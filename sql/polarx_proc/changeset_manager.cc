@@ -7,7 +7,7 @@
 namespace im {
 ChangesetManager gChangesetManager;
 
-atomic_bool ChangesetManager::changeset_start(false);
+std::atomic_bool ChangesetManager::changeset_start(false);
 
 int ChangesetManager::start_track(const std::string &table_name,
                                   u_int64_t memory_limit) {
@@ -354,7 +354,7 @@ inline ChangeSetCache *ChangesetManager::get_changeset_from_cache(
   if (thd->changeset_map.find(full_table_name) == thd->changeset_map.end()) {
     thd->changeset_map.emplace(
         full_table_name,
-        std::move(std::unique_ptr<ChangeSetCache>(new ChangeSetCache())));
+        std::unique_ptr<ChangeSetCache>(new ChangeSetCache()));
   }
 
   return thd->changeset_map[full_table_name].get();
@@ -461,7 +461,7 @@ void ChangesetManager::init_changeset(const DBTableName &full_table_name,
   }
 
   changeset_map.emplace(full_table_name,
-                        std::move(std::unique_ptr<Changeset>(new Changeset())));
+                        std::unique_ptr<Changeset>(new Changeset()));
 
   auto &cs = changeset_map[full_table_name];
   cs->init(full_table_name);

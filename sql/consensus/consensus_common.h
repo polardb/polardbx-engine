@@ -28,7 +28,7 @@
 
 #define CONSENSUS_MAX_NODE_NUMBER 100
 
-class MEM_ROOT;
+struct MEM_ROOT;
 
 namespace im {
 

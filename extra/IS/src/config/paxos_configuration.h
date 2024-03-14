@@ -100,7 +100,7 @@ class Configuration {
 class StableConfiguration : public Configuration {
  public:
   StableConfiguration() : serversNum(0) {}
-  virtual ~StableConfiguration() {}
+  ~StableConfiguration() override {}
 
   void forEach(const SideEffect &sideEffect, void *ptr) override;
   void forEachLearners(const SideEffect &sideEffect, void *ptr) override;

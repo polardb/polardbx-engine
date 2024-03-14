@@ -21,7 +21,7 @@
 namespace polarx_rpc {
 
 class Chistogram final {
-  NO_COPY_MOVE(Chistogram);
+  NO_COPY_MOVE(Chistogram)
 
  private:
   static constexpr auto HISTOGRAM_NSLOTS = 128;

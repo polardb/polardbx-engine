@@ -37,7 +37,7 @@ class Recycle_internal_schema_access : public ACL_internal_schema_access {
  public:
   Recycle_internal_schema_access() {}
 
-  ~Recycle_internal_schema_access() {}
+  ~Recycle_internal_schema_access() override {}
 
   virtual ACL_internal_access_result check(ulong want_access, ulong *save_priv,
                                            bool) const override;

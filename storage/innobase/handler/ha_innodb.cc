@@ -24792,13 +24792,13 @@ bool thd_get_transaction_group(THD *thd) {
   return THDVAR(thd, transaction_group);
 }
 
-void ha_innobase::get_create_info(const char *table, const dd::Table *table_def,
+void ha_innobase::get_create_info(const char *table_name, const dd::Table *table_def,
                                   HA_CREATE_INFO *create_info) {
   dict_table_t *dict_table = nullptr;
   THD *m_thd = ha_thd();
   char norm_name[FN_REFLEN];
 
-  normalize_table_name(norm_name, table);
+  normalize_table_name(norm_name, table_name);
 
   if (table_def->is_persistent()) {
     dd::cache::Dictionary_client *client = dd::get_dd_client(m_thd);

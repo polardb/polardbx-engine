@@ -28,8 +28,8 @@ uint64_t Server::getLastCachedLogIndex() {
 }
 
 /* Implement for LocalServer */
-LocalServer::LocalServer(uint64_t serverId)
-    : Server(serverId),
+LocalServer::LocalServer(uint64_t serverIdParm)
+    : Server(serverIdParm),
       lastSyncedIndex(1),
       logType(false),
       learnerConnTimeout(0),
@@ -149,8 +149,8 @@ void AliSQLServer::setLastNonCommitDepIndex(uint64_t logIndex) {
 }
 
 /* Implement for RemoteServer */
-RemoteServer::RemoteServer(uint64_t serverId)
-    : Server(serverId),
+RemoteServer::RemoteServer(uint64_t serverIdParm)
+    : Server(serverIdParm),
       sendMsgQueue(nullptr),
       nextIndex(1),
       matchIndex(0),

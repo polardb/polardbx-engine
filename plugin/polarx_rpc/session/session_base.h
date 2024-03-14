@@ -20,7 +20,7 @@
 namespace polarx_rpc {
 
 class CsessionBase {
-  NO_COPY_MOVE(CsessionBase);
+  NO_COPY_MOVE(CsessionBase)
 
  protected:
   const uint64_t sid_;

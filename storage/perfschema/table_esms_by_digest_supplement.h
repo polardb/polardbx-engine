@@ -79,7 +79,7 @@ class table_esms_by_digest_supplement : public PFS_engine_table {
   table_esms_by_digest_supplement();
 
  public:
-  ~table_esms_by_digest_supplement() {}
+  ~table_esms_by_digest_supplement() override {}
 
  protected:
   int make_row(PFS_statements_digest_stat *);

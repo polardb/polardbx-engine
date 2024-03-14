@@ -321,7 +321,10 @@ undo_space_id and undo_space_num and to create the automatic file_name
 and space name.  In addition, it is used in undo::Tablespaces to track
 the trx_rseg_t objects in an Rsegs vector. So we do not allocate the
 Rsegs vector for each object, only when requested by the constructor. */
-struct Tablespace {
+class Tablespace {
+  friend class Tablespaces;
+
+ public:
   /** Constructor
   @param[in]  id    tablespace id */
   explicit Tablespace(space_id_t id)

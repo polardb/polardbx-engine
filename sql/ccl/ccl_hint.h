@@ -65,7 +65,7 @@ class Ccl_queue_field_hint : public Ccl_queue_hint {
   explicit Ccl_queue_field_hint(LEX_CSTRING lex_str, Item *item)
       : Ccl_queue_hint(item), m_field_name(lex_str) {}
 
-  virtual ~Ccl_queue_field_hint() {}
+  ~Ccl_queue_field_hint() override {}
 
   virtual std::string name() override;
   /**
@@ -88,7 +88,7 @@ class Ccl_queue_value_hint : public Ccl_queue_hint {
   explicit Ccl_queue_value_hint(LEX_CSTRING lex_str, Item *item)
       : Ccl_queue_hint(item), m_value_str(lex_str) {}
 
-  virtual ~Ccl_queue_value_hint() {}
+  ~Ccl_queue_value_hint() override {}
 
   virtual std::string name() override;
 

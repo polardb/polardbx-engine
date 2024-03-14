@@ -20,7 +20,7 @@ namespace polarx_rpc {
 
 template <class T>
 class CarrayQueue {
-  NO_COPY(CarrayQueue);
+  NO_COPY(CarrayQueue)
 
  private:
   // pushed from tail and popped from head

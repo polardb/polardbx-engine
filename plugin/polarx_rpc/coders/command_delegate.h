@@ -20,7 +20,7 @@
 namespace polarx_rpc {
 
 class CcommandDelegate {
-  NO_COPY(CcommandDelegate);
+  NO_COPY(CcommandDelegate)
 
  public:
   struct info_t final {

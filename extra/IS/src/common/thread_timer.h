@@ -109,6 +109,7 @@ class ThreadTimer {
 
   struct CallbackBase {
     virtual void run() = 0;
+    virtual ~CallbackBase() {}
   };
 
   template <typename Callable>
@@ -209,6 +210,6 @@ class ThreadTimer {
   uint64_t randWeight_;
 };
 
-};      /* end of namespace alisql */
+}      /* end of namespace alisql */
 
 #endif  // #ifndef thread_timer_INC

@@ -149,11 +149,11 @@ static int easy_http_request_message_complete(http_parser *parser)
         return 0;                                                               \
     }
 
-EASY_HTTP_REQUEST_CB_DEFINE(path);
-EASY_HTTP_REQUEST_CB_DEFINE(proto);
-EASY_HTTP_REQUEST_CB_DEFINE(query_string);
-EASY_HTTP_REQUEST_CB_DEFINE(fragment);
-EASY_HTTP_REQUEST_CB_DEFINE(host);
+EASY_HTTP_REQUEST_CB_DEFINE(path)
+EASY_HTTP_REQUEST_CB_DEFINE(proto)
+EASY_HTTP_REQUEST_CB_DEFINE(query_string)
+EASY_HTTP_REQUEST_CB_DEFINE(fragment)
+EASY_HTTP_REQUEST_CB_DEFINE(host)
 
 static int easy_http_request_on_body(http_parser *parser, const char *value, size_t len)
 {

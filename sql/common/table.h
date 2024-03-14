@@ -91,6 +91,8 @@ class Conf_writer {
   explicit Conf_writer(THD *thd, TABLE *table, MEM_ROOT *mem_root,
                        Conf_table_op op_type)
       : m_thd(thd), m_table(table), m_mem_root(mem_root), m_op_type(op_type) {}
+
+  virtual ~Conf_writer() {}
   /**
     Setup table writer context
   */

@@ -28,6 +28,7 @@
 #include "sql/my_decimal.h"
 #include "sql/protocol.h"
 #include "sql/sql_class.h"
+#include "sql/sql_const.h"
 #include "sql/sql_time.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/mysys_util.h"
@@ -478,13 +479,11 @@ void test_make_sort_key(Field *field, uchar *from, const uchar *expected,
 
 // Convenience function for large values.
 void test_make_sort_key(Field *field) {
-  const int pack_length = field->pack_length();
-
   uchar from[MAX_FIELD_WIDTH];
-  memset(from, 'b', pack_length);
+  memset(from, 'b', MAX_FIELD_WIDTH);
 
   uchar to[MAX_FIELD_WIDTH + 1];
-  memset(to, 'b', pack_length + 1);
+  memset(to, 'b', MAX_FIELD_WIDTH + 1);
 
   test_make_sort_key(field, from, to, 1);
 }

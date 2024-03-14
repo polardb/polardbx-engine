@@ -55,7 +55,7 @@ class XPaxos_relay_log_info final : public Relay_log_info {
                        param_id, param_channel, is_rli_fake) {
   }
 
-  virtual ~XPaxos_relay_log_info();
+  ~XPaxos_relay_log_info() override;
 
   virtual Channel_style style() const override { return Channel_style::XPaxos; }
 

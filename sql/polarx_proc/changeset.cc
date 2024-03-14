@@ -289,7 +289,7 @@ void Changeset::fetch_pk(bool delete_last_cs,
 }
 
 void Changeset::get_result_list(
-    std::unordered_map<std::string, unique_ptr<Change>> &pk_map,
+    std::unordered_map<std::string, std::unique_ptr<Change>> &pk_map,
     std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share) {
   uint primary_key = table_share->primary_key;
   KEY *key_info = &table_share->key_info[primary_key];

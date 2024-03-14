@@ -13,7 +13,7 @@
 namespace polarx_rpc {
 
 class Crandom {
-  NO_COPY_MOVE(Crandom);
+  NO_COPY_MOVE(Crandom)
 
  private:
   enum : uint32_t {

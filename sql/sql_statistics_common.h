@@ -28,7 +28,7 @@
 
 struct ST_FIELD_INFO;
 class THD;
-struct Table_ref;
+class Table_ref;
 class Item;
 
 /*All the extern variables and functions */

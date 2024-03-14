@@ -604,7 +604,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
   uint64 start_pos = my_b_tell(binlog_file_reader.get_io_cache());
   uint64 end_pos = start_pos;
   uint64 consensus_log_length = 0;
-  uint64 cindex, cterm, cflag = 0;
+  uint64 cindex = 0, cterm = 0, cflag = 0;
   std::vector<uint64> blob_index_list;
   while (!stop_scan && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {

@@ -111,7 +111,7 @@ class Proc_purge_status : public Proc {
     }
   }
 
-  virtual ~Proc_purge_status() {}
+  ~Proc_purge_status() override {}
 
   static Proc *instance();
 

@@ -25,7 +25,7 @@
 #include "ppi/ppi_stat.h"
 
 struct ST_FIELD_INFO;
-struct Table_ref;
+class Table_ref;
 class Item;
 class THD;
 

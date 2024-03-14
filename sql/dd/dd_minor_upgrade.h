@@ -35,6 +35,10 @@
 
   This strategy didn't affect official upgrade.
 */
+#include <sys/types.h>
+
+class THD;
+
 namespace dd {
 
 /**
@@ -51,7 +55,7 @@ class Minor_upgrade_ctx {
  public:
   Minor_upgrade_ctx() {}
 
-  ~Minor_upgrade_ctx() {}
+  virtual ~Minor_upgrade_ctx() {}
 
   // Get the singleton instance
   static Minor_upgrade_ctx *instance();

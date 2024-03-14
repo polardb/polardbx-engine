@@ -34,6 +34,17 @@
 */
 namespace im {
 
+template class Ring_buffer<Ccl_slot, CCL_SLOT_SIZE>;
+
+/* Singleton static Ccl_ring_slots object init */
+template <>
+Ccl_ring_slots *Ccl_ring_slots::m_ring_buffer = nullptr;
+
+template <>
+Ccl_ring_slots *Ccl_ring_slots::instance() {
+  return m_ring_buffer;
+}
+
 /* All concurrency control system memory usage */
 PSI_memory_key key_memory_ccl;
 /* CCL slot mutex psi key */
@@ -45,10 +56,6 @@ PSI_rwlock_key key_rwlock_rule_container;
 
 /* Singleton static System_ccl object init */
 System_ccl *System_ccl::m_system_ccl = nullptr;
-
-/* Singleton static Ccl_ring_slots object init */
-template <>
-Ccl_ring_slots *Ccl_ring_slots::m_ring_buffer = nullptr;
 
 static bool ccl_inited = false;
 

@@ -13,8 +13,8 @@
 namespace polarx_rpc {
 
 class CcpuInfo final {
-  NO_CONSTRUCTOR(CcpuInfo);
-  NO_COPY_MOVE(CcpuInfo);
+  NO_CONSTRUCTOR(CcpuInfo)
+  NO_COPY_MOVE(CcpuInfo)
 
  public:
   struct cpu_info_t final {

@@ -301,7 +301,7 @@ struct easy_message_session_t {
 #ifdef EASY_DEBUG_MAGIC
     uint64_t                magic;
 #endif
-    EASY_MESSAGE_SESSION_HEADER(list_node);
+    EASY_MESSAGE_SESSION_HEADER(list_node)
 };
 
 // 用于接收, 一个或多个easy_request_t
@@ -343,7 +343,7 @@ struct easy_session_t {
 #ifdef EASY_DEBUG_MAGIC
     uint64_t                magic;
 #endif
-    EASY_MESSAGE_SESSION_HEADER(session_list_node);
+    EASY_MESSAGE_SESSION_HEADER(session_list_node)
     ev_tstamp               timeout, now;
     ev_timer                timeout_watcher;
 
@@ -372,11 +372,11 @@ struct easy_session_t {
     uint32_t                accept_count;
 
 struct easy_listen_simple_t {
-    EASY_LISTEN_HEADER;
+    EASY_LISTEN_HEADER
 };
 
 struct easy_listen_t {
-    EASY_LISTEN_HEADER;
+    EASY_LISTEN_HEADER
 
     easy_addr_t             addr;
     easy_spin_t             listen_lock;

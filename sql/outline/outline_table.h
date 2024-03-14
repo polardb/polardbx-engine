@@ -36,7 +36,7 @@ class Outline_reader : public Conf_reader {
   explicit Outline_reader(THD *thd, TABLE *table, MEM_ROOT *mem_root)
       : Conf_reader(thd, table, mem_root) {}
 
-  virtual ~Outline_reader() {}
+  ~Outline_reader() override {}
   /**
     Push invalid outline record warning
 

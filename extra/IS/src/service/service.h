@@ -107,6 +107,7 @@ class Service {
   }; /* end of class ServiceEvent */
   struct CallbackBase {
     virtual void run() = 0;
+    virtual ~CallbackBase() = default;
   };
   template <typename Callable>
   struct Callback : public CallbackBase {
@@ -156,6 +157,6 @@ class Service {
   std::shared_ptr<easy_eio_start_wrapper> eio_start_wrapper_ = nullptr;
 };      /* end of class Service */
 
-};      /* end of namespace alisql */
+}      /* end of namespace alisql */
 
 #endif  // #ifndef cluster_service_INC

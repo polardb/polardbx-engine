@@ -102,7 +102,7 @@ private:
 class LocalServer : public Server {
  public:
   LocalServer(uint64_t serverId);
-  virtual ~LocalServer() {}
+  ~LocalServer() override = default;
 
   void beginRequestVote(void *) override {}
   void beginLeadership(void *) override;
@@ -146,7 +146,7 @@ class LocalServer : public Server {
  **/
 class AliSQLServer : public LocalServer {
  public:
-  AliSQLServer(uint64_t serverId) : LocalServer(serverId) {}
+  explicit AliSQLServer(uint64_t serverIdParam) : LocalServer(serverIdParam) {}
   ~AliSQLServer() override = default;
   uint64_t writeLogDone(uint64_t logIndex) override;
   void setLastNonCommitDepIndex(uint64_t logIndex);
@@ -164,7 +164,7 @@ class SendMsgTask;
 class RemoteServer : public Server {
  public:
   RemoteServer(uint64_t serverId);
-  virtual ~RemoteServer();
+  ~RemoteServer() override;
 
   void beginRequestVote(void *) override;
   void beginLeadership(void *) override;

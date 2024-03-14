@@ -65,7 +65,7 @@ typedef Char_string_templ<Keyring_str_allocator> Key_string;
 */
 class Keyring_obj_alloc {
  public:
-  void *operator new(size_t s) throw() { return keyring_rds_malloc<void*>(s); }
+  void *operator new(size_t s) noexcept { return keyring_rds_malloc<void*>(s); }
   void operator delete(void *ptr, size_t) { my_free(ptr); }
 };
 

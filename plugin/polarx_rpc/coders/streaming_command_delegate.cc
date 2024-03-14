@@ -88,13 +88,13 @@ int CstreamingCommandDelegate::field_metadata(struct st_send_field *field,
 
   /// build protobuf inplace
   PolarXRPC::Resultset::ColumnMetaData_FieldType xtype{};
-  uint64_t collation;
+  uint64_t collation = 0;
   uint64_t *collation_ptr = nullptr;
-  uint32_t decimals;
+  uint32_t decimals = 0;
   uint32_t *decimals_ptr = nullptr;
-  uint32_t length;
+  uint32_t length = 0;
   uint32_t *length_ptr = nullptr;
-  uint32_t content_type;
+  uint32_t content_type = 0;
   uint32_t *content_type_ptr = nullptr;
   auto is_string = false;
 

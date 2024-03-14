@@ -77,7 +77,7 @@ class Guard {
 class Object_guard : public Guard {
  public:
   Object_guard() {}
-  virtual ~Object_guard() {}
+  ~Object_guard() override {}
 
   Object_guard(const String_type &key);
 
@@ -140,7 +140,7 @@ class Entity_guard : public Guard {
     MY_BITMAP *m_write_set;
   };
 
-  virtual ~Entity_guard() {}
+  ~Entity_guard() override {}
 
   /*  Entity record guard should implement those three strategies */
   /**
@@ -216,7 +216,7 @@ class User_entity_guard : public Entity_guard {
   User_entity_guard() {}
   User_entity_guard(const User_entity_guard &src);
 
-  virtual ~User_entity_guard() {}
+  ~User_entity_guard() override {}
 
   /* Entity record guard should implement those three strategies */
   /**
@@ -262,7 +262,7 @@ class Dynamic_privilege_entity_guard : public Entity_guard {
 
   Dynamic_privilege_entity_guard(const Dynamic_privilege_entity_guard &src);
 
-  virtual ~Dynamic_privilege_entity_guard() {}
+  ~Dynamic_privilege_entity_guard() override {}
 
   /* Entity record guard should implement those three strategies */
   /**
@@ -309,7 +309,7 @@ class Role_entity_guard : public Entity_guard {
 
   Role_entity_guard(const Role_entity_guard &src);
 
-  virtual ~Role_entity_guard() {}
+  ~Role_entity_guard() override {}
 
   /* Entity record guard should implement those three strategies */
   /**
@@ -448,7 +448,7 @@ class Mysql_internal_schema_access : public ACL_internal_schema_access {
  public:
   Mysql_internal_schema_access() {}
 
-  ~Mysql_internal_schema_access() {}
+  ~Mysql_internal_schema_access() override {}
 
   ACL_internal_access_result check(ulong want_access, ulong *,
                                    bool) const override;
@@ -470,7 +470,7 @@ class Inner_schema_access : public ACL_internal_schema_access {
  public:
   Inner_schema_access() {}
 
-  ~Inner_schema_access() {}
+  ~Inner_schema_access() override {}
 
   ACL_internal_access_result check(ulong want_access, ulong *save_priv,
                                    bool any_combination_will_do) const override;

@@ -16,7 +16,7 @@
 namespace polarx_rpc {
 
 class CrequestCache final {
-  NO_COPY_MOVE(CrequestCache);
+  NO_COPY_MOVE(CrequestCache)
 
  public:
   struct plan_store_t final {

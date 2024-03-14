@@ -56,7 +56,7 @@ class Ccl_reader : public Conf_reader {
   explicit Ccl_reader(THD *thd, TABLE *table, MEM_ROOT *mem_root)
       : Conf_reader(thd, table, mem_root) {}
 
-  virtual ~Ccl_reader() {}
+  ~Ccl_reader() override {}
 
   /**
     Push invalid ccl record warning

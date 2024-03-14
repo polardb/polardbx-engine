@@ -28,12 +28,6 @@ pipeline {
   }
 
   stages {
-    stage('Configure') {
-      steps {
-        sh 'cicd/configure.sh'
-      }
-    }
-
     stage('Build') {
       steps {
         sh 'cicd/build.sh'

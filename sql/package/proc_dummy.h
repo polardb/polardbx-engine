@@ -69,7 +69,7 @@ class Proc_dummy : public Proc {
     m_result_type = Result_type::RESULT_OK;
   }
 
-  virtual ~Proc_dummy() {}
+  ~Proc_dummy() override {}
 
   static Proc *instance();
 
@@ -155,7 +155,7 @@ class Proc_dummy_2 : public Proc {
     m_columns.assign_at(COLUMN_ID, element);
   }
 
-  virtual ~Proc_dummy_2() {}
+  ~Proc_dummy_2() override {}
 
   static Proc *instance();
 

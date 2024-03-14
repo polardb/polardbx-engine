@@ -20,7 +20,7 @@ namespace polarx_rpc {
 class CsessionBase;
 
 class CstreamingCommandDelegate : public CcommandDelegate {
-  NO_COPY(CstreamingCommandDelegate);
+  NO_COPY(CstreamingCommandDelegate)
 
  protected:
   CsessionBase &session_;

@@ -154,7 +154,7 @@ struct task_t final {
 /// The inherited class should has private destructor to prevent alloc on stack.
 template <class T>
 class Ctask {
-  NO_COPY_MOVE(Ctask);
+  NO_COPY_MOVE(Ctask)
 
  protected:
   Ctask() = default;
@@ -181,7 +181,7 @@ class Ctask {
 class CtcpConnection;
 
 class CmtEpoll final {
-  NO_COPY_MOVE(CmtEpoll);
+  NO_COPY_MOVE(CmtEpoll)
 
  private:
   /// group info

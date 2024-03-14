@@ -120,7 +120,7 @@ class Paxos : public Consensus {
  public:
   Paxos(uint64_t electionTimeout = 5000, std::shared_ptr<PaxosLog> log = NULL,
         uint64_t purgeLogTimeout = 10000);
-  virtual ~Paxos();
+  ~Paxos() override;
 
   typedef enum LcType {
     LeaderTransfer,

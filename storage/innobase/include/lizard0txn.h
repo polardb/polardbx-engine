@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0txn_h
 
 #include "lizard0txn0types.h"
+#include "ut0new.h"
 
 namespace undo {
 class Tablespace;

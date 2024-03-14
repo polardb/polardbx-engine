@@ -158,48 +158,45 @@ static Sys_var_charptr Sys_polardbx_release_version(
 static Sys_var_deprecated_alias Sys_rds_release_date(
     "rds_release_date", Sys_polardbx_release_date);
 
-/* Internal Account variables. */
-using namespace im;
-
 static PolyLock_mutex Plock_internal_account_string(
-    &LOCK_internal_account_string);
+    &im::LOCK_internal_account_string);
 
 static bool update_kill_user(sys_var *, THD *, enum_var_type) {
-  Internal_account_ctx::instance()->build_array(IA_type::KILL_USER);
+  im::Internal_account_ctx::instance()->build_array(im::IA_type::KILL_USER);
   return (false);
 }
 
 static bool update_inner_user(sys_var *, THD *, enum_var_type) {
-  Internal_account_ctx::instance()->build_array(IA_type::INNER_USER);
+  im::Internal_account_ctx::instance()->build_array(im::IA_type::INNER_USER);
   return (false);
 }
 
 static Sys_var_charptr Sys_rds_kill_user_list(
     "rds_kill_user_list", "user can kill non-super user, string split by ','",
-    GLOBAL_VAR(ia_config.user_str[IA_type::KILL_USER]), CMD_LINE(REQUIRED_ARG),
+    GLOBAL_VAR(im::ia_config.user_str[im::IA_type::KILL_USER]), CMD_LINE(REQUIRED_ARG),
     IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
     ON_CHECK(NULL), ON_UPDATE(update_kill_user));
 
 static Sys_var_ulong Sys_rds_kill_connections(
     "rds_kill_connections", "Max conenction count for rds kill user",
-    GLOBAL_VAR(ia_config.connections[IA_type::KILL_USER]),
+    GLOBAL_VAR(im::ia_config.connections[im::IA_type::KILL_USER]),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(0),
     BLOCK_SIZE(1));
 
 static bool update_maintain_user(sys_var *, THD *, enum_var_type) {
-  Internal_account_ctx::instance()->build_array(IA_type::MAINTENACE_USER);
+  im::Internal_account_ctx::instance()->build_array(im::IA_type::MAINTENACE_USER);
   return (false);
 }
 static Sys_var_charptr Sys_rds_maintain_user_list(
     "maintain_user_list", "maintenace account string split by ','",
-    GLOBAL_VAR(ia_config.user_str[IA_type::MAINTENACE_USER]),
+    GLOBAL_VAR(im::ia_config.user_str[im::IA_type::MAINTENACE_USER]),
     CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(0),
     &Plock_internal_account_string, NOT_IN_BINLOG, ON_CHECK(NULL),
     ON_UPDATE(update_maintain_user));
 
 static Sys_var_ulong Sys_rds_maintain_max_connections(
     "maintain_max_connections", "The max connection count for maintain user",
-    GLOBAL_VAR(ia_config.connections[IA_type::MAINTENACE_USER]),
+    GLOBAL_VAR(im::ia_config.connections[im::IA_type::MAINTENACE_USER]),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, ULONG_MAX), DEFAULT(0),
     BLOCK_SIZE(1));
 
@@ -207,7 +204,7 @@ static Sys_var_bool Sys_opt_enable_rds_priv_strategy(
     "opt_enable_rds_priv_strategy",
     "When this option is enabled,"
     "it will protect reserved account and privileges",
-    GLOBAL_VAR(opt_enable_rds_priv_strategy), CMD_LINE(OPT_ARG), DEFAULT(false),
+    GLOBAL_VAR(im::opt_enable_rds_priv_strategy), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_enum Sys_lock_instance_mode(
@@ -535,7 +532,7 @@ static Sys_var_bool Sys_rotate_log_table(
 static Sys_var_charptr Sys_rotate_log_table_last_name(
     "rotate_log_table_last_name", "Last rotated log table file name",
     READ_ONLY GLOBAL_VAR(im::rotate_log_table_last_name_ptr),
-    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(rotate_log_table_last_name),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(im::rotate_log_table_last_name),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
 
 static Sys_var_charptr Sys_rds_inner_schema_list(
@@ -546,7 +543,7 @@ static Sys_var_charptr Sys_rds_inner_schema_list(
 
 static Sys_var_charptr Sys_rds_inner_user_list(
     "inner_user_list", "Inner account string split by ','",
-    GLOBAL_VAR(ia_config.user_str[IA_type::INNER_USER]), CMD_LINE(REQUIRED_ARG),
+    GLOBAL_VAR(im::ia_config.user_str[im::IA_type::INNER_USER]), CMD_LINE(REQUIRED_ARG),
     IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
     ON_CHECK(NULL), ON_UPDATE(update_inner_user));
 

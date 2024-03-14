@@ -80,7 +80,7 @@ class Show_native_procedure_proc : public Proc, public Disable_copy_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Show_native_procedure_proc() {}
+  ~Show_native_procedure_proc() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

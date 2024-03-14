@@ -129,7 +129,7 @@ class Recycle_proc_show : public Recycle_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Recycle_proc_show() {}
+  ~Recycle_proc_show() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -202,7 +202,7 @@ class Recycle_proc_purge : public Recycle_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Recycle_proc_purge() {}
+  ~Recycle_proc_purge() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -302,7 +302,7 @@ class Recycle_proc_restore : public Recycle_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Recycle_proc_restore() {}
+  ~Recycle_proc_restore() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

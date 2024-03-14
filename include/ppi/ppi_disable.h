@@ -28,6 +28,7 @@
 */
 class Disable_ppi_iface {
  public:
+  virtual ~Disable_ppi_iface() = default;
   virtual bool disable_ppi_statement_stat() = 0;
   virtual bool disable_ppi_thread_stat() = 0;
   virtual bool disable_ppi_transaction_stat() = 0;

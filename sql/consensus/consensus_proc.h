@@ -537,7 +537,7 @@ class Consensus_proc_force_single_mode final : public Consensus_proc {
  public:
   explicit Consensus_proc_force_single_mode(PSI_memory_key key)
       : Consensus_proc(key) {}
-  virtual ~Consensus_proc_force_single_mode() {}
+  ~Consensus_proc_force_single_mode() override {}
   static Proc *instance();
   Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
   const std::string str() const override {
@@ -661,7 +661,7 @@ class Consensus_proc_show_global final : public Consensus_proc {
       m_columns.push_back(elements[i]);
     }
   }
-  virtual ~Consensus_proc_show_global() {}
+  ~Consensus_proc_show_global() override {}
   static Proc *instance();
   Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
   const std::string str() const override {
@@ -720,7 +720,7 @@ class Consensus_proc_show_local final : public Consensus_proc {
       m_columns.push_back(elements[i]);
     }
   }
-  virtual ~Consensus_proc_show_local() {}
+  ~Consensus_proc_show_local() override {}
   static Proc *instance();
   Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
   const std::string str() const override {
@@ -764,7 +764,7 @@ class Consensus_proc_show_logs final : public Consensus_proc {
       m_columns.push_back(elements[i]);
     }
   }
-  virtual ~Consensus_proc_show_logs() {}
+  ~Consensus_proc_show_logs() override {}
   static Proc *instance();
   Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
   const std::string str() const override { return std::string("show_logs"); }

@@ -129,7 +129,7 @@ class Proc : public PSI_memory_base {
         m_parameters_list(),
         m_columns(key) {}
 
-  virtual ~Proc() {}
+  ~Proc() override {}
 
   /**
     Generate the parse tree root.

@@ -46,7 +46,7 @@
 
 class Table_ref;
 class THD;
-class LEX;
+struct LEX;
 class Item;
 
 namespace im {
@@ -770,7 +770,7 @@ class Ring_buffer : public PSI_memory_base, public Disable_copy_base {
   }
 
   /* Singleton instance */
-  static Ring_buffer *instance() { return m_ring_buffer; }
+  static Ring_buffer *instance();
   static Ring_buffer *m_ring_buffer;
 
  private:
@@ -796,7 +796,8 @@ class Ring_buffer : public PSI_memory_base, public Disable_copy_base {
 #define CCL_SLOT_SIZE (64 + CCL_QUEUE_BUCKET_COUNT_MAX)
 
 /* Instantiation of slots */
-using Ccl_ring_slots = Ring_buffer<Ccl_slot, CCL_SLOT_SIZE>;
+using Ccl_ring_slots =
+    Ring_buffer<Ccl_slot, CCL_SLOT_SIZE>;
 
 } /*namespace im */
 

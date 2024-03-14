@@ -31,7 +31,7 @@
 #include "sql/mdl.h"
 #include "sql/tztime.h"
 
-class handlerton;
+struct handlerton;
 class THD;
 class Foreign_key_parents_invalidator;
 
@@ -73,7 +73,7 @@ class Recycle_error_handler : public Internal_error_handler {
                                 Sql_condition::enum_severity_level *,
                                 const char *message) override;
 
-  virtual ~Recycle_error_handler();
+  ~Recycle_error_handler() override;
 
   bool is_error() { return m_error; }
 

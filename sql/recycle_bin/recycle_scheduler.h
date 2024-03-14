@@ -75,7 +75,7 @@ class Recycle_scheduler_error_handler : public Internal_error_handler {
                                 Sql_condition::enum_severity_level *,
                                 const char *message) override;
 
-  virtual ~Recycle_scheduler_error_handler();
+  ~Recycle_scheduler_error_handler() override;
 
   bool is_error() { return m_error; }
 

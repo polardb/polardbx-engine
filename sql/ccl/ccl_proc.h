@@ -150,7 +150,7 @@ class Ccl_proc_add : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_add() {}
+  ~Ccl_proc_add() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -200,7 +200,7 @@ class Ccl_proc_flush : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_flush() {}
+  ~Ccl_proc_flush() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -269,7 +269,7 @@ class Ccl_proc_del : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_del() {}
+  ~Ccl_proc_del() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -352,7 +352,7 @@ class Ccl_proc_show : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_show() {}
+  ~Ccl_proc_show() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -401,7 +401,7 @@ class Ccl_proc_flush_queue : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_flush_queue() {}
+  ~Ccl_proc_flush_queue() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -473,7 +473,7 @@ class Ccl_proc_show_queue : public Ccl_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Ccl_proc_show_queue() {}
+  ~Ccl_proc_show_queue() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

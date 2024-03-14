@@ -101,7 +101,7 @@ class Trans_proc_returning : public Trans_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Trans_proc_returning() {}
+  ~Trans_proc_returning() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

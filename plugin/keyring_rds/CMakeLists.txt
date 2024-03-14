@@ -36,6 +36,8 @@ MYSQL_ADD_PLUGIN(keyring_rds
                  MODULE_ONLY
                  MODULE_OUTPUT_NAME "keyring_rds")
 
+target_compile_options(keyring_rds PRIVATE "-Wno-ignored-attributes")
+
 IF(HAVE_DLOPEN)
     SET(DYNLIB_EXTENSION "so")
 ENDIF()

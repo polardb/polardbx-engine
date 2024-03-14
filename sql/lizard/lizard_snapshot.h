@@ -71,6 +71,8 @@ class Snapshot_hint {
  public:
   explicit Snapshot_hint(Item *item) : m_item(item) {}
 
+  virtual ~Snapshot_hint() {}
+
   /** Item type. */
   virtual Snapshot_type type() const = 0;
 
@@ -247,7 +249,7 @@ class Snapshot_time_vision : public Snapshot_vision {
  public:
   Snapshot_time_vision() : m_second(0) {}
 
-  virtual ~Snapshot_time_vision() {}
+  ~Snapshot_time_vision() override {}
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -295,7 +297,7 @@ class Snapshot_scn_vision : public Snapshot_vision {
   Snapshot_scn_vision(my_scn_t scn, my_trx_id_t tid)
       : m_scn(scn), m_up_limit_tid(tid) {}
 
-  virtual ~Snapshot_scn_vision() {}
+  ~Snapshot_scn_vision() override {}
 
   Snapshot_scn_vision(const Snapshot_scn_vision &v) = delete;
 
@@ -359,7 +361,7 @@ class Snapshot_gcn_vision : public Snapshot_vision {
         m_current_scn(scn),
         m_up_limit_tid(tid) {}
 
-  virtual ~Snapshot_gcn_vision() {}
+  ~Snapshot_gcn_vision() override {}
 
   Snapshot_gcn_vision(const Snapshot_gcn_vision &v) = delete;
 
@@ -430,7 +432,7 @@ class Snapshot_noop_vision : public Snapshot_vision {
  public:
   Snapshot_noop_vision() {}
 
-  virtual ~Snapshot_noop_vision() {}
+  ~Snapshot_noop_vision() override {}
 
   /*------------------------------------------------------------------------------*/
   /* Virtual function */

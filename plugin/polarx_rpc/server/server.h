@@ -32,7 +32,7 @@ extern bool xcluster_standalone;
 namespace polarx_rpc {
 
 class Cserver final {
-  NO_COPY_MOVE(Cserver);
+  NO_COPY_MOVE(Cserver)
 
   /// thread of watch dog to prevent deadlock on thread pool schedule
   static void watch_dog() {

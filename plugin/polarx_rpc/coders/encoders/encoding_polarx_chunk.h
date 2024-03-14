@@ -34,7 +34,7 @@ static const int kMaxVarint32Bytes = 5;
 static const int kReservedVariableSizeData = 32;
 
 struct Block {
-  NO_COPY_MOVE(Block);
+  NO_COPY_MOVE(Block)
 
  public:
   google::protobuf::io::ArrayOutputStream *array;
@@ -72,7 +72,7 @@ struct Block {
 };
 
 struct Chunk {
-  NO_COPY_MOVE(Chunk);
+  NO_COPY_MOVE(Chunk)
 
  public:
   size_t field_num;

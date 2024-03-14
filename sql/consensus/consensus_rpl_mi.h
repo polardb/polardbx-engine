@@ -57,7 +57,7 @@ class XPaxos_master_info final : public Master_info {
             param_id, param_channel) {
   }
 
-  virtual ~XPaxos_master_info() {}
+  ~XPaxos_master_info() override {}
 
   /** XPaxos channel */
   virtual Channel_style style() const override { return Channel_style::XPaxos; }

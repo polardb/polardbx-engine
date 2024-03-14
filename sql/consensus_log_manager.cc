@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "events.h"
 #include "log.h"
 #include "log_event.h"
+#include "mysql/psi/mysql_file.h"
 #include "mysql/thread_pool_priv.h"
 #include "rpl_gtid.h"
 #include "rpl_msr.h"

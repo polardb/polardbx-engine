@@ -147,7 +147,7 @@ class Changeset {
                 TABLE_SHARE *table_share);
 
   void get_result_list(
-      std::unordered_map<std::string, unique_ptr<Change>> &pk_map,
+      std::unordered_map<std::string, std::unique_ptr<Change>> &pk_map,
       std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
 
   void get_result_list(const char *file_name,

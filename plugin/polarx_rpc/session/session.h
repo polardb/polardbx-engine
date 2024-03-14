@@ -33,7 +33,7 @@ class CmtEpoll;
 extern std::atomic<int> g_session_count;
 
 class Csession final : public CsessionBase {
-  NO_COPY_MOVE(Csession);
+  NO_COPY_MOVE(Csession)
 
  private:
   /// epoll info(always valid)

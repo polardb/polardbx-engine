@@ -151,7 +151,7 @@ class Random_array
         ut::make_psi_memory_key(psi_mem_key), ut::Count{m_size});
   }
 
-  virtual ~Random_array() { ut::delete_arr(m_elements); }
+  ~Random_array() override { ut::delete_arr(m_elements); }
 
   virtual bool do_before_operation(size_t pos) { return false; }
 
@@ -193,7 +193,7 @@ class Atomic_random_array
   Atomic_random_array(size_t size, PSI_memory_key psi_mem_key)
       : Random_array<Element_type, Key_type, Value_type>(size, psi_mem_key) {}
 
-  virtual ~Atomic_random_array() {}
+  ~Atomic_random_array() override {}
 
   virtual bool do_before_operation(size_t pos) override {
     uint loop = 0;
@@ -236,7 +236,7 @@ class Lru_list : public Cache_interface<Element_type, Key_type, Value_type> {
  public:
   explicit Lru_list();
 
-  virtual ~Lru_list();
+  ~Lru_list() override;
 
   bool insert(Value_type value) override;
 

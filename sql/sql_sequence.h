@@ -46,7 +46,7 @@ class PT_values_create_sequence_option : public PT_create_table_option {
  public:
   explicit PT_values_create_sequence_option(FIELD_TYPE value) : value(value) {}
 
-  virtual ~PT_values_create_sequence_option() {}
+  ~PT_values_create_sequence_option() override {}
 
   bool contextualize(Table_ddl_parse_context *pc) override {
     if (PT_create_table_option::contextualize(pc)) return true;
@@ -62,7 +62,7 @@ class PT_values_create_sequence_type : public PT_create_table_option {
  public:
   explicit PT_values_create_sequence_type(Sequence_type type) : m_type(type) {}
 
-  virtual ~PT_values_create_sequence_type() {}
+  ~PT_values_create_sequence_type() override {}
 
   bool contextualize(Table_ddl_parse_context *pc) override {
     if (PT_create_table_option::contextualize(pc)) return true;
@@ -88,12 +88,12 @@ class PT_create_sequence_stmt : public PT_create_table_stmt {
                                       For @SQL {CREATE SEQUENCE ...}
   */
   explicit PT_create_sequence_stmt(
-      MEM_ROOT *mem_root, bool only_if_not_exists, Table_ident *table_name,
-      On_duplicate on_duplicate,
+      MEM_ROOT *mem_root, bool only_if_not_exists_arg, Table_ident *table_name_arg,
+      On_duplicate on_duplicate_arg,
       const Mem_root_array<PT_create_table_option *>
           *opt_create_sequence_options)
-      : PT_create_table_stmt(mem_root, false, only_if_not_exists, table_name,
-                             NULL, NULL, NULL, on_duplicate, NULL),
+      : PT_create_table_stmt(mem_root, false, only_if_not_exists_arg, table_name_arg,
+                             NULL, NULL, NULL, on_duplicate_arg, NULL),
         opt_create_sequence_options(opt_create_sequence_options) {}
 
   /**

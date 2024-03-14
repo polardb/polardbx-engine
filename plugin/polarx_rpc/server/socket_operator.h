@@ -25,8 +25,8 @@
 namespace polarx_rpc {
 
 class Csocket final {
-  NO_CONSTRUCTOR(Csocket);
-  NO_COPY_MOVE(Csocket);
+  NO_CONSTRUCTOR(Csocket)
+  NO_COPY_MOVE(Csocket)
 
  public:
   /// 0 if success else -errno

@@ -149,7 +149,7 @@ class Outline_optimizer_proc_add : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_optimizer_proc_add() {}
+  ~Outline_optimizer_proc_add() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -243,7 +243,7 @@ class Outline_index_proc_add : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_index_proc_add() {}
+  ~Outline_index_proc_add() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -310,7 +310,7 @@ class Outline_proc_del : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_proc_del() {}
+  ~Outline_proc_del() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -360,7 +360,7 @@ class Outline_proc_flush : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_proc_flush() {}
+  ~Outline_proc_flush() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -440,7 +440,7 @@ class Outline_proc_show : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_proc_show() {}
+  ~Outline_proc_show() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -554,7 +554,7 @@ class Outline_proc_preview : public Outline_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Outline_proc_preview() {}
+  ~Outline_proc_preview() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

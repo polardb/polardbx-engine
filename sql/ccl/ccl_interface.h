@@ -28,7 +28,7 @@
 
 class THD;
 struct LEX;
-struct Table_ref;
+class Table_ref;
 class Item;
 
 namespace im {

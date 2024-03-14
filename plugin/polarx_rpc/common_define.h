@@ -8,6 +8,9 @@
 // Disable/default class copy & move.
 //
 
+#include <cstddef>
+#include <utility>
+
 #define NO_CONSTRUCTOR(_class) \
  public:                       \
   _class() = delete;           \

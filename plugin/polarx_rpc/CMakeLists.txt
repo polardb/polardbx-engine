@@ -88,6 +88,11 @@ ELSE ()
         ADD_COMPILE_FLAGS(${PROTO_SRCS} COMPILE_FLAGS "-Wno-unused-variable")
     ENDIF ()
 
+    ADD_COMPILE_FLAGS(${PROTO_SRCS} COMPILE_FLAGS "-Wno-shadow-field")
+    ADD_COMPILE_FLAGS(${PROTO_SRCS} COMPILE_FLAGS "-Wno-unused-const-variable")
+    ADD_COMPILE_FLAGS(${PROTO_SRCS} COMPILE_FLAGS "-Wno-deprecated-declarations")
+    ADD_COMPILE_FLAGS(${PROTO_SRCS} COMPILE_FLAGS "-Wno-pessimizing-move")
+
     SET(polarx_rpc_PROTOBUF_SRC ${PROTO_LITE_SRCS} ${PROTO_LITE_HDRS})
 
     IF (MSVC)
@@ -132,6 +137,11 @@ ELSE ()
             "secure/account_verification_handler.cc"
             "secure/native_verification.cc")
 
+    ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-shadow-field")
+    ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-unused-const-variable")
+    ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-deprecated-declarations")
+    ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-pessimizing-move")
+
     ADD_COMPILE_FLAGS(${polarx_rpc_SRC} ${polarx_rpc_PROTOBUF_SRC} COMPILE_FLAGS)
 
     MYSQL_ADD_PLUGIN(polarx_rpc ${polarx_rpc_SRC} DEFAULT MODULE_OUTPUT_NAME "polarx_rpc")
@@ -162,6 +172,11 @@ ELSE ()
             tests/client/xconnection_impl.cc
             tests/client/xrow.cc
     )
+
+    ADD_COMPILE_FLAGS(${CLIENT_SRC} COMPILE_FLAGS "-Wno-shadow-field")
+    ADD_COMPILE_FLAGS(${CLIENT_SRC} COMPILE_FLAGS "-Wno-unused-const-variable")
+    ADD_COMPILE_FLAGS(${CLIENT_SRC} COMPILE_FLAGS "-Wno-deprecated-declarations")
+    ADD_COMPILE_FLAGS(${CLIENT_SRC} COMPILE_FLAGS "-Wno-pessimizing-move")
 
     ADD_COMPILE_FLAGS(${CLIENT_SRC} COMPILE_FLAGS)
     ADD_LIBRARY(polarx_rpc_client STATIC ${CLIENT_SRC})
@@ -206,6 +221,11 @@ ELSE ()
             tests/driver/processor/commands/macro.cc
             tests/driver/processor/commands/mysqlxtest_error_names.cc
     )
+
+    ADD_COMPILE_FLAGS(${XTEST_SRC} COMPILE_FLAGS "-Wno-shadow-field")
+    ADD_COMPILE_FLAGS(${XTEST_SRC} COMPILE_FLAGS "-Wno-unused-const-variable")
+    ADD_COMPILE_FLAGS(${XTEST_SRC} COMPILE_FLAGS "-Wno-deprecated-declarations")
+    ADD_COMPILE_FLAGS(${XTEST_SRC} COMPILE_FLAGS "-Wno-pessimizing-move")
 
     ADD_COMPILE_FLAGS(${XTEST_SRC} COMPILE_FLAGS)
     MYSQL_ADD_EXECUTABLE(polarx_rpc_test ${XTEST_SRC})

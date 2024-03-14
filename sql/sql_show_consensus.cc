@@ -73,6 +73,7 @@
 #include "sql/sql_tmp_table.h"               // create_ondisk_from_heap
 #include "sql/sql_trigger.h"                 // acquire_shared_mdl_for_trigger
 #include "sql/strfunc.h"                     // lex_string_strmake
+#include "sql/sys_vars_consensus.h"
 #include "sql/table_trigger_dispatcher.h"    // Table_trigger_dispatcher
 #include "sql/temp_table_param.h"            // Temp_table_param
 #include "sql/trigger.h"                     // Trigger
@@ -163,14 +164,7 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
         has_voted = "No";
         break;
     }
-    switch (cis[i].forceSync) {
-      case 1:
-        force_sync = "Yes";
-        break;
-      case 0:
-        force_sync = "No";
-        break;
-    }
+    force_sync = cis[i].forceSync ? "Yes" : "No";
     election_weight = cis[i].electionWeight;
     applied_index = cis[i].appliedIndex;
     learner_source = cis[i].learnerSource;
@@ -275,14 +269,7 @@ int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
     }
   }
 
-  switch (opt_cluster_log_type_instance) {
-    case 0:
-      instance_type = "Normal";
-      break;
-    case 1:
-      instance_type = "Log";
-      break;
-  }
+  instance_type = opt_cluster_log_type_instance ? "Log" : "Normal";
 
   int field_num = 0;
   table->field[field_num++]->store((longlong)id, true);

@@ -94,7 +94,7 @@ class Table_stats : public Object_stats {
  public:
   Table_stats();
 
-  virtual ~Table_stats() {}
+  ~Table_stats() override {}
 
   /**
     Accumulate the data from Stats_data;
@@ -121,7 +121,7 @@ class Index_stats : public Object_stats {
  public:
   Index_stats();
 
-  virtual ~Index_stats() {}
+  ~Index_stats() override {}
 
   /**
     Accumulate the data from Stats_data;

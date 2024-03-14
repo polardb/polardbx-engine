@@ -17,7 +17,7 @@ namespace polarx_rpc {
 class CtcpConnection;
 
 class CpolarxEncoder final {
-  NO_COPY_MOVE(CpolarxEncoder);
+  NO_COPY_MOVE(CpolarxEncoder)
 
  private:
   protocol::Encoding_pool enc_pool_;

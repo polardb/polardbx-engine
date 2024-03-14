@@ -32,6 +32,8 @@
 
 #include "lizard0log.h"
 
+#include <sstream>
+
 /** Get the format string for the logger.
 @param[in]      errcode         The error code from share/errmsg-*.txt
 @return the message string or nullptr */

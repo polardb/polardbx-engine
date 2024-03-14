@@ -33,7 +33,7 @@ class Outline_reload : public Reload {
  public:
   Outline_reload() {}
 
-  virtual ~Outline_reload() {}
+  ~Outline_reload() override {}
 
   virtual void execute(THD *thd) override;
 

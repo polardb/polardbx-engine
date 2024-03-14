@@ -2142,7 +2142,7 @@ class THD : public MDL_context_owner,
    public:
     bool is_read_only() const override { return false; }
     Autonomous_trx_rw(THD *thd, Attachable_trx *prev_trx);
-    ~Autonomous_trx_rw();
+    ~Autonomous_trx_rw() override;
 
     void init_autonomous();
 

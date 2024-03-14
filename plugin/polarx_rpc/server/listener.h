@@ -31,7 +31,7 @@
 namespace polarx_rpc {
 
 class Clistener final : public CepollCallback {
-  NO_COPY_MOVE(Clistener);
+  NO_COPY_MOVE(Clistener)
 
  private:
   CmtEpoll &epoll_;

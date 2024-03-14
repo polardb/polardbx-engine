@@ -294,7 +294,7 @@ trx_undo_t *trx_undo_mem_create(trx_rseg_t *rseg, ulint id, ulint type,
 
 /* Forward declaration. */
 namespace undo {
-struct Tablespace;
+class Tablespace;
 class Truncate;
 }  // namespace undo
 

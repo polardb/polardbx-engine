@@ -966,15 +966,15 @@ ha_sequence::~ha_sequence() {
   @retval         false           Success
   @retval         true            Failure
 */
-bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table,
+bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table_arg,
                                             ulonglong *local_values) {
   Sequence_last_value *entry;
   st_sequence_field_info *field_info;
   Field **field;
   DBUG_ENTER("fill_sequence_fields");
 
-  std::string key(table->s->table_cache_key.str,
-                  table->s->table_cache_key.length);
+  std::string key(table_arg->s->table_cache_key.str,
+                  table_arg->s->table_cache_key.length);
   Sequence_last_value_hash::const_iterator it =
       thd->get_sequence_hash()->find(key);
 
@@ -988,9 +988,9 @@ bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table,
         std::pair<std::string, Sequence_last_value *>(key, entry));
   }
 
-  Bitmap_helper bitmap_helper(table, m_share);
+  Bitmap_helper bitmap_helper(table_arg, m_share);
 
-  for (field = table->field, field_info = seq_fields; *field;
+  for (field = table_arg->field, field_info = seq_fields; *field;
        field++, field_info++) {
     assert(!memcmp(field_info->field_name, (*field)->field_name,
                    strlen(field_info->field_name)));
@@ -1012,14 +1012,14 @@ bool ha_sequence::fill_into_sequence_fields(THD *thd, TABLE *table,
   @retval         false           Success
   @retval         true            Failure
 */
-bool ha_sequence::fill_sequence_fields_from_thd(THD *thd, TABLE *table) {
+bool ha_sequence::fill_sequence_fields_from_thd(THD *thd, TABLE *table_arg) {
   Sequence_last_value *entry;
   st_sequence_field_info *field_info;
   Field **field;
   DBUG_ENTER("fill_sequence_fields_from_thd");
 
-  std::string key(table->s->table_cache_key.str,
-                  table->s->table_cache_key.length);
+  std::string key(table_arg->s->table_cache_key.str,
+                  table_arg->s->table_cache_key.length);
   Sequence_last_value_hash::const_iterator it =
       thd->get_sequence_hash()->find(key);
 
@@ -1033,9 +1033,9 @@ bool ha_sequence::fill_sequence_fields_from_thd(THD *thd, TABLE *table) {
     DBUG_RETURN(true);
   }
 
-  Bitmap_helper bitmap_helper(table, m_share);
+  Bitmap_helper bitmap_helper(table_arg, m_share);
 
-  for (field = table->field, field_info = seq_fields; *field;
+  for (field = table_arg->field, field_info = seq_fields; *field;
        field++, field_info++) {
     assert(!memcmp(field_info->field_name, (*field)->field_name,
                    strlen(field_info->field_name)));
@@ -1448,7 +1448,7 @@ int ha_sequence::external_lock(THD *thd, int lock_type) {
   @retval         0         Success
   @retval         ~0        Failure
 */
-int ha_sequence::scroll_sequence(TABLE *table,
+int ha_sequence::scroll_sequence(TABLE *table_arg,
                                  Sequence_cache_request cache_request,
                                  Share_locker_helper *helper, SR_ctx *sr_ctx) {
   DBUG_ENTER("ha_sequence::scroll_sequence");
@@ -1460,7 +1460,7 @@ int ha_sequence::scroll_sequence(TABLE *table,
 
   /* Sequence transaction do the reload */
   Reload_sequence_cache_ctx ctx(ha_thd(), table_share);
-  DBUG_RETURN(ctx.reload_sequence_cache(table, (void *)sr_ctx));
+  DBUG_RETURN(ctx.reload_sequence_cache(table_arg, (void *)sr_ctx));
 }
 
 /**

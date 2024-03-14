@@ -21,7 +21,7 @@ typedef void (easy_buf_cleanup_pt)(easy_buf_t *, void *);
     easy_list_t             node;       \
     int                     flags;      \
     easy_buf_cleanup_pt     *cleanup;   \
-    void                    *args;
+    void                    *args
 
 struct easy_buf_t {
     EASY_BUF_DEFINE;

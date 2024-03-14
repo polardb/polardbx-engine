@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <string>
 #include <utility>
+#include <sstream>
 
 #include "my_sys.h"
 #include "mysqld_error.h"
@@ -36,16 +37,12 @@ struct err_t final {
         sql_state(std::move(state)),
         severity(sev) {}
 
-#pragma GCC diagnostic ignored "-Wsuggest-attribute=format"
-
   err_t(int e, std::string state, Severity sev, const char *fmt, va_list args)
       : error(e), sql_state(std::move(state)), severity(sev) {
     char buffer[MAX_MESSAGE_LENGTH];
-    ::vsnprintf(buffer, sizeof(buffer), fmt, args);
+    std::snprintf(buffer, sizeof(buffer), fmt, args);
     message.assign(buffer);
   }
-
-#pragma GCC diagnostic warning "-Wsuggest-attribute=format"
 
   explicit inline operator bool() const { return error != 0; }
 

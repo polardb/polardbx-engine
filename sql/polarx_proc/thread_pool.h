@@ -14,7 +14,6 @@
 
 #include "lock.h"
 
-using namespace std;
 
 namespace im {
 struct TaskItem {
@@ -133,8 +132,8 @@ class ThreadPool {
  private:
   Mutex mu_;
   CondVar cv_;
-  deque<TaskItem> deque_;
-  vector<pthread_t> threads_;
+  std::deque<TaskItem> deque_;
+  std::vector<pthread_t> threads_;
   uint32_t thread_count_;
   bool shutdown_;
   uint32_t no_doing_thread_count_;

@@ -21,8 +21,19 @@ MACRO(IMPORT_ROCKSDB)
   set(WITH_TESTS OFF)
   set(WITH_JEMALLOC OFF)
   set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+
+  # ignore errors in dependency build
+  set(ORIGINAL_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(FIND "${CMAKE_CXX_FLAGS}" "-Werror" WERROR_POS)
+  if (NOT WERROR_POS EQUAL -1)
+      string(REPLACE "-Werror" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
+
   add_subdirectory(${ROCKSDB_DIR})
   include_directories(${ROCKSDB_DIR}/include)
+
+  set(CMAKE_CXX_FLAGS "${ORIGINAL_CXX_FLAGS}")
 
   # restore the original values
   set(WITH_TESTS ${WITH_TESTS_BACKUP})

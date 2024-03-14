@@ -15,8 +15,8 @@
 namespace polarx_rpc {
 
 class Ctime final {
-  NO_CONSTRUCTOR(Ctime);
-  NO_COPY_MOVE(Ctime);
+  NO_CONSTRUCTOR(Ctime)
+  NO_COPY_MOVE(Ctime)
 
  public:
   static inline int64_t system_ms() {

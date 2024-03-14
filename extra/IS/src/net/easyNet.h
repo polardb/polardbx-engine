@@ -54,7 +54,7 @@ class EasyNet : public Net {
  public:
   EasyNet(uint64_t num = 2, const uint64_t sessionTimeout = 300,
           bool memory_usage_count = false);
-  virtual ~EasyNet() {}
+  ~EasyNet() override {}
 
   int init(void *ptr = nullptr) override;
   int start(int port) override;

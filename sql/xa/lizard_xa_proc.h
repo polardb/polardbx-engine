@@ -170,7 +170,7 @@ class Xa_proc_find_by_xid : public Xa_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Xa_proc_find_by_xid() {}
+  ~Xa_proc_find_by_xid() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -264,7 +264,7 @@ class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Xa_proc_prepare_with_trx_slot() {}
+  ~Xa_proc_prepare_with_trx_slot() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -315,7 +315,7 @@ class Xa_proc_send_heartbeat : public Xa_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Xa_proc_send_heartbeat() {}
+  ~Xa_proc_send_heartbeat() override {}
 
   /* Proc name */
   virtual const std::string str() const override {
@@ -380,7 +380,7 @@ class Xa_proc_advance_gcn_no_flush : public Xa_proc_base {
   virtual Sql_cmd *evoke_cmd(THD *thd,
                              mem_root_deque<Item *> *list) const override;
 
-  virtual ~Xa_proc_advance_gcn_no_flush() {}
+  ~Xa_proc_advance_gcn_no_flush() override {}
 
   /* Proc name */
   virtual const std::string str() const override {

@@ -123,7 +123,7 @@ class RecordSampler : public Sampler {
                          enum_sampling_method sampling_method);
 
   /** Destructor. */
-  virtual ~RecordSampler() { m_leaf_pcur.close(); }
+  ~RecordSampler() override { m_leaf_pcur.close(); }
 
   virtual dberr_t next(uchar *buf) override;
 
@@ -447,7 +447,7 @@ class BlockSampler : public Sampler {
                         enum_sampling_method sampling_method);
 
   /** Destructor. */
-  virtual ~BlockSampler() {}
+  ~BlockSampler() override {}
 
   virtual dberr_t init(trx_t *trx, dict_index_t *index,
                        row_prebuilt_t *prebuilt) override;

@@ -15,7 +15,7 @@ namespace polarx_rpc {
 
 template <class T>
 class CtimerHeap final {
-  NO_COPY_MOVE(CtimerHeap);
+  NO_COPY_MOVE(CtimerHeap)
 
  private:
   struct timer_t final {

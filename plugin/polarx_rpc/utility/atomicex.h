@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
+#include <cassert>
 
 #include "../common_define.h"
 
@@ -17,7 +18,7 @@
 namespace polarx_rpc {
 
 class CspinLock final {
-  NO_COPY_MOVE(CspinLock);
+  NO_COPY_MOVE(CspinLock)
 
  private:
   std::atomic_flag lock_;
@@ -44,7 +45,7 @@ class CspinLock final {
 };
 
 class CautoSpinLock final {
-  NO_COPY(CautoSpinLock);
+  NO_COPY(CautoSpinLock)
 
  private:
   CspinLock *lock_;
@@ -96,7 +97,7 @@ class CautoSpinLock final {
 };
 
 class CmcsSpinLock final {
-  NO_COPY_MOVE(CmcsSpinLock);
+  NO_COPY_MOVE(CmcsSpinLock)
 
  public:
   struct mcs_spin_node_t final {
@@ -162,7 +163,7 @@ class CmcsSpinLock final {
 };
 
 class CautoMcsSpinLock final {
-  NO_COPY_MOVE(CautoMcsSpinLock);
+  NO_COPY_MOVE(CautoMcsSpinLock)
 
  private:
   CmcsSpinLock *lock_;
@@ -209,7 +210,7 @@ class CautoMcsSpinLock final {
 
 // Nonfair reenter-able writer-first spin read-write-lock.
 class CspinRWLock final {
-  NO_COPY_MOVE(CspinRWLock);
+  NO_COPY_MOVE(CspinRWLock)
 
  private:
   static constexpr uintptr_t RWLOCK_PART_BITS = sizeof(uintptr_t) * 4;
@@ -357,7 +358,7 @@ class CspinRWLock final {
 };
 
 class CautoSpinRWLock final {
-  NO_COPY_MOVE(CautoSpinRWLock);
+  NO_COPY_MOVE(CautoSpinRWLock)
 
  private:
   CspinRWLock &lock_;

@@ -107,7 +107,7 @@ class Parser_error_handler : public Internal_error_handler {
     return true;
   }
 
-  virtual ~Parser_error_handler() { m_thd->pop_internal_handler(); }
+  ~Parser_error_handler() override { m_thd->pop_internal_handler(); }
 
  private:
   THD *m_thd;

@@ -88,7 +88,7 @@ class ChangesetManager {
   int open_table(const std::string &tableName, TABLE **output,
                  thr_lock_type lock_type);
 
-  static atomic_bool changeset_start;
+  static std::atomic_bool changeset_start;
 
   static inline bool is_changeset_enable() {
     return changeset_start.load() && opt_enable_changeset;

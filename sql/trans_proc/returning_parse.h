@@ -24,7 +24,7 @@
 #include "sql/sql_list.h"
 
 class THD;
-class LEX;
+struct LEX;
 class Query_block;
 
 namespace im {

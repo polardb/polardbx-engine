@@ -30,7 +30,7 @@ class CmtEpoll;
 class CtcpConnection;
 
 class CsessionManager final {
-  NO_COPY_MOVE(CsessionManager);
+  NO_COPY_MOVE(CsessionManager)
 
  private:
   const std::string host_;

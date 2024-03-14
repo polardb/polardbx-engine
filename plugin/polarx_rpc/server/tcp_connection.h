@@ -45,7 +45,7 @@ static constexpr uint32_t MAX_FIXED_DEALING_BUF = 0x4000000;  // 64MB
 static constexpr uint32_t MAX_NET_WRITE_TIMEOUT = 60 * 1000;  // 60s
 
 class CtcpConnection final : public CepollCallback {
-  NO_COPY_MOVE(CtcpConnection);
+  NO_COPY_MOVE(CtcpConnection)
 
  private:
   CmtEpoll &epoll_;

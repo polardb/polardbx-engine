@@ -67,7 +67,7 @@ class Binlog_xa_specification : public XA_specification {
     clear();
   }
 
-  virtual ~Binlog_xa_specification() {}
+  ~Binlog_xa_specification() override {}
 
   Binlog_xa_specification(const Binlog_xa_specification &other)
       : XA_specification(other) {
