@@ -68,6 +68,9 @@ message StmtExecute {
 
   // capabilities
   optional uint64 capabilities = 17;
+
+  // innodb_mark_distributed
+  optional bool mark_distributed = 18;
 }
 
 // statement executed successful

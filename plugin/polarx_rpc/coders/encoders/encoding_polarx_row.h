@@ -114,7 +114,7 @@ class XRow_encoder_base {
       m_encoder->template ensure_buffer_size<30>();
       m_encoder->template encode_field_delimited_header<tags::Row::field>();
       m_encoder->template encode_const_var_uint<1>();
-      m_encoder->template encode_const_var_uint<1>();
+      m_encoder->template encode_const_var_uint<0>();
       return;
     }
 

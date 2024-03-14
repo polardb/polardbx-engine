@@ -75,7 +75,6 @@ class Csession final : public CsessionBase {
 
   void wait_begin(THD *thd, int wait_type);
   void wait_end(THD *thd);
-  void post_kill(THD *thd);
 
   inline void shutdown(bool log) {
     shutdown_.store(true, std::memory_order_release);

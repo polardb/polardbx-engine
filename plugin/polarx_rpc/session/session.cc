@@ -56,13 +56,8 @@ static void thd_wait_end(THD *thd) {
   reinterpret_cast<Csession *>(thd->polarx_rpc_context)->wait_end(thd);
 }
 
-static void post_kill_notification(THD *thd) {
-  assert(thd->polarx_rpc_context != nullptr);
-  reinterpret_cast<Csession *>(thd->polarx_rpc_context)->post_kill(thd);
-}
-
 static THD_event_functions polarx_rpc_monitor = {thd_wait_begin, thd_wait_end,
-                                                 post_kill_notification};
+                                                 nullptr};
 
 /**
  * @param wait_type
@@ -113,8 +108,6 @@ void Csession::wait_end(THD *thd) {
     thd->polarx_rpc_record = false;
   }
 }
-
-void Csession::post_kill(THD *thd) {}
 
 bool Csession::flush() {
   if (shutdown_.load(std::memory_order_acquire)) {
@@ -376,6 +369,10 @@ void Csession::dispatch(msg_t &&msg, bool &run) {
 }
 
 err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
+  /// check exit first
+  if (plugin_info.exit.load(std::memory_order_acquire))
+    return err_t(ER_SERVER_SHUTDOWN, "server shutdown", "HY000", err_t::FATAL);
+
   /// attach before any mysql internal operations
   auto err = attach();
   if (UNLIKELY(err)) return err;  /// success or fatal error
@@ -402,6 +399,8 @@ err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
   if (!thd_in_active_multi_stmt_transaction(thd)) thd->clear_transaction_seq();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->mark_cts_transaction();
+  if (msg.has_mark_distributed() && msg.mark_distributed())
+    thd->mark_distributed();
   if (msg.has_snapshot_seq()) thd->set_snapshot_seq(msg.snapshot_seq());
   if (msg.has_commit_seq()) thd->set_commit_seq(msg.commit_seq());
 #endif
@@ -601,6 +600,10 @@ std::string plan_param_audit_str_builder(
 }
 
 err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
+  /// check exit first
+  if (plugin_info.exit.load(std::memory_order_acquire))
+    return err_t(ER_SERVER_SHUTDOWN, "server shutdown", "HY000", err_t::FATAL);
+
   /// attach before any mysql internal operations
   auto err = attach();
   if (UNLIKELY(err)) return err;
@@ -627,6 +630,8 @@ err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
   if (!thd_in_active_multi_stmt_transaction(thd)) thd->clear_transaction_seq();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->mark_cts_transaction();
+  if (msg.has_mark_distributed() && msg.mark_distributed())
+    thd->mark_distributed();
   if (msg.has_snapshot_seq()) thd->set_snapshot_seq(msg.snapshot_seq());
   if (msg.has_commit_seq()) thd->set_commit_seq(msg.commit_seq());
 #endif

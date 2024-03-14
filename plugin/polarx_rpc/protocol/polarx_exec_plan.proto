@@ -221,5 +221,8 @@ message ExecPlan {
 
   // capabilities
   optional uint64 capabilities = 16;
+
+  // innodb_mark_distributed
+  optional bool mark_distributed = 17;
 }
 

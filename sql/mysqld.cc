@@ -2276,10 +2276,6 @@ class Set_kill_conn : public Do_THD_Impl {
 
       MYSQL_CALLBACK(Connection_handler_manager::event_functions,
                      post_kill_notification, (killing_thd));
-      /// and THD PolarDB-X RPC cb
-      if (likely(killing_thd != nullptr))
-        MYSQL_CALLBACK(killing_thd->polarx_rpc_monitor, post_kill_notification,
-                       (killing_thd));
     }
 
     if (killing_thd->is_killable && killing_thd->kill_immunizer == nullptr) {

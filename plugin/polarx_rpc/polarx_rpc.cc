@@ -51,9 +51,10 @@ static int polarx_rpc_init(MYSQL_PLUGIN info) {
   /// construct
   assert(!plugin_info.server);
   try {
-    plugin_info.server.reset(new polarx_rpc::Cserver);
+    /// init cache before server
     plugin_info.cache.reset(new polarx_rpc::CrequestCache(
         polarx_rpc::request_cache_number, polarx_rpc::request_cache_instances));
+    plugin_info.server.reset(new polarx_rpc::Cserver);
   } catch (std::exception &e) {
     my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
                           "Plugin polarx_rpc startup failed with error \"%s\"",
