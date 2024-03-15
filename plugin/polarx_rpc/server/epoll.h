@@ -986,7 +986,7 @@ class CmtEpoll final {
 
   static inline int check_port(uint16_t port) {
     auto fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (UNLIKELY(fd <= 0)) return -errno;
+    if (UNLIKELY(fd < 0)) return -errno;
     sockaddr_in address;
     ::memset(&address, 0, sizeof(address));
     if (::inet_pton(AF_INET, "127.0.0.1", &address.sin_addr.s_addr) != 1) {
@@ -1014,7 +1014,7 @@ class CmtEpoll final {
     address.sin_addr.s_addr = htonl(INADDR_ANY);
     address.sin_port = htons(port);
     auto fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (UNLIKELY(fd <= 0)) return -errno;
+    if (UNLIKELY(fd < 0)) return -errno;
     int sock_op = 1;
     ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &sock_op, sizeof(sock_op));
     if (reuse)

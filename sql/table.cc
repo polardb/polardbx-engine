@@ -165,6 +165,8 @@ LEX_CSTRING GTID_EXECUTED_NAME = {STRING_WITH_LEN("gtid_executed")};
 /* Keyword for parsing generated column functions */
 LEX_CSTRING PARSE_GCOL_KEYWORD = {STRING_WITH_LEN("parse_gcol_expr")};
 
+static char check_constraint_source_expression[256] = "";
+
 /* Functions defined in this file */
 
 static Item *create_view_field(THD *thd, Table_ref *view, Item **field_ref,
@@ -2482,20 +2484,17 @@ static bool fix_value_generator_fields(THD *thd, TABLE *table,
   std::string where_str;
   if (source == VGS_GENERATED_COLUMN || source == VGS_DEFAULT_EXPRESSION) {
     if (field->is_field_for_functional_index()) {
-      where_str.append(STRING_WITH_LEN("functional index"));
+      thd->where = "functional index";
     } else if (source == VGS_GENERATED_COLUMN) {
-      where_str.append(STRING_WITH_LEN("generated column function"));
+      thd->where = "generated column function";
     } else {
-      where_str.append(STRING_WITH_LEN("default value expression"));
+      thd->where = "default value expression";
     }
   } else {
     assert(source == VGS_CHECK_CONSTRAINT);
-    where_str.reserve(256);
-    where_str.append(STRING_WITH_LEN("check constraint "));
-    where_str.append(source_name);
-    where_str.append(STRING_WITH_LEN(" expression"));
+    snprintf(check_constraint_source_expression, sizeof(check_constraint_source_expression), "check constraint %s expression", source_name);
+    thd->where = check_constraint_source_expression;
   }
-  thd->where = where_str.c_str();
 
   bool charset_switched = false;
   const CHARSET_INFO *saved_collation_connection = Item::default_charset();

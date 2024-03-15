@@ -41,9 +41,9 @@ class Paxos;
 }  // namespace alisql
 
 struct ConsensusStateChange {
-  alisql::Paxos::StateType state;
-  uint64 term;
-  uint64 index;
+  alisql::Paxos::StateType state{alisql::Paxos::NOROLE};
+  uint64 term{0};
+  uint64 index{0};
 };
 
 class BLConsensusLog : public alisql::PaxosLog {
