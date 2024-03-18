@@ -567,8 +567,8 @@ class GeneralCompaction : public Compaction {
 
  protected:
   using PrefetchExtentMap = std::unordered_map<int64_t, AsyncRandomAccessExtent *,
-  std::hash<int64_t>, std::equal_to<int64_t>,
-  memory::stl_adapt_allocator<std::pair<int64_t,
+  std::hash<int64_t>, std::equal_to<>,
+  memory::stl_adapt_allocator<std::pair<const int64_t,
   AsyncRandomAccessExtent *>, memory::ModId::kCompaction>>;
 
   // TODO default options for create table builder, remove future

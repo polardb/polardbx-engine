@@ -257,7 +257,7 @@ void MurmurHash3_x86_32(const void* key, int len, uint32_t seed, void* out)
   case 3: k1 ^= tail[2] << 16; __attribute__ ((fallthrough));
   case 2: k1 ^= tail[1] << 8; __attribute__ ((fallthrough));
   case 1: k1 ^= tail[0];
-    k1 *= c1; k1 = ROTL32(k1, 15); k1 *= c2; h1 ^= k1; __attribute__ ((fallthrough));
+    k1 *= c1; k1 = ROTL32(k1, 15); k1 *= c2; h1 ^= k1;
   };
 
   //----------
@@ -350,7 +350,7 @@ void MurmurHash3_x86_128(const void* key, const int len, uint32_t seed, void* ou
   case  3: k1 ^= tail[2] << 16; __attribute__ ((fallthrough));
   case  2: k1 ^= tail[1] << 8; __attribute__ ((fallthrough));
   case  1: k1 ^= tail[0] << 0;
-    k1 *= c1; k1 = ROTL32(k1, 15); k1 *= c2; h1 ^= k1; __attribute__ ((fallthrough));
+    k1 *= c1; k1 = ROTL32(k1, 15); k1 *= c2; h1 ^= k1;
   };
 
   //----------
@@ -434,7 +434,7 @@ void MurmurHash3_x64_128(const void* key, const int len, const uint32_t seed, vo
   case  3: k1 ^= ((uint64_t)tail[2]) << 16; __attribute__ ((fallthrough));
   case  2: k1 ^= ((uint64_t)tail[1]) << 8; __attribute__ ((fallthrough));
   case  1: k1 ^= ((uint64_t)tail[0]) << 0;
-    k1 *= c1; k1 = ROTL64(k1, 31); k1 *= c2; h1 ^= k1; __attribute__ ((fallthrough));
+    k1 *= c1; k1 = ROTL64(k1, 31); k1 *= c2; h1 ^= k1;
   };
 
   //----------

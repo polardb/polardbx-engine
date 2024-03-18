@@ -153,8 +153,13 @@ link_directories(
   /usr/lib/mysql/
   )
 
+set(lib_dir "lib64")
+if(EXISTS "/etc/lsb-release")
+  set(lib_dir "lib")
+endif()
+
 IF(WITH_PROTOBUF3)
-  SET (PROTOBUF_OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/bu/lib64/libprotobuf.a)
+  SET (PROTOBUF_OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/bu/${lib_dir}/libprotobuf.a)
   add_custom_command (
     OUTPUT ${PROTOBUF_OUTPUT}
     COMMAND cd ${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/cmake &&
@@ -166,7 +171,7 @@ IF(WITH_PROTOBUF3)
     ALL DEPENDS ${PROTOBUF_OUTPUT}
   )
   INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/bu/include/)
-  link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/bu/lib64/)
+  link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../dependency/protobuf-3.6.1/bu/${lib_dir}/)
 ENDIF()
 
 ADD_LIBRARY (aliconsensus STATIC ${CONSENSUS_SRC_FILES})

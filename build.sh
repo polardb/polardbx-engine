@@ -221,7 +221,7 @@ elif [ x"$build_type" = x"Debug" ]; then
 fi
 
 if [ x"$mach_type" = x"x86_64" ]; then # X86
-  COMMON_FLAGS="$COMMON_FLAGS -fno-omit-frame-pointer -D_GLIBCXX_USE_CXX11_ABI=0"
+  COMMON_FLAGS="$COMMON_FLAGS -fno-omit-frame-pointer -D_GLIBCXX_USE_CXX11_ABI=1"
 elif [ x"$mach_type" = x"aarch64" ]; then # ARM64
   # ARM64 needn't more flags
   COMMON_FLAGS="$COMMON_FLAGS" #"-static-libstdc++ -static-libgcc"
@@ -253,14 +253,8 @@ else
   exit 1
 fi
 
-if [ x"$mach_type" = x"aarch64" ]; then # ARM64
-    CC=gcc
-    CXX=g++
-else # X86
-    CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
-    CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
-    source /opt/rh/devtoolset-7/enable
-fi
+CC=gcc
+CXX=g++
 
 # Update choosed version
 gcc_version=`$CC --version | awk 'NR==1 {print $3}'`
@@ -321,10 +315,15 @@ else
       -DDOWNLOAD_BOOST=0                \
       -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
       -DENABLE_DOWNLOADS=0              \
-      -DWITH_UNIT_TESTS=0
+      -DWITH_UNIT_TESTS=0 \
+      -DWITHOUT_IS_UT=1 \
+      -DWITH_PROTOBUF3=1 \
+      -DBUILD_AS_EXTERNAL=1 \
+      -DMINIMAL_MAKE=1 \
+      -DWITH_POLARX=OFF
 fi
 
-make -j `getconf _NPROCESSORS_ONLN`
+make -j$(nproc)
 
 
 if [ $with_initialize -eq  1 ]; then

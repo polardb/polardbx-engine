@@ -19,6 +19,8 @@
 
 #include "plugin/galaxy/udf/registrator.h"
 
+#include <string>
+
 namespace gs {
 namespace udf {
 

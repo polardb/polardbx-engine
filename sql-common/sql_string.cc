@@ -23,6 +23,7 @@
 #include "sql_string.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "my_dbug.h"
 #include "my_macros.h"

@@ -10,6 +10,7 @@
 #endif
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <cstdint>
 #include <algorithm>
 #include "m_string.h"
 #include "my_io.h"
@@ -172,13 +173,13 @@ long long Backup_page_tracker::set_page_tracking(UDF_INIT *, UDF_ARGS *args,
   int retval = 0;
   uint64_t lsn = 0;
   retval =
-      mysql_service_mysql_page_track->start(thd, PAGE_TRACK_SE_INNODB, &lsn);
+      mysql_service_mysql_page_track->start(thd, PAGE_TRACK_SE_INNODB, (uint64_t*)&lsn);
   if (retval) return (-1 * retval);
 
   // try stop only if page-track is ongoing
   if (!(*((long long *)args->args[0])) && (lsn != 0)) {
     retval =
-        mysql_service_mysql_page_track->stop(thd, PAGE_TRACK_SE_INNODB, &lsn);
+        mysql_service_mysql_page_track->stop(thd, PAGE_TRACK_SE_INNODB, (uint64_t*)&lsn);
     if (retval) return (-1 * retval);
   }
   return lsn;
@@ -225,7 +226,7 @@ long long Backup_page_tracker::page_track_get_start_lsn(UDF_INIT *,
   }
   uint64_t first_start_lsn, last_start_lsn;  // ignore the return value
   mysql_service_mysql_page_track->get_status(thd, PAGE_TRACK_SE_INNODB,
-                                             &first_start_lsn, &last_start_lsn);
+                                             (uint64_t*)&first_start_lsn, (uint64_t*)&last_start_lsn);
   return first_start_lsn;
 }
 
@@ -275,7 +276,7 @@ long long Backup_page_tracker::page_track_get_changed_page_count(
   uint64_t stop_lsn = *((long long *)args->args[1]);
 
   int status = mysql_service_mysql_page_track->get_num_page_ids(
-      thd, PAGE_TRACK_SE_INNODB, &start_lsn, &stop_lsn, &changed_page_count);
+      thd, PAGE_TRACK_SE_INNODB, (uint64_t*)&start_lsn, (uint64_t*)&stop_lsn, (uint64_t*)&changed_page_count);
   if (status) return (-1 * status);
 
   return (changed_page_count);
@@ -370,7 +371,7 @@ long long Backup_page_tracker::page_track_get_changed_pages(UDF_INIT *,
 
   Backup_page_tracker::m_receive_changed_page_data = true;
   int status = mysql_service_mysql_page_track->get_page_ids(
-      thd, PAGE_TRACK_SE_INNODB, &start_lsn, &stop_lsn,
+      thd, PAGE_TRACK_SE_INNODB, (uint64_t*)&start_lsn, (uint64_t*)&stop_lsn,
       Backup_page_tracker::m_changed_pages_buf, CHANGED_PAGES_BUFFER_SIZE,
       page_track_callback, nullptr);
   Backup_page_tracker::m_receive_changed_page_data = false;

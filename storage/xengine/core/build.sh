@@ -87,11 +87,11 @@ else
 fi
 
 if [ x"$build_type" = x"RelWithDebInfo" ]; then
-  COMMON_FLAGS="-O3 -g -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing -D_GLIBCXX_USE_CXX11_ABI=0"
+  COMMON_FLAGS="-O3 -g -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing -D_GLIBCXX_USE_CXX11_ABI=1"
   CFLAGS="$COMMON_FLAGS"
   CXXFLAGS="$COMMON_FLAGS"
 elif [ x"$build_type" = x"Debug" ]; then
-  COMMON_FLAGS="-O0 -g3 -gdwarf-2 -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing -D_GLIBCXX_USE_CXX11_ABI=0"
+  COMMON_FLAGS="-O0 -g3 -gdwarf-2 -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing -D_GLIBCXX_USE_CXX11_ABI=1"
   CFLAGS="$COMMON_FLAGS"
   CXXFLAGS="$COMMON_FLAGS"
 fi

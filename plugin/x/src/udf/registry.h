@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #define PLUGIN_X_SRC_UDF_REGISTRY_H_
 
 #include <initializer_list>
+#include <string>
 #include "plugin/x/src/udf/registrator.h"
 
 #define UDF(name) udf::get_##name##_record()

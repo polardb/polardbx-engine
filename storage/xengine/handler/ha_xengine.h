@@ -623,8 +623,7 @@ class ha_xengine : public my_core::handler {
   void setup_scan_iterator(const Xdb_key_def &kd, xengine::common::Slice *slice,
                            const bool use_all_keys, const bool is_ascending,
                            const uint eq_cond_len,
-                           const xengine::common::Slice* end_key = nullptr)
-                           MY_ATTRIBUTE((__nonnull__(1)));
+                           const xengine::common::Slice* end_key = nullptr);
   void release_scan_iterator(void);
 
   xengine::common::Status

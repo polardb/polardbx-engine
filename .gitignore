@@ -2623,3 +2623,5 @@ plugin/polarx_rpc/protobuf_lite/
 extra/IS/consensus/bu/
 extra/IS/consensus/output/
 extra/IS/dependency/easy/src/bu/
+build
+.cache

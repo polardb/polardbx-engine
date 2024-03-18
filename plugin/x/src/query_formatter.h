@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "plugin/x/ngs/include/ngs/memory.h"
 #include "plugin/x/src/helper/to_string.h"

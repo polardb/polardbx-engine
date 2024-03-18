@@ -55,6 +55,8 @@ Steinar */
 #ifndef MY_HASH_COMBINE_INCLUDED
 #define MY_HASH_COMBINE_INCLUDED
 
+#include <cstdint>
+
 #if defined(_MSC_VER)
 #define MY_FUNCTIONAL_HASH_ROTL32(x, r) _rotl(x, r)
 #else

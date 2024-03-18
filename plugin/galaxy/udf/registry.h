@@ -22,6 +22,7 @@
 #define PLUGIN_GALAXY_UDF_REGISTRY_H
 
 #include <initializer_list>
+#include <string>
 #include <unordered_map>
 
 #include "plugin/galaxy/udf/udf.h"
