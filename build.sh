@@ -253,8 +253,14 @@ else
   exit 1
 fi
 
+if [ x"$mach_type" = x"aarch64" ]; then # ARM64
     CC=gcc
     CXX=g++
+else # X86
+    CC=/opt/rh/devtoolset-7/root/usr/bin/gcc
+    CXX=/opt/rh/devtoolset-7/root/usr/bin/g++
+    source /opt/rh/devtoolset-7/enable
+fi
 
 # Update choosed version
 gcc_version=`$CC --version | awk 'NR==1 {print $3}'`
@@ -315,15 +321,11 @@ else
       -DDOWNLOAD_BOOST=0                \
       -DMYSQL_SERVER_SUFFIX="$server_suffix"         \
       -DENABLE_DOWNLOADS=0              \
-      -DWITH_UNIT_TESTS=0 \
-      -DWITHOUT_IS_UT=1 \
-      -DWITH_PROTOBUF3=1 \
-      -DBUILD_AS_EXTERNAL=1 \
-      -DMINIMAL_MAKE=1 \
-      -DWITH_POLARX=OFF
+      -DWITH_UNIT_TESTS=0
 fi
 
-make -j${nproc}
+make -j `getconf _NPROCESSORS_ONLN`
+
 
 if [ $with_initialize -eq  1 ]; then
   initialize

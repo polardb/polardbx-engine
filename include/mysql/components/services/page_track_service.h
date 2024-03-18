@@ -26,7 +26,6 @@
 
 #include <mysql/components/service.h>
 #include <functional>
-#include <cstdint>
 
 #ifdef __cplusplus
 class THD;

@@ -28,7 +28,6 @@
 #endif
 
 #include <sys/types.h>
-#include <string>
 #include <unordered_map>
 
 #include "field_types.h"  // enum_field_types
