@@ -1,0 +1,17 @@
+# Get rid of previous tests binlog
+--disable_query_log
+reset master;
+--enable_query_log
+
+drop table if exists t1;
+
+create table t2 (id int) engine = innodb;
+create table t3 (id int) engine = myisam;
+drop table if exists t2 ,t3, t4;
+
+create table t5 (id int) engine = innodb;
+drop table if exists t5;
+
+--echo # Show binlog events
+--let $keep_gtid_events= 1
+source include/show_binlog_events.inc;
