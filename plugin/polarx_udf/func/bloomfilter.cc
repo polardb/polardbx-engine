@@ -605,7 +605,7 @@ void XxHash_x64_64(const void *key, const int len, uint32_t seed, void *out) {
     bytes_left -= 8;
   }
   // process by 4-byte block
-  if (bytes_left > 4) {
+  if (bytes_left >= 4) {
     hash = processTail(hash, getblock32((uint32_t *)tail_by_int8, 0));
     tail_by_int8 += 4;
     bytes_left -= 4;
