@@ -237,7 +237,7 @@ bool handle_reload_request(THD *thd, unsigned long options, Table_ref *tables,
         than it would help them)
        */
       tmp_write_to_binlog = 0;
-      // TODO @yanhua, need it ?? with mysqld.cc:
+      // NOTE:: used from mysqld.cc
       // mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true,
       // true);
       //  if (mysql_bin_log.is_open()) {

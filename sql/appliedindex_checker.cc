@@ -29,7 +29,6 @@ void AppliedIndexChecker::prepare(intervalType &inv) {
   group_queue_.push_back(inv);
 }
 
-// TODO@ yanhua, need debug use
 int AppliedIndexChecker::commit(uint64 index) {
   std::lock_guard<std::mutex> lg(lock_);
   for (auto &inv : group_queue_) {

@@ -63,6 +63,7 @@ void raft_log_print(easy_log_level_t log_level, const char *message) {
     case EASY_LOG_DEBUG:
     case EASY_LOG_TRACE:
       xp::info(ER_XP_PROTO) << message;
+      break;
     case EASY_LOG_ALL:
       xp::system(ER_XP_PROTO) << message;
     default:

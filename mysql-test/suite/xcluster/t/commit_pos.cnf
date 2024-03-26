@@ -2,6 +2,7 @@
 
 [mysqld]
 commit_pos_watcher_interval=1000
+commit_pos_watcher=ON
 
 [mysqld.2]
 commit_pos_watcher=OFF

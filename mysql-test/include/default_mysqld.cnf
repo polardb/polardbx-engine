@@ -75,6 +75,8 @@ consensus-election-timeout=5000
 consensus-io-thread_cnt=8
 consensus-worker-thread_cnt=8
 consensus_log_level=LOG_ERROR
+enable_appliedindex_checker=ON
+commit_pos_watcher=ON
 
 skip-replica-start=OFF
 binlog_order_commits=OFF

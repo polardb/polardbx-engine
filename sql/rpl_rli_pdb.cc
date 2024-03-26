@@ -228,8 +228,11 @@ const char *info_slave_worker_fields[] = {
     */
     "channel_name",
 
+    // NOTE::deprecated
+    "checkpoint_consensus_apply_index",
+    
     // used by consensus
-    "checkpoint_consensus_apply_index", "consensus_apply_index"};
+    "consensus_apply_index"};
 
 /*
   Number of records in the mts partition hash below which
@@ -276,7 +279,6 @@ Slave_worker::Slave_worker(Relay_log_info *rli,
       checkpoint_relay_log_pos(0),
       checkpoint_master_log_pos(0),
       worker_checkpoint_seqno(0),
-      checkpoint_consensus_apply_index(0),
       running_status(NOT_RUNNING),
       exit_incremented(false) {
   /*
@@ -557,7 +559,6 @@ bool Slave_worker::read_info(Rpl_info_handler *from) {
   checkpoint_relay_log_pos = temp_checkpoint_relay_log_pos;
   checkpoint_master_log_pos = temp_checkpoint_master_log_pos;
   worker_checkpoint_seqno = temp_checkpoint_seqno;
-  checkpoint_consensus_apply_index = temp_checkpoint_consensus_apply_index;
   set_consensus_apply_index(temp_consensus_apply_index);
 
   return false;
@@ -597,6 +598,7 @@ bool Slave_worker::write_info(Rpl_info_handler *to) {
   ulong nbytes = (ulong)no_bytes_in_map(&group_executed);
   uchar *buffer = (uchar *)group_executed.bitmap;
   assert(nbytes <= (c_rli->checkpoint_group + 7) / 8);
+  ulong checkpoint_consensus_apply_index = 0;
 
   if (to->prepare_info_for_write() || to->set_info((int)internal_id) ||
       to->set_info(group_relay_log_name) ||
@@ -609,7 +611,7 @@ bool Slave_worker::write_info(Rpl_info_handler *to) {
       to->set_info((ulong)checkpoint_master_log_pos) ||
       to->set_info(worker_checkpoint_seqno) || to->set_info(nbytes) ||
       to->set_info(buffer, (size_t)nbytes) || to->set_info(channel) ||
-      to->set_info((ulong)checkpoint_consensus_apply_index) ||
+      to->set_info(checkpoint_consensus_apply_index) ||
       to->set_info((ulong)(consensus_apply_index.load())))
     return true;
 
@@ -689,7 +691,6 @@ bool Slave_worker::commit_positions(Log_event *ev, Slave_job_group *ptr_g,
       if (bitmap_is_set(&group_shifted, pos))
         bitmap_set_bit(&group_executed, pos - ptr_g->shifted);
     }
-    checkpoint_consensus_apply_index = ptr_g->checkpoint_consensus_index;
   }
   /*
     Extracts an updated relay-log name to store in Worker's rli.

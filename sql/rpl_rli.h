@@ -689,7 +689,6 @@ class Relay_log_info : public Rpl_info {
     max_binlog_size.
   */
  protected:
-  // TODO @yanhua, unnecessary atomic
   std::atomic<ulonglong> consensus_apply_index;
   /**
      Event group means a group of events of a transaction. group_relay_log_name

@@ -9338,8 +9338,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     DBUG_EXECUTE_IF("simulate_crash_after_sync_binlog", DBUG_SUICIDE(););
   }
 
-  // TODO @yanha, xpaxos will not use binlog_sender, so leader no need do this
-  //  && thd->slave_thread
   if (update_binlog_end_pos_after_sync && flush_error == 0 && sync_error == 0) {
     THD *tmp_thd = final_queue;
     const char *binlog_file = nullptr;

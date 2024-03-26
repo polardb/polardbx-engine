@@ -665,7 +665,7 @@ static Sys_var_bool Sys_enable_appliedindex_checker(
     "enable_appliedindex_checker",
     "enable applied index checker during ordered_commit",
     GLOBAL_VAR(opt_enable_appliedindex_checker), CMD_LINE(OPT_ARG),
-    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_enable_appliedindex_checker));
 
 static Sys_var_ulonglong Sys_appliedindex_force_delay(
@@ -751,7 +751,7 @@ static Sys_var_bool Sys_commit_pos_watcher(
     "commit_pos_watcher",
     "background thread checking and updating binlog commit position",
     READ_ONLY GLOBAL_VAR(opt_commit_pos_watcher), CMD_LINE(OPT_ARG),
-    DEFAULT(true));
+    DEFAULT(false));
 
 static Sys_var_ulonglong Sys_commit_pos_watcher_interval(
     "commit_pos_watcher_interval",

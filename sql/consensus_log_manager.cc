@@ -130,7 +130,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
   cache_log->open();
 
   if (open_cached_file(cache_log->get_io_cache(), mysql_tmpdir, LOG_PREFIX,
-                       binlog_stmt_cache_size, MYF(MY_WME)))
+                       binlog_cache_size, MYF(MY_WME)))
     return 1;
 
   cache_log->get_io_cache()->end_of_file = CACHE_BUFFER_SIZE;
