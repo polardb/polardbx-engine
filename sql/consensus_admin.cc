@@ -811,7 +811,6 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
           rli->flush_info(true);
         }
       } else {
-        xp::fatal(ER_XP_RECOVERY) << "should not reach here";
         // these code will not reached anymore
         // start_apply_index != 0 && recover_status == RELAYLOG_WORKING is
         // impossible
