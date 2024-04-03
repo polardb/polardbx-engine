@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2007, 2017, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,34 +20,36 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/** @file handler/i_s_ext.h
- Information of data file operation.
-
- Created 5/14/2019 Galaxy SQL
- *******************************************************/
-
-#ifndef i_s_file_h
-#define i_s_file_h
-
+#include <assert.h>
+#include <mysql.h>
 #include <sys/types.h>
-#include <time.h>
 
-#include "sql/table.h"
+#include "m_string.h"
+#include "my_compiler.h"
+#include "my_sys.h"
 
-#include "univ.i"
+int main(int argc, char **argv) {
+  if (argc < 3) {
+    printf("ERROR: para\n");
+    return 1;
+  }
 
-class Field;
-class THD;
-class Table_ref;
-class Item;
+  if (strcmp(argv[2], "fetchKey") == 0) {
+    if (argc != 4) {
+      printf("ERROR: para\n");
+      return 1;
+    }
 
-extern struct st_mysql_plugin i_s_innodb_data_file_purge;
-extern struct st_mysql_plugin i_s_innodb_tablespace_master_key;
+    printf("b4fPuji+uxQieo8uKScgzWxV1DphwMxPGcxsFv64ywfKUd86ucWoI8SqF2ALB+vN6KLZk8sc3ZTbLzgI3KcbfSfPJqKX6cV8UPf7uOA3ZMfVJB7k9jSG516lJ97Aifkxss4ItgFNvHVkhCTMDQsT2wVkzAyyeLmDqcCqYzbWyGkVKXVZreWa5fcc2CJYHsbdAHmuCVW78fQMMecep7Mo72DN9y0zlcj8SSd2DL5J6F420dipwF2fGgfNhH7hiP8iHvHzVFzKM8V4gq9R5DzqJVvlguQwEEm1PJHtIge/2m8Yx/fVDT2kSWTCdSxp16YeUgQeMOK3LKI0YTXxTrhqUg==\n");
+  } else {
+    if (argc != 3) {
+      printf("ERROR: para\n");
+      return 1;
+    }
 
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_string(Field *field, const char *str);
+    printf("INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1\n");
+  }
 
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_time_t(Field *field, time_t time);
+  return 0;
+}
 
-#endif

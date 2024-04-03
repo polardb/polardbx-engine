@@ -206,3 +206,29 @@ int my_key_iterator_get_key(void *key_iterator, char *key_id, char *user_id) {
     return keyring->mysql_key_iterator_get_key(key_iterator, key_id, user_id);
   });
 }
+
+static bool is_keyring_rds(THD *, plugin_ref plugin, void *arg) {
+  bool *key_data = reinterpret_cast<bool *>(arg);
+  plugin = my_plugin_lock(NULL, &plugin);
+  if (plugin) {
+    static const char *keyring_rds = "keyring_rds";
+    static const size_t len = strlen(keyring_rds);
+    LEX_CSTRING *name = plugin_name(plugin);
+    *key_data =
+        (len == name->length) && (memcmp(keyring_rds, name->str, len) == 0);
+  }
+  // this function should get executed only for the first plugin. This is why
+  // it always returns error. plugin_foreach will stop after first iteration.
+  plugin_unlock(NULL, plugin);
+  return true;
+}
+
+/**
+  Iterates over all active keyring plugins and check if it is keyring_rds
+  for the first one found.
+*/
+int my_key_is_keyring_rds(bool *ret) {
+  if (keyring_access_test()) return 1;
+  plugin_foreach(current_thd, is_keyring_rds, MYSQL_KEYRING_PLUGIN, ret);
+  return 0;
+}

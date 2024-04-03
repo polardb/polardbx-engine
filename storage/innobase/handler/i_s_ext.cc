@@ -29,6 +29,7 @@
 #include <field.h>
 #include <sql_show.h>
 
+#include "fil0key.h"
 #include "fil0purge.h"
 #include "mysql/plugin.h"
 #include "sql/table.h"
@@ -233,6 +234,130 @@ struct st_mysql_plugin i_s_innodb_data_file_purge = {
     /* plugin version (for SHOW PLUGINS) */
     /* unsigned int */
     STRUCT_FLD(version, i_s_innodb_plugin_version_for_purge_file),
+
+    /* SHOW_VAR* */
+    STRUCT_FLD(status_vars, NULL),
+
+    /* SYS_VAR** */
+    STRUCT_FLD(system_vars, NULL),
+
+    /* reserved for dependency checking */
+    /* void* */
+    STRUCT_FLD(__reserved1, NULL),
+
+    /* Plugin flags */
+    /* unsigned long */
+    STRUCT_FLD(flags, 0UL),
+};
+
+ST_FIELD_INFO innodb_tablespace_master_key_fields_info[] = {
+#define IDX_TABLE_SPACE 0
+    {STRUCT_FLD(field_name, "table_space"),
+     STRUCT_FLD(field_length, MAX_FULL_NAME_LEN + 1),
+     STRUCT_FLD(field_type, MYSQL_TYPE_STRING), STRUCT_FLD(value, 0),
+     STRUCT_FLD(field_flags, 0), STRUCT_FLD(old_name, ""),
+     STRUCT_FLD(open_method, 0)},
+
+#define IDX_MASTER_KEY_ID 1
+    {STRUCT_FLD(field_name, "master_key_id"),
+     STRUCT_FLD(field_length, Encryption::MASTER_KEY_NAME_MAX_LEN + 1),
+     STRUCT_FLD(field_type, MYSQL_TYPE_STRING), STRUCT_FLD(value, 0),
+     STRUCT_FLD(field_flags, 0), STRUCT_FLD(old_name, ""),
+     STRUCT_FLD(open_method, 0)},
+
+    END_OF_ST_FIELD_INFO};
+
+/** Fill the tablespace master key id
+INFORMATION_SCHEMA.INNODB_TABLESPACE_MASTER_KEY
+@return 0 on SUCCESS */
+static int innodb_tablespace_master_key_fill_table(
+    THD *thd,          /*!< in: thread */
+    Table_ref *tables, /*!< in/out: tables to fill */
+    Item *)            /*!< in: condition (not used) */
+{
+  Field **fields;
+  TABLE *table;
+  Tbl_keys tbl_keys;
+  DBUG_ENTER("innodb_tablespace_master_key_fill_table");
+
+  table = tables->table;
+  fields = table->field;
+
+  fil_encryption_all_key(tbl_keys);
+
+  for (auto &elem : tbl_keys) {
+    OK(field_store_string(fields[IDX_TABLE_SPACE], elem.first.c_str()));
+    OK(field_store_string(fields[IDX_MASTER_KEY_ID], elem.second.c_str()));
+
+    OK(schema_table_store_record(thd, table));
+  }
+
+  DBUG_RETURN(0);
+}
+
+/** Bind the dynamic table INFORMATION_SCHEMA.INNODB_TABLESPACE_MASTER_KEY
+@return 0 on success */
+static int innodb_tablespace_master_key_init(void *p) {
+  ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER("innodb_tablespace_master_key_init");
+
+  schema = (ST_SCHEMA_TABLE *)p;
+
+  schema->fields_info = innodb_tablespace_master_key_fields_info;
+  schema->fill_table = innodb_tablespace_master_key_fill_table;
+
+  DBUG_RETURN(0);
+}
+
+/** I_S.innodb_* views version postfix. Everytime the define of any InnoDB I_S
+ * table is changed, this value has to be increased accordingly */
+constexpr uint8_t i_s_innodb_plugin_version_postfix_rds = 1;
+
+/** I_S.innodb_* views version. It would be X.Y and X should be the server major
+ *  * version while Y is the InnoDB I_S views version, starting from 1 */
+constexpr uint64_t i_s_innodb_plugin_version_rds =
+    (INNODB_VERSION_MAJOR << 8 |
+     (i_s_innodb_plugin_version_postfix_rds + EXTRA_IS_PLUGIN_VERSION));
+
+struct st_mysql_plugin i_s_innodb_tablespace_master_key = {
+    /* the plugin type (a MYSQL_XXX_PLUGIN value) */
+    /* int */
+    STRUCT_FLD(type, MYSQL_INFORMATION_SCHEMA_PLUGIN),
+
+    /* pointer to type-specific plugin descriptor */
+    /* void* */
+    STRUCT_FLD(info, &i_s_info),
+
+    /* plugin name */
+    STRUCT_FLD(name, "INNODB_TABLESPACE_MASTER_KEY"),
+
+    /* plugin author (for SHOW PLUGINS) */
+    /* const char* */
+    STRUCT_FLD(author, plugin_author),
+
+    /* general descriptive text (for SHOW PLUGINS) */
+    /* const char* */
+    STRUCT_FLD(descr, "InnoDB encrypted tablespace list"),
+
+    /* the plugin license (PLUGIN_LICENSE_XXX) */
+    /* int */
+    STRUCT_FLD(license, PLUGIN_LICENSE_GPL),
+
+    /* the function to invoke when plugin is loaded */
+    /* int (*)(void*); */
+    STRUCT_FLD(init, innodb_tablespace_master_key_init),
+
+    /* the function to invoke when plugin is un installed */
+    /* int (*)(void*); */
+    NULL,
+
+    /* the function to invoke when plugin is unloaded */
+    /* int (*)(void*); */
+    STRUCT_FLD(deinit, i_s_common_deinit),
+
+    /* plugin version (for SHOW PLUGINS) */
+    /* unsigned int */
+    STRUCT_FLD(version, i_s_innodb_plugin_version_rds),
 
     /* SHOW_VAR* */
     STRUCT_FLD(status_vars, NULL),

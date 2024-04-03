@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2016, 2018, Alibaba and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,34 +20,28 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/** @file handler/i_s_ext.h
- Information of data file operation.
+#ifndef PLUGIN_KEYRING_RDS_KEYRING_RDS_COMMON_H_INCLUDED
+#define PLUGIN_KEYRING_RDS_KEYRING_RDS_COMMON_H_INCLUDED
 
- Created 5/14/2019 Galaxy SQL
- *******************************************************/
+#include "mysql/psi/mysql_rwlock.h"
 
-#ifndef i_s_file_h
-#define i_s_file_h
+namespace keyring_rds {
 
-#include <sys/types.h>
-#include <time.h>
+class Lock_helper {
+ public:
+  explicit Lock_helper(mysql_rwlock_t *lock, bool exclusive) : m_lock(lock) {
+    if (exclusive)
+      mysql_rwlock_wrlock(m_lock);
+    else
+      mysql_rwlock_rdlock(m_lock);
+  }
 
-#include "sql/table.h"
+  ~Lock_helper() { mysql_rwlock_unlock(m_lock); }
 
-#include "univ.i"
+ private:
+  mysql_rwlock_t *m_lock;
+};
 
-class Field;
-class THD;
-class Table_ref;
-class Item;
-
-extern struct st_mysql_plugin i_s_innodb_data_file_purge;
-extern struct st_mysql_plugin i_s_innodb_tablespace_master_key;
-
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_string(Field *field, const char *str);
-
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_time_t(Field *field, time_t time);
+}  // namespace keyring_rds
 
 #endif

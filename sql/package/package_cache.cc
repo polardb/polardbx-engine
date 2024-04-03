@@ -25,6 +25,8 @@
 #include "mysql/psi/mysql_memory.h"
 
 #include "sql/ccl/ccl_proc.h"
+#include "sql/keyring/keyring_current_key_id.h"
+#include "sql/keyring/keyring_generate_key.h"
 #include "sql/outline/outline_proc.h"
 #include "sql/package/package.h"
 #include "sql/package/package_common.h"
@@ -247,6 +249,10 @@ void package_context_init() {
   register_package<Proc, im::Jemalloc_profile_proc>(im::JEMALLOC_PROC_SCHEMA);
 #endif
 
+  /* dbms_keyring.generate_key(...) */
+  register_package<Proc, Proc_generate_key>(KEYRING_PROC_SCHEMA);
+  /* dbms_keyring.current_key_id(...) */
+  register_package<Proc, Proc_current_key_id>(KEYRING_PROC_SCHEMA);
 }
 
 } /* namespace im */

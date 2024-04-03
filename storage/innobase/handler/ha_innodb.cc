@@ -198,6 +198,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "os0enc.h"
 #include "os0file.h"
+#include "os0key.h"
 
 #include <mutex>
 #include <sstream>
@@ -5538,6 +5539,8 @@ static int innodb_init(void *p) {
   lizard::global_tcn_cache = ut::new_withkey<lizard::Global_tcn>(
       ut::make_psi_memory_key(mem_key_tcn), lizard::tcn_cache_size_align(),
       mem_key_tcn);
+
+  my_key_is_keyring_rds(&is_keyring_rds);
 
   return 0;
 }
@@ -23980,8 +23983,8 @@ mysql_declare_plugin(innobase){
     i_s_innodb_ft_index_cache, i_s_innodb_ft_index_table, i_s_innodb_tables,
     i_s_innodb_tablestats, i_s_innodb_indexes, i_s_innodb_tablespaces,
     i_s_innodb_columns, i_s_innodb_virtual, i_s_innodb_cached_indexes,
-    i_s_innodb_session_temp_tablespaces,
-    i_s_innodb_data_file_purge
+    i_s_innodb_session_temp_tablespaces, i_s_innodb_data_file_purge,
+    i_s_innodb_tablespace_master_key
 
     mysql_declare_plugin_end;
 

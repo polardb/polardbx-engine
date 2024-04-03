@@ -1,0 +1,61 @@
+call mtr.add_suppression("generate one first");
+call mtr.add_suppression("pipe output length = 0");
+select * from information_schema.plugins where plugin_name like '%keyring%';
+PLUGIN_NAME	PLUGIN_VERSION	PLUGIN_STATUS	PLUGIN_TYPE	PLUGIN_TYPE_VERSION	PLUGIN_LIBRARY	PLUGIN_LIBRARY_VERSION	PLUGIN_AUTHOR	PLUGIN_DESCRIPTION	PLUGIN_LICENSE	LOAD_OPTION
+keyring_rds	1.0	ACTIVE	KEYRING	1.1	keyring_rds.so	1.11	Yongping.Liu, Alibaba	fetch authentication data from KMS	GPL	ON
+daemon_keyring_proxy_plugin	1.0	ACTIVE	DAEMON	80032.0	NULL	NULL	Oracle	A plugin that implements the keyring component services atop of the keyring plugin	GPL	FORCE
+show variables like 'keyring_rds%';
+Variable_name	Value
+keyring_rds_command_timeout_sec	10
+keyring_rds_key_id_file_dir	__##keyring_rds##__
+keyring_rds_kms_agent_cmd	/home/mysql/kms_agent
+select * from performance_schema.keyring_keys;
+KEY_ID	KEY_OWNER	BACKEND_KEY_ID
+select * from information_schema.INNODB_TABLESPACE_MASTER_KEY;
+table_space	master_key_id
+call dbms_keyring.current_key_id();
+ERROR HY000: Function 'keyring_key_fetch' failed because underlying keyring service returned an error. Please check if a keyring is installed and that provided arguments are valid for the keyring you are using.
+call dbms_keyring.generate_key();
+ERROR HY000: Function 'keyring_key_generate' failed because underlying keyring service returned an error. Please check if a keyring is installed and that provided arguments are valid for the keyring you are using.
+set global debug='+d,keyring_rds_kms_simu';
+call dbms_keyring.generate_key();
+create database key_test;
+use key_test;
+create table t(a int) encryption='y';
+insert into t values(1), (2), (3);
+select * from t;
+a
+1
+2
+3
+create table str_tbl(a varchar(20)) encryption='y';
+insert into str_tbl values('a'), ('b'), ('c');
+select * from str_tbl;
+a
+a
+b
+c
+select * from performance_schema.keyring_keys;
+KEY_ID	KEY_OWNER	BACKEND_KEY_ID
+INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1		
+select * from information_schema.INNODB_TABLESPACE_MASTER_KEY;
+table_space	master_key_id
+key_test/str_tbl	INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1
+key_test/t	INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1
+call dbms_keyring.current_key_id();
+key_id
+INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1
+alter instance rotate innodb master key;
+drop table str_tbl;
+drop table t;
+drop database key_test;
+set global debug='-d,keyring_rds_kms_simu';
+set global keyring_rds_command_timeout_sec = 15;
+select @@keyring_rds_command_timeout_sec;
+@@keyring_rds_command_timeout_sec
+15
+set global keyring_rds_command_timeout_sec = 10;
+set global debug='+d,keyring_rds_kms_unsimu';
+call dbms_keyring.generate_key();
+ERROR HY000: Function 'keyring_key_generate' failed because underlying keyring service returned an error. Please check if a keyring is installed and that provided arguments are valid for the keyring you are using.
+set global debug='-d,keyring_rds_kms_unsimu';

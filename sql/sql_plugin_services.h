@@ -298,7 +298,8 @@ static struct security_context_service_st security_context_handler = {
     security_context_get_option, security_context_set_option};
 
 static struct mysql_keyring_service_st mysql_keyring_handler = {
-    my_key_store, my_key_fetch, my_key_remove, my_key_generate};
+    my_key_store, my_key_fetch, my_key_remove, my_key_generate,
+    my_key_is_keyring_rds};
 
 static struct plugin_registry_service_st plugin_registry_handler = {
     mysql_plugin_registry_acquire, mysql_plugin_registry_release};

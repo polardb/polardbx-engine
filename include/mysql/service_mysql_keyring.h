@@ -81,6 +81,8 @@ extern "C" struct mysql_keyring_service_st {
     @sa my_key_generate, st_mysql_keyring::mysql_key_generate
   */
   int (*my_key_generate_func)(const char *, const char *, const char *, size_t);
+
+  int (*my_key_is_keyring_rds)(bool *);
 } * mysql_keyring_service;
 
 #ifdef MYSQL_DYNAMIC_PLUGIN
@@ -103,6 +105,8 @@ int my_key_store(const char *, const char *, const char *, const void *,
 int my_key_fetch(const char *, char **, const char *, void **, size_t *);
 int my_key_remove(const char *, const char *);
 int my_key_generate(const char *, const char *, const char *, size_t);
+
+int my_key_is_keyring_rds(bool *);
 
 #endif
 

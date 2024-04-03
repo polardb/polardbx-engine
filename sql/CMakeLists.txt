@@ -720,6 +720,9 @@ SET(SQL_SHARED_SOURCES
   sql_implicit_common.cc
   sql_implicit_element.cc
   xrpc/xrpc_proc.cc
+  keyring/keyring_common.cc
+  keyring/keyring_generate_key.cc
+  keyring/keyring_current_key_id.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

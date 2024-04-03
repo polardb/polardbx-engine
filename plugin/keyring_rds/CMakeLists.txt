@@ -1,5 +1,5 @@
-# Copyright (c) 2006, 2022, Oracle and/or its affiliates.
-# 
+# Copyright (c) 2016, 2018, Alibaba and/or its affiliates. All rights reserved.
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
 # as published by the Free Software Foundation.
@@ -20,16 +20,23 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-ADD_WSHADOW_WARNING()
+ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="keyring_rds")
 
-MYSQL_ADD_EXECUTABLE(mysql_client_test mysql_client_test.cc COMPONENT Test)
-TARGET_LINK_LIBRARIES(mysql_client_test mysqlclient)
+SET (KEYRING_RDS_SOURCES
+     keyring_rds_key_id.cc
+     keyring_rds_file_io.cc
+     keyring_rds_kms_agent.cc
+     keyring_rds.cc
+     keyring_rds_impl.cc
+     my_popen.cc
+     )
 
-MYSQL_ADD_EXECUTABLE(kms_agent_mock kms_agent_mock.cc COMPONENT Test)
-TARGET_LINK_LIBRARIES(kms_agent_mock mysqlclient)
-SET_TARGET_PROPERTIES(kms_agent_mock PROPERTIES LINKER_LANGUAGE CXX)
+MYSQL_ADD_PLUGIN(keyring_rds
+                 ${KEYRING_RDS_SOURCES}
+                 MODULE_ONLY
+                 MODULE_OUTPUT_NAME "keyring_rds")
 
-IF(WITH_UNIT_TESTS)
-  MYSQL_ADD_EXECUTABLE(bug25714 bug25714.cc SKIP_INSTALL)
-  TARGET_LINK_LIBRARIES(bug25714 mysqlclient)
+IF(HAVE_DLOPEN)
+    SET(DYNLIB_EXTENSION "so")
 ENDIF()
+

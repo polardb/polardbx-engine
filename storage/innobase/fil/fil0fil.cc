@@ -1269,6 +1269,7 @@ class Fil_shard {
   Fil_shard &operator=(const Fil_shard &) = delete;
 
   friend class Fil_system;
+  friend class Space_iterator;
 };
 
 /** The tablespace memory cache */
@@ -1804,6 +1805,7 @@ class Fil_system {
   Fil_system &operator=(const Fil_system &) = delete;
 
   friend class Fil_shard;
+  friend class Space_iterator;
 };
 
 /** The tablespace memory cache. This variable is nullptr before the module is
@@ -11677,6 +11679,22 @@ void Fil_path::convert_to_lower_case(std::string &path) {
   innobase_casedn_path(lc_path);
 
   path.assign(lc_path);
+}
+
+/** Iterate over the spaces.
+@param[in]	para function input parameter
+@param[in]	f		Callback */
+void Space_iterator::for_each_space(void *para, Function &f) {
+  for (auto shard : fil_system->m_shards) {
+    shard->mutex_acquire();
+
+    for (auto &elem : shard->m_spaces) {
+      auto space = elem.second;
+      f(space, para);
+    }
+
+    shard->mutex_release();
+  }
 }
 
 void fil_purge() { fil_system->purge(); }

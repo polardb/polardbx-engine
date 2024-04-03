@@ -441,6 +441,7 @@ class Encryption {
   /** Encrypt initial vector */
   const byte *m_iv;
 
+ public:
   /** Current master key id */
   static uint32_t s_master_key_id;
 

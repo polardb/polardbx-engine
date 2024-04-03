@@ -2226,6 +2226,17 @@ and old name are same, no update done.
 @param[in]      name            new name for tablespace */
 void fil_space_update_name(fil_space_t *space, const char *name);
 
+/** Iterate over the tablespaces. */
+class Space_iterator {
+ public:
+  using Function = std::function<void(fil_space_t *, void *)>;
+
+  /** Iterate over the spaces.
+  @param[in]	para function input parameter
+  @param[in]	f		Callback */
+  static void for_each_space(void *para, Function &f);
+};
+
 /** Adjust file name for import for partition files in different letter case.
 @param[in]      table   Innodb dict table
 @param[in]      path    file path to open

@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2016, 2018, Alibaba and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,34 +20,42 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/** @file handler/i_s_ext.h
- Information of data file operation.
+#ifndef KEYRING_RDS_LOGGER_H
+#define KEYRING_RDS_LOGGER_H
 
- Created 5/14/2019 Galaxy SQL
- *******************************************************/
+#include <stdarg.h>
 
-#ifndef i_s_file_h
-#define i_s_file_h
+#include <mysql/components/services/log_builtins.h>
+#include <mysql/plugin.h>
+#include <mysqld_error.h>
 
-#include <sys/types.h>
-#include <time.h>
+namespace keyring_rds {
 
-#include "sql/table.h"
+/**
+  Log API.
+*/
+class Logger {
+ public:
+  static void log(longlong level, longlong errcode, ...) {
+    va_list vl;
+    va_start(vl, errcode);
+    LogPluginErrV(level, errcode, vl);
+    va_end(vl);
+  }
 
-#include "univ.i"
+  static void log(longlong level, const char *fmt, ...)
+      __attribute__((format(gnu_printf, 2, 3))) {
+    char ebuff[MYSQL_ERRMSG_SIZE];
 
-class Field;
-class THD;
-class Table_ref;
-class Item;
+    va_list args;
+    va_start(args, fmt);
+    (void)vsnprintf(ebuff, sizeof(ebuff), fmt, args);
+    va_end(args);
 
-extern struct st_mysql_plugin i_s_innodb_data_file_purge;
-extern struct st_mysql_plugin i_s_innodb_tablespace_master_key;
+    LogPluginErr(level, ER_KEYRING_LOGGER_ERROR_MSG, ebuff);
+  }
+};
 
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_string(Field *field, const char *str);
+}  // namespace keyring_rds
 
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_time_t(Field *field, time_t time);
-
-#endif
+#endif  // KEYRING_RDS_LOGGER_H

@@ -12208,6 +12208,12 @@ ER_XP_COMMIT
 ER_XP_PROTO
   eng "[Proto] %s"
 
+ER_TDE_GET_MASTER_KEY_ID
+  eng "%s"
+
+ER_TDE_FETCH_MASTER_KEY_ID
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

@@ -195,6 +195,7 @@ SET(INNOBASE_SOURCES
   os/os0enc.cc
   os/os0proc.cc
   os/os0event.cc
+	os/os0key.cc
   page/page0cur.cc
   page/page0page.cc
   page/page0zip.cc
@@ -257,6 +258,7 @@ SET(INNOBASE_SOURCES
   ut/ut0wqueue.cc
   srv/srv0file.cc
   fil/fil0purge.cc
+	fil/fil0key.cc
   handler/i_s_ext.cc
   trx/lizard0scn.cc
   trx/lizard0gcs.cc

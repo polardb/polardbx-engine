@@ -1,0 +1,67 @@
+--disable_ps_protocol
+--source include/have_debug.inc
+call mtr.add_suppression("generate one first");
+call mtr.add_suppression("pipe output length = 0");
+# Initial state
+
+select * from information_schema.plugins where plugin_name like '%keyring%';
+
+# variables
+show variables like 'keyring_rds%';
+
+# all master key id
+select * from performance_schema.keyring_keys;
+
+# all encrypted table and key id
+select * from information_schema.INNODB_TABLESPACE_MASTER_KEY;
+
+# the current master key id
+--error ER_KEYRING_UDF_KEYRING_SERVICE_ERROR
+call dbms_keyring.current_key_id();
+
+# create a key
+--error ER_KEYRING_UDF_KEYRING_SERVICE_ERROR
+call dbms_keyring.generate_key();
+
+# Turn on the KMS mock
+set global debug='+d,keyring_rds_kms_simu';
+
+#
+# Normal Process
+
+call dbms_keyring.generate_key();
+create database key_test;
+use key_test;
+
+create table t(a int) encryption='y';
+insert into t values(1), (2), (3);
+select * from t;
+
+create table str_tbl(a varchar(20)) encryption='y';
+insert into str_tbl values('a'), ('b'), ('c');
+select * from str_tbl;
+
+select * from performance_schema.keyring_keys;
+select * from information_schema.INNODB_TABLESPACE_MASTER_KEY;
+call dbms_keyring.current_key_id();
+
+alter instance rotate innodb master key;
+
+drop table str_tbl;
+drop table t;
+drop database key_test;
+
+set global debug='-d,keyring_rds_kms_simu';
+
+# restore the virialbes
+
+set global keyring_rds_command_timeout_sec = 15;
+
+select @@keyring_rds_command_timeout_sec;
+
+set global keyring_rds_command_timeout_sec = 10;
+
+set global debug='+d,keyring_rds_kms_unsimu';
+--error ER_KEYRING_UDF_KEYRING_SERVICE_ERROR
+call dbms_keyring.generate_key();
+set global debug='-d,keyring_rds_kms_unsimu';

@@ -1,4 +1,4 @@
-/* Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
+/* Copyright (c) 2018, 2019, Alibaba and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -20,34 +20,10 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-/** @file handler/i_s_ext.h
- Information of data file operation.
+#include "keyring_common.h"
 
- Created 5/14/2019 Galaxy SQL
- *******************************************************/
+namespace im {
 
-#ifndef i_s_file_h
-#define i_s_file_h
+LEX_CSTRING KEYRING_PROC_SCHEMA = {C_STRING_WITH_LEN("dbms_keyring")};
 
-#include <sys/types.h>
-#include <time.h>
-
-#include "sql/table.h"
-
-#include "univ.i"
-
-class Field;
-class THD;
-class Table_ref;
-class Item;
-
-extern struct st_mysql_plugin i_s_innodb_data_file_purge;
-extern struct st_mysql_plugin i_s_innodb_tablespace_master_key;
-
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_string(Field *field, const char *str);
-
-/* Defined with in 'handler/i_s.cc' */
-extern int field_store_time_t(Field *field, time_t time);
-
-#endif
+}  // namespace im
