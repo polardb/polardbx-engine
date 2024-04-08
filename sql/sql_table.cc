@@ -3232,7 +3232,18 @@ bool mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
 
       thd->thread_specific_used = true;
 
-      if (built_query.write_bin_log()) goto err_with_rollback;
+      /**
+        PolarX DN:
+
+        In the past, "DROP TALBE IF EXISTS ..." will always
+        generate binlog and GTID, which might cause: mysql.gtid_execute and
+        gtid_execute in binlog is not consistent.
+
+        Now, such a query will not generte binlog and GTID if drop nothing.
+      */
+      if (!drop_ctx.if_exists || drop_ctx.has_base_atomic_tables()) {
+        if (built_query.write_bin_log()) goto err_with_rollback;
+      }
 
       if (drop_ctx.has_no_gtid_single_table_group() ||
           drop_ctx.has_gtid_single_table_group()) {
@@ -3309,7 +3320,10 @@ bool mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
     built_query.add_array(drop_ctx.base_atomic_tables);
     built_query.add_array(drop_ctx.nonexistent_tables);
 
-    if (built_query.write_bin_log()) goto err_with_rollback;
+    if (!drop_ctx.if_exists || drop_ctx.has_base_atomic_tables() ||
+        drop_ctx.has_base_non_atomic_tables()) {
+      if (built_query.write_bin_log()) goto err_with_rollback;
+    }
 
     /*
       Commit our changes to the binary log (if any) and mark GTID
