@@ -135,7 +135,7 @@ void Paxos::changeState_(enum State newState) {
   if (state_ == newState)
     return;
   */
-  easy_log_common("Server %d : Paxos state change from %s to %s !!\n",
+  easy_system_log("Server %d : Paxos state change from %s to %s !!\n",
                  localServer_->serverId, stateString[state_],
                  stateString[newState]);
   /* only leader run purge log timer */
@@ -254,7 +254,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
           logBufL += addr;
           logBufL += " ";
         }
-        easy_error_log(
+        easy_system_log(
             "Server %d : Init follower from learner, new members(%s) new "
             "learners(%s)\n",
             localServer_->serverId, logBuf.c_str(), logBufL.c_str());
@@ -274,7 +274,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
           config_->delMember(addr, this);
         else {
           /* This node is removed from the cluster, shutdown myself */
-          easy_error_log(
+          easy_system_log(
               "Server %d : This node is removed from the cluster, shutdown "
               "myself currentTerm(%llu) lli(%llu) ccIndex(%llu)!!\n",
               localServer_->serverId, currentTerm_.load(),
@@ -309,7 +309,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
           localServer_->serverId = 100;
           this->state_.store(LEARNER);
           this->electionTimer_->stop();
-          easy_error_log(
+          easy_system_log(
               "Server %d : This server is downgrade from follower(%llu) to "
               "learner(%llu)!!",
               localServer_->serverId, oldId, localServer_->serverId);
@@ -390,7 +390,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
          */
         if (server->learnerSource == localServer_->serverId ||
             (state_ == LEADER && server->learnerSource == 0)) {
-          easy_error_log("Server %d : a new learner %d is sourced from me!!\n",
+          easy_system_log("Server %d : a new learner %d is sourced from me!!\n",
                          localServer_->serverId, server->serverId);
           server->beginLeadership(nullptr);
           server->connect(nullptr);
@@ -413,7 +413,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
             "Server %d : Error: local learner meta error local:%s "
             "leader:%s!!\n",
             localServer_->serverId, strLearners.c_str(), strServers.c_str());
-        easy_error_log(
+        easy_system_log(
             "Server %d : SyncLearnerAll: update local learner config from %s "
             "to %s\n",
             localServer_->serverId, strLearners.c_str(), strServers.c_str());
@@ -423,7 +423,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         log_->setMetaData(Paxos::keyLearnerConfigure,
                           config_->learnersToString());
       } else {
-        easy_error_log(
+        easy_system_log(
             "Server %d : SyncLearnerAll: local learner is match with leader "
             "%s\n",
             localServer_->serverId, strServers.c_str());
@@ -445,7 +445,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
     ccMgr_.cond.notify_all();
   }
 
-  easy_error_log(
+  easy_system_log(
       "Server %d : applyConfigureChange_ done! logIndex(%llu) currentTerm(%ld) "
       "val.cctype(%d) val.optype(%d)\n",
       localServer_->serverId, logIndex, currentTerm_.load(), val.cctype(),
@@ -458,14 +458,14 @@ int Paxos::leaderTransfer_(uint64_t targetId) {
   auto server = config_->getServer(targetId);
   if (nullptr == server || targetId == 0) return PaxosErrorCode::PE_NOTFOUND;
   if (subState_ == SubLeaderTransfer) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : leaderTransfer to server(%ld), Now we're in another "
         "leader transfer, skip this action!",
         localServer_->serverId, targetId);
     return PaxosErrorCode::PE_CONFLICTS;
   }
   if (cdrMgr_.inRecovery) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : leaderTransfer to server(%ld), Now we're in commit "
         "dependency recovery, skip this action!",
         localServer_->serverId, targetId);
@@ -475,7 +475,7 @@ int Paxos::leaderTransfer_(uint64_t targetId) {
   if (std::dynamic_pointer_cast<RemoteServer>(server)
           ->isLearner)  // server == nullptr already checked
   {
-    easy_error_log(
+    easy_system_log(
         "Server %d : leaderTransfer to server(%ld), it is a learner, skip this "
         "action!",
         localServer_->serverId, targetId);
@@ -484,7 +484,7 @@ int Paxos::leaderTransfer_(uint64_t targetId) {
 
   ++(stats_.countLeaderTransfer);
 
-  easy_error_log(
+  easy_system_log(
       "Server %d : leaderTransfer to server(%ld), currentTerm(%ld), lli(%ld)\n",
       localServer_->serverId, targetId, currentTerm_.load(),
       log_->getLastLogIndex());
@@ -530,7 +530,7 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
         std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
     if (server == nullptr) {
       subState_ = SubNone;
-      easy_error_log(
+      easy_system_log(
           "Server %d : try transfer leader to id(%d), which is not in the "
           "configuration!!",
           localServer_->serverId, targetId);
@@ -539,7 +539,7 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
     if (commitIndex_ == logIndex && commitIndex_ == server->matchIndex)
       leaderCommand(LeaderTransfer, server);
     else {
-      easy_error_log(
+      easy_system_log(
           "Server %d : skip send cmd LeaderTransfer because the pos is not "
           "catch up. commitIndex(%llu), lli(%llu), li(%llu), target matchIndex(%llu)",
           localServer_->serverId, commitIndex_.load(), log_->getLastLogIndex(), logIndex,
@@ -563,7 +563,7 @@ int Paxos::checkLeaderTransfer(uint64_t targetId, uint64_t term,
   if (state_ == LEADER && subState_ == SubLeaderTransfer &&
       term == currentTerm_) {
     if (lastLogIndex > logIndex) {
-      easy_error_log(
+      easy_system_log(
           "Server %d : checkLeaderTransfer: In transfer to server %ld local "
           "lli:%llu is bigger than target lli:%llu, we update target lli to "
           "current lli.\n",
@@ -588,7 +588,7 @@ int Paxos::checkLeaderTransfer(uint64_t targetId, uint64_t term,
     }
   } else if (state_ == FOLLOWER && currentTerm_ > term &&
              lastLogIndex > logIndex && leaderId_ == targetId) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : checkLeaderTransfer: LeaderTransfer success target(id:%ld "
         "t:%ld lli:%ld) current(t:%ld lli:%ld)\n",
         localServer_->serverId, targetId, term, logIndex, currentTerm_.load(),
@@ -801,7 +801,7 @@ int Paxos::configureChange_(
     logBuf += addr;
     logBuf += " ";
   }
-  easy_error_log(
+  easy_system_log(
       "Server %d : configureChange begin: cctype(%d) optype(%d) term(%llu) "
       "lli(%llu) addrs(%s)\n",
       localServer_->serverId, cctype, optype, currentTerm_.load(),
@@ -857,7 +857,7 @@ int Paxos::configureChange_(
   }
 
   ret = sendConfigureAndWait_(val, ul);
-  easy_error_log(
+  easy_system_log(
       "Server %d : configureChange return: cctype(%d) optype(%d) addrs(%s) "
       "return(%d) success(%d) preparedIndex(%llu) lli(%llu)\n",
       localServer_->serverId, cctype, optype, logBuf.c_str(), ret,
@@ -950,7 +950,7 @@ int Paxos::configureLearner_(uint64_t serverId, uint64_t source, bool applyMode,
     return PaxosErrorCode::PE_NONE;
   }
 
-  easy_error_log(
+  easy_system_log(
       "Server %d : configureLearner: change learnerSource from %llu to %llu\n",
       localServer_->serverId, server->learnerSource, source);
 
@@ -964,7 +964,7 @@ int Paxos::configureLearner_(uint64_t serverId, uint64_t source, bool applyMode,
   val.set_applymode(applyMode);
 
   ret = sendConfigureAndWait_(val, ul);
-  easy_error_log(
+  easy_system_log(
       "Server %d : configureLearner return: serverid(%d) return(%d) "
       "success(%d) preparedIndex(%llu) lli(%llu)\n",
       localServer_->serverId, serverId, ret, ccMgr_.applied,
@@ -1037,7 +1037,7 @@ int Paxos::configureMember_(uint64_t serverId, bool forceSync,
   val.set_electionweight(electionWeight);
 
   ret = sendConfigureAndWait_(val, ul);
-  easy_error_log(
+  easy_system_log(
       "Server %d : configureMember return: serverid(%d) return(%d) success(%d) "
       "preparedIndex(%llu) lli(%llu)\n",
       localServer_->serverId, serverId, ret, ccMgr_.applied,
@@ -1092,7 +1092,7 @@ int Paxos::downgradeMember_(uint64_t serverId,
   val.add_addrs(server->strAddr);
 
   ret = sendConfigureAndWait_(val, ul);
-  easy_error_log(
+  easy_system_log(
       "Server %d : downgradeMember return: serverid(%d) return(%d) success(%d) "
       "preparedIndex(%llu) lli(%llu)\n",
       localServer_->serverId, serverId, ret, ccMgr_.applied,
@@ -1130,7 +1130,7 @@ void Paxos::becameLeader_() {
       cdrMgr_.inRecovery = true;
       cdrMgr_.lastLogIndex = tmpIndex;
       cdrMgr_.lastNonCommitDepIndex = 0;
-      easy_error_log(
+      easy_system_log(
           "Server %d : Last log optype is kCommitDep, will reset the log, "
           "lastLogIndex(%llu). tmpEntry(term:%llu,index:%llu)\n",
           localServer_->serverId, tmpIndex, tmpEntry.term(), tmpEntry.index());
@@ -1141,7 +1141,7 @@ void Paxos::becameLeader_() {
 
     /* Deal with the election weight things. */
     if (config_->needWeightElection(localServer_->electionWeight)) {
-      easy_error_log(
+      easy_system_log(
           "Server %d : Try weight election for this election term(%llu)!!\n",
           localServer_->serverId, currentTerm_.load());
       subState_.store(SubLeaderTransfer);
@@ -1180,7 +1180,7 @@ void Paxos::becameLeader_() {
     log_->getEntry(lastLogIndex, entry, false);  // ignore error
     uint64_t lastLogTerm = entry.term();
 
-    easy_log_common(
+    easy_system_log(
         "Server %d : become Leader (currentTerm %ld, lli:%ld, llt:%ld)!!\n",
         localServer_->serverId, currentTerm_.load(), lastLogIndex, lastLogTerm);
   }
@@ -1203,7 +1203,7 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
   if (!arg->paxos->cdrIsValid(arg)) return;
   std::shared_ptr<PaxosLog> log = arg->paxos->getLog();
   std::shared_ptr<LocalServer> localServer = arg->paxos->getLocalServer();
-  easy_error_log("Server %d : start reset log because of commit dependency.\n",
+  easy_system_log("Server %d : start reset log because of commit dependency.\n",
                  localServer->serverId);
   LogEntry tmpEntry;
   uint64_t tmpIndex = arg->lastLogIndex;
@@ -1217,7 +1217,7 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
     }
     if (tmpEntry.optype() != kCommitDep) break;
   }
-  easy_error_log("Server %d : commitDepResetLog reset from index %ld to %ld. tmpEntry(term:%llu,index:%llu)\n",
+  easy_system_log("Server %d : commitDepResetLog reset from index %ld to %ld. tmpEntry(term:%llu,index:%llu)\n",
                  localServer->serverId, arg->lastLogIndex, tmpIndex + 1, tmpEntry.term(), tmpEntry.index());
   arg->paxos->truncateBackward_(tmpIndex + 1);
   if (arg->paxos->debugResetLogSlow) sleep(1);
@@ -1243,7 +1243,7 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
     }
   }
   arg->paxos->cdrClear(arg);
-  easy_error_log("Server %d : finish commitDepResetLog.\n",
+  easy_system_log("Server %d : finish commitDepResetLog.\n",
                  localServer->serverId);
   /* still Send an extra empty log entry to implicitly commit old entries */
   arg->paxos->replicateLog_(tmpEntry, false);
@@ -1358,13 +1358,13 @@ int Paxos::requestVote(bool force) {
     return -1;
   }
   if (state_ == LEARNER) {
-    easy_error_log("Server %d : Skip requestVote because I am learner.",
+    easy_system_log("Server %d : Skip requestVote because I am learner.",
                    localServer_->serverId);
     return -1;
   }
 
   if (localServer_->electionWeight == 0) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : Skip requestVote because electionWeight is 0 "
         "currentTerm(%ld)\n",
         localServer_->serverId, currentTerm_.load());
@@ -1373,7 +1373,7 @@ int Paxos::requestVote(bool force) {
 
   /* For debug */
   if (debugDisableElection) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : Skip requestVote because of debugDisableElection "
         "currentTerm(%ld)\n",
         localServer_->serverId, currentTerm_.load());
@@ -1403,7 +1403,7 @@ int Paxos::requestVote(bool force) {
     epochTimer_->restart();
     votedFor_ = localServer_->serverId;
     log_->setMetaData(keyVoteFor, votedFor_);
-    easy_log_common("Server %d : Start new requestVote: new term(%ld)\n",
+    easy_system_log("Server %d : Start new requestVote: new term(%ld)\n",
                    localServer_->serverId, currentTerm_.load());
 
     PaxosMsg msg;
@@ -1450,7 +1450,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   if (state_ == LEARNER) {
     rsp->set_term(msg->term());
     rsp->set_votegranted(0);
-    easy_error_log(
+    easy_system_log(
         "Server %d : Receive a RequestVote from server %d, term(%llu) when I'm "
         "LEARNER!! Just reject!!\n",
         localServer_->serverId, msg->candidateid(), msg->term());
@@ -1462,7 +1462,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   if (server == nullptr || server->strAddr != msg->addr()) {
     rsp->set_term(currentTerm_);
     rsp->set_votegranted(0);
-    easy_error_log(
+    easy_system_log(
         "Server %d : reject RequestVote because this server is not in the "
         "current configure, server(id:%llu, addr:%s).\n",
         localServer_->serverId, msg->candidateid(), msg->addr().c_str());
@@ -1472,7 +1472,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   if (msg->term() < currentTerm_) {
     rsp->set_term(currentTerm_);
     rsp->set_votegranted(0);
-    easy_error_log(
+    easy_system_log(
         "Server %d : Receive an old RequestVote from server %d msg term(%d) "
         "current term(%d) reject!!\n",
         localServer_->serverId, msg->serverid(), msg->term(),
@@ -1496,7 +1496,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
                    (msg->lastlogterm() == lastLogTerm &&
                     msg->lastlogindex() >= lastLogIndex));
 
-  easy_error_log(
+  easy_system_log(
       "Server %d : leaderStickiness check: msg::force(%d) state_:%d "
       "electionTimer_::Stage:%d leaderId_:%llu .\n",
       localServer_->serverId, msg->force(), state_.load(),
@@ -1510,7 +1510,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
         !Paxos::debugDisableElection))) {
     rsp->set_term(currentTerm_);
     rsp->set_votegranted(0);
-    easy_error_log(
+    easy_system_log(
         "Server %d : reject RequestVote because of leaderStickiness, "
         "local(lli:%ld, llt:%ld); msg(candidateid: %d, term: %ld lli:%ld, "
         "llt:%ld) .\n",
@@ -1523,7 +1523,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
 
   if (msg->term() > currentTerm_) {
     /* Enter New Term */
-    easy_error_log(
+    easy_system_log(
         "Server %d : New Term in onRequestVote !! server %d 's term(%d) is "
         "bigger than me(%d).\n",
         localServer_->serverId, msg->candidateid(), msg->term(),
@@ -1542,7 +1542,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
     log_->setMetaData(keyVoteFor, votedFor_);
     electionTimer_->restart();
   }
-  easy_error_log(
+  easy_system_log(
       "Server %d : isVote: %d, local(lli:%llu, llt:%d); msg(candidateid: %d, "
       "term: %d lli:%llu, llt:%d) .\n",
       localServer_->serverId, rsp->votegranted(), lastLogIndex, lastLogTerm,
@@ -1646,14 +1646,14 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
   server->setLastAckEpoch(currentEpoch_);
 
   if (msg->term() > currentTerm_) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : New Term in onRequestVoteResponce !! server %d 's "
         "term(%d) is bigger than me(%d).\n",
         localServer_->serverId, msg->serverid(), msg->term(),
         currentTerm_.load());
     newTerm(msg->term());
   } else if (msg->term() < currentTerm_) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : Receive an old RequestVoteResponce from server %d msg "
         "term(%d) current term(%d) skip!!\n",
         localServer_->serverId, msg->serverid(), msg->term(),
@@ -1661,7 +1661,7 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
     if (msg->force()) {
       /* We reset term, when we're reject because leaderStickiness. */
       if (msg->term() >= log_->getLastLogTerm()) {
-        easy_error_log(
+        easy_system_log(
             "Server %d : Downgrade term from %llu to %llu when "
             "onRequestVoteResponce, because there are leaderStickiness "
             "leader(%ld) exist!!\n",
@@ -1674,7 +1674,7 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
     assert(msg->term() == currentTerm_);
     server->hasVote = true;
 
-    easy_error_log(
+    easy_system_log(
         "Server %d : server %d (term:%ld) vote me to became leader.\n",
         localServer_->serverId, msg->serverid(), msg->term());
 
@@ -1682,7 +1682,7 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
       becameLeader_();
     }
   } else
-    easy_error_log("Server %d : server %d refuse to let me became leader.\n",
+    easy_system_log("Server %d : server %d refuse to let me became leader.\n",
                    localServer_->serverId, msg->serverid());
 
   return 0;
@@ -1974,7 +1974,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   } else if (msg->term() < currentTerm_) {
     if (!forceRequestMode_ && leaderId_.load() == 0 &&
         msg->term() >= log_->getLastLogTerm() && state_ == CANDIDATE) {
-      easy_error_log(
+      easy_system_log(
           "Server %d : Downgrade term from %llu to %llu when onAppendLog, "
           "because there are leaderStickiness leader(%ld) exist!!\n",
           localServer_->serverId, currentTerm_.load(), msg->term(),
@@ -1982,7 +1982,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
       newTerm(msg->term());
     } else if (state_ == LEARNER && (enableLearnerAutoResetMatchIndex_ ||
                                      msg->term() >= log_->getLastLogTerm())) {
-      easy_error_log(
+      easy_system_log(
           "Server %d : Downgrade term from %llu to %llu when onAppendLog, "
           "because I am learner!!\n",
           localServer_->serverId, currentTerm_.load(), msg->term());
@@ -2228,7 +2228,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
             /* Truncate the log start from the index. */
             truncateBackward_(index);
             ++(stats_.countTruncateBackward);
-            easy_error_log(
+            easy_system_log(
                 "Server %d : truncate paxos log from(include) %ld in appendLog "
                 "msg, lli:%ld\n",
                 localServer_->serverId, index, log_->getLastLogIndex());
@@ -2737,7 +2737,7 @@ int Paxos::leaderCommand(LcTypeT type, std::shared_ptr<RemoteServer> server) {
   ++(stats_.countLeaderCommand);
 
   if (type == LeaderTransfer) {
-    easy_error_log(
+    easy_system_log(
         "Server %d : leaderCommand(LeaderTransfer) to server(%ld), "
         "currentTerm(%ld), lli(%llu)\n",
         localServer_->serverId, server->serverId, currentTerm_.load(),
@@ -2865,7 +2865,7 @@ uint64_t Paxos::checkCommitIndex(uint64_t baseIndex, uint64_t term) {
 void Paxos::newTerm(uint64_t newTerm) {
   if (state_ == LEADER) {
     leaderStepDowning_.store(true);
-    easy_error_log(
+    easy_system_log(
         "Server %d : new term(old:%ld,new:%ld), This is a Leader Step Down!!\n",
         localServer_->serverId, currentTerm_.load(), newTerm);
     log_->setMetaData(keyLastLeaderTerm, currentTerm_);
@@ -2876,7 +2876,7 @@ void Paxos::newTerm(uint64_t newTerm) {
       ccMgr_.condChangeDone.notify_all();
     }
   } else
-    easy_error_log("Server %d : new term(old:%ld,new:%ld) !!\n",
+    easy_system_log("Server %d : new term(old:%ld,new:%ld) !!\n",
                    localServer_->serverId, currentTerm_.load(), newTerm);
   currentTerm_.store(newTerm);
   log_->setTerm(currentTerm_);
@@ -3243,7 +3243,7 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
        * scan. */
       log_->setMetaData(keyScanIndex, 0);
     } else {
-      easy_error_log(
+      easy_system_log(
           "Server %d : Start scan log on startup from %llu to %llu for "
           "uncommit configure change log entries.\n",
           index, startScanIndex, lastLogIndex);
@@ -3527,7 +3527,7 @@ uint64_t Paxos::leaderTransferIfNecessary_(uint64_t epoch) {
   }
 
   target = choices[rand() % choices.size()];
-  easy_error_log(
+  easy_system_log(
       "Server %d: try to do an auto leader transfer, reason: %s, target: %llu",
       localServer_->serverId, reason.c_str(), target);
 
@@ -3691,7 +3691,7 @@ int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
 }
 
 void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch) {
-  easy_error_log("Server %d : electionWeightAction start, term:%llu epoch:%llu",
+  easy_system_log("Server %d : electionWeightAction start, term:%llu epoch:%llu",
                  localServer_->serverId, term, baseEpoch);
   std::lock_guard<std::mutex> lg(lock_);
   if (term != currentTerm_.load() || state_.load() != LEADER) {
@@ -3710,7 +3710,7 @@ void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch) {
     auto term = currentTerm_.load();
     auto lli = log_->getLastLogIndex();
 
-    easy_error_log(
+    easy_system_log(
         "Server %d : electionWeightAction try to transfer leader to server "
         "%llu, term(%llu)\n",
         localServer_->serverId, targetId, term);
@@ -3722,7 +3722,7 @@ void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch) {
   } else {
     subState_.store(SubNone);
     weightElecting_ = false;
-    easy_error_log(
+    easy_system_log(
         "Server %d : electionWeightAction skip transfer leader because %s.\n",
         localServer_->serverId,
         targetId == 0 ? "no available server"

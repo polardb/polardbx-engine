@@ -214,7 +214,7 @@ int Witness::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_serverid(serverId);
   rsp->set_term(msg->term());
   rsp->set_votegranted(0);
-  easy_error_log(
+  easy_system_log(
       "Server %d : Receive an RequestVote from server %d, term(%llu) when I'm "
       "WITNESS!! Just reject!!\n",
       serverId, msg->candidateid(), msg->term());
@@ -225,7 +225,7 @@ int Witness::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
 
-  easy_error_log(
+  easy_system_log(
       "Server %d : Receive an onLeaderCommand when I'm WITNESS!! Just "
       "reject!!\n",
       serverId);
@@ -240,7 +240,7 @@ int Witness::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
 
 void Witness::resetLastLogIndex(uint64_t lli) {
   std::lock_guard<std::mutex> lg(lock_);
-  easy_error_log("Server %d : resetLastLogIndex to %llu\n", serverId, lli);
+  easy_system_log("Server %d : resetLastLogIndex to %llu\n", serverId, lli);
   log_->resetLastLogIndex(lli);
   commitIndex_ = log_->getLastLogIndex();
 }

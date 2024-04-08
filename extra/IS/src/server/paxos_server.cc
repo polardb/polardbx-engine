@@ -358,7 +358,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
           lostConnectMode = true;
         } else if (currentEpoch != 0 &&
                    lastAckEpoch.load() < currentEpoch - 1) {
-          easy_error_log(
+          easy_warn_log(
               "Detect lost connect to server %llu, currentEpoch:%llu, "
               "lastAckEpoch:%llu!",
               serverId, paxos->getCurrentEpoch(), lastAckEpoch.load());

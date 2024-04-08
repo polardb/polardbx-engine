@@ -10605,6 +10605,9 @@ bool mysqld_get_one_option(int optid,
     }
   }
 
+  xp::info(ER_XP_0) << "mysqld option: "
+      << "name:" << opt->name << ", value:" << (argument ? argument : "");
+
   switch (optid) {
     case '#':
 #ifndef NDEBUG

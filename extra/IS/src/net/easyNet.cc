@@ -215,7 +215,7 @@ NetServerRef EasyNet::getConnDataAndSetFail(easy_connection_t *c, bool isFail) {
   if (isFail) {
     if (!server->netError.load()) {
       if (server->c == c || server->c == nullptr)
-        easy_error_log("EasyNet::onDisconnected server %ld\n",
+        easy_system_log("EasyNet::onDisconnected server %ld\n",
                        server->serverId);
       else
         easy_error_log(
@@ -228,7 +228,7 @@ NetServerRef EasyNet::getConnDataAndSetFail(easy_connection_t *c, bool isFail) {
     server->netError.store(isFail);
   } else {
     if (server->netError.load())
-      easy_error_log("EasyNet::onConnected server %ld\n", server->serverId);
+      easy_system_log("EasyNet::onConnected server %ld\n", server->serverId);
     /* connect */
     server->c = c;
     server->waitForReply = 0;

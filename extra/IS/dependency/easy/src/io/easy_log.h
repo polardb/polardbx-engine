@@ -23,19 +23,19 @@ typedef enum {
     EASY_LOG_ALL
 } easy_log_level_t;
 
-#define easy_log_common(format, args...) \
+#define easy_system_log(format, args...) if (easy_log_level >= EASY_LOG_ERROR) \
         easy_log_format_default(EASY_LOG_OFF, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_fatal_log(format, args...) if(easy_log_level>=EASY_LOG_FATAL)      \
+#define easy_fatal_log(format, args...) if (easy_log_level >= EASY_LOG_FATAL)      \
         easy_log_format(EASY_LOG_FATAL, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_error_log(format, args...) if(easy_log_level>=EASY_LOG_ERROR)      \
+#define easy_error_log(format, args...) if (easy_log_level >= EASY_LOG_ERROR)      \
         easy_log_format(EASY_LOG_ERROR, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_warn_log(format, args...) if(easy_log_level>=EASY_LOG_WARN)        \
+#define easy_warn_log(format, args...) if (easy_log_level >= EASY_LOG_WARN)        \
         easy_log_format(EASY_LOG_WARN, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_info_log(format, args...) if(easy_log_level>=EASY_LOG_INFO)        \
+#define easy_info_log(format, args...) if (easy_log_level >= EASY_LOG_INFO)        \
         easy_log_format(EASY_LOG_INFO, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_debug_log(format, args...) if(easy_log_level>=EASY_LOG_DEBUG)      \
+#define easy_debug_log(format, args...) if (easy_log_level >= EASY_LOG_DEBUG)      \
         easy_log_format(EASY_LOG_DEBUG, __FILE__, __LINE__, __FUNCTION__, format, ## args)
-#define easy_trace_log(format, args...) if(easy_log_level>=EASY_LOG_TRACE)      \
+#define easy_trace_log(format, args...) if (easy_log_level >= EASY_LOG_TRACE)      \
         easy_log_format(EASY_LOG_TRACE, __FILE__, __LINE__, __FUNCTION__, format, ## args)
 
 // 打印backtrace
