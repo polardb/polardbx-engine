@@ -25,6 +25,7 @@
 #include "sql/binlog.h"
 #include "sql/bl_consensus_log.h"
 #include "sql/consensus_log_manager.h"
+#include "sql/current_thd.h"
 #include "sql/mysqld_thd_manager.h"
 #include "sql/rpl_mi.h"
 #include "sql/rpl_msr.h"
@@ -566,10 +567,14 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         DBUG_RETURN(1);
       }
 
-      if ((rli->is_time_for_mta_checkpoint() ||
-           DBUG_EVALUATE_IF("check_replica_debug_group", 1, 0)) &&
-          mta_checkpoint_routine(rli, false)) {
-            DBUG_RETURN(1);
+      if (rli->is_time_for_mta_checkpoint() ) {
+        if (mta_checkpoint_routine(rli, false)) {
+          DBUG_RETURN(1);
+        } else {
+          // mta_checkpoint_routine could change thd status to waiting for handler
+          // commit, this is a hack to solve this problem.
+          THD_STAGE_INFO(current_thd, stage_reading_event_from_the_relay_log);
+        }
       }
 
       // determine whether exit
