@@ -23,7 +23,6 @@ SELECT kcu.constraint_name, kcu.column_name, kcu.referenced_table_name,
 --replace_column 1 #
 call dbms_ccl.show_ccl_rule();
 
-
-delete from mysql.concurrency_control;
+truncate table mysql.concurrency_control;
 commit;
 call dbms_ccl.flush_ccl_rule();

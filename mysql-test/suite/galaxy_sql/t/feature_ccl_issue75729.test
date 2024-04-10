@@ -462,7 +462,7 @@ call dbms_ccl.show_ccl_rule();
 
 connection default;
 
-delete from mysql.concurrency_control;
+truncate table mysql.concurrency_control;
 commit;
 call dbms_ccl.flush_ccl_rule();
 
