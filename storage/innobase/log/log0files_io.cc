@@ -1066,6 +1066,11 @@ dberr_t log_create_unused_file(const Log_files_context &ctx,
     return DB_ERROR;
   }
 
+#ifdef POSIX_FADV_DONTNEED
+  /** Flush and free page cache of redolog creation */
+  posix_fadvise(file.m_file, 0, size_in_bytes, POSIX_FADV_DONTNEED);
+#endif /* POSIX_FADV_DONTNEED */
+
   ret = os_file_close(file);
   ut_a(ret);
 
