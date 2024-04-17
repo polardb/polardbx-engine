@@ -7036,14 +7036,6 @@ static int init_server_components() {
   }
   ha_post_recover();
 
-  if (!opt_initialize) {
-    if (!opt_consensus_force_recovery) {
-      if (!opt_cluster_log_type_instance) {
-        start_consensus_apply_threads();
-      }
-    }
-  }
-
   /*
     Add prepared XA transactions into the cache of XA transactions and acquire
     mdl lock for every table involved in any of these prepared XA transactions.
@@ -8313,6 +8305,14 @@ int mysqld_main(int argc, char **argv)
   check_binlog_stmt_cache_size(nullptr);
 
   binlog_unsafe_map_init();
+
+  if (!opt_initialize) {
+    if (!opt_consensus_force_recovery) {
+      if (!opt_cluster_log_type_instance) {
+        start_consensus_apply_threads();
+      }
+    }
+  }
 
   //  ReplicaInitializer replica_initializer(opt_initialize,
   //  opt_skip_replica_start,
