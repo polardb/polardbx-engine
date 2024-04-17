@@ -562,7 +562,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
       }
 
       if (sql_slave_killed(rli->info_thd, rli)) {
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread is terminated because of slave_killed";
         DBUG_RETURN(1);
       }
@@ -587,7 +587,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
                  opt_consensus_leader_stop_apply ||
                  (opt_consensus_leader_stop_apply_time &&
                   (time_diff < (long)opt_consensus_leader_stop_apply_time))) {
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread stop, opt_consensus_leader_stop_apply: "
             << (opt_consensus_leader_stop_apply ? "true" : "false")
             << ", seconds_behind_master: " << time_diff
@@ -600,7 +600,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         rli->sql_thread_kill_accepted = true;
         rli->force_apply_queue_before_stop = true;
         mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread catchup commit index, consensus index: "
             << rli->get_consensus_apply_index()
             << ", current term: " << consensus_log_manager.get_current_term()
@@ -700,7 +700,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
     assert(consensus_log_manager.get_status() == RELAY_LOG_WORKING);
     start_apply_index =
         consensus_log_manager.get_consensus_info()->get_start_apply_index();
-    xp::info(ER_XP_APPLIER)
+    xp::system(ER_XP_APPLIER)
         << "Apply thread start, recover status = " << recover_status
         << ", start apply index = " << start_apply_index
         << ", rli consensus index " << rli->get_consensus_apply_index()
@@ -722,7 +722,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
               << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
             << "', pos = " << log_pos << "', next_index = " << next_index
             << ", rli apply index = " << recover_index;
@@ -752,7 +752,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
               << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
             << "', pos = " << log_pos << "', next_index = " << next_index
             << ", rli apply index = " << start_index;
@@ -785,7 +785,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
                 << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          xp::info(ER_XP_APPLIER)
+          xp::system(ER_XP_APPLIER)
               << "Apply thread group relay log file name = '" << log_name
               << "', pos = " << log_pos << "', next_index = " << next_index
               << ", rli apply index = " << start_index;
@@ -806,7 +806,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
                 << "Apply thread cannot find start index " << next_index;
             abort();
           }
-          xp::info(ER_XP_APPLIER)
+          xp::system(ER_XP_APPLIER)
               << "Apply thread group relay log file name = '" << log_name
               << "', pos = " << log_pos << "', next_index = " << next_index
               << ", rli apply index = " << start_index;
@@ -829,7 +829,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
               << "Apply thread cannot find start index " << next_index;
           abort();
         }
-        xp::info(ER_XP_APPLIER)
+        xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
             << "', pos = " << log_pos << ", rli apply index = " << start_index;
         rli->set_group_relay_log_name(log_name);

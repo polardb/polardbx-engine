@@ -819,12 +819,12 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index) {
 
     retIndex = log->get_trx_end_index(consensus_index);
     if (retIndex == 0) {
-      xp::error(ER_XP_0) << "ConsensusLogManager: fail to find next trx index.";
+      xp::error(ER_XP_0) << "fail to find next trx index.";
       abort();
     }
   }
-  xp::info(ER_XP_0) << "ConsensusLogManager: "
-                    << "input index: " << consensus_index
+  xp::system(ER_XP_0) << "get_next_trx_index"
+                    << ", input index: " << consensus_index
                     << ", next transaction index is " << retIndex + 1;
   return retIndex + 1;
 }
@@ -1087,7 +1087,7 @@ void ConsensusLogManager::wait_apply_threads_stop() {
 }
 
 int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index) {
-  xp::info(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::wait_leader_degraded, consensus term: " << term
       << ", consensus index: " << index;
   int error = 0;
@@ -1155,7 +1155,7 @@ int ConsensusLogManager::wait_leader_degraded(uint64 term, uint64 index) {
   }
 end:
   consensus_guard.unlock();
-  xp::info(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::wait_leader_degraded finish, error " << error;
   // recover prefetch
   prefetch_manager->enable_all_prefetch_channels();
@@ -1163,7 +1163,7 @@ end:
 }
 
 int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
-  xp::info(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::wait_follower_upgraded, consensus term: " << term
       << ", consensus index: " << index;
   int error = 0;
@@ -1284,7 +1284,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
   }
 end:
   consensus_guard.unlock();
-  xp::info(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::wait_follower_upgraded finish, error " << error;
 
   // recover prefetch
@@ -1293,7 +1293,7 @@ end:
 }
 
 int ConsensusLogManager::wait_follower_change_term(uint64 term) {
-  xp::info(ER_XP_0)
+  xp::system(ER_XP_0)
       << "ConsensusLogManager::wait_follower_change_term, consensus term: "
       << term;
   current_term = term;
@@ -1425,9 +1425,9 @@ void *run_consensus_stage_change(void *arg) {
 }
 
 void *run_consensus_commit_pos_watcher(void *arg) {
-  xp::info(ER_XP_0) << "start consensus_commit_pos_watcher thread";
+  xp::system(ER_XP_0) << "start consensus_commit_pos_watcher thread";
   binlog_commit_pos_watcher((bool *)arg);
-  xp::info(ER_XP_0) << "stop consensus_commit_pos_watcher thread";
+  xp::system(ER_XP_0) << "stop consensus_commit_pos_watcher thread";
   return NULL;
 }
 

@@ -57,7 +57,7 @@ void Consensus_recovery_manager::add_trx_in_binlog(uint64 consensus_index,
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   internal_xids_in_binlog[xid] = consensus_index;
 
-  xp::system(ER_XP_RECOVERY)
+  xp::info(ER_XP_RECOVERY)
       << "XID = [" << xid << "]"
       << " Index = [" << consensus_index
       << " ] was added at "
@@ -70,7 +70,7 @@ void Consensus_recovery_manager::add_trx_in_binlog(uint64 consensus_index,
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   external_xids_in_binlog[xid] = consensus_index;
 
-  xp::system(ER_XP_RECOVERY) << "XID = [" << xid << "]"
+  xp::info(ER_XP_RECOVERY) << "XID = [" << xid << "]"
                              << " Index = [" << consensus_index
                              << " ] was added at "
                                 "Consensus_recovery_manager::add_trx_in_binlog";

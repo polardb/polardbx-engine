@@ -53,7 +53,7 @@ void mts_init_consensus_apply_index(Relay_log_info *rli,
   // assert(rli->is_parallel_exec());
   assert(rli->info_thd->xpaxos_replication_channel);
 
-  xp::info(ER_XP_APPLIER) << "mts_init_consensus_apply_index "
+  xp::system(ER_XP_APPLIER) << "mts_init_consensus_apply_index "
                           << consensus_index;
 
   rli->m_consensus_index_buf->init_tail(consensus_index);

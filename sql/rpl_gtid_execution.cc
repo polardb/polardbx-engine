@@ -347,6 +347,15 @@ static inline void skip_statement(THD *thd) {
                       thd->query().str, thd->variables.gtid_next.type,
                       thd->lex->sql_command, thd->thread_id()));
 
+  char buf[Gtid::MAX_TEXT_LENGTH + 1];
+  global_sid_lock->rdlock();
+  thd->variables.gtid_next.to_string(global_sid_map, buf);
+  global_sid_lock->unlock();
+
+  xp::system(ER_XP_APPLIER) << "skip_statement with same gtid"
+                            << ", thread_id=" << thd->thread_id()
+                            << ", gtid=" << buf;
+
   /*
     Despite the transaction was skipped, there is still the need
     to notify that its session ticket was consumed.

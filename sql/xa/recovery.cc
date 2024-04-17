@@ -187,11 +187,11 @@ bool xa::recovery::recover_prepared_in_tc_one_ht(THD *, plugin_ref plugin,
 
   if (ht->state == SHOW_OPTION_YES && ht->recover_prepared_in_tc) {
     assert(info->xa_list != nullptr);
-    xp::system(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list";
+    xp::info(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list";
     ret = ht->recover_prepared_in_tc(ht, *info->xa_list);
     if (ret) return ret;
 
-    xp::system(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list_in_ht ";
+    xp::info(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list_in_ht ";
     ret = ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
   }
   return ret;
@@ -238,7 +238,7 @@ bool xa::recovery::recover_one_ht(THD *, plugin_ref plugin, void *arg) {
     }
     bool has_failures =
         ::has_failures(internal_stats) || ::has_failures(external_stats);
-    LogErr(has_failures ? ERROR_LEVEL : INFORMATION_LEVEL,
+    LogErr(has_failures ? ERROR_LEVEL : SYSTEM_LEVEL,
            ER_BINLOG_CRASH_RECOVERY_ENGINE_RESULTS,
            ha_resolve_storage_engine_name(ht),
            ::print_stats(internal_stats, external_stats).data());

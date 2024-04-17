@@ -344,7 +344,7 @@ int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list,
   }
 
   if (info.found_foreign_xids)
-    LogErr(WARNING_LEVEL, ER_XA_RECOVER_FOUND_XA_TRX, info.found_foreign_xids);
+    LogErr(SYSTEM_LEVEL, ER_XA_RECOVER_FOUND_XA_TRX, info.found_foreign_xids);
   if (info.dry_run && info.found_my_xids) {
     LogErr(ERROR_LEVEL, ER_XA_RECOVER_EXPLANATION, info.found_my_xids,
            opt_tc_log_file);

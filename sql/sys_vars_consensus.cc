@@ -751,7 +751,7 @@ static Sys_var_bool Sys_commit_pos_watcher(
     "commit_pos_watcher",
     "background thread checking and updating binlog commit position",
     READ_ONLY GLOBAL_VAR(opt_commit_pos_watcher), CMD_LINE(OPT_ARG),
-    DEFAULT(false));
+    DEFAULT(true));
 
 static Sys_var_ulonglong Sys_commit_pos_watcher_interval(
     "commit_pos_watcher_interval",

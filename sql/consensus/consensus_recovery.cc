@@ -182,7 +182,7 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
     if (this->m_is_malformed) break;
   }
 
-  xp::info(ER_XP_RECOVERY) << "Consensus_binlog_recovery::recover end "
+  xp::system(ER_XP_RECOVERY) << "Consensus_binlog_recovery::recover end "
                            << ", file_size " << m_reader.ifile()->length()
                            << ", curr_position " << m_reader.position()
                            << ", m_current_index " << m_current_index
