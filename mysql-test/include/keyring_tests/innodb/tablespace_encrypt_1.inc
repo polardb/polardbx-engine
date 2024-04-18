@@ -50,11 +50,13 @@ call mtr.add_suppression("\\[Error\\] \\[[^]]*\\] \\[[^]]*\\] Encryption can't f
 call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Check keyring fail, please check the keyring is loaded.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # START : WITHOUT KEYRING
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # Create a tablespace with encryption, should fail since keyring is not
@@ -76,7 +78,7 @@ DROP TABLESPACE encrypt_ts;
 --echo # RESTART 1 : WITH KEYRING
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --disable_warnings
@@ -528,7 +530,7 @@ SELECT * FROM t1 ORDER BY c1 LIMIT 10;
 --echo # RESTART 2 : WITHOUT KEYRING
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # Try to access table in encrypted tablespace
@@ -539,7 +541,7 @@ SELECT * FROM t1 ORDER BY c1 LIMIT 10;
 --echo # RESTART 3 : WITH KEYRING
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # Confirm the encryption info can be retrieved properly and table can be read.
@@ -878,7 +880,7 @@ DROP TABLESPACE encrypt_ts;
 --echo #########################################################################
 --echo # RESTART 4 : WITH KEYRING AND --INNODB_DIRECTORIES
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --innodb-directories=$MYSQL_TMP_DIR;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --innodb-directories=$MYSQL_TMP_DIR;
 --source include/restart_mysqld_no_echo.inc
 
 # Check encrypted tablespace is getting created in remote directory(outside of datadir)

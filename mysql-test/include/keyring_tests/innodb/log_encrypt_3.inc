@@ -10,9 +10,11 @@ call mtr.add_suppression("\\[ERROR\\] .* Failed to find tablespace for table `\.
 call mtr.add_suppression("\\[ERROR\\] .* Can't set redo log files to be encrypted.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 # Restart with redo log encryption enabled
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 let $old_innodb_redo_log_encrypt = `SELECT @@innodb_redo_log_encrypt`;
@@ -25,7 +27,7 @@ USE tde_db;
 #  This causes InnoDB to flush its logs to disk. )
 # Restart with redo log encryption enabled
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 SELECT @@global.innodb_redo_log_encrypt ;
@@ -50,7 +52,7 @@ SELECT a,LEFT(b,10) FROM tde_db.t4;
 FLUSH LOGS;
 # Restart with redo log encryption enabled
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 
@@ -97,7 +99,7 @@ SELECT a,LEFT(b,10) FROM tde_db.t4;
 COMMIT;
 # Restart with redo log encryption enabled
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 

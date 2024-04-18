@@ -28,9 +28,11 @@ call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Encryption can't f
 --echo #########
 --echo
 
+--source include/make_consensus_args.inc
+
 # Take backup of instance manifest
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --echo #########################################################################
@@ -53,7 +55,7 @@ ALTER INSTANCE ROTATE INNODB MASTER KEY;
 --echo #########################################################################
 # Restore instance manifest from backup
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --echo --------------------------------------------------
@@ -294,12 +296,12 @@ ALTER TABLESPACE mysql ENGINE=memory;
 --echo #   - tables in mysql ts should be accessible
 --echo #########################################################################
 ALTER TABLESPACE mysql ENCRYPTION='Y';
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 SELECT NAME, ENCRYPTION FROM INFORMATION_SCHEMA.INNODB_TABLESPACES where NAME='mysql';
 SELECT help_keyword_id FROM mysql.help_keyword ORDER BY help_keyword_id LIMIT 2;
 ALTER TABLESPACE mysql ENCRYPTION='N';
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 ALTER TABLESPACE mysql ENCRYPTION='Y';
 SELECT NAME, ENCRYPTION FROM INFORMATION_SCHEMA.INNODB_TABLESPACES where NAME='mysql';

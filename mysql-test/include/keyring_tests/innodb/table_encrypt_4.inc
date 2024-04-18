@@ -83,7 +83,9 @@ if($source_db != $dest_db) {
 	eval DROP TABLE $dest_db.t1;
 }
 
---let $restart_parameters= restart: $PLUGIN_DIR_OPT
+--source include/make_consensus_args.inc
+
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args
 --source include/restart_mysqld_no_echo.inc
 
 eval SELECT * FROM $dest_db.t1 LIMIT 10;

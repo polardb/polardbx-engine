@@ -14,11 +14,13 @@ call mtr.add_suppression("\\[Error\\] \\[[^]]*\\] \\[[^]]*\\] Encryption can't f
 call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Check keyring fail, please check the keyring is loaded.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # START : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --echo #########
 --echo # SETUP #
@@ -55,7 +57,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo # RESTART 1 : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --performance-schema-consumer-events-stages-current=ON --performance-schema-events-stages-history-size=1000;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --performance-schema-consumer-events-stages-current=ON --performance-schema-events-stages-history-size=1000;
 --source include/restart_mysqld_no_echo.inc
 
 --echo # Monitoring connection
@@ -166,7 +168,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART 2 : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # We shouldn't be able to read t1 records as it is encrypted now and keyring
@@ -178,7 +180,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART 3 : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # Disable all consumers

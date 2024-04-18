@@ -524,7 +524,6 @@ The following options may be given as the first argument:
  name and library is the plugin library in plugin_dir.
  --enable-appliedindex-checker 
  enable applied index checker during ordered_commit
- (Defaults to on; use --skip-enable-appliedindex-checker to disable.)
  --enable-changeset  Whether open the polarx changeset proc
  (Defaults to on; use --skip-enable-changeset to disable.)
  --enable-implicit-primary-key 
@@ -2223,7 +2222,7 @@ disabled-storage-engines
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
-enable-appliedindex-checker TRUE
+enable-appliedindex-checker FALSE
 enable-changeset TRUE
 enable-implicit-primary-key FALSE
 enable-polarx-rpc TRUE

@@ -44,7 +44,7 @@ EOF
 --echo # With keyring and innodb_undo_log_encrypt=ON
 --echo ###############################################################################
 --source include/keyring_tests/helper/binary_restore_manifest.inc
---let $restart_parameters="restart: $PLUGIN_DIR_OPT --datadir=$MYSQL_ENC_DATADIR --log_error_verbosity=3 --innodb_undo_log_encrypt=ON --log-error=$MYSQLTEST_VARDIR/log/restart_1.err "
+--let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args --datadir=$MYSQL_ENC_DATADIR --log_error_verbosity=3 --innodb_undo_log_encrypt=ON --log-error=$MYSQLTEST_VARDIR/log/restart_1.err "
 --source include/start_mysqld_no_echo.inc
 
 SHOW VARIABLES LIKE "%innodb_undo_log_encrypt%";
@@ -68,7 +68,7 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 --echo ###############################################################################
 --echo # With keyring and innodb_undo_log_encrypt=OFF
 --echo ###############################################################################
---let $restart_parameters="restart: $PLUGIN_DIR_OPT --datadir=$MYSQL_ENC_DATADIR --log_error_verbosity=3 --innodb_undo_log_encrypt=OFF --log-error=$MYSQLTEST_VARDIR/log/restart_1.err"
+--let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args --datadir=$MYSQL_ENC_DATADIR --log_error_verbosity=3 --innodb_undo_log_encrypt=OFF --log-error=$MYSQLTEST_VARDIR/log/restart_1.err"
 --source include/restart_mysqld_no_echo.inc
 
 # Mark UNDO tablespace inactive so that it could be dropped.
@@ -90,7 +90,7 @@ SELECT NAME, SPACE_TYPE, ENCRYPTION, STATE FROM INFORMATION_SCHEMA.INNODB_TABLES
 # Reset to initial state
 --source include/shutdown_mysqld.inc
 --source include/wait_until_disconnected.inc
---let $restart_parameters="restart: $PLUGIN_DIR_OPT"
+--let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args"
 --source include/start_mysqld_no_echo.inc
 
 --remove_file $BOOTSTRAP_LOG

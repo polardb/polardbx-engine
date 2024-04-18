@@ -27,7 +27,7 @@ let $_row_count_to_assert =
  WHERE
    (subsystem = 'Server' OR
     subsystem = 'InnoDB') AND
-   prio = 'Note' AND
+   (prio = 'Note' OR prio = 'System') AND
    REGEXP_LIKE(data, '.*$assert_select.*') = 1`;
 --let $assert_text = Found 1 log message(s) for "$assert_select"
 --let $assert_cond = $_row_count_to_assert = 1

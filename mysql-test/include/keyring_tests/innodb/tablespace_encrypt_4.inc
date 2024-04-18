@@ -13,11 +13,13 @@
 call mtr.add_suppression("ibd can't be decrypted, please confirm the keyfile is match and keyring plugin is loaded.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # START : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --echo #########
 --echo # SETUP #
@@ -27,7 +29,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo # RESTART 1 : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --performance-schema-consumer-events-stages-current=ON;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --performance-schema-consumer-events-stages-current=ON;
 --source include/restart_mysqld_no_echo.inc
 
 --echo #########################################################################

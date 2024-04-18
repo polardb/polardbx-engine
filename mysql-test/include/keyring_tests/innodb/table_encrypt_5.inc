@@ -171,9 +171,11 @@ DROP TABLE tde_db.t_non_encrypt , tde_db.t_non_encrypt_2 , tde_db.t_non_encrypt_
 # Reload keyring
 ALTER INSTANCE RELOAD KEYRING;
 
+--source include/make_consensus_args.inc
+
 --echo #-----------------------------------------------------------------------
 --echo # Test 1 : Restart with same keyring option , all tables accesible
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 SELECT status_key, status_value FROM
 performance_schema.keyring_component_status
@@ -181,7 +183,7 @@ WHERE status_key LIKE '%name%' OR status_key LIKE '%status%';
 --echo # init tables
 call tde_db.init_setup();
 --echo # restart with same keyring option
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 # All tables accessible
 SELECT COUNT(*) FROM tde_db.t_encrypt;
@@ -256,7 +258,7 @@ DROP TABLE tde_db.t_non_encrypt , tde_db.t_non_encrypt_2 , tde_db.t_non_encrypt_
 --echo #-----------------------------------------------------------------------
 --echo # Test 2 : Restart without keyring option - old encrypt table not
 --echo # accessible but rest are.
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 SELECT status_key, status_value FROM
 performance_schema.keyring_component_status
@@ -267,7 +269,7 @@ call tde_db.init_setup();
 
 --source include/keyring_tests/helper/instance_backup_manifest.inc
 --echo # restart without keyring 
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --echo # encrypt table not accessible
@@ -323,7 +325,7 @@ DROP DATABASE tde_db;
 --source include/keyring_tests/helper/instance_restore_manifest.inc
 --echo # Initial setup
 --echo # Starting server with keyring
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --disable_warnings
@@ -415,7 +417,7 @@ call tde_db.init_setup();
 
 --source include/keyring_tests/helper/local_keyring_file_backup.inc 
 --echo # restart without keyring 
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 # Restore original keyring file
@@ -522,7 +524,7 @@ ALTER INSTANCE RELOAD KEYRING;
 --echo # And creation of new encrypt,non encrypt table is also posible
 #------------------------------------------------------------------------------
 --echo # restart with keyring to load initial data 
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 SELECT status_key, status_value FROM
 performance_schema.keyring_component_status
@@ -534,7 +536,7 @@ call tde_db.init_setup();
 
 # Take backup of key data and replace it with empty file
 --source include/keyring_tests/helper/local_keyring_file_backup.inc 
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --echo # encrypt table not accessible

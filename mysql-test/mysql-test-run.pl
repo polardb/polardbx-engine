@@ -1615,6 +1615,7 @@ sub print_global_resfile {
   resfile_global("repeat",           $opt_repeat);
   resfile_global("sanitize",         $opt_sanitize         ? 1 : 0);
   resfile_global("shutdown-timeout", $opt_shutdown_timeout ? 1 : 0);
+  resfile_global("start-timeout",    $opt_start_timeout ? 1 : 0);
   resfile_global("sp-protocol",      $opt_sp_protocol      ? 1 : 0);
   resfile_global("start_time",       isotime $^T);
   resfile_global("suite-opt",        $opt_suite_opt);
@@ -1812,6 +1813,7 @@ sub command_line_setup {
     'retry-failure=i'       => \$opt_retry_failure,
     'retry=i'               => \$opt_retry,
     'shutdown-timeout=i'    => \$opt_shutdown_timeout,
+    'start-timeout=i'       => \$opt_start_timeout,
     'start'                 => \$opt_start,
     'start-and-exit'        => \$opt_start_exit,
     'start-dirty'           => \$opt_start_dirty,
@@ -2181,7 +2183,6 @@ sub command_line_setup {
     $opt_testcase_timeout = 7 * 24 * 60;
     $opt_suite_timeout    = 7 * 24 * 60;
     $opt_shutdown_timeout = 24 * 60;         # One day to shutdown
-    $opt_shutdown_timeout = 24 * 60;
     $opt_start_timeout    = 24 * 60 * 60;    # One day for PID file creation
   }
 

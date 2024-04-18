@@ -26,7 +26,7 @@ let $_row_count_to_assert =
  FROM performance_schema.error_log 
  WHERE 
    subsystem = 'InnoDB' AND 
-   prio = 'Note' AND 
+   (prio = 'Note' OR prio = 'System') AND
    data LIKE '%$assert_select%'`;
 --let $assert_text = Found log message(s) for "$assert_select"
 --let $assert_cond = $_row_count_to_assert > 0

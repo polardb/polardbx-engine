@@ -26,11 +26,13 @@ call mtr.add_suppression("\\[WARNING\\] \\[[^]]*\\] \\[[^]]*\\] Decrypting a pag
 call mtr.add_suppression("\\[WARNING\\] \\[[^]]*\\] \\[[^]]*\\] Encryption key missing:");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # START : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --echo #########
 --echo # SETUP #
@@ -68,7 +70,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -87,7 +89,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo #########################################################################
 --echo # RESTART $rc : WITH KEYRING PLUGIN after crash
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 --echo # Wait for Encryption processing to finish in background thread
@@ -107,7 +109,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -120,7 +122,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -142,7 +144,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='N';
 --echo #########################################################################
 --echo # RESTART $rc : WITH KEYRING PLUGIN after crash
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 
@@ -163,7 +165,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -178,7 +180,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -197,7 +199,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo #########################################################################
 --echo # RESTART $rc : WITH KEYRING PLUGIN after crash
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 
@@ -218,7 +220,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -231,7 +233,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -253,7 +255,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='N';
 --echo #########################################################################
 --echo # RESTART $rc : WITH KEYRING PLUGIN after crash
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 
@@ -274,7 +276,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -287,7 +289,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -326,7 +328,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -339,7 +341,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --performance-schema-consumer-events-stages-current=ON;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --performance-schema-consumer-events-stages-current=ON;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -381,7 +383,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -396,7 +398,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -439,7 +441,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -452,7 +454,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -495,7 +497,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc: WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -510,7 +512,7 @@ SELECT * FROM t1 LIMIT 10;
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --innodb_doublewrite=0;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --innodb_doublewrite=0;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -556,7 +558,7 @@ ALTER TABLESPACE encrypt_ts encryption='Y';
 --echo # RESTART $rc: WITH KEYRING PLUGIN after crash
 --echo #########################################################################
 # Without fix, following restart would crash reporting page corruption
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --innodb_doublewrite=0 --debug=d,dont_update_key_found_during_REDO_scan;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --innodb_doublewrite=0 --debug=d,dont_update_key_found_during_REDO_scan;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 

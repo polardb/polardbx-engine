@@ -6,10 +6,12 @@
 # Waiting time when (re)starting the server
 --let $explicit_default_wait_counter=10000
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # RESTART 1 : WITH KEYRING
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --performance-schema-consumer-events-stages-current=ON --performance-schema-events-stages-history-size=1000;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --performance-schema-consumer-events-stages-current=ON --performance-schema-events-stages-history-size=1000;
 --source include/restart_mysqld_no_echo.inc
 
 SET SESSION debug= '+d,ddl_btree_build_insert_return_interrupt';
@@ -52,7 +54,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo #########################################################################
 --echo # RESTART 2 : WITH KEYRING PLUGIN
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 ALTER TABLESPACE encrypt_ts ENCRYPTION='N';

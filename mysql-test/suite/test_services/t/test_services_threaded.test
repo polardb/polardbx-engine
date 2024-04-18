@@ -1,4 +1,5 @@
 #--source include/have_daemon_example_plugin.inc
+--source include/not_parallel.inc
 
 # Restart of server to get deterministic results.
 --let server_log= $MYSQLTEST_VARDIR/log/test_services_threaded.err
@@ -10,7 +11,7 @@ call mtr.add_suppression("This is a warning from test plugin");
 call mtr.add_suppression("This is an error from test plugin");
 
 SET @orig_log_error_verbosity= @@global.log_error_verbosity;
-SET @@global.log_error_verbosity= 3;
+SET @@global.log_error_verbosity= 2;
 
 --echo ------ Run plugin ------------------------------------------------
 --replace_result $TESTSERVICESTHREADED TESTSERVICESTHREADED

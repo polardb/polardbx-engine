@@ -20,8 +20,10 @@ let SEARCH_FILE= $MYSQL_TMP_DIR/encrypt_log_output.err;
 # Take backup of global manifest file
 --source include/keyring_tests/helper/binary_backup_manifest.inc
 
+--source include/make_consensus_args.inc
+
 # Test that the output appears.
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --no-console --log-error=$SEARCH_FILE;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --no-console --log-error=$SEARCH_FILE;
 --source include/restart_mysqld_no_echo.inc
 
 SELECT @@global.innodb_redo_log_encrypt;
@@ -64,13 +66,13 @@ EOF
 --source include/keyring_tests/helper/binary_restore_manifest.inc
 
 --echo # Prepare new datadir
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR_1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR_1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" $PLUGIN_DIR_OPT $consensus_args </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap2.log 2>&1;
 
 --echo # Run the bootstrap command with keyring
 --exec $NEW_CMD
 
 --echo # Starting server with keyring plugin
---let $restart_parameters=restart: $PLUGIN_DIR_OPT --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1
+--let $restart_parameters=restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1
 --source include/start_mysqld_no_echo.inc
 
 SELECT @@global.innodb_redo_log_encrypt;
@@ -243,7 +245,7 @@ send call tde_db.populate_table_set_redo_encrypt('tde_db.t_non_encrypt');
 --connection default
 --sleep 3
 --echo # Starting server with keyring
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1;
 --sleep 3
 --let $_server_id= `SELECT @@server_id`
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
@@ -305,7 +307,7 @@ send call tde_db.query_table('tde_db.t_non_encrypt');
 --connection default
 --sleep 20
 --echo # Starting server with keyring
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --datadir=$MYSQLD_DATADIR_1;
 --let $_server_id= `SELECT @@server_id`
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
 --exec echo "$restart_parameters" > $_expect_file_name

@@ -13,9 +13,11 @@ SELECT NAME, ENCRYPTION FROM INFORMATION_SCHEMA.INNODB_TABLESPACES WHERE NAME='e
 --error 0,CR_SERVER_LOST,CR_SERVER_GONE_ERROR,ER_INTERNAL_ERROR
 ALTER TABLESPACE encrypt_ts ENCRYPTION='N';
 
+--source include/make_consensus_args.inc
+
 --echo # RESTART $rc : WITH KEYRING PLUGIN after crash and cause resume operation
 --echo #              to crash $crash_point_desc
-let $NEW_CMD = $MYSQLD_CMD --plugin-dir=$PLUGIN_DIR --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --datadir=$MYSQLD_DATADIR --early-plugin-load=keyring_file=$KEYRING_PLUGIN --loose-keyring_file_data=$MYSQL_TMP_DIR/mysecret_keyring $KEYRING_PLUGIN_OPT --debug=+d,$crash_point;
+let $NEW_CMD = $MYSQLD_CMD --plugin-dir=$PLUGIN_DIR $consensus_args --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --datadir=$MYSQLD_DATADIR --early-plugin-load=keyring_file=$KEYRING_PLUGIN --loose-keyring_file_data=$MYSQL_TMP_DIR/mysecret_keyring $KEYRING_PLUGIN_OPT --debug=+d,$crash_point;
 --error 1,2,42,137
 --exec $NEW_CMD
 

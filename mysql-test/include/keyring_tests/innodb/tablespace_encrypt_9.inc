@@ -15,11 +15,13 @@ call mtr.add_suppression("ibd can't be decrypted, please confirm the keyfile is 
 call mtr.add_suppression("Check keyring fail, please check the keyring is loaded.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo #########################################################################
 --echo # START : WITHOUT KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --echo #########
 --echo # SETUP #
@@ -58,7 +60,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo # RESTART 1 : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 --echo ############################################################
@@ -79,7 +81,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo # Restart after crash without Keyring plugin loaded
 --source include/keyring_tests/helper/instance_backup_manifest.inc
 --error 1,42
---exec $MYSQLD_CMD $PLUGIN_DIR_OPT --log-error=$MYSQLTEST_VARDIR/log/my_restart.err
+--exec $MYSQLD_CMD $PLUGIN_DIR_OPT $consensus_args --log-error=$MYSQLTEST_VARDIR/log/my_restart.err
 
 # Search the failure pattern in error log
 let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err;
@@ -94,7 +96,7 @@ SELECT * from test.t1 limit 10;
 --echo # RESTART 2 : WITH KEYRING PLUGIN
 --echo #########################################################################
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 
 --echo # Server should have restarted properly.

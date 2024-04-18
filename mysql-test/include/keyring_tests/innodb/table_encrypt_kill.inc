@@ -146,6 +146,8 @@ DELIMITER ;|
 
 SHOW CREATE TABLE tde_db.t_encrypt;
 
+--source include/make_consensus_args.inc
+
 --echo # Case1: insert on encrypt and non encrypt table in parallel during kill
 --echo # In connection con1 - Running insert on encrypt table
 connect (con1,localhost,root,,);
@@ -160,7 +162,7 @@ send call tde_db.populate_t_non_encrypt();
 
 --connection default
 --echo # kill and restart the server
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --sleep 3
 --let $_server_id= `SELECT @@server_id`
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
@@ -218,7 +220,7 @@ send call tde_db.delete_t_encrypt();
 
 --connection default
 --echo # kill and restart the server
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --sleep 3
 
 --let $_server_id= `SELECT @@server_id`
@@ -275,7 +277,7 @@ send call tde_db.read_t_encrypt();
 --connection default
 --echo # kill and restart the server
 
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --sleep 1
 --let $_server_id= `SELECT @@server_id`
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqld.$_server_id.expect
@@ -314,7 +316,7 @@ SELECT 1;
 
 #--connection default
 #--echo # kill and restart the server
-#let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+#let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 #--sleep 3
 #--source include/kill_and_restart_mysqld.inc
 #--disconnect con1

@@ -7,9 +7,11 @@ call mtr.add_suppression("\\[ERROR\\] .* Can't set redo log files to be encrypte
 call mtr.add_suppression("You need to use --log-bin to make --binlog-format work");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 # Restart with redo log encryption enabled
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 SHOW VARIABLES LIKE "%innodb_redo_log_encrypt%";
@@ -48,7 +50,7 @@ SELECT * FROM t1 LIMIT 10;
 
 # Restart to confirm the encryption info can be retrieved properly.
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 SHOW VARIABLES LIKE "%innodb_redo_log_encrypt%";
@@ -76,7 +78,7 @@ INSERT INTO t1 VALUES(9, "jjjjj");
 
 # Restart to confirm the encryption info can be retrieved properly.
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 SHOW VARIABLES LIKE "%innodb_redo_log_encrypt%";
@@ -86,7 +88,7 @@ DROP TABLE t1;
 
 # Restart to confirm the encryption info can be retrieved properly.
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON --general-log --log-output=FILE --general_log_file=$MYSQL_TMP_DIR/keyring_query_log
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON --general-log --log-output=FILE --general_log_file=$MYSQL_TMP_DIR/keyring_query_log
 --source include/start_mysqld_no_echo.inc
 
 SHOW VARIABLES LIKE "%innodb_redo_log_encrypt%";
@@ -126,7 +128,7 @@ SELECT * FROM tde_db.t1 LIMIT 10;
 DROP DATABASE tde_db;
 
 --source include/kill_mysqld.inc
---let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON
 --source include/start_mysqld_no_echo.inc
 
 # Cleanup

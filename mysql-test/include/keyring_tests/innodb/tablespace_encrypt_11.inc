@@ -45,12 +45,14 @@ EXECUTE_STEP
 --echo # SETUP #
 --echo #########
 
+--source include/make_consensus_args.inc
+
 --let $rc=1
 
 --echo #########################################################################
 --echo # RESTART $rc : WITH KEYRING PLUGIN
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -73,7 +75,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 
 --echo # INJECT error TOO_MANY_CONCURRENT_TXNS in startup location $location.
 --echo # It will cause FATAL error and server abort.
-let $restart_parameters = restart: $PLUGIN_DIR_OPT --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --debug=+d,$location;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --debug=+d,$location;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 
@@ -87,7 +89,7 @@ DROP TABLESPACE encrypt_ts;
 --echo #########################################################################
 --echo # RESTART $rc : normally
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --remove_file $MYSQLTEST_VARDIR/log/my_restart.err
 --inc $rc
@@ -112,7 +114,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo # INJECT error TOO_MANY_CONCURRENT_TXNS in startup location $location.
 --echo # It will cause FATAL error and server abort.
 --error 0,2,-2147483645
---exec $MYSQLD_CMD $PLUGIN_DIR_OPT --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --debug=+d,$location
+--exec $MYSQLD_CMD $PLUGIN_DIR_OPT $consensus_args --log-error=$MYSQLTEST_VARDIR/log/my_restart.err --debug=+d,$location
 
 --echo # Search the failure pattern in error log
 --let SEARCH_FILE= $MYSQLTEST_VARDIR/log/my_restart.err
@@ -122,7 +124,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo #########################################################################
 --echo # RESTART $rc : normally
 --echo #########################################################################
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/start_mysqld_no_echo.inc
 --inc $rc
 
@@ -136,6 +138,6 @@ DROP TABLESPACE encrypt_ts;
 --echo #########################################################################
 --echo # RESTART $rc : final
 --echo #########################################################################
---let $restart_parameters = "restart: $PLUGIN_DIR_OPT"
+--let $restart_parameters = "restart: $PLUGIN_DIR_OPT $consensus_args"
 --source include/restart_mysqld_no_echo.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/setup.inc

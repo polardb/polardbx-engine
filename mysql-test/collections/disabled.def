@@ -391,40 +391,42 @@ innodb.innodb_read_only-1                        : WL#21509040 innodb-read-only
 innodb.ddl_kill					:  WL#001 failed in community 8032
 
 binlog.binlog_rewrite                            : WL#21509040 change REPLICATION SOURCE not support
+binlog_gtid.binlog_gtid_log_status_errors      	 : WL#21509040 change REPLICATION SOURCE not support
 binlog.binlog_expire_logs_days_deprecation       : WL#21509040 binlog expire
-binlog.binlog_purge_binary_logs_stall            : WL#21509040 purge binlog
-binlog.binlog_cache_write_failure                : WL#21509040 commit failed
-binlog.binlog_index                              : WL#21509040 crash 
-binlog.binlog_restart_server_with_exhausted_index_value 			: WL#21509040 disable temp 
-binlog.binlog_purge_binary_logs_to               		: WL#21509040 crash
-binlog.binlog_xa_recovery_errors					 	: WL#21509040 disable temp
-binlog.binlog_expire_logs_seconds		     			: WL#21509040 not support expire_logs_seconds
+binlog.binlog_expire_logs_seconds		     	 : WL#21509040 not support expire_logs_seconds
+binlog_gtid.binlog_gtid_purge_binlog_at_startup	 : WL#21509040 not support expire_logs_seconds
 
 binlog_gtid.binlog_simulate_crash_and_error_on_compress_gtid_table  : WL#21509040 not support encrypt table
 binlog_gtid.binlog_flush_logs_error                     : WL#21509040 not support now
-binlog_gtid.binlog_gtid_purge_binlog_at_startup	     	: WL#21509040 not support expire_logs_seconds
 binlog_gtid.binlog_gtids_table_gcov                 	: WL#21509040 must write gtid to SE
-binlog_gtid.binlog_gtid_log_status_errors      			: WL#001 'change replicate to' does not work for x-cluster
 binlog_nogtid.binlog_gtid_simple_recovery        	 	: WL#21509040 binlog remove
 
 service_sys_var_registration.sys_var_service_cl       : WL#21509040 not support restart --log-in
 sys_vars.innodb_version_basic                         : WL#21509040 modify the version
 main.log_components_filter                            : WL#21509040 log timestamp unstable
-x.compression_level_lz4_server                        : WL#21509040 error from xcluster support
 perfschema.idx_compare_socket_instances               : WL#21509040 disable ipv6
 
 
+main.mysqlpump_bugs             : WL#001 dependency not exist
+main.mtr_unit_tests             : WL#001 dependency not exist
+main.ssl_ca                     : WL#001 dependency not exist
+main.ssl_crl                    : WL#001 dependency not exist
+auth_sec.mysql_ssl_rsa_setup    : WL#001 dependency not exist
+innodb.mysqld_core_dump_without_buffer_pool                 : WL#001 tcn cache cause dump larger
+innodb.mysqld_core_dump_without_buffer_pool_dynamic         : WL#001 tcn cache cause dump larger
+innodb.mysqld_core_dump_without_buffer_pool_with_resizing   : WL#001 tcn cache cause dump larger
+main.count_distinct3            : WL#001 myisam not support
+main.window_functions_big       : WL#001 too slow
+main.sum_distinct-big           : WL#001 too slow
+main.multi_update2              : WL#001 too slow
+innodb.ibd2sdi                  : WL#001 Maximum number of characters allowed as the value for suffix are 17
 
-main.mysqlpump_bugs : WL#001 dependency not exist
-main.mtr_unit_tests : WL#001 dependency not exist
-main.ssl_ca : WL#001 dependency not exist
-main.ssl_crl : WL#001 dependency not exist
-auth_sec.mysql_ssl_rsa_setup : WL#001 dependency not exist
-innodb.mysqld_core_dump_without_buffer_pool : WL#001 tcn cache cause dump larger
-innodb.mysqld_core_dump_without_buffer_pool_dynamic : WL#001 tcn cache cause dump larger
-innodb.mysqld_core_dump_without_buffer_pool_with_resizing : WL#001 tcn cache cause dump larger
-main.count_distinct3 : WL#001 myisam not support
-main.window_functions_big : WL#001 too slow
-main.sum_distinct-big : WL#001 too slow
-main.multi_update2 : WL#001 too slow
-innodb.ibd2sdi : WL#001 Maximum number of characters allowed as the value for suffix are 17
+
+innodb.innodb_corrupt_readonly                   : WL#21509040 innodb readonly
+main.events_read_only                            : WL#001 readonly
+main.dd_schema_definition_after_upgrade_80_debug : WL#21509040 lizard not support
+main.dd_upgrade_encrypted                        : WL#21509040 lizard not support
+main.wl14965                                     : WL#001 upgrade from 8027
+main.mysql_upgrade_grant                         : WL#001 upgrade
+main.binlog_partial_json_warnings                : WL#001 skip binlog
+perfschema.table_binary_log_transaction_compression_stats_restart : WL#001 skip binlog

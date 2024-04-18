@@ -3,4 +3,4 @@
 # mysqld --version/-V
 --exec $MYSQLD --version | grep "Malloc Library" | wc -l | tr -d ' \t'
 # error log
---exec grep 'Malloc Library' $MYSQLTEST_VARDIR/log/mysqld.1.err|wc -l | tr -d ' \t'
+--exec grep 'Malloc Library' $MYSQLTEST_VARDIR/log/mysqld.1.err | head -n 1 |wc -l | tr -d ' \t'

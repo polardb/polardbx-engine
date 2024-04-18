@@ -19,13 +19,15 @@ call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Encryption can't f
 call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Check keyring fail, please check the keyring is loaded.");
 --enable_query_log
 
+--source include/make_consensus_args.inc
+
 --echo # START : WITHOUT KEYRING
 --echo
 --echo #########
 --echo # SETUP #
 --echo #########
 --source include/keyring_tests/helper/instance_backup_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 
 let $MYSQLD_DATADIR= `select @@datadir`;
@@ -80,7 +82,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 
 --echo # RESTART $rc : WITH KEYRING
 --source include/keyring_tests/helper/instance_restore_manifest.inc
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -92,7 +94,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo #-------------------------- TEST 2 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -104,7 +106,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo #-------------------------- TEST 3 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -116,7 +118,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo #-------------------------- TEST 4 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -130,7 +132,7 @@ ALTER TABLESPACE encrypt_ts ENCRYPTION='Y';
 --echo #-------------------------- TEST 5 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -142,7 +144,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo #-------------------------- TEST 6 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -154,7 +156,7 @@ let $restart_parameters = restart: $PLUGIN_DIR_OPT;
 --echo #-------------------------- TEST 7 -------------------------------------#
 
 --echo # RESTART $rc : WITH KEYRING
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --inc $rc
 
@@ -170,7 +172,7 @@ DROP TABLE t1;
 DROP TABLESPACE encrypt_ts;
 
 --echo # RESTART $rc : final
-let $restart_parameters = restart: $PLUGIN_DIR_OPT;
+let $restart_parameters = restart: $PLUGIN_DIR_OPT $consensus_args;
 --source include/restart_mysqld_no_echo.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/encryption_error_log.inc
 --remove_file $MYSQLTEST_VARDIR/tmp/unencryption_error_log.inc

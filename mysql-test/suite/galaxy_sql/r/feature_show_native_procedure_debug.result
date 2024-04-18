@@ -27,6 +27,8 @@ dbms_consensus	show_cluster_local	ADMIN_PROC	NULL
 dbms_consensus	show_logs	ADMIN_PROC	NULL
 dbms_consensus	upgrade_learner	ADMIN_PROC	VARCHAR
 dbms_jemalloc	profile	ADMIN_PROC	NULL
+dbms_keyring	current_key_id	ADMIN_PROC	NULL
+dbms_keyring	generate_key	ADMIN_PROC	NULL
 dbms_outln	add_index_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR, VARCHAR, VARCHAR
 dbms_outln	add_optimizer_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR
 dbms_outln	del_outline	ADMIN_PROC	LONGLONG

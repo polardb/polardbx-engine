@@ -1,11 +1,8 @@
 #!/usr/bin/bash
 source cicd/common.sh
 
-CORES=$(nproc)
-RETRY=2
-PARALLEL=$((CORES / 4))
+PARALLEL=20
 PERL_BIN=perl
-TIME_OUT=90
 
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
   [ "${TEST_TYPE_ENUM}" -eq "${MERGE_TEST_COVERAGE}" ] ||
@@ -14,8 +11,8 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
     --report-unstable-tests \
     --timer \
     --force \
-    --max-test-fail=100 \
-    --retry="${RETRY}" \
+    --max-test-fail=0 \
+    --retry=2 \
     --skip-ndb \
     --skip-rpl \
     --skip-combinations \
@@ -24,7 +21,9 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
     --report-features \
     --unit-tests-report \
     --big-test \
-    --testcase-timeout="${TIME_OUT}" \
+    --testcase-timeout=90 \
+    --suite-timeout=600 \
+    --start-timeout=600 \
     --xml-report="${RESULT_PATH}"/mtr_result.xml \
     --port-base=10000
 fi

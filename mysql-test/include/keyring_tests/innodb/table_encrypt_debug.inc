@@ -51,9 +51,11 @@ INSERT INTO tde_db.t1 VALUES(1, "bbbbb");
 INSERT INTO tde_db.t1 VALUES(2, "ccccc");
 INSERT INTO tde_db.t1 VALUES(3, "ddddd");
 
+--source include/make_consensus_args.inc
+
 --echo # Execute the statement that causes the crash
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --error 2013
 ALTER INSTANCE ROTATE INNODB MASTER KEY;
 --enable_reconnect
@@ -85,7 +87,7 @@ INSERT INTO tde_db.t2 VALUES(1, "bbbbb");
 
 --echo # Execute the statement that causes the crash
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION DEBUG="+d,ib_encryption_rotate_crash";
 --error 2013
 ALTER INSTANCE ROTATE INNODB MASTER KEY;
@@ -125,7 +127,7 @@ SET debug='-d,skip_dd_table_access_check';
 --echo # Test crash point `ib_crash_during_create_for_encryption` during a CREATE TABLE
 --echo #
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION DEBUG="+d,ib_crash_during_create_for_encryption";
 
 --echo # Execute the statement that causes the crash
@@ -150,7 +152,7 @@ SELECT * FROM tde_db.t2;
 --echo # Test crash point `ib_crash_during_decrypt_page` during an IMPORT TABLESPACE
 --echo #
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 FLUSH TABLE tde_db.t1 FOR EXPORT;
 --copy_file $MYSQLD_DATADIR/tde_db/t1.cfg $MYSQLD_DATADIR/t1.cfg_back
@@ -178,7 +180,7 @@ INSERT INTO tde_db.t1 VALUES(7, "hhhhh");
 SELECT * FROM tde_db.t1 ORDER BY c1 ;
 DROP TABLE tde_db.t1;
 
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 --disable_reconnect
@@ -194,7 +196,7 @@ DROP DATABASE tde_db;
 CREATE DATABASE tde_db;
 
 # Write file to make mysql-test-run.pl start up the server again
---exec echo "restart: $PLUGIN_DIR_OPT" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--exec echo "restart: $PLUGIN_DIR_OPT $consensus_args" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 CREATE TABLE tde_db.test_tbl(c1 int) ENCRYPTION="Y" ENGINE=InnoDB;
 
