@@ -1,0 +1,9 @@
+create table t1 (id int) engine = myisam;
+xa start '';
+--error ER_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA
+insert into t1 values (1);
+xa end '';
+xa prepare '';
+xa commit '';
+
+drop table t1;

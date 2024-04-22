@@ -1,0 +1,6 @@
+$KEYRING_PLUGIN_OPT $KEYRING_PLUGIN_LOAD --keyring_file_data=$MYSQL_TMP_DIR/keyring_master/keyring_master
+
+--initialize --innodb-data-file-path=ibdata1:12M;ibdata2:4M:autoextend
+--binlog-format=row
+--gtid-mode=on
+--enforce-gtid-consistency

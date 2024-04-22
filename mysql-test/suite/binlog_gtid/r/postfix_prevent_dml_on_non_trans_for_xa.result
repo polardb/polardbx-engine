@@ -1,0 +1,8 @@
+create table t1 (id int) engine = myisam;
+xa start '';
+insert into t1 values (1);
+ERROR HY000: It is not allowed to operate non-transaction tables in XA transactions when GTID enable.
+xa end '';
+xa prepare '';
+xa commit '';
+drop table t1;

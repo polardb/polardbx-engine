@@ -318,7 +318,7 @@ my @mysqld_rules = (
   { 'loose-mysqlx-port'                            => \&fix_x_port },
   # force enable PolarDB-X RPC when new rpc enabled
   { 'rpc-port'                                     => \&fix_rpc_port },
-  { 'enable-polarx-rpc'                            => "on" },
+  { 'enable-polarx-rpc'                            => "off" },
   { 'loose-mysqlx-socket'                          => \&fix_x_socket },
   { 'loose-mysqlx-ssl'                             => \&fix_ssl_disabled },
   { 'loose-mysqlx-ssl-ca'                          => "" },

@@ -12214,6 +12214,9 @@ ER_TDE_GET_MASTER_KEY_ID
 ER_TDE_FETCH_MASTER_KEY_ID
   eng "%s"
 
+ER_RPL_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA
+  eng "Statement violates GTID consistency: Updates to non-transactional tables cannot be done in XA transactions.
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

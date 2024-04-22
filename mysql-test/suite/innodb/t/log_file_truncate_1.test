@@ -22,6 +22,11 @@ let $wait_condition =
 --echo # Resize redo log to 100M:
 SET GLOBAL innodb_redo_log_capacity = 100*1024*1024;
 
+# Always log_force_consumption, might never redo occupies at least 10MB on disk
+--disable_query_log
+SET GLOBAL DEBUG = '-d,log_force_consumption';
+--enable_query_log
+
 --echo # Create connection which generates spam to the redo log.
 --connect(C1,localhost,root,,test)
 --send CALL log_spammer()

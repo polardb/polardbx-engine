@@ -1,9 +1,14 @@
 create database test1;
 create table test1.t1 (n int);
+set session debug = '+d,crash_before_gcn_commit';
+insert into test1.t1 values (1);
+ERROR HY000: Lost connection to MySQL server during query
+insert into test1.t1 values (2);
+select * from test1.t1;
 n
 1
 2
+select * from test1.t1;
 n
 1
-# restart
 drop database test1;

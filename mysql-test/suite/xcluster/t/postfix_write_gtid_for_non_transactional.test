@@ -1,0 +1,143 @@
+--source include/have_debug.inc
+
+call mtr.add_suppression("You need to use --log-bin to make --binlog-format work");
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+
+--connection conn1
+--let $master_uuid= `SELECT @@GLOBAL.SERVER_UUID`
+
+--echo ################################
+--echo # ANALYZE
+--echo ################################
+create table tt1 (id int) engine = innodb;
+ANALYZE TABLE tt1;
+
+create table tt2 (id int) engine = myisam;
+ANALYZE TABLE tt2;
+
+CREATE TABLE replicated (col1 INT);
+INSERT INTO replicated VALUES (1), (2);
+ANALYZE TABLE replicated UPDATE HISTOGRAM ON col1 WITH 1024 BUCKETS;
+
+--echo ################################
+--echo # REPAIR
+--echo ################################
+ CREATE TABLE tt4 ( c1 INTEGER NOT NULL PRIMARY KEY, c2 CHAR(10)) PARTITION BY RANGE (c1) (
+    PARTITION p0 VALUES LESS THAN (100),
+    PARTITION p1 VALUES LESS THAN (200),
+    PARTITION p2 VALUES LESS THAN (300),
+    PARTITION p3 VALUES LESS THAN (400),
+    PARTITION p4 VALUES LESS THAN (500),
+    PARTITION p5 VALUES LESS THAN MAXVALUE);
+INSERT INTO tt4 VALUES(0,'abc'),(100,'abc'),(200,'abc'),(300,'abc'),(400,'abc');
+ALTER TABLE tt4 REPAIR PARTITION p1,p2;
+
+--echo ################################
+--echo # Drop if exists
+--echo ################################
+--disable_warnings
+DROP DATABASE IF EXISTS mysqltest_prometheus;
+DROP EVENT IF EXISTS test.justonce;
+DROP TRIGGER IF EXISTS trig_t1_ins;
+drop view if exists v1;
+DROP PROCEDURE IF EXISTS p1;
+DROP SCHEMA IF EXISTS xtest;
+--enable_warnings
+
+--echo ################################
+--echo # FLUSH
+--echo ################################
+FLUSH PRIVILEGES;
+FLUSH TABLES;
+FLUSH STATUS;
+
+--echo ################################
+--echo # non transactional table
+--echo ################################
+TRUNCATE mysql.general_log;
+insert into tt2 values (1);
+delete from tt2;
+alter table tt2 add COLUMN (col2 int);
+
+CREATE PROCEDURE p() SELECT 1;
+CREATE FUNCTION f() RETURNS INT return 1;
+ALTER FUNCTION f comment "atomic DDL on routine";
+ALTER PROCEDURE p comment "atomic DDL on routine";
+
+create table tt3 (id int key) engine = myisam;
+insert into tt3 values (1);
+# will only insert (2), but also write gtid.
+--error ER_DUP_ENTRY
+insert into tt3 values (2),(1);
+
+--echo ################################
+--echo # create if not exists.
+--echo ################################
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test1`;
+--disable_warnings
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test1`;
+--enable_warnings
+
+--echo ################################
+--echo # ROTATE MASTER KEY
+--echo ################################
+ALTER INSTANCE ROTATE INNODB MASTER KEY;
+
+--echo ################################
+--echo # Empty transaction with assign GTID
+--echo ################################
+--replace_result $master_uuid MASTER_UUID
+--eval SET GTID_NEXT='$master_uuid:1000'
+BEGIN;
+COMMIT;
+SET GTID_NEXT=AUTOMATIC;
+
+--echo ################################
+--echo # Check if written to table.
+--echo ################################
+--sleep 1
+--connection conn1
+SET @@GLOBAL.DEBUG= '+d,compress_gtid_table_from_clone_thread';
+
+--connection conn2
+SET @@GLOBAL.DEBUG= '+d,compress_gtid_table_from_clone_thread';
+
+--connection conn1
+insert into tt1 values (100);
+SET DEBUG_SYNC='now WAIT_FOR complete_compression';
+SET @@GLOBAL.DEBUG= '-d,compress_gtid_table_from_clone_thread';
+
+--replace_result $master_uuid MASTER_UUID
+SELECT * FROM mysql.gtid_executed;
+
+--replace_result $master_uuid MASTER_UUID
+SELECT @@GLOBAL.GTID_EXECUTED;
+
+--connection conn2
+SET DEBUG_SYNC='now WAIT_FOR complete_compression';
+SET @@GLOBAL.DEBUG= '-d,compress_gtid_table_from_clone_thread';
+--source include/wait_apply_catchup.inc
+
+--replace_result $master_uuid MASTER_UUID
+SELECT * FROM mysql.gtid_executed;
+
+--replace_result $master_uuid MASTER_UUID
+SELECT @@GLOBAL.GTID_EXECUTED;
+
+connection default;
+drop table tt1;
+drop table tt2;
+drop table tt3;
+drop table tt4;
+drop table replicated;
+drop procedure p;
+drop function f;
+drop database test1;

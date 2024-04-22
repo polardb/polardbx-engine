@@ -7392,7 +7392,8 @@ bool ha_notify_table_ddl(THD *thd, const MDL_key *mdl_key,
                          const char *old_table_name, const char *new_db_name,
                          const char *new_table_name);
 
-std::pair<int, bool> commit_owned_gtids(THD *thd, bool all);
+std::pair<int, bool> commit_owned_gtids(THD *thd, bool all,
+                                        bool is_xa_second_phase = false);
 bool set_tx_isolation(THD *thd, enum_tx_isolation tx_isolation, bool one_shot);
 bool is_index_access_error(int error);
 

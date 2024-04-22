@@ -3907,6 +3907,11 @@ class THD : public MDL_context_owner,
     return (m_se_gtid_flags[SE_GTID_PERSIST_EXPLICIT]);
   }
 
+  bool save_gtid_for_non_transactional_ops() {
+    return !se_persists_gtid() && !owned_gtid_is_empty() &&
+           owned_gtid.sidno > 0 && owned_gtid.gno > 0;
+  }
+
   /** @return true, if external XA transaction is in progress. */
   bool is_extrenal_xa() const {
     auto trx = get_transaction();
@@ -4423,6 +4428,8 @@ class THD : public MDL_context_owner,
                               bool some_non_transactional_table,
                               bool non_transactional_tables_are_tmp);
   bool is_ddl_gtid_compatible();
+  bool is_xa_gtid_compatible(bool some_non_transactional_table,
+                             bool non_transactional_tables_are_tmp);
   void binlog_invoker() { m_binlog_invoker = true; }
   bool need_binlog_invoker() const { return m_binlog_invoker; }
   void get_definer(LEX_USER *definer);

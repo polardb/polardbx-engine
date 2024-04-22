@@ -1,0 +1,110 @@
+call mtr.add_suppression("You need to use --log-bin to make --binlog-format work");
+################################
+# ANALYZE
+################################
+create table tt1 (id int) engine = innodb;
+ANALYZE TABLE tt1;
+Table	Op	Msg_type	Msg_text
+test.tt1	analyze	status	OK
+create table tt2 (id int) engine = myisam;
+ANALYZE TABLE tt2;
+Table	Op	Msg_type	Msg_text
+test.tt2	analyze	status	Table is already up to date
+CREATE TABLE replicated (col1 INT);
+INSERT INTO replicated VALUES (1), (2);
+ANALYZE TABLE replicated UPDATE HISTOGRAM ON col1 WITH 1024 BUCKETS;
+Table	Op	Msg_type	Msg_text
+test.replicated	histogram	status	Histogram statistics created for column 'col1'.
+################################
+# REPAIR
+################################
+CREATE TABLE tt4 ( c1 INTEGER NOT NULL PRIMARY KEY, c2 CHAR(10)) PARTITION BY RANGE (c1) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN (200),
+PARTITION p2 VALUES LESS THAN (300),
+PARTITION p3 VALUES LESS THAN (400),
+PARTITION p4 VALUES LESS THAN (500),
+PARTITION p5 VALUES LESS THAN MAXVALUE);
+INSERT INTO tt4 VALUES(0,'abc'),(100,'abc'),(200,'abc'),(300,'abc'),(400,'abc');
+ALTER TABLE tt4 REPAIR PARTITION p1,p2;
+Table	Op	Msg_type	Msg_text
+test.tt4	repair	status	OK
+################################
+# Drop if exists
+################################
+DROP DATABASE IF EXISTS mysqltest_prometheus;
+DROP EVENT IF EXISTS test.justonce;
+DROP TRIGGER IF EXISTS trig_t1_ins;
+drop view if exists v1;
+DROP PROCEDURE IF EXISTS p1;
+DROP SCHEMA IF EXISTS xtest;
+################################
+# FLUSH
+################################
+FLUSH PRIVILEGES;
+FLUSH TABLES;
+FLUSH STATUS;
+################################
+# non transactional table
+################################
+TRUNCATE mysql.general_log;
+insert into tt2 values (1);
+delete from tt2;
+alter table tt2 add COLUMN (col2 int);
+CREATE PROCEDURE p() SELECT 1;
+CREATE FUNCTION f() RETURNS INT return 1;
+ALTER FUNCTION f comment "atomic DDL on routine";
+ALTER PROCEDURE p comment "atomic DDL on routine";
+create table tt3 (id int key) engine = myisam;
+insert into tt3 values (1);
+insert into tt3 values (2),(1);
+ERROR 23000: Duplicate entry '1' for key 'tt3.PRIMARY'
+################################
+# create if not exists.
+################################
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test1`;
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `test1`;
+################################
+# ROTATE MASTER KEY
+################################
+ALTER INSTANCE ROTATE INNODB MASTER KEY;
+################################
+# Empty transaction with assign GTID
+################################
+SET GTID_NEXT='MASTER_UUID:1000';
+BEGIN;
+COMMIT;
+SET GTID_NEXT=AUTOMATIC;
+################################
+# Check if written to table.
+################################
+SET @@GLOBAL.DEBUG= '+d,compress_gtid_table_from_clone_thread';
+SET @@GLOBAL.DEBUG= '+d,compress_gtid_table_from_clone_thread';
+insert into tt1 values (100);
+SET DEBUG_SYNC='now WAIT_FOR complete_compression';
+SET @@GLOBAL.DEBUG= '-d,compress_gtid_table_from_clone_thread';
+SELECT * FROM mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+MASTER_UUID	1	35
+MASTER_UUID	1000	1000
+SELECT @@GLOBAL.GTID_EXECUTED;
+@@GLOBAL.GTID_EXECUTED
+MASTER_UUID:1-35:1000
+SET DEBUG_SYNC='now WAIT_FOR complete_compression';
+SET @@GLOBAL.DEBUG= '-d,compress_gtid_table_from_clone_thread';
+SELECT * FROM mysql.gtid_executed;
+source_uuid	interval_start	interval_end
+MASTER_UUID	1	34
+MASTER_UUID	35	35
+MASTER_UUID	1000	1000
+SELECT @@GLOBAL.GTID_EXECUTED;
+@@GLOBAL.GTID_EXECUTED
+MASTER_UUID:1-35:1000
+drop table tt1;
+drop table tt2;
+drop table tt3;
+drop table tt4;
+drop table replicated;
+drop procedure p;
+drop function f;
+drop database test1;

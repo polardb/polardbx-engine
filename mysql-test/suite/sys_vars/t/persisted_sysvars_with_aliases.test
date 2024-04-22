@@ -99,6 +99,9 @@
 # Binlog-less runs use --skip-log-replica-updates.
 --source include/have_log_bin.inc
 
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .*PolarX RPC disabled");
+--enable_query_log
 
 --echo #### Initialize ####
 

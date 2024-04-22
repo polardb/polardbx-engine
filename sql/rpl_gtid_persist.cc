@@ -133,7 +133,8 @@ void Gtid_table_access_context::before_open(THD *) {
              MYSQL_LOCK_IGNORE_TIMEOUT | MYSQL_OPEN_IGNORE_KILLED);
 }
 
-bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write) {
+bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write,
+                                     bool force_attach) {
   DBUG_TRACE;
 
   if (!(*thd)) *thd = m_drop_thd_object = this->create_thd();
@@ -148,7 +149,8 @@ bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write) {
     (*thd)->variables.option_bits &= ~OPTION_BIN_LOG;
   }
 
-  if (!(*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR)) {
+  if (!(*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_NOTR) ||
+      force_attach) {
     /*
       This type of caller of Attachable_trx_rw is deadlock-free with
       the main transaction thanks to rejection to update
@@ -157,7 +159,7 @@ bool Gtid_table_access_context::init(THD **thd, TABLE **table, bool is_write) {
     assert(
         (*thd)->get_transaction()->xid_state()->has_state(XID_STATE::XA_IDLE) ||
         (*thd)->get_transaction()->xid_state()->has_state(
-            XID_STATE::XA_PREPARED));
+            XID_STATE::XA_PREPARED) || force_attach);
 
     (*thd)->begin_attachable_rw_transaction();
 
@@ -343,6 +345,40 @@ end:
     return 0;
 }
 
+int Gtid_table_persistor::save_by_write_table(THD *thd, const Gtid *gtid) {
+  DBUG_TRACE;
+  int ret = 0;
+  int error = 0;
+  TABLE *table = nullptr;
+  Gtid_table_access_context table_access_ctx;
+  char buf[binary_log::Uuid::TEXT_LENGTH + 1];
+
+  bool updated = gtid_state->update_prev_gtids(thd->owned_gtid, buf);
+
+  if (!updated) {
+    /** If already exists in previous_gtids_logged, then no need to write
+    again. */
+    return 0;
+  }
+
+  mysql_mutex_lock(&LOCK_reset_gtid_table);
+  if (table_access_ctx.init(&thd, &table, true, true)) {
+    error = 1;
+    goto end;
+  }
+
+  ret = error = write_row(table, buf, gtid->gno, gtid->gno);
+
+end:
+  const int deinit_ret = table_access_ctx.deinit(thd, table, 0 != error, true);
+
+  if (!ret && deinit_ret) ret = -1;
+
+  mysql_mutex_unlock(&LOCK_reset_gtid_table);
+
+  return ret;
+}
+
 int Gtid_table_persistor::save(THD *thd, const Gtid *gtid) {
   DBUG_TRACE;
   int error = 0;
@@ -495,6 +531,12 @@ int Gtid_table_persistor::compress(THD *thd) {
   m_atomic_count = 0;
 
   DBUG_EXECUTE_IF("compress_gtid_table", {
+    const char act[] = "now signal complete_compression";
+    assert(opt_debug_sync_timeout > 0);
+    assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
+  };);
+
+  DBUG_EXECUTE_IF("compress_gtid_table_from_clone_thread", {
     const char act[] = "now signal complete_compression";
     assert(opt_debug_sync_timeout > 0);
     assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));

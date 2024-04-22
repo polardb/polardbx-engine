@@ -124,8 +124,14 @@ void Sql_cmd_xa_second_phase::setup_thd_context(THD *thd) {
   auto detached_xs = this->m_detached_trx_context->xid_state();
 
   std::tie(this->m_gtid_error, this->m_need_clear_owned_gtid) =
-      commit_owned_gtids(thd, true);
+      commit_owned_gtids(thd, true, true);
   if (this->m_gtid_error) my_error(ER_XA_RBROLLBACK, MYF(0));
+
+  DBUG_EXECUTE_IF("simulate_crash_after_write_gtid_for_xa", {
+    ha_flush_logs();
+    DBUG_SUICIDE();
+  });
+
   this->m_result = detached_xs->xa_trans_rolled_back() || this->m_gtid_error;
 
   assert(thd_xs->is_binlogged() == false);

@@ -399,6 +399,8 @@ bool Clone_persist_gtid::check_compress() {
   This is to make the debug test outcome predictable. */
   DBUG_EXECUTE_IF("compress_gtid_table", { return false; });
 
+  DBUG_EXECUTE_IF("compress_gtid_table_from_clone_thread", { return true; });
+
   /* Check replication global threshold on number of GTIDs. */
   if (!opt_bin_log && gtid_executed_compression_period != 0 &&
       m_compression_gtid_counter > gtid_executed_compression_period) {

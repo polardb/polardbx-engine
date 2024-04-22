@@ -1,0 +1,51 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+STOP XPAXOS_REPLICATION;
+
+--connection conn1
+create table t1 (id int) engine = innodb;
+xa start 'zjy';
+insert into t1 values (1);
+xa end 'zjy';
+xa prepare 'zjy';
+xa commit 'zjy';
+
+--connection conn2
+--let $debug_point= simulate_crash_after_write_gtid_for_xa
+--source include/add_debug_point.inc
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--disable_warnings
+START XPAXOS_REPLICATION;
+--enable_warnings
+--source include/wait_until_disconnected.inc
+
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+
+--connection conn1
+xa recover;
+
+select * from t1;
+
+--connection conn2
+--disable_warnings
+START XPAXOS_REPLICATION;
+--enable_warnings
+--source include/wait_apply_catchup.inc
+xa recover;
+
+select * from t1;
+
+--disconnect conn1
+--disconnect conn2
+
+--connection default
+drop table t1;

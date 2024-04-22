@@ -10124,6 +10124,9 @@ ER_SAMPLE_WRONG_SEMANTIC
 ER_ROTATE_REQUIRE_LOG_TABLE
    eng "Rotate command must be working on log table"
 
+ER_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA
+  eng "It is not allowed to operate non-transaction tables in XA transactions when GTID enable."
+
 #
 #  End of RDS error message.
 #

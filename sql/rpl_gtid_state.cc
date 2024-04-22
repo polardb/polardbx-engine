@@ -615,6 +615,32 @@ void Gtid_state::update_prev_gtids(Gtid_set *write_gtid_set) {
   DBUG_VOID_RETURN;
 }
 
+bool Gtid_state::update_prev_gtids(const Gtid &gtid, char *sid_buf) {
+  DBUG_ENTER("Gtid_state::update_prev_gtids(gtid, sid_buf)");
+  rpl_sid sid;
+
+  if (!opt_bin_log) {
+    DBUG_RETURN(false);
+  }
+
+  global_sid_lock->wrlock();
+
+  if (previous_gtids_logged.contains_gtid(gtid)) {
+    global_sid_lock->unlock();
+    DBUG_RETURN(false);
+  }
+
+  previous_gtids_logged._add_gtid(gtid);
+
+  sid = global_sid_map->sidno_to_sid(gtid.sidno);
+
+  global_sid_lock->unlock();
+
+  sid.to_string(sid_buf);
+
+  DBUG_RETURN(true);
+}
+
 enum_return_status Gtid_state::add_lost_gtids(Gtid_set *gtid_set,
                                               bool starts_with_plus) {
   DBUG_TRACE;
@@ -679,9 +705,7 @@ int Gtid_state::save(THD *thd) {
   DBUG_TRACE;
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
-  assert(thd->se_persists_gtid());
-  // xpaxos should not arrive here
-  assert(false);
+  assert(thd->xpaxos_replication_channel);
   int error = 0;
 
   int ret = gtid_table_persistor->save(thd, &thd->owned_gtid);
@@ -697,6 +721,22 @@ int Gtid_state::save(THD *thd) {
     error = -1;
 
   return error;
+}
+
+int Gtid_state::save_by_write_table(THD *thd) {
+  DBUG_TRACE;
+
+  int ret = 0;
+#if !defined(NDEBUG)
+  bool skip = false;
+  DBUG_EXECUTE_IF("simulate_err_on_write_gtid_into_table", { skip = true; });
+  if (!skip)
+#endif
+    ret = gtid_table_persistor->save_by_write_table(thd, &thd->owned_gtid);
+
+  assert(!ret);
+
+  return ret;
 }
 
 int Gtid_state::save(const Gtid_set *gtid_set) {

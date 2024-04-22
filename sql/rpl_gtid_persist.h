@@ -63,7 +63,7 @@ class Gtid_table_access_context : public System_table_access {
     @retval true  failed
     @retval false success
   */
-  bool init(THD **thd, TABLE **table, bool is_write);
+  bool init(THD **thd, TABLE **table, bool is_write, bool force_attach = false);
   /**
     De-initialize the gtid_executed table access context as following:
       - Close the table
@@ -138,6 +138,22 @@ class Gtid_table_persistor {
       -1   Error
   */
   int save(THD *thd, const Gtid *gtid);
+
+  /**
+    Insert the gtid by writting table directly.
+
+    @param thd  Thread requesting to save gtid into the table
+    @param gtid holds the sidno and the gno.
+
+    @retval
+      0    OK
+    @retval
+      1    The table was not found.
+    @retval
+      -1   Error
+  */
+  int save_by_write_table(THD *thd, const Gtid *gtid);
+
   /**
     Insert the gtid set into table.
 

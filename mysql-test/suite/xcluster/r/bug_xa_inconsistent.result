@@ -1,0 +1,21 @@
+STOP XPAXOS_REPLICATION;
+create table t1 (id int) engine = innodb;
+xa start 'zjy';
+insert into t1 values (1);
+xa end 'zjy';
+xa prepare 'zjy';
+xa commit 'zjy';
+# Adding debug point 'simulate_crash_after_write_gtid_for_xa' to @@GLOBAL.debug
+START XPAXOS_REPLICATION;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select * from t1;
+id
+1
+START XPAXOS_REPLICATION;
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select * from t1;
+id
+1
+drop table t1;

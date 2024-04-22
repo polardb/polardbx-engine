@@ -3185,6 +3185,19 @@ class Gtid_state {
   /** Updates previously logged GTID set before writing to table. */
   void update_prev_gtids(Gtid_set *write_gtid_set);
 
+  /**
+    Updates previously logged GTID set by a GTID before writing to table.
+
+    @param[in]    gtid      GTID to be updated
+    @param[out]   sid_buf   sid string of gtid
+
+    @return false if the gtid is already in previous_gtids_logged. That is
+                  no need to write to table again. Or opt_bin_log == false.
+            true  if the gitd was not in previous_gtids_logged, and it's added
+                  by this call, and should be written to table directly.
+  */
+  bool update_prev_gtids(const Gtid &gtid, char *sid_buf);
+
   /// Return a pointer to the Gtid_set that contains the lost gtids.
   const Gtid_set *get_lost_gtids() const { return &lost_gtids; }
   /*
@@ -3276,6 +3289,27 @@ class Gtid_state {
         -1   Error
   */
   int save(THD *thd);
+
+  /**
+    Write the THD::owned_gtid into gtid_executed table directly and the
+    executed_gtids variable. Only for non transactional operations, which
+    are without INNODB.
+
+    Unlike "int save(THD *thd)":
+    1. It write the gtid into table directly.
+    2. It will force begin an attachable rw transaction.
+
+    @param thd Session to commit
+
+    @retval
+      0    OK
+    @retval
+      1    The table was not found.
+    @retval
+      -1   Error
+  */
+  int save_by_write_table(THD *thd);
+
   /**
     Insert the gtid set into table.
 

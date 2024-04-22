@@ -1517,7 +1517,8 @@ bool is_ha_commit_low_invoking_commit_order(THD *thd, bool all) {
                             is not required
 */
 
-std::pair<int, bool> commit_owned_gtids(THD *thd, bool all) {
+std::pair<int, bool> commit_owned_gtids(THD *thd, bool all,
+                                        bool is_xa_second_phase) {
   DBUG_TRACE;
   int error = 0;
   bool need_clear_owned_gtid = false;
@@ -1558,8 +1559,22 @@ std::pair<int, bool> commit_owned_gtids(THD *thd, bool all) {
       If GTID is not persisted by SE, write it to
       mysql.gtid_executed table.
     */
-    if (!thd->xpaxos_replication_channel && thd->owned_gtid.sidno > 0 &&
-        !thd->se_persists_gtid()) {
+    /*
+      Revision 1:
+      xpaxos_replication_channel = true only it's worker thread and sql thread.
+      Allow follower to save gtid for non-transactional operations.
+
+      Revision 2:
+      XA COMMIT in Follower is as like:
+      (a) Write GTID into table
+      (b) Replay XA COMMIT
+      If crash between (a) and (b), then the event will never be replayed.
+
+      Operations on non-transactional tables within XA transactions are no
+      longer allowed.
+    */
+    if (thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid() &&
+        thd->xpaxos_replication_channel && !is_xa_second_phase) {
       error = gtid_state->save(thd);
     }
   }

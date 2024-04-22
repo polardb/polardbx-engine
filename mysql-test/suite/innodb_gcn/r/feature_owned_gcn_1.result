@@ -2,7 +2,7 @@ call mtr.add_suppression("Found 1 prepared XA transactions");
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
 set global innodb_purge_rseg_truncate_frequency = 1;
 create table tt (id int);
-create table t_my_gcn(save_gcn int);
+create table t_my_gcn(save_gcn BIGINT);
 set global innodb_undo_retention = 9000;
 ###############################
 # case 1

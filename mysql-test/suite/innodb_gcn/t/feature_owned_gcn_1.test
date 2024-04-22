@@ -5,7 +5,7 @@ call mtr.add_suppression("Found 1 prepared XA transactions");
 set global innodb_purge_rseg_truncate_frequency = 1;
 
 create table tt (id int);
-create table t_my_gcn(save_gcn int);
+create table t_my_gcn(save_gcn BIGINT);
 
 --source include/wait_innodb_all_purged.inc
 

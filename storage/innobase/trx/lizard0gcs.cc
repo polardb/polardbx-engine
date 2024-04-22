@@ -147,8 +147,9 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   /** 1. generate scn number */
   scn_list_mutex_enter();
 
-  DBUG_EXECUTE_IF("crash_before_gcn_commit",
-                  ut_ad(trx->txn_desc.cmmt.gcn != GCN_NULL ? 0 : 1););
+  DBUG_EXECUTE_IF(
+      "crash_before_gcn_commit",
+      if (trx->txn_desc.cmmt.gcn != GCN_NULL) { DBUG_SUICIDE(); });
 
   assert_trx_commit_mark_initial(trx);
 

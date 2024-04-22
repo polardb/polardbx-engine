@@ -1841,7 +1841,12 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         (This only happens for DDL, since DML will save the GTID into
         table and release ownership inside ha_commit_trans.)
       */
-      if (!thd->xpaxos_replication_channel && gtid_state->save(thd) != 0) {
+      /*
+        Revision:
+        xpaxos_replication_channel = true only it's worker thread and sql thread.
+        Allow follower to save gtid for non-transactional operations.
+      */
+      if (thd->xpaxos_replication_channel && gtid_state->save(thd) != 0) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {
@@ -1907,6 +1912,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         executed by the client is empty.
       */
       if (thd->binlog_setup_trx_data()) return 1;
+
       binlog_cache_data *cache_data = &thd_get_cache_mngr(thd)->trx_cache;
 
       // Generate BEGIN event
@@ -8823,11 +8829,18 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
     // xa prepare and normal commit both should wait commit index update
     MYSQL_BIN_LOG::consensus_before_commit(head);
 
+    bool save_gtid_for_non_trans =
+        head->save_gtid_for_non_transactional_ops();
+
     assert(!head->get_transaction()->m_flags.commit_low ||
            head->get_transaction()->m_flags.ready_preempt);
     ::finish_transaction_in_engines(head, all, false, true);
     DBUG_PRINT("debug", ("commit_error: %d, commit_pending: %s",
                          head->commit_error, YESNO(head->tx_commit_pending)));
+
+    if (save_gtid_for_non_trans) {
+      gtid_state->save_by_write_table(head);
+    }
   }
 
   /*
@@ -9009,10 +9022,15 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
 
   auto all = thd->get_transaction()->m_flags.real_commit;
   auto committed_low = thd->get_transaction()->m_flags.commit_low;
+  bool save_gtid_for_non_trans = thd->save_gtid_for_non_transactional_ops();
 
   assert(thd->commit_error != THD::CE_COMMIT_ERROR ||
          thd->consensus_error != THD::CSS_NONE);
   ::finish_transaction_in_engines(thd, all, false);
+
+  if (save_gtid_for_non_trans) {
+    gtid_state->save_by_write_table(thd);
+  }
 
   // If the ordered commit didn't updated the GTIDs for this thd yet
   // at process_commit_stage_queue (i.e. --binlog-order-commits=0)
@@ -10845,6 +10863,16 @@ int THD::decide_logging_format(Table_ref *tables) {
                                 write_all_non_transactional_are_tmp_tables))
       error = 1;
 
+    /**
+      PolarDB-X:
+      It is not allowed to operate non-transaction tables in XA transactions,
+      because it might lead to inconsistent data between Leader and Follower.
+    */
+    if (!error &&
+        !is_xa_gtid_compatible(write_to_some_non_transactional_table,
+                               write_all_non_transactional_are_tmp_tables))
+      error = 1;
+
     if (error) {
       DBUG_PRINT("info", ("decision: no logging since an error was generated"));
       return -1;
@@ -11159,6 +11187,31 @@ bool THD::is_dml_gtid_compatible(bool some_transactional_table,
     return handle_gtid_consistency_violation(
         this, ER_GTID_UNSAFE_NON_TRANSACTIONAL_TABLE,
         ER_RPL_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE);
+  }
+
+  return true;
+}
+
+/**
+  PolarDB-X:
+  It is not allowed to operate non-transaction tables in XA transactions,
+  because it might lead to inconsistent data between Leader and Follower.
+*/
+bool THD::is_xa_gtid_compatible(bool some_non_transactional_table,
+                                bool non_transactional_tables_are_tmp) {
+  DBUG_TRACE;
+
+  // If @@session.sql_log_bin has been manually turned off (only
+  // doable by SUPER), then no problem, we can execute any statement.
+  if ((variables.option_bits & OPTION_BIN_LOG) == 0 ||
+      mysql_bin_log.is_open() == false)
+    return true;
+
+  if (some_non_transactional_table && !non_transactional_tables_are_tmp &&
+      get_transaction()->xid_state()->check_in_xa(false)) {
+    return handle_gtid_consistency_violation(
+        this, ER_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA,
+        ER_RPL_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA);
   }
 
   return true;
