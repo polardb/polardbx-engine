@@ -1,7 +1,7 @@
 %define version_extra X-Cluster
-%define release_date 20240407
+%define release_date 20240423
 %define engine_version 8.4.19
-Version: 8.4.19.20240407
+Version: 8.4.19.20240423
 
 Name: t-polardbx-engine-80
 Release: %(echo $RELEASE)%{?dist}
