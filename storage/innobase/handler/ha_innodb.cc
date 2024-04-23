@@ -15374,6 +15374,7 @@ int ha_innobase::create(const char *name, TABLE *form,
 
 /** Discards or imports an InnoDB tablespace.
 @param[in]      discard         true if discard, else import
+@param[in]      option          if value is HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if tablespace exists
 @param[in,out]  table_def       dd::Table describing table which
 tablespace is to be imported or discarded. Can be adjusted by SE,
 the changes will be saved into the data-dictionary at statement
@@ -15381,6 +15382,7 @@ commit time.
 @return 0 == success, -1 == error */
 
 int ha_innobase::discard_or_import_tablespace(bool discard,
+                                              uint option,
                                               dd::Table *table_def) {
   DBUG_TRACE;
 
@@ -15463,15 +15465,27 @@ int ha_innobase::discard_or_import_tablespace(bool discard,
                                            m_prebuilt->trx);
 
   } else if (!dict_table->ibd_file_missing) {
-    ib::error(ER_IB_MSG_567)
-        << "Unable to import tablespace " << dict_table->name
-        << " because it already"
-           " exists.  Please DISCARD the tablespace"
-           " before IMPORT.";
-    ib_senderrf(m_prebuilt->trx->mysql_thd, IB_LOG_LEVEL_ERROR,
-                ER_TABLESPACE_EXISTS, dict_table->name.m_name);
+    if (option & HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS) {
+      ib::warn(ER_IB_MSG_567)
+          << "Unable to import tablespace " << dict_table->name
+          << " because it already"
+             " exists.  Please DISCARD the tablespace"
+             " before IMPORT.";
+      ib_senderrf(m_prebuilt->trx->mysql_thd, IB_LOG_LEVEL_WARN,
+                  ER_TABLESPACE_EXISTS, dict_table->name.m_name);
+      // ignore if tablespace already exists, but write the binlog for replication
+      return (0);
+    } else {
+      ib::error(ER_IB_MSG_567)
+          << "Unable to import tablespace " << dict_table->name
+          << " because it already"
+             " exists.  Please DISCARD the tablespace"
+             " before IMPORT.";
+      ib_senderrf(m_prebuilt->trx->mysql_thd, IB_LOG_LEVEL_ERROR,
+                  ER_TABLESPACE_EXISTS, dict_table->name.m_name);
 
-    return HA_ERR_TABLE_EXIST;
+      return HA_ERR_TABLE_EXIST;
+    }
   } else {
     err = row_import_for_mysql(dict_table, table_def, m_prebuilt);
 
@@ -18700,7 +18714,7 @@ int ha_innobase::extra(enum ha_extra_function operation)
       m_prebuilt->no_autoinc_locking = true;
       break;
     default: /* Do nothing */
-             ;
+        ;
   }
 
   return (0);
@@ -24792,7 +24806,8 @@ bool thd_get_transaction_group(THD *thd) {
   return THDVAR(thd, transaction_group);
 }
 
-void ha_innobase::get_create_info(const char *table_name, const dd::Table *table_def,
+void ha_innobase::get_create_info(const char *table_name,
+                                  const dd::Table *table_def,
                                   HA_CREATE_INFO *create_info) {
   dict_table_t *dict_table = nullptr;
   THD *m_thd = ha_thd();

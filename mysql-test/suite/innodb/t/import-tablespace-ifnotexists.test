@@ -1,0 +1,16 @@
+# Test "ALTER TABLE ... IMPORT TABLESPACE IF NOT EXISTS" in InnoDB
+#--source include/have_innodb.inc
+
+--echo #
+--echo # ALTER TABLE ... IMPORT TABLESPACE IF NOT EXISTS
+--echo #
+
+CREATE TABLE t1 (c1 VARCHAR(32), c2 VARCHAR(32), c3 VARCHAR(32),
+PRIMARY KEY (c1, c2, c3))
+ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT INTO t1 VALUES ('Test Data -1', 'Test Data -2', 'Test Data -3');
+
+--source suite/innodb/include/import_tablespace_ifnotexists.inc
+
+DROP TABLE t1;

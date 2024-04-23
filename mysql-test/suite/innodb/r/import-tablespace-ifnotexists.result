@@ -1,0 +1,32 @@
+#
+# ALTER TABLE ... IMPORT TABLESPACE IF NOT EXISTS
+#
+CREATE TABLE t1 (c1 VARCHAR(32), c2 VARCHAR(32), c3 VARCHAR(32),
+PRIMARY KEY (c1, c2, c3))
+ENGINE=InnoDB CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+INSERT INTO t1 VALUES ('Test Data -1', 'Test Data -2', 'Test Data -3');
+FLUSH TABLES test.t1 FOR EXPORT;
+UNLOCK TABLES;
+ALTER TABLE test.t1 DISCARD TABLESPACE;
+ALTER TABLE test.t1 IMPORT TABLESPACE;
+ALTER TABLE test.t1 IMPORT TABLESPACE;
+ERROR HY000: Tablespace 'test/t1' exists.
+ALTER TABLE test.t1 IMPORT TABLESPACE IF NOT EXISTS;
+Warnings:
+Warning	1813	InnoDB: Tablespace 'test/t1' exists.
+CHECK TABLE test.t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SHOW CREATE TABLE test.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `c1` varchar(32) NOT NULL,
+  `c2` varchar(32) NOT NULL,
+  `c3` varchar(32) NOT NULL,
+  PRIMARY KEY (`c1`,`c2`,`c3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM test.t1;
+c1	c2	c3
+Test Data -1	Test Data -2	Test Data -3
+DROP TABLE t1;
+# Test End

@@ -1524,6 +1524,7 @@ void warn_about_deprecated_binary(THD *thd)
         signed_num
         opt_ignore_unknown_user
         opt_consensus_log_index
+        opt_import_tablespace_if_not_exists
 
 
 %type <order_direction>
@@ -8903,9 +8904,9 @@ standalone_alter_commands:
           {
             $$= NEW_PTN PT_alter_table_discard_tablespace;
           }
-        | IMPORT TABLESPACE_SYM
+        | IMPORT TABLESPACE_SYM opt_import_tablespace_if_not_exists
           {
-            $$= NEW_PTN PT_alter_table_import_tablespace;
+            $$= NEW_PTN PT_alter_table_import_tablespace($3);
           }
 /*
   This part was added for release 5.1 by Mikael Ronström.
@@ -8985,9 +8986,9 @@ standalone_alter_commands:
             $$= NEW_PTN PT_alter_table_discard_partition_tablespace($3);
           }
         | IMPORT PARTITION_SYM all_or_alt_part_name_list
-          TABLESPACE_SYM
+          TABLESPACE_SYM opt_import_tablespace_if_not_exists
           {
-            $$= NEW_PTN PT_alter_table_import_partition_tablespace($3);
+            $$= NEW_PTN PT_alter_table_import_partition_tablespace($3, $5);
           }
         | SECONDARY_LOAD_SYM
           {
@@ -9272,6 +9273,10 @@ alter_lock_option_value:
               MYSQL_YYABORT;
             }
           }
+        ;
+opt_import_tablespace_if_not_exists:
+          /* empty */ { $$= 0; }
+        | IF not EXISTS { $$=HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS; }
         ;
 
 opt_column:

@@ -626,6 +626,9 @@ enum enum_alter_inplace_result {
 #define HA_LEX_CREATE_INTERNAL_TMP_TABLE 8
 #define HA_MAX_REC_LENGTH 65535U
 
+/* Alter table import tablespace if not exists */
+#define HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS 1
+
 /**
   Options for the START TRANSACTION statement.
 
@@ -2910,8 +2913,8 @@ constexpr const decltype(handlerton::flags) HTON_SUPPORTS_ENGINE_ATTRIBUTE{
     1 << 17};
 
 /** Engine supports Generated invisible primary key. */
-constexpr const decltype(
-    handlerton::flags) HTON_SUPPORTS_GENERATED_INVISIBLE_PK{1 << 18};
+constexpr const decltype(handlerton::flags)
+    HTON_SUPPORTS_GENERATED_INVISIBLE_PK{1 << 18};
 
 /** Whether the secondary engine supports DDLs. No meaning if the engine is not
  * secondary. */
@@ -4006,9 +4009,7 @@ class Ft_hints {
 
      @return pointer to ft_hints struct
    */
-  struct ft_hints *get_hints() {
-    return &hints;
-  }
+  struct ft_hints *get_hints() { return &hints; }
 };
 
 /**
@@ -4770,7 +4771,8 @@ class handler {
   bool ha_check_and_repair(THD *thd);
   int ha_disable_indexes(uint mode);
   int ha_enable_indexes(uint mode);
-  int ha_discard_or_import_tablespace(bool discard, dd::Table *table_def);
+  int ha_discard_or_import_tablespace(bool discard, uint import_tablespace_option,
+                                      dd::Table *table_def);
   int ha_rename_table(const char *from, const char *to,
                       const dd::Table *from_table_def, dd::Table *to_table_def);
   int ha_delete_table(const char *name, const dd::Table *table_def);
@@ -6769,6 +6771,7 @@ class handler {
     Discard or import tablespace.
 
     @param  [in]      discard   Indicates whether this is discard operation.
+    @param[in]        option    if value is HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if tablespace exists
     @param  [in,out]  table_def dd::Table object describing the table
                                 in which tablespace needs to be discarded
                                 or imported. This object can be adjusted by
@@ -6781,6 +6784,7 @@ class handler {
   */
 
   virtual int discard_or_import_tablespace(bool discard [[maybe_unused]],
+                                           uint option [[maybe_unused]],
                                            dd::Table *table_def
                                            [[maybe_unused]]) {
     set_my_errno(HA_ERR_WRONG_COMMAND);

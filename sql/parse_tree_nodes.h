@@ -4564,12 +4564,24 @@ class PT_alter_table_import_partition_tablespace final
 
  public:
   explicit PT_alter_table_import_partition_tablespace(
-      const List<String> *opt_partition_list)
-      : super(Alter_info::ALTER_IMPORT_TABLESPACE, opt_partition_list) {}
+      const List<String> *opt_partition_list,
+      uint alter_table_import_tablespace_option)
+      : super(Alter_info::ALTER_IMPORT_TABLESPACE, opt_partition_list),
+        m_alter_table_import_tablespace_option(
+            alter_table_import_tablespace_option) {}
+
+  bool contextualize(Table_ddl_parse_context *pc) override {
+    pc->alter_info->import_tablespace_option =
+        m_alter_table_import_tablespace_option;
+    return super::contextualize(pc);
+  }
 
   Sql_cmd *make_cmd(Table_ddl_parse_context *pc) override {
     return new (pc->mem_root) Sql_cmd_discard_import_tablespace(pc->alter_info);
   }
+
+ private:
+  const uint m_alter_table_import_tablespace_option;
 };
 
 class PT_alter_table_discard_tablespace final
@@ -4590,12 +4602,23 @@ class PT_alter_table_import_tablespace final
   typedef PT_alter_table_standalone_action super;
 
  public:
-  PT_alter_table_import_tablespace()
-      : super(Alter_info::ALTER_IMPORT_TABLESPACE) {}
+  PT_alter_table_import_tablespace(uint alter_table_import_tablespace_option)
+      : super(Alter_info::ALTER_IMPORT_TABLESPACE),
+        m_alter_table_import_tablespace_option(
+            alter_table_import_tablespace_option) {}
+
+  bool contextualize(Table_ddl_parse_context *pc) override {
+    pc->alter_info->import_tablespace_option =
+        m_alter_table_import_tablespace_option;
+    return super::contextualize(pc);
+  }
 
   Sql_cmd *make_cmd(Table_ddl_parse_context *pc) override {
     return new (pc->mem_root) Sql_cmd_discard_import_tablespace(pc->alter_info);
   }
+
+ private:
+  const uint m_alter_table_import_tablespace_option;
 };
 
 class PT_alter_table_stmt final : public PT_table_ddl_stmt_base {
@@ -4963,9 +4986,9 @@ class PT_alter_tablespace_option final
   const Option_type m_value;
 };
 
-typedef PT_alter_tablespace_option<decltype(
-                                       Tablespace_options::autoextend_size),
-                                   &Tablespace_options::autoextend_size>
+typedef PT_alter_tablespace_option<
+    decltype(Tablespace_options::autoextend_size),
+    &Tablespace_options::autoextend_size>
     PT_alter_tablespace_option_autoextend_size;
 
 typedef PT_alter_tablespace_option<decltype(Tablespace_options::extent_size),
@@ -4980,14 +5003,14 @@ typedef PT_alter_tablespace_option<decltype(Tablespace_options::max_size),
                                    &Tablespace_options::max_size>
     PT_alter_tablespace_option_max_size;
 
-typedef PT_alter_tablespace_option<decltype(
-                                       Tablespace_options::redo_buffer_size),
-                                   &Tablespace_options::redo_buffer_size>
+typedef PT_alter_tablespace_option<
+    decltype(Tablespace_options::redo_buffer_size),
+    &Tablespace_options::redo_buffer_size>
     PT_alter_tablespace_option_redo_buffer_size;
 
-typedef PT_alter_tablespace_option<decltype(
-                                       Tablespace_options::undo_buffer_size),
-                                   &Tablespace_options::undo_buffer_size>
+typedef PT_alter_tablespace_option<
+    decltype(Tablespace_options::undo_buffer_size),
+    &Tablespace_options::undo_buffer_size>
     PT_alter_tablespace_option_undo_buffer_size;
 
 typedef PT_alter_tablespace_option<

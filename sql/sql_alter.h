@@ -441,6 +441,9 @@ class Alter_info {
   */
   enum_with_validation with_validation;
 
+  // Option for alter table import tablespace
+  uint import_tablespace_option;
+
   /// "new_db" (if any) or "db" (if any) or default database from
   /// ALTER TABLE [db.]table [ RENAME [TO|AS|=] [new_db.]new_table ]
   LEX_CSTRING new_db_name;
@@ -466,6 +469,7 @@ class Alter_info {
         requested_algorithm(ALTER_TABLE_ALGORITHM_DEFAULT),
         requested_lock(ALTER_TABLE_LOCK_DEFAULT),
         with_validation(ALTER_VALIDATION_DEFAULT),
+        import_tablespace_option(0),
         new_db_name(LEX_CSTRING{nullptr, 0}),
         new_table_name(LEX_CSTRING{nullptr, 0}) {}
 

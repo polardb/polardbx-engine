@@ -11193,9 +11193,9 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
             goto err;
         }
       } else  // Case 1
-          if (write_bin_log(thd, true, thd->query().str, thd->query().length,
-                            is_trans))
-        goto err;
+        if (write_bin_log(thd, true, thd->query().str, thd->query().length,
+                          is_trans))
+          goto err;
     }
     /*
       Case 3 and 4 does nothing under RBR
@@ -11382,6 +11382,7 @@ bool Sql_cmd_discard_import_tablespace::mysql_discard_or_import_tablespace(
 
   bool discard = (m_alter_info->flags & Alter_info::ALTER_DISCARD_TABLESPACE);
   error = table_list->table->file->ha_discard_or_import_tablespace(discard,
+                                                                   m_alter_info->import_tablespace_option,
                                                                    table_def);
 
   THD_STAGE_INFO(thd, stage_end);
@@ -14681,7 +14682,6 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         /* Reset auto_increment value if it was dropped */
         if ((field->auto_flags & Field::NEXT_NUMBER) &&
             !(used_fields & HA_CREATE_USED_AUTO)) {
-
           added_auto_inc_field -= 1;  // IPK: AUTO_INCREMENT field is dropped
 
           create_info->auto_increment_value = 0;
@@ -14826,7 +14826,6 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     */
     if (def->change && !def->after) continue;
 
-
     /**
       RDS IPK :
       If this is an AUTO_INCREMENT field,
@@ -14909,8 +14908,9 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
           // If no implicit row id be found, then putting new column in the last
           new_create_list.push_back(def);
       } else
-        // If no implicit row id in this table, then putting new column in the last
-        new_create_list.push_back(def);      
+        // If no implicit row id in this table, then putting new column in the
+        // last
+        new_create_list.push_back(def);
     } else {
       const Create_field *find;
       if (def->change) {
@@ -14994,8 +14994,7 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
     while (drop_idx < drop_list.size()) {
       const Alter_drop *drop = drop_list[drop_idx];
       if (drop->type == Alter_drop::KEY &&
-          !my_strcasecmp(system_charset_info, key_name, drop->name))
-      {
+          !my_strcasecmp(system_charset_info, key_name, drop->name)) {
         /* RDS IPK : If dropped PK/UK, reduce the number */
         if (key_info->flags & HA_NOSAME) added_unique_key--;
         break;

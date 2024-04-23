@@ -2825,12 +2825,14 @@ int ha_innopart::set_dd_discard_attribute(dd::Table *table_def, bool discard) {
 
 /** Discards or imports an InnoDB tablespace.
 @param[in]      discard         True if discard, else import.
+@param[in]      option          if value is HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if tablespace exists
 @param[in,out]  table_def       dd::Table describing table which
 tablespaces are to be imported or discarded. Can be adjusted by SE,
 the changes will be saved into the data-dictionary at statement
 commit time.
 @return 0 or error number. */
 int ha_innopart::discard_or_import_tablespace(bool discard,
+                                              uint option,
                                               dd::Table *table_def) {
   int error = 0;
   uint i;
@@ -2840,7 +2842,7 @@ int ha_innopart::discard_or_import_tablespace(bool discard,
   for (i = m_part_info->get_first_used_partition(); i < m_tot_parts;
        i = m_part_info->get_next_used_partition(i)) {
     m_prebuilt->table = m_part_share->get_table_part(i);
-    error = ha_innobase::discard_or_import_tablespace(discard, table_def);
+    error = ha_innobase::discard_or_import_tablespace(discard, option, table_def);
     if (error != 0) {
       break;
     }

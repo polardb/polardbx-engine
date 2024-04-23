@@ -4911,11 +4911,12 @@ int handler::ha_enable_indexes(uint mode) {
 */
 
 int handler::ha_discard_or_import_tablespace(bool discard,
+                                             uint option,
                                              dd::Table *table_def) {
   assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);
   mark_trx_read_write();
 
-  return discard_or_import_tablespace(discard, table_def);
+  return discard_or_import_tablespace(discard, option, table_def);
 }
 
 bool handler::ha_prepare_inplace_alter_table(TABLE *altered_table,

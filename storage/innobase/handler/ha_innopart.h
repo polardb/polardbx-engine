@@ -381,10 +381,11 @@ class ha_innopart : public ha_innobase,
   /** Set DD discard attribute for tablespace.
   @param[in]    table_def       dd table
   @param[in]    discard         True if this table is discarded
+  @param[in]    option          if value is HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if tablespace exists
   @return       0 or error number. */
   int set_dd_discard_attribute(dd::Table *table_def, bool discard);
 
-  int discard_or_import_tablespace(bool discard, dd::Table *table_def) override;
+  int discard_or_import_tablespace(bool discard, uint option, dd::Table *table_def) override;
 
   /** Compare key and rowid.
   Helper function for sorting records in the priority queue.

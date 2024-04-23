@@ -205,7 +205,7 @@ class ha_innobase : public handler {
 
   int optimize(THD *thd, HA_CHECK_OPT *check_opt) override;
 
-  int discard_or_import_tablespace(bool discard, dd::Table *table_def) override;
+  int discard_or_import_tablespace(bool discard, uint option, dd::Table *table_def) override;
 
   int extra(ha_extra_function operation) override;
 
