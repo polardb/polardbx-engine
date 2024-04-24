@@ -135,14 +135,16 @@ loop:
 
   if (truncated <= 0) {
     sig_count = os_event_reset(file_purge_event);
-    os_event_wait_time_low(file_purge_event, std::chrono::milliseconds{5000000},
+    os_event_wait_time_low(file_purge_event, std::chrono::milliseconds{5000},
                            sig_count);
     truncated_size = 0;
   } else if (truncated > 0) {
     if (truncated_size >= max_size) {
       sig_count_shutdown = os_event_reset(file_purge_shutdown_event);
-      auto t = std::chrono::milliseconds{srv_data_file_purge_interval} * 1000;
-      os_event_wait_time_low(file_purge_shutdown_event, t, sig_count_shutdown);
+      os_event_wait_time_low(
+          file_purge_shutdown_event,
+          std::chrono::milliseconds{srv_data_file_purge_interval},
+          sig_count_shutdown);
 
       truncated_size = 0;
     }
