@@ -264,32 +264,33 @@ int Service::process(easy_request_t *r, void *args) {
       }
 
       assert(np->type == NetPacketTypeNet);
-      assert(r->ms->c->type == EASY_TYPE_CLIENT);
-      PaxosMsg *tmpMsg = nullptr;
-      if (np->msg) {
-        msg = static_cast<PaxosMsg *>(np->msg);
-      } else {
-        msg = tmpMsg = new PaxosMsg();
-        assert(np->len > 0);
-        msg->ParseFromArray(np->data, np->len);
+      if (r->ms->c->status == EASY_CONN_OK) {
+        assert(r->ms->c->type == EASY_TYPE_CLIENT);
+        PaxosMsg *tmpMsg = nullptr;
+        if (np->msg) {
+          msg = static_cast<PaxosMsg *>(np->msg);
+        } else {
+          msg = tmpMsg = new PaxosMsg();
+          assert(np->len > 0);
+          msg->ParseFromArray(np->data, np->len);
+        }
+
+        uint64_t newId = 0;
+        if (0 == cons->onAppendLogSendFail(msg, &newId)) {
+          easy_warn_log(
+              "Resend msg msgId(%llu) rename to msgId(%llu) to server %ld, "
+              "term:%ld, startLogIndex:%ld, entries_size:%d, pli:%ld\n",
+              msg->msgid(), newId, msg->serverid(), msg->term(),
+              msg->entries_size() >= 1 ? msg->entries().begin()->index() : -1,
+              msg->entries_size(), msg->prevlogindex());
+          msg->set_msgid(newId);
+          np->packetId = newId;
+          msg->SerializeToArray(np->data, np->len);
+          srv->resendPacket(r->ms->c->addr, np, newId);
+        }
+        if (tmpMsg) delete tmpMsg;
       }
 
-      uint64_t newId = 0;
-      if (r->ms->c->status == EASY_CONN_OK &&
-          0 == cons->onAppendLogSendFail(msg, &newId)) {
-        easy_warn_log(
-            "Resend msg msgId(%llu) rename to msgId(%llu) to server %ld, "
-            "term:%ld, startLogIndex:%ld, entries_size:%d, pli:%ld\n",
-            msg->msgid(), newId, msg->serverid(), msg->term(),
-            msg->entries_size() >= 1 ? msg->entries().begin()->index() : -1,
-            msg->entries_size(), msg->prevlogindex());
-        msg->set_msgid(newId);
-        np->packetId = newId;
-        msg->SerializeToArray(np->data, np->len);
-        srv->resendPacket(r->ms->c->addr, np, newId);
-      }
-
-      if (tmpMsg) delete tmpMsg;
     }
     r->opacket = (void *)nullptr;
     // TODO we return EASY_ABORT if there is nothing we need io thread to do.
