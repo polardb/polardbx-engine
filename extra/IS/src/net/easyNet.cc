@@ -20,6 +20,7 @@
 #include "paxos.pb.h"
 #include "paxos_server.h"  //TODO no driect include
 #include "service.h"
+#include <list>
 
 namespace alisql {
 
@@ -244,13 +245,18 @@ void EasyNet::setConnData(easy_addr_t addr, NetServerRef server) {
 
 void EasyNet::delConnDataById(uint64_t id) {
   /* Protect the connStatus_ map */
-  std::lock_guard<std::mutex> lg(lock_);
-  for (auto it = connStatus_.begin(); it != connStatus_.end();) {
-    if (std::dynamic_pointer_cast<RemoteServer>(it->second)->serverId == id)
-      connStatus_.erase(it++);
-    else
-      ++it;
-    if (connStatus_.size() == 0) break;
+  std::list<std::shared_ptr<RemoteServer>> delete_servers{};
+  {
+    std::lock_guard<std::mutex> lg(lock_);
+    for (auto it = connStatus_.begin(); it != connStatus_.end();) {
+      if (std::dynamic_pointer_cast<RemoteServer>(it->second)->serverId == id) {
+        delete_servers.push_back(std::dynamic_pointer_cast<RemoteServer>(it->second));
+        connStatus_.erase(it++);
+      } else {
+        ++it;
+      }
+      if (connStatus_.size() == 0) break;
+    }
   }
 }
 

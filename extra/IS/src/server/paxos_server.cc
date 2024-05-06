@@ -220,7 +220,7 @@ void RemoteServer::stepDown(void *) {
 
 void RemoteServer::stop(void *) {
   bool rStop = false;
-  if (isStop.compare_exchange_weak(rStop, true)) {
+  if (isStop.compare_exchange_strong(rStop, true)) {
     stepDown(nullptr);
     if (sendMsgQueue && sendMsgQueue->stop(false)) {
       sendMsgQueue.reset();
