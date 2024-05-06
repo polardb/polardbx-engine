@@ -1845,7 +1845,7 @@ ER_RPL_SLAVE_SQL_THREAD_IO_ERROR_READING_EVENT
   eng "Slave SQL thread%s: I/O error reading event (errno: %d  cur_log->error: %d)"
 
 ER_RPL_SLAVE_ERROR_READING_RELAY_LOG_EVENTS
-  eng "Error reading relay log event%s: %s"
+  eng "Error reading relay log event%s: %s, position %llu->%llu"
 
 ER_SLAVE_CHANGE_MASTER_TO_EXECUTED
   eng "'CHANGE MASTER TO%s executed'. Previous state master_host='%s', master_port= %u, master_log_file='%s', master_log_pos= %ld, master_bind='%s'. New state master_host='%s', master_port= %u, master_log_file='%s', master_log_pos= %ld, master_bind='%s'."

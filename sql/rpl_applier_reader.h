@@ -86,6 +86,8 @@ class Rpl_applier_reader {
 
   /* purge logs by xpaxos module and reset the log file index offset */
   LOG_INFO *get_log_info() { return &m_linfo; }
+  Relaylog_file_reader &relaylog_file_reader() { return m_relaylog_file_reader; }
+  const char *get_errmsg() const { return m_errmsg; }
 
  private:
   Relaylog_file_reader m_relaylog_file_reader;

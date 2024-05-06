@@ -4986,7 +4986,9 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
     delete ev;
 
     LogErr(INFORMATION_LEVEL, ER_RPL_SLAVE_ERROR_READING_RELAY_LOG_EVENTS,
-           rli->get_for_channel_str(), "slave SQL thread was killed");
+           rli->get_for_channel_str(), "slave SQL thread was killed",
+           rli->get_event_start_pos(),
+           applier_reader->relaylog_file_reader().position());
     return 1;
   }
 
@@ -5258,6 +5260,17 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
     rli->mts_group_status = Relay_log_info::MTS_KILLED_GROUP;
 
   mysql_mutex_unlock(&rli->data_lock);
+  LogErr(ERROR_LEVEL, ER_RPL_SLAVE_ERROR_READING_RELAY_LOG_EVENTS,
+         rli->get_for_channel_str(),
+         (applier_reader->get_errmsg() 
+          ? applier_reader->get_errmsg() 
+          : (applier_reader->relaylog_file_reader().get_error_str() 
+             ? applier_reader->relaylog_file_reader().get_error_str() 
+             : "nothing")
+          ),
+         rli->get_event_start_pos(),
+         applier_reader->relaylog_file_reader().position());
+
   rli->report(ERROR_LEVEL, ER_SLAVE_RELAY_LOG_READ_FAILURE,
               ER_THD(thd, ER_SLAVE_RELAY_LOG_READ_FAILURE),
               "\

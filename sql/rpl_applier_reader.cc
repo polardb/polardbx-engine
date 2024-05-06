@@ -256,7 +256,8 @@ Log_event *Rpl_applier_reader::read_next_event() {
 
   LogErr(ERROR_LEVEL, ER_RPL_SLAVE_ERROR_READING_RELAY_LOG_EVENTS,
          m_rli->get_for_channel_str(),
-         m_errmsg ? m_errmsg : m_relaylog_file_reader.get_error_str());
+         m_errmsg ? m_errmsg : m_relaylog_file_reader.get_error_str(),
+         m_rli->get_event_start_pos(), m_relaylog_file_reader.position());
   return nullptr;
 }
 
