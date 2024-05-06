@@ -6611,7 +6611,7 @@ void MYSQL_BIN_LOG::dec_prep_xids(THD *thd) {
   thd->get_transaction()->m_flags.xid_written = false;
   if (result == 0) {
     mysql_mutex_lock(&LOCK_xids);
-    mysql_cond_signal(&m_prep_xids_cond);
+    mysql_cond_broadcast(&m_prep_xids_cond);
     mysql_mutex_unlock(&LOCK_xids);
   }
 }
