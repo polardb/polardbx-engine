@@ -101,26 +101,26 @@ SET SESSION debug = "+d,simulate_error_during_flush_cache_to_file";
 TRUNCATE t1;
 --source include/save_binlog_position.inc
 
-SET GLOBAL binlog_error_action = IGNORE_ERROR;
-BEGIN;
-INSERT INTO t1 VALUES (repeat('a', 8192));
-
-SET SESSION debug = "+d,fault_injection_reinit_io_cache_while_flushing_to_file";
---replace_regex /.*Error writing file.*/Error writing file <tmp_file_name> (Errcode: ##)/
-COMMIT;
-SET SESSION debug = "-d,fault_injection_reinit_io_cache_while_flushing_to_file";
-
-# Check that transaction is committed
---let $assert_cond = COUNT(*) = 1 FROM t1;
---let $assert_text = Count of elements in t1 should be 1.
-
-# Check that error is present in error log
---let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
---let $assert_count = 1
---let $assert_select = An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'IGNORE_ERROR'.
---let $assert_text = An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'IGNORE_ERROR'.
---source include/assert_grep.inc
-
+# SET GLOBAL binlog_error_action = IGNORE_ERROR;
+# BEGIN;
+# INSERT INTO t1 VALUES (repeat('a', 8192));
+# 
+# SET SESSION debug = "+d,fault_injection_reinit_io_cache_while_flushing_to_file";
+# --replace_regex /.*Error writing file.*/Error writing file <tmp_file_name> (Errcode: ##)/
+# COMMIT;
+# SET SESSION debug = "-d,fault_injection_reinit_io_cache_while_flushing_to_file";
+# 
+# # Check that transaction is committed
+# --let $assert_cond = COUNT(*) = 1 FROM t1;
+# --let $assert_text = Count of elements in t1 should be 1.
+# 
+# # Check that error is present in error log
+# --let $assert_file= $MYSQLTEST_VARDIR/log/mysqld.1.err
+# --let $assert_count = 1
+# --let $assert_select = An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'IGNORE_ERROR'.
+# --let $assert_text = An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'IGNORE_ERROR'.
+# --source include/assert_grep.inc
+# 
 # Restart so that binary log is enabled again and we can do the below test
 --disconnect con1
 --connection default

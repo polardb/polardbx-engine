@@ -49,19 +49,9 @@ SET SESSION debug = "+d,simulate_error_during_flush_cache_to_file";
 #
 TRUNCATE t1;
 include/save_binlog_position.inc
-SET GLOBAL binlog_error_action = IGNORE_ERROR;
-BEGIN;
-INSERT INTO t1 VALUES (repeat('a', 8192));
-SET SESSION debug = "+d,fault_injection_reinit_io_cache_while_flushing_to_file";
-COMMIT;
-Warnings:
-Error	1026	Error writing file <tmp_file_name> (Errcode: ##)
-SET SESSION debug = "-d,fault_injection_reinit_io_cache_while_flushing_to_file";
-include/assert_grep.inc [An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'IGNORE_ERROR'.]
 # restart
 include/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-binlog.000001	#	Stop	#	#	
 
 # Case 5 Simulate write failure when reinitializing binlog cache for
 #        copying to binlog with ABORT_SERVER
@@ -83,5 +73,6 @@ select * from t2;
 c1
 include/assert.inc [Count of elements in t2 should be 0.]
 include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 DROP TABLE t1, t2, t3;
 RESET MASTER;

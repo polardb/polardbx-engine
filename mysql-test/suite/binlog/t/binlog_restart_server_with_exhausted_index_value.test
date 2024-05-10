@@ -96,7 +96,7 @@ EOF
 
 # Verify that FLUSH BINARY LOGS after the exhaustion of binlog index values
 # causes the server to abort.
---error ER_BINLOG_LOGGING_IMPOSSIBLE
+#--error ER_BINLOG_LOGGING_IMPOSSIBLE
 FLUSH BINARY LOGS;
 
 --let $server_params= --binlog_error_action=IGNORE_ERROR

@@ -32,12 +32,12 @@ CREATE DATABASE test;
 EOF
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc
-let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --secure-file-priv="" $PLUGIN_DIR_OPT $consensus_args </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --innodb_undo_directory=$MYSQLD_UNDO_DATADIR --secure-file-priv="" $PLUGIN_DIR_OPT $consensus_args </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
 
 --echo # Run the bootstrap command of datadir1
 --exec $NEW_CMD
 
---let $restart_parameters= restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR1 --innodb_undo_directory=$MYSQLD_UNDO_DATADIR
+--let $restart_parameters= restart: $PLUGIN_DIR_OPT --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --datadir=$MYSQLD_DATADIR1 --innodb_undo_directory=$MYSQLD_UNDO_DATADIR
 --source include/start_mysqld_no_echo.inc
 
 --disable_warnings

@@ -90,7 +90,7 @@ AND error_code NOT IN("MY-011243", "MY-011240", "MY-011245", "MY-010931",
 "MY-013602", "MY-010069", "MY-013595", "MY-010108",
 "MY-012363", "MY-011953", "MY-013623", "MY-013711",
 "MY-013880", "MY-013881", "MY-013882", "MY-013883",
-"MY-013884", "MY-013908", "MY-013930")
+"MY-013884", "MY-013908", "MY-013930", "MY-025034")
 ORDER BY logged, error_code;
 prio	error_code	subsystem
 System	MY-010116	Server
@@ -139,17 +139,17 @@ Note	MY-012356	InnoDB
 Note	MY-010006	Server
 Note	MY-025005	Server
 Note	MY-025010	Server
-System	MY-025031	XPaxos
-System	MY-025031	XPaxos
-Note	MY-013911	Server
-Note	MY-013911	Server
+Note	MY-025031	XPaxos
+Note	MY-025031	XPaxos
+System	MY-013911	Server
+System	MY-013911	Server
 Warning	MY-010604	Repl
 System	MY-025036	XPaxos
 System	MY-025036	XPaxos
 System	MY-025036	XPaxos
 System	MY-025036	XPaxos
 System	MY-025031	XPaxos
-Note	MY-025030	XPaxos
+System	MY-025030	XPaxos
 Note	MY-012487	InnoDB
 Note	MY-012488	InnoDB
 System	MY-025022	Server
@@ -161,16 +161,11 @@ Note	MY-010252	Server
 Note	MY-010254	Server
 Note	MY-010264	Server
 Note	MY-010251	Server
-Note	MY-025034	XPaxos
 Note	MY-025035	XPaxos
-Note	MY-025034	XPaxos
 Note	MY-010581	Repl
-Note	MY-025034	XPaxos
-Note	MY-025030	XPaxos
-Note	MY-025034	XPaxos
-Note	MY-025034	XPaxos
+System	MY-025030	XPaxos
 Note	MY-010587	Repl
-Note	MY-025030	XPaxos
+System	MY-025030	XPaxos
 Note	MY-013999	Server
 Note	MY-013999	Server
 
@@ -183,20 +178,23 @@ AND prio!="Note"
 "MY-010931", "MY-010116", "MY-011810", "MY-000000",
 "MY-000067", "MY-010159", "MY-013595", "MY-013602",
 "MY-010108", "MY-012363", "MY-013711", "MY-013908",
-"MY-013930" )
+"MY-013930", "MY-025034")
 ORDER BY logged;
 prio	error_code	subsystem	data
 System	MY-013576	InnoDB	InnoDB initialization has started.
 System	MY-013577	InnoDB	InnoDB initialization has ended.
-System	MY-025031	XPaxos	[Recovery] recover_prepared_in_tc_one_ht for xa_list
-System	MY-025031	XPaxos	[Recovery] recover_prepared_in_tc_one_ht for xa_list_in_ht 
+System	MY-013911	Server	Crash recovery finished in binlog engine. No attempts to commit, rollback or prepare any transactions.
+System	MY-013911	Server	Crash recovery finished in InnoDB engine. No attempts to commit, rollback or prepare any transactions.
 Warning	MY-010604	Repl	Neither --relay-log nor --relay-log-index were used; so replication may break when this MySQL server acts as a slave and has his hostname changed!! Please use '--relay-log=96ea8691969f-relay-bin' to avoid this problem.
 System	MY-025036	XPaxos	[Proto] Server 1 : Paxos state change from FOLL to CAND !!
 System	MY-025036	XPaxos	[Proto] Server 1 : Start new requestVote: new term(2)
 System	MY-025036	XPaxos	[Proto] Server 1 : Paxos state change from CAND to LEDR !!
 System	MY-025036	XPaxos	[Proto] Server 1 : become Leader (currentTerm 2, lli:1, llt:2)!!
 System	MY-025031	XPaxos	[Recovery] Found max consensus index = [0] at Consensus_recovery_manager::get_max_consensus_index_from_recover_trx_hash
+System	MY-025030	XPaxos	start consensus_commit_pos_watcher thread
 System	MY-025022	Server	Gtid_in_table : 
+System	MY-025030	XPaxos	ConsensusLogManager::wait_follower_upgraded, consensus term: 2, consensus index: 0
+System	MY-025030	XPaxos	ConsensusLogManager::wait_follower_upgraded finish, error 0
 
 # FR-1.4.1 Show the log-error-verbosity applies
 # We passed --log-error-verbosity=3 at start-up. Show that we have Notes.

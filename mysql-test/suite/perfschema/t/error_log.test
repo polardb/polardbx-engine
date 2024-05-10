@@ -140,7 +140,7 @@ SELECT prio,error_code,subsystem
                          "MY-013602", "MY-010069", "MY-013595", "MY-010108",
                          "MY-012363", "MY-011953", "MY-013623", "MY-013711",
                          "MY-013880", "MY-013881", "MY-013882", "MY-013883",
-                         "MY-013884", "MY-013908", "MY-013930")
+                         "MY-013884", "MY-013908", "MY-013930", "MY-025034")
  ORDER BY logged, error_code;
 
 --echo
@@ -170,7 +170,7 @@ SELECT prio,error_code,subsystem,data
                          "MY-010931", "MY-010116", "MY-011810", "MY-000000",
                          "MY-000067", "MY-010159", "MY-013595", "MY-013602",
                          "MY-010108", "MY-012363", "MY-013711", "MY-013908",
-                         "MY-013930" )
+                         "MY-013930", "MY-025034")
  ORDER BY logged;
 
 --echo

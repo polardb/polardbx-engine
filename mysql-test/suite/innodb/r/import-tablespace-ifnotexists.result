@@ -29,4 +29,3 @@ SELECT * FROM test.t1;
 c1	c2	c3
 Test Data -1	Test Data -2	Test Data -3
 DROP TABLE t1;
-# Test End

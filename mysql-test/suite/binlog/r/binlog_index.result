@@ -61,29 +61,26 @@ SELECT @index;
 @index
 binlog.000001
 binlog.000002
-binlog.000003
 
 # crash_purge_non_critical_after_update_index
 flush logs;
 SET SESSION debug="+d,crash_purge_non_critical_after_update_index";
+purge binary logs TO 'binlog.000003';
+ERROR HY000: Lost connection to MySQL server during query
+SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
+SELECT @index;
+@index
+binlog.000003
+
+# crash_purge_critical_after_update_index
+flush logs;
+SET SESSION debug="+d,crash_purge_critical_after_update_index";
 purge binary logs TO 'binlog.000004';
 ERROR HY000: Lost connection to MySQL server during query
 SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
 SELECT @index;
 @index
 binlog.000004
-binlog.000005
-
-# crash_purge_critical_after_update_index
-flush logs;
-SET SESSION debug="+d,crash_purge_critical_after_update_index";
-purge binary logs TO 'binlog.000006';
-ERROR HY000: Lost connection to MySQL server during query
-SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
-SELECT @index;
-@index
-binlog.000006
-binlog.000007
 
 # crash_create_non_critical_before_update_index
 SET SESSION debug="+d,crash_create_non_critical_before_update_index";
@@ -92,9 +89,7 @@ ERROR HY000: Lost connection to MySQL server during query
 SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
 SELECT @index;
 @index
-binlog.000006
-binlog.000007
-binlog.000008
+binlog.000004
 
 # crash_create_critical_before_update_index
 SET SESSION debug="+d,crash_create_critical_before_update_index";
@@ -103,10 +98,7 @@ ERROR HY000: Lost connection to MySQL server during query
 SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
 SELECT @index;
 @index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
+binlog.000004
 
 # crash_create_after_update_index
 SET SESSION debug="+d,crash_create_after_update_index";
@@ -115,12 +107,8 @@ ERROR HY000: Lost connection to MySQL server during query
 SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
 SELECT @index;
 @index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
+binlog.000004
+binlog.000005
 
 #
 # This should put the server in unsafe state and stop
@@ -130,81 +118,25 @@ binlog.000011
 SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
 SELECT @index;
 @index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
+binlog.000004
+binlog.000005
 
 # fault_injection_registering_index
 SET SESSION debug="+d,fault_injection_registering_index";
 SET GLOBAL binlog_error_action= IGNORE_ERROR;
 flush logs;
-ERROR HY000: Can't open file: 'binlog.000012' (errno: 1 - Operation not permitted)
-SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
-SELECT @index;
-@index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
-
-# restart
-SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
-SELECT @index;
-@index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
-binlog.000012
-
+ERROR HY000: Lost connection to MySQL server during query
 # fault_injection_updating_index
 SET SESSION debug="+d,fault_injection_updating_index";
 SET GLOBAL binlog_error_action= IGNORE_ERROR;
 flush logs;
-ERROR HY000: Can't open file: 'binlog.000013' (errno: 1 - Operation not permitted)
-SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
-SELECT @index;
-@index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
-binlog.000012
-
-# restart
-SET @index=LOAD_FILE('MYSQLTEST_VARDIR/mysqld.1/data//binlog.index');
-SELECT @index;
-@index
-binlog.000006
-binlog.000007
-binlog.000008
-binlog.000009
-binlog.000010
-binlog.000011
-binlog.000012
-binlog.000013
-
+ERROR HY000: Lost connection to MySQL server during query
 # Test case6: Set DEBUG POINT before rename index file when
 #             appending a binlog file name to index file.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000006	#	#
-binlog.000007	#	#
-binlog.000008	#	#
-binlog.000009	#	#
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
+binlog.000004	#	#
+binlog.000005	#	#
 SET SESSION debug="+d,crash_create_before_rename_index_file";
 flush logs;
 ERROR HY000: Lost connection to MySQL server during query
@@ -213,16 +145,9 @@ ERROR HY000: Lost connection to MySQL server during query
 # i.e. binlog file name is added.
 show binary logs;
 Log_name	File_size	Encrypted
+binlog.000004	#	#
+binlog.000005	#	#
 binlog.000006	#	#
-binlog.000007	#	#
-binlog.000008	#	#
-binlog.000009	#	#
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
 # Test case7: Set DEBUG POINT after rename index file when
 #             appending a binlog file name to index file.
 SET SESSION debug="+d,crash_create_after_rename_index_file";
@@ -233,168 +158,82 @@ ERROR HY000: Lost connection to MySQL server during query
 # i.e. binlog file name is added.
 show binary logs;
 Log_name	File_size	Encrypted
+binlog.000004	#	#
+binlog.000005	#	#
 binlog.000006	#	#
 binlog.000007	#	#
-binlog.000008	#	#
-binlog.000009	#	#
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
 # Test case8: Set DEBUG POINT after rename index file when
 #             purging the index file.
 show binary logs;
 Log_name	File_size	Encrypted
+binlog.000004	#	#
+binlog.000005	#	#
 binlog.000006	#	#
 binlog.000007	#	#
-binlog.000008	#	#
-binlog.000009	#	#
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
 SET SESSION debug="+d,crash_create_after_rename_index_file";
-purge binary logs TO 'binlog.000010';
+purge binary logs TO 'binlog.000007';
 ERROR HY000: Lost connection to MySQL server during query
 # Restart the master server
 # Test if the index file has the correct data,
 # i.e. requested binlog file names are removed.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
+binlog.000007	#	#
 # Test case9: Set DEBUG POINT befor rename index file when
 #             purging the index file.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000010	#	#
-binlog.000011	#	#
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
+binlog.000007	#	#
 SET SESSION debug="+d,crash_create_before_rename_index_file";
-purge binary logs TO 'binlog.000012';
+purge binary logs TO 'binlog.000007';
 ERROR HY000: Lost connection to MySQL server during query
 # Restart the master server
 # Test if the index file has the correct data,
 # i.e. requested binlog file names are removed.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
+binlog.000007	#	#
 # Test case10: Inject a fault to copy part content to the temp file
 #              when purging the index file.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
+binlog.000007	#	#
 SET SESSION debug="+d,fault_injection_copy_part_file";
-purge binary logs TO 'binlog.000014';
+purge binary logs TO 'binlog.000007';
 ERROR HY000: Lost connection to MySQL server during query
 # Restart the master server
 # Test the index file is complete, although is not purged successfully.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
-binlog.000020	#	#
+binlog.000007	#	#
 # Test case11: Bug #20381055SERVER CRASHES IF INDEX FILE IS OPENED BY
 SET SESSION debug="d,force_index_file_delete_failure";
 call mtr.add_suppression("Failed to delete the existing index file");
 call mtr.add_suppression("failed to move crash safe index file to index file");
 call mtr.add_suppression("failed to update the index file");
-PURGE BINARY LOGS TO 'binlog.000014';;
+PURGE BINARY LOGS TO 'binlog.000007';;
 ERROR HY000: I/O error reading log index file
 # Test the index file is complete, although is not purged successfully.
 # Also this will indicate that binary logging is not disabled.
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
-binlog.000020	#	#
+binlog.000007	#	#
+# Restart the master server
 SET GLOBAL binlog_error_action='IGNORE_ERROR';
 FLUSH LOGS;
-ERROR HY000: Can't open file: 'binlog.000021' (errno: 1 - Operation not permitted)
-SHOW BINARY LOGS;
-ERROR HY000: You are not using binary logging
-# restart
-show binary logs;
-Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
-binlog.000020	#	#
-binlog.000021	#	#
+ERROR HY000: Lost connection to MySQL server during query
 CREATE TABLE t1(i INT);
 SET GLOBAL binlog_error_action='IGNORE_ERROR';
 SET SESSION debug="+d,force_index_file_delete_failure";
 SET SESSION debug="+d,force_rotate";
 INSERT INTO t1 VALUES (12);
-ERROR HY000: Can't open file: 'binlog.000022' (errno: 1 - Operation not permitted)
+ERROR HY000: Can't open file: 'binlog.000008' (errno: 1 - Operation not permitted)
 SHOW BINARY LOGS;
 ERROR HY000: You are not using binary logging
 # restart
 show binary logs;
 Log_name	File_size	Encrypted
-binlog.000012	#	#
-binlog.000013	#	#
-binlog.000014	#	#
-binlog.000015	#	#
-binlog.000016	#	#
-binlog.000017	#	#
-binlog.000018	#	#
-binlog.000019	#	#
-binlog.000020	#	#
-binlog.000021	#	#
-binlog.000022	#	#
+binlog.000007	#	#
 DROP TABLE t1;
 SET SESSION debug="";
 # Test case11: Ends

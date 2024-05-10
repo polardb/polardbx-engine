@@ -351,10 +351,14 @@ binlog.binlog_rotate_binlog_master_key_crash_recovery 				: WL#21509040 encrypt 
 component_keyring_file.tablespace_encrypt_5							: WL#21509040 encrypt ablespace
 component_keyring_file.tablespace_encrypt_7							: WL#21509040 encrypt ablespace
 component_keyring_file.tablespace_encrypt_10						: WL#21509040 encrypt ablespace
+component_keyring_file.tablespace_encrypt_11						: WL#21509040 encrypt ablespace at fsp_init_resume_alter_encrypt_tablespace
+component_keyring_file.tablespace_encrypt_2                         : WL#000 Table flags are 0x4800 in data dictionary but encrypt_ts.ibd are 0x6800
+innodb.tablespace_encrypt_5                 						: WL#21509040 encrypt ablespace at fsp_init_resume_alter_encrypt_tablespace
 innodb.tablespace_encrypt_2											: WL#21509040 encrypt ablespace
 innodb.tablespace_encrypt_9											: WL#21509040 encrypt ablespace
 innodb.tablespace_encrypt_10										: WL#21509040 encrypt ablespace
 innodb.tablespace_encrypt_7											: WL#21509040 encrypt ablespace
+innodb.tablespace_encrypt_11										: WL#21509040 encrypt ablespace
 innodb_undo.truncate_recover_e01 : WL#21509040 not support encrypt table
 innodb_undo.truncate_recover_e02 : WL#21509040 not support encrypt table
 innodb_undo.truncate_recover_e03 : WL#21509040 not support encrypt table
@@ -426,7 +430,10 @@ innodb.innodb_corrupt_readonly                   : WL#21509040 innodb readonly
 main.events_read_only                            : WL#001 readonly
 main.dd_schema_definition_after_upgrade_80_debug : WL#21509040 lizard not support
 main.dd_upgrade_encrypted                        : WL#21509040 lizard not support
+component_keyring_file.dd_upgrade_encrypted      : WL#21509040 lizard not support
+component_keyring_file.upgrade                   : WL#21509040 lizard not support
 main.wl14965                                     : WL#001 upgrade from 8027
 main.mysql_upgrade_grant                         : WL#001 upgrade
 main.binlog_partial_json_warnings                : WL#001 skip binlog
 perfschema.table_binary_log_transaction_compression_stats_restart : WL#001 skip binlog
+binlog_gtid.binlog_gtid_binlog_recovery_errors   : WL#001 std_data/binlog_recovery/xx.000001 is bad for xcluster/lizard

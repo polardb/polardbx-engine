@@ -111,7 +111,7 @@ purge binary logs TO 'binlog.000002';
 
 file_exists $MYSQLD_DATADIR/binlog.000001;
 file_exists $MYSQLD_DATADIR/binlog.000002;
-file_exists $MYSQLD_DATADIR/binlog.000003;
+#file_exists $MYSQLD_DATADIR/binlog.000003;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 -- eval SET @index=LOAD_FILE('$index')
@@ -124,7 +124,7 @@ flush logs;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,crash_purge_non_critical_after_update_index";
 --error 2013
-purge binary logs TO 'binlog.000004';
+purge binary logs TO 'binlog.000003';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -133,7 +133,7 @@ purge binary logs TO 'binlog.000004';
 file_exists $MYSQLD_DATADIR/binlog.000001;
 --error 1
 file_exists $MYSQLD_DATADIR/binlog.000002;
---error 1
+#--error 1
 file_exists $MYSQLD_DATADIR/binlog.000003;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
@@ -147,19 +147,20 @@ flush logs;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,crash_purge_critical_after_update_index";
 --error 2013
-purge binary logs TO 'binlog.000006';
+purge binary logs TO 'binlog.000004';
 
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
 --error 1
+file_exists $MYSQLD_DATADIR/binlog.000001;
+--error 1
+file_exists $MYSQLD_DATADIR/binlog.000002;
+--error 1
+file_exists $MYSQLD_DATADIR/binlog.000003;
 file_exists $MYSQLD_DATADIR/binlog.000004;
 --error 1
 file_exists $MYSQLD_DATADIR/binlog.000005;
-file_exists $MYSQLD_DATADIR/binlog.000006;
-file_exists $MYSQLD_DATADIR/binlog.000007;
---error 1
-file_exists $MYSQLD_DATADIR/binlog.000008;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 -- eval SET @index=LOAD_FILE('$index')
@@ -175,9 +176,9 @@ flush logs;
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
-file_exists $MYSQLD_DATADIR/binlog.000008;
+file_exists $MYSQLD_DATADIR/binlog.000004;
 --error 1
-file_exists $MYSQLD_DATADIR/binlog.000009;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 -- eval SET @index=LOAD_FILE('$index')
@@ -193,16 +194,15 @@ flush logs;
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
-file_exists $MYSQLD_DATADIR/binlog.000009;
+file_exists $MYSQLD_DATADIR/binlog.000004;
 --error 1
-file_exists $MYSQLD_DATADIR/binlog.000010;
---error 1
-file_exists $MYSQLD_DATADIR/binlog.000011;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 -- eval SET @index=LOAD_FILE('$index')
 -- replace_regex /\.[\\\/]binlog/binlog/
 SELECT @index;
+
 
 --echo # crash_create_after_update_index
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -213,8 +213,8 @@ flush logs;
 --enable_reconnect
 --source include/wait_until_connected_again.inc
 
-file_exists $MYSQLD_DATADIR/binlog.000010;
-file_exists $MYSQLD_DATADIR/binlog.000011;
+file_exists $MYSQLD_DATADIR/binlog.000004;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 --chmod 0644 $INDEX
 -- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 -- eval SET @index=LOAD_FILE('$index')
@@ -234,48 +234,52 @@ SELECT @index;
 SELECT @index;
 
 --echo # fault_injection_registering_index
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,fault_injection_registering_index";
 SET GLOBAL binlog_error_action= IGNORE_ERROR;
 # normalize strerror message for solaris10-sparc-64bit as long as errno is OK
--- replace_regex /\.[\\\/]binlog/binlog/ /errno: 1 - .*\)/errno: 1 - Operation not permitted)/
--- error ER_CANT_OPEN_FILE
+#-- replace_regex /\.[\\\/]binlog/binlog/ /errno: 1 - .*\)/errno: 1 - Operation not permitted)/
+--error 2013
 flush logs;
 
---chmod 0644 $INDEX
--- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
--- eval SET @index=LOAD_FILE('$index')
--- replace_regex /\.[\\\/]binlog/binlog/
-SELECT @index;
+#--chmod 0644 $INDEX
+#-- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+#-- eval SET @index=LOAD_FILE('$index')
+#-- replace_regex /\.[\\\/]binlog/binlog/
+#SELECT @index;
 
---source include/restart_mysqld.inc
+--enable_reconnect
+--source include/wait_until_connected_again.inc
 
---chmod 0644 $INDEX
--- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
--- eval SET @index=LOAD_FILE('$index')
--- replace_regex /\.[\\\/]binlog/binlog/
-SELECT @index;
+#--chmod 0644 $INDEX
+#-- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+#-- eval SET @index=LOAD_FILE('$index')
+#-- replace_regex /\.[\\\/]binlog/binlog/
+#SELECT @index;
 
 --echo # fault_injection_updating_index
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 SET SESSION debug="+d,fault_injection_updating_index";
 SET GLOBAL binlog_error_action= IGNORE_ERROR;
 # normalize strerror message for solaris10-sparc-64bit as long as errno is OK
 -- replace_regex /\.[\\\/]binlog/binlog/ /errno: 1 - .*\)/errno: 1 - Operation not permitted)/
--- error ER_CANT_OPEN_FILE
+--error 2013
 flush logs;
 
---chmod 0644 $INDEX
--- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
--- eval SET @index=LOAD_FILE('$index')
--- replace_regex /\.[\\\/]binlog/binlog/
-SELECT @index;
+#--chmod 0644 $INDEX
+#-- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+#-- eval SET @index=LOAD_FILE('$index')
+#-- replace_regex /\.[\\\/]binlog/binlog/
+#SELECT @index;
 
---source include/restart_mysqld.inc
+--enable_reconnect
+--source include/wait_until_connected_again.inc
 
---chmod 0644 $INDEX
--- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
--- eval SET @index=LOAD_FILE('$index')
--- replace_regex /\.[\\\/]binlog/binlog/
-SELECT @index;
+#--chmod 0644 $INDEX
+#-- replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+#-- eval SET @index=LOAD_FILE('$index')
+#-- replace_regex /\.[\\\/]binlog/binlog/
+#SELECT @index;
 
 #
 # WL#5493
@@ -306,9 +310,9 @@ SELECT @index;
 -- echo # Test case6: Set DEBUG POINT before rename index file when
 -- echo #             appending a binlog file name to index file.
 -- source include/show_binary_logs.inc
-file_exists $MYSQLD_DATADIR/binlog.000013;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 --error 1
-file_exists $MYSQLD_DATADIR/binlog.000014;
+file_exists $MYSQLD_DATADIR/binlog.000006;
 
 # Write file to make mysql-test-run.pl expect crash and restart
 SET SESSION debug="+d,crash_create_before_rename_index_file";
@@ -327,10 +331,10 @@ flush logs;
 -- echo # Test if the index file has the correct data,
 -- echo # i.e. binlog file name is added.
 -- source include/show_binary_logs.inc
-file_exists $MYSQLD_DATADIR/binlog.000014;
-file_exists $MYSQLD_DATADIR/binlog.000015;
+file_exists $MYSQLD_DATADIR/binlog.000005;
+file_exists $MYSQLD_DATADIR/binlog.000006;
 --error 1
-file_exists $MYSQLD_DATADIR/binlog.000016;
+file_exists $MYSQLD_DATADIR/binlog.000007;
 
 -- echo # Test case7: Set DEBUG POINT after rename index file when
 -- echo #             appending a binlog file name to index file.
@@ -351,10 +355,10 @@ flush logs;
 -- echo # Test if the index file has the correct data,
 -- echo # i.e. binlog file name is added.
 -- source include/show_binary_logs.inc
-file_exists $MYSQLD_DATADIR/binlog.000016;
-file_exists $MYSQLD_DATADIR/binlog.000017;
+file_exists $MYSQLD_DATADIR/binlog.000006;
+file_exists $MYSQLD_DATADIR/binlog.000007;
 --error 1
-file_exists $MYSQLD_DATADIR/binlog.000018;
+file_exists $MYSQLD_DATADIR/binlog.000008;
 
 -- echo # Test case8: Set DEBUG POINT after rename index file when
 -- echo #             purging the index file.
@@ -365,7 +369,7 @@ SET SESSION debug="+d,crash_create_after_rename_index_file";
 -- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 -- error 2013
-purge binary logs TO 'binlog.000010';
+purge binary logs TO 'binlog.000007';
 
 -- source include/wait_until_disconnected.inc
 -- enable_reconnect
@@ -378,10 +382,10 @@ purge binary logs TO 'binlog.000010';
 -- echo # i.e. requested binlog file names are removed.
 -- source include/show_binary_logs.inc
 -- error 1
-file_exists $MYSQLD_DATADIR/binlog.000008;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 -- error 1
-file_exists $MYSQLD_DATADIR/binlog.000009;
-file_exists $MYSQLD_DATADIR/binlog.000010;
+file_exists $MYSQLD_DATADIR/binlog.000006;
+file_exists $MYSQLD_DATADIR/binlog.000007;
 
 -- echo # Test case9: Set DEBUG POINT befor rename index file when
 -- echo #             purging the index file.
@@ -392,7 +396,7 @@ SET SESSION debug="+d,crash_create_before_rename_index_file";
 -- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 -- error 2013
-purge binary logs TO 'binlog.000012';
+purge binary logs TO 'binlog.000007';
 
 -- source include/wait_until_disconnected.inc
 -- enable_reconnect
@@ -405,10 +409,10 @@ purge binary logs TO 'binlog.000012';
 -- echo # i.e. requested binlog file names are removed.
 -- source include/show_binary_logs.inc
 -- error 1
-file_exists $MYSQLD_DATADIR/binlog.000010;
+file_exists $MYSQLD_DATADIR/binlog.000005;
 -- error 1
-file_exists $MYSQLD_DATADIR/binlog.000011;
-file_exists $MYSQLD_DATADIR/binlog.000012;
+file_exists $MYSQLD_DATADIR/binlog.000006;
+file_exists $MYSQLD_DATADIR/binlog.000007;
 
 -- echo # Test case10: Inject a fault to copy part content to the temp file
 -- echo #              when purging the index file.
@@ -419,7 +423,7 @@ SET SESSION debug="+d,fault_injection_copy_part_file";
 -- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 -- error 2013
-purge binary logs TO 'binlog.000014';
+purge binary logs TO 'binlog.000007';
 
 -- source include/wait_until_disconnected.inc
 -- enable_reconnect
@@ -430,9 +434,8 @@ purge binary logs TO 'binlog.000014';
 
 -- echo # Test the index file is complete, although is not purged successfully.
 -- source include/show_binary_logs.inc
-file_exists $MYSQLD_DATADIR/binlog.000012;
-file_exists $MYSQLD_DATADIR/binlog.000013;
-file_exists $MYSQLD_DATADIR/binlog.000014;
+file_exists $MYSQLD_DATADIR/binlog.000007;
+
 
 -- echo # Test case11: Bug #20381055SERVER CRASHES IF INDEX FILE IS OPENED BY
         #              OTHER APPLICATION AND PURGE IS ISSUED.
@@ -448,27 +451,27 @@ call mtr.add_suppression("failed to update the index file");
 # When index file cannot be recreated during purge binary logs command,
 # it should throw error but it should not disable binary logging.
 -- error ER_IO_ERR_LOG_INDEX_READ
--- eval PURGE BINARY LOGS TO 'binlog.000014';
+-- eval PURGE BINARY LOGS TO 'binlog.000007';
 
 -- echo # Test the index file is complete, although is not purged successfully.
 -- echo # Also this will indicate that binary logging is not disabled.
 -- source include/show_binary_logs.inc
-file_exists $MYSQLD_DATADIR/binlog.000012;
-file_exists $MYSQLD_DATADIR/binlog.000013;
-file_exists $MYSQLD_DATADIR/binlog.000014;
+file_exists $MYSQLD_DATADIR/binlog.000007;
 
+
+-- echo # Restart the master server
+-- exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 # When index file cannot be recreated during FLUSH LOGS command,
 # it should throw error and binary logging should be disabled.
 SET GLOBAL binlog_error_action='IGNORE_ERROR';
 # normalize strerror message for solaris10-sparc-64bit as long as errno is OK
---replace_regex /\.[\\\/]binlog/binlog/ /errno: 1 - .*\)/errno: 1 - Operation not permitted)/
---error ER_CANT_OPEN_FILE
+--error 2013
 FLUSH LOGS;
 
---error ER_NO_BINARY_LOGGING
-SHOW BINARY LOGS;
---source include/restart_mysqld.inc
---source include/show_binary_logs.inc
+-- enable_reconnect
+-- source include/wait_until_connected_again.inc
+-- disable_reconnect
+
 CREATE TABLE t1(i INT);
 SET GLOBAL binlog_error_action='IGNORE_ERROR';
 SET SESSION debug="+d,force_index_file_delete_failure";

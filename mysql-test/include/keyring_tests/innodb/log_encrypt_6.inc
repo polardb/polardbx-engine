@@ -35,13 +35,13 @@ EOF
 --echo # Stop the MTR default DB server
 --source include/shutdown_mysqld.inc
 
-let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT $consensus_args --innodb_dedicated_server=OFF --initialize-insecure --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --innodb_redo_log_encrypt=ON </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
+let NEW_CMD = $MYSQLD --no-defaults $PLUGIN_DIR_OPT $consensus_args --innodb_dedicated_server=OFF --initialize-insecure $consensus_args --innodb_redo_log_capacity=$LOG_SIZE --innodb_page_size=$START_PAGE_SIZE --basedir=$MYSQLD_BASEDIR --datadir=$MYSQLD_DATADIR1 --init-file=$BOOTSTRAP_SQL --secure-file-priv="" --innodb_redo_log_encrypt=ON </dev/null>>$MYSQLTEST_VARDIR/tmp/bootstrap1.log 2>&1;
 
 --echo # Run the bootstrap command of datadir1
 --exec $NEW_CMD
 
 --echo # Start the DB server with datadir1
---let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args --innodb_redo_log_encrypt=ON --datadir=$MYSQLD_DATADIR1 --innodb_page_size=$START_PAGE_SIZE --innodb_redo_log_capacity=$LOG_SIZE"
+--let $restart_parameters="restart: $PLUGIN_DIR_OPT --innodb_redo_log_encrypt=ON --datadir=$MYSQLD_DATADIR1 --innodb_page_size=$START_PAGE_SIZE --innodb_redo_log_capacity=$LOG_SIZE"
 --replace_regex /\.dll/.so/
 --source include/start_mysqld_no_echo.inc
 
@@ -121,16 +121,17 @@ let SEARCH_PATTERN= Aborting;
 --let $_server_id= `SELECT @@server_id`
 --source include/shutdown_mysqld.inc
 
---echo # Try starting without keyring and --innodb_force_recovery=SRV_FORCE_NO_LOG_REDO. 
---echo # Start the DB server with datadir1
---let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args --datadir=$MYSQLD_DATADIR1 --innodb_page_size=$START_PAGE_SIZE --innodb_redo_log_capacity=$LOG_SIZE --innodb_force_recovery=6 --no-console --log-error=$MYSQL_TMP_DIR/wl9290_2.err "
---replace_regex /\.dll/.so/
---source include/start_mysqld_no_echo.inc
-SELECT 1;
+# readonly not support for xcluster
+#--echo # Try starting without keyring and --innodb_force_recovery=SRV_FORCE_NO_LOG_REDO. 
+#--echo # Start the DB server with datadir1
+#--let $restart_parameters="restart: $PLUGIN_DIR_OPT $consensus_args --datadir=$MYSQLD_DATADIR1 --innodb_page_size=$START_PAGE_SIZE --innodb_redo_log_capacity=$LOG_SIZE --innodb_force_recovery=6 --no-console --log-error=$MYSQL_TMP_DIR/wl9290_2.errr "
+#--replace_regex /\.dll/.so/
+#--source include/start_mysqld_no_echo.inc
+#SELECT 1;
 
 # shutdown server
---let $_server_id= `SELECT @@server_id`
---source include/shutdown_mysqld.inc
+#--let $_server_id= `SELECT @@server_id`
+#--source include/shutdown_mysqld.inc
 
 # Restore global manifest file
 --source include/keyring_tests/helper/binary_restore_manifest.inc
@@ -141,7 +142,7 @@ SELECT 1;
 
 --remove_file $BOOTSTRAP_SQL
 --remove_file $MYSQL_TMP_DIR/wl9290.err
---remove_file $MYSQL_TMP_DIR/wl9290_2.err
+#--remove_file $MYSQL_TMP_DIR/wl9290_2.err
 
 # Remove residue files
 --force-rmdir $MYSQLD_DATADIR1
