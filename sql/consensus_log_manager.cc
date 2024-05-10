@@ -91,11 +91,21 @@ void stateChangeCb(alisql::Paxos::StateType state, uint64_t term,
 
 void wait_commit_index_in_recovery() {
   auto mgr = consensus_log_manager.get_recovery_manager();
+  uint64 max_consensus_index = 0;
+
+  xp::system(ER_XP_RECOVERY)
+      << "wait_commit_index_in_recovery begin"
+      << ", current commitIndex " << consensus_ptr->getCommitIndex();
 
   while (consensus_ptr->getCommitIndex() <
-         mgr->get_max_consensus_index_from_pending_recovering_trxs()) {
+         (max_consensus_index = mgr->get_max_consensus_index_from_pending_recovering_trxs())) {
     my_sleep(500);
   }
+
+  xp::system(ER_XP_RECOVERY)
+      << "Found max consensus index from pending_recovering_trxs"
+      << ", current commitIndex " << consensus_ptr->getCommitIndex()
+      << ", max_consensus_index " << max_consensus_index;
 
   /*
     If the node was leader when shutdown, it should wait for binlog truncation
@@ -113,6 +123,13 @@ void wait_commit_index_in_recovery() {
       my_sleep(500);
     }
   }
+
+  xp::system(ER_XP_RECOVERY)
+      << "wait_commit_index_in_recovery end"
+      << ", recover_status " << recover_status
+      << ", start_apply_index " << start_apply_index
+      << ", current commitIndex " << consensus_ptr->getCommitIndex()
+      << ", last_leader_term_index " << mgr->get_last_leader_term_index();
 }
 
 ConsensusLogManager::ConsensusLogManager()

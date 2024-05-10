@@ -255,9 +255,6 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
   XA_specification *xa_spec =
       (info.spec_list ? info.spec_list->find(xid) : nullptr);
 
-  xp::system(ER_XP_RECOVERY) << "recover_one_internal_trx "
-                             << ", xid " << xa_trx.id;
-
   if (info.commit_list ? info.commit_list->count(xid) != 0
                        : tc_heuristic_recover == TC_HEURISTIC_RECOVER_COMMIT) {
     enum xa_status_code exec_status;

@@ -133,8 +133,6 @@ void Consensus_recovery_manager::add_pending_recovering_trx(
     enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
     const XA_recover_txn *xa_trx, const XA_specification &xa_spec,
     uint64 consensus_index) {
-  xp::system(ER_XP_RECOVERY) << "add pending recovering trx " << xa_trx->id;
-
   if (std::count(Pending_recovering_trxs.begin(), Pending_recovering_trxs.end(),
                  consensus_index)) {
     xp::fatal(ER_XP_RECOVERY) << "same index = [" << consensus_index << "] "
@@ -169,10 +167,6 @@ uint64 Consensus_recovery_manager::
   }
   mysql_mutex_unlock(&LOCK_consensuslog_recover_hash);
 
-  xp::system(ER_XP_RECOVERY)
-      << "Found max consensus index = [" << res << "] at "
-      << "Consensus_recovery_manager::get_max_consensus_index_from_recover_trx_"
-         "hash";
   return res;
 }
 

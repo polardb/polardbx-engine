@@ -191,6 +191,7 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
                            << ", m_valid_index " << m_valid_index
                            << ", m_is_malformed " << m_is_malformed
                            << ", m_in_transaction " << m_in_transaction
+                           << ", m_failure_message " << m_failure_message
                            << ", get_error_type  " << m_reader.get_error_type()
                            << ", get_error_number " << it.get_error_number()
                            << ", get_error_message " << it.get_error_message();
@@ -210,8 +211,6 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
     // truncate cache
     consensus_log_manager.get_fifo_cache_manager()->trunc_log_from_cache(
         m_valid_index + 1);
-    if (!error && m_is_malformed)
-      m_is_malformed = false;
   }
 
   consensus_log_manager.set_sync_index(m_valid_index);
