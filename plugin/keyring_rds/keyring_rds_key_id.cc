@@ -211,8 +211,8 @@ bool Key_container::init(const char *file) {
   @retval      true     Exist
   @retval      false    Not exist
 */
-bool Key_container::exist(const Key_string &key) {
-  return (m_key_hash.find(key) != m_key_hash.end());
+bool Key_container::exist_in_file(const Key_string &key_id) {
+  return m_key_id_hash.find(key_id) != m_key_id_hash.end();
 }
 
 /**
@@ -222,14 +222,14 @@ bool Key_container::exist(const Key_string &key) {
   @retval      true     Error occurs
   @retval      false    Successfully
 */
-bool Key_container::store(const Key_string &key) {
-  if (key.length() >= MAX_KEY_ID_LENGTH) {
-    Logger::log(ERROR_LEVEL, "store too long key id: %s", key.c_str());
+bool Key_container::store_key_id(const Key_string &key_id) {
+  if (key_id.length() >= MAX_KEY_ID_LENGTH) {
+    Logger::log(ERROR_LEVEL, "store too long key id: %s", key_id.c_str());
     return true;
   }
 
   // First append to local file, then insert into cache
-  return append_file(key) || cache_key(key);
+  return append_file(key_id) || cache_key_id(key_id);
 }
 
 /**
@@ -269,7 +269,7 @@ bool Key_container::load_key_id() {
       return true;
     }
 
-    cache_key(Key_string((const char *)buf, id_len));
+    cache_key_id(Key_string((const char *)buf, id_len));
   } while (true);
 
   my_off_t pos = m_file_io->tell();
@@ -334,18 +334,61 @@ bool Key_container::append_file(const Key_string &key) {
 /**
   Insert into cache, and update m_current_id
 */
-bool Key_container::cache_key(const Key_string &key) {
-  auto it = m_key_hash.find(key);
+bool Key_container::cache_key_id(const Key_string &key_id) {
+  auto it = m_key_id_hash.find(key_id);
 
-  if (it != m_key_hash.end()) {
+  if (it != m_key_id_hash.end()) {
     it->second++;
-    Logger::log(WARNING_LEVEL, "duplicated key id: %s", key.c_str());
+    Logger::log(WARNING_LEVEL, "duplicated key id: %s", key_id.c_str());
   } else {
-    m_key_hash.emplace(key, 1);
+    m_key_id_hash.emplace(key_id, 1);
   }
 
   /* Update the current key id */
-  m_current_id = key;
+  m_current_id = key_id;
+  return false;
+}
+
+/**
+  Try to get key from cached key_map.
+  @param[in]   key_id   key id
+  @param[out]  key      key from cache
+  @retval      false    Key id exist
+  @retval      true     Key id not exist
+*/
+bool Key_container::get_key_in_cache(const Key_string &key_id,
+                                     Key_string *key) {
+  if (m_key_map.find(key_id) == m_key_map.end()) return true;
+  *key = m_key_map[key_id];
+  return false;
+}
+
+/**
+  Cache key_id and key into key_map.
+  @retval      true     Error occurs
+  @retval      false    Successfully
+*/
+bool Key_container::cache_key(const Key_string &key_id, const Key_string &key) {
+  if (key_id.length() >= MAX_KEY_ID_LENGTH) {
+    Logger::log(ERROR_LEVEL, "store too long key id: %s", key_id.c_str());
+    return true;
+  }
+  if (key.length() != AES_KEY_LENGTH) {
+    Logger::log(ERROR_LEVEL, "store wrong length key: %s", key.c_str());
+    return true;
+  }
+  if (m_key_map.find(key_id) != m_key_map.end()) {
+    const Key_string &cache_key = m_key_map[key_id];
+    if (cache_key != key) {
+      Logger::log(ERROR_LEVEL,
+                  "the cached key is not equal to the key read from kms, "
+                  "cached key is %s, kms key is %s",
+                  cache_key.c_str(), key.c_str());
+      return true;
+    }
+    return false;
+  }
+  m_key_map.emplace(key_id, key);
   return false;
 }
 
@@ -353,10 +396,10 @@ bool Key_container::cache_key(const Key_string &key) {
   Copy keys from container, initialize iterator.
 */
 void Keys_iterator::init(Key_container *container) {
-  m_keys.reserve(container->m_key_hash.size());
+  m_keys.reserve(container->m_key_id_hash.size());
 
-  auto hash_it = container->m_key_hash.begin();
-  while (hash_it != container->m_key_hash.end()) {
+  auto hash_it = container->m_key_id_hash.begin();
+  while (hash_it != container->m_key_id_hash.end()) {
     m_keys.push_back(hash_it->first);
     ++hash_it;
   }

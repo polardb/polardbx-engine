@@ -141,8 +141,8 @@ class Key_imp : public Key_interface {
     if (gen_key_len == 0) return true;
 
     // Store the new key id in cache and persist to local file
-    Key_string key(k, gen_key_len);
-    if (key_container->store(key)) return true;
+    Key_string new_key_id(k, gen_key_len);
+    if (key_container->store_key_id(new_key_id)) return true;
 
     return false;
   }
@@ -212,7 +212,7 @@ class Key_imp : public Key_interface {
   bool fetch_key_of_id(const char *key_id, void **key, size_t *key_len) {
     /* Validating the key_id */
     Key_string check_id(key_id);
-    if (!key_container->exist(check_id)) {
+    if (!key_container->exist_in_file(check_id)) {
       /**
         There are some bugs, or local key id file damaged,
         but we still try to fetch it from KMS.
@@ -226,10 +226,34 @@ class Key_imp : public Key_interface {
       return true;
     }
 
-    /* Fetch the key content from KMS/Agent */
-    if (kms_agent->fetch(key_id, k, AES_KEY_LENGTH) == 0) {
-      my_free(k);
-      return true;
+    Key_string key_from_cache;
+    bool found_in_cache =
+        !key_container->get_key_in_cache(check_id, &key_from_cache);
+
+    if (found_in_cache && !validate_cached_key) {
+      memcpy(k, key_from_cache.c_str(), key_from_cache.length());
+    } else {
+      /* Fetch the key content from KMS/Agent */
+      if (kms_agent->fetch(key_id, k, AES_KEY_LENGTH) == 0) {
+        my_free(k);
+        return true;
+      }
+      Key_string key_from_kms{k, AES_KEY_LENGTH};
+
+      if (found_in_cache) {
+        if (key_from_cache != key_from_kms) {
+          Logger::log(ERROR_LEVEL,
+                      "the cached key is not equal to the key read from kms, "
+                      "cached key is %s, kms key is %s",
+                      key_from_cache.c_str(), key_from_kms.c_str());
+          return true;
+        }
+      } else {
+        /* Cache the kms key into key_map */
+        if (key_container->cache_key(key_id, key_from_kms)) {
+          return true;
+        }
+      }
     }
 
     *key_len = AES_KEY_LENGTH;

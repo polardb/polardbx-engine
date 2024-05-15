@@ -56,13 +56,17 @@ extern void deinit_key_id_mgr();
        maybe some key id lost in KMS/Agent
 */
 class Key_container : public Keyring_obj_alloc {
-  typedef malloc_unordered_map<Key_string, int> Key_hash;
+  /* <Key_id, cached_times> */
+  typedef malloc_unordered_map<Key_string, int> Key_id_hash;
+  /* <Key_id, Key> */
+  typedef malloc_unordered_map<Key_string, Key_string> Key_map;
 
  public:
   Key_container()
-      : m_key_hash(key_memory_KEYRING_rds),
+      : m_key_id_hash(key_memory_KEYRING_rds),
         m_file_io(new File_io()),
-        m_content_size(0) {}
+        m_content_size(0),
+        m_key_map(key_memory_KEYRING_rds) {}
 
   ~Key_container() { delete m_file_io; }
 
@@ -77,12 +81,12 @@ class Key_container : public Keyring_obj_alloc {
   bool init(const char *file);
 
   /**
-    If a key id exist in cache.
+    If a key id exist in id_cache.
 
     @retval      true     Exist
     @retval      false    Not exist
   */
-  bool exist(const Key_string &key);
+  bool exist_in_file(const Key_string &key_id);
 
   /**
     Add a new key id.
@@ -91,7 +95,7 @@ class Key_container : public Keyring_obj_alloc {
     @retval      true     Error occurs
     @retval      false    Successfully
   */
-  bool store(const Key_string &key);
+  bool store_key_id(const Key_string &key_id);
 
   /**
     Get the newest master key id.
@@ -99,19 +103,36 @@ class Key_container : public Keyring_obj_alloc {
   */
   const Key_string &get_current() const { return m_current_id; }
 
+  /**
+    Try to get key from cached key_map.
+    @param[in]   key_id   key id
+    @param[out]  key      key from cache
+    @retval      false    Key id exist
+    @retval      true     Key id not exist
+  */
+  bool get_key_in_cache(const Key_string &key_id, Key_string *key);
+
+  /**
+    Cache key_id and key into key_map.
+    @retval      true     Error occurs
+    @retval      false    Successfully
+  */
+  bool cache_key(const Key_string &key_id, const Key_string &key);
+
  private:
   /**
     Internal auxiliary functions.
   */
   bool append_file(const Key_string &key);  // Append a id to file
-  bool cache_key(const Key_string &key);    // Insert a id to cache
+  bool cache_key_id(const Key_string &key_id);  // Insert a id to cache
   bool load_key_id();  // Initialize key id cache from the local file
 
  private:
-  Key_hash m_key_hash;     /* Key id cache */
+  Key_id_hash m_key_id_hash; /* Key id cache */
   File_io *m_file_io;      /* Accessor to key id file */
   Key_string m_current_id; /* The newest master key id */
-  uint32_t m_content_size; /* Length of valid content */
+  uint32_t m_content_size; /* Length of valid content of key id file */
+  Key_map m_key_map;       /* Cached map of key id to key */
 
   static const size_t HEADER_LENGTH;
   static const uint32_t MAX_CONTENT_LEN;

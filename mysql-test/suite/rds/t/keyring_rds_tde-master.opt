@@ -1,2 +1,3 @@
 $KEYRING_PLUGIN_OPT
 --early-plugin-load=keyring_rds.so
+--keyring_rds_validate_cached_key=true

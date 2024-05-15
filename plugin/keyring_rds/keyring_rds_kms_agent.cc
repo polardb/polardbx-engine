@@ -57,6 +57,8 @@ char *kms_agent_cmd = NULL;
 /** Local command execution timeout */
 int cmd_timeout_sec = 10;
 
+bool validate_cached_key = false;
+
 KMS_Agent global_inst;
 KMS_Agent *kms_agent = &global_inst;  // The global instance
 

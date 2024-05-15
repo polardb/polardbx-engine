@@ -47,6 +47,18 @@ call dbms_keyring.current_key_id();
 
 alter instance rotate innodb master key;
 
+--let $restart_parameters=restart: --keyring_rds_validate_cached_key=fasle --debug=+d,keyring_rds_kms_simu
+--source include/restart_mysqld.inc
+create table t1(a int) encryption='y';
+insert into t1 values(1), (2), (3);
+select * from t1;
+call dbms_keyring.generate_key();
+create table t2(a int) encryption='y';
+insert into t2 values(1), (2), (3);
+select * from t2;
+
+drop table t1;
+drop table t2;
 drop table str_tbl;
 drop table t;
 drop database key_test;

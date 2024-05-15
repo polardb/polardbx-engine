@@ -9,6 +9,7 @@ Variable_name	Value
 keyring_rds_command_timeout_sec	10
 keyring_rds_key_id_file_dir	
 keyring_rds_kms_agent_cmd	/home/mysql/kms_agent
+keyring_rds_validate_cached_key	ON
 select * from performance_schema.keyring_keys;
 KEY_ID	KEY_OWNER	BACKEND_KEY_ID
 select * from information_schema.INNODB_TABLESPACE_MASTER_KEY;
@@ -46,6 +47,24 @@ call dbms_keyring.current_key_id();
 key_id
 INNODBKey-cbfc72a7-b739-40a4-95e7-84fbf9bf1e89-1
 alter instance rotate innodb master key;
+# restart: --keyring_rds_validate_cached_key=fasle --debug=+d,keyring_rds_kms_simu
+create table t1(a int) encryption='y';
+insert into t1 values(1), (2), (3);
+select * from t1;
+a
+1
+2
+3
+call dbms_keyring.generate_key();
+create table t2(a int) encryption='y';
+insert into t2 values(1), (2), (3);
+select * from t2;
+a
+1
+2
+3
+drop table t1;
+drop table t2;
 drop table str_tbl;
 drop table t;
 drop database key_test;

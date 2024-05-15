@@ -299,7 +299,7 @@ size_t Ccl_rule_set::delete_keyword_rule(ulonglong rule_id) {
     const Ccl_rule *rule = *it;
     if (rule->get_rule_id() == rule_id) {
       destroy_object<Ccl_rule>(const_cast<Ccl_rule *>(rule));
-      it = m_keyword_rules.erase(it);
+      m_keyword_rules.erase(it);
       num += 1;
     } else
       it++;

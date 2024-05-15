@@ -70,9 +70,18 @@ static MYSQL_SYSVAR_INT(command_timeout_sec,                   /* name       */
                         0                                      /* blk        */
 );
 
+static MYSQL_SYSVAR_BOOL(
+    validate_cached_key,                                /* name */
+    keyring_rds::validate_cached_key,                   /* var */
+    PLUGIN_VAR_OPCMDARG,                                /* flags */
+    "Whether to validate cached key with key from kms", /* comment */
+    NULL,                                               /* check func*/
+    NULL,                                               /* update func*/
+    false);                                             /* default*/
+
 static SYS_VAR *keyring_rds_system_variables[] = {
     MYSQL_SYSVAR(key_id_file_dir), MYSQL_SYSVAR(kms_agent_cmd),
-    MYSQL_SYSVAR(command_timeout_sec), NULL};
+    MYSQL_SYSVAR(command_timeout_sec), MYSQL_SYSVAR(validate_cached_key), NULL};
 
 /* Log component service */
 static SERVICE_TYPE(registry) *reg_srv = NULL;

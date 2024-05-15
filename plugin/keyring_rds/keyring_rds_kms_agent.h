@@ -31,6 +31,8 @@ extern char *kms_agent_cmd;
 /** Local command execution timeout */
 extern int cmd_timeout_sec;
 
+extern bool validate_cached_key;
+
 /**
   Accessor to KMS/Agent.
 */
