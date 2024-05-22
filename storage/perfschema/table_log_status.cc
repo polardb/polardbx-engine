@@ -28,6 +28,7 @@
 #include "storage/perfschema/table_log_status.h"
 
 #include "mysql/plugin.h"
+#include "sql/consensus_log_manager.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"
 #include "sql/field.h"
@@ -204,7 +205,8 @@ int table_log_status::make_row() {
   */
   {
     Log_resource *res;
-    res = Log_resource_factory::get_wrapper(&mysql_bin_log, &json_local);
+    GUARDED_READ_CONSENSUS_LOG();
+    res = Log_resource_factory::get_wrapper(consensus_log, &json_local);
     if ((error = DBUG_EVALUATE_IF("log_status_oom_binlog", 1, !res))) {
       my_error(ER_UNABLE_TO_COLLECT_LOG_STATUS, MYF(0), "LOCAL",
                "failed to allocate memory to collect "
