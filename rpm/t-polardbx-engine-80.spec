@@ -1,7 +1,7 @@
 %define version_extra X-Cluster
-%define release_date 20240511
+%define release_date 20240523
 %define engine_version 8.4.19
-Version: 8.4.19.20240511
+Version: 8.4.19.20240523
 
 Name: t-polardbx-engine-80
 Release: %(echo $RELEASE)%{?dist}
@@ -11,11 +11,7 @@ Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: cmake >= 3.8.2
 
-%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
-BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static
-%else
-BuildRequires: libaio-devel
-%endif
+BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, libaio-devel
 
 BuildRequires: alios7u-2_32-gcc-10-repo
 BuildRequires: gcc >= 10.2.1
