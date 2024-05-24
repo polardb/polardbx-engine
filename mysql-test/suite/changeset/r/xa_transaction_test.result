@@ -37,15 +37,15 @@ OP	PK
 xa commit "tt";
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	1	1	0	0	252
+test	c2	1	1	0	0	420
 call polarx.changeset_fetch('c2');
 OP	id	str
-DELETE	1	abc
 INSERT	1	efg
+DELETE	1	abc
 INSERT	2	bcd
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	1	1	0	0	252
+test	c2	1	1	0	0	420
 xa begin "tt2";
 call polarx.changeset_fetch('c2');
 OP	PK
@@ -56,13 +56,13 @@ OP	PK
 xa commit "tt2" one phase;
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	2	1	0	0	84
+test	c2	2	1	0	0	140
 call polarx.changeset_fetch('c2');
 OP	id	str
 INSERT	3	hijk
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	2	1	0	0	84
+test	c2	2	1	0	0	140
 call polarx.changeset_finish('c2');
 SEQ	ROW
 DROP TABLE IF EXISTS c2;

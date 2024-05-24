@@ -25,15 +25,15 @@ OP	PK
 commit;
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	1	1	0	0	252
+test	c2	1	1	0	0	420
 call polarx.changeset_fetch('c2');
 OP	id	str
-DELETE	1	abc
 INSERT	1	efg
+DELETE	1	abc
 INSERT	2	bcd
 call polarx.changeset_stats('c2');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c2	1	1	0	0	252
+test	c2	1	1	0	0	420
 call polarx.changeset_finish('c2');
 SEQ	ROW
 DROP TABLE IF EXISTS c2;

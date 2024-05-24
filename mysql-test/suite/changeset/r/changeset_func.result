@@ -24,12 +24,12 @@ id	gmt_modified	value
 5	2022-09-10 12:30:16	c
 call polarx.changeset_stats('c1');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c1	3	0	0	0	27
+test	c1	3	0	0	0	195
 call polarx.changeset_fetch('c1');
 OP	id	gmt_modified
-INSERT	3	2022-09-10 10:30:18
-INSERT	4	2022-09-10 10:35:16
 INSERT	5	2022-09-10 12:30:16
+INSERT	4	2022-09-10 10:35:16
+INSERT	3	2022-09-10 10:30:18
 update c1 set value = "f" where value = "a";
 update c1 set gmt_modified = "2022-09-10 12:50:40" where id = 5;
 delete from c1 where value = "b";
@@ -40,26 +40,26 @@ id	gmt_modified	value
 5	2022-09-10 12:50:40	c
 call polarx.changeset_stats('c1');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c1	3	3	2	0	99
+test	c1	3	3	2	0	715
 call polarx.changeset_fetch('c1');
 OP	id	gmt_modified
+DELETE	4	2022-09-10 10:35:16
+DELETE	2	2022-09-10 10:30:16
 DELETE	1	2022-09-10 10:30:14
 INSERT	1	2022-09-10 10:30:14
-DELETE	2	2022-09-10 10:30:16
+DELETE	5	2022-09-10 12:30:16
 DELETE	3	2022-09-10 10:30:18
 INSERT	3	2022-09-10 10:30:18
-DELETE	4	2022-09-10 10:35:16
-DELETE	5	2022-09-10 12:30:16
 INSERT	5	2022-09-10 12:50:40
 call polarx.changeset_stats('c1');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c1	3	3	2	0	72
+test	c1	3	3	2	0	520
 call polarx.changeset_stop('c1');
 SEQ	ROW
 insert into c1 values (6, "2022-09-10 12:33:16", "f");
 call polarx.changeset_stats('c1');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c1	3	3	2	0	72
+test	c1	3	3	2	0	520
 call polarx.changeset_fetch('c1');
 OP	PK
 call polarx.changeset_stats('c1');

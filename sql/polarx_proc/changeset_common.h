@@ -21,6 +21,8 @@
 #include "mysql/service_mysql_alloc.h"
 #include "sql/psi_memory_key.h"
 
+#define CHANGESET_PK_HEADER_SIZE 56
+
 namespace im {
 
 // 1024 * 1024 * 4

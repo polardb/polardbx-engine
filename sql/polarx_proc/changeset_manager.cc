@@ -88,6 +88,19 @@ int ChangesetManager::stop_track(const std::string &table_name) {
   return 0;
 }
 
+void ChangesetManager::close_changeset(const std::string &db_name, const std::string &table_name) {
+  DBTableName full_table_name(db_name, table_name);
+  if (!has_changeset(full_table_name)) {
+    return ;
+  }
+  erase_changeset(full_table_name);
+  if (has_changeset(full_table_name)) {
+    sql_print_information("close changeset failed %s.%s\n", db_name.c_str(), table_name.c_str());
+  } else {
+    sql_print_information("close changeset %s.%s", db_name.c_str(), table_name.c_str());
+  }
+}
+
 int ChangesetManager::fence_change(const std::string &table_name) {
   if (current_thd->db().str == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "please use database first");
@@ -120,7 +133,7 @@ int ChangesetManager::fence_change(const std::string &table_name) {
 
 int ChangesetManager::fetch_change(
     const std::string &table_name, bool delete_last_cs,
-    std::map<std::string, ChangesetResult *> &changes,
+    std::vector<ChangesetResult *> &changes,
     TABLE_SHARE *table_share) {
   if (current_thd->db().str == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "please use database first");
@@ -410,7 +423,7 @@ inline void ChangesetManager::commit(const DBTableName &full_table_name,
 
 void ChangesetManager::fetch_changeset(
     const DBTableName &full_table_name, bool delete_last_cs,
-    std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share) {
+    std::vector<ChangesetResult *> &res, TABLE_SHARE *table_share) {
   polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
   auto cs = get_changeset_ptr(full_table_name);
   if (cs == nullptr) {

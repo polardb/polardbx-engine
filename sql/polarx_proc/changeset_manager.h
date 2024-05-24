@@ -30,8 +30,10 @@ class ChangesetManager {
 
   int fence_change(const std::string &table_name);
 
+  void close_changeset(const std::string &db_name, const std::string &table_name);
+
   int fetch_change(const std::string &table_name, bool delete_last_cs,
-                   std::map<std::string, ChangesetResult *> &changes,
+                   std::vector<ChangesetResult *> &changes,
                    TABLE_SHARE *table_share);
 
   int fetch_times(const std::string &table_name, Changeset::Stats &stats);
@@ -114,7 +116,7 @@ class ChangesetManager {
   Changeset *get_changeset_ptr(const DBTableName &full_table_name);
 
   void fetch_changeset(const DBTableName &full_table_name, bool delete_last_cs,
-                       std::map<std::string, ChangesetResult *> &res,
+                       std::vector<ChangesetResult *> &res,
                        TABLE_SHARE *table_share);
 
   Changeset::Stats fetch_changeset_stats(const DBTableName &full_table_name);

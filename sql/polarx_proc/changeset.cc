@@ -123,7 +123,7 @@ void flush_imm_table(void *changeset) {
     FileHeader fileHeader{0, 0};
     fileHeader.pk_length = cs->imm_pk_map.begin()->first.length();
     fileHeader.pk_size =
-        cs->imm_memory_size.load() / cs->imm_pk_map.begin()->first.length();
+        cs->imm_memory_size.load() / (cs->imm_pk_map.begin()->first.length() + CHANGESET_PK_HEADER_SIZE);
     my_write(fd, reinterpret_cast<const uchar *>(&fileHeader),
              sizeof(fileHeader), MYF(MY_NABP));
 
@@ -230,7 +230,7 @@ void Changeset::rm_all_changeset_files() {
 }
 
 void Changeset::fetch_pk(bool delete_last_cs,
-                         std::map<std::string, ChangesetResult *> &res,
+                         std::vector<ChangesetResult *> &res,
                          TABLE_SHARE *table_share) {
   MutexLock lock(&mutex);
 
@@ -290,7 +290,7 @@ void Changeset::fetch_pk(bool delete_last_cs,
 
 void Changeset::get_result_list(
     std::unordered_map<std::string, std::unique_ptr<Change>> &pk_map,
-    std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share) {
+    std::vector<ChangesetResult *> &res, TABLE_SHARE *table_share) {
   uint primary_key = table_share->primary_key;
   KEY *key_info = &table_share->key_info[primary_key];
 
@@ -305,8 +305,7 @@ void Changeset::get_result_list(
     while (change != nullptr) {
       std::list<Field *> pk_field =
           make_pk_fields(key_info, key, current_thd->mem_root);
-      pk.append(std::to_string(change->get_change_type()));
-      res.emplace(pk, new ChangesetResult(change->get_change_type(), pk_field));
+      res.push_back(new ChangesetResult(change->get_change_type(), pk_field));
       change = change->get_next();
     }
   }
@@ -315,7 +314,7 @@ void Changeset::get_result_list(
 }
 
 void Changeset::get_result_list(const char *file_name,
-                                std::map<std::string, ChangesetResult *> &res,
+                                std::vector<ChangesetResult *> &res,
                                 TABLE_SHARE *table_share) {
   uint primary_key = table_share->primary_key;
   KEY *key_info = &table_share->key_info[primary_key];
@@ -345,10 +344,8 @@ void Changeset::get_result_list(const char *file_name,
 
     std::list<Field *> pk_field =
         make_pk_fields(key_info, buffer, current_thd->mem_root);
-    std::string pk((char *)buffer, fileHeader.pk_length);
-    pk.append(std::to_string(t));
 
-    res.emplace(pk, new ChangesetResult(t, pk_field));
+    res.push_back(new ChangesetResult(t, pk_field));
   }
 
   my_free(buffer);
@@ -433,9 +430,9 @@ void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
 
   // memory info
   if (mem_c) {
-    memory_size.fetch_add(pk.length());
+    memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
     if (change->get_next() != nullptr) {
-      memory_size.fetch_add(pk.length());
+      memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
     }
   }
 
@@ -462,7 +459,7 @@ void Changeset::pk_map_insert(std::unique_ptr<Change> &change, bool mem_c) {
   }
 
   // memory info
-  if (mem_c) memory_size.fetch_add(pk.length());
+  if (mem_c) memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
 }
 
 void Changeset::add_delete(const std::string &pk) {

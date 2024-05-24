@@ -137,6 +137,7 @@
 #include "xa_handler.h"
 
 #include "sql/recycle_bin/recycle_table.h"
+#include "polarx_proc/changeset_manager.h"
 
 /**
   @def MYSQL_TABLE_IO_WAIT
@@ -2543,6 +2544,8 @@ int ha_delete_table(THD *thd, handlerton *table_type, const char *path,
                             thd->mem_root, table_type))) {
     return ENOENT;
   }
+
+  im::gChangesetManager.close_changeset(std::string(db), std::string(alias));
 
   path = get_canonical_filename(file, path, tmp_path);
 

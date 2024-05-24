@@ -143,15 +143,15 @@ class Changeset {
   void rm_all_changeset_files();
 
   void fetch_pk(bool delete_last_cs,
-                std::map<std::string, ChangesetResult *> &res,
+                std::vector<ChangesetResult *> &res,
                 TABLE_SHARE *table_share);
 
   void get_result_list(
       std::unordered_map<std::string, std::unique_ptr<Change>> &pk_map,
-      std::map<std::string, ChangesetResult *> &res, TABLE_SHARE *table_share);
+      std::vector<ChangesetResult *> &res, TABLE_SHARE *table_share);
 
   void get_result_list(const char *file_name,
-                       std::map<std::string, ChangesetResult *> &res,
+                       std::vector<ChangesetResult *> &res,
                        TABLE_SHARE *table_share);
 
   std::list<Field *> make_pk_fields(KEY *key_info, uchar *pk,

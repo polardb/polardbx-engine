@@ -219,7 +219,7 @@ void Sql_cmd_changeset_proc_fetch::send_result(THD *thd, bool error) {
   TABLE *table;
   gChangesetManager.open_table(table_name, &table, TL_READ);
 
-  std::map<std::string, ChangesetResult *> changes;
+  std::vector<ChangesetResult *> changes;
   if (gChangesetManager.fetch_change(table_name, delete_last_cs, changes,
                                      table->s)) {
     my_printf_error(ER_CHANGESET_COMMAND_ERROR, "changeset fetch failed", 0);
@@ -233,15 +233,14 @@ void Sql_cmd_changeset_proc_fetch::send_result(THD *thd, bool error) {
     m_columns.push_back({MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("OP"), 24});
     if ((dynamic_cast<const Changeset_proc_fetch *>(m_proc))
             ->my_send_result_metadata(thd, m_columns,
-                                      begin.second->pk_field_list))
+                                      begin->pk_field_list))
       return;
   } else {
     // send result
     if (m_proc->send_result_metadata(thd)) return;
   }
 
-  for (auto item : changes) {
-    auto row = item.second;
+  for (auto row : changes) {
     proto->start_row();
     proto->store(row->get_op_string().data(), &my_charset_utf8mb3_bin);
     for (auto pk : row->pk_field_list) {
