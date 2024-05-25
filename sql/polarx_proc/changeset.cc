@@ -423,7 +423,7 @@ void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
     while (cur != nullptr) {
       cur = cur->get_next();
       // memory info
-      memory_size.fetch_sub(pk.length());
+      memory_size.fetch_sub(pk.length() + CHANGESET_PK_HEADER_SIZE);
     }
     mem_pk_map.erase(it);
   }

@@ -1,0 +1,69 @@
+DROP TABLE IF EXISTS c1;
+CREATE TABLE c1 (
+id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+insert into c1 values (1, "2022-09-10 10:30:14", "a");
+insert into c1 values (2, "2022-09-10 10:30:16", "b");
+call polarx.changeset_start('c1');
+TABLE
+c1
+call polarx.changeset_fetch('c1');
+OP	PK
+insert into c1 values (3, "2022-09-10 10:30:18", "a");
+insert into c1 values (4, "2022-09-10 10:35:16", "b");
+insert into c1 values (5, "2022-09-10 12:30:16", "c");
+select * from c1;
+id	gmt_modified	value
+1	2022-09-10 10:30:14	a
+2	2022-09-10 10:30:16	b
+3	2022-09-10 10:30:18	a
+4	2022-09-10 10:35:16	b
+5	2022-09-10 12:30:16	c
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c1	3	0	0	0	195
+call polarx.changeset_fetch('c1');
+OP	id	gmt_modified
+INSERT	5	2022-09-10 12:30:16
+INSERT	4	2022-09-10 10:35:16
+INSERT	3	2022-09-10 10:30:18
+DROP TABLE c1;
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+CREATE TABLE c1 (
+user_id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (user_id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+call polarx.changeset_start('c1');
+TABLE
+c1
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c1	0	0	0	0	0
+call polarx.changeset_fetch('c1');
+OP	PK
+insert into c1 values (1, "2022-09-10 10:30:14", "a");
+insert into c1 values (2, "2022-09-10 10:30:16", "b");
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c1	2	0	0	0	130
+call polarx.changeset_fetch('c1');
+OP	user_id	gmt_modified
+INSERT	2	2022-09-10 10:30:16
+INSERT	1	2022-09-10 10:30:14
+select * from c1;
+user_id	gmt_modified	value
+1	2022-09-10 10:30:14	a
+2	2022-09-10 10:30:16	b
+call polarx.changeset_finish('c1');
+SEQ	ROW
+call polarx.changeset_stats('c1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+DROP TABLE c1;

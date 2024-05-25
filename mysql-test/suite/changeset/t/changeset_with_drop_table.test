@@ -1,0 +1,62 @@
+--disable_warnings
+DROP TABLE IF EXISTS c1;
+--enable_warnings
+
+CREATE TABLE c1 (
+id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+insert into c1 values (1, "2022-09-10 10:30:14", "a");
+insert into c1 values (2, "2022-09-10 10:30:16", "b");
+
+call polarx.changeset_start('c1');
+call polarx.changeset_fetch('c1');
+
+insert into c1 values (3, "2022-09-10 10:30:18", "a");
+insert into c1 values (4, "2022-09-10 10:35:16", "b");
+insert into c1 values (5, "2022-09-10 12:30:16", "c");
+
+select * from c1;
+
+call polarx.changeset_stats('c1');
+call polarx.changeset_fetch('c1');
+
+#
+#test drop table
+#
+DROP TABLE c1;
+
+call polarx.changeset_stats('c1');
+
+
+# create table
+#
+CREATE TABLE c1 (
+user_id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (user_id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+call polarx.changeset_stats('c1');
+call polarx.changeset_start('c1');
+
+call polarx.changeset_stats('c1');
+call polarx.changeset_fetch('c1');
+
+insert into c1 values (1, "2022-09-10 10:30:14", "a");
+insert into c1 values (2, "2022-09-10 10:30:16", "b");
+
+call polarx.changeset_stats('c1');
+call polarx.changeset_fetch('c1');
+
+select * from c1;
+
+call polarx.changeset_finish('c1');
+
+call polarx.changeset_stats('c1');
+
+DROP TABLE c1;
