@@ -235,7 +235,7 @@ get_mach_type
 get_os_type
 get_linux_version
 
-if [ x"$build_type" = x"debug" ]; then
+if [[ x"$build_type" = x"debug" ]]; then
   build_type="Debug"
   debug=1
   if [ $enable_gcov -eq 1 ]; then
@@ -243,26 +243,28 @@ if [ x"$build_type" = x"debug" ]; then
   else
     gcov=0
   fi
-elif [ x"$build_type" = x"release" ]; then
-  # Release CMAKE_BUILD_TYPE is not compatible with mysql 8.0
-  # build_type="Release"
+elif [[ x"$build_type" = x"release" ]]; then
+  build_type="Release"
+  debug=0
+  gcov=0
+elif [[ x"$build_type" = x"release_with_debinfo" ]]; then
   build_type="RelWithDebInfo"
   debug=0
   gcov=0
 else
-  echo "Invalid build type, it must be \"debug\" or \"release\"."
+  echo "Invalid build type, it must be \"debug\" or \"release\" or \"release_with_debinfo\"."
   exit 1
 fi
 
 server_suffix="-""$server_suffix"
 
-if [ x"$build_type" = x"RelWithDebInfo" ]; then
+if [[ x"$build_type" = x"RelWithDebInfo" ]] || [[ x"$build_type" = x"Release" ]]; then
   COMMON_FLAGS="-O3 -g -D_FORTIFY_SOURCE=2  "
-elif [ x"$build_type" = x"Debug" ]; then
-  COMMON_FLAGS="-O0 -g3 "
+elif [[ x"$build_type" = x"Debug" ]]; then
+  COMMON_FLAGS="-O0 -g3 -fstack-protector-strong"
 fi
 
-COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer -fstack-protector-strong "
+COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer"
 
 if [ x"$mach_type" = x"x86_64" ]; then # X86
   COMMON_FLAGS="$COMMON_FLAGS"
