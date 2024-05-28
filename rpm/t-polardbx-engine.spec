@@ -11,15 +11,12 @@ Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: cmake >= 3.8.2
 
-BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, libaio-devel
+%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
+BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, autoconf
+%endif
+ 
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel libaio-devel
 
-BuildRequires: alios7u-2_32-gcc-10-repo
-BuildRequires: gcc >= 10.2.1
-BuildRequires: gcc-c++ >= 10.2.1
-BuildRequires: libstdc++-devel >= 10.2.1
-BuildRequires: binutils >= 2.35
-
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 
 Packager: xiedao.yy@alibaba-inc.com
 Autoreq: no
