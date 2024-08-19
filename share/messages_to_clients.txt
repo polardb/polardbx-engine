@@ -10139,7 +10139,7 @@ ER_CONSENSUS_CONFIG_BAD
 ER_CONSENSUS_FOLLOWER_NOT_ALLOWED
   eng "The consensus follower is not allowed to to do current operation."
 
-ER_CONSENSUS_LEADERSHIP_CHANGE
+ER_CONSENSUS_LEADERSHIP_CHANGED
   eng "The cluster's leadership has already change, please relocate consensus leader and retry."
 
 ER_CONSENSUS_LOG_TOO_LARGE
@@ -10181,6 +10181,9 @@ ER_XA_PROC_INVALID_MASTER_INFO
 
 ER_XA_PROC_INVALID_XA_BRANCH_PARAM
   eng "Invalid xa branch parms. global branch: %d, local branch: %d."
+
+ER_CONSENSUS_LEADERSHIP_IS_CHANGING
+  eng "The cluster's leadership is changing, please relocate consensus leader and retry."
 
 #
 #  End of RDS error message.

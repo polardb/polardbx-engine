@@ -400,6 +400,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /** Manage the MTS dependency tracking */
   Transaction_dependency_tracker m_dependency_tracker;
 
+  std::atomic<bool> disable_ordered_commit{false};
+
   /**
     Find the oldest binary log referenced by the index file
 
@@ -1061,6 +1063,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
                          ulong max_size, bool null_created,
                          bool need_lock_index, bool need_sid_lock,
                          Format_description_log_event *extra_description_event);
+
+  bool is_in_leader_transfer();
 
   std::unique_ptr<Gcn_manager> gcn_mgr;
 };

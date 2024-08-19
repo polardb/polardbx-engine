@@ -1652,11 +1652,15 @@ void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
         consensus_log_manager.get_consensus_info()->get_start_apply_index()))) {
     // TODO: need write apply index to consensus info table???
     xp::warn(ER_XP_COMMIT)
-        << "Failed to commit ,because previous error or shutdown or leadership "
-           "changed, system apply index:"
+        << "Failed to commit, because previous error or shutdown or leadership "
+           "changed, system current term:" 
+        << consensus_log_manager.get_consensus_info()->get_current_term()
+        << ", system apply index:"
         << consensus_log_manager.get_consensus_info()->get_start_apply_index()
-        << " , thd consensus term:" << thd->consensus_term
-        << ", consensus index:" << thd->consensus_index;
+        << ", thd consensus term:" << thd->consensus_term
+        << ", consensus index:" << thd->consensus_index
+        << ", commit_error:" << thd->commit_error
+        << ", consensus_error:" << thd->consensus_error;
 
     if (thd->commit_error == THD::CE_NONE) {
       xp::warn(ER_XP_COMMIT)
@@ -1672,16 +1676,9 @@ void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
     // if code is not shutdown or log too large, it must be leadership change
     if (consensus_ptr->isShutdown()) thd->consensus_error = THD::CSS_SHUTDOWN;
     if (thd->consensus_error == THD::CSS_NONE)
-      thd->consensus_error = THD::CSS_LEADERSHIP_CHANGE;
+      thd->consensus_error = THD::CSS_LEADERSHIP_CHANGED;
 
-    if (thd->consensus_error == THD::CSS_LEADERSHIP_CHANGE)
-      my_error(ER_CONSENSUS_LEADERSHIP_CHANGE, MYF(0));
-    else if (thd->consensus_error == THD::CSS_LOG_TOO_LARGE)
-      my_error(ER_CONSENSUS_LOG_TOO_LARGE, MYF(0));
-    else if (thd->consensus_error == THD::CSS_SHUTDOWN)
-      my_error(ER_SERVER_SHUTDOWN, MYF(0));
-    else
-      my_error(ER_CONSENSUS_OTHER_ERROR, MYF(0));
+    my_error(THD::Consensus_error_code[thd->consensus_error], MYF(0));
   }
 }
 
@@ -2028,4 +2025,9 @@ end:
   }
 
   return error;
+}
+
+bool MYSQL_BIN_LOG::is_in_leader_transfer()
+{
+  return disable_ordered_commit || consensus_ptr->isInLeaderTransfer();
 }

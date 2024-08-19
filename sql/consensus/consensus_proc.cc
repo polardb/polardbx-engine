@@ -379,10 +379,16 @@ bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
+  mysql_bin_log.disable_ordered_commit.store(true);
+  my_sleep(opt_consensus_wait_milliseconds_before_change_leader * 1000);
+
   res = consensus_ptr->leaderTransfer(node_id);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
+
+  mysql_bin_log.disable_ordered_commit.store(false);
+
   if (res)
     my_error(ER_CONSENSUS_COMMAND_ERROR, MYF(0), res, alisql::pxserror(res));
   return (res != 0);

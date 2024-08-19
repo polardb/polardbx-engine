@@ -57,7 +57,7 @@ uint64 show_fifo_cache_size(THD *, SHOW_VAR *var, char *buff) {
   return 0;
 }
 
-uint64 show_first_index_in_fifo_cache(THD *, SHOW_VAR *var, char *buff) {
+uint64 show_fifo_cache_first_index(THD *, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
   long *value = reinterpret_cast<long *>(buff);
@@ -74,6 +74,14 @@ uint64 show_log_count_in_fifo_cache(THD *, SHOW_VAR *var, char *buff) {
   uint64 size = consensus_log_manager.get_fifo_cache_manager()
                     ->get_fifo_cache_log_count();
   *value = static_cast<long long>(size);
+  return 0;
+}
+
+uint64 show_consensus_in_leader_transfer(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_LONGLONG;
+  var->value = buff;
+  long *value = reinterpret_cast<long *>(buff);
+  *value = mysql_bin_log.is_in_leader_transfer() ? 1 : 0;
   return 0;
 }
 

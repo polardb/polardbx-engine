@@ -107,6 +107,8 @@ bool opt_consensus_auto_reset_match_index = 1;
 bool opt_consensus_learner_heartbeat;
 bool opt_consensus_auto_leader_transfer;
 ulonglong opt_consensus_auto_leader_transfer_check_seconds;
+ulonglong opt_consensus_wait_milliseconds_before_change_leader;
+bool opt_consensus_disable_commit_before_change_leader;
 bool opt_consensuslog_revise;
 bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
@@ -860,3 +862,17 @@ static Sys_var_bool Sys_consensus_safe_for_reset_master(
     "insert Consensus_empty event into binblog after reset master",
     SESSION_VAR(opt_consensus_safe_for_reset_master), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulonglong Sys_consensus_wait_milliseconds_before_change_leader(
+    "consensus_wait_milliseconds_before_change_leader",
+    "the waiting time before change leader",
+    GLOBAL_VAR(opt_consensus_wait_milliseconds_before_change_leader),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 60000), DEFAULT(1000), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_bool Sys_consensus_disable_commit_before_change_leader(
+    "consensus_disable_commit_before_change_leader",
+    "disable_commit_before_change_leader",
+    GLOBAL_VAR(opt_consensus_disable_commit_before_change_leader), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+

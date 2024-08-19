@@ -1957,13 +1957,22 @@ class THD : public MDL_context_owner,
  public:
   enum Consensus_error {
     CSS_NONE = 0,
-    CSS_LEADERSHIP_CHANGE,
+    CSS_LEADERSHIP_CHANGING,
+    CSS_LEADERSHIP_CHANGED,
     CSS_LOG_TOO_LARGE,
     CSS_SHUTDOWN,
-    CSS_GU_ERROR,
     CSS_OTHER
   };
 
+  constexpr static uint32_t Consensus_error_code[Consensus_error::CSS_OTHER + 1] = {
+    ER_CONSENSUS_OTHER_ERROR,
+    ER_CONSENSUS_LEADERSHIP_CHANGED,
+    ER_CONSENSUS_LEADERSHIP_IS_CHANGING,
+    ER_CONSENSUS_LOG_TOO_LARGE,
+    ER_SERVER_SHUTDOWN,
+    ER_CONSENSUS_OTHER_ERROR
+  };
+ 
   uint64 consensus_index{0};
   uint64 consensus_term{0};
   Consensus_error consensus_error{CSS_NONE};

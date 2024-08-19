@@ -149,6 +149,7 @@ show master status;
 #bug22962305 init gtid set scan all binlog files
 flush logs;
 insert into t values(2);
+drop table t;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
 --source include/wait_until_connected_again.inc
@@ -156,5 +157,3 @@ insert into t values(2);
 
 #bug23162444 gtid error before the cluster has elected a leader
 --exec cat $MYSQLTEST_VARDIR/log/mysqld.1.err | grep "Can't find the log has the commit index 0" | wc -l
-
-drop table t;

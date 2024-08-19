@@ -8709,17 +8709,24 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   mysql_mutex_lock(consensus_log_manager.get_term_lock());
 
   // before flush do consensus check
-  if (term == 0 || consensus_log->getCurrentTerm() != term ||
-      term != consensus_log_manager.get_current_term()) {
+  if (term == 0
+      || consensus_log->getCurrentTerm() != term
+      || term != consensus_log_manager.get_current_term()
+      || (opt_consensus_disable_commit_before_change_leader
+          && is_in_leader_transfer())) {
     for (THD *head = first_seen; head; head = head->next_to_commit) {
       binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(head);
       cache_mngr->reset();
-      xp::warn(ER_XP_COMMIT) << "Failed to commit ,because leadership changed, "
-                                "replicate log or check term failed";
+      xp::warn(ER_XP_COMMIT) << "Failed to commit, because leadership changed, "
+                                "replicate log or check term failed"
+                            << ", term: " << term 
+                            << ", current term: " << consensus_log_manager.get_current_term() 
+                            << ", disable_ordered_commit: " << disable_ordered_commit 
+                            << ", isInLeaderTransfer: " << consensus_ptr->isInLeaderTransfer();
       head->mark_transaction_to_rollback(true);
       head->commit_error = THD::CE_COMMIT_ERROR;
       head->get_transaction()->m_flags.commit_low = false;
-      head->consensus_error = THD::CSS_LEADERSHIP_CHANGE;
+      head->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
     }
     mysql_mutex_unlock(consensus_log_manager.get_term_lock());
     mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
@@ -9205,14 +9212,23 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     [&] { consensus_log_manager.rdlock_consensus_status(); },
     [&] { consensus_log_manager.unlock_consensus_status(); }
   );
+
   // check this function should return early
-  if ((!opt_initialize && consensus_log_manager.get_status() !=
-                              Consensus_Log_System_Status::BINLOG_WORKING) ||
-      opt_cluster_log_type_instance) {
+  if ((!opt_initialize
+        && consensus_log_manager.get_status() != Consensus_Log_System_Status::BINLOG_WORKING)
+      || opt_cluster_log_type_instance
+      || (opt_consensus_disable_commit_before_change_leader
+          && is_in_leader_transfer())) {
     thd_get_cache_mngr(thd)->reset();
     thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
-    my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+    if (opt_consensus_disable_commit_before_change_leader
+        && is_in_leader_transfer()) {
+      thd->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
+      my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
+    } else {
+      my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+    }
     return thd->commit_error;
   }
 

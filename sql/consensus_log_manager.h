@@ -351,9 +351,10 @@ void *run_consensus_stage_change(void *arg);
 void *run_consensus_commit_pos_watcher(void *arg);
 int cluster_force_purge_gtid();
 uint64 show_fifo_cache_size(THD *, SHOW_VAR *var, char *buff);
-uint64 show_first_index_in_fifo_cache(THD *, SHOW_VAR *var, char *buff);
+uint64 show_fifo_cache_first_index(THD *, SHOW_VAR *var, char *buff);
 uint64 show_log_count_in_fifo_cache(THD *, SHOW_VAR *var, char *buff);
 int show_appliedindex_checker_queue(THD *, SHOW_VAR *var, char *);
+uint64 show_consensus_in_leader_transfer(THD *, SHOW_VAR *var, char *buff);
 
 
 #define GUARDED_READ_CONSENSUS_LOG()                                        \

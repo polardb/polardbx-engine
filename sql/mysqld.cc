@@ -10236,16 +10236,21 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_ALL},
     {"consensus_fifo_cache_used_size", (char *)&show_fifo_cache_size, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
-    {"first_index_in_consensus_fifo_cache",
-     (char *)&show_first_index_in_fifo_cache, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"consensus_fifo_cache_first_index",
+     (char *)&show_fifo_cache_first_index, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"consensus_fifo_cache_log_count", (char *)&show_log_count_in_fifo_cache,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"appliedindex_checker_queue", (char *)&show_appliedindex_checker_queue,
+    {"consensus_appliedindex_checker_queue", (char *)&show_appliedindex_checker_queue,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"consensus_easy_pool_size",
      reinterpret_cast<char *>(
          const_cast<long int *>(&alisql::easy_pool_alloc_byte)),
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"consensus_in_leader_transfer", (char *)&show_consensus_in_leader_transfer,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Flashback_area_query_cnt",
+     (char *)offsetof(System_status_var, flashback_area_query_cnt),
+     SHOW_LONGLONG_STATUS, SHOW_SCOPE_SESSION},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {

@@ -437,6 +437,7 @@ class Paxos : public Consensus {
   }
   enum State getState() { return state_.load(); }
   enum SubState getSubState() { return subState_.load(); }
+  bool isInLeaderTransfer() { return subState_.load() == SubState::SubLeaderTransfer; }
   const uint64_t &getElectionTimeout() { return electionTimeout_; }
   const uint64_t &getHeartbeatTimeout() { return heartbeatTimeout_; }
   uint64_t getCommitIndex() {

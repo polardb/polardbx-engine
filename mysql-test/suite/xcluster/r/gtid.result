@@ -73,5 +73,5 @@ File	Position	Binlog_Do_DB	Binlog_Ignore_DB	Executed_Gtid_Set
 master-bin.000004	#			#
 flush logs;
 insert into t values(2);
-0
 drop table t;
+0
