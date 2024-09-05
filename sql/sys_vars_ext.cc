@@ -655,3 +655,10 @@ static Sys_var_bool Sys_opt_index_format_gpp_enabled(
     "it will add gpp column on secondary index if suitable.",
     SESSION_VAR(opt_index_format_gpp_enabled), CMD_LINE(OPT_ARG), DEFAULT(true),
     NO_MUTEX_GUARD, IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern bool opt_enable_writeset_tracking_for_ipk;
+static Sys_var_bool Sys_enable_writeset_tracking_for_ipk(
+       "enable_writeset_tracking_for_ipk",
+       "Whether record the IPK to writeset.",
+       GLOBAL_VAR(opt_enable_writeset_tracking_for_ipk),
+       CMD_LINE(OPT_ARG), DEFAULT(true));

@@ -51,8 +51,11 @@
 #include "sql/table.h"  // TABLE
 #include "sql/transaction_info.h"
 #include "template_utils.h"
+#include "sql/sql_implicit_common.h"
 
 #define HASH_STRING_SEPARATOR "½"
+
+bool opt_enable_writeset_tracking_for_ipk = true;
 
 const char *transaction_write_set_hashing_algorithms[] = {"OFF", "MURMUR32",
                                                           "XXHASH64", nullptr};
@@ -824,7 +827,10 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record) {
       thd->get_transaction()->get_transaction_write_set_ctx();
   bool writeset_hashes_added = false;
 
-  if (table->key_info && (table->s->primary_key < MAX_KEY)) {
+  //Check if the table has a key and the key is a primary key or an IPK.
+  if (table->key_info && (table->s->primary_key < MAX_KEY ||
+                          (opt_enable_writeset_tracking_for_ipk &&
+                           table->s->has_implicit_row_id))) {
     const ptrdiff_t ptrdiff = record - table->record[0];
     std::string pke_schema_table;
     pke_schema_table.reserve(NAME_LEN * 3);
@@ -845,8 +851,10 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record) {
     std::vector<uint64> hash_list;
 #endif
     for (uint key_number = 0; key_number < table->s->keys; key_number++) {
-      // Skip non unique.
-      if (!((table->key_info[key_number].flags & (HA_NOSAME)) == HA_NOSAME))
+      // Skip non unique and non ipk
+      if (!((table->key_info[key_number].flags & (HA_NOSAME)) == HA_NOSAME) &&
+          !(opt_enable_writeset_tracking_for_ipk && table->s->has_implicit_row_id &&
+            NAME_IS_IMPLICIT(table->key_info[key_number].name)))
         continue;
 
       enum pke_mode_e { STANDARD_PKE = 1, NO_PARTIAL_KEYS_PKE = 2, END = 3 };

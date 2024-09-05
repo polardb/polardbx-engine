@@ -1,0 +1,171 @@
+################################################################################
+# ==== Purpose ====
+# This test verifys the RDS IPK having the same effect as the PRIMARY KEY
+# when the binlog_transaction_dependency_tracking = WRITESET while global
+# system variable enable_writeset_tracking_for_ipk is TRUE.
+# 
+# ==== Implementation ====
+# 0. Set global variables to track transaction dependencies based on writeset;
+# 1. Set implicit_primary_key = ON and create a table without PK or UK and
+#    insert some rows into the table;
+# 2. Set global enable_writeset_tracking_for_ipk = FALSE / ON to verify the IPK have
+#    the same effect as the PRIMARY KEY.
+################################################################################
+
+--disable_warnings
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+--echo #
+--echo # 0. INITIALIZE: set some variables to track transaction dependencies based on writeset.
+--echo #
+
+SET @save_binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
+SET @save_enable_writeset_tracking_for_ipk = @@GLOBAL.enable_writeset_tracking_for_ipk;
+SET @save_implicit_primary_key = @@GLOBAL.implicit_primary_key;
+SET @save_transaction_write_set_extraction = @@SESSION.transaction_write_set_extraction;
+
+SET SESSION transaction_write_set_extraction = XXHASH64;
+SET GLOBAL binlog_transaction_dependency_tracking = WRITESET;
+
+SELECT @@GLOBAL.binlog_transaction_dependency_tracking;
+SELECT @@GLOBAL.enable_writeset_tracking_for_ipk;
+--enable_warnings
+
+--echo #
+--echo # 1. Before we set enable_writeset_tracking_for_ipk, IPK will not be added to writeset.
+--echo #    When somes rows are insertted to a table without PK or UK, the last_committed
+--echo #    of the rows are different, so rows cannot be applied in parallel in the replicas.
+--echo #
+
+SET GLOBAL enable_writeset_tracking_for_ipk = FALSE;
+SET GLOBAL implicit_primary_key = ON;
+
+CREATE TABLE t1(id INT, did INT);
+
+INSERT INTO t1 VALUES (0, 1);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 1 2
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t1 VALUES (1, 2);
+--let $logical_timestamps= 2 3
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t1 VALUES (2, 3);
+--let $logical_timestamps= 3 4
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t1 VALUES (3, 4);
+--let $logical_timestamps= 4 5
+--source include/assert_logical_timestamps.inc
+
+DROP TABLE t1;
+--source include/rpl_sync.inc
+ 
+--echo #
+--echo # 2. After we set enable_writeset_tracking_for_ipk, IPK will be added to writeset.
+--echo #    When somes rows are insertted to a table without PK or UK, the last_committed
+--echo #    of the rows are the same, so rows can be applied in parallel in the replicas.
+--echo #
+
+--connection master
+SET GLOBAL enable_writeset_tracking_for_ipk= TRUE;
+SELECT @@GLOBAL.enable_writeset_tracking_for_ipk;
+
+CREATE TABLE t2(id INT, did INT);
+
+INSERT INTO t2 VALUES (0, 1);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 7 8
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t2 VALUES (1, 2);
+--let $logical_timestamps= 7 9
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t2 VALUES (2, 3);
+--let $logical_timestamps= 7 10
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t2 VALUES (3, 4);
+--let $logical_timestamps= 7 11
+--source include/assert_logical_timestamps.inc
+
+DROP TABLE t2;
+--source include/rpl_sync.inc
+
+--echo #
+--echo # 3. If there are some duplicated values on IPK, the rows will conflict with each other.
+--echo #    The last_committed of the rows are different, so rows cannot be applied in parallel
+--echo #    in the replicas.
+--echo #
+
+--connection master
+SET show_ipk_info= 1;
+
+CREATE TABLE t3 (id INT);
+
+INSERT INTO t3 VALUES (0, 1);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 13 14
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t3 VALUES (0, 1);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 14 15
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t3 VALUES (0, 1);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 15 16
+--source include/assert_logical_timestamps.inc
+
+SELECT * FROM t3;
+
+DROP TABLE t3;
+--source include/rpl_sync.inc
+
+--echo #
+--echo # 4. Check that IPK will not show up when there are unique indexes in the table.
+--echo #    And the last_committed value of the rows is determined by the unique indexes.
+--echo #
+
+--connection master
+SET show_ipk_info= 1;
+
+CREATE TABLE t4 (id INT PRIMARY KEY, did INT UNIQUE KEY, ddid INT, KEY (ddid));
+
+INSERT INTO t4 VALUES (0, 1, 2);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 18 19
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t4 VALUES (1, 2, 2);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 18 20
+--source include/assert_logical_timestamps.inc
+
+INSERT INTO t4 VALUES (2, 3, 2);
+--let $binlog_file= master-bin.000001
+--let $logical_timestamps= 18 21
+--source include/assert_logical_timestamps.inc
+
+SELECT * FROM t4;
+
+DROP TABLE t4;
+--source include/rpl_sync.inc
+
+--echo #
+--echo # 5. CLEAN UP
+--echo #
+
+--connection master
+--disable_warnings
+SET @@GLOBAL.binlog_transaction_dependency_tracking= @save_binlog_transaction_dependency_tracking;
+SET @@SESSION.transaction_write_set_extraction = @save_transaction_write_set_extraction;
+SET @@GLOBAL.enable_writeset_tracking_for_ipk= @save_enable_writeset_tracking_for_ipk;
+SET @@GLOBAL.implicit_primary_key= @save_implicit_primary_key;
+--enable_warnings
+
+--source include/rpl_end.inc

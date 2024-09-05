@@ -1,0 +1,108 @@
+include/master-slave.inc
+[connection master]
+#
+# 0. INITIALIZE: set some variables to track transaction dependencies based on writeset.
+#
+SET @save_binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
+SET @save_enable_writeset_tracking_for_ipk = @@GLOBAL.enable_writeset_tracking_for_ipk;
+SET @save_implicit_primary_key = @@GLOBAL.implicit_primary_key;
+SET @save_transaction_write_set_extraction = @@SESSION.transaction_write_set_extraction;
+SET SESSION transaction_write_set_extraction = XXHASH64;
+SET GLOBAL binlog_transaction_dependency_tracking = WRITESET;
+SELECT @@GLOBAL.binlog_transaction_dependency_tracking;
+@@GLOBAL.binlog_transaction_dependency_tracking
+WRITESET
+SELECT @@GLOBAL.enable_writeset_tracking_for_ipk;
+@@GLOBAL.enable_writeset_tracking_for_ipk
+1
+#
+# 1. Before we set enable_writeset_tracking_for_ipk, IPK will not be added to writeset.
+#    When somes rows are insertted to a table without PK or UK, the last_committed
+#    of the rows are different, so rows cannot be applied in parallel in the replicas.
+#
+SET GLOBAL enable_writeset_tracking_for_ipk = FALSE;
+SET GLOBAL implicit_primary_key = ON;
+Warnings:
+Warning	1287	'@@implicit_primary_key' is deprecated and will be removed in a future release. Please use enable_implicit_primary_key instead.
+CREATE TABLE t1(id INT, did INT);
+INSERT INTO t1 VALUES (0, 1);
+include/include/assert_logical_timestamps.inc [1 2]
+INSERT INTO t1 VALUES (1, 2);
+include/include/assert_logical_timestamps.inc [2 3]
+INSERT INTO t1 VALUES (2, 3);
+include/include/assert_logical_timestamps.inc [3 4]
+INSERT INTO t1 VALUES (3, 4);
+include/include/assert_logical_timestamps.inc [4 5]
+DROP TABLE t1;
+include/rpl_sync.inc
+#
+# 2. After we set enable_writeset_tracking_for_ipk, IPK will be added to writeset.
+#    When somes rows are insertted to a table without PK or UK, the last_committed
+#    of the rows are the same, so rows can be applied in parallel in the replicas.
+#
+SET GLOBAL enable_writeset_tracking_for_ipk= TRUE;
+SELECT @@GLOBAL.enable_writeset_tracking_for_ipk;
+@@GLOBAL.enable_writeset_tracking_for_ipk
+1
+CREATE TABLE t2(id INT, did INT);
+INSERT INTO t2 VALUES (0, 1);
+include/include/assert_logical_timestamps.inc [7 8]
+INSERT INTO t2 VALUES (1, 2);
+include/include/assert_logical_timestamps.inc [7 9]
+INSERT INTO t2 VALUES (2, 3);
+include/include/assert_logical_timestamps.inc [7 10]
+INSERT INTO t2 VALUES (3, 4);
+include/include/assert_logical_timestamps.inc [7 11]
+DROP TABLE t2;
+include/rpl_sync.inc
+#
+# 3. If there are some duplicated values on IPK, the rows will conflict with each other.
+#    The last_committed of the rows are different, so rows cannot be applied in parallel
+#    in the replicas.
+#
+SET show_ipk_info= 1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE t3 (id INT);
+INSERT INTO t3 VALUES (0, 1);
+include/include/assert_logical_timestamps.inc [13 14]
+INSERT INTO t3 VALUES (0, 1);
+include/include/assert_logical_timestamps.inc [14 15]
+INSERT INTO t3 VALUES (0, 1);
+include/include/assert_logical_timestamps.inc [15 16]
+SELECT * FROM t3;
+id	__#alibaba_rds_row_id#__
+0	1
+0	1
+0	1
+DROP TABLE t3;
+include/rpl_sync.inc
+#
+# 4. Check that IPK will not show up when there are unique indexes in the table.
+#    And the last_committed value of the rows is determined by the unique indexes.
+#
+SET show_ipk_info= 1;
+Warnings:
+Warning	1287	'@@show_ipk_info' is deprecated and will be removed in a future release. Please use enable_show_ipk_info instead.
+CREATE TABLE t4 (id INT PRIMARY KEY, did INT UNIQUE KEY, ddid INT, KEY (ddid));
+INSERT INTO t4 VALUES (0, 1, 2);
+include/include/assert_logical_timestamps.inc [18 19]
+INSERT INTO t4 VALUES (1, 2, 2);
+include/include/assert_logical_timestamps.inc [18 20]
+INSERT INTO t4 VALUES (2, 3, 2);
+include/include/assert_logical_timestamps.inc [18 21]
+SELECT * FROM t4;
+id	did	ddid
+0	1	2
+1	2	2
+2	3	2
+DROP TABLE t4;
+include/rpl_sync.inc
+#
+# 5. CLEAN UP
+#
+SET @@GLOBAL.binlog_transaction_dependency_tracking= @save_binlog_transaction_dependency_tracking;
+SET @@SESSION.transaction_write_set_extraction = @save_transaction_write_set_extraction;
+SET @@GLOBAL.enable_writeset_tracking_for_ipk= @save_enable_writeset_tracking_for_ipk;
+SET @@GLOBAL.implicit_primary_key= @save_implicit_primary_key;
+include/rpl_end.inc
