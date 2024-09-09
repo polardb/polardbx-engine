@@ -253,15 +253,6 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
   bool exceeds_capacity = false;
 
   if (can_use_writesets) {
-    /*
-     Check if adding this transaction exceeds the capacity of the writeset
-     history. If that happens, m_writeset_history will be cleared only after
-     using its information for current transaction.
-    */
-    exceeds_capacity =
-        m_writeset_history.size() + writeset->size() > m_opt_max_history_size;
-    writeset_exceeds_max_size_count += exceeds_capacity;
-
     if (writeset->size() > writeset_max_size_in_history)
       writeset_max_size_in_history = writeset->size();
 
@@ -273,18 +264,31 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
      transaction's row hashes to the history.
     */
     int64 last_parent = m_writeset_history_start;
-    for (std::vector<uint64>::iterator it = writeset->begin();
-         it != writeset->end(); ++it) {
-      Writeset_history::iterator hst = m_writeset_history.find(*it);
-      if (hst != m_writeset_history.end()) {
-        if (hst->second > last_parent && hst->second < sequence_number)
-          last_parent = hst->second;
+    int64 dup_count = 0;
+    if (!m_writeset_history.empty()) {
+      for (std::vector<uint64>::iterator it = writeset->begin();
+          it != writeset->end(); ++it) {
+        Writeset_history::iterator hst = m_writeset_history.find(*it);
+        if (hst != m_writeset_history.end()) {
+          dup_count++;
+          if (hst->second > last_parent && hst->second < sequence_number)
+            last_parent = hst->second;
+        }
+      }
+    }
 
-        hst->second = sequence_number;
-      } else {
-        if (!exceeds_capacity)
-          m_writeset_history.insert(
-              std::pair<uint64, int64>(*it, sequence_number));
+    /*
+     Check if adding this transaction exceeds the capacity of the writeset
+     history. If that happens, m_writeset_history will be cleared only after
+     using its information for current transaction.
+    */
+    exceeds_capacity =
+        m_writeset_history.size() + writeset->size() - dup_count > m_opt_max_history_size;
+    writeset_exceeds_max_size_count += exceeds_capacity;
+
+    if (!exceeds_capacity) {
+      for (const auto& key : *writeset) {
+          m_writeset_history.emplace(key, sequence_number);
       }
     }
 

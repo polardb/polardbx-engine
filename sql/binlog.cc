@@ -8807,6 +8807,10 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
     DBUG_EXECUTE_IF(
         "block_leader_after_delete",
         if (thd != head) { DBUG_SET("+d,after_delete_wait"); };);
+
+    // xa prepare and normal commit both should wait commit index update
+    MYSQL_BIN_LOG::consensus_before_commit(head);
+
     /*
       If flushing failed, set commit_error for the session, skip the
       transaction and proceed with the next transaction instead. This
@@ -8832,9 +8836,6 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
     assert(head->commit_error != THD::CE_COMMIT_ERROR);
     Thd_backup_and_restore switch_thd(thd, head);
     bool all = head->get_transaction()->m_flags.real_commit;
-
-    // xa prepare and normal commit both should wait commit index update
-    MYSQL_BIN_LOG::consensus_before_commit(head);
 
     bool save_gtid_for_non_trans =
         head->save_gtid_for_non_transactional_ops();
@@ -9009,17 +9010,17 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     if (cache_mngr) cache_mngr->reset();
   }
 
+  if (!opt_binlog_order_commits || thd->get_transaction()->m_flags.commit_low ||
+      thd->consensus_error != THD::CSS_NONE) {
+    /* Wait until the logs are received by more than half of the nodes */
+    MYSQL_BIN_LOG::consensus_before_commit(thd);
+  }
+
   if (thd->get_transaction()->sequence_number != SEQ_UNINIT &&
       thd->consensus_error == THD::CSS_NONE) {
     mysql_mutex_lock(&LOCK_replica_trans_dep_tracker);
     m_dependency_tracker.update_max_committed(thd);
     mysql_mutex_unlock(&LOCK_replica_trans_dep_tracker);
-  }
-
-  if (!opt_binlog_order_commits || thd->get_transaction()->m_flags.commit_low ||
-      thd->consensus_error != THD::CSS_NONE) {
-    /* Wait until the logs are received by more than half of the nodes */
-    MYSQL_BIN_LOG::consensus_before_commit(thd);
   }
 
   DBUG_EXECUTE_IF("crash_before_large_trx_commit_late", {
