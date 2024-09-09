@@ -46,6 +46,9 @@ class XMessage_encoder_base : public Base_type {
 
   constexpr static PolarXRPC::Notice::Frame_Scope k_local =
       PolarXRPC::Notice::Frame_Scope_LOCAL;
+  
+  constexpr static PolarXRPC::Notice::Frame_Scope k_global =
+      PolarXRPC::Notice::Frame_Scope_GLOBAL;
 
   constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter k_message =
       PolarXRPC::Notice::SessionStateChanged::PRODUCED_MESSAGE;
@@ -68,6 +71,10 @@ class XMessage_encoder_base : public Base_type {
 
   constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
       k_client_id = PolarXRPC::Notice::SessionStateChanged::CLIENT_ID_ASSIGNED;
+
+  constexpr static PolarXRPC::Notice::SessionStateChanged_Parameter
+      k_extra_server_state =
+          PolarXRPC::Notice::SessionStateChanged::EXTRA_SERVER_STATE;
 
  public:
   // Constructor inheritance doesn't work in solaris
@@ -208,6 +215,31 @@ class XMessage_encoder_base : public Base_type {
     auto field_payload_start =
         Base_type::template begin_delimited_field<FrameTags::payload>();
     Base_type::template encode_field_const_enum<StateTags::param, k_expired>();
+    Base_type::end_delimited_field(field_payload_start);
+    Base_type::end_xmessage(xmsg_start);
+  }
+  
+  void encode_notice_server_state(const uint64_t flag) {
+    using FrameTags = tags::Frame;
+    using StateTags = tags::SessionStateChanged;
+    using ScalarTags = tags::Scalar;
+
+    /// The buffer size should large enough.
+    auto xmsg_start =
+        Base_type::template begin_xmessage<FrameTags::server_id, 145>();
+    Base_type::template encode_field_const_var_uint<FrameTags::type,
+                                                    k_state_change>();
+    Base_type::template encode_field_const_enum<FrameTags::scope, k_global>();
+    auto field_payload_start =
+        Base_type::template begin_delimited_field<FrameTags::payload>();
+    Base_type::template encode_field_const_enum<StateTags::param,
+                                                k_extra_server_state>();
+    auto field_value_start =
+        Base_type::template begin_delimited_field<StateTags::value>();
+    Base_type::template encode_field_const_enum<ScalarTags::type, k_v_uint>();
+    Base_type::template encode_field_var_uint64<ScalarTags::v_unsigned_int>(
+        flag);
+    Base_type::end_delimited_field(field_value_start);
     Base_type::end_delimited_field(field_payload_start);
     Base_type::end_xmessage(xmsg_start);
   }

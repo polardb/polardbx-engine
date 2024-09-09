@@ -148,6 +148,11 @@ message SessionStateChanged {
     TRX_ROLLEDBACK = 9;
     PRODUCED_MESSAGE = 10;
     CLIENT_ID_ASSIGNED = 11;
+    EXTRA_SERVER_STATE = 12;
+    // .. more to be added
+  }
+  enum ExtraServerState {
+    IN_LEADER_TRANSFER_FLAG = 1;
     // .. more to be added
   }
   required Parameter param = 1;
