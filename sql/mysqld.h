@@ -421,6 +421,17 @@ extern ulong opt_keyring_migration_port;
 
 extern ulonglong global_conn_mem_limit;
 extern ulonglong global_conn_mem_counter;
+
+extern ulong writeset_current_history_size;
+extern ulong writeset_history_clear_count;
+extern ulong writeset_cannot_use_count;
+extern ulong writeset_exceeds_max_size_count;
+extern ulong writeset_has_missing_keys_count;
+extern ulong writeset_has_related_foreign_keys_count;
+extern ulong writeset_was_write_set_limit_reached_count;
+extern ulong writeset_max_size_in_trx;
+extern ulong writeset_max_size_in_history;
+
 /**
   Variable to check if connection related options are set
   as part of keyring migration.

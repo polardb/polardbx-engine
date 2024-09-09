@@ -3,9 +3,27 @@ CREATE TABLE t1(id INT, PRIMARY KEY (id));
 FLUSH LOGS;
 INSERT INTO t1(id) VALUES(1);
 INSERT INTO t1(id) VALUES(2);
+show global status like "%writeset%";
+Variable_name	Value
+writeset_cannot_use_count	1
+writeset_current_history_size	2
+writeset_exceeds_max_size_count	0
+writeset_has_missing_keys_count	0
+writeset_has_related_foreign_keys_count	0
+writeset_history_clear_count	1
+writeset_was_write_set_limit_reached_count	0
 SET GLOBAL binlog_transaction_dependency_tracking= 'WRITESET_SESSION';
 INSERT INTO t1(id) VALUES(3);
 INSERT INTO t1(id) VALUES(4);
+show global status like "%writeset%";
+Variable_name	Value
+writeset_cannot_use_count	1
+writeset_current_history_size	2
+writeset_exceeds_max_size_count	0
+writeset_has_missing_keys_count	0
+writeset_has_related_foreign_keys_count	0
+writeset_history_clear_count	1
+writeset_was_write_set_limit_reached_count	0
 include/save_binlog_position.inc
 INSERT INTO t1(id) VALUES(5);
 include/include/assert_logical_timestamps.inc [2 5]

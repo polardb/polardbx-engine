@@ -260,6 +260,13 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
     */
     exceeds_capacity =
         m_writeset_history.size() + writeset->size() > m_opt_max_history_size;
+    writeset_exceeds_max_size_count += exceeds_capacity;
+
+    if (writeset->size() > writeset_max_size_in_history)
+      writeset_max_size_in_history = writeset->size();
+
+    if (writeset->size() > writeset_max_size_in_trx)
+      writeset_max_size_in_trx = writeset->size();
 
     /*
      Compute the greatest sequence_number among all conflicts and add the
@@ -294,17 +301,27 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
       */
       commit_parent = std::min(last_parent, commit_parent);
     }
+  } else {
+    writeset_has_missing_keys_count += write_set_ctx->get_has_missing_keys();
+    writeset_has_related_foreign_keys_count += write_set_ctx->get_has_related_foreign_keys();
+    writeset_was_write_set_limit_reached_count += write_set_ctx->was_write_set_limit_reached();
+    writeset_cannot_use_count++;
   }
 
   if (exceeds_capacity || !can_use_writesets) {
     m_writeset_history_start = sequence_number;
     m_writeset_history.clear();
+    writeset_max_size_in_trx = 0;
+    writeset_history_clear_count++;
   }
+  writeset_current_history_size = m_writeset_history.size();
 }
 
 void Writeset_trx_dependency_tracker::rotate(int64 start) {
   m_writeset_history_start = start;
   m_writeset_history.clear();
+  writeset_max_size_in_trx = 0;
+  writeset_history_clear_count++;
 }
 
 /**

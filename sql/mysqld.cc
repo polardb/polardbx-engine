@@ -1407,6 +1407,16 @@ ulong locked_account_connection_count = 0;
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_mem_counter = 0;
 
+ulong writeset_current_history_size = 0;
+ulong writeset_history_clear_count = 0;
+ulong writeset_cannot_use_count = 0;
+ulong writeset_exceeds_max_size_count = 0;
+ulong writeset_has_missing_keys_count = 0;
+ulong writeset_has_related_foreign_keys_count = 0;
+ulong writeset_was_write_set_limit_reached_count = 0;
+ulong writeset_max_size_in_history = 0;
+ulong writeset_max_size_in_trx = 0;
+
 /**
   This variable holds handle to the object that's responsible
   for loading/unloading components from manifest file
@@ -10251,6 +10261,25 @@ SHOW_VAR status_vars[] = {
     {"Flashback_area_query_cnt",
      (char *)offsetof(System_status_var, flashback_area_query_cnt),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_SESSION},
+    {"writeset_current_history_size", (char *)&writeset_current_history_size, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_history_clear_count", (char *)&writeset_history_clear_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_cannot_use_count", (char *)&writeset_cannot_use_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_exceeds_max_size_count", (char *)&writeset_exceeds_max_size_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_has_missing_keys_count", (char *)&writeset_has_missing_keys_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_has_related_foreign_keys_count", (char *)&writeset_has_related_foreign_keys_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_was_write_set_limit_reached_count", (char *)&writeset_was_write_set_limit_reached_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_max_size_in_history", (char *)&writeset_max_size_in_history, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"writeset_max_size_in_trx", (char *)&writeset_max_size_in_trx, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {
@@ -10416,6 +10445,16 @@ static int mysql_init_variables() {
   opt_debug_sync_timeout = 0;
 #endif /* defined(ENABLED_DEBUG_SYNC) */
   server_uuid[0] = 0;
+
+  writeset_current_history_size = 0;
+  writeset_history_clear_count = 0;
+  writeset_cannot_use_count = 0;
+  writeset_exceeds_max_size_count = 0;
+  writeset_has_missing_keys_count = 0;
+  writeset_has_related_foreign_keys_count = 0;
+  writeset_was_write_set_limit_reached_count = 0;
+  writeset_max_size_in_history = 0;
+  writeset_max_size_in_trx = 0;
 
   /* Character sets */
   system_charset_info = &my_charset_utf8mb3_general_ci;
