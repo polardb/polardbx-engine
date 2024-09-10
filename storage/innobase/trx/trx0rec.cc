@@ -2418,8 +2418,8 @@ err_exit:
 [[nodiscard]] static trx_undo_rec_t *trx_undo_get_undo_rec_low(
     roll_ptr_t roll_ptr, /*!< in: roll pointer to record */
     mem_heap_t *heap,    /*!< in: memory heap where copied */
-    bool is_temp)        /*!< in: true if temp undo rec. */
-{
+    bool is_temp,        /*!< in: true if temp undo rec. */
+    Page_fetch mode = Page_fetch::NORMAL) {
   trx_undo_rec_t *undo_rec;
   ulint rseg_id;
   space_id_t space_id;
@@ -2432,14 +2432,10 @@ err_exit:
   trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
   space_id = trx_rseg_id_to_space_id(rseg_id, is_temp);
 
-  bool found;
-  const page_size_t &page_size = fil_space_get_page_size(space_id, &found);
-  ut_ad(found);
-
   mtr_start(&mtr);
 
   undo_page = trx_undo_page_get_s_latched(page_id_t(space_id, page_no),
-                                          page_size, &mtr);
+                                          univ_page_size, &mtr, mode);
 
   undo_rec = trx_undo_rec_copy(undo_page, static_cast<uint32_t>(offset), heap);
 
@@ -2464,21 +2460,21 @@ err_exit:
 [[nodiscard]] static bool trx_undo_get_undo_rec(
     roll_ptr_t roll_ptr, txn_rec_t *txn_rec, mem_heap_t *heap, bool is_temp,
     const table_name_t &name, trx_undo_rec_t **undo_rec, bool is_as_of,
-    bool flashback_area, mtr_t *txn_mtr) {
+    bool flashback_area, mtr_t *txn_mtr, Page_fetch mode = Page_fetch::NORMAL) {
   bool missing_history = false;
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
   if (is_as_of) {
-    missing_history =
-        lizard::txn_undo_is_missing_history(txn_rec, flashback_area, txn_mtr);
+    missing_history = lizard::txn_undo_is_missing_history(
+        txn_rec, flashback_area, txn_mtr, mode);
   } else {
-    lizard::txn_rec_real_state_by_misc(txn_rec);
+    lizard::txn_rec_real_state_by_misc(txn_rec, nullptr, mode);
     missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
   }
 
   if (!missing_history) {
-    *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);
+    *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, mode);
   }
 
   rw_lock_s_unlock(&purge_sys->latch);
@@ -2497,7 +2493,7 @@ bool trx_undo_prev_version_build(
     mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
     const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
-    lob::undo_vers_t *lob_undo, const lizard::Vision *vision) {
+    lob::undo_vers_t *lob_undo, const lizard::Vision *vision, Page_fetch mode) {
   DBUG_TRACE;
 
   trx_undo_rec_t *undo_rec = nullptr;
@@ -2552,10 +2548,10 @@ bool trx_undo_prev_version_build(
   mtr_start(&txn_mtr);
   if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
                             index->table->name, &undo_rec, is_as_of,
-                            flashback_area, &txn_mtr)) {
+                            flashback_area, &txn_mtr, mode)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
-      undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp);
+      undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, mode);
     } else {
       mtr_commit(&txn_mtr);
       /* The undo record may already have been purged,
@@ -2640,7 +2636,7 @@ bool trx_undo_prev_version_build(
           txn_info.gcn,
       };
 
-      lizard::txn_rec_real_state_by_misc(&undo_txn_rec);
+      lizard::txn_rec_real_state_by_misc(&undo_txn_rec, nullptr, mode);
 
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);
@@ -2729,6 +2725,7 @@ bool trx_undo_prev_version_build(
     update->reset();
   }
 
+  lizard::lizard_stats.row_prev_vers_build_cnt.inc();
   return true;
 }
 

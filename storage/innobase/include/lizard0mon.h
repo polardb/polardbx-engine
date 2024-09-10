@@ -241,6 +241,9 @@ struct lizard_var_t {
 
   /** Number of queries via flashback area. */
   ulint flashback_area_query_cnt;
+
+  /** Number of previous version built. */
+  ulint row_prev_vers_build_cnt;
 };
 
 struct lizard_stats_t {
@@ -365,6 +368,8 @@ struct lizard_stats_t {
   ulint_ctr_1_t index_lock_guess_clust_miss;
 
   ulint_ctr_1_t flashback_area_query_cnt;
+
+  ulint_ctr_1_t row_prev_vers_build_cnt;
 };
 
 namespace lizard {

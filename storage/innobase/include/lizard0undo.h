@@ -787,12 +787,12 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   @param[in]      txn_mtr       Non-nullptr if use external mtr, the caller is
                                 responsible for committing mtr;
                                 If passing nullptr, it will use a temporary mtr.
-
+  @param[in]      mode          Fetch mode.
   @return         bool       true if the record should be cleaned out.
 */
-std::pair<bool, txn_status_t> txn_slot_lookup_low(txn_rec_t *txn_rec,
-                                                  txn_lookup_t *txn_lookup,
-                                                  mtr_t *txn_mtr);
+std::pair<bool, txn_status_t> txn_slot_lookup_low(
+    txn_rec_t *txn_rec, txn_lookup_t *txn_lookup, mtr_t *txn_mtr,
+    Page_fetch mode = Page_fetch::NORMAL);
 
 /**
   set txn_slot_t
@@ -827,11 +827,13 @@ inline void txn_lookup_t_set(txn_lookup_t *txn_lookup,
 }
 
 inline bool txn_rec_lock_state_by_lookup(txn_rec_t *txn_rec,
-                                         txn_lookup_t *txn_lookup, mtr_t *mtr) {
+                                         txn_lookup_t *txn_lookup, mtr_t *mtr,
+                                         Page_fetch mode) {
   bool active = false;
   ut_ad(txn_lookup && mtr);
 
-  std::tie(active, std::ignore) = txn_slot_lookup_low(txn_rec, txn_lookup, mtr);
+  std::tie(active, std::ignore) =
+      txn_slot_lookup_low(txn_rec, txn_lookup, mtr, mode);
   return active;
 }
 
@@ -851,7 +853,8 @@ inline bool txn_rec_lock_state_by_lookup(txn_rec_t *txn_rec,
 */
 inline bool txn_rec_real_state_by_lookup(txn_rec_t *txn_rec,
                                          txn_status_t *txn_status,
-                                         bool *cleanout) {
+                                         bool *cleanout,
+                                         Page_fetch mode = Page_fetch::NORMAL) {
   bool active = false;
   bool cache_hit = false;
   txn_lookup_t txn_lookup;
@@ -872,7 +875,7 @@ inline bool txn_rec_real_state_by_lookup(txn_rec_t *txn_rec,
 
   /** Record is still active, lookup txn hdr to confirm it. */
   std::tie(active, *txn_status) =
-      txn_slot_lookup_low(txn_rec, &txn_lookup, nullptr);
+      txn_slot_lookup_low(txn_rec, &txn_lookup, nullptr, mode);
   if (active) {
     return active;
   } else {
@@ -896,7 +899,8 @@ inline bool txn_rec_real_state_by_lookup(txn_rec_t *txn_rec,
           false   committed
 */
 inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
-                                       bool *cleanout = nullptr) {
+                                       bool *cleanout = nullptr,
+                                       Page_fetch mode = Page_fetch::NORMAL) {
   txn_status_t txn_status = txn_status_t::ACTIVE;
 
   /** If record is not active, the trx must be committed. */
@@ -909,7 +913,7 @@ inline bool txn_rec_real_state_by_misc(txn_rec_t *txn_rec,
     return false;
   }
 
-  return txn_rec_real_state_by_lookup(txn_rec, &txn_status, cleanout);
+  return txn_rec_real_state_by_lookup(txn_rec, &txn_status, cleanout, mode);
 }
 
 /**
@@ -1307,7 +1311,7 @@ commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
                   erased (flashback area)
 */
 extern bool txn_undo_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
-                                        mtr_t *txn_mtr);
+                                        mtr_t *txn_mtr, Page_fetch mode);
 
 /** Calculate rsegment status of undo tablespace.
  *

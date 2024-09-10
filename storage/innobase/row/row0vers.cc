@@ -1268,6 +1268,7 @@ dberr_t row_vers_build_for_consistent_read(
   mem_heap_t *heap = nullptr;
   byte *buf;
   dberr_t err;
+  ulint prev_version_cnt = 0;
 
   ut_ad(index->is_clustered());
   ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_X_FIX) ||
@@ -1303,7 +1304,8 @@ dberr_t row_vers_build_for_consistent_read(
 
     bool purge_sees = trx_undo_prev_version_build(
         rec, mtr, version, index, *offsets, heap, &prev_version, nullptr, vrow,
-        0, lob_undo, vision);
+        0, lob_undo, vision,
+        (++prev_version_cnt >= 3 ? Page_fetch::SCAN : Page_fetch::NORMAL));
 
     if (vision->is_asof()) {
       err = (purge_sees) ? DB_SUCCESS : DB_SNAPSHOT_TOO_OLD;
@@ -1331,7 +1333,9 @@ dberr_t row_vers_build_for_consistent_read(
 
     txn_rec_t txn_rec;
     lizard::row_get_txn_rec(prev_version, index, *offsets, &txn_rec);
-    lizard::txn_rec_real_state_by_misc(&txn_rec);
+    lizard::txn_rec_real_state_by_misc(
+        &txn_rec, nullptr,
+        (prev_version_cnt >= 3 ? Page_fetch::SCAN : Page_fetch::NORMAL));
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy
       it to in_heap and return */

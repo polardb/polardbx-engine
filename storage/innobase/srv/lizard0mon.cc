@@ -238,6 +238,8 @@ static void export_lizard_status(void) {
       lizard_stats.index_lock_guess_clust_miss;
 
   lizard_vars.flashback_area_query_cnt = lizard_stats.flashback_area_query_cnt;
+
+  lizard_vars.row_prev_vers_build_cnt = lizard_stats.row_prev_vers_build_cnt;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -558,6 +560,9 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_SCOPE_GLOBAL},
 
     {"flashback_area_query_cnt", (char *)&lizard_vars.flashback_area_query_cnt,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"row_prev_vers_build_cnt", (char *)&lizard_vars.row_prev_vers_build_cnt,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};

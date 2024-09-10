@@ -2740,11 +2740,12 @@ void undo_decode_slot_ptr(slot_ptr_t ptr_arg, slot_addr_t *slot_addr) {
 
   @param[in/out]  txn_rec       txn info of the records.
   @param[out]     txn_lookup    txn lookup result, nullptr if don't care.
-
+  @param[in]      txn_mtr       txn mtr
+  @param[in]      mode          Fetch mode.
   @return         bool          whether corresponding trx is active.
 */
 static bool txn_slot_lookup_func(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
-                                 mtr_t *txn_mtr) {
+                                 mtr_t *txn_mtr, Page_fetch mode) {
   undo_addr_t undo_addr;
   page_t *undo_page;
   ulint fil_type;
@@ -2777,7 +2778,7 @@ static bool txn_slot_lookup_func(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
   if (!have_mtr) mtr_start(mtr);
 
   /** Undo tablespace always univ_page_size */
-  undo_page = trx_undo_page_get_s_latched(page_id, univ_page_size, mtr);
+  undo_page = trx_undo_page_get_s_latched(page_id, univ_page_size, mtr, mode);
 
   /** transaction tablespace didn't allowed to be truncated */
   ut_a(undo_page);
@@ -2959,13 +2960,13 @@ static bool txn_slot_lookup_strict(txn_rec_t *txn_rec) {
 
   @param[in/out]  txn_rec       txn info of the records.
   @param[out]     txn_lookup    txn lookup result, nullptr if don't care
-
+  @param[in]      mode          Fetch mode.
   @return         pair          first: whether corresponding trx is active.
                                 second: txn slot real status.
 */
 std::pair<bool, txn_status_t> txn_slot_lookup_low(txn_rec_t *txn_rec,
                                                   txn_lookup_t *txn_lookup,
-                                                  mtr_t *txn_mtr) {
+                                                  mtr_t *txn_mtr, Page_fetch mode) {
   bool ret;
   undo_addr_t undo_addr;
   bool exist;
@@ -3005,7 +3006,7 @@ std::pair<bool, txn_status_t> txn_slot_lookup_low(txn_rec_t *txn_rec,
     }
   }
 
-  ret = txn_slot_lookup_func(txn_rec, txn_lookup, txn_mtr);
+  ret = txn_slot_lookup_func(txn_rec, txn_lookup, txn_mtr, mode);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
   /*
@@ -4011,7 +4012,7 @@ bool trx_useg_verify(page_t *undo_page, const page_size_t &page_size,
                   erased (flashback area)
 */
 bool txn_undo_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
-                                 mtr_t *txn_mtr) {
+                                 mtr_t *txn_mtr, Page_fetch mode) {
   txn_lookup_t txn_lookup;
 
   DBUG_EXECUTE_IF("simulate_prev_image_purged_during_query",
@@ -4034,7 +4035,7 @@ bool txn_undo_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
   }
 
   /** precheck fail, then lookup by reading txn. */
-  txn_rec_lock_state_by_lookup(txn_rec, &txn_lookup, txn_mtr);
+  txn_rec_lock_state_by_lookup(txn_rec, &txn_lookup, txn_mtr, mode);
 
   return !txn_lookup_rollptr_is_valid(&txn_lookup, flashback_area);
 }

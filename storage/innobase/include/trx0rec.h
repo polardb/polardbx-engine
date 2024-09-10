@@ -224,6 +224,7 @@ in which case we also set old_vers to NULL.
                                 "after image" of undo log has been rebuilt
 @param[in]      lob_undo        LOB undo information.
 @param[in]      vision          If it's a as-of query. (lizard)
+@param[in]      mode            page fetch mode
 @retval true if previous version was built, or if it was an insert or the table
 has been rebuilt
 @retval false if the previous version is earlier than purge_view, or being
@@ -234,7 +235,8 @@ bool trx_undo_prev_version_build(const rec_t *index_rec, mtr_t *index_mtr,
                                  rec_t **old_vers, mem_heap_t *v_heap,
                                  const dtuple_t **vrow, ulint v_status,
                                  lob::undo_vers_t *lob_undo,
-                                 const lizard::Vision *vision);
+                                 const lizard::Vision *vision,
+                                 Page_fetch mode = Page_fetch::NORMAL);
 
 #endif /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of adding an undo log record.

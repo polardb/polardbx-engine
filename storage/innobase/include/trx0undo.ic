@@ -133,12 +133,13 @@ static inline page_t *trx_undo_page_get(const page_id_t &page_id,
 @param[in]      page_id         Page id
 @param[in]      page_size       Page size
 @param[in,out]  mtr             Mini-transaction
+@param[in]      mode            Fetch mode.
 @return pointer to page s-latched */
 static inline page_t *trx_undo_page_get_s_latched(const page_id_t &page_id,
                                                   const page_size_t &page_size,
-                                                  mtr_t *mtr) {
-  buf_block_t *block =
-      buf_page_get(page_id, page_size, RW_S_LATCH, UT_LOCATION_HERE, mtr);
+                                                  mtr_t *mtr, Page_fetch mode) {
+  buf_block_t *block = buf_page_get_gen(page_id, page_size, RW_S_LATCH, nullptr,
+                                        mode, UT_LOCATION_HERE, mtr);
   buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
 
   return (buf_block_get_frame(block));
