@@ -28,7 +28,7 @@ include/assert.inc ['binlog_transaction_dependency_tracking should be WRITESET_S
 SET GLOBAL binlog_transaction_dependency_tracking= 2;
 include/assert.inc ['binlog_transaction_dependency_tracking should be WRITESET_SESSION']
 SET GLOBAL binlog_transaction_dependency_tracking= DEFAULT;
-include/assert.inc ['binlog_transaction_dependency_tracking should be COMMIT_ORDER']
+include/assert.inc ['binlog_transaction_dependency_tracking should be WRITESET']
 SET GLOBAL binlog_transaction_dependency_tracking= NULL;
 ERROR 42000: Variable 'binlog_transaction_dependency_tracking' can't be set to the value of 'NULL'
 SET GLOBAL binlog_transaction_dependency_tracking= '';
@@ -46,7 +46,7 @@ ERROR 42000: Variable 'binlog_transaction_dependency_tracking' can't be set to t
 Expect value still set to "COMMIT_ORDER"
 SELECT @@global.binlog_transaction_dependency_tracking;
 @@global.binlog_transaction_dependency_tracking
-COMMIT_ORDER
+WRITESET
 Case1 a): "When binlog_transaction_dependency_tracking != COMMIT_ORDER,
 transaction_write_set_extraction cannot be changed."
 SET GLOBAL binlog_transaction_dependency_tracking= 'WRITESET';

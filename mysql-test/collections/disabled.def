@@ -151,6 +151,10 @@ x.status_variables	 : BUG#000 We don't support IPv6
 x.system_variable_bind_address	 : BUG#000 We don't support IPv6
 auth_sec.host_sort	 : BUG#000 We don't support IPv6
 
+x.notices_gr_quorum            : BUG#000 consensus follower is not allowed to to do current operation.
+x.notices_gr_single_primary    : BUG#000 consensus follower is not allowed to to do current operation.
+x.notices_gr_join_leave        : BUG#000 consensus follower is not allowed to to do current operation.
+
 main.mysql_load_data_local_dir  : BUG#0000 mysql failed
 
 # Lizard didn't support in-place upgrade.
@@ -351,6 +355,7 @@ binlog.binlog_encryption_random_access           					: WL#21509040 encrypt binl
 binlog.binlog_rotate_binlog_master_key_errors    					: WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_crash_recovery_at_startup 	: WL#21509040 encrypt binlog
 binlog.binlog_rotate_binlog_master_key_crash_recovery 				: WL#21509040 encrypt binlog
+component_keyring_file.rpl_binlog_cache_encryption      : WL#21509040 encrypt binlog
 component_keyring_file.tablespace_encrypt_5							: WL#21509040 encrypt ablespace
 component_keyring_file.tablespace_encrypt_7							: WL#21509040 encrypt ablespace
 component_keyring_file.tablespace_encrypt_10						: WL#21509040 encrypt ablespace

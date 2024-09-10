@@ -172,6 +172,8 @@ enable_show_ipk_info
 enable_show_ipk_info
 enable_udf_bloomfilter_xxhash
 enable_udf_bloomfilter_xxhash
+enable_writeset_tracking_for_ipk
+enable_writeset_tracking_for_ipk
 explain_format
 explain_format
 force_revise

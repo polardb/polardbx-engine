@@ -541,6 +541,9 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-enable-polarx-rpc to disable.)
  --enable-show-ipk-info 
  Show everything about implicit key info
+ --enable-writeset-tracking-for-ipk 
+ Whether record the IPK to writeset.
+ (Defaults to on; use --skip-enable-writeset-tracking-for-ipk to disable.)
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -2131,7 +2134,7 @@ binlog-stmt-cache-size 32768
 binlog-transaction-compression FALSE
 binlog-transaction-compression-level-zstd 3
 binlog-transaction-dependency-history-size 25000
-binlog-transaction-dependency-tracking COMMIT_ORDER
+binlog-transaction-dependency-tracking WRITESET
 block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
 caching-sha2-password-digest-rounds 5000
@@ -2248,6 +2251,7 @@ enable-changeset TRUE
 enable-implicit-primary-key FALSE
 enable-polarx-rpc TRUE
 enable-show-ipk-info FALSE
+enable-writeset-tracking-for-ipk TRUE
 end-markers-in-json FALSE
 enforce-gtid-consistency false
 eq-range-index-dive-limit 200

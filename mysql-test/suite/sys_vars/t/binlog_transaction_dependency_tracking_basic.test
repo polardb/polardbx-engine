@@ -80,8 +80,8 @@ SET GLOBAL binlog_transaction_dependency_tracking= 2;
 --source include/assert.inc
 
 SET GLOBAL binlog_transaction_dependency_tracking= DEFAULT;
---let $assert_text= 'binlog_transaction_dependency_tracking should be COMMIT_ORDER'
---let $assert_cond= "[SELECT @@GLOBAL.binlog_transaction_dependency_tracking]" = "COMMIT_ORDER"
+--let $assert_text= 'binlog_transaction_dependency_tracking should be WRITESET'
+--let $assert_cond= "[SELECT @@GLOBAL.binlog_transaction_dependency_tracking]" = "WRITESET"
 --source include/assert.inc
 
 #
