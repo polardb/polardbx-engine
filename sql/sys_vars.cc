@@ -4254,7 +4254,7 @@ static Sys_var_ulong Binlog_transaction_dependency_history_size(
     "Maximum number of rows to keep in the writeset history.",
     GLOBAL_VAR(mysql_bin_log.m_dependency_tracker.get_writeset()
                    ->m_opt_max_history_size),
-    CMD_LINE(REQUIRED_ARG, 0), VALID_RANGE(1, 1000000), DEFAULT(25000),
+    CMD_LINE(REQUIRED_ARG, 0), VALID_RANGE(1, 1000000), DEFAULT(200000),
     BLOCK_SIZE(1), &PLock_slave_trans_dep_tracker, NOT_IN_BINLOG,
     ON_CHECK(nullptr), ON_UPDATE(nullptr));
 
