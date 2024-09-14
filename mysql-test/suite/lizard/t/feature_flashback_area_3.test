@@ -356,7 +356,7 @@ ALTER TABLE t1 rebuild partition p0, p1, p2;
 --source suite/lizard/include/table_has_fba.inc
 
 set query_via_flashback_area = 1;
---error ER_SNAPSHOT_TOO_OLD
+--error ER_AS_OF_TABLE_DEF_CHANGED
 select * from t1 as of timestamp @past_timestamps;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 
@@ -372,7 +372,7 @@ ALTER TABLE t1 REMOVE PARTITIONING;
 --source suite/lizard/include/table_has_fba.inc
 
 set query_via_flashback_area = 1;
---error ER_SNAPSHOT_TOO_OLD
+--error ER_AS_OF_TABLE_DEF_CHANGED
 select * from t1 as of timestamp @past_timestamps;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 
@@ -434,7 +434,7 @@ ALTER TABLE t1 REMOVE PARTITIONING;
 --source suite/lizard/include/table_has_fba.inc
 
 set query_via_flashback_area = 1;
---error ER_SNAPSHOT_TOO_OLD
+--error ER_AS_OF_TABLE_DEF_CHANGED
 select * from t1 as of timestamp @past_timestamps;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 

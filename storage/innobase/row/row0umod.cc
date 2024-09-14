@@ -269,6 +269,9 @@ introduced where a call to log_free_check() is bypassed. */
   dberr_t err;
   dict_index_t *index;
   bool online;
+  /** Disable purge operations driven by rollbacks, since the record may still
+   * be visible to "AS OF" queries. */
+  bool enable_rollback_purge = false;
 
   ut_ad(thr_get_trx(thr) == node->trx);
   ut_ad(node->trx->in_rollback);
@@ -348,7 +351,7 @@ introduced where a call to log_free_check() is bypassed. */
 
   DEBUG_SYNC_C("ib_undo_mod_before_remove_clust");
 
-  if (err == DB_SUCCESS && node->rec_type == TRX_UNDO_UPD_DEL_REC) {
+  if (enable_rollback_purge && err == DB_SUCCESS && node->rec_type == TRX_UNDO_UPD_DEL_REC) {
     mtr_start(&mtr);
 
     dict_disable_redo_if_temporary(index->table, &mtr);
@@ -405,6 +408,7 @@ introduced where a call to log_free_check() is bypassed. */
   ulint rec_deleted;
   bool success;
   bool old_has;
+  bool enable_rollback_purge = false;
 
   log_free_check();
 
@@ -493,8 +497,16 @@ introduced where a call to log_free_check() is bypassed. */
       node->pcur.restore_position(BTR_SEARCH_LEAF, &mtr_vers, UT_LOCATION_HERE);
   ut_a(success);
 
-  old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers,
-                                         index, entry, 0, 0);
+  if (enable_rollback_purge) {
+    old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(),
+                                           &mtr_vers, index, entry, 0, 0);
+  } else {
+    /** Disable purge operations driven by rollbacks, since the record may still
+     * be visible to "AS OF" queries. Regardless of whether the record has old
+     * versions, we will delete-mark it rather than deleting it directly. */
+    old_has = true;
+  }
+
   if (old_has) {
     err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr,
                                        &mtr);
