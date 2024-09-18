@@ -12,8 +12,8 @@ xa prepare 'ac_fbx2_b1';
 xa commit 'ac_fbx2_b1';
 set session debug = "-d, sim_old_txn_undo_hdr";
 call dbms_xa.find_by_xid('ac_fbx2_b1', '', 1);
-STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA
-NOT_SUPPORT	#	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA	SERVER_UUID
+NOT_SUPPORT	#	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 ######################################
 # Case 2: Attached
 ######################################
@@ -23,8 +23,8 @@ update tt set id = id + 1;
 xa end 'ac_fbx2_b2';
 xa prepare 'ac_fbx2_b2';
 call dbms_xa.find_by_xid('ac_fbx2_b2', '', 1);
-STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA
-ATTACHED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA	SERVER_UUID
+ATTACHED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 set xa_detach_on_prepare = default;
 ######################################
 # Case 3: Detached
@@ -41,8 +41,8 @@ include/assert.inc [expect_gcn == actual_gcn]
 # Case 5: NOTSTART_OR_FORGET
 ######################################
 call dbms_xa.find_by_xid('ac_fbx2_b5', '', 1);
-STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA
-NOTSTART_OR_FORGET	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA	SERVER_UUID
+NOTSTART_OR_FORGET	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
 ######################################
 # Case 6: 128 Bytes XID
 ######################################

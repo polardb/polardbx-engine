@@ -124,6 +124,7 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
   XID xid;
   auto thd_xs = thd->get_transaction()->xid_state();
   MyXAInfo info(XA_status::NOTSTART_OR_FORGET);
+  size_t uuid_len = 0;
 
   protocol = thd->get_protocol();
 
@@ -175,6 +176,8 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
       protocol->store_null();
       /** master transaction ptr */
       protocol->store_null();
+      /** Server UUID */
+      protocol->store_null();
       break;
     case DETACHED_PREPARE:
     case COMMIT:
@@ -225,6 +228,10 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
         protocol->store_null();
         protocol->store_null();
       }
+
+      /** 5. Return Server UUID */
+      uuid_len = std::min(strlen(server_uuid_ptr), MAX_SERVER_UUID_LENGTH);
+      protocol->store_string(server_uuid_ptr, uuid_len, system_charset_info);
 
       break;
     default:

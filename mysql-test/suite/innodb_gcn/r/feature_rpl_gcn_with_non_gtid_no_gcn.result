@@ -38,32 +38,32 @@ set global xa_detach_on_prepare = true;
 # Case 2: Detached XA + Commit
 ###############################
 [connection master]
-xa begin '1_no_mts';
+xa begin '1_no_mts_with_no_gitd_no_gcn';
 insert into tt values (1);
-xa end '1_no_mts';
-xa prepare '1_no_mts';
-xa commit '1_no_mts';
+xa end '1_no_mts_with_no_gitd_no_gcn';
+xa prepare '1_no_mts_with_no_gitd_no_gcn';
+xa commit '1_no_mts_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 3: Detached XA + Rollback
 ###############################
 [connection master]
-xa begin '2_no_mts';
+xa begin '2_no_mts_with_no_gitd_no_gcn';
 insert into tt values (2);
-xa end '2_no_mts';
-xa prepare '2_no_mts';
-xa rollback '2_no_mts';
+xa end '2_no_mts_with_no_gitd_no_gcn';
+xa prepare '2_no_mts_with_no_gitd_no_gcn';
+xa rollback '2_no_mts_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 4: Detached XA One Phase
 ###############################
 [connection master]
-xa begin '3_no_mts';
+xa begin '3_no_mts_with_no_gitd_no_gcn';
 insert into tt values (3);
-xa end '3_no_mts';
-xa commit '3_no_mts' one phase;
+xa end '3_no_mts_with_no_gitd_no_gcn';
+xa commit '3_no_mts_with_no_gitd_no_gcn' one phase;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 [connection master]
@@ -72,22 +72,22 @@ set global xa_detach_on_prepare = false;
 # Case 5: Attached XA + Commit
 ###############################
 [connection master]
-xa begin '4_no_mts';
+xa begin '4_no_mts_with_no_gitd_no_gcn';
 insert into tt values (4);
-xa end '4_no_mts';
-xa prepare '4_no_mts';
-xa commit '4_no_mts';
+xa end '4_no_mts_with_no_gitd_no_gcn';
+xa prepare '4_no_mts_with_no_gitd_no_gcn';
+xa commit '4_no_mts_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 6: Attached XA + Rollback
 ###############################
 [connection master]
-xa begin '5_no_mts';
+xa begin '5_no_mts_with_no_gitd_no_gcn';
 insert into tt values (5);
-xa end '5_no_mts';
-xa prepare '5_no_mts';
-xa rollback '5_no_mts';
+xa end '5_no_mts_with_no_gitd_no_gcn';
+xa prepare '5_no_mts_with_no_gitd_no_gcn';
+xa rollback '5_no_mts_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
@@ -134,32 +134,32 @@ set global xa_detach_on_prepare = true;
 # Case 2: Detached XA + Commit
 ###############################
 [connection master]
-xa begin '1_mts_by_db';
+xa begin '1_mts_by_db_with_no_gitd_no_gcn';
 insert into tt values (1);
-xa end '1_mts_by_db';
-xa prepare '1_mts_by_db';
-xa commit '1_mts_by_db';
+xa end '1_mts_by_db_with_no_gitd_no_gcn';
+xa prepare '1_mts_by_db_with_no_gitd_no_gcn';
+xa commit '1_mts_by_db_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 3: Detached XA + Rollback
 ###############################
 [connection master]
-xa begin '2_mts_by_db';
+xa begin '2_mts_by_db_with_no_gitd_no_gcn';
 insert into tt values (2);
-xa end '2_mts_by_db';
-xa prepare '2_mts_by_db';
-xa rollback '2_mts_by_db';
+xa end '2_mts_by_db_with_no_gitd_no_gcn';
+xa prepare '2_mts_by_db_with_no_gitd_no_gcn';
+xa rollback '2_mts_by_db_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 4: Detached XA One Phase
 ###############################
 [connection master]
-xa begin '3_mts_by_db';
+xa begin '3_mts_by_db_with_no_gitd_no_gcn';
 insert into tt values (3);
-xa end '3_mts_by_db';
-xa commit '3_mts_by_db' one phase;
+xa end '3_mts_by_db_with_no_gitd_no_gcn';
+xa commit '3_mts_by_db_with_no_gitd_no_gcn' one phase;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 [connection master]
@@ -168,22 +168,22 @@ set global xa_detach_on_prepare = false;
 # Case 5: Attached XA + Commit
 ###############################
 [connection master]
-xa begin '4_mts_by_db';
+xa begin '4_mts_by_db_with_no_gitd_no_gcn';
 insert into tt values (4);
-xa end '4_mts_by_db';
-xa prepare '4_mts_by_db';
-xa commit '4_mts_by_db';
+xa end '4_mts_by_db_with_no_gitd_no_gcn';
+xa prepare '4_mts_by_db_with_no_gitd_no_gcn';
+xa commit '4_mts_by_db_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 6: Attached XA + Rollback
 ###############################
 [connection master]
-xa begin '5_mts_by_db';
+xa begin '5_mts_by_db_with_no_gitd_no_gcn';
 insert into tt values (5);
-xa end '5_mts_by_db';
-xa prepare '5_mts_by_db';
-xa rollback '5_mts_by_db';
+xa end '5_mts_by_db_with_no_gitd_no_gcn';
+xa prepare '5_mts_by_db_with_no_gitd_no_gcn';
+xa rollback '5_mts_by_db_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
@@ -230,32 +230,32 @@ set global xa_detach_on_prepare = true;
 # Case 2: Detached XA + Commit
 ###############################
 [connection master]
-xa begin '1_mts_by_lc';
+xa begin '1_mts_by_lc_with_no_gitd_no_gcn';
 insert into tt values (1);
-xa end '1_mts_by_lc';
-xa prepare '1_mts_by_lc';
-xa commit '1_mts_by_lc';
+xa end '1_mts_by_lc_with_no_gitd_no_gcn';
+xa prepare '1_mts_by_lc_with_no_gitd_no_gcn';
+xa commit '1_mts_by_lc_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 3: Detached XA + Rollback
 ###############################
 [connection master]
-xa begin '2_mts_by_lc';
+xa begin '2_mts_by_lc_with_no_gitd_no_gcn';
 insert into tt values (2);
-xa end '2_mts_by_lc';
-xa prepare '2_mts_by_lc';
-xa rollback '2_mts_by_lc';
+xa end '2_mts_by_lc_with_no_gitd_no_gcn';
+xa prepare '2_mts_by_lc_with_no_gitd_no_gcn';
+xa rollback '2_mts_by_lc_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 4: Detached XA One Phase
 ###############################
 [connection master]
-xa begin '3_mts_by_lc';
+xa begin '3_mts_by_lc_with_no_gitd_no_gcn';
 insert into tt values (3);
-xa end '3_mts_by_lc';
-xa commit '3_mts_by_lc' one phase;
+xa end '3_mts_by_lc_with_no_gitd_no_gcn';
+xa commit '3_mts_by_lc_with_no_gitd_no_gcn' one phase;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 [connection master]
@@ -264,22 +264,22 @@ set global xa_detach_on_prepare = false;
 # Case 5: Attached XA + Commit
 ###############################
 [connection master]
-xa begin '4_mts_by_lc';
+xa begin '4_mts_by_lc_with_no_gitd_no_gcn';
 insert into tt values (4);
-xa end '4_mts_by_lc';
-xa prepare '4_mts_by_lc';
-xa commit '4_mts_by_lc';
+xa end '4_mts_by_lc_with_no_gitd_no_gcn';
+xa prepare '4_mts_by_lc_with_no_gitd_no_gcn';
+xa commit '4_mts_by_lc_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################
 # Case 6: Attached XA + Rollback
 ###############################
 [connection master]
-xa begin '5_mts_by_lc';
+xa begin '5_mts_by_lc_with_no_gitd_no_gcn';
 insert into tt values (5);
-xa end '5_mts_by_lc';
-xa prepare '5_mts_by_lc';
-xa rollback '5_mts_by_lc';
+xa end '5_mts_by_lc_with_no_gitd_no_gcn';
+xa prepare '5_mts_by_lc_with_no_gitd_no_gcn';
+xa rollback '5_mts_by_lc_with_no_gitd_no_gcn';
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 [connection slave]
 ###############################

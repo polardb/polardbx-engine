@@ -145,7 +145,8 @@ class Xa_proc_find_by_xid : public Xa_proc_base {
     COLUMN_N_LOCAL_BRANCH = 6,
     COLUMN_MASTER_TRX_ID = 7,
     COLUMN_MASTER_UBA = 8,
-    COLUMN_LAST = 9
+    COLUMN_SERVER_UUID = 9,
+    COLUMN_LAST = 10
   };
 
  public:
@@ -169,6 +170,7 @@ class Xa_proc_find_by_xid : public Xa_proc_base {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("N_LOCAL_BRANCH"), 0},
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MASTER_TRX_ID"), 0},
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MASTER_UBA"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("SERVER_UUID"), 512},
     };
 
     for (size_t i = 0; i < COLUMN_LAST; i++) {

@@ -1,1 +1,2 @@
+--let $xid_suffix_2=_with_gitd_no_gcn
 --source suite/innodb_gcn/t/feature_rpl_gcn_parallel_type.inc
