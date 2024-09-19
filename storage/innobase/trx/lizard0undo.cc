@@ -218,8 +218,7 @@ void txn_desc_t::copy_xa_when_prepare(const MyGCN &xa_gcn,
   ut_ad(xa_gcn.is_pmmt_gcn());
   ut_ad(xa_gcn.decided());
   ut_ad(xa_gcn.pushed_up());
-  pmmt.gcn = xa_gcn.gcn();
-  pmmt.csr = xa_gcn.csr();
+  pmmt = xa_gcn.clone_pmmt();
 
   ut_ad(!xa_branch.is_null());
   branch = xa_branch;
@@ -230,9 +229,8 @@ void txn_desc_t::copy_xa_when_commit(const MyGCN &xa_gcn,
   ut_ad(xa_gcn.is_cmmt_gcn());
   ut_ad(xa_gcn.decided());
   ut_ad(xa_gcn.pushed_up());
-  cmmt.gcn = xa_gcn.gcn();
-  cmmt.csr = xa_gcn.csr();
 
+  cmmt.copy_gcn(xa_gcn.clone_cmmt());
   maddr = xa_maddr;
 }
 

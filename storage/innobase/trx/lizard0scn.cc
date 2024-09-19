@@ -382,13 +382,13 @@ enum proposal_state_t proposal_mark_state(const proposal_mark_t &pmmt) {
 /*****************************************
  *              commit_mark_t            *
  *****************************************/
-void commit_mark_t::copy_to_my_gcn(MyGCN *my_gcn) {
+void commit_mark_t::copy_to_my_gcn(MyGCN *my_gcn) const {
   my_gcn->copy_cmmt({gcn, csr});
 }
 
 /*****************************************
  *              proposal_mark_t          *
  *****************************************/
-void proposal_mark_t::copy_to_my_gcn(MyGCN *my_gcn) {
+void proposal_mark_t::copy_to_my_gcn(MyGCN *my_gcn) const {
   my_gcn->copy_pmmt({gcn, csr});
 }

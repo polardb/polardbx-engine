@@ -170,8 +170,13 @@ struct commit_mark_t {
   /** Current only represent gcn source. since utc and scn only be allowed to
    * generate automatically */
   csr_t csr;
+
+  void copy_gcn(const gcn_tuple_t &tuple) {
+    gcn = tuple.gcn;
+    csr = tuple.csr;
+  }
   /** Copy gcn state to MyGCN */
-  void copy_to_my_gcn(MyGCN *);
+  void copy_to_my_gcn(MyGCN *)const ;
 };
 
 /** Compare function */
@@ -231,7 +236,9 @@ struct proposal_mark_t {
 
   proposal_mark_t(gcn_t gcn_arg, csr_t csr_arg) : gcn(gcn_arg), csr(csr_arg) {}
 
-  void copy_to_my_gcn(MyGCN *);
+  proposal_mark_t(const gcn_tuple_t &tuple) : gcn(tuple.gcn), csr(tuple.csr) {}
+
+  void copy_to_my_gcn(MyGCN *) const;
 
   bool is_null() const { return gcn == GCN_NULL; }
 

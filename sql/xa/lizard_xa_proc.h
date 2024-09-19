@@ -416,9 +416,7 @@ class Sql_cmd_xa_proc_ac_prepare : public Sql_cmd_xa_proc_base {
       : Sql_cmd_xa_proc_base(thd, list, proc),
         m_trx_id(0),
         m_slot_ptr(0),
-        m_proposal_gcn(GCN_NULL),
-        m_csr(CSR_AUTOMATIC) {}
-
+        m_pmmt() {}
   /**
     Implementation of Proc execution body.
 
@@ -435,8 +433,7 @@ class Sql_cmd_xa_proc_ac_prepare : public Sql_cmd_xa_proc_base {
  private:
   trx_id_t m_trx_id;
   slot_ptr_t m_slot_ptr;
-  gcn_t m_proposal_gcn;
-  csr_t m_csr;
+  gcn_tuple_t m_pmmt;
 };
 
 class Xa_proc_ac_prepare : public Xa_proc_base {

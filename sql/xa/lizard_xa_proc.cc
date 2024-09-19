@@ -497,8 +497,7 @@ bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
 
   MyGCN decided_gcn = cmd_executor->get_proposal_gcn();
   assert(decided_gcn.decided());
-  m_proposal_gcn = decided_gcn.gcn();
-  m_csr = decided_gcn.csr();
+  m_pmmt = decided_gcn.clone_pmmt();
 
   /** 8. reset gcn variables and status. */
   thd->reset_gcn_variables();
@@ -526,8 +525,8 @@ void Sql_cmd_xa_proc_ac_prepare::send_result(THD *thd, bool error) {
   protocol->store_string(server_uuid_ptr, uuid_len, system_charset_info);
   protocol->store((ulonglong)m_trx_id);
   protocol->store((ulonglong)m_slot_ptr);
-  protocol->store((ulonglong)m_proposal_gcn);
-  auto csr_str = get_csr_str(m_csr);
+  protocol->store((ulonglong)m_pmmt.gcn);
+  auto csr_str = get_csr_str(m_pmmt.csr);
   protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
   if (protocol->end_row()) DBUG_VOID_RETURN;
 

@@ -120,6 +120,50 @@ void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
   trx_sys_mutex_exit();
 }
 
+/** Init xa attributes from txn undo when active or prepare.
+ *
+ * @param[in]		trx id
+ * @param[in]		txn undo if allocate */
+void MyXAInfo::init_by_txn_undo(const trx_id_t tid,
+                                const trx_undo_t *txn_undo) {
+  slot_ptr_t slot_ptr = 0;
+  /** Only used for detached xa for now. */
+  ut_ad(status == XA_status::DETACHED_PREPARE);
+  ut_ad(is_null());
+
+  if (txn_undo) {
+    if (!txn_undo->pmmt.is_null()) {
+      txn_undo->pmmt.copy_to_my_gcn(&gcn);
+    }
+    lizard::undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
+    slot = {tid, slot_ptr};
+    branch = txn_undo->branch;
+    maddr = txn_undo->maddr;
+  } else {
+    /** It seems impossible to get here for detached XA, because empty detached
+    xa trx will be rollback directly when doing "xa prepare". See
+    innodb_replace_trx_in_thd. */
+    slot = {tid, 0};
+  }
+}
+
+/** Init xa attributes from txn slot after transaction finished.
+ *
+ * @param[in]		txn slot */
+void MyXAInfo::init_by_txn_slot(const txn_slot_t *txn_slot) {
+  ut_ad(is_null());
+  ut_ad(txn_slot);
+
+  status = txn_slot->is_rollback() ? XA_status::ROLLBACK : XA_status::COMMIT;
+  /** if TXN_UNDO_LOG_COMMITED or TXN_UNDO_LOG_PURGED, must be
+  non proposal. */
+  txn_slot->image.copy_to_my_gcn(&gcn);
+
+  slot = {txn_slot->trx_id, txn_slot->slot_ptr};
+  branch = txn_slot->branch;
+  maddr = txn_slot->maddr;
+}
+
 namespace lizard {
 namespace xa {
 
@@ -218,36 +262,6 @@ const XID *get_external_xid_from_thd(THD *thd) {
 
   return xid;
 }
-
-static void trx_load_xa_info(trx_t *trx, MyXAInfo *info) {
-  trx_undo_t *txn_undo = nullptr;
-  slot_ptr_t slot_ptr = 0;
-  /** Only used for detached xa for now. */
-  ut_ad(info->status == XA_status::DETACHED_PREPARE);
-
-  txn_undo = txn_undo_get(trx);
-  if (txn_undo) {
-    undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
-    info->slot = {trx->id, slot_ptr};
-    if (!txn_undo->pmmt.is_null()) {
-      txn_undo->pmmt.copy_to_my_gcn(&info->gcn);
-    } else {
-      /* Case: prepare without ac_prepare. */
-      info->gcn.reset();
-    }
-    info->branch = txn_undo->branch;
-    info->maddr = txn_undo->maddr;
-  } else {
-    /** It seems impossible to get here for detached XA, because empty detached
-    xa trx will be rollback directly when doing "xa prepare". See
-    innodb_replace_trx_in_thd. */
-    info->slot = {trx->id, 0};
-    info->gcn.reset();
-    info->branch.reset();
-    info->maddr.reset();
-  }
-}
-
 /**
   Search detached prepare XA transaction info by XID. NOTES:
   Assume holding xid_state lock, can't happen parallel rollback or commit.
@@ -283,8 +297,7 @@ bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
     ut_a(trx_is_prepared_in_tc(trx));
 
     info->status = XA_status::DETACHED_PREPARE;
-    trx_load_xa_info(trx, info);
-
+    info->init_by_txn_undo(trx->id, txn_undo_get(trx));
     return true;
   }
 
@@ -388,19 +401,7 @@ bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info) {
         *info = MY_XA_INFO_NOT_SUPPORT;
         break;
       }
-
-      info->status =
-          txn_slot.is_rollback() ? XA_status::ROLLBACK : XA_status::COMMIT;
-
-      info->slot = {txn_slot.trx_id, txn_slot.slot_ptr};
-
-      /** if TXN_UNDO_LOG_COMMITED or TXN_UNDO_LOG_PURGED, must be
-      non proposal. */
-      txn_slot.image.copy_to_my_gcn(&info->gcn);
-
-      info->branch = txn_slot.branch;
-      info->maddr = txn_slot.maddr;
-
+      info->init_by_txn_slot(&txn_slot);
       break;
     case TXN_UNDO_LOG_ACTIVE:
       /** Skip txn in active state. */

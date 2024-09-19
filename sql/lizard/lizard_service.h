@@ -35,6 +35,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+struct trx_undo_t;
+struct txn_slot_t;
+
 /*-----------------------------------------------------------------------------*/
 /** MyGCN structure that represent user behavior */
 /*-----------------------------------------------------------------------------*/
@@ -55,8 +58,6 @@ struct MyGCN {
         is_proposal(false),
         has_decided(false),
         has_pushed_up(false) {}
-
-  gcn_tuple_t tuple() const { return m_gtuple; }
 
   bool decided() const { return has_decided; }
 
@@ -180,7 +181,24 @@ struct MyGCN {
     return buf;
   }
 
+  /** Clone proposal gcn
+   *
+   * @retval	propose gcn */
+  gcn_tuple_t clone_pmmt() const {
+    assert(is_pmmt_gcn());
+    return tuple();
+  }
+
+  /** Clone commit gcn
+   *
+   * @retval	commit gcn */
+  gcn_tuple_t clone_cmmt() const {
+    assert(is_cmmt_gcn());
+    return tuple();
+  }
+
  private:
+  gcn_tuple_t tuple() const { return m_gtuple; }
   /**
     Copy from pmmt which must be already pushed up.
     @param[in]    gcn_tuple     {gcn, csr}
@@ -244,6 +262,7 @@ enum XA_status {
 };
 
 struct MyXAInfo {
+ public:
   MyXAInfo(XA_status s) : status(s), gcn(), slot(), branch(), maddr() {}
 
   XA_status status;
@@ -259,13 +278,29 @@ struct MyXAInfo {
 
   /* XA master branch ID */
   xa_addr_t maddr;
+
+ public:
+  bool is_null() {
+    return gcn.is_null() && slot.is_null() && branch.is_null() &&
+           maddr.is_null();
+  }
+  /** Init xa attributes from txn undo when active or prepare.
+   *
+   * @param[in]		trx id
+   * @param[in]		txn undo if allocate */
+  void init_by_txn_undo(const trx_id_t tid, const trx_undo_t *txn_undo);
+
+  /** Init xa attributes from txn slot after transaction finished.
+   *
+   * @param[in]		txn slot */
+  void init_by_txn_slot(const txn_slot_t *txn_slot);
 };
 
-#define MY_XA_INFO_ATTACH (MyXAInfo(XA_status::ATTACHED))
+const MyXAInfo MY_XA_INFO_ATTACH(XA_status::ATTACHED);
 
-#define MY_XA_INFO_FORGET (MyXAInfo(XA_status::NOTSTART_OR_FORGET))
+const MyXAInfo MY_XA_INFO_FORGET(XA_status::NOTSTART_OR_FORGET);
 
-#define MY_XA_INFO_NOT_SUPPORT (MyXAInfo(XA_status::NOT_SUPPORT))
+const MyXAInfo MY_XA_INFO_NOT_SUPPORT(XA_status::NOT_SUPPORT);
 
 namespace lizard {
 namespace xa {
