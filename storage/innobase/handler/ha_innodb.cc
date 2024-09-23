@@ -6407,7 +6407,15 @@ static int innobase_close_connection(
     in the 1st and 3rd case. */
     if (trx_is_started(trx)) {
       if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
-        if (trx_is_redo_rseg_updated(trx)) {
+        /*
+          Lizard Revision:
+          For an "empty" transaction, we may assign a TXN undo to it to save
+          the state information of the transaction. The state information of
+          the transaction will eventually be used by the two-phase commit
+          coordinator. So we can't just rollback such a transaction.
+        */
+        if (trx_is_redo_rseg_updated(trx) ||
+            lizard::trx_is_txn_rseg_updated(trx)) {
           trx_disconnect_prepared(trx);
         } else {
           trx_rollback_for_mysql(trx);

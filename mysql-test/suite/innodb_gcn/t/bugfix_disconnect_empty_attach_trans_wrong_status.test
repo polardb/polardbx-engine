@@ -1,0 +1,131 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+set global innodb_undo_retention = 9000;
+set global xa_detach_on_prepare = off;
+
+#################
+# Case 1
+#################
+connect(con1, localhost, root,,);
+connection con1;
+show variables like "xa_detach_on_prepare";
+xa start 'bfx_disc_status_1';
+xa end 'bfx_disc_status_1';
+--disable_result_log
+call dbms_xa.prepare_with_trx_slot('bfx_disc_status_1', '', 1);
+--enable_result_log
+disconnect con1;
+# sleep enough time to make sure that has disconnectted
+--sleep 2
+
+connection default;
+--let $expect_status= DETACHED_PREPARE
+--let $my_xid= 'bfx_disc_status_1','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+xa commit 'bfx_disc_status_1';
+--let $expect_status= COMMIT
+--let $my_xid= 'bfx_disc_status_1','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+#################
+# Case 2
+#################
+connect(con1, localhost, root,,);
+connection con1;
+show variables like "xa_detach_on_prepare";
+xa start 'bfx_disc_status_2';
+xa end 'bfx_disc_status_2';
+--disable_result_log
+call dbms_xa.prepare_with_trx_slot('bfx_disc_status_2', '', 1);
+--enable_result_log
+disconnect con1;
+--sleep 2
+
+connection default;
+--let $expect_status= DETACHED_PREPARE
+--let $my_xid= 'bfx_disc_status_2','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+xa rollback 'bfx_disc_status_2';
+--let $expect_status= ROLLBACK
+--let $my_xid= 'bfx_disc_status_2','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+#################
+# Case 3
+#################
+connection default;
+--let $commit_gcn = `select @base_seq + 100`
+
+connect(con1, localhost, root,,);
+connection con1;
+show variables like "xa_detach_on_prepare";
+xa start 'bfx_disc_status_3';
+xa end 'bfx_disc_status_3';
+--let $expect_gcn= $commit_gcn
+--let $expect_csr= ASSIGNED_GCN
+--let $my_xid= 'bfx_disc_status_3', '', 1
+--let $ac_args= 1, 1, $commit_gcn
+--let $ac_conn=con1
+--source suite/innodb_gcn/include/xa_proc_ac_prepare_verify.inc
+disconnect con1;
+--sleep 2
+
+connect(con1, localhost, root,,);
+connection con1;
+--let $expect_status= DETACHED_PREPARE
+--let $my_xid= 'bfx_disc_status_3','',1
+--let $ac_args= 1, 1, $commit_gcn
+--let $ac_conn=con1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+--let $m_trx_id= $ac_prepare_trx_id
+--let $m_uba= $ac_prepare_uba
+--let $server_uuid= $ac_prepare_uuid
+
+--let $my_xid= 'bfx_disc_status_3', '', 1
+--let $m_phyid= $m_trx_id, $m_uba
+--let $expect_gcn= $commit_gcn
+--let $expect_csr= ASSIGNED_GCN
+--let $server_uuid= $server_uuid
+--let $expect_m_trx_id= NULL
+--let $expect_m_uba= NULL
+--source suite/innodb_gcn/include/xa_proc_ac_commit_verify.inc
+
+#################
+# Case 4
+#################
+connection default;
+--let $commit_gcn = `select @base_seq + 200`
+
+connection con1;
+show variables like "xa_detach_on_prepare";
+xa start 'bfx_disc_status_4';
+xa end 'bfx_disc_status_4';
+--let $expect_gcn= $commit_gcn
+--let $expect_csr= ASSIGNED_GCN
+--let $my_xid= 'bfx_disc_status_4', '', 1
+--let $ac_args= 1, 1, $commit_gcn
+--let $ac_conn=con1
+--source suite/innodb_gcn/include/xa_proc_ac_prepare_verify.inc
+disconnect con1;
+--sleep 2
+
+connect(con1, localhost, root,,);
+connection con1;
+--let $expect_status= DETACHED_PREPARE
+--let $my_xid= 'bfx_disc_status_4','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+--let $m_trx_id= $ac_prepare_trx_id
+--let $m_uba= $ac_prepare_uba
+--let $server_uuid= $ac_prepare_uuid
+
+xa rollback 'bfx_disc_status_4';
+--let $expect_status= ROLLBACK
+--let $my_xid= 'bfx_disc_status_4','',1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+
+set global innodb_undo_retention = default;
+set global xa_detach_on_prepare = default;
+disconnect con1;

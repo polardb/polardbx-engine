@@ -1,0 +1,75 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+set global innodb_undo_retention = 9000;
+set global xa_detach_on_prepare = off;
+show variables like "xa_detach_on_prepare";
+Variable_name	Value
+xa_detach_on_prepare	OFF
+xa start 'bfx_disc_status_1';
+xa end 'bfx_disc_status_1';
+call dbms_xa.prepare_with_trx_slot('bfx_disc_status_1', '', 1);
+include/assert.inc [expect_status == actual_status]
+xa commit 'bfx_disc_status_1';
+include/assert.inc [expect_status == actual_status]
+show variables like "xa_detach_on_prepare";
+Variable_name	Value
+xa_detach_on_prepare	OFF
+xa start 'bfx_disc_status_2';
+xa end 'bfx_disc_status_2';
+call dbms_xa.prepare_with_trx_slot('bfx_disc_status_2', '', 1);
+include/assert.inc [expect_status == actual_status]
+xa rollback 'bfx_disc_status_2';
+include/assert.inc [expect_status == actual_status]
+show variables like "xa_detach_on_prepare";
+Variable_name	Value
+xa_detach_on_prepare	OFF
+xa start 'bfx_disc_status_3';
+xa end 'bfx_disc_status_3';
+call dbms_xa.ac_prepare(#gtrid, #bqual, #formatID, #N_BRANCH, #N_LOCAL_BRANCH, #gcn)
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_csr == actual_csr]
+disconnect con1;
+connect con1, localhost, root,,;
+connection con1;
+include/assert.inc [expect_status == actual_status]
+connection con1;
+connection con1;
+call dbms_xa.ac_commit(#gtrid, #bqual, #formatID, #server_uuid,
+#master_trx_id, #master_uba, #gcn)
+include/assert.inc [expect_status == actual_status]
+connection con1;
+connection con1;
+include/assert.inc [expect_gcn == actual_gcn]
+connection con1;
+connection con1;
+include/assert.inc [expect_csr == actual_csr]
+connection con1;
+connection con1;
+include/assert.inc [expect_m_trx_id == actual_m_trx_id]
+connection con1;
+connection con1;
+include/assert.inc [expect_m_uba == actual_m_uba]
+connection con1;
+connection con1;
+connection default;
+connection con1;
+show variables like "xa_detach_on_prepare";
+Variable_name	Value
+xa_detach_on_prepare	OFF
+xa start 'bfx_disc_status_4';
+xa end 'bfx_disc_status_4';
+call dbms_xa.ac_prepare(#gtrid, #bqual, #formatID, #N_BRANCH, #N_LOCAL_BRANCH, #gcn)
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_csr == actual_csr]
+disconnect con1;
+connect con1, localhost, root,,;
+connection con1;
+include/assert.inc [expect_status == actual_status]
+connection con1;
+connection con1;
+xa rollback 'bfx_disc_status_4';
+include/assert.inc [expect_status == actual_status]
+connection con1;
+connection con1;
+set global innodb_undo_retention = default;
+set global xa_detach_on_prepare = default;
+disconnect con1;
