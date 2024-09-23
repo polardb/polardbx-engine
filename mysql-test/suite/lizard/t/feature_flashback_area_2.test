@@ -533,6 +533,7 @@ ALTER TABLE t9 ENCRYPTION='Y';
 
 ALTER TABLE t9 ENCRYPTION='N';
 
+sleep 2;
 set @past_timestamps = (select now());
 sleep 2;
 
@@ -566,7 +567,7 @@ ALTER TABLE t9 IMPORT TABLESPACE;
 --source suite/lizard/include/table_has_fba.inc
 
 set query_via_flashback_area = 1;
---error ER_SNAPSHOT_TOO_OLD, ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_SNAPSHOT_TOO_OLD
 select * from t9 as of timestamp @past_timestamps;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 

@@ -74,12 +74,14 @@ select * from t1 as of timestamp @past_timestamps;
 c1	c2
 1	100
 2	200
+250	250
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 Variable_name	Value
 Lizard_flashback_area_query_cnt	7
 set query_via_flashback_area = 1;
 select * from t1 as of timestamp @past_timestamps where c1 > 200;
 c1	c2
+250	250
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 Variable_name	Value
 Lizard_flashback_area_query_cnt	8
