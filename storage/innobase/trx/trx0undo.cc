@@ -271,13 +271,18 @@ trx_undo_rec_t *trx_undo_get_next_rec(
 
   space = page_get_space_id(page_align(rec));
 
+
+#ifdef UNIV_DEBUG
   bool found;
   const page_size_t &page_size = fil_space_get_page_size(space, &found);
-
   ut_ad(found);
 
-  return (trx_undo_get_next_rec_from_next_page(
-      space, page_size, page_align(rec), page_no, offset, RW_S_LATCH, mtr));
+  ut_ad(page_size.equals_to(univ_page_size));
+#endif
+
+  return (trx_undo_get_next_rec_from_next_page(space, univ_page_size,
+                                               page_align(rec), page_no, offset,
+                                               RW_S_LATCH, mtr));
 }
 
 /** Gets the first record in an undo log.
@@ -1028,8 +1033,8 @@ static page_no_t trx_undo_free_page_low(
 
   lizard_verify_txn_tablespace_by_id(space, false);
 
-  undo_page =
-      trx_undo_page_get(page_id_t(space, page_no), rseg->page_size, mtr);
+  undo_page = lizard::trx_undo_page_get_with_hint(
+      page_id_t(space, page_no), rseg->page_size, Cache_hint::KEEP_OLD, mtr);
 
   header_page =
       trx_undo_page_get(page_id_t(space, hdr_page_no), rseg->page_size, mtr);

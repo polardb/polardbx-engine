@@ -4397,8 +4397,6 @@ buf_block_t *Buf_fetch<T>::single_page() {
 
   ut_a(!block->page.was_stale());
 
-  lizard::txn_undo_page_hit_stat(m_bp_hit, block, m_rw_latch);
-
   return (block);
 }
 

@@ -488,7 +488,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
 
       {
         if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_rec_real_state_by_misc(&txn_rec);
+          lizard::txn_rec_real_state_by_misc(&txn_rec, Cache_hint::KEEP_OLD);
         }
       }
 

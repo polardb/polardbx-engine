@@ -73,21 +73,28 @@ static inline roll_ptr_t trx_read_roll_ptr(
 /** Gets an undo log page and x-latches it.
 @param[in]      page_id         Page id
 @param[in]      page_size       Page size
+@param[in]      mode            Fetch mode.
 @param[in,out]  mtr             Mini-transaction
 @return pointer to page x-latched */
-static inline page_t *trx_undo_page_get(const page_id_t &page_id,
-                                        const page_size_t &page_size,
-                                        mtr_t *mtr);
+static inline page_t *trx_undo_page_get_low(const page_id_t &page_id,
+                                            const page_size_t &page_size,
+                                            Page_fetch mode, mtr_t *mtr);
+
+#define trx_undo_page_get(page_id, page_size, mtr) \
+  trx_undo_page_get_low(page_id, page_size, Page_fetch::NORMAL, mtr)
 
 /** Gets an undo log page and s-latches it.
 @param[in]      page_id         Page id
 @param[in]      page_size       Page size
-@param[in,out]  mtr             Mini-transaction
 @param[in]      mode            Fetch mode.
+@param[in,out]  mtr             Mini-transaction
 @return pointer to page s-latched */
-static inline page_t *trx_undo_page_get_s_latched(
-    const page_id_t &page_id, const page_size_t &page_size, mtr_t *mtr,
-    Page_fetch mode = Page_fetch::NORMAL);
+static inline page_t *trx_undo_page_get_s_latched_low(
+    const page_id_t &page_id, const page_size_t &page_size, Page_fetch mode,
+    mtr_t *mtr);
+
+#define trx_undo_page_get_s_latched(page_id, page_size, mtr) \
+  trx_undo_page_get_s_latched_low(page_id, page_size, Page_fetch::NORMAL, mtr)
 
 /** Returns the previous undo record on the page in the specified log, or
 NULL if none exists.

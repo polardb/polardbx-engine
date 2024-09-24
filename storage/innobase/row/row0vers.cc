@@ -259,7 +259,9 @@ static bool row_vers_find_matching(
         &prev_version, nullptr,
         dict_index_has_virtual(sec_index) ? &clust_vrow : nullptr, 0, nullptr,
         nullptr /* Only lock_sec_rec_some_has_impl run into here, it's a
-                 current reading so can't be a as-of query */);
+                 current reading so can't be a as-of query */
+        ,
+        Cache_hint::MAKE_YOUNG);
 
     /* The oldest visible clustered index version must not be
     delete-marked, because we never start a transaction by
@@ -594,7 +596,7 @@ bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
 
   mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  lizard::txn_rec_real_state_by_misc(txn_rec);
+  lizard::txn_rec_real_state_by_misc(txn_rec, Cache_hint::KEEP_OLD);
 
   return (!purge_sys->vision.modifications_visible(txn_rec, name));
 }
@@ -717,7 +719,8 @@ static void row_vers_build_cur_vrow_low(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
-                                nullptr, nullptr /* TODO: figure out it */);
+                                nullptr, nullptr /* TODO: figure out it */,
+                                Cache_hint::MAKE_YOUNG);
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -837,7 +840,8 @@ static bool row_vers_vc_matches_cluster(
 
     trx_undo_prev_version_build(rec, mtr, version, clust_index, clust_offsets,
                                 heap, &prev_version, nullptr, vrow, status,
-                                nullptr, nullptr /* TODO: figured out it */);
+                                nullptr, nullptr /* TODO: figured out it */,
+                                Cache_hint::MAKE_YOUNG);
 
     if (heap2) {
       mem_heap_free(heap2);
@@ -1158,7 +1162,8 @@ bool row_vers_old_has_index_entry(
     trx_undo_prev_version_build(
         rec, mtr, version, clust_index, clust_offsets, heap, &prev_version,
         nullptr, dict_index_has_virtual(index) ? &vrow : nullptr, 0, nullptr,
-        nullptr /* Only purge sys, or rollback run into here */);
+        nullptr /* Only purge sys, or rollback run into here */,
+        Cache_hint::MAKE_YOUNG);
     mem_heap_free(heap2); /* free version and clust_offsets */
 
     if (!prev_version) {
@@ -1305,7 +1310,8 @@ dberr_t row_vers_build_for_consistent_read(
     bool purge_sees = trx_undo_prev_version_build(
         rec, mtr, version, index, *offsets, heap, &prev_version, nullptr, vrow,
         0, lob_undo, vision,
-        (++prev_version_cnt >= 3 ? Page_fetch::SCAN : Page_fetch::NORMAL));
+        (++prev_version_cnt >= 3 ? Cache_hint::KEEP_OLD
+                                 : Cache_hint::MAKE_YOUNG));
 
     if (vision->is_asof()) {
       err = (purge_sees) ? DB_SUCCESS : DB_SNAPSHOT_TOO_OLD;
@@ -1333,9 +1339,8 @@ dberr_t row_vers_build_for_consistent_read(
 
     txn_rec_t txn_rec;
     lizard::row_get_txn_rec(prev_version, index, *offsets, &txn_rec);
-    lizard::txn_rec_real_state_by_misc(
-        &txn_rec, nullptr,
-        (prev_version_cnt >= 3 ? Page_fetch::SCAN : Page_fetch::NORMAL));
+    lizard::txn_rec_real_state_by_misc(&txn_rec, Cache_hint::KEEP_OLD, nullptr);
+
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy
       it to in_heap and return */
@@ -1455,10 +1460,11 @@ void row_vers_build_for_semi_consistent_read(
     heap = mem_heap_create(1024, UT_LOCATION_HERE);
 
     if (!trx_undo_prev_version_build(rec, mtr, version, index, *offsets, heap,
-                                     &prev_version, in_heap, vrow, 0,
-                                     nullptr,
+                                     &prev_version, in_heap, vrow, 0, nullptr,
                                      nullptr /* semi-consi can't be a
-                                                as-of query */)) {
+                                                as-of query */
+                                     ,
+                                     Cache_hint::MAKE_YOUNG)) {
       mem_heap_free(heap);
       heap = heap2;
       heap2 = nullptr;

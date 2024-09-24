@@ -2419,7 +2419,7 @@ err_exit:
     roll_ptr_t roll_ptr, /*!< in: roll pointer to record */
     mem_heap_t *heap,    /*!< in: memory heap where copied */
     bool is_temp,        /*!< in: true if temp undo rec. */
-    Page_fetch mode = Page_fetch::NORMAL) {
+    Cache_hint hint) {
   trx_undo_rec_t *undo_rec;
   ulint rseg_id;
   space_id_t space_id;
@@ -2434,8 +2434,8 @@ err_exit:
 
   mtr_start(&mtr);
 
-  undo_page = trx_undo_page_get_s_latched(page_id_t(space_id, page_no),
-                                          univ_page_size, &mtr, mode);
+  undo_page = lizard::trx_undo_page_get_s_latched_with_hint(
+      page_id_t(space_id, page_no), univ_page_size, hint, &mtr);
 
   undo_rec = trx_undo_rec_copy(undo_page, static_cast<uint32_t>(offset), heap);
 
@@ -2457,29 +2457,77 @@ err_exit:
  truncated and we cannot fetch the old version
  @retval false if the undo log record is available
  NOTE: the caller must have latches on the clustered index page. */
-[[nodiscard]] static bool trx_undo_get_undo_rec(
+[[nodiscard]] static bool trx_undo_get_undo_rec_with_asof(
     roll_ptr_t roll_ptr, txn_rec_t *txn_rec, mem_heap_t *heap, bool is_temp,
-    const table_name_t &name, trx_undo_rec_t **undo_rec, bool is_as_of,
-    bool flashback_area, mtr_t *txn_mtr, Page_fetch mode = Page_fetch::NORMAL) {
+    const table_name_t &name, trx_undo_rec_t **undo_rec, bool flashback_area,
+    Cache_hint hint, mtr_t *txn_mtr) {
+  bool missing_history =
+      lizard::txn_undo_is_missing_history(txn_rec, flashback_area, txn_mtr);
+
+  if (!missing_history) {
+    *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
+  }
+
+  return (missing_history);
+}
+
+/** Copies an undo record to heap.
+ @param[in]     roll_ptr        roll pointer to record
+ @param[in/out] txn_rec         txn_info of record
+ @param[in]     heap            memory heap where copied
+ @param[in]     is_temp         true if temporary, no-redo rseg.
+ @param[in]     name            table name
+ @param[out]    undo_rec        own: copy of the record
+ @retval true if the undo log has been
+ truncated and we cannot fetch the old version
+ @retval false if the undo log record is available
+ NOTE: the caller must have latches on the clustered index page. */
+[[nodiscard]] static bool trx_undo_get_undo_rec_with_normal(
+    roll_ptr_t roll_ptr, txn_rec_t *txn_rec, mem_heap_t *heap, bool is_temp,
+    const table_name_t &name, trx_undo_rec_t **undo_rec, Cache_hint hint) {
   bool missing_history = false;
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  if (is_as_of) {
-    missing_history = lizard::txn_undo_is_missing_history(
-        txn_rec, flashback_area, txn_mtr, mode);
-  } else {
-    lizard::txn_rec_real_state_by_misc(txn_rec, nullptr, mode);
-    missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
-  }
+  lizard::txn_rec_real_state_by_misc(txn_rec, Cache_hint::KEEP_OLD, nullptr);
+  missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
 
   if (!missing_history) {
-    *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, mode);
+    *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
   }
 
   rw_lock_s_unlock(&purge_sys->latch);
 
   return (missing_history);
+}
+
+/** Copies an undo record to heap.
+ @param[in]     roll_ptr        roll pointer to record
+ @param[in/out] txn_rec         txn_info of record
+ @param[in]     heap            memory heap where copied
+ @param[in]     is_temp         true if temporary, no-redo rseg.
+ @param[in]     name            table name
+ @param[out]    undo_rec        own: copy of the record
+ @param[in]     is_as_of        If it's a as-of query (lizard)
+ @param[in]     txn_mtr         txn mtr (lizard)
+ @retval true if the undo log has been
+ truncated and we cannot fetch the old version
+ @retval false if the undo log record is available
+ NOTE: the caller must have latches on the clustered index page. */
+[[nodiscard]] static bool trx_undo_get_undo_rec(
+    roll_ptr_t roll_ptr, txn_rec_t *txn_rec, mem_heap_t *heap, bool is_temp,
+    const table_name_t &name, trx_undo_rec_t **undo_rec, bool is_as_of,
+    bool flashback_area, Cache_hint hint, mtr_t *txn_mtr) {
+  if (is_as_of) {
+    ut_ad(txn_mtr);
+    return trx_undo_get_undo_rec_with_asof(roll_ptr, txn_rec, heap, is_temp,
+                                           name, undo_rec, flashback_area, hint,
+                                           txn_mtr);
+  } else {
+    ut_ad(!flashback_area);
+    return trx_undo_get_undo_rec_with_normal(roll_ptr, txn_rec, heap, is_temp,
+                                             name, undo_rec, hint);
+  }
 }
 
 #ifdef UNIV_DEBUG
@@ -2493,7 +2541,7 @@ bool trx_undo_prev_version_build(
     mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
     const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
     rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
-    lob::undo_vers_t *lob_undo, const lizard::Vision *vision, Page_fetch mode) {
+    lob::undo_vers_t *lob_undo, const lizard::Vision *vision, Cache_hint hint) {
   DBUG_TRACE;
 
   trx_undo_rec_t *undo_rec = nullptr;
@@ -2548,10 +2596,10 @@ bool trx_undo_prev_version_build(
   mtr_start(&txn_mtr);
   if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
                             index->table->name, &undo_rec, is_as_of,
-                            flashback_area, &txn_mtr, mode)) {
+                            flashback_area, hint, &txn_mtr)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
-      undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, mode);
+      undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
     } else {
       mtr_commit(&txn_mtr);
       /* The undo record may already have been purged,
@@ -2636,7 +2684,8 @@ bool trx_undo_prev_version_build(
           txn_info.gcn,
       };
 
-      lizard::txn_rec_real_state_by_misc(&undo_txn_rec, nullptr, mode);
+      lizard::txn_rec_real_state_by_misc(&undo_txn_rec, Cache_hint::KEEP_OLD,
+                                         nullptr);
 
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);

@@ -117,13 +117,14 @@ static inline roll_ptr_t trx_read_roll_ptr(
 /** Gets an undo log page and x-latches it.
 @param[in]      page_id         Page id
 @param[in]      page_size       Page size
+@param[in]      mode            Fetch mode.
 @param[in,out]  mtr             Mini-transaction
 @return pointer to page x-latched */
-static inline page_t *trx_undo_page_get(const page_id_t &page_id,
-                                        const page_size_t &page_size,
-                                        mtr_t *mtr) {
-  buf_block_t *block =
-      buf_page_get(page_id, page_size, RW_X_LATCH, UT_LOCATION_HERE, mtr);
+static inline page_t *trx_undo_page_get_low(const page_id_t &page_id,
+                                            const page_size_t &page_size,
+                                            Page_fetch mode, mtr_t *mtr) {
+  buf_block_t *block = buf_page_get_gen(page_id, page_size, RW_X_LATCH, nullptr,
+                                        mode, UT_LOCATION_HERE, mtr);
   buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
 
   return (buf_block_get_frame(block));
@@ -132,12 +133,12 @@ static inline page_t *trx_undo_page_get(const page_id_t &page_id,
 /** Gets an undo log page and s-latches it.
 @param[in]      page_id         Page id
 @param[in]      page_size       Page size
-@param[in,out]  mtr             Mini-transaction
 @param[in]      mode            Fetch mode.
+@param[in,out]  mtr             Mini-transaction
 @return pointer to page s-latched */
-static inline page_t *trx_undo_page_get_s_latched(const page_id_t &page_id,
-                                                  const page_size_t &page_size,
-                                                  mtr_t *mtr, Page_fetch mode) {
+static inline page_t *trx_undo_page_get_s_latched_low(
+    const page_id_t &page_id, const page_size_t &page_size, Page_fetch mode,
+    mtr_t *mtr) {
   buf_block_t *block = buf_page_get_gen(page_id, page_size, RW_S_LATCH, nullptr,
                                         mode, UT_LOCATION_HERE, mtr);
   buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);

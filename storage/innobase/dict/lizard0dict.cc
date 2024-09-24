@@ -170,7 +170,7 @@ bool dd_index_modification_visible(
       goto judge;
     }
 
-    lizard::txn_rec_real_state_by_misc(&rec_txn);
+    lizard::txn_rec_real_state_by_misc(&rec_txn, Cache_hint::KEEP_OLD);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
     index->txn.gcn.store(rec_txn.gcn);
