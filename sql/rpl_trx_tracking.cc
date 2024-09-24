@@ -288,7 +288,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
 
     if (!exceeds_capacity) {
       for (const auto& key : *writeset) {
-          m_writeset_history.emplace(key, sequence_number);
+          m_writeset_history.insert_or_assign(key, sequence_number);
       }
     }
 
