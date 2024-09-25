@@ -106,9 +106,13 @@ insert into t values(repeat('c', 300));
 xa end 'x1';
 xa prepare 'x1';
 # restart
+Timeout in wait_condition.inc for select LAST_LOG_INDEX=LAST_APPLY_INDEX from information_schema.alisql_cluster_local limit 1
 select count(*) from t;
 count(*)
 1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
 xa commit 'x1';
 drop table t;
 # ---------- case10 ----------
@@ -128,6 +132,9 @@ xa prepare 'x1';
 select count(*) from t;
 count(*)
 1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
 xa commit 'x1';
 drop table t;
 # ---------- cleanup -----------

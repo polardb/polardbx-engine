@@ -5865,7 +5865,7 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
                         (ulong)rli->get_group_master_log_pos()));
     mysql_mutex_unlock(&rli->data_lock);
     if (rli->is_parallel_exec()) {
-      bool real_event = server_id && !is_artificial_event();
+      bool real_event = server_id && !is_artificial_event() && !rli->info_thd->xpaxos_replication_channel;
       rli->reset_notified_checkpoint(
           0, real_event ? common_header->when.tv_sec + (time_t)exec_time : 0,
           real_event);

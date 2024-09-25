@@ -3528,8 +3528,10 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
                   &my_charset_bin);
   protocol->store((ulonglong)mi->rli->get_group_relay_log_pos());
   protocol->store(mi->rli->get_group_master_log_name_info(), &my_charset_bin);
+  const bool is_mi_slave_io_running = (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
+      || (consensus_log_manager.get_status() == RELAY_LOG_WORKING);
   protocol->store(
-      mi->slave_running == MYSQL_SLAVE_RUN_CONNECT
+      is_mi_slave_io_running
           ? "Yes"
           : (mi->slave_running == MYSQL_SLAVE_RUN_NOT_CONNECT ? "Connecting"
                                                               : "No"),
@@ -3631,11 +3633,15 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
        condition2: compare the file names (to handle rotation case)
     */
     /* GalaxyEngine does not maintain master log info currently. */
-    if (!Multisource_info::is_xpaxos_channel(mi->rli) &&
-        (mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()) &&
-        (!strcmp(mi->get_master_log_name(),
-                 mi->rli->get_group_master_log_name()))) {
-      if (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
+    bool is_no_delay = 0;
+    if (mi->rli->info_thd->xpaxos_replication_channel) {
+      is_no_delay = consensus_ptr->getCommitIndex() <= consensus_log_manager.get_real_apply_index();;
+    } else {
+      is_no_delay = mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()
+                      && !strcmp(mi->get_master_log_name(), mi->rli->get_group_master_log_name());
+    }
+    if (is_no_delay) {
+      if (is_mi_slave_io_running)
         protocol->store(0LL);
       else
         protocol->store_null();

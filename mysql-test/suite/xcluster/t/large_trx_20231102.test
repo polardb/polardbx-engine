@@ -114,6 +114,7 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 
 --source include/wait_follower_catchup.inc
 
+--sleep 5
 xa commit 'x1';
 drop table t;
 
@@ -352,6 +353,7 @@ xa prepare 'x1';
 --disable_reconnect
 
 select count(*) from t;
+xa recover;
 
 --connection conn1
 xa commit 'x1';
@@ -401,6 +403,7 @@ xa prepare 'x1';
 --disable_reconnect
 
 select count(*) from t;
+xa recover;
 
 --connection conn1
 xa commit 'x1';

@@ -657,7 +657,10 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
 
       // determine whether exit
       uint64 stop_term = consensus_log_manager.get_stop_term();
-      long time_diff = (long)(time(0) - rli->last_master_timestamp);
+      long time_diff= 0;
+      if (rli->last_master_timestamp)
+        time_diff= ((long)(time(0) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
+
       if (stop_term == UINT64_MAX && 0 == opt_consensus_stop_apply_index) {
         my_sleep(opt_consensus_check_commit_index_interval);
         continue;
