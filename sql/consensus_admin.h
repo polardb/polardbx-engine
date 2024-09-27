@@ -38,8 +38,8 @@ void xpaxos_set_privilege_checks_user();
 int start_slave_threads();
 void stop_slave_threads();
 void binlog_commit_pos_watcher(bool *is_running);
-int check_exec_consensus_log_end_condition(Relay_log_info *rli,
-                                           bool is_xpaxos_replication);
+int check_exec_consensus_log_end_condition(Relay_log_info *rli);
+int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication);
 void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
                                 bool is_xpaxos_replication);
 int calculate_consensus_apply_start_pos(Relay_log_info *rli,

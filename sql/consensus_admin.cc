@@ -614,10 +614,46 @@ void stop_slave_threads() {
   channel_map.unlock();
 }
 
-
-int check_exec_consensus_log_end_condition(Relay_log_info *rli,
-                                           bool is_xpaxos_replication) {
+int check_exec_consensus_log_end_condition(Relay_log_info *rli) {
   DBUG_ENTER("check_exec_consensus_log_end_condition");
+  // determine whether exit
+  uint64 stop_term = consensus_log_manager.get_stop_term();
+  long time_diff= 0;
+  if (opt_consensus_leader_stop_apply_time && rli->last_master_timestamp)
+    time_diff= ((long)(time(0) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
+
+  if (consensus_log_manager.get_apply_term() >= stop_term
+      || (0 < opt_consensus_stop_apply_index && opt_consensus_stop_apply_index <= consensus_log_manager.get_real_apply_index())
+      || opt_consensus_leader_stop_apply
+      || (opt_consensus_leader_stop_apply_time && time_diff < (long)opt_consensus_leader_stop_apply_time)) {
+    xp::system(ER_XP_APPLIER)
+        << "Apply thread stop, opt_consensus_leader_stop_apply: "
+        << (opt_consensus_leader_stop_apply ? "true" : "false")
+        << ", seconds_behind_master: " << time_diff
+        << ", consensus_leader_stop_apply_time: "
+        << opt_consensus_leader_stop_apply_time
+        << ", consensus_stop_apply_index: "
+        << opt_consensus_stop_apply_index;
+    opt_consensus_leader_stop_apply = false;
+    mysql_mutex_lock(consensus_log_manager.get_apply_thread_lock());
+    mysql_cond_broadcast(consensus_log_manager.get_catchup_cond());
+    consensus_log_manager.set_apply_catchup(true);
+    rli->sql_thread_kill_accepted = true;
+    rli->force_apply_queue_before_stop = true;
+    mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
+    xp::system(ER_XP_APPLIER)
+        << "Apply thread catchup commit index, consensus index: "
+        << rli->get_consensus_apply_index()
+        << ", current term: " << consensus_log_manager.get_current_term()
+        << ", apply term: " << consensus_log_manager.get_apply_term()
+        << ", stop term: " << consensus_log_manager.get_stop_term();
+    DBUG_RETURN(1);
+  }
+  DBUG_RETURN(0);
+}
+
+int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
+  DBUG_ENTER("check_wait_commitindex");
   if (is_xpaxos_replication && !opt_disable_wait_commitindex) {
     uint64 tmpCommitIndex = 0;
     // when the followe case, continue read, return 0
@@ -655,42 +691,7 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli,
         }
       }
 
-      // determine whether exit
-      uint64 stop_term = consensus_log_manager.get_stop_term();
-      long time_diff= 0;
-      if (rli->last_master_timestamp)
-        time_diff= ((long)(time(0) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
-
-      if (stop_term == UINT64_MAX && 0 == opt_consensus_stop_apply_index) {
-        my_sleep(opt_consensus_check_commit_index_interval);
-        continue;
-      } else if (consensus_log_manager.get_apply_term() >= stop_term ||
-                 (0 < opt_consensus_stop_apply_index &&
-                  opt_consensus_stop_apply_index <= consensus_log_manager.get_real_apply_index()) ||
-                 opt_consensus_leader_stop_apply ||
-                 (opt_consensus_leader_stop_apply_time &&
-                  (time_diff < (long)opt_consensus_leader_stop_apply_time))) {
-        xp::system(ER_XP_APPLIER)
-            << "Apply thread stop, opt_consensus_leader_stop_apply: "
-            << (opt_consensus_leader_stop_apply ? "true" : "false")
-            << ", seconds_behind_master: " << time_diff
-            << ", consensus_leader_stop_apply_time: "
-            << opt_consensus_leader_stop_apply_time
-            << ", consensus_stop_apply_index: "
-            << opt_consensus_stop_apply_index;
-        opt_consensus_leader_stop_apply = false;
-        mysql_mutex_lock(consensus_log_manager.get_apply_thread_lock());
-        mysql_cond_broadcast(consensus_log_manager.get_catchup_cond());
-        consensus_log_manager.set_apply_catchup(true);
-        rli->sql_thread_kill_accepted = true;
-        rli->force_apply_queue_before_stop = true;
-        mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
-        xp::system(ER_XP_APPLIER)
-            << "Apply thread catchup commit index, consensus index: "
-            << rli->get_consensus_apply_index()
-            << ", current term: " << consensus_log_manager.get_current_term()
-            << ", apply term: " << consensus_log_manager.get_apply_term()
-            << ", stop term: " << consensus_log_manager.get_stop_term();
+      if (check_exec_consensus_log_end_condition(rli)) {
         DBUG_RETURN(1);
       } else if (consensus_ptr->getCommitIndex() >
                      consensus_log_manager.get_real_apply_index() ||

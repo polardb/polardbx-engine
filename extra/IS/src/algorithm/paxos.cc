@@ -3739,17 +3739,20 @@ void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch) {
 
 void Paxos::resetNextIndexForServer(std::shared_ptr<RemoteServer> server) {
   std::lock_guard<std::mutex> lg(lock_);
-  auto lastLogIndex = getLastLogIndex();
+  auto nextIndex = getLastLogIndex();
   /* make sure the first appendLog msg when reconnect have payload to
    * truncateForward. */
-  if (lastLogIndex > 1) lastLogIndex -= 1;
+  if (nextIndex > 1) nextIndex -= 1;
+  if (nextIndex <= log_->getMockStartIndex()) {
+    nextIndex = log_->getMockStartIndex() + 1;
+  }
 
   if (server->matchIndex.load() != 0)
     server->nextIndex.store(server->matchIndex.load() + 1);
   else if (server->isLearner && server->sendByAppliedIndex)
     server->nextIndex.store(appliedIndex_.load() + 1);
   else
-    server->nextIndex.store(lastLogIndex);
+    server->nextIndex.store(nextIndex);
 }
 
 bool Paxos::tryFillFollowerMeta_(

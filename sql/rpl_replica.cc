@@ -7362,7 +7362,7 @@ extern "C" void *handle_slave_sql(void *arg) {
       }
 
       // wait commitIndex update when wakeup by event_read_signal
-      if (1 == check_exec_consensus_log_end_condition(
+      if (1 == check_wait_commitindex(
                    rli, Multisource_info::is_xpaxos_channel(rli))) {
         main_loop_error = true;
         continue;

@@ -171,6 +171,7 @@ class PaxosLog {
     return ret;
   }
   virtual bool isStateMachineHealthy() { return true; }
+  virtual uint64_t getMockStartIndex() { return 0; }
   virtual bool entriesPreCheck(
       const ::google::protobuf::RepeatedPtrField<LogEntry> &) {
     return false;

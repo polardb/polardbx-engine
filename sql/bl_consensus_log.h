@@ -42,8 +42,8 @@ class Paxos;
 
 struct ConsensusStateChange {
   alisql::Paxos::StateType state{alisql::Paxos::NOROLE};
-  uint64 term{0};
-  uint64 index{0};
+  uint64_t term{0};
+  uint64_t index{0};
 };
 
 class BLConsensusLog : public alisql::PaxosLog {
@@ -60,7 +60,7 @@ class BLConsensusLog : public alisql::PaxosLog {
 
   BLConsensusLog();
   ~BLConsensusLog() override;
-  void init(uint64 fake_start_index_arg,
+  void init(uint64_t fake_start_index_arg,
             ConsensusLogManager *consensus_log_manager_arg);
 
   int getEntry(uint64_t logIndex, alisql::LogEntry &entry, bool fastFail,
@@ -87,14 +87,15 @@ class BLConsensusLog : public alisql::PaxosLog {
   void setTerm(uint64_t term) override;
   uint64_t getLength() override;
   bool isStateMachineHealthy() override;
+  uint64_t getMockStartIndex() override { return mock_start_index; }
 
-  uint64 getCurrentTerm() const { return currentTerm_; }
-  static void packLogEntry(uchar *buffer, size_t buf_size, uint64 term,
-                           uint64 index, Consensus_Log_Op_Type entry_type,
+  uint64_t getCurrentTerm() const { return currentTerm_; }
+  static void packLogEntry(uchar *buffer, size_t buf_size, uint64_t term,
+                           uint64_t index, Consensus_Log_Op_Type entry_type,
                            alisql::LogEntry &log_entry);
 
  private:
-  uint64 mock_start_index;  // before this index, all log entry should be mocked
+  uint64_t mock_start_index;  // before this index, all log entry should be mocked
   ConsensusLogManager *consensusLogManager_;  // ConsensusLog Operation detail
 };
 
