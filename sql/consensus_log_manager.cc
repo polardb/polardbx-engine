@@ -676,27 +676,22 @@ int ConsensusLogManager::write_log_entries(std::vector<ConsensusLogEntry> &logs,
   MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
                            ? binlog
                            : &rli_info->relay_log;
+  //disable rotate when still binlog, because not LOCK_LOG held
   enable_rotate =
-      !(logs.back().flag & Consensus_log_event_flag::FLAG_LARGE_TRX);
+      (!(logs.back().flag & Consensus_log_event_flag::FLAG_LARGE_TRX) && status != BINLOG_WORKING);
   if ((error = log->append_multi_consensus_logs(logs, max_index, &do_rotate,
                                                 rli_info))) {
     goto end;
   }
   if (do_rotate && recovery_manager->is_pending_recovering_trx_empty() &&
       enable_rotate) {
-    if (status == BINLOG_WORKING) {
-      if ((error = binlog->rotate_consensus_log())) {
-        goto end;
-      }
-    } else {
-      Master_info *mi = rli_info->mi;
-      mysql_mutex_lock(&mi->data_lock);
-      if ((error = rotate_relay_log(rli_info->mi))) {
-        mysql_mutex_unlock(&mi->data_lock);
-        goto end;
-      }
+    Master_info *mi = rli_info->mi;
+    mysql_mutex_lock(&mi->data_lock);
+    if ((error = rotate_relay_log(rli_info->mi))) {
       mysql_mutex_unlock(&mi->data_lock);
+      goto end;
     }
+    mysql_mutex_unlock(&mi->data_lock);
   }
 end:
   if (error)

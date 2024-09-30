@@ -554,7 +554,9 @@ class Log_event_footer {
                                                    unsigned long len);
 
   static bool event_checksum_test(unsigned char *buf, unsigned long event_len,
-                                  enum_binlog_checksum_alg alg);
+                                  enum_binlog_checksum_alg alg,
+                                  uint32_t *crc_in_header = nullptr,
+                                  uint32_t *crc_from_calc = nullptr);
 
   /* Constructors */
   Log_event_footer() : checksum_alg(BINLOG_CHECKSUM_ALG_UNDEF) {}

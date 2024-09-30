@@ -322,10 +322,17 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
   }
 
+  auto iter = consensus_log_manager.get_recovery_manager()->external_xids_in_binlog.find(xa_trx.id);
+  uint64 consensus_index = 0;
+  if (iter != consensus_log_manager.get_recovery_manager()->external_xids_in_binlog.end())
+    consensus_index = iter->second;
+
   xp::system(ER_XP_RECOVERY)
       << "recover_one_external_trx "
       << ", state: " << (int)state << ", state_in_ht: " << (int)state_in_ht
-      << ", xid: " << xa_trx.id;
+      << ", xid: " << xa_trx.id
+      << ", consensus_index: " << consensus_index;
+
 
   switch (state) {
     case enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE:

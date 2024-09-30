@@ -126,7 +126,8 @@ enum_binlog_checksum_alg Log_event_footer::get_checksum_alg(const char *buf,
 */
 bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
                                            unsigned long event_len,
-                                           enum_binlog_checksum_alg alg) {
+                                           enum_binlog_checksum_alg alg,
+                                           uint32_t *crc_in_header, uint32_t *crc_from_calc) {
   bool res = false;
   unsigned short flags = 0;  // to store in FD's buffer flags orig value
 
@@ -177,6 +178,8 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
     }
 
     res = !(computed == incoming);
+    if (crc_in_header) *crc_in_header = incoming;
+    if (crc_from_calc) *crc_from_calc = computed;
   }
 #ifndef NDEBUG
   if (binary_log_debug::debug_checksum_test) return true;

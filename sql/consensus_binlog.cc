@@ -49,7 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "storage/innobase/include/ut0dbg.h"
 
 static void correct_binlog_event_log_pos(char *buf, size_t buf_len,
-                                         ulonglong offset) {
+                                         ulonglong offset, uint32_t *crc = nullptr) {
   if (!opt_consensuslog_revise) return;
   // calc correct end_log_pos
   ulonglong end_log_pos =
@@ -65,10 +65,11 @@ static void correct_binlog_event_log_pos(char *buf, size_t buf_len,
 
   // update checksum field because we modify the event's content
   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF) {
-    uint32_t crc = checksum_crc32(0L, NULL, 0);
-    crc = checksum_crc32(crc, (const unsigned char *)buf,
+    uint32_t tmp_crc = checksum_crc32(0L, NULL, 0);
+    tmp_crc = checksum_crc32(tmp_crc, (const unsigned char *)buf,
                          buf_len - BINLOG_CHECKSUM_LEN);
-    int4store(buf + buf_len - BINLOG_CHECKSUM_LEN, crc);
+    int4store(buf + buf_len - BINLOG_CHECKSUM_LEN, tmp_crc);
+    if (crc) *crc = tmp_crc;
   }
 }
 
@@ -81,12 +82,13 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
                        ? ev->buf_len
                        : opt_consensus_large_event_split_size;
   std::string log_content = consensus_log_manager.get_empty_log();
+  uint32 event_crc32 = 0;
   // correct before split
   uint64 offset = log_content.length() + Consensus_log_event::MAX_EVENT_LENGTH;
   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
     offset += BINLOG_CHECKSUM_LEN;
   offset *= (ev->buf_len / opt_consensus_large_event_split_size);
-  correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, offset);
+  correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, offset, &event_crc32);
 
   while (start_pos < ev->buf_len) {
     uint64 blen = end_pos - start_pos;
@@ -113,7 +115,8 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
                            << ", consensus_index " << thd->consensus_index
                            << ", start_pos " << start_pos << ", end_pos "
                            << end_pos << ", buf_len " << ev->buf_len
-                           << ", flag " << flag << ", crc32 " << crc32;
+                           << ", flag " << flag << ", crc32 " << crc32
+                           << ", event_crc32 " << event_crc32;
     if (end_pos == ev->buf_len) {
       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
                                                 ev->buf_len);
@@ -1289,7 +1292,15 @@ static int verify_checksum(uchar *buf, size_t len) {
     event_len = uint4korr(header + EVENT_LEN_OFFSET);
     /* sanity check */
     if (event_len > len) return 1;
-    if (Log_event_footer::event_checksum_test(header, event_len, alg)) return 1;
+    uint32_t crc_in_header = 0, crc_from_calc = 0;
+    if (Log_event_footer::event_checksum_test(header, event_len, alg,
+        &crc_in_header, &crc_from_calc)) {
+      xp::error(ER_XP_COMMIT)
+          << "event_checksum_test failed "
+          << ", crc_in_header: " << crc_in_header
+          << ", crc_from_calc: " << crc_from_calc;
+      return 1;
+    }
     header += event_len;
   }
   if ((size_t)(header - buf) != len) return 1;

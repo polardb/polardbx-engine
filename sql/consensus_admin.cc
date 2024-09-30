@@ -746,8 +746,8 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
       consensus_log_manager.set_real_apply_index(consensus_index);
       consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
-      // xp::info(ER_XP_APPLIER) << "update_consensus_apply_pos: " <<
-      // consensus_index
+      // xp::info(ER_XP_APPLIER) << "update_consensus_apply_pos: "
+      //                       << ", consensus_index: " << consensus_index
       //                       << ", consensus_term: " << consensus_term
       //                       << ", consensus_index: " << consensus_index
       //                       << ", consensus_index_end_pos: " <<

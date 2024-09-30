@@ -297,6 +297,12 @@ void Consensus_binlog_recovery::process_external_xid(ulong unmasked_server_id,
       m_xa_spec_recovery->clear();
     }
     auto found = this->m_external_xids.find(xid);
+    xp::info(ER_XP_RECOVERY) << "Consensus_binlog_recovery::process_external_xid  "
+                          << ", XID " << xid
+                          << ", m_current_index " << m_current_index
+                          << ", state " << (int)state
+                          << ", found " << (int)found->second;
+
     if (found != this->m_external_xids.end()) {
       assert(found->second != enum_ha_recover_xa_state::PREPARED_IN_SE);
       if (state == enum_ha_recover_xa_state::PREPARED_IN_TC ||
