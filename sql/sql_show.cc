@@ -2735,18 +2735,40 @@ class thread_info_compare {
 
 static const char *thread_state_info(THD *invoking_thd, THD *inspected_thd) {
   DBUG_TRACE;
-  if (inspected_thd->get_protocol()->get_rw_status()) {
-    if (inspected_thd->get_protocol()->get_rw_status() == 2)
-      return "Sending to client";
-    if (inspected_thd->get_command() == COM_SLEEP) return "";
-    return "Receiving from client";
-  } else {
-    MUTEX_LOCK(lock, &inspected_thd->LOCK_current_cond);
-    const char *proc_info = inspected_thd->proc_info_session(invoking_thd);
-    if (proc_info) return proc_info;
-    if (inspected_thd->current_cond.load()) return "Waiting on cond";
-    return nullptr;
+  // if (inspected_thd->get_protocol()->get_rw_status()) {
+  //   if (inspected_thd->get_protocol()->get_rw_status() == 2)
+  //     return "Sending to client";
+  //   if (inspected_thd->get_command() == COM_SLEEP) return "";
+  //   return "Receiving from client";
+  // } else {
+  //   MUTEX_LOCK(lock, &inspected_thd->LOCK_current_cond);
+  //   const char *proc_info = inspected_thd->proc_info_session(invoking_thd);
+  //   if (proc_info) return proc_info;
+  //   if (inspected_thd->current_cond.load()) return "Waiting on cond";
+  //   return nullptr;
+  // }
+
+  {
+    MUTEX_LOCK(protocol_lock, &inspected_thd->LOCK_thd_protocol);
+    if (inspected_thd->get_protocol()->get_rw_status()) {
+      if (inspected_thd->get_protocol()->get_rw_status() == 2)
+        return "Sending to client";
+      if (inspected_thd->get_command() == COM_SLEEP) return "";
+      return "Receiving from client";
+    }
   }
+
+  /** TODO: In principle, both LOCK_thd_protocol and LOCK_current_cond should be
+  held, but to prevent possible deadlock, LOCK_thd_protocol is released here
+  first.
+
+  Considering that this is used by show processlist, the data accuracy
+  requirement is not high, so the restriction is relaxed. */
+  MUTEX_LOCK(lock, &inspected_thd->LOCK_current_cond);
+  const char *proc_info = inspected_thd->proc_info_session(invoking_thd);
+  if (proc_info) return proc_info;
+  if (inspected_thd->current_cond.load()) return "Waiting on cond";
+  return nullptr;
 }
 
 /**
