@@ -1918,7 +1918,9 @@ bool MYSQL_BIN_LOG::open_exist_binlog(
     At every rotate memorize the last transaction counter state to use it as
     offset at logging the transaction logical timestamps.
   */
+  mysql_mutex_lock(&LOCK_replica_trans_dep_tracker);
   m_dependency_tracker.rotate();
+  mysql_mutex_unlock(&LOCK_replica_trans_dep_tracker);
 
   update_binlog_end_pos();
   DBUG_RETURN(0);

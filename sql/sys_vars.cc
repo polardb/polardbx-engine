@@ -4227,9 +4227,7 @@ static bool update_binlog_transaction_dependency_tracking(sys_var *, THD *,
     change in the transaction dependency source so that WS and COMMIT
     transition smoothly.
   */
-  mysql_mutex_lock(mysql_bin_log.get_log_lock());
   mysql_bin_log.m_dependency_tracker.tracking_mode_changed();
-  mysql_mutex_unlock(mysql_bin_log.get_log_lock());
   return false;
 }
 

@@ -39,6 +39,7 @@
 #include "sql/sql_lex.h"
 #include "sql/system_variables.h"
 #include "sql/transaction_info.h"
+#include "debug_sync.h"
 
 Logical_clock::Logical_clock() : state(SEQ_UNINIT), offset(0) {}
 
@@ -252,6 +253,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
       !write_set_ctx->was_write_set_limit_reached();
   bool exceeds_capacity = false;
 
+  mysql_mutex_lock(&LOCK_replica_trans_dep_tracker);
   if (can_use_writesets) {
     if (writeset->size() > writeset_max_size_in_history)
       writeset_max_size_in_history = writeset->size();
@@ -263,6 +265,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
      Compute the greatest sequence_number among all conflicts and add the
      transaction's row hashes to the history.
     */
+    DEBUG_SYNC(thd, "wait_in_get_dependency");
     int64 last_parent = m_writeset_history_start;
     int64 dup_count = 0;
     if (!m_writeset_history.empty()) {
@@ -319,6 +322,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
     writeset_history_clear_count++;
   }
   writeset_current_history_size = m_writeset_history.size();
+  mysql_mutex_unlock(&LOCK_replica_trans_dep_tracker);
 }
 
 void Writeset_trx_dependency_tracker::rotate(int64 start) {
