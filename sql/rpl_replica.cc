@@ -3529,7 +3529,8 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
   protocol->store((ulonglong)mi->rli->get_group_relay_log_pos());
   protocol->store(mi->rli->get_group_master_log_name_info(), &my_charset_bin);
   const bool is_mi_slave_io_running = (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
-      || (consensus_log_manager.get_status() == RELAY_LOG_WORKING);
+      || (channel_map.is_xpaxos_replication_channel_name(mi->get_channel())
+          && consensus_log_manager.get_status() == RELAY_LOG_WORKING);
   protocol->store(
       is_mi_slave_io_running
           ? "Yes"

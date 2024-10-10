@@ -691,7 +691,10 @@ int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
         }
       }
 
-      if (check_exec_consensus_log_end_condition(rli)) {
+      if (consensus_log_manager.get_stop_term() == UINT64_MAX) {
+        my_sleep(opt_consensus_check_commit_index_interval);
+        continue;
+      } else if (check_exec_consensus_log_end_condition(rli)) {
         DBUG_RETURN(1);
       } else if (consensus_ptr->getCommitIndex() >
                      consensus_log_manager.get_real_apply_index() ||
