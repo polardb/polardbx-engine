@@ -80,6 +80,11 @@ bool opt_enable_polarx_rpc = true;
 ulonglong opt_import_tablespace_iterator_interval_ms =
     DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
 
+namespace lizard {
+SHOW_COMP_OPTION have_xa_prepare_with_trx_slot;
+SHOW_COMP_OPTION have_xa_async_commit;
+}  // namespace lizard
+
 /**
   Output the latest build info for the MYSQLD binary.
 
@@ -662,3 +667,15 @@ static Sys_var_bool Sys_enable_writeset_tracking_for_ipk(
        "Whether record the IPK to writeset.",
        GLOBAL_VAR(opt_enable_writeset_tracking_for_ipk),
        CMD_LINE(OPT_ARG), DEFAULT(true));
+
+static Sys_var_have Sys_have_xa_prepare_with_trx_slot(
+    "have_xa_prepare_with_trx_slot", "have_xa_prepare_with_trx_slot",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_prepare_with_trx_slot),
+    NO_CMD_LINE, NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr), DEPRECATED_VAR(""));
+
+static Sys_var_have Sys_have_xa_async_commit(
+    "have_xa_async_commit", "have_xa_async_commit",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_async_commit), NO_CMD_LINE,
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr),
+    DEPRECATED_VAR(""));

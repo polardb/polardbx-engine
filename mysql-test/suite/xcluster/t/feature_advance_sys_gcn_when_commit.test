@@ -1,5 +1,7 @@
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 
+SET GLOBAL INNODB_TXN_RETENTION = 9000;
+
 --connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
 --connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
 
@@ -439,5 +441,6 @@ set xa_detach_on_prepare = default;
 disconnect conn1;
 disconnect conn2;
 connection default;
+SET GLOBAL INNODB_TXN_RETENTION = default;
 set xa_detach_on_prepare = default;
 drop table t1;

@@ -1,4 +1,5 @@
 SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+SET GLOBAL INNODB_TXN_RETENTION = 9000;
 set sql_log_bin = 0;
 set sql_log_bin = 0;
 create table t1 (id int);
@@ -181,4 +182,5 @@ disconnect conn1;
 connection default;
 set xa_detach_on_prepare = default;
 set sql_log_bin = on;
+SET GLOBAL INNODB_TXN_RETENTION = default;
 drop table t1;

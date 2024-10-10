@@ -8,6 +8,8 @@ CREATE TABLE t1 (c1 INT PRIMARY KEY);
 --let $xid = 'ac_recv_branch_info','' ,1
 --let $gcn = `select @base_seq + 100`
 
+SET GLOBAL INNODB_TXN_RETENTION = 259200;
+
 --connect(con1, localhost, root,,)
 --connection con1
 --eval XA START $xid
@@ -35,3 +37,5 @@ XA RECOVER;
 --eval XA ROLLBACK $xid
 
 DROP TABLE t1;
+
+SET GLOBAL INNODB_TXN_RETENTION = default;

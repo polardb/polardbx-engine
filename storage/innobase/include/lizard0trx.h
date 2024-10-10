@@ -43,8 +43,6 @@ namespace lizard {
 extern void alloc_commit_cleanout(trx_t *trx);
 extern void release_commit_cleanout(trx_t *trx);
 
-extern void cleanout_after_commit(trx_t *trx);
-
 }  // namespace lizard
 
 #endif

@@ -145,6 +145,8 @@ typedef void (*decide_xa_when_commit_by_xid_t)(handlerton *hton, XID *xid,
                                                MyGCN *my_gcn,
                                                xa_addr_t *master_addr);
 
+typedef bool (*trx_slot_check_retention_t)();
+
 template <typename T>
 using search_up_limit_tid_t = trx_id_t (*)(const T &lhs);
 
@@ -178,5 +180,6 @@ struct handlerton_ext {
   decide_xa_when_prepare_t decide_xa_when_prepare;
   decide_xa_when_commit_t decide_xa_when_commit;
   decide_xa_when_commit_by_xid_t decide_xa_when_commit_by_xid;
+  trx_slot_check_retention_t trx_slot_check_retention;
 };
 #endif

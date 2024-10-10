@@ -1,3 +1,5 @@
+SET GLOBAL INNODB_TXN_RETENTION = 9000;
+
 --connection default
 create table t (id int);
 insert into t values (1);
@@ -140,3 +142,5 @@ disconnect con_a;
 
 --connection default
 drop table t;
+
+SET GLOBAL INNODB_TXN_RETENTION = default;

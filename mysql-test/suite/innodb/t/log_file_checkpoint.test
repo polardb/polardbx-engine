@@ -41,7 +41,7 @@ EOF
 --source $MYSQLD_DATADIR/found.inc
 
 --error 1,42
---exec $MYSQLD --no-defaults $MYSQLD_ARGS --innodb-unknown-param=y
+--exec $MYSQLD --no-defaults $MYSQLD_ARGS --innodb-unknown-param=y --enable_polarx_rpc=0
 let SEARCH_PATTERN = The latest found checkpoint is at lsn = $REDO_CHECKPOINT_LSN in redo log file;
 --replace_result $REDO_CHECKPOINT_LSN REDO_CHECKPOINT_LSN
 --source include/search_pattern.inc

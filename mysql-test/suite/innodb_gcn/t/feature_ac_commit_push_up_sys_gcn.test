@@ -4,6 +4,8 @@
 --echo # ac_prepare will push up sys GCN.
 --echo #####################################
 
+SET GLOBAL INNODB_TXN_RETENTION = 9000;
+
 connect(con1, localhost, root,,);
 
 connection default;
@@ -47,5 +49,7 @@ echo call dbms_xa.ac_commit(#gtrid, #bqual, #formatID, #server_uuid,
 --let $assert_text=expect_sys_gcn == actual_sys_gcn
 --let $assert_cond="$expect_sys_gcn" = "$actual_sys_gcn"
 --source include/assert.inc
+
+set global INNODB_TXN_RETENTION = default;
 
 --disconnect con1

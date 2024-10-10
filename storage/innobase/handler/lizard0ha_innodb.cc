@@ -284,6 +284,15 @@ void innobase_copy_user_prepare(THD *thd, trx_t *trx) {
 }
 
 /**
+ * Check if all transaction slots is reserved enough time.
+ * @return true if reserved enough time. */
+bool innobase_trx_slot_check_retention() {
+  DBUG_EXECUTE_IF("ac_not_care_txn_retention", return true;);
+
+  return lizard::Undo_retention::retention_time || lizard::txn_retention_time;
+}
+
+/**
   Initialize innobase extension.
 
   param[in]  innobase_hton  handlerton of innobase.
@@ -318,6 +327,7 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.decide_xa_when_commit = innobase_decide_xa_when_commit;
   hton->ext.decide_xa_when_commit_by_xid =
       innobase_decide_xa_when_commit_by_xid;
+  hton->ext.trx_slot_check_retention = innobase_trx_slot_check_retention;
 }
 
 enum_tx_isolation thd_get_trx_isolation(const THD *thd);

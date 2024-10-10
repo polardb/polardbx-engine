@@ -1,3 +1,4 @@
+SET GLOBAL INNODB_TXN_RETENTION = 9000;
 create table t (id int);
 insert into t values (1);
 set xa_detach_on_prepare = on;
@@ -116,3 +117,4 @@ connection con_a;
 disconnect con_a;
 connection default;
 drop table t;
+SET GLOBAL INNODB_TXN_RETENTION = default;

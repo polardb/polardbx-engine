@@ -52,6 +52,11 @@ const LEX_CSTRING xa_status_str[] = {{C_STRING_WITH_LEN("ATTACHED")},
                                      {C_STRING_WITH_LEN("NOTSTART_OR_FORGET")},
                                      {C_STRING_WITH_LEN("NOT_SUPPORT")}};
 
+static inline bool trx_slot_check_retention() {
+  handlerton *ttse = innodb_hton;
+  return ttse->ext.trx_slot_check_retention();
+}
+
 /* Singleton instance for find_by_xid */
 Proc *Xa_proc_find_by_xid::instance() {
   static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
@@ -293,6 +298,12 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
   XID xid;
   XID_STATE *xid_state = thd->get_transaction()->xid_state();
 
+  /** 0. Check retention for TXN (contains coordinator logs). */
+  if (!trx_slot_check_retention()) {
+    my_error(ER_XA_PROC_RETENTION_NOT_SATISFIED, MYF(0));
+    DBUG_RETURN(true);
+  }
+
   /** 1. parsed XID from parameters list. */
   if (get_xid(m_list, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
@@ -317,8 +328,9 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
   Because Sql_cmd_xa_prepare::execute will depend on the state on LEX in
   some places. */
   Nested_xa_prepare_lex nested_xa_prepare_lex(thd, &xid);
-  (dynamic_cast<Sql_cmd_xa_prepare *>(thd->lex->m_sql_cmd))->set_delay_ok();
-  if (thd->lex->m_sql_cmd->execute(thd)) {
+  Sql_cmd_xa_prepare *cmd_executor = nested_xa_prepare_lex.get_cmd_executor();
+  cmd_executor->set_delay_ok();
+  if (cmd_executor->execute(thd)) {
     DBUG_RETURN(true);
   }
 
@@ -429,6 +441,12 @@ bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
   XID xid;
   XID_STATE *xid_state = thd->get_transaction()->xid_state();
 
+  /** 0. Check retention for TXN (contains coordinator logs). */
+  if (!trx_slot_check_retention()) {
+    my_error(ER_XA_PROC_RETENTION_NOT_SATISFIED, MYF(0));
+    DBUG_RETURN(true);
+  }
+
   /** 1. parsed XID, n_branch, n_local_branch, pre commit gcn from parameters
   list. */
   if (get_xid(m_list, &xid)) {
@@ -490,7 +508,7 @@ bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
   Nested_xa_prepare_lex nested_xa_prepare_lex(thd, &xid);
   Sql_cmd_xa_prepare *cmd_executor = nested_xa_prepare_lex.get_cmd_executor();
   cmd_executor->set_delay_ok();
-  if (thd->lex->m_sql_cmd->execute(thd)) {
+  if (cmd_executor->execute(thd)) {
     thd->reset_gcn_variables();
     DBUG_RETURN(true);
   }
@@ -631,6 +649,12 @@ bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
   char server_uuid[MAX_SERVER_UUID_LENGTH + 1] = "";
   xa_addr_t addr;
 
+  /** 0. Check retention for TXN (contains coordinator logs). */
+  if (!trx_slot_check_retention()) {
+    my_error(ER_XA_PROC_RETENTION_NOT_SATISFIED, MYF(0));
+    DBUG_RETURN(true);
+  }
+
   /** 1. parsed XID, master branch info, commit_gcn from parameters list. */
   if (get_xid(m_list, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
@@ -658,8 +682,9 @@ bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
   Because Sql_cmd_xa_commit::execute will depend on the state on LEX in
   some places. */
   Nested_xa_commit_lex nested_xa_commit_lex(thd, &xid);
-  (dynamic_cast<Sql_cmd_xa_commit *>(thd->lex->m_sql_cmd))->set_delay_ok();
-  if (thd->lex->m_sql_cmd->execute(thd)) {
+  Sql_cmd_xa_commit *cmd_executor = nested_xa_commit_lex.get_cmd_executor();
+  cmd_executor->set_delay_ok();
+  if (cmd_executor->execute(thd)) {
     DBUG_RETURN(true);
   }
 
