@@ -57,6 +57,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 extern mysql_pfs_key_t undo_retention_mutex_key;
 #endif
 
+/** TXN will be retained for a period of time after the database is restarted */
+extern ib_time_system_us_t server_start_time_for_txn;
+
 struct trx_rseg_t;
 struct trx_undo_t;
 struct SYS_VAR;

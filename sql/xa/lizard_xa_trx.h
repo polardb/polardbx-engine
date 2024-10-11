@@ -63,6 +63,11 @@ extern void ac_proposal_gcn(THD *thd);
 */
 extern void search_trx_info(xid_t *xid, MyXAInfo *info);
 }  // namespace xa
+
+/** init server_start_time_for_txn, so the TXN can be kept for a while after
+restart instance. */
+extern void init_server_start_time_for_txn();
+
 }  // namespace lizard
 
 #endif  // XA_TRX_INCUDED

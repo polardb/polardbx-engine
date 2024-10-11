@@ -128,6 +128,8 @@ void trx_undo_write_xid(
 mysql_pfs_key_t undo_retention_mutex_key;
 #endif
 
+ib_time_system_us_t server_start_time_for_txn = 0;
+
 /*-----------------------------------------------------------------------------*/
 /* txn_slot_t related */
 /*-----------------------------------------------------------------------------*/
@@ -1593,6 +1595,31 @@ commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
   return cmmt;
 }
 
+static bool txn_retention_satisfied_from_server_start() {
+  ib_time_system_us_t cur_utc;
+
+  /** Not set retention, can reuse txn */
+  if (!txn_retention_time && !lizard::Undo_retention::retention_time) {
+    return true;
+  }
+
+  /** Not init, can not reuse txn. */
+  if (unlikely(!server_start_time_for_txn)) {
+    return false;
+  }
+
+  cur_utc = ut_time_system_us();
+
+  std::chrono::microseconds retention_time = std::chrono::seconds(
+      std::max(txn_retention_time, lizard::Undo_retention::retention_time));
+
+  if (cur_utc < server_start_time_for_txn + retention_time.count()) {
+    return false;
+  }
+
+  return true;
+}
+
 /**
   Check if the txn retention time has been satisfied.
   If the retention time has been satisfied, the txn undo has been retained for
@@ -1603,6 +1630,10 @@ commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
   @retval     true if the txn retention satisfied
 */
 bool txn_retention_satisfied(utc_t utc) {
+  if (!txn_retention_satisfied_from_server_start()) {
+    return false;
+  }
+
   ut_ad(utc > 0);
 
   auto cur_utc = ut_time_system_us();
@@ -4195,6 +4226,12 @@ void trx_purge_status(purge_status_t &status) {
 
   status.erased_scn = erase_sys->erased_scn.load();
   status.erased_gcn = erase_sys->erased_gcn.get();
+}
+
+void init_server_start_time_for_txn() {
+  ut_ad(!server_start_time_for_txn);
+
+  server_start_time_for_txn = ut_time_system_us();
 }
 
 }  // namespace lizard

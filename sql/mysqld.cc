@@ -1005,6 +1005,7 @@ MySQL clients support the protocol:
 #endif
 
 #include "sql/lizard/lizard_hb_freezer.h"
+#include "sql/xa/lizard_xa_trx.h"
 
 using std::max;
 using std::min;
@@ -8354,6 +8355,8 @@ int mysqld_main(int argc, char **argv)
   im::ACL_inner_schema_register(opt_initialize);
 
   im::internal_account_ctx_init();
+
+  lizard::init_server_start_time_for_txn();
 
   (void)RUN_HOOK(server_state, after_recovery, (nullptr));
 
