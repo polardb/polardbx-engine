@@ -40,13 +40,24 @@ CsessionBase::~CsessionBase() {
     const auto psi = thd->get_psi();
 #ifdef HAVE_PSI_THREAD_INTERFACE
     if (psi != nullptr) {
-      PSI_THREAD_CALL(delete_thread)(psi);
       thd->set_psi(nullptr);
+      /// Attach psi to thread local and delete it when session destroyed.
+      /// This makes MDL lock backup work correctly when XA prepared but not
+      /// committed.
+      PSI_THREAD_CALL(set_thread)(psi);
     }
 #endif
 
     srv_session_close(mysql_session_);
     mysql_session_ = nullptr;
+    
+#ifdef HAVE_PSI_THREAD_INTERFACE
+    if (psi != nullptr) {
+      /// detach and delete it
+      PSI_THREAD_CALL(set_thread)(nullptr);
+      PSI_THREAD_CALL(delete_thread)(psi);
+    }
+#endif
   }
   plugin_info.total_sessions.fetch_sub(1, std::memory_order_release);
 }

@@ -1060,7 +1060,10 @@ bool Srv_session::close() {
 
   m_thd->security_context()->logout();
   m_thd->m_view_ctx_list.clear();
-  close_mysql_tables(m_thd);
+  // Just close tables and keep the MDL for XA trx
+  // which prepared but not committed.
+  assert(m_thd->get_transaction()->is_empty(Transaction_ctx::STMT));
+  close_thread_tables(m_thd);
 
   m_thd->set_plugin(nullptr);
   m_thd->pop_diagnostics_area();
