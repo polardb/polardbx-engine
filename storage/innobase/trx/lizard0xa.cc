@@ -164,6 +164,25 @@ void MyXAInfo::init_by_txn_slot(const txn_slot_t *txn_slot) {
   maddr = txn_slot->maddr;
 }
 
+/**
+  Decide master address when ac commit.
+  @param[in]    trx
+*/
+void xa_addr_t::decide_if_ac_commit(const trx_t *trx) {
+  if (is_null() || !trx) {
+    reset();
+    return;
+  }
+  ut_a(trx->txn_desc.maddr.is_null());
+  ut_ad(is_valid());
+
+  if (trx->id != tid) {
+    ut_a(undo_ptr_get_slot(trx->txn_desc.undo_ptr) != slot_ptr);
+  } else {
+    reset();
+  }
+}
+
 namespace lizard {
 namespace xa {
 
@@ -454,6 +473,7 @@ bool trx_slot_check_validity(const trx_t *trx) {
 }
 
 }  // namespace xa
+   //
 
 void decide_xa_when_prepare(MyGCN *gcn) {
   gcn_t sys_gcn;
@@ -478,26 +498,6 @@ void decide_xa_when_prepare(MyGCN *gcn) {
 
 push_up:
   gcn->push_up_sys_gcn();
-}
-
-static void decide_xa_master_addr(const trx_t *trx, xa_addr_t *master_addr) {
-  if (master_addr->is_null()) {
-    return;
-  }
-
-  if (!trx) {
-    master_addr->reset();
-    return;
-  }
-
-  ut_a(trx->txn_desc.maddr.is_null());
-
-  ut_ad(master_addr->is_valid());
-  if (trx->id != master_addr->tid) {
-    ut_a(undo_ptr_get_slot(trx->txn_desc.undo_ptr) != master_addr->slot_ptr);
-  } else {
-    master_addr->reset();
-  }
 }
 
 /**
@@ -568,7 +568,7 @@ void decide_xa_when_commit(const trx_t *trx, MyGCN *gcn,
 push_up:
   gcn->push_up_sys_gcn();
 
-  decide_xa_master_addr(trx, master_addr);
+  master_addr->decide_if_ac_commit(trx);
 }
 
 }  // namespace lizard

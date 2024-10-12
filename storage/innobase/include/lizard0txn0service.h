@@ -40,6 +40,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0trx0service.h"
 #include "ut0dbg.h"
 
+class trx_t;
+
 /** Transaction slot address */
 typedef uint64_t slot_ptr_t;
 typedef uint16_t branch_num_t;
@@ -66,6 +68,12 @@ struct xa_addr_t {
   }
 
   bool is_valid() const { return tid && slot_ptr; }
+
+  /**
+    Decide master address when ac commit.
+    @param[in]    trx
+  */
+  void decide_if_ac_commit(const trx_t *trx);
 
   trx_id_t tid;
   slot_ptr_t slot_ptr;
