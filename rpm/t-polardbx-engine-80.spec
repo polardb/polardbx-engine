@@ -4,7 +4,7 @@
 %define version_extra X-Cluster
 
 Name: t-polardbx-engine-80
-Version: 8.4.19
+Version: 8.4.20
 Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
