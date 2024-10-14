@@ -623,10 +623,9 @@ void CsessionBase::end_query(THD *thd) {
 
 #ifdef MYSQL8
   /// write audit log before exit
-  // todo: temporarily disable audit log(bad performance)
-//  thd->update_slow_query_status();
-//  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
-//  log_slow_statement(thd);
+  thd->update_slow_query_status();
+  mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_RDS_QUERY_RESULT));
+  log_slow_statement(thd);
 #else
   /// write audit log before exit
   thd->update_server_status();

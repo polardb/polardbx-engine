@@ -1156,7 +1156,9 @@ int Srv_session::execute_command(enum enum_server_command command,
   m_thd->push_protocol(&client_proto);
   mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
 
-  mysql_audit_release(m_thd);
+  // only free audit cache when not safe session(improve performance)
+  if (!safe_session)
+    mysql_audit_release(m_thd);
 
   /*
     The server does it for COM_QUERY in dispatch_sql_command() but not for
@@ -1295,10 +1297,9 @@ void Srv_session::set_safe(bool safe) {
   safe_session = safe;
   if (safe) {
     m_thd->remove_srv_session_mark();
-    // todo: temporarily disable audit log(bad performance)
-    // m_thd->m_audited = true;
+    m_thd->m_audited = true;
   } else {
     m_thd->mark_as_srv_session();
-    // m_thd->m_audited = false;
+    m_thd->m_audited = false;
   }
 }
