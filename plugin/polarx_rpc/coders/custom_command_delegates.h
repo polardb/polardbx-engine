@@ -6,7 +6,10 @@
 
 #include <utility>
 
+#include "../global_defines.h"
+#ifdef MYSQL8PLUS
 #include "sql/binlog.h"
+#endif
 
 #include "protocol_fwd.h"
 #include "streaming_command_delegate.h"
@@ -48,12 +51,14 @@ class CstmtCommandDelegate : public CstreamingCommandDelegate {
       msg_enc().encode_notice_text_message(message);
       trigger_on_message(PolarXRPC::ServerMessages::NOTICE);
     }
-    
+
+#ifdef MYSQL8PLUS
     // check global leader in transfer
     if (mysql_bin_log.is_in_leader_transfer())
       msg_enc().encode_notice_server_state(
           PolarXRPC::Notice::
               SessionStateChanged_ExtraServerState_IN_LEADER_TRANSFER_FLAG);
+#endif
     return true;
   }
 
