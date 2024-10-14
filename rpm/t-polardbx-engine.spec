@@ -1,7 +1,7 @@
 %define version_extra X-Cluster
-%define release_date 20240523
+%define release_date 20241014
 %define engine_version 8.4.19
-Version: 2.4.0
+Version: 2.4.1
 
 Name: t-polardbx-engine
 Release: %(git rev-parse --short HEAD)%{?dist}

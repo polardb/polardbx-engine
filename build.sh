@@ -367,6 +367,10 @@ else
       -DWITH_VALGRIND=$valg              \
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
       -DDOWNLOAD_BOOST=0                \
+      -DPOLARDBX_VERSION_EXTRA="X-Cluster" \
+      -DPOLARDBX_PRODUCT_VERSION="2.5.0" \
+      -DPOLARDBX_ENGINE_VERSION="8.4.20" \
+      -DPOLARDBX_RELEASE_DATE="20241014" \
       -DWITH_UNIT_TESTS=$debug           \
       -DWITH_TESTS=$debug
 fi

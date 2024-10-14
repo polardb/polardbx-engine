@@ -1,5 +1,5 @@
-%define polardb_version 'PolarDB V2.0 Distributed Edition'
-%define product_version 2.4.0
+%define polardb_version 'PolarDB V2.0'
+%define product_version 2.5.0
 %define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
 
