@@ -40,12 +40,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_class.h"
 #include "sql/sql_plugin_var.h"
 
-#include "lizard0xa.h"
 #include "lizard0ha_innodb.h"
 #include "lizard0read0types.h"
 #include "lizard0undo.h"
 #include "lizard0ut.h"
-#include "lizard0undo.h"
+#include "lizard0xa.h"
+
+/** @{ */
 
 /** Bqual format: 'xxx@nnnn' */
 static unsigned int XID_GROUP_SUFFIX_SIZE = 5;
@@ -53,71 +54,192 @@ static unsigned int XID_GROUP_SUFFIX_SIZE = 5;
 static char XID_GROUP_SPLIT_CHAR = '@';
 
 /**
-  Whether the XID group matched.
+  check if the xid match the format v1.
 
   Requirement:
-   1) formatID must be equal
-   2) gtrid must be equal
-   3) bqual length must be equal
-   4) bqual prefix must be equal
-   5) bqual suffix must be number
-*/
-bool trx_group_match_by_xid(const XID *lhs, const XID *rhs) {
-  /* Require within XA transaction */
-  if (lhs->is_null() || rhs->is_null()) return false;
+  1) Buqal length must be greater than XID_GROUP_SUFFIX_SIZE
+  2) Split char must be right.
+  3) The suffix must be a numober except split char
 
-  /* Require formatID equal */
-  if (lhs->formatID != rhs->formatID) return false;
+  @param[in]  xid   xid to be checked
+  @return true if match, otherwise false
+*/
+bool check_if_match_format_v1(const XID *xid) {
+  if (xid->is_null()) return false;
 
   int prefix_len =
-      lhs->gtrid_length + lhs->bqual_length - XID_GROUP_SUFFIX_SIZE;
+      xid->gtrid_length + xid->bqual_length - XID_GROUP_SUFFIX_SIZE;
 
-  if (lhs->gtrid_length != rhs->gtrid_length ||
-      lhs->bqual_length != rhs->bqual_length ||
-      lhs->bqual_length <= XID_GROUP_SUFFIX_SIZE ||
-      lhs->data[prefix_len] != XID_GROUP_SPLIT_CHAR ||
-      memcmp(lhs->data, rhs->data, prefix_len + 1)) {
+  if (xid->bqual_length <= XID_GROUP_SUFFIX_SIZE ||
+      xid->data[prefix_len] != XID_GROUP_SPLIT_CHAR) {
     return false;
   }
-
   for (unsigned int i = 1; i < XID_GROUP_SUFFIX_SIZE; i++) {
-    if (!my_isdigit(&my_charset_latin1, lhs->data[prefix_len + i]) ||
-        !my_isdigit(&my_charset_latin1, rhs->data[prefix_len + i])) {
+    if (!my_isdigit(&my_charset_latin1, xid->data[prefix_len + i])) {
       return false;
     }
   }
+  return true;
+}
+/** @} */
+
+/**
+ * Before building the group id in format v1, we must check if the xid meet
+ * requirements (call @check_if_match_format_v1). The trxs that meet the
+ * following requirements are divided into a group in format v1:
+ *
+ * 1) gtrid must be equal
+ * 2) bqual prefix must be equal
+ * 3) formatID must be equal
+ *
+ * So we append bqual prefix and formatID to xa_desc_t::m_gid besides gtrid,
+ * which is quite different from format v2. To specify the version, format
+ * version is also appended.
+ *
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid_v1() {
+  ut_ad(m_gid.empty());
+
+  /** No need to build the group id. */
+  if (!check_if_match_format_v1(&m_xid)) {
+    return false;
+  }
+
+  auto formatID = std::to_string(m_xid.get_format_id());
+
+  int length = m_xid.get_gtrid_length() + m_xid.get_bqual_length() -
+               XID_GROUP_SUFFIX_SIZE + formatID.size() + sizeof(FORMAT_V1) - 1;
+
+  m_gid.reserve(length);
+
+  /** 1. append gtrid and bqual prefix */
+  m_gid.append(m_xid.get_data(), length);
+
+  /** 2. append formatID */
+  m_gid.append(formatID);
+
+  /** 3. append format version */
+  m_gid.append(FORMAT_V1, sizeof(FORMAT_V1) - 1);
 
   return true;
 }
 
 /**
-  Loop all the rw trxs to find xa transaction which belonged to the same group
-  and push trx_id into group container.
+ * Build the group id in format v2. The trxs that meet the following
+ * Requirements are divided into a group in format v2:
+ *
+ * 1) gtrid must be equal
+ *
+ * So we append gtrid to xa_desc_t::m_gid. To specify the version, format
+ * version is also appended.
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid_v2() {
+  ut_ad(m_gid.empty());
+  m_gid.reserve(m_xid.get_gtrid_length() + sizeof(FORMAT_V2) - 1);
+
+  /** 1. append gtrid */
+  m_gid.append(m_xid.get_data(), m_xid.get_gtrid_length());
+
+  /** 2. append format version */
+
+  m_gid.append(FORMAT_V2, sizeof(FORMAT_V2) - 1);
+
+  return true;
+}
+
+/**
+ * Build the group id. For 0-FORMAT_V1_RANGE, use the format v1.
+ * Otherwise, use the format v2.
+ *
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid() {
+  ut_ad(!m_xid.is_null());
+  ut_ad(m_group == nullptr);
+
+  ut_ad(m_xid.get_format_id() >= 0);
+
+  if (m_xid.get_format_id() <= FORMAT_V1_RANGE) {
+    return build_gid_v1();
+  } else {
+    return build_gid_v2();
+  }
+}
+
+/**
+ * Release the reference of the Xa Group for a given trx. Remove
+ * it from trx_sys->xa_group_shards when the reference count is 0.
+ * do nothing if xa_desc.is_group_null(), cause that the xa group might
+ * have been released or even not exist(i.e. disabled).
+ * @param[in]  trx  innodb transaction
+ */
+void trx_release_xa_group_reference_if_need(trx_t *trx) {
+  ut_ad(trx != nullptr);
+  auto &xa_desc = trx->xa_desc;
+
+  /* released or not exist(i.e diabled). */
+  if (xa_desc.is_group_null()) return;
+
+  /** If the trx is empty or read-only, the xa group can't be closed when
+  use commit one phase. Just close it here. */
+  xa_desc.group()->close();
+
+  trx_sys->xa_group_shards[trx_get_xa_group_shard_no(xa_desc.gid())]
+      .xa_groups.latch_and_execute(
+          [&](Xa_group_by_id &xa_group_by_id) {
+            /* As we own xa_group_by_id mutex, nobody can reference the
+            xa_group at now. */
+            if (xa_desc.group()->release_reference()) {
+              xa_group_by_id.erase(xa_desc.gid());
+            }
+          },
+          UT_LOCATION_HERE);
+
+  trx->xa_desc.set_group(nullptr);
+}
+
+/**
+ * Adds the transaction to Xa group if need. If transaction group is
+ * disabled, trx->xa_desc.group() would be nullptr and this trx should not
+ * be added to any xa group.
+ * @param[in]  trx   The transaction assumed to not be in the xa_group yet
+ */
+void trx_add_to_xa_group_if_need(trx_t *trx) {
+  ut_ad(trx != nullptr);
+  auto &xa_desc = trx->xa_desc;
+
+  if (!xa_desc.is_group_null()) {
+    ut_ad(!xa_desc.group()->latch_own());
+
+    xa_desc.group()->latch();
+    xa_desc.group()->insert(trx->id);
+    xa_desc.group()->unlatch();
+  }
+}
+/**
+  Loop the xa_group to find the same group transaction and
+  push trx_id into group container. Do nothing if transcation
+  group is disabled.
 
   @param[in]    trx       current trx handler
   @param[in]    vision    current query view
 */
-void vision_collect_trx_group_ids(const trx_t *my_trx, lizard::Vision *vision) {
-  /** Restrict only user client thread */
-  if (my_trx->mysql_thd == nullptr ||
-      my_trx->mysql_thd->system_thread != NON_SYSTEM_THREAD ||
-      !thd_get_transaction_group(my_trx->mysql_thd))
-    return;
+void vision_collect_trx_group_ids(trx_t *my_trx, lizard::Vision *vision) {
+  /* Transaction group is disabled. */
+  if (my_trx->xa_desc.is_group_null()) return;
 
-  trx_sys_mutex_enter();
+  trx_mutex_enter(my_trx);
+  auto xa_group = my_trx->xa_desc.group();
+  ut_ad(!xa_group->latch_own());
 
-  for (auto trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list); trx != nullptr;
-       trx = UT_LIST_GET_NEXT(trx_list, trx)) {
-    trx_mutex_enter(trx);
+  xa_group->latch();
 
-    if (trx_group_match_by_xid(my_trx->xad.my_xid(), trx->xad.my_xid())) {
-      vision->group_ids.push(trx->id);
-    }
+  vision->update_xa_vision(xa_group);
 
-    trx_mutex_exit(trx);
-  }
-
-  trx_sys_mutex_exit();
+  xa_group->unlatch();
+  trx_mutex_exit(my_trx);
 }
 
 /** Init xa attributes from txn undo when active or prepare.

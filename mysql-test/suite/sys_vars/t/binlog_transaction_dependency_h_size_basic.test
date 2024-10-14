@@ -46,8 +46,8 @@ SET @@GLOBAL.binlog_transaction_dependency_history_size= 1;
 # Default value
 #
 SET @@GLOBAL.binlog_transaction_dependency_history_size= default;
---let $assert_text= 'Default value is 25000'
---let $assert_cond= "[SELECT @@GLOBAL.binlog_transaction_dependency_history_size]" = 25000
+--let $assert_text= 'Default value is 200000'
+--let $assert_cond= "[SELECT @@GLOBAL.binlog_transaction_dependency_history_size]" = 200000
 --source include/assert.inc
 
 #
@@ -68,7 +68,7 @@ SET @@GLOBAL.binlog_transaction_dependency_history_size= NULL;
 --error ER_WRONG_TYPE_FOR_VAR
 SET @@GLOBAL.binlog_transaction_dependency_history_size= 1.0;
 
---echo Expect value still set to 25000
+--echo Expect value still set to 200000
 SELECT @@GLOBAL.binlog_transaction_dependency_history_size;
 
 #

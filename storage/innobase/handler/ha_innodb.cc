@@ -806,6 +806,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(trx_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(trx_sys_shard_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(trx_sys_serialisation_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(trx_sys_group_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(trx_sys_group_shard_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(zip_pad_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(master_key_id_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(sync_array_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -1175,11 +1177,6 @@ static MYSQL_THDVAR_ULONG(ddl_threads, PLUGIN_VAR_RQCMDARG,
                           nullptr, 4, /* Default. */
                           1,          /* Minimum. */
                           64, 0);     /* Maximum. */
-
-static MYSQL_THDVAR_BOOL(transaction_group, PLUGIN_VAR_OPCMDARG,
-                         "Enable transaction group mode, data changes are "
-                         "visible to all transactions in the same group",
-                         nullptr, nullptr, false);
 
 static SHOW_VAR innodb_status_variables[] = {
     {"buffer_pool_dump_status",
@@ -3038,8 +3035,9 @@ static inline void trx_register_for_2pc(trx_t *trx) /* in: transaction */
 }
 
 static inline void trx_deregister_from_2pc(trx_t *trx) {
+  ut_ad(trx->xa_desc.is_group_null());
   trx->is_registered = false;
-  trx->xad.reset();
+  trx->xa_desc.reset();
 }
 
 /** Copy table flags from MySQL's HA_CREATE_INFO into an InnoDB table object.
@@ -15441,8 +15439,7 @@ the changes will be saved into the data-dictionary at statement
 commit time.
 @return 0 == success, -1 == error */
 
-int ha_innobase::discard_or_import_tablespace(bool discard,
-                                              uint option,
+int ha_innobase::discard_or_import_tablespace(bool discard, uint option,
                                               dd::Table *table_def) {
   DBUG_TRACE;
 
@@ -24067,7 +24064,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(undo_space_reserved_size),
     MYSQL_SYSVAR(txn_retention),
     MYSQL_SYSVAR(global_query_wait_timeout),
-    MYSQL_SYSVAR(transaction_group),
     MYSQL_SYSVAR(tcn_cache_level),
     MYSQL_SYSVAR(tcn_cache_size),
     MYSQL_SYSVAR(tcn_block_cache_type),
@@ -24916,10 +24912,6 @@ static bool innobase_check_reserved_file_name(handlerton *, const char *name) {
   return (true);
 }
 #endif /* !UNIV_HOTBACKUP */
-
-bool thd_get_transaction_group(THD *thd) {
-  return THDVAR(thd, transaction_group);
-}
 
 void ha_innobase::get_create_info(const char *table_name,
                                   const dd::Table *table_def,

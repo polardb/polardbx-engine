@@ -53,8 +53,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-#include "lizard0read0types.h"
 #include "lizard0erase.h"
+#include "lizard0read0types.h"
 
 /** The transaction system */
 trx_sys_t *trx_sys = nullptr;
@@ -562,6 +562,10 @@ void trx_sys_create(void) {
     new (&shard) Trx_shard{};
   }
 
+  for (auto &xa_group_shard : trx_sys->xa_group_shards) {
+    new (&xa_group_shard) Xa_group_shard{};
+  }
+
   new (&trx_sys->rsegs) Rsegs();
   trx_sys->rsegs.set_empty();
 
@@ -624,6 +628,10 @@ void trx_sys_close(void) {
 
   for (auto &shard : trx_sys->shards) {
     shard.~Trx_shard();
+  }
+
+  for (auto &xa_group_shard : trx_sys->xa_group_shards) {
+    xa_group_shard.~Xa_group_shard();
   }
 
   /* We used placement new to create this mutex. Call the destructor. */

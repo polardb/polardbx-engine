@@ -66,7 +66,7 @@ Vision::Vision()
       m_up_limit_id(TRX_ID_MAX),
       m_active(false),
       m_snapshot_vision(nullptr),
-      group_ids() {}
+      m_xa_vision() {}
 
 /** Reset as initialzed values */
 void Vision::reset() {
@@ -76,7 +76,7 @@ void Vision::reset() {
   m_up_limit_id = TRX_ID_MAX;
   m_active = false;
   m_snapshot_vision = nullptr;
-  group_ids.clear();
+  m_xa_vision.init();
 }
 
 VisionContainer::VisionList::VisionList() {
@@ -371,12 +371,12 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
     }
     return true;
   } else if (txn_rec->scn == SCN_NULL) {
-    if (group_ids.has(txn_rec->trx_id)) return true;
+    if (m_xa_vision.modification_visible(txn_rec->trx_id)) return true;
     /** If transaction still active,  not seen */
     ut_ad(!check_consistent || undo_ptr_is_active(txn_rec->undo_ptr));
     return false;
   } else {
-    if (group_ids.has(txn_rec->trx_id)) return true;
+    if (m_xa_vision.modification_visible(txn_rec->trx_id)) return true;
     /**
       Modification scn is less than snapshot mean that
       the trx commit is prior the query lanuch.

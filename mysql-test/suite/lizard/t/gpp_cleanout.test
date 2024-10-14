@@ -43,10 +43,8 @@ show status like '%sec_clean%';
 
 --echo # ------------------------- Test Partition table ----------------------------------------
 create table test12 (name varchar(30),age bigint,grade bigint,date datetime not null,partition_id int not null,   PRIMARY KEY (`name`,`PARTITION_ID`),   KEY `IDX_DATE` (`date`,`name`,`partition_id`),   KEY `IDX_AGE` (`age`,`partition_id`) ) PARTITION BY RANGE COLUMNS(PARTITION_ID) (PARTITION p0 VALUES LESS THAN (0) ENGINE = InnoDB,  PARTITION P1 VALUES LESS THAN (1) ENGINE = InnoDB);
-show status like '%clust_clean%';
 insert into test12 values('Tom27',21,1,'2017-08-25 12:12:12',0);
 update test12 set grade=3,date=now() where age=21 and partition_id=0;
-show status like '%clust_clean%';
 
 
 --echo # -------------------------Clean up --------------------------------------------------

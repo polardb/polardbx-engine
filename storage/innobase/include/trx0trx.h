@@ -1195,7 +1195,7 @@ struct trx_t {
   dberr_t gp_error_state;
 
   /** Descripe XA attributes from server */
-  XAD xad;
+  xa_desc_t xa_desc;
 
   /** XA specification interpreted from TC log when recovery. */
   XA_specification *xa_spec;

@@ -3,6 +3,7 @@
 --connect(con1,localhost,root,,test)
 --connect(con2,localhost,root,,test)
 --connect(con3,localhost,root,,test)
+--connect(con4,localhost,root,,test)
 
 --connection con1
 set session transaction_isolation= 'READ-COMMITTED';
@@ -13,12 +14,17 @@ set session transaction_isolation= 'READ-COMMITTED';
 --connection con3
 set session transaction_isolation= 'READ-COMMITTED';
 
+--connection con4
+set session transaction_isolation= 'READ-COMMITTED';
+
 --echo # --------- case 1 ---------
 
 --connection con1
 create table t1 (id int) engine = innodb;
 insert into t1 values (1);
 
+# enable transaction group mode
+set innodb_transaction_group = ON;
 
 # start the first XA transaction and do some chagnes
 xa start 'xa', 'test@0001';
@@ -43,38 +49,55 @@ xa start 'xa', 'test@0002';
 # transaction group mode is not enabled, still cannot see the changes
 select * from t1;
 
-# unless it's enabled explicitely
+# enable it when the trx has started, the changes are still invisible
 set innodb_transaction_group = ON;
+select * from t1;
+
+xa end 'xa', 'test@0002';
+xa commit 'xa', 'test@0002' one phase;
+
+# now start a new XA transaction
+xa start 'xa', 'test@0003';
+
+# the changes are visible now
 select * from t1;
 
 
 --connection con3
 
-# XA transaction with unexpected BQUAL name cannot join the group
+Set innodb_transaction_group = ON;
+
+# XA transaction with different BQUAL name cannot join the group
 xa start 'xa', 'test@123a';
 
-# so the changes are not visible
-select * from t1;
-
-# even transaction group mode is enabled
-set innodb_transaction_group = ON;
+# so the changes are not visible even transaction group mode is enabled
 select * from t1;
 
 xa end 'xa', 'test@123a';
 xa commit 'xa', 'test@123a' one phase;
 
-# check the current setting
-show variables like "innodb_transaction_group";
-
 # now start a new XA transaction with expected BQUAL name in format of
 # "value@xxxx" where "x" is digit
 
-xa start 'xa', 'test@0003';
+xa start 'xa', 'test@0004';
 
 # the changes are visible now
 select * from t1;
-xa end 'xa', 'test@0003';
-xa commit 'xa', 'test@0003' one phase;
+xa end 'xa', 'test@0004';
+xa commit 'xa', 'test@0004' one phase;
+
+--connection con4
+
+Set innodb_transaction_group = ON;
+
+# the formatID of trxs in the same group must be equal, otherwise they would be 
+# viewed as different groups. The default formatID is 1 if not specified.
+xa start 'xa', 'test@0005', 9999;
+
+# the changes are invisible
+select * from t1;
+xa end 'xa', 'test@0005', 9999;
+xa commit 'xa', 'test@0005', 9999 one phase;
 
 --echo # --------- case 2 ---------
 
@@ -104,8 +127,8 @@ xa commit 'xa', 'test@0001' one phase;
 select * from t1;
 # commit this XA transaction
 
-xa end 'xa', 'test@0002';
-xa commit 'xa', 'test@0002' one phase;
+xa end 'xa', 'test@0003';
+xa commit 'xa', 'test@0003' one phase;
 
 
 
@@ -113,8 +136,8 @@ xa commit 'xa', 'test@0002' one phase;
 
 --connection con1
 set innodb_transaction_group = ON;
-xa start 'xa', 'test@0004';
-insert into t1 values(4);
+xa start 'xa', 'test@0006';
+insert into t1 values(6);
 
 
 --connection con3
@@ -128,33 +151,43 @@ set innodb_transaction_group = ON;
 
 show variables like "%isolation%";
 
-xa start 'xa', 'test@0005';
+xa start 'xa', 'test@0007';
 
 # the changes are visible
 select * from t1;
 
-# commit this XA transaction
-xa end 'xa', 'test@0005';
-xa commit 'xa', 'test@0005' one phase;
 
+--connection con2
 
 # SELECT uses lock when using SERIALIZABLE, cannot see the changes
 set session transaction isolation level SERIALIZABLE;
 
 show variables like "%isolation%";
 
-xa start 'xa', 'test@0006';
+xa start 'xa', 'test@0008';
 
 # this statement will be blocked until lock timeout
 
 --error ER_LOCK_WAIT_TIMEOUT
 select * from t1;
 
-# commit this XA transaction
+xa end 'xa', 'test@0008';
+xa commit 'xa', 'test@0008' one phase;
+
+--connection con3
+xa end 'xa', 'test@0007';
+xa commit 'xa', 'test@0007' one phase;
+
+--connection con1
 xa end 'xa', 'test@0006';
 xa commit 'xa', 'test@0006' one phase;
 
 --echo # --------- case 5 ---------
+--connection con1
+set innodb_transaction_group = ON;
+xa start 'xa', 'test@0009';
+insert into t1 values(9);
+
 --connection con3
 set session transaction isolation level READ COMMITTED;
 
@@ -162,28 +195,136 @@ set innodb_transaction_group = ON;
 
 show variables like "%isolation%";
 
-xa start 'xa', 'test@0007';
-
-# the changes made by ('xa', 'test@0004')  are visible
-select * from t1;
+xa start 'xa', 'test@0010';
 
 # make changes
-insert into t1 values(7);
+insert into t1 values(10);
 
 --connection con1
-# test if ('xa', 'test@0004') can see the changes from ('xa', 'test@0007')
+# test if ('xa', 'test@0009') can see the changes from ('xa', 'test@0010')
 select * from t1;
 # commit this XA transaction
-xa end 'xa', 'test@0004';
-xa commit 'xa', 'test@0004' one phase;
+xa end 'xa', 'test@0009';
+xa commit 'xa', 'test@0009' one phase;
 
 --connection con3
 # commit this XA transaction
-xa end 'xa', 'test@0007';
-xa commit 'xa', 'test@0007' one phase;
+xa end 'xa', 'test@0010';
+xa commit 'xa', 'test@0010' one phase;
 
+--echo # --------- case 6 ---------
+--connection con1
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+
+show variables like "%isolation%";
+
+xa start 'xa', 'test@0011';
+select * from t1;
+xa end 'xa', 'test@0011';
+
+--connection con2
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+
+# There is no xa branch has been set prepared, therefor new xa branch 
+# can be started
+xa start 'xa', 'test@0012';
+select * from t1;
+xa end 'xa', 'test@0012';
+xa prepare 'xa', 'test@0012';
+
+--connection con3
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+
+# Once one xa branch has been set prepared, new xa branch cannot 
+# be started again
+--error ER_XA_GROUP_CLOSE_ERROR
+xa start 'xa', 'test@0013';
 
 --connection con1
+xa prepare 'xa', 'test@0011';
+xa commit 'xa', 'test@0011';
+
+--connection con2
+xa commit 'xa', 'test@0012';
+
+--echo # --------- case 7 ---------
+--connection con1
+
+xa start 'xa', 'test@0013';
+select * from t1;
+xa end 'xa', 'test@0013';
+
+--connection con2
+# There is no xa branch has been set prepared, therefor new xa branch 
+# can be started
+xa start 'xa', 'test@0014';
+select * from t1;
+xa end 'xa', 'test@0014';
+xa commit 'xa', 'test@0014' one phase;
+
+--connection con3
+# xa commit one phase would also close xa group, therefor new xa branch 
+# cannot be started again
+--error ER_XA_GROUP_CLOSE_ERROR
+xa start 'xa', 'test@0015';
+
+--connection con1
+xa prepare 'xa', 'test@0013';
+xa commit 'xa', 'test@0013';
+
+
+--echo # --------- case 8 ---------
+--connection con1
+set innodb_transaction_group = ON;
+
+# if the formatID is greater than 9999, use the new format
+xa start 'xa', 'test@0016', 10000;
+insert into t1 values(16);
+
+--connection con2
+set innodb_transaction_group = ON;
+
+xa start 'xa', 'test@456a', 10000;
+
+# in new format, trxs with the same gtrid are divided into one group
+# so the changes are visible
+select * from t1;
+
+--connection con3
+set innodb_transaction_group = ON;
+
+xa start 'xa', 'test@789a', 10001;
+
+# the changes are visible
+select * from t1;
+
+xa end 'xa', 'test@789a', 10001;
+xa commit 'xa', 'test@789a', 10001 one phase;
+
+--connection con2
+
+xa end 'xa', 'test@456a', 10000;
+xa commit 'xa', 'test@456a', 10000 one phase;
+
+--connection con4
+set innodb_transaction_group = ON;
+
+xa start 'xa1', 'test@0017', 10000;
+
+# the changes are invisible
+select * from t1;
+
+xa end 'xa1', 'test@0017', 10000;
+xa commit 'xa1', 'test@0017' ,10000 one phase;
+
+--connection con1
+xa end 'xa','test@0016', 10000;
+xa commit 'xa','test@0016', 10000 one phase;
 drop table t1;
 
 
@@ -191,3 +332,4 @@ drop table t1;
 disconnect con1;
 disconnect con2;
 disconnect con3;
+disconnect con4;

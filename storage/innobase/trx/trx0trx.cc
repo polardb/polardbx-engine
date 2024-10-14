@@ -263,7 +263,9 @@ static void trx_init(trx_t *trx) {
 
   trx->vision.reset();
 
-  trx->xad.reset();
+  trx_release_xa_group_reference_if_need(trx);
+
+  trx->xa_desc.reset();
 
   trx->xa_spec = nullptr;
 
@@ -288,7 +290,7 @@ struct TrxFactory {
 
     new (&trx->gp_wait) gp_wait_t();
 
-    new (&trx->xad) XAD();
+    new (&trx->xa_desc) xa_desc_t();
 
     new (&trx->vision) lizard::Vision();
 
@@ -369,7 +371,7 @@ struct TrxFactory {
 
     trx->gp_wait.~gp_wait_t();
 
-    trx->xad.~XAD();
+    trx->xa_desc.~xa_desc_t();
 
     trx->vision.~Vision();
 
@@ -557,6 +559,10 @@ static void trx_free(trx_t *&trx) {
 
   trx->mod_tables.clear();
 
+  trx_release_xa_group_reference_if_need(trx);
+
+  trx->xa_desc.reset();
+
   // ut_ad(trx->read_view == nullptr);
 
   ut_ad(!trx->vision.is_active());
@@ -683,6 +689,7 @@ void trx_free_prepared_or_active_recovered(trx_t *trx) {
   assert_trx_in_rw_list(trx);
 
   trx_release_impl_and_expl_locks(trx, false);
+
   trx_undo_free_trx_with_prepared_or_active_logs(trx, was_prepared);
 
   ut_ad(!trx->in_rw_trx_list);
@@ -1125,7 +1132,6 @@ static inline void trx_remove_from_rw_trx_list(trx_t *trx) {
   UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
   ut_d(trx->in_rw_trx_list = false);
 }
-
 /** Creates trx objects for transactions and initializes the trx list of
  trx_sys at database start. Rollback segments and undo log lists must
  already exist when this function is called, because the lists of
@@ -1502,6 +1508,8 @@ static void trx_start_low(
 
     trx_sys_rw_trx_add(trx);
 
+    trx_add_to_xa_group_if_need(trx);
+
     trx_set_trx_id_for_audit_trx_ctx(trx);
   } else {
     trx->id = 0;
@@ -1833,8 +1841,9 @@ static void trx_finalize_for_fts(
 
 /** If required, flushes the log to disk based on the value of
  innodb_flush_log_at_trx_commit. */
-static void trx_flush_log_if_needed_low(lsn_t lsn, bool no_flush) /*!< in: lsn up to which logs
-                                                   are to be flushed. */
+static void trx_flush_log_if_needed_low(lsn_t lsn,
+                                        bool no_flush) /*!< in: lsn up to which
+                                        logs are to be flushed. */
 {
 #ifdef _WIN32
   bool flush = true;
@@ -1876,8 +1885,9 @@ static void trx_flush_log_if_needed(lsn_t lsn, /*!< in: lsn up to which logs are
     auto wait_stats = log_write_up_to(*log_sys, lsn, true);
     MONITOR_INC_WAIT_STATS(MONITOR_TRX_ON_LOG_, wait_stats);
   } else {
-    //Note:: xpaxos follower apply worker no need flush immediately
-    bool no_flush = trx->mysql_thd && trx->mysql_thd->xpaxos_replication_channel;
+    // Note:: xpaxos follower apply worker no need flush immediately
+    bool no_flush =
+        trx->mysql_thd && trx->mysql_thd->xpaxos_replication_channel;
     trx_flush_log_if_needed_low(lsn, no_flush);
   }
 
@@ -3239,6 +3249,10 @@ static void trx_prepare(trx_t *trx) {
   trx_sys->n_prepared_trx++;
   trx_sys_mutex_exit();
 
+  /* close xa group for extern Xa transaction. */
+  if (!trx->xa_desc.is_group_null()) {
+    trx->xa_desc.group()->close();
+  }
   /* Force isolation level to RC and release GAP locks
   for test purpose. */
   DBUG_EXECUTE_IF("ib_force_release_gap_lock_prepare",
@@ -3713,6 +3727,8 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
   trx_sys_mutex_exit();
 
   trx_sys_rw_trx_add(trx);
+
+  trx_add_to_xa_group_if_need(trx);
 
   trx_set_trx_id_for_audit_trx_ctx(trx);
 }

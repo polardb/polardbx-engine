@@ -283,8 +283,8 @@ typedef struct xid_t {
 
   friend class XID_STATE;
 
-  friend bool trx_group_match_by_xid(const struct xid_t *lhs,
-                                     const struct xid_t *rhs);
+  friend bool check_if_match_format_v1(const struct xid_t *xid);
+
 } XID;
 
 struct st_handler_tablename;

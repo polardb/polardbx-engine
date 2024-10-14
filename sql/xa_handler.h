@@ -38,4 +38,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 */
 void register_xa_attributes(THD *thd, handlerton *ht_arg);
 
+/**
+  Register Xa_group informations into storage engine.
+
+  @param[in]      thd       connection handler
+  @param[in]      ht        handlerton
+  @return true if succeed, false otherwise
+*/
+bool register_xa_group(THD *thd, handlerton *ht_arg);
+
 #endif

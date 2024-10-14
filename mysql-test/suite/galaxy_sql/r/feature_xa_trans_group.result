@@ -1,9 +1,11 @@
 set session transaction_isolation= 'READ-COMMITTED';
 set session transaction_isolation= 'READ-COMMITTED';
 set session transaction_isolation= 'READ-COMMITTED';
+set session transaction_isolation= 'READ-COMMITTED';
 # --------- case 1 ---------
 create table t1 (id int) engine = innodb;
 insert into t1 values (1);
+set innodb_transaction_group = ON;
 xa start 'xa', 'test@0001';
 select * from t1;
 id
@@ -25,27 +27,34 @@ set innodb_transaction_group = ON;
 select * from t1;
 id
 1
-2
-xa start 'xa', 'test@123a';
-select * from t1;
-id
-1
-set innodb_transaction_group = ON;
-select * from t1;
-id
-1
-xa end 'xa', 'test@123a';
-xa commit 'xa', 'test@123a' one phase;
-show variables like "innodb_transaction_group";
-Variable_name	Value
-innodb_transaction_group	ON
+xa end 'xa', 'test@0002';
+xa commit 'xa', 'test@0002' one phase;
 xa start 'xa', 'test@0003';
 select * from t1;
 id
 1
 2
-xa end 'xa', 'test@0003';
-xa commit 'xa', 'test@0003' one phase;
+Set innodb_transaction_group = ON;
+xa start 'xa', 'test@123a';
+select * from t1;
+id
+1
+xa end 'xa', 'test@123a';
+xa commit 'xa', 'test@123a' one phase;
+xa start 'xa', 'test@0004';
+select * from t1;
+id
+1
+2
+xa end 'xa', 'test@0004';
+xa commit 'xa', 'test@0004' one phase;
+Set innodb_transaction_group = ON;
+xa start 'xa', 'test@0005', 9999;
+select * from t1;
+id
+1
+xa end 'xa', 'test@0005', 9999;
+xa commit 'xa', 'test@0005', 9999 one phase;
 # --------- case 2 ---------
 insert into t1 values (3);
 select * from t1;
@@ -61,36 +70,12 @@ id
 1
 2
 3
-xa end 'xa', 'test@0002';
-xa commit 'xa', 'test@0002' one phase;
+xa end 'xa', 'test@0003';
+xa commit 'xa', 'test@0003' one phase;
 # --------- case 4 ---------
 set innodb_transaction_group = ON;
-xa start 'xa', 'test@0004';
-insert into t1 values(4);
-set session transaction isolation level READ COMMITTED;
-set innodb_transaction_group = ON;
-show variables like "%isolation%";
-Variable_name	Value
-transaction_isolation	READ-COMMITTED
-xa start 'xa', 'test@0005';
-select * from t1;
-id
-1
-2
-3
-4
-xa end 'xa', 'test@0005';
-xa commit 'xa', 'test@0005' one phase;
-set session transaction isolation level SERIALIZABLE;
-show variables like "%isolation%";
-Variable_name	Value
-transaction_isolation	SERIALIZABLE
 xa start 'xa', 'test@0006';
-select * from t1;
-ERROR HY000: Lock wait timeout exceeded; try restarting transaction
-xa end 'xa', 'test@0006';
-xa commit 'xa', 'test@0006' one phase;
-# --------- case 5 ---------
+insert into t1 values(6);
 set session transaction isolation level READ COMMITTED;
 set innodb_transaction_group = ON;
 show variables like "%isolation%";
@@ -102,17 +87,153 @@ id
 1
 2
 3
-4
-insert into t1 values(7);
+6
+set session transaction isolation level SERIALIZABLE;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	SERIALIZABLE
+xa start 'xa', 'test@0008';
+select * from t1;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+xa end 'xa', 'test@0008';
+xa commit 'xa', 'test@0008' one phase;
+xa end 'xa', 'test@0007';
+xa commit 'xa', 'test@0007' one phase;
+xa end 'xa', 'test@0006';
+xa commit 'xa', 'test@0006' one phase;
+# --------- case 5 ---------
+set innodb_transaction_group = ON;
+xa start 'xa', 'test@0009';
+insert into t1 values(9);
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	READ-COMMITTED
+xa start 'xa', 'test@0010';
+insert into t1 values(10);
 select * from t1;
 id
 1
 2
 3
-4
-7
-xa end 'xa', 'test@0004';
-xa commit 'xa', 'test@0004' one phase;
-xa end 'xa', 'test@0007';
-xa commit 'xa', 'test@0007' one phase;
+6
+9
+10
+xa end 'xa', 'test@0009';
+xa commit 'xa', 'test@0009' one phase;
+xa end 'xa', 'test@0010';
+xa commit 'xa', 'test@0010' one phase;
+# --------- case 6 ---------
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	READ-COMMITTED
+xa start 'xa', 'test@0011';
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+xa end 'xa', 'test@0011';
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	READ-COMMITTED
+xa start 'xa', 'test@0012';
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+xa end 'xa', 'test@0012';
+xa prepare 'xa', 'test@0012';
+set session transaction isolation level READ COMMITTED;
+set innodb_transaction_group = ON;
+show variables like "%isolation%";
+Variable_name	Value
+transaction_isolation	READ-COMMITTED
+xa start 'xa', 'test@0013';
+ERROR HY000: Cannot start a new xa branch when enable transaction group, if there has been already one xa branch in prepared state.
+xa prepare 'xa', 'test@0011';
+xa commit 'xa', 'test@0011';
+xa commit 'xa', 'test@0012';
+# --------- case 7 ---------
+xa start 'xa', 'test@0013';
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+xa end 'xa', 'test@0013';
+xa start 'xa', 'test@0014';
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+xa end 'xa', 'test@0014';
+xa commit 'xa', 'test@0014' one phase;
+xa start 'xa', 'test@0015';
+ERROR HY000: Cannot start a new xa branch when enable transaction group, if there has been already one xa branch in prepared state.
+xa prepare 'xa', 'test@0013';
+xa commit 'xa', 'test@0013';
+# --------- case 8 ---------
+set innodb_transaction_group = ON;
+xa start 'xa', 'test@0016', 10000;
+insert into t1 values(16);
+set innodb_transaction_group = ON;
+xa start 'xa', 'test@456a', 10000;
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+16
+set innodb_transaction_group = ON;
+xa start 'xa', 'test@789a', 10001;
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+16
+xa end 'xa', 'test@789a', 10001;
+xa commit 'xa', 'test@789a', 10001 one phase;
+xa end 'xa', 'test@456a', 10000;
+xa commit 'xa', 'test@456a', 10000 one phase;
+set innodb_transaction_group = ON;
+xa start 'xa1', 'test@0017', 10000;
+select * from t1;
+id
+1
+2
+3
+6
+9
+10
+xa end 'xa1', 'test@0017', 10000;
+xa commit 'xa1', 'test@0017' ,10000 one phase;
+xa end 'xa','test@0016', 10000;
+xa commit 'xa','test@0016', 10000 one phase;
 drop table t1;

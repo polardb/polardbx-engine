@@ -36,6 +36,7 @@
 
 #include "mysql/components/services/log_builtins.h"
 
+#include "sql/xa_handler.h"
 namespace lizard {
 namespace xa {
 
@@ -115,6 +116,51 @@ bool apply_trx_for_xa(THD *thd, const XID *xid, slot_ptr_t *slot_ptr,
     return true;
   }
 
+  return false;
+}
+
+/**
+  To prepare xa group for an external xa transaction, innodb must be
+  registered as a participant. After one xa branch has been prepared
+  (also including commited), the xa group would be closed. Then other
+  xa branches can not participate in the xa group. We do the check
+  here.
+  1. start trx in transaction slot storage engine.[ttse]
+  2. register ttse as a participant
+  3. register xa group and check if it has been closed.
+  @param[in]	Thread handler
+  @param[in]	XID
+  @return true if error, false otherwise.
+ */
+bool prepare_xa_group_and_check(THD *thd, const XID *xid) {
+  /* Restrict only user client thread */
+  if (thd->system_thread != NON_SYSTEM_THREAD || thd->is_binlog_applier() ||
+      !thd->variables.innodb_transaction_group) {
+    return false;
+  }
+
+  /** Take innodb as transaction slot storage engine. */
+  handlerton *ttse = innodb_hton;
+
+#ifndef NDEBUG
+  XID_STATE *xid_state = thd->get_transaction()->xid_state();
+  assert(xid_state->has_state(XID_STATE::XA_ACTIVE));
+  assert(xid_state->get_xid()->eq(xid));
+  assert(ttse);
+#endif
+  (void)xid;
+
+  /** 1. Start trx within transaction slot storage engine, and register it
+  as a participant. */
+  if (ttse->ext.start_trx_for_xa(ttse, thd, false)) {
+    my_error(ER_XA_GROUP_TRX_SLOT_ALLOC_ERROR, MYF(0));
+    return true;
+  }
+  /** 2. register xa group and check if the xa group has been closed. */
+  if (!register_xa_group(thd, ttse)) {
+    my_error(ER_XA_GROUP_CLOSE_ERROR, MYF(0));
+    return true;
+  }
   return false;
 }
 

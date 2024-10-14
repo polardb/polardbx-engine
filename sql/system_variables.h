@@ -414,6 +414,8 @@ struct System_variables {
 
   bool opt_flashback_area;
 
+  bool innodb_transaction_group;
+
   /**
     @sa Sys_sql_generate_invisible_primary_key
   */

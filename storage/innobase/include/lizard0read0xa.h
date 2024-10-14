@@ -24,31 +24,45 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "xa_handler.h"
-#include "sql/sql_class.h"
+/** @file include/lizard0read0xa.h
+  Lizard XA transaction structure.
 
-/**
-  Register XID informations into storage engine.
+ Created 2021-08-10 by Jianwei.zhao
+ *******************************************************/
 
-  @param[in]      thd       connection handler
-  @param[in]      ht        handlerton
-*/
-void register_xa_attributes(THD *thd, handlerton *ht_arg) {
-  if (thd->get_transaction()->xid_state()->check_in_xa(false) &&
-      ht_arg->ext.register_xa_attributes != nullptr) {
-    ht_arg->ext.register_xa_attributes(thd);
+#ifndef lizard0read0xa_h
+#define lizard0read0xa_h
+
+#include <string>
+#include <unordered_set>
+#include "trx0types.h"
+
+class Xa_group;
+
+class Xa_vision {
+ public:
+  Xa_vision() : m_group_ids(), m_group_clock(0) {}
+  void init() {
+    m_group_ids.clear();
+    m_group_clock = 0;
   }
-}
-/**
-  Register Xa_group informations into storage engine.
 
-  @param[in]      thd       connection handler
-  @param[in]      ht        handlerton
-  @return false if xa group is closed, true otherwise
-*/
-bool register_xa_group(THD *thd, handlerton *ht_arg) {
-  ut_ad(thd->get_transaction()->xid_state()->check_in_xa(false));
-  ut_ad(ht_arg->ext.register_xa_group != nullptr);
+  void update_group_ids(const Xa_group *xa_group);
 
-  return ht_arg->ext.register_xa_group(thd);
-}
+  bool modification_visible(const trx_id_t id) const { return find(id); }
+
+ private:
+  /** The trx id container that belong to the same xa group. */
+  std::unordered_set<trx_id_t> m_group_ids;
+
+  /** A sequence number used to check whether the xa group has
+  changed quickly. */
+  ulint m_group_clock;
+
+  bool find(const trx_id_t id) const {
+    auto it = m_group_ids.find(id);
+    if (it != m_group_ids.end()) return true;
+    return false;
+  }
+};
+#endif

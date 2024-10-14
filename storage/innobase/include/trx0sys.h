@@ -573,6 +573,11 @@ struct trx_sys_t {
   /** Mapping from transaction id to transaction instance. */
   Trx_shard shards[TRX_SHARDS_N];
 
+  char pad8[ut::INNODB_CACHE_LINE_SIZE];
+
+  /** Mapping from xa transaction gtrid to xa group. */
+  Xa_group_shard xa_group_shards[XA_GROUP_SHARDS_N];
+
   /** Number of transactions currently in the XA PREPARED state. */
   ulint n_prepared_trx;
 

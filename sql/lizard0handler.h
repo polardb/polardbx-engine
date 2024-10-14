@@ -115,6 +115,8 @@ class XA_spec_list {
 
 typedef void (*register_xa_attributes_t)(THD *thd);
 
+typedef bool (*register_xa_group_t)(THD *thd);
+
 typedef gcn_t (*load_gcn_t)();
 typedef scn_t (*load_scn_t)();
 
@@ -158,6 +160,7 @@ class Snapshot_gcn_vision;
 /** Extension structure of handlerton */
 struct handlerton_ext {
   register_xa_attributes_t register_xa_attributes;
+  register_xa_group_t register_xa_group;
   load_gcn_t load_gcn;
   load_scn_t load_scn;
   snapshot_scn_too_old_t snapshot_scn_too_old;

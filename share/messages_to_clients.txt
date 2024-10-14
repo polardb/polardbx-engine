@@ -10188,6 +10188,12 @@ ER_CONSENSUS_LEADERSHIP_IS_CHANGING
 ER_XA_PROC_RETENTION_NOT_SATISFIED
   eng "Transaction slots may be cleaned up immediately because the retention time of transaction slots is not set. It is recommended to adjust innodb_txn_retention to a large enough value."
 
+ER_XA_GROUP_TRX_SLOT_ALLOC_ERROR
+  eng "Failed to allocate transaction slot when xa start."
+
+ER_XA_GROUP_CLOSE_ERROR
+  eng "Cannot start a new xa branch when enable transaction group, if there has been already one xa branch in prepared state."
+
 #
 #  End of RDS error message.
 #

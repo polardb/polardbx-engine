@@ -24,58 +24,20 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0xa0types.h
+/** @file read/lizard0read0xa.cc
   Lizard XA transaction structure.
 
- Created 2021-08-10 by Jianwei.zhao
+ Created 2024-10-10 by Zefeng.liu
  *******************************************************/
 
-#ifndef lizard0xa0types_h
-#define lizard0xa0types_h
+#include "lizard0read0xa.h"
+#include "lizard0xa.h"
 
-#include <string>
-#include <unordered_set>
-
-#include "trx0types.h"
-
-typedef std::unordered_set<trx_id_t> trx_group_ids_t;
-
-/**
-  Structure used by Vision
-*/
-struct trx_group_ids {
- public:
-  trx_group_ids_t m_ids;
-  ulint m_size;
-
-  explicit trx_group_ids() : m_ids(), m_size(0) {}
-
-  virtual ~trx_group_ids() { clear(); }
-
-  void push(trx_id_t id) {
-    if (m_ids.insert(id).second) m_size++;
-  }
-
-  void clear() {
-    if (m_size > 0) {
-      m_ids.clear();
-      m_size = 0;
+void Xa_vision::update_group_ids(const Xa_group *xa_group) {
+  if (xa_group->has_modified(m_group_clock)) {
+    for (auto trx_id : xa_group->get_trx_ids()) {
+      m_group_ids.insert(trx_id);
     }
+    m_group_clock = xa_group->get_clock();
   }
-
-  ulint size() { return m_size; }
-
-  bool has(const trx_id_t id) const {
-    if (m_size > 0 && find(id)) return true;
-    return false;
-  }
-
- private:
-  bool find(const trx_id_t id) const {
-    auto it = m_ids.find(id);
-    if (it != m_ids.end()) return true;
-    return false;
-  }
-};
-
-#endif
+}

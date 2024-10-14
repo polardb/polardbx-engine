@@ -87,7 +87,7 @@ static bool innobase_start_trx_for_xa(handlerton *hton, THD *thd, bool rw) {
 
   innobase_register_trx_only_trans(hton, thd, trx);
 
-  thd->get_ha_data(hton->slot)->ha_info[1].set_trx_read_write();
+  if (rw) thd->get_ha_data(hton->slot)->ha_info[1].set_trx_read_write();
 
   return false;
 }
@@ -142,10 +142,11 @@ template trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>(
     const lizard::Snapshot_gcn_vision &lhs);
 
 /**
-  Copy server XA attributes into innobase.
-
-  @param[in]      thd       connection handler.
-*/
+ * Copy server XA attributes into innobase.
+ *
+ * @param[in]      thd       connection handler.
+ *
+ */
 static void innobase_register_xa_attributes(THD *thd) {
   trx_t *&trx = thd_to_trx(thd);
   ut_ad(trx != nullptr);
@@ -154,13 +155,61 @@ static void innobase_register_xa_attributes(THD *thd) {
     /** Note: Other session will compare trx group when assign readview. */
     trx_mutex_enter(trx);
 
-    thd_get_xid(thd, (MYSQL_XID *)trx->xad.my_xid());
-    trx->xad.build_group();
+    trx->xa_desc.copy_xid(thd->get_transaction()->xid_state()->get_xid());
 
-    ut_ad(!trx->xad.is_null());
+    ut_ad(!trx->xa_desc.is_xid_null());
 
     trx_mutex_exit(trx);
   }
+}
+
+/**
+ * Build xa group id for the trx, and try to reference the corresponding xa
+ * group. Create xa group if not exist. Notice: the xid does not meet the
+ * format requirement is allowed, but will be ignored, which means that no
+ * xa groups will be created or referenced.
+ *
+ * @param[in]     thd       connection handler.
+ * @return false if xa group has been closed, otherwise true.
+ */
+static bool innobase_register_xa_group(THD *thd) {
+  trx_t *&trx = thd_to_trx(thd);
+  ut_ad(trx != nullptr);
+  ut_ad(trx_is_registered_for_2pc(trx));
+
+  /** Note: Other session will compare trx group when assign readview. */
+  trx_mutex_enter(trx);
+
+  /* xid must have been set. */
+  ut_ad(!trx->xa_desc.is_xid_null());
+
+  /* 1. build xa group id. */
+  if (!trx->xa_desc.build_gid()) {
+    trx_mutex_exit(trx);
+    return true;
+  }
+
+  /* 2. create xa group if not exist, then fix it to avoid release. */
+  Xa_group *xa_group = nullptr;
+  bool closed;
+  trx_sys->xa_group_shards[trx_get_xa_group_shard_no(trx->xa_desc.gid())]
+      .xa_groups.latch_and_execute(
+          [&](Xa_group_by_id &xa_group_by_id) {
+            xa_group = xa_group_by_id.get(trx->xa_desc.gid(), true);
+            closed = xa_group->is_closed();
+            if (!closed) {
+              /** fix the xa group. */
+              xa_group->reference();
+              trx->xa_desc.set_group(xa_group);
+            }
+          },
+          UT_LOCATION_HERE);
+
+  if (closed) trx->xa_desc.reset();
+
+  trx_mutex_exit(trx);
+
+  return !closed;
 }
 
 uint64 innobase_load_gcn() { return lizard::gcs_load_gcn(); }
@@ -299,6 +348,8 @@ bool innobase_trx_slot_check_retention() {
 */
 void innobase_init_ext(handlerton *hton) {
   hton->ext.register_xa_attributes = innobase_register_xa_attributes;
+  hton->ext.register_xa_group = innobase_register_xa_group;
+
   hton->ext.load_gcn = innobase_load_gcn;
   hton->ext.load_scn = innobase_load_scn;
 

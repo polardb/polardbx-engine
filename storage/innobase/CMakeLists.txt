@@ -278,6 +278,7 @@ SET(INNOBASE_SOURCES
   ut/lizard0ut.cc
   page/lizard0page.cc
   read/lizard0read.cc
+  read/lizard0read0xa.cc
   trx/lizard0trx.cc
   dict/lizard0gcs0hist.cc
   row/lizard0mysql.cc

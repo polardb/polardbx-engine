@@ -44,7 +44,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0mem.h"
 #include "trx0types.h"
 
-#include "lizard0xa0types.h"
+#include "lizard0read0xa.h"
 
 struct row_prebuilt_t;
 
@@ -149,6 +149,10 @@ class Vision {
 
   const Snapshot_vision *snapshot_vision() const { return m_snapshot_vision; }
 
+  void update_xa_vision(const Xa_group *xa_group) {
+    m_xa_vision.update_group_ids(xa_group);
+  }
+
   bool is_asof_gcn() const {
     return m_snapshot_vision &&
            m_snapshot_vision->type() == Snapshot_type::AS_OF_GCN;
@@ -194,13 +198,12 @@ class Vision {
   /** Snapshot vision used for asof query. */
   const Snapshot_vision *m_snapshot_vision;
 
+  /** Xa vision used for transaction group. */
+  Xa_vision m_xa_vision;
+
   UT_LIST_NODE_T(Vision) list;
 
   friend class VisionContainer;
-
- public:
-  /** The trx id container that belong to the same trx group */
-  trx_group_ids group_ids;
 };
 
 /**

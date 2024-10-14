@@ -112,8 +112,6 @@ typedef struct xid_t XID;
 typedef struct st_xarecover_txn XA_recover_txn;
 struct MDL_key;
 
-typedef struct xa_desc_t XAD;
-
 namespace dd {
 enum class enum_column_types;
 class Table;

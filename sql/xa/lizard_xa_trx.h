@@ -51,6 +51,21 @@ extern bool apply_trx_for_xa(THD *thd, const XID *xid, slot_ptr_t *slot_ptr,
                              trx_id_t *trx_id);
 
 /**
+  To prepare xa group for an external xa transaction, innodb must be
+  registered as a participant. After one xa branch has been prepared
+  (also including commited), the xa group would be closed. Then other
+  xa branches can not participate in the xa group. We do the check
+  here.
+  1. start trx in transaction slot storage engine.[ttse]
+  2. register ttse as a participant
+  3. register xa group and check if it has been closed.
+  @param[in]	Thread handler
+  @param[in]	XID
+  @return true if error, otherwise false.
+ */
+extern bool prepare_xa_group_and_check(THD *thd, const XID *xid);
+
+/**
   Decide proposal GCN through pre_commit_gcn and sys GCN,
   and set THD::owned_commit_gcn.
 */
