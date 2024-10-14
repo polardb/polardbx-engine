@@ -46,7 +46,7 @@ class XMessage_encoder_base : public Base_type {
 
   constexpr static PolarXRPC::Notice::Frame_Scope k_local =
       PolarXRPC::Notice::Frame_Scope_LOCAL;
-  
+
   constexpr static PolarXRPC::Notice::Frame_Scope k_global =
       PolarXRPC::Notice::Frame_Scope_GLOBAL;
 
@@ -218,7 +218,7 @@ class XMessage_encoder_base : public Base_type {
     Base_type::end_delimited_field(field_payload_start);
     Base_type::end_xmessage(xmsg_start);
   }
-  
+
   void encode_notice_server_state(const uint64_t flag) {
     using FrameTags = tags::Frame;
     using StateTags = tags::SessionStateChanged;
@@ -354,6 +354,14 @@ class XMessage_encoder_base : public Base_type {
     auto xmsg_start =
         Base_type::template begin_xmessage<tags::Ok::server_id, 5>();
     Base_type::template encode_field_string<tags::Ok::msg>(message);
+    Base_type::end_xmessage(xmsg_start);
+  }
+
+  void encode_ok(const uint32_t connection_id) {
+    auto xmsg_start =
+        Base_type::template begin_xmessage<tags::Ok::server_id, 10>();
+    Base_type::template encode_field_var_uint32<tags::Ok::connection_id>(
+        connection_id);
     Base_type::end_xmessage(xmsg_start);
   }
 

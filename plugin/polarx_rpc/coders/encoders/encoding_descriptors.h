@@ -17,6 +17,7 @@ struct Ok {
   static constexpr uint32_t server_id = 0;
 
   static constexpr uint32_t msg = 1;
+  static constexpr uint32_t connection_id = 2;
 };
 
 struct Error {

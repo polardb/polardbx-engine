@@ -135,6 +135,7 @@ message ServerMessages {
 // generic Ok message
 message Ok {
   optional string msg = 1;
+  optional uint32 connection_id = 2;
 }
 
 

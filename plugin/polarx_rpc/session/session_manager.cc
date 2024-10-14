@@ -67,8 +67,10 @@ void CsessionManager::execute(CtcpConnection &tcp, const uint64_t &sid,
           tcp.msg_enc().encode_error(PolarXRPC::Error::FATAL, err.error,
                                      err.message, err.sql_state);
         else {
+          const auto thd = s->get_thd();
+          const auto conn_id = nullptr == thd ? -1 : thd->thread_id();
           s->detach();  /// detach and clear TLS thd anyway
-          tcp.msg_enc().encode_ok();
+          tcp.msg_enc().encode_ok(conn_id);
         }
         tcp.encoder().flush(tcp);
       }
