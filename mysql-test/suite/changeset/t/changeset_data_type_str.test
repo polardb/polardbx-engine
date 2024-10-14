@@ -1,0 +1,62 @@
+--disable_warnings
+DROP TABLE IF EXISTS c8;
+--enable_warnings
+
+CREATE TABLE c8 (
+a char(50),
+b varchar(60),
+c varchar(300),
+d varbinary(257),
+e VARCHAR(50) NOT NULL,
+PRIMARY KEY (a,b,c,d)
+) ENGINE=InnoDB default charset utf8mb4;
+
+connect (conn1,localhost,root,,);
+
+connection conn1;
+
+set names utf8mb4;
+
+call polarx.changeset_start('c8');
+
+INSERT INTO c8 (a, b, c, d, e)
+VALUES
+('Hello', 'Hello', 'This is a test string.', 'Hello World', 'Data1'),
+('World', 'World', 'Another example of text.', 'Hello World', 'Data2');
+
+call polarx.changeset_stats('c8');
+
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('这是中文', '这是中文', '这是中文', 'This is a test string.', 'Data3');
+
+call polarx.changeset_stats('c8');
+
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('This is emoji 😅😎', 'This is emoji 😅😎', 'This is emoji 😅😎', 'This is a test string.', 'Data4');
+
+call polarx.changeset_stats('c8');
+
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('君の日本語は本当に上手です', '君の日本語は本当に上手です', '君の日本語は本当に上手です', 'This is a test string.', 'Data5');
+
+call polarx.changeset_stats('c8');
+
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('이건 한국어야', '이건 한국어야', '이건 한국어야', 'This is a test string.', 'Data6');
+
+select * from c8;
+
+call polarx.changeset_stats('c8');
+call polarx.changeset_fetch('c8');
+
+update c8 set e = "test_value";
+
+call polarx.changeset_stats('c8');
+call polarx.changeset_fetch('c8');
+call polarx.changeset_stats('c8');
+call polarx.changeset_finish('c8');
+call polarx.changeset_stats('c8');
+
+select * from c8;
+
+DROP TABLE IF EXISTS c8;

@@ -19,14 +19,14 @@ c3
 insert into c3(str, value) select str, value from c3;
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	32	0	0	0	7104
+test	c3	32	0	0	0	2264
 insert into c3(str, value) values ("changeset4", "test4");
 call polarx.changeset_times('c3');
 TABLE	NUM_INSERTS
 c3	3
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	33	0	0	1	222
+test	c3	33	0	0	1	71
 call polarx.changeset_fetch('c3');
 OP	id	str
 INSERT	58	changeset
@@ -63,7 +63,7 @@ INSERT	88	changeset2
 INSERT	89	changeset3
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	33	0	0	1	222
+test	c3	33	0	0	1	71
 call polarx.changeset_fetch('c3', 1);
 OP	id	str
 INSERT	58	changeset
@@ -100,19 +100,19 @@ INSERT	88	changeset2
 INSERT	89	changeset3
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	33	0	0	1	222
+test	c3	33	0	0	1	71
 call polarx.changeset_fetch('c3');
 OP	id	str
 INSERT	121	changeset4
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	33	0	0	0	222
+test	c3	33	0	0	0	71
 call polarx.changeset_fetch('c3', 1);
 OP	id	str
 INSERT	121	changeset4
 call polarx.changeset_stats('c3');
 SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c3	33	0	0	0	222
+test	c3	33	0	0	0	71
 call polarx.changeset_fetch('c3');
 OP	PK
 call polarx.changeset_stats('c3');

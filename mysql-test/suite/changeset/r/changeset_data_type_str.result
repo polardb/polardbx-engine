@@ -1,0 +1,90 @@
+DROP TABLE IF EXISTS c8;
+CREATE TABLE c8 (
+a char(50),
+b varchar(60),
+c varchar(300),
+d varbinary(257),
+e VARCHAR(50) NOT NULL,
+PRIMARY KEY (a,b,c,d)
+) ENGINE=InnoDB default charset utf8mb4;
+set names utf8mb4;
+call polarx.changeset_start('c8');
+TABLE
+c8
+INSERT INTO c8 (a, b, c, d, e)
+VALUES
+('Hello', 'Hello', 'This is a test string.', 'Hello World', 'Data1'),
+('World', 'World', 'Another example of text.', 'Hello World', 'Data2');
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	2	0	0	0	600
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('这是中文', '这是中文', '这是中文', 'This is a test string.', 'Data3');
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	3	0	0	0	907
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('This is emoji 😅😎', 'This is emoji 😅😎', 'This is emoji 😅😎', 'This is a test string.', 'Data4');
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	4	0	0	0	1234
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('君の日本語は本当に上手です', '君の日本語は本当に上手です', '君の日本語は本当に上手です', 'This is a test string.', 'Data5');
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	5	0	0	0	1595
+INSERT INTO c8 (a, b, c, d, e)
+VALUES('이건 한국어야', '이건 한국어야', '이건 한국어야', 'This is a test string.', 'Data6');
+select * from c8;
+a	b	c	d	e
+Hello	Hello	This is a test string.	Hello World	Data1
+This is emoji 😅😎	This is emoji 😅😎	This is emoji 😅😎	This is a test string.	Data4
+World	World	Another example of text.	Hello World	Data2
+이건 한국어야	이건 한국어야	이건 한국어야	This is a test string.	Data6
+君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.	Data5
+这是中文	这是中文	这是中文	This is a test string.	Data3
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	6	0	0	0	1916
+call polarx.changeset_fetch('c8');
+OP	a	b	c	d
+INSERT	Hello	Hello	This is a test string.	Hello World
+INSERT	This is emoji 😅😎	This is emoji 😅😎	This is emoji 😅😎	This is a test string.
+INSERT	World	World	Another example of text.	Hello World
+INSERT	이건 한국어야	이건 한국어야	이건 한국어야	This is a test string.
+INSERT	君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.
+INSERT	这是中文	这是中文	这是中文	This is a test string.
+update c8 set e = "test_value";
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	6	6	0	0	5748
+call polarx.changeset_fetch('c8');
+OP	a	b	c	d
+DELETE	Hello	Hello	This is a test string.	Hello World
+INSERT	Hello	Hello	This is a test string.	Hello World
+DELETE	This is emoji 😅😎	This is emoji 😅😎	This is emoji 😅😎	This is a test string.
+INSERT	This is emoji 😅😎	This is emoji 😅😎	This is emoji 😅😎	This is a test string.
+DELETE	World	World	Another example of text.	Hello World
+INSERT	World	World	Another example of text.	Hello World
+DELETE	이건 한국어야	이건 한국어야	이건 한국어야	This is a test string.
+INSERT	이건 한국어야	이건 한국어야	이건 한국어야	This is a test string.
+DELETE	君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.
+INSERT	君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.
+DELETE	这是中文	这是中文	这是中文	This is a test string.
+INSERT	这是中文	这是中文	这是中文	This is a test string.
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	c8	6	6	0	0	3832
+call polarx.changeset_finish('c8');
+SEQ	ROW
+call polarx.changeset_stats('c8');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+select * from c8;
+a	b	c	d	e
+Hello	Hello	This is a test string.	Hello World	test_value
+This is emoji 😅😎	This is emoji 😅😎	This is emoji 😅😎	This is a test string.	test_value
+World	World	Another example of text.	Hello World	test_value
+이건 한국어야	이건 한국어야	이건 한국어야	This is a test string.	test_value
+君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.	test_value
+这是中文	这是中文	这是中文	This is a test string.	test_value
+DROP TABLE IF EXISTS c8;

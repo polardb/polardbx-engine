@@ -171,6 +171,8 @@ class Changeset {
                        std::vector<ChangesetResult *> &res,
                        TABLE *table);
 
+  static uint my_get_key_length(KEY_PART_INFO * key_part_info, uchar const *pk);
+
   std::list<Field *> make_pk_fields(TABLE *table, uchar *pk,
                                     MEM_ROOT *mem_root);
 
@@ -188,6 +190,12 @@ class Changeset {
 
   // tmp table approximate memory size
   std::atomic<uint64_t> tmp_memory_size{};
+
+  // pk nums
+  std::atomic<uint64_t> primary_key_nums{};
+  
+  // imm table pk nums
+  std::atomic<uint64_t> imm_primary_key_nums{};
 
   std::atomic<bool> imm_empty;
 

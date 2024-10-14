@@ -1,40 +1,65 @@
 --disable_warnings
 DROP TABLE IF EXISTS cs_varchar_t;
+DROP TABLE IF EXISTS cs_long_varchar_t;
 DROP TABLE IF EXISTS cs_char_t;
 --enable_warnings
- 
+
 create table cs_varchar_t(a varchar(5), b int, primary key(a)) default charset latin1;
- 
+
 call polarx.changeset_start('cs_varchar_t');
- 
+
 insert into cs_varchar_t values('12345',1);
- 
+
+call polarx.changeset_stats('cs_varchar_t');
+
 call polarx.changeset_fetch('cs_varchar_t');
- 
+
 update cs_varchar_t set b = 2;
- 
+
 call polarx.changeset_fetch('cs_varchar_t');
- 
+
 call polarx.changeset_finish('cs_varchar_t');
- 
+
 select * from cs_varchar_t;
- 
+
+create table cs_long_varchar_t(a varchar(300), b int, primary key(a)) default charset latin1;
+
+call polarx.changeset_start('cs_long_varchar_t');
+
+insert into cs_long_varchar_t values('12345',1);
+
+call polarx.changeset_stats('cs_long_varchar_t');
+
+call polarx.changeset_fetch('cs_long_varchar_t');
+
+update cs_long_varchar_t set b = 2;
+
+call polarx.changeset_fetch('cs_long_varchar_t');
+
+call polarx.changeset_finish('cs_long_varchar_t');
+
+select * from cs_long_varchar_t;
+
 create table cs_char_t(a varchar(5), b int, primary key(a)) default charset latin1;
- 
+
 call polarx.changeset_start('cs_char_t');
- 
+
 insert into cs_char_t values('67891',1);
- 
+
+call polarx.changeset_stats('cs_char_t');
+
 call polarx.changeset_fetch('cs_char_t');
- 
+
 update cs_char_t set b = 2;
- 
+
 call polarx.changeset_fetch('cs_char_t');
- 
+
 call polarx.changeset_finish('cs_char_t');
- 
+
 select * from cs_char_t;
- 
+
 drop table cs_varchar_t;
- 
+
+drop table cs_long_varchar_t;
+
 drop table cs_char_t;

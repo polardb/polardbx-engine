@@ -47,6 +47,7 @@ void Changeset::swap_pk() {
 
   tmp_memory_size.store(memory_size);
   memory_size.store(0);
+  primary_key_nums.store(0);
 }
 
 /**
@@ -106,9 +107,10 @@ void flush_imm_table(void *changeset) {
 
   const char *file_name = cs->get_next_file_name();
 
-  sql_print_information("changeset flush start, file name: %s, size: %ld",
+  sql_print_information("changeset flush start, file name: %s, size: %ld, pk nums: %ld",
                         file_name,
-                        cs->imm_memory_size.load(std::memory_order_acquire));
+                        cs->imm_memory_size.load(std::memory_order_acquire),
+                        cs->imm_primary_key_nums.load(std::memory_order_acquire));
 
   {
     cs->mutex.Unlock();
@@ -120,12 +122,9 @@ void flush_imm_table(void *changeset) {
       return;
     }
 
-    FileHeader fileHeader{0, 0};
-    fileHeader.pk_length = cs->imm_pk_map.begin()->first.length();
-    fileHeader.pk_size =
-        cs->imm_memory_size.load() / (cs->imm_pk_map.begin()->first.length() + CHANGESET_PK_HEADER_SIZE);
-    my_write(fd, reinterpret_cast<const uchar *>(&fileHeader),
-             sizeof(fileHeader), MYF(MY_NABP));
+    FileHeader file_header{cs->imm_primary_key_nums.load(std::memory_order_acquire)};
+    my_write(fd, reinterpret_cast<const uchar *>(&file_header),
+             sizeof(file_header), MYF(MY_NABP));
 
     unsigned int pk_num = 0;
     for (auto &item : cs->imm_pk_map) {
@@ -135,8 +134,8 @@ void flush_imm_table(void *changeset) {
       // only pk
       while (change != nullptr) {
         pk_num++;
-        ChangeType t = change->get_change_type();
-        my_write(fd, reinterpret_cast<const uchar *>(&t), sizeof(t),
+        RowHeader row_header{change->get_change_type(), (uint32) pk.length()};
+        my_write(fd, reinterpret_cast<const uchar *>(&row_header), sizeof(row_header),
                  MYF(MY_NABP));
         my_write(fd, reinterpret_cast<const uchar *>(pk.data()), pk.length(),
                  MYF(MY_NABP));
@@ -147,21 +146,23 @@ void flush_imm_table(void *changeset) {
 
     my_close(fd, MYF(0));
 
-    assert(pk_num == fileHeader.pk_size);
+    assert(pk_num == file_header.pk_nums);
 
     cs->imm_pk_map.clear();
 
     cs->mutex.Lock();
   }
 
-  sql_print_information("changeset flush finish, file name: %s, size: %ld",
+  sql_print_information("changeset flush finish, file name: %s, size: %ld, pk nums: %ld",
                         file_name,
-                        cs->imm_memory_size.load(std::memory_order_acquire));
+                        cs->imm_memory_size.load(std::memory_order_acquire),
+                        cs->imm_primary_key_nums.load(std::memory_order_acquire));
 
   cs->file_list.emplace_back(file_name, true);
   cs->imm_empty.store(true);
   // memory info
   cs->imm_memory_size.store(0);
+  cs->imm_primary_key_nums.store(0);
 
   // signal wait
   cs->cv.SignalAll();
@@ -186,6 +187,10 @@ void Changeset::memory_check_and_flush() {
     // swap memory info
     imm_memory_size.store(memory_size);
     memory_size.store(0);
+
+    // swap primary key nums
+    imm_primary_key_nums.store(primary_key_nums);
+    primary_key_nums.store(0);
 
     sql_print_information("add background flush task");
     thread_pool->Schedule(&flush_imm_table, this);
@@ -323,28 +328,28 @@ void Changeset::get_result_list(const char *file_name,
     return;
   }
 
-  FileHeader fileHeader{0, 0};
-  my_read(fd, reinterpret_cast<uchar *>(&fileHeader), sizeof(fileHeader),
+  FileHeader file_header{0};
+  my_read(fd, reinterpret_cast<uchar *>(&file_header), sizeof(file_header),
           MYF(0));
 
-  auto buffer =
-      (uchar *)my_malloc(key_memory_CS_RESULT_BUFFER, fileHeader.pk_length,
+  for (unsigned int i = 0; i < file_header.pk_nums; ++i) {
+    RowHeader row_header;
+
+    my_read(fd, reinterpret_cast<uchar *>(&row_header), sizeof(row_header), MYF(0));
+
+    auto buffer =
+      (uchar *)my_malloc(key_memory_CS_RESULT_BUFFER, row_header.length,
                          MYF(MY_WME | ME_FATALERROR));
-
-  for (unsigned int i = 0; i < fileHeader.pk_size; ++i) {
-    ChangeType t;
-
-    my_read(fd, reinterpret_cast<uchar *>(&t), sizeof(t), MYF(0));
-    my_read(fd, reinterpret_cast<uchar *>(buffer), fileHeader.pk_length,
-            MYF(0));
+    
+    my_read(fd, reinterpret_cast<uchar *>(buffer), row_header.length, MYF(0));
 
     std::list<Field *> pk_field =
         make_pk_fields(table, buffer, current_thd->mem_root);
 
-    res.push_back(new ChangesetResult(t, pk_field));
-  }
+    res.push_back(new ChangesetResult(row_header.type, pk_field));
 
-  my_free(buffer);
+    my_free(buffer);
+  }
 
   my_close(fd, MYF(0));
 
@@ -384,10 +389,46 @@ Changeset::Changeset()
       cv(&mutex) {
   memory_size.store(0);
   imm_memory_size.store(0);
+  primary_key_nums.store(0);
+  imm_primary_key_nums.store(0);
   memset(&stats_, 0, sizeof(stats_));
 }
 
 Changeset::~Changeset() { close(); }
+
+uint Changeset::my_get_key_length(KEY_PART_INFO * key_part_info, uchar const *key) {
+  uint length = key_part_info->length;
+  switch ((enum ha_base_keytype) key_part_info->type) {
+  case HA_KEYTYPE_NUM:
+  case HA_KEYTYPE_TEXT:
+  case HA_KEYTYPE_BINARY:
+  case HA_KEYTYPE_BIT:
+  case HA_KEYTYPE_INT8:
+  case HA_KEYTYPE_SHORT_INT:
+  case HA_KEYTYPE_USHORT_INT:
+  case HA_KEYTYPE_LONG_INT:
+  case HA_KEYTYPE_ULONG_INT:
+  case HA_KEYTYPE_INT24:
+  case HA_KEYTYPE_UINT24:
+  case HA_KEYTYPE_LONGLONG:
+  case HA_KEYTYPE_ULONGLONG:
+  case HA_KEYTYPE_FLOAT:
+  case HA_KEYTYPE_DOUBLE:
+    break;
+  case HA_KEYTYPE_VARTEXT1:
+  case HA_KEYTYPE_VARBINARY1:
+    length = (uint) key[0] + 1;
+    break;
+  case HA_KEYTYPE_VARTEXT2:
+  case HA_KEYTYPE_VARBINARY2:
+    length = (uint) (key)[0] + ((uint) (key)[1] << 8) + 2;
+    break;
+  case HA_KEYTYPE_END:                        /* purecov: inspected */
+    /* keep compiler happy */
+    break;
+  }
+  return length;
+}
 
 std::list<Field *> Changeset::make_pk_fields(TABLE *table, uchar *pk,
                                              MEM_ROOT *mem_root) {
@@ -400,7 +441,7 @@ std::list<Field *> Changeset::make_pk_fields(TABLE *table, uchar *pk,
     // make field
     Field *field = key_info->key_part[i].field->clone(mem_root);
     field->table = table;
-    uint16 length = key_info->key_part[i].store_length;
+    uint16 length = my_get_key_length(&key_info->key_part[i], pk);
 
     uchar *buffer = (uchar *)my_malloc(key_memory_CS_RESULT_BUFFER, length,
                                        MYF(MY_WME | ME_FATALERROR));
@@ -425,6 +466,7 @@ void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
       cur = cur->get_next();
       // memory info
       memory_size.fetch_sub(pk.length() + CHANGESET_PK_HEADER_SIZE);
+      primary_key_nums.fetch_sub(1);
     }
     mem_pk_map.erase(it);
   }
@@ -432,8 +474,10 @@ void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
   // memory info
   if (mem_c) {
     memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+    primary_key_nums.fetch_add(1);
     if (change->get_next() != nullptr) {
       memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+      primary_key_nums.fetch_add(1);
     }
   }
 
@@ -460,7 +504,10 @@ void Changeset::pk_map_insert(std::unique_ptr<Change> &change, bool mem_c) {
   }
 
   // memory info
-  if (mem_c) memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+  if (mem_c) {
+    memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+    primary_key_nums.fetch_add(1);
+  }
 }
 
 void Changeset::add_delete(const std::string &pk) {

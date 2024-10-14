@@ -26,16 +26,20 @@
 namespace im {
 
 // 1024 * 1024 * 4
-static const uint64_t MAX_MEMORY_SIZE = 1 << 22;
+static const uint64 MAX_MEMORY_SIZE = 1 << 22;
 
 // 1024 * 1024 * 32
-static const uint64_t MAX_MEMORY_LIMIT = 1 << 25;
+static const uint64 MAX_MEMORY_LIMIT = 1 << 25;
 
 enum ChangeType { DELETE, INSERT };
 
 struct FileHeader {
-  unsigned int pk_size;
-  unsigned int pk_length;
+  uint64 pk_nums;
+};
+
+struct RowHeader {
+  ChangeType type;
+  uint32 length;
 };
 
 class DBTableName {

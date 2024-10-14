@@ -102,6 +102,7 @@ bool Changeset_proc_fetch::my_send_result_metadata(
   }
   for (const auto &field : fields) {
     switch (field->type()) {
+      case MYSQL_TYPE_BIT:
       case MYSQL_TYPE_YEAR:
       case MYSQL_TYPE_TINY:
       case MYSQL_TYPE_LONG:
@@ -112,71 +113,72 @@ bool Changeset_proc_fetch::my_send_result_metadata(
                                          field->type()))) {
           DBUG_RETURN(0);
         }
+        item->max_length = field->field_length;
         item->unsigned_flag = (field->all_flags() & UNSIGNED_FLAG);
         break;
       case MYSQL_TYPE_DATE:
       case MYSQL_TYPE_TIME:
       case MYSQL_TYPE_TIMESTAMP:
-      case MYSQL_TYPE_DATETIME: {
+      case MYSQL_TYPE_DATETIME: 
+      {
         const Name_string field_name(field->field_name,
                                      strlen(field->field_name));
-        if (!(item = new Item_temporal(field->type(), field_name, 0, 0)))
+        if (!(item = new Item_temporal(field->type(), field_name, 0,
+                                       field->field_length)))
           DBUG_RETURN(0);
-        if (field->type() == MYSQL_TYPE_TIMESTAMP ||
-            field->type() == MYSQL_TYPE_DATETIME)
-          item->decimals = field->field_length;
+        
         break;
       }
-      case MYSQL_TYPE_FLOAT: {
+      case MYSQL_TYPE_FLOAT:
+      case MYSQL_TYPE_DOUBLE: 
+      {
         const Name_string field_name(field->field_name,
                                      strlen(field->field_name));
-        if ((item = new Item_float(field_name, 0.0, DECIMAL_NOT_SPECIFIED,
+        if ((item = new Item_float(field_name, 0.0, field->decimals(),
                                    field->field_length)) == nullptr)
           DBUG_RETURN(NULL);
-        item->set_data_type_float();
-        break;
-      }
-      case MYSQL_TYPE_DOUBLE: {
-        const Name_string field_name(field->field_name,
-                                     strlen(field->field_name));
-        if ((item = new Item_float(field_name, 0.0, DECIMAL_NOT_SPECIFIED,
-                                   field->field_length)) == nullptr)
-          DBUG_RETURN(NULL);
-        item->set_data_type_double();
+        
+        if (field->type() == MYSQL_TYPE_FLOAT) 
+        {
+          item->set_data_type(MYSQL_TYPE_FLOAT);
+        }
         break;
       }
       case MYSQL_TYPE_DECIMAL:
       case MYSQL_TYPE_NEWDECIMAL:
-        if (!(item = new Item_decimal((longlong)0L, false))) {
+        if (!(item = new Item_decimal((longlong)0L, false))) 
+        {
           DBUG_RETURN(0);
         }
         item->unsigned_flag = (field->all_flags() & MY_I_S_UNSIGNED);
-        item->decimals = field->field_length % 10;
-        item->max_length = (field->field_length / 100) % 100;
-        if (item->unsigned_flag == 0) item->max_length += 1;
-        if (item->decimals > 0) item->max_length += 1;
+        item->decimals = field->decimals();
+        item->max_length = field->field_length;
         item->item_name.copy(field->field_name);
         break;
       case MYSQL_TYPE_TINY_BLOB:
       case MYSQL_TYPE_MEDIUM_BLOB:
       case MYSQL_TYPE_LONG_BLOB:
       case MYSQL_TYPE_BLOB:
-        if (!(item = new Item_blob(field->field_name, field->field_length))) {
+        if (!(item = new Item_blob(field->field_name, field->field_length))) 
+        {
           DBUG_RETURN(0);
         }
         break;
-      case MYSQL_TYPE_BIT:
-      case MYSQL_TYPE_GEOMETRY:
+      case MYSQL_TYPE_ENUM:
+      case MYSQL_TYPE_STRING:
       case MYSQL_TYPE_VARCHAR:
-        if (!(item = new Item_empty_string(
-                  field->field_name, field->char_length(), field->charset()))) {
+        if (!(item = new Item_empty_string(field->field_name,
+                                           field->char_length(),
+                                           field->charset())))
+        {
           DBUG_RETURN(0);
         }
+        
+        item->decimals = 0;
         break;
       default:
-        /* Don't let unimplemented types pass through. Could be a grave error.
-         */
-        assert(field->type() == MYSQL_TYPE_STRING);
+        /* Don't let unimplemented types pass through. Could be a grave error.*/
+
         if (!(item = new Item_return_int(field->field_name, field->field_length,
                                          field->type()))) {
           DBUG_RETURN(0);

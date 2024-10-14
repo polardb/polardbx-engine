@@ -175,7 +175,7 @@ void ChangesetManager::get_primary_keys(uchar const *record, KEY *key_info,
   uint length, offset;
   for (uint i = 0; i < key_info->actual_key_parts; ++i) {
     offset = key_info->key_part[i].offset;
-    length = key_info->key_part[i].store_length;
+    length = Changeset::my_get_key_length(&key_info->key_part[i],  (uchar const *) record + offset);
     pk.append((const char *)record + offset, length);
   }
 }

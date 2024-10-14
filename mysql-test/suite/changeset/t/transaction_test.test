@@ -7,7 +7,7 @@ id INT NOT NULL,
 str VARCHAR(20) NOT NULL,
 value VARCHAR(50) NOT NULL,
 PRIMARY KEY (id, str)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 connect (conn1,localhost,root,,);
 connect (conn2,localhost,root,,);
@@ -37,4 +37,4 @@ call polarx.changeset_stats('c2');
 call polarx.changeset_fetch('c2');
 call polarx.changeset_stats('c2');
 call polarx.changeset_finish('c2');
-DROP TABLE IF EXISTS c2;
+DROP TABLE c2;

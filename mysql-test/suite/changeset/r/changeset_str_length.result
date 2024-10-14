@@ -1,10 +1,14 @@
 DROP TABLE IF EXISTS cs_varchar_t;
+DROP TABLE IF EXISTS cs_long_varchar_t;
 DROP TABLE IF EXISTS cs_char_t;
 create table cs_varchar_t(a varchar(5), b int, primary key(a)) default charset latin1;
 call polarx.changeset_start('cs_varchar_t');
 TABLE
 cs_varchar_t
 insert into cs_varchar_t values('12345',1);
+call polarx.changeset_stats('cs_varchar_t');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	cs_varchar_t	1	0	0	0	62
 call polarx.changeset_fetch('cs_varchar_t');
 OP	a
 INSERT	12345
@@ -18,11 +22,35 @@ SEQ	ROW
 select * from cs_varchar_t;
 a	b
 12345	2
+create table cs_long_varchar_t(a varchar(300), b int, primary key(a)) default charset latin1;
+call polarx.changeset_start('cs_long_varchar_t');
+TABLE
+cs_long_varchar_t
+insert into cs_long_varchar_t values('12345',1);
+call polarx.changeset_stats('cs_long_varchar_t');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	cs_long_varchar_t	1	0	0	0	63
+call polarx.changeset_fetch('cs_long_varchar_t');
+OP	a
+INSERT	12345
+update cs_long_varchar_t set b = 2;
+call polarx.changeset_fetch('cs_long_varchar_t');
+OP	a
+DELETE	12345
+INSERT	12345
+call polarx.changeset_finish('cs_long_varchar_t');
+SEQ	ROW
+select * from cs_long_varchar_t;
+a	b
+12345	2
 create table cs_char_t(a varchar(5), b int, primary key(a)) default charset latin1;
 call polarx.changeset_start('cs_char_t');
 TABLE
 cs_char_t
 insert into cs_char_t values('67891',1);
+call polarx.changeset_stats('cs_char_t');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+test	cs_char_t	1	0	0	0	62
 call polarx.changeset_fetch('cs_char_t');
 OP	a
 INSERT	67891
@@ -37,4 +65,5 @@ select * from cs_char_t;
 a	b
 67891	2
 drop table cs_varchar_t;
+drop table cs_long_varchar_t;
 drop table cs_char_t;
