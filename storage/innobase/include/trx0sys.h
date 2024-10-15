@@ -53,7 +53,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include "trx0trx.h"
 
-#include "lizard0undo0types.h"
+#include "lizard0erase0types.h"
+#include "lizard0purge0types.h"
 
 namespace lizard {
 extern trx_id_t gcs_load_min_active_trx_id();

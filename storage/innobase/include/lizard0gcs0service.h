@@ -64,7 +64,7 @@ constexpr gcn_t GCN_NULL = std::numeric_limits<gcn_t>::max();
 constexpr gcn_t GCN_INITIAL = 1024;
 
 /** Commit number source */
-enum csr_t {
+enum cn_source_t {
   /** Automatic generated commit number. like scn, utc or local trx gcn */
   /** Defaultly, all commit numbers are automatical */
   CSR_AUTOMATIC = 0,
@@ -72,6 +72,20 @@ enum csr_t {
   /** Assigned commit number. like global trx gcn */
   CSR_ASSIGNED = 1,
 };
+typedef enum cn_source_t csr_t;
+
+/** Category of commit number combination. */
+enum cn_category_t {
+  /** Didn't have any kind of commit number */
+  CCR_NONE = 0,
+  /** Represent system commit number. */
+  CCR_SCN,
+  /** Represent global commit number. */
+  CCR_GCN,
+  /** Represent scn and gcn both */
+  CCR_ALL,
+};
+typedef enum cn_category_t ccr_t;
 
 /** GCN tuple structure, it will be used by:
  *

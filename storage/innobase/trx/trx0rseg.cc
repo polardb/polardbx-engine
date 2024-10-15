@@ -48,7 +48,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout0safe.h"
 #include "lizard0gcs.h"
 #include "lizard0mon.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "lizard0erase.h"

@@ -78,7 +78,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "lizard0data0types.h"
-#include "lizard0undo0types.h"
+#include "lizard0txn.h"
 
 #include "sql/lizard/lizard_snapshot.h"
 

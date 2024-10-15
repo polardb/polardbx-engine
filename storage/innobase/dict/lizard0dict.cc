@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict0mem.h"
 #include "lizard0data0data.h"
 #include "lizard0dd0policy.h"
+#include "lizard0txn0rec.h"
 
 #include "sql/sql_class.h"
 
@@ -170,7 +171,7 @@ bool dd_index_modification_visible(
       goto judge;
     }
 
-    lizard::txn_rec_real_state_by_misc(&rec_txn, Cache_hint::KEEP_OLD);
+    lizard::txn_rec_real_state(&rec_txn, Cache_hint::KEEP_OLD);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
     index->txn.gcn.store(rec_txn.gcn);

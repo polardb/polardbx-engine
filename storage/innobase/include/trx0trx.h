@@ -62,13 +62,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0tcn.h"
 #include "lizard0trx.h"
 #include "lizard0undo0types.h"
-#include "lizard0xa.h"
+#include "lizard0read0xa.h"
 
+class XA_specification;
 
-namespace binlog {
-class Binlog_xa_specification;
-}  // namespace binlog
-   //
 // Forward declaration
 struct mtr_t;
 

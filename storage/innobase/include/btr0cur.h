@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0cur.h"
 #include "univ.i"
 
+#include "lizard0txn0rec0types.h"
+
 /** Mode flags for btr_cur operations; these can be ORed */
 enum {
   /** do no undo logging */

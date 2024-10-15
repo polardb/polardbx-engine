@@ -119,16 +119,16 @@ bool innobase_assign_slot_for_xa(THD *thd, slot_ptr_t *slot_ptr_arg,
 
 static bool innobase_search_detach_prepare_trx_by_xid(const XID *xid,
                                                       MyXAInfo *info) {
-  return lizard::xa::trx_search_detach_prepare_by_xid(xid, info);
+  return lizard::trx_search_detach_prepare_by_xid(xid, info);
 }
 
 static bool innobase_search_rollback_background_trx_by_xid(const XID *xid,
                                                            MyXAInfo *info) {
-  return lizard::xa::trx_search_rollback_background_by_xid(xid, info);
+  return lizard::trx_search_rollback_background_by_xid(xid, info);
 }
 
 static bool innobase_search_history_trx_by_xid(const XID *xid, MyXAInfo *info) {
-  return lizard::xa::trx_search_history_by_xid(xid, info);
+  return lizard::trx_search_history_by_xid(xid, info);
 }
 
 template <typename T>

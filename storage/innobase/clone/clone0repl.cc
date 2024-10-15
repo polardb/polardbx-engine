@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_thd_internal_api.h"
 
 #include "lizard0undo.h"
+#include "lizard0xa.h"
 
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
@@ -348,7 +349,7 @@ void Clone_persist_gtid::get_gtid_info(trx_t *trx, Gtid_desc &gtid_desc) {
 
   lizard::XA_specification_strategy xss(trx);
   if (xss.has_gtid()) {
-    xss.get_gtid_info(gtid_desc);
+    xss.get_gtid_info(&gtid_desc);
     return;
   }
 

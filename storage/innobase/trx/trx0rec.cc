@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "fsp0fsp.h"
 #include "lizard0dict.h"
+#include "lizard0txn0rec.h"
 #include "mach0data.h"
 #include "mtr0log.h"
 #include "trx0undo.h"
@@ -2462,7 +2463,7 @@ err_exit:
     const table_name_t &name, trx_undo_rec_t **undo_rec, bool flashback_area,
     Cache_hint hint, mtr_t *txn_mtr) {
   bool missing_history =
-      lizard::txn_undo_is_missing_history(txn_rec, flashback_area, txn_mtr);
+      lizard::txn_rec_is_missing_history(txn_rec, flashback_area, txn_mtr);
 
   if (!missing_history) {
     *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
@@ -2489,7 +2490,7 @@ err_exit:
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  lizard::txn_rec_real_state_by_misc(txn_rec, Cache_hint::KEEP_OLD, nullptr);
+  lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD);
   missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
 
   if (!missing_history) {
@@ -2684,8 +2685,7 @@ bool trx_undo_prev_version_build(
           txn_info.gcn,
       };
 
-      lizard::txn_rec_real_state_by_misc(&undo_txn_rec, Cache_hint::KEEP_OLD,
-                                         nullptr);
+      lizard::txn_rec_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD);
 
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);

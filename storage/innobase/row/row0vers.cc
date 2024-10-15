@@ -61,6 +61,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0row.h"
 #include "lizard0undo.h"
+#include "lizard0txn0rec.h"
 
 /** Check whether all non-virtual columns in a index entries match
 @param[in]      index           the secondary index
@@ -596,7 +597,7 @@ bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
 
   mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  lizard::txn_rec_real_state_by_misc(txn_rec, Cache_hint::KEEP_OLD);
+  lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD);
 
   return (!purge_sys->vision.modifications_visible(txn_rec, name));
 }
@@ -1339,7 +1340,7 @@ dberr_t row_vers_build_for_consistent_read(
 
     txn_rec_t txn_rec;
     lizard::row_get_txn_rec(prev_version, index, *offsets, &txn_rec);
-    lizard::txn_rec_real_state_by_misc(&txn_rec, Cache_hint::KEEP_OLD, nullptr);
+    lizard::txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
 
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy

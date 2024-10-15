@@ -25,7 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 /** @file include/lizard0txn.h
-  Lizard transaction tablespace implementation.
+  Lizard transaction management.
 
  Created 2020-03-27 by Jianwei.zhao
  *******************************************************/
@@ -33,60 +33,238 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn_h
 #define lizard0txn_h
 
-#include "lizard0txn0service.h"
-#include "ut0new.h"
+#include "lizard0undo0types.h"
+#include "lizard0ut.h"
 
-#include "univ.i"
+/** TXN will be retained for a period of time after the database is restarted */
+extern ib_time_system_us_t server_start_time_for_txn;
 
-namespace undo {
-class Tablespace;
-class Tablespaces;
-}  // namespace undo
+/**
+  The transaction description:
+
+  It will be inited when allocate the first txn undo log
+  header, and never change until transaction commit or rollback.
+*/
+struct txn_desc_t {
+ public:
+  /** undo log header address */
+  undo_ptr_t undo_ptr;
+  /** scn number */
+  commit_mark_t cmmt;
+  /** proposal commit number. */
+  proposal_mark_t pmmt;
+  /** branch info */
+  xa_branch_t branch;
+  /** Master txn address for async commit. */
+  xa_addr_t maddr;
+
+ public:
+  txn_desc_t() : undo_ptr(UNDO_PTR_NULL), cmmt(), pmmt(), branch(), maddr() {}
+
+  void reset() {
+    undo_ptr = UNDO_PTR_NULL;
+    cmmt.reset();
+    pmmt.reset();
+    branch.reset();
+    maddr.reset();
+  }
+
+
+  /** assemble cmmt and undo ptr */
+  void assemble(const commit_mark_t &mark, const slot_addr_t &slot_addr);
+
+  /** assemble undo ptr */
+  void assemble_undo_ptr(const slot_addr_t &slot_addr);
+
+  void resurrect_xa(const proposal_mark_t &pmmt, const xa_branch_t &branch,
+                    const xa_addr_t &maddr);
+
+  void copy_xa_when_prepare(const MyGCN &xa_gcn, const xa_branch_t &xa_branch);
+
+  void copy_xa_when_commit(const MyGCN &xa_gcn, const xa_addr_t &xa_maddr);
+};
+
+/**
+  Lizard transaction attributes in index (used by Vision)
+   1) scn
+   2) undo_ptr
+   3) gcn
+*/
+struct txn_index_t {
+  /** undo log header address */
+  std::atomic<undo_ptr_t> uba;
+  /** scn number */
+  std::atomic<scn_t> scn;
+  /** gcn number */
+  std::atomic<gcn_t> gcn;
+};
+
+/**
+  Lizard transaction attributes.
+   1) scn
+   2) undo_ptr
+   3) gcn
+*/
+struct txn_info_t {
+  /** scn number */
+  scn_t scn;
+  /** undo log header address */
+  undo_ptr_t undo_ptr;
+  /** gcn number */
+  gcn_t gcn;
+};
 
 namespace lizard {
 
-/** Type of txn tablespace container */
-using TXN_tablespaces =
-    std::vector<undo::Tablespace *, ut::allocator<undo::Tablespace *>>;
+/** Prepare some special transaction description. */
+struct txn_sys_t {
+ public:
+  static slot_addr_t SLOT_ADDR_NO_REDO;
+  static slot_addr_t SLOT_ADDR_NULL;
 
-/** Global singlton txn tablespaces */
-extern TXN_tablespaces txn_spaces;
+ private:
+  txn_sys_t() { assemble_txn_desc(); }
 
-/** Judge whether it's lizard transaction tablespace by num
-@param[in]      num         >=1 and <= 127
-@return         true        yes */
-bool fsp_is_txn_tablespace_by_num(space_id_t num);
+  void assemble_txn_desc() {
+    /** Temporary table didn't have real UBA and scn. */
+    slot_addr_t slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                             SLOT_OFFSET_TEMP_TAB_REC};
 
-/** Judge whether it's lizard transaction tablespace by space id
-@param[in]      num         space id
-@return         true        yes */
-bool fsp_is_txn_tablespace_by_id(space_id_t id);
+    commit_mark_t cmmt = {SCN_TEMP_TAB_REC, US_TEMP_TAB_REC, GCN_TEMP_TAB_REC,
+                          CSR_AUTOMATIC};
+    txn_desc_temp.assemble(cmmt, slot_addr);
 
-/** Make sure txn tablespace position in undo::tablespaces */
-int fsp_txn_tablespace_pos_by_id(space_id_t id);
+    /** Dynamic metadata table txn description */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                 SLOT_OFFSET_DYNAMIC_METADATA};
+    cmmt = {SCN_DYNAMIC_METADATA, US_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA,
+            CSR_AUTOMATIC};
+    txn_desc_dm.assemble(cmmt, slot_addr);
 
-/**
-  Mark the undo tablespace as lizard transaction tablespace
-  @param[in]    undo spaces
-*/
-void mark_txn_tablespace(undo::Tablespaces *spaces);
+    /** Log ddl table txn description */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_LOG_DDL};
 
-/** validate the first undo tablespaces are always transaction tablespace */
-bool txn_always_first_undo_tablespace(undo::Tablespaces *spaces);
+    cmmt = {SCN_LOG_DDL, US_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC};
+    txn_desc_ld.assemble(cmmt, slot_addr);
+
+    /** dd index txn for dd table. */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_DICT_REC};
+    cmmt = {SCN_DICT_REC, US_DICT_REC, GCN_DICT_REC, CSR_AUTOMATIC};
+    txn_desc_dd.assemble(cmmt, slot_addr);
+
+    /** dd index txn for dd table upgrade */
+    slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
+                 SLOT_OFFSET_INDEX_UPGRADE};
+    cmmt = {SCN_INDEX_UPGRADE, US_INDEX_UPGRADE, GCN_INDEX_UPGRADE,
+            CSR_AUTOMATIC};
+    txn_desc_dd_upgrade.assemble(cmmt, slot_addr);
+  }
+
+ public:
+  static struct txn_sys_t *instance() {
+    static txn_sys_t txn_sys;
+    return &txn_sys;
+  }
+
+  /** Whether scn and undo_ptr come from special temporary transaction
+   * description.*/
+  bool is_temporary(scn_t scn, undo_ptr_t undo_ptr) {
+    if (scn == txn_desc_temp.cmmt.scn && undo_ptr == txn_desc_temp.undo_ptr)
+      return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dm */
+  bool is_dynamic_metadata(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dm.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for temporary */
+  bool is_temporary(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_temp.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for log ddl */
+  bool is_log_ddl(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_ld.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dd index of dd table. */
+  bool is_dd_index_of_dd(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dd.undo_ptr) return true;
+
+    return false;
+  }
+
+  /** Whether undo address is for dd index of dd table. */
+  bool is_dd_index_of_dd_upgrade(const undo_addr_t &undo_addr) {
+    undo_ptr_t undo_ptr;
+    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    if (undo_ptr == txn_desc_dd_upgrade.undo_ptr) return true;
+
+    return false;
+  }
+
+  bool is_special(const undo_addr_t &undo_addr) {
+    return is_temporary(undo_addr) || is_log_ddl(undo_addr) ||
+           is_dynamic_metadata(undo_addr) || is_dd_index_of_dd(undo_addr) ||
+           is_dd_index_of_dd_upgrade(undo_addr);
+  }
+
+ public:
+  /** Special for temporary table record. */
+  txn_desc_t txn_desc_temp;
+  /** Special for dynamic metadata table record. */
+  txn_desc_t txn_desc_dm;
+  /** Special for log ddl table record. */
+  txn_desc_t txn_desc_ld;
+  /** Sepcial for dd index for dd table. */
+  txn_desc_t txn_desc_dd;
+  /** Sepcial for dd index for dd table from upgrade */
+  txn_desc_t txn_desc_dd_upgrade;
+};
 
 }  // namespace lizard
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 
-#define lizard_verify_txn_tablespace_by_id(id, is)       \
-  do {                                                   \
-    ut_a(lizard::fsp_is_txn_tablespace_by_id(id) == is); \
+/* Assert the txn_desc is initial */
+#define assert_txn_desc_initial(trx)                        \
+  do {                                                      \
+    ut_a((trx)->txn_desc.undo_ptr == UNDO_PTR_NULL &&       \
+         lizard::commit_mark_state((trx)->txn_desc.cmmt) == \
+             SCN_STATE_INITIAL);                            \
+  } while (0)
+
+/* Assert the txn_desc is allocated */
+#define assert_txn_desc_allocated(trx)                      \
+  do {                                                      \
+    ut_a((trx)->txn_desc.undo_ptr != UNDO_PTR_NULL &&       \
+         lizard::commit_mark_state((trx)->txn_desc.cmmt) == \
+             SCN_STATE_INITIAL);                            \
   } while (0)
 
 #else
 
-#define lizard_verify_txn_tablespace_by_id(id, is)
+#define assert_txn_desc_initial(trx)
+#define assert_txn_desc_allocated(trx)
 
 #endif
+
 
 #endif  // lizard0txn_h

@@ -54,6 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <assert.h>
 
 #include "lizard0mtr0log.h"
+#include "lizard0txn0rec.h"
 #include "my_dbug.h"
 
 #ifndef UNIV_HOTBACKUP
@@ -3139,7 +3140,7 @@ dberr_t btr_cur_pessimistic_insert(
   /** Lizard: Do the cleanout, thr can be NULL if BTR_NO_LOCKING_FLAG */
   if (thr != nullptr && !index->table->is_intrinsic() &&
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
-    lizard::row_lizard_cleanout_when_modify_rec(
+    lizard::txn_rec_cleanout_when_modify(
         thr_get_trx(thr)->id, const_cast<rec_t *>(rec), index, offsets,
         btr_cur_get_block(cursor), mtr);
   }
@@ -4441,9 +4442,9 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   /** Lizard: Do the cleanout. */
   if (thr != nullptr && !index->table->is_intrinsic() &&
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
-    lizard::row_lizard_cleanout_when_modify_rec(thr_get_trx(thr)->id,
-                                                const_cast<rec_t *>(rec), index,
-                                                offsets, block, mtr);
+    lizard::txn_rec_cleanout_when_modify(thr_get_trx(thr)->id,
+                                         const_cast<rec_t *>(rec), index,
+                                         offsets, block, mtr);
   }
 
   err =

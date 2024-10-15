@@ -67,7 +67,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0gcs.h"
 #include "lizard0purge.h"
-#include "lizard0txn.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 

@@ -601,7 +601,7 @@ void txn_undo_page_hit_stat(bool hit, const buf_block_t *block,
           else
             lizard_stats.txn_undo_page_write_miss.inc();
           break;
-        case RW_S_LATCH:  // called in txn_slot_lookup_loose
+        case RW_S_LATCH:  // called in txn_slot_read_low
           if (hit)
             lizard_stats.txn_undo_page_read_hit.inc();
           else

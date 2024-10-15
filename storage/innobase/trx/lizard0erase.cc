@@ -327,6 +327,8 @@ commit_mark_t trx_erase_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
   commit_mark_t cmmt;
 
   ut_a(!fsp_is_system_temporary(rseg->space_id));
+  ut_a(!rseg->is_txn);
+
   mtr_start(&mtr);
   rseg->latch();
 

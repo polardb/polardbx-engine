@@ -294,7 +294,7 @@ void row_purge_alloc_gpp_field(purge_node_t *node);
 
   @retval         scn id
 */
-scn_id_t row_get_rec_scn_id(const rec_t *rec, const dict_index_t *index,
+scn_t row_get_rec_scn_id(const rec_t *rec, const dict_index_t *index,
                             const ulint *offsets);
 
 /**
@@ -405,21 +405,6 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
 */
 byte *trx_undo_update_rec_get_lizard_cols(const byte *ptr,
                                           txn_info_t *txn_info);
-
-/**
-  Get the real SCN of a record by UBA, and write back to records in physical
-  page, when we make a btr update / delete.
-  @param[in]      trx_id    trx_id of the transactions
-                            who updates / deletes the record
-  @param[in]      rec       record
-  @param[in]      offsets   rec_get_offsets(rec)
-  @param[in/out]  block     buffer block of the record
-  @param[in/out]  mtr       mini-transaction
-*/
-void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
-                                         const dict_index_t *index,
-                                         const ulint *offsets,
-                                         const buf_block_t *block, mtr_t *mtr);
 
 /**
   Write redo log to the buffer about updates of scn and uba.

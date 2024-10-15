@@ -35,7 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0gcs.h"
 #include "lizard0scn.h"
-#include "lizard0undo0types.h"
+#include "lizard0purge0types.h"
 #include "page0size.h"
 
 /**	Two Phase Purge (2PP)

@@ -42,7 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "ut0mutex.h"
 
-#include "lizard0undo0types.h"
+#include "lizard0txn0rec0types.h"
 #include "lizard0ut.h"
 
 struct mtr_t;

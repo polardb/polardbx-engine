@@ -79,7 +79,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row.h"
 #include "lizard0scn.h"
 #include "lizard0tcn.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "lizard0xa.h"
@@ -893,7 +893,7 @@ static trx_t *trx_resurrect_insert(
 
   assert_trx_commit_mark_initial(trx);
   assert_txn_desc_initial(trx);
-  ut_ad(lizard::slot_addr_validate(undo->slot_addr));
+  ut_ad(slot_addr_validate(undo->slot_addr));
 
   /* This is single-threaded startup code, we do not need the
   protection of trx->mutex or trx_sys->mutex here. */

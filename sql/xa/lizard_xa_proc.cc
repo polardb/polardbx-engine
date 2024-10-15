@@ -117,7 +117,7 @@ bool Sql_cmd_xa_proc_find_by_xid::pc_execute(THD *) {
   DBUG_RETURN(false);
 }
 
-static const LEX_CSTRING get_csr_str(const enum csr_t my_csr) {
+static const LEX_CSTRING get_csr_str(const csr_t my_csr) {
   return transaction_csr_str[my_csr];
 }
 

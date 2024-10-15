@@ -49,7 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <ostream>
 
-#include "lizard0tcn.h"
+#include "lizard0mon.h"
 
 // Forward declaration
 struct fil_addr_t;

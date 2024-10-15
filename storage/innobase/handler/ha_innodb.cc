@@ -221,7 +221,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0row.h"
 #include "lizard0scn.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 #include "lizard0undo.h"
 #include "lizard0data0data.h"
 

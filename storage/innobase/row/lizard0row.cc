@@ -37,6 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0mon.h"
 #include "lizard0page.h"
 #include "lizard0tcn.h"
+#include "lizard0txn0rec.h"
 #include "lizard0undo.h"
 
 #include "my_dbug.h"
@@ -729,7 +730,7 @@ void row_purge_alloc_gpp_field(purge_node_t *node) {
 
   @retval         scn id
 */
-scn_id_t row_get_rec_scn_id(const rec_t *rec, const dict_index_t *index,
+scn_t row_get_rec_scn_id(const rec_t *rec, const dict_index_t *index,
                             const ulint *offsets) {
   ulint offset;
   ut_ad(index->is_clustered());
@@ -1016,57 +1017,6 @@ byte *row_upd_write_lizard_vals_to_log(const dict_index_t *index,
 }
 
 /**
-  Get the real SCN of a record by UBA, and write back to records in physical
-  page, when we make a btr update / delete.
-  @param[in]      trx_id    trx_id of the transactions
-                            who updates / deletes the record
-  @param[in]      rec       record
-  @param[in]      offsets   rec_get_offsets(rec)
-  @param[in/out]  block     buffer block of the record
-  @param[in/out]  mtr       mini-transaction
-*/
-void row_lizard_cleanout_when_modify_rec(const trx_id_t trx_id, rec_t *rec,
-                                         const dict_index_t *index,
-                                         const ulint *offsets,
-                                         const buf_block_t *block, mtr_t *mtr) {
-  trx_id_t rec_id;
-  bool cleanout;
-  txn_rec_t rec_txn;
-
-  ut_ad(trx_id > 0);
-
-  rec_id = row_get_rec_trx_id(rec, index, offsets);
-
-  if (trx_id == rec_id) {
-    /* update a exist row which has been modified by
-    the current active transaction */
-    return;
-  }
-
-  /** scn must be consistent with the undo_ptr */
-  assert_row_lizard_valid(rec, index, offsets);
-  ut_ad(index->is_clustered());
-  ut_ad(!index->table->is_intrinsic());
-
-  row_get_txn_rec(rec, index, offsets, &rec_txn);
-
-  /** lookup the scn by UBA address */
-  txn_rec_real_state_by_misc(&rec_txn, Cache_hint::KEEP_OLD, &cleanout);
-
-  if (cleanout) {
-    ut_ad(mtr_memo_contains_flagged(mtr, block, MTR_MEMO_PAGE_X_FIX));
-    row_upd_rec_lizard_fields_in_cleanout(
-        const_cast<rec_t *>(rec),
-        const_cast<page_zip_des_t *>(buf_block_get_page_zip(block)), index,
-        offsets, &rec_txn);
-
-    /** Write redo log */
-    if (opt_cleanout_write_redo)
-      btr_cur_upd_lizard_fields_clust_rec_log(rec, index, &rec_txn, mtr);
-  }
-}
-
-/**
   Whether the transaction on the record has committed
   @param[in]        trx_id
   @param[in]        rec             current rec
@@ -1093,7 +1043,7 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
   txn_rec_t txn_rec;
   row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  return !txn_rec_real_state_by_misc(&txn_rec, Cache_hint::KEEP_OLD);
+  return !txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
 }
 
 /**

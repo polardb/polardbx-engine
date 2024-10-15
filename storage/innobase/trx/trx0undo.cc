@@ -63,7 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0gcs.h"
 #include "lizard0mon.h"
 #include "lizard0scn.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 
@@ -2160,7 +2160,7 @@ page_t *trx_undo_set_state_at_prepare(trx_t *trx, trx_undo_t *undo,
   trx_undo_write_xid(undo_header, &undo->xid, mtr);
 
   if (lizard::fsp_is_txn_tablespace_by_id(undo->space)) {
-    ut_a(lizard::xa::trx_slot_check_validity(trx));
+    ut_a(lizard::trx_slot_check_validity(trx));
   }
 
   return (undo_page);
@@ -2456,8 +2456,10 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
 
     rseg->page_no = trx_rseg_header_create(new_space_id, univ_page_size,
                                            PAGE_NO_MAX, rseg->id, &mtr);
-
     ut_a(rseg->page_no != FIL_NULL);
+
+    rseg->is_txn = lizard::fsp_is_txn_tablespace_by_id(new_space_id);
+    ut_a(!rseg->is_txn);
 
     auto rseg_header =
         trx_rsegf_get_new(new_space_id, rseg->page_no, rseg->page_size, &mtr);

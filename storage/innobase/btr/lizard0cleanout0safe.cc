@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0cleanout0safe.h"
 #include "lizard0dbg.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 #include "lizard0undo.h"
 
 /**

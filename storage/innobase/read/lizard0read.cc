@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 
 #include "sql/lizard/lizard_snapshot.h"
+#include "lizard0txn0rec.h"
 
 #ifdef UNIV_PFS_MUTEX
 /* Vision container list mutex key */

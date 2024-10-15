@@ -266,7 +266,7 @@ SET(INNOBASE_SOURCES
   dict/lizard0dict.cc
   fil/lizard0fil.cc
   fsp/lizard0fsp.cc
-  trx/lizard0txn.cc
+  fsp/lizard0txn0space.cc
   trx/lizard0undo.cc
   mtr/lizard0mtr.cc
   row/lizard0row.cc
@@ -285,6 +285,9 @@ SET(INNOBASE_SOURCES
   trx/lizard0gp.cc
   trx/lizard0xa.cc
   trx/lizard0tcn.cc
+  trx/lizard0txn.cc
+  trx/lizard0txn0rec.cc
+  trx/lizard0undo0types.cc
   ut/lizard0iv.cc
   dict/lizard0dict0mem.cc
   data/lizard0data0data.cc

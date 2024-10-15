@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
+#include "lizard0txn0rec0types.h"
 
 #include "dict0mem.h"
 #include "trx0types.h"
@@ -131,6 +132,12 @@ class Vision {
     m_creator_trx_id = id;
   }
 
+  /** What kind of commit number that was used to check visible . */
+  ccr_t visible_by() const {
+    if (m_snapshot_vision) return m_snapshot_vision->visible_by();
+
+    return CCR_SCN;
+  }
   /**
     Return active state of the vision
     @retval   active state of the vision

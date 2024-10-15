@@ -242,6 +242,9 @@ class Snapshot_vision {
   /** Whether is it a real vision that can be used by innodb. */
   virtual bool is_vision() const = 0;
 
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const = 0;
+
   /** Whether this vision is too old.
    *  Because it need to compare with purge_sys,
    *  so its definition is see in lizard0mysql.cc file in InnoDB module.
@@ -287,6 +290,9 @@ class Snapshot_time_vision : public Snapshot_vision {
 
   /** Time snapshot cann't be used by innodb directly. */
   virtual bool is_vision() const override { return false; }
+
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_NONE; }
 
   virtual bool too_old() const override {
     assert(0);
@@ -345,6 +351,9 @@ class Snapshot_scn_vision : public Snapshot_vision {
   }
 
   virtual bool is_vision() const override { return true; }
+
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_SCN; }
 
   virtual bool too_old() const override;
 
@@ -422,6 +431,9 @@ class Snapshot_gcn_vision : public Snapshot_vision {
 
   virtual bool is_vision() const override { return true; }
 
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_ALL; }
+
   virtual bool too_old() const override;
 
   /**
@@ -472,6 +484,9 @@ class Snapshot_noop_vision : public Snapshot_vision {
   virtual uint64_t val_int() const override { return SCN_NULL; }
 
   virtual bool is_vision() const override { return false; }
+
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_NONE; }
 
   virtual bool too_old() const override {
     assert(0);

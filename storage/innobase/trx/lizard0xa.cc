@@ -46,128 +46,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0ut.h"
 #include "lizard0xa.h"
 
-/** @{ */
-
-/** Bqual format: 'xxx@nnnn' */
-static unsigned int XID_GROUP_SUFFIX_SIZE = 5;
-
-static char XID_GROUP_SPLIT_CHAR = '@';
-
-/**
-  check if the xid match the format v1.
-
-  Requirement:
-  1) Buqal length must be greater than XID_GROUP_SUFFIX_SIZE
-  2) Split char must be right.
-  3) The suffix must be a numober except split char
-
-  @param[in]  xid   xid to be checked
-  @return true if match, otherwise false
-*/
-bool check_if_match_format_v1(const XID *xid) {
-  if (xid->is_null()) return false;
-
-  int prefix_len =
-      xid->gtrid_length + xid->bqual_length - XID_GROUP_SUFFIX_SIZE;
-
-  if (xid->bqual_length <= XID_GROUP_SUFFIX_SIZE ||
-      xid->data[prefix_len] != XID_GROUP_SPLIT_CHAR) {
-    return false;
-  }
-  for (unsigned int i = 1; i < XID_GROUP_SUFFIX_SIZE; i++) {
-    if (!my_isdigit(&my_charset_latin1, xid->data[prefix_len + i])) {
-      return false;
-    }
-  }
-  return true;
-}
-/** @} */
-
-/**
- * Before building the group id in format v1, we must check if the xid meet
- * requirements (call @check_if_match_format_v1). The trxs that meet the
- * following requirements are divided into a group in format v1:
- *
- * 1) gtrid must be equal
- * 2) bqual prefix must be equal
- * 3) formatID must be equal
- *
- * So we append bqual prefix and formatID to xa_desc_t::m_gid besides gtrid,
- * which is quite different from format v2. To specify the version, format
- * version is also appended.
- *
- * @return true if the group id is built successfully, otherwise false
- */
-bool xa_desc_t::build_gid_v1() {
-  ut_ad(m_gid.empty());
-
-  /** No need to build the group id. */
-  if (!check_if_match_format_v1(&m_xid)) {
-    return false;
-  }
-
-  auto formatID = std::to_string(m_xid.get_format_id());
-
-  int length = m_xid.get_gtrid_length() + m_xid.get_bqual_length() -
-               XID_GROUP_SUFFIX_SIZE + formatID.size() + sizeof(FORMAT_V1) - 1;
-
-  m_gid.reserve(length);
-
-  /** 1. append gtrid and bqual prefix */
-  m_gid.append(m_xid.get_data(), length);
-
-  /** 2. append formatID */
-  m_gid.append(formatID);
-
-  /** 3. append format version */
-  m_gid.append(FORMAT_V1, sizeof(FORMAT_V1) - 1);
-
-  return true;
-}
-
-/**
- * Build the group id in format v2. The trxs that meet the following
- * Requirements are divided into a group in format v2:
- *
- * 1) gtrid must be equal
- *
- * So we append gtrid to xa_desc_t::m_gid. To specify the version, format
- * version is also appended.
- * @return true if the group id is built successfully, otherwise false
- */
-bool xa_desc_t::build_gid_v2() {
-  ut_ad(m_gid.empty());
-  m_gid.reserve(m_xid.get_gtrid_length() + sizeof(FORMAT_V2) - 1);
-
-  /** 1. append gtrid */
-  m_gid.append(m_xid.get_data(), m_xid.get_gtrid_length());
-
-  /** 2. append format version */
-
-  m_gid.append(FORMAT_V2, sizeof(FORMAT_V2) - 1);
-
-  return true;
-}
-
-/**
- * Build the group id. For 0-FORMAT_V1_RANGE, use the format v1.
- * Otherwise, use the format v2.
- *
- * @return true if the group id is built successfully, otherwise false
- */
-bool xa_desc_t::build_gid() {
-  ut_ad(!m_xid.is_null());
-  ut_ad(m_group == nullptr);
-
-  ut_ad(m_xid.get_format_id() >= 0);
-
-  if (m_xid.get_format_id() <= FORMAT_V1_RANGE) {
-    return build_gid_v1();
-  } else {
-    return build_gid_v2();
-  }
-}
-
 /**
  * Release the reference of the Xa Group for a given trx. Remove
  * it from trx_sys->xa_group_shards when the reference count is 0.
@@ -257,7 +135,7 @@ void MyXAInfo::init_by_txn_undo(const trx_id_t tid,
     if (!txn_undo->pmmt.is_null()) {
       txn_undo->pmmt.copy_to_my_gcn(&gcn);
     }
-    lizard::undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
+    undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
     slot = {tid, slot_ptr};
     branch = txn_undo->branch;
     maddr = txn_undo->maddr;
@@ -306,7 +184,160 @@ void xa_addr_t::decide_if_ac_commit(const trx_t *trx) {
 }
 
 namespace lizard {
-namespace xa {
+
+XA_specification_strategy::XA_specification_strategy(const trx_t *trx)
+    : m_trx(trx), m_xa_spec(trx->xa_spec) {}
+
+/**
+ * Judge if has gtid when recovery trx.
+ *
+ * @retval	true
+ * @retval	false
+ */
+bool XA_specification_strategy::has_gtid() {
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+
+  if (binlog_xa_spec && binlog_xa_spec->has_gtid()) {
+    return true;
+  }
+
+  return false;
+}
+/**
+ * Judge storage way for gtid according to gtid source.
+ */
+trx_undo_t::Gtid_storage XA_specification_strategy::decide_gtid_storage() {
+  trx_undo_t::Gtid_storage storage = trx_undo_t::Gtid_storage::NONE;
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+  ut_ad(has_gtid());
+  ut_ad(binlog_xa_spec->is_legal_source());
+
+  switch (binlog_xa_spec->source()) {
+    case binlog::Binlog_xa_specification::Source::NONE:
+      ut_a(0);
+      break;
+    case binlog::Binlog_xa_specification::Source::COMMIT:
+      storage = trx_undo_t::Gtid_storage::COMMIT;
+      break;
+    case binlog::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE:
+    case binlog::Binlog_xa_specification::Source::XA_PREPARE:
+    case binlog::Binlog_xa_specification::Source::XA_COMMIT:
+    case binlog::Binlog_xa_specification::Source::XA_ROLLBACK:
+      storage = trx_undo_t::Gtid_storage::PREPARE_AND_COMMIT;
+      break;
+  }
+  return storage;
+}
+
+/**
+ * Overwrite gtid storage type of trx_undo_t when recovery.
+ */
+void XA_specification_strategy::overwrite_gtid_storage(trx_t *trx) {
+  trx_undo_t *undo{nullptr};
+  ut_ad(trx == m_trx);
+  ut_ad(has_gtid());
+
+  if (trx->rsegs.m_redo.rseg != nullptr && trx_is_redo_rseg_updated(trx)) {
+    undo = trx->rsegs.m_redo.update_undo;
+    if (undo) {
+      undo->m_gtid_storage = decide_gtid_storage();
+    }
+  }
+}
+
+/** Fill gtid info from xa spec. */
+void XA_specification_strategy::get_gtid_info(Gtid_desc *gtid_desc) {
+  auto binlog_xa_spec =
+      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+  ut_ad(has_gtid());
+
+  gtid_desc->m_version = GTID_VERSION;
+
+  auto &gtid = binlog_xa_spec->m_gtid;
+  auto &sid = binlog_xa_spec->m_sid;
+
+  gtid_desc->m_info.fill(0);
+  auto char_buf = reinterpret_cast<char *>(&gtid_desc->m_info[0]);
+  auto len = gtid.to_string(sid, char_buf);
+  ut_a((size_t)len <= GTID_INFO_SIZE);
+  gtid_desc->m_is_set = true;
+}
+
+/**
+ * Judge if has gcn when commit detached XA
+ *
+ * @retval  true
+ * @retval  false
+ */
+bool XA_specification_strategy::has_commit_gcn() const {
+  return m_xa_spec && m_xa_spec->gcn().is_cmmt_gcn();
+}
+
+bool XA_specification_strategy::has_proposal_gcn() const {
+  return m_xa_spec && m_xa_spec->gcn().is_pmmt_gcn();
+}
+
+/**
+ * Overwrite commit gcn in trx when commit detached XA
+ */
+void XA_specification_strategy::overwrite_xa_when_commit(trx_t *trx) const {
+  ut_ad(has_commit_gcn());
+
+  if (trx_is_started(trx) && trx->rsegs.m_txn.rseg != nullptr &&
+      trx_is_txn_rseg_updated(trx)) {
+    ut_ad(trx->txn_desc.cmmt.is_null());
+
+    MyGCN xa_gcn = m_xa_spec->gcn();
+    xa_addr_t xa_maddr = m_xa_spec->xa_maddr();
+
+    decide_xa_when_commit(trx, &xa_gcn, &xa_maddr);
+
+    trx->txn_desc.copy_xa_when_commit(xa_gcn, xa_maddr);
+  }
+}
+
+void XA_specification_strategy::overwrite_xa_when_prepare(trx_t *trx) const {
+  ut_ad(has_proposal_gcn());
+
+  if (trx_is_started(trx) && trx->rsegs.m_txn.rseg != nullptr &&
+      trx_is_txn_rseg_updated(trx)) {
+    ut_ad(trx->txn_desc.pmmt.is_null());
+
+    MyGCN xa_gcn = m_xa_spec->gcn();
+    const xa_branch_t xa_branch = m_xa_spec->xa_branch();
+
+    decide_xa_when_prepare(&xa_gcn);
+
+    ut_ad(has_proposal_gcn());
+    trx->txn_desc.copy_xa_when_prepare(xa_gcn, xa_branch);
+  }
+}
+
+Guard_xa_specification::Guard_xa_specification(trx_t *trx,
+                                               XA_specification *xa_spec,
+                                               bool prepare)
+    : m_trx(trx), m_xa_spec(xa_spec) {
+  ut_ad(trx);
+
+  trx->xa_spec = m_xa_spec;
+  XA_specification_strategy xss(trx);
+
+  if (xss.has_gtid()) {
+    xss.overwrite_gtid_storage(trx);
+  }
+
+  if (prepare && xss.has_proposal_gcn()) {
+    xss.overwrite_xa_when_prepare(trx);
+  }
+
+  if (!prepare && xss.has_commit_gcn()) {
+    xss.overwrite_xa_when_commit(trx);
+  }
+}
+
+Guard_xa_specification::~Guard_xa_specification() { m_trx->xa_spec = nullptr; }
 
 template <class T>
 struct my_hash {};
@@ -593,9 +624,6 @@ bool trx_slot_check_validity(const trx_t *trx) {
 
   return true;
 }
-
-}  // namespace xa
-   //
 
 void decide_xa_when_prepare(MyGCN *gcn) {
   gcn_t sys_gcn;

@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0fil.h"
 #include "lizard0fsp.h"
 #include "lizard0fspspace.h"
-#include "lizard0txn.h"
+#include "lizard0txn0space.h"
 
 namespace lizard {
 

@@ -67,6 +67,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0row.h"
 #include "lizard0undo.h"
+#include "lizard0txn0rec.h"
 
 /* Flag to enable/disable deadlock detector. */
 bool innobase_deadlock_detect = true;
@@ -262,7 +263,7 @@ bool lock_clust_rec_cons_read_sees(
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  lizard::txn_rec_cleanout_state_by_misc(&txn_rec, pcur, rec, index, offsets);
+  lizard::txn_rec_cleanout_when_query(&txn_rec, pcur, rec, index, offsets);
 
   return (vision->modifications_visible(&txn_rec, index->table->name));
 }

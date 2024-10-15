@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0gp.h"
 #include "lizard0row.h"
+#include "lizard0txn0rec.h"
 #include "lizard0undo.h"
 #include "page0page.h"
 #include "row0row.h"
@@ -471,7 +472,6 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
                                  dict_index_t *index, const ulint *offsets,
                                  btr_pcur_t *pcur, lizard::Vision *vision,
                                  dberr_t *error) {
-  bool active;
 #ifdef UNIV_DEBUG
   bool looped = false;
 #endif
@@ -494,9 +494,9 @@ retry:
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  active = txn_rec_cleanout_state_by_misc(&txn_rec, pcur, rec, index, offsets);
+  txn_rec_cleanout_when_query(&txn_rec, pcur, rec, index, offsets);
   /** 1. Already committed; */
-  if (!active) {
+  if (txn_rec.is_committed()) {
     ut_a(txn_rec.gcn != GCN_NULL);
     ut_a(txn_rec.scn != SCN_NULL);
 

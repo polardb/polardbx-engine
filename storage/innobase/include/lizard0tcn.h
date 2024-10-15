@@ -29,11 +29,14 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 #define lizard0tcn_h
 
 #include "hash0hash.h"
+
 #include "lizard0iv.h"
 #include "lizard0mon.h"
 #include "lizard0scn.h"
 #include "lizard0scn0types.h"
 #include "lizard0undo0types.h"
+#include "lizard0txn0rec.h"
+
 #include "rem0types.h"
 #include "trx0types.h"
 

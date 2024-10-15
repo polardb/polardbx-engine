@@ -44,6 +44,7 @@ Created 2018-01-27 by Sunny Bains */
 
 #include "lizard0row.h"
 #include "lizard0undo.h"
+#include "lizard0txn0rec.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
@@ -488,7 +489,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
 
       {
         if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_rec_real_state_by_misc(&txn_rec, Cache_hint::KEEP_OLD);
+          lizard::txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
         }
       }
 
