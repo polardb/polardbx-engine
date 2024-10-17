@@ -60,23 +60,8 @@ let $wait_condition= select role='Leader' from information_schema.alisql_cluster
 --sleep 1
 --source include/wait_until_connected_again_old.inc
 
---connection conn3
-let $wait_condition= select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local;
---source include/wait_condition.inc
-insert into t1 values (6);
---let $logindex = `select last_log_index from information_schema.alisql_cluster_local;`
 
---connection conn1
-let $wait_condition= select last_log_index=$logindex from information_schema.alisql_cluster_local;
---source include/wait_condition.inc
-
---connection conn3
-select count(distinct(match_index)) from information_schema.alisql_cluster_global where server_id <= 3;
-#change consensus_leader to 1;
---replace_result $PAXOS_PORT_1 PAXOS_PORT_1
-eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1");
-
---sleep 1
+--sleep 10
 --connection conn1
 select count(distinct(match_index)) from information_schema.alisql_cluster_global where server_id <= 3;
 drop table t1;

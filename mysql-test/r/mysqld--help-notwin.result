@@ -345,6 +345,8 @@ The following options may be given as the first argument:
  Checksum when consensus receive log. Disabled by default.
  --consensus-configure-change-timeout=# 
  Consensus configure change timeout (ms). Default 1 min
+ --consensus-disable-commit-before-change-leader 
+ disable_commit_before_change_leader
  --consensus-disable-election 
  Disable consensus election and stepdown. Disabled by
  default.
@@ -455,6 +457,8 @@ The following options may be given as the first argument:
  --consensus-sync-follower-meta-interva[=#] 
  Interval of leader sync follower's meta for learner
  source
+ --consensus-wait-milliseconds-before-change-leader[=#] 
+ the waiting time before change leader
  --consensus-worker-thread-cnt[=#] 
  Number of consensus worker thread
  --consensuslog-revise 
@@ -2133,8 +2137,8 @@ binlog-rows-query-log-events FALSE
 binlog-stmt-cache-size 32768
 binlog-transaction-compression FALSE
 binlog-transaction-compression-level-zstd 3
-binlog-transaction-dependency-history-size 25000
-binlog-transaction-dependency-tracking WRITESET
+binlog-transaction-dependency-history-size 200000
+binlog-transaction-dependency-tracking COMMIT_ORDER
 block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
 caching-sha2-password-digest-rounds 5000
@@ -2179,6 +2183,7 @@ consensus-check-commit-index-interval 1000
 consensus-check-large-event TRUE
 consensus-checksum FALSE
 consensus-configure-change-timeout 60000
+consensus-disable-commit-before-change-leader FALSE
 consensus-disable-election FALSE
 consensus-disable-fifo-cache FALSE
 consensus-dynamic-easyindex TRUE
@@ -2224,6 +2229,7 @@ consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
+consensus-wait-milliseconds-before-change-leader 1000
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE
 console FALSE

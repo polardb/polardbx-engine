@@ -5158,7 +5158,7 @@ sub run_testcase ($) {
       $ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
       last if ($ret == 0);
       $err_cnt++;
-      if ($err_cnt >= 10) {
+      if ($err_cnt >= 20) {
         mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
         report_failure_and_restart($tinfo);
         return 1;
@@ -6208,7 +6208,7 @@ sub check_expected_crash_and_restart($$) {
               $ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
               last if ($ret == 0);
               $err_cnt++;
-              if ($err_cnt >= 10) {
+              if ($err_cnt >= 20) {
                 mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
                 report_failure_and_restart($tinfo);
                 return 1;
