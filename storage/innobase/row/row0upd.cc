@@ -82,6 +82,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0dict.h"
 #include "lizard0page.h"
+#include "lizard0row0gpp.h"
 
 #ifndef UNIV_HOTBACKUP
 /* What kind of latch and lock can we assume when the control comes to
@@ -1956,7 +1957,7 @@ void row_upd_store_row(upd_node_t *node, THD *thd, TABLE *mysql_table) {
   node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
                         nullptr, nullptr, ext, node->heap);
 
-  lizard::upd_alloc_gpp_field_for_old_row(node);
+  lizard::row_upd_alloc_gpp_field_for_old_row(node);
 
   if (node->table->n_v_cols) {
     row_upd_store_v_row(node, node->is_delete ? nullptr : node->update, thd,
@@ -1970,7 +1971,7 @@ void row_upd_store_row(upd_node_t *node, THD *thd, TABLE *mysql_table) {
     node->upd_row = dtuple_copy(node->row, node->heap);
 
     /* Lizard-4.0: Alloc gpp field and link it with upd_row. */
-    lizard::upd_alloc_gpp_field_for_new_row(node);
+    lizard::row_upd_alloc_gpp_field_for_new_row(node);
 
     row_upd_replace(node->upd_row, &node->upd_ext, clust_index, node->update,
                     node->heap);

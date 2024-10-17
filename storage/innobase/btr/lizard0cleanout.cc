@@ -50,6 +50,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0ut.h"
 #include "lizard0btr0cur.h"
+#include "lizard0row0gpp.h"
 
 namespace lizard {
 

@@ -282,6 +282,7 @@ SET(INNOBASE_SOURCES
   trx/lizard0trx.cc
   dict/lizard0gcs0hist.cc
   row/lizard0mysql.cc
+  row/lizard0row0gpp.cc
   trx/lizard0gp.cc
   trx/lizard0xa.cc
   trx/lizard0tcn.cc

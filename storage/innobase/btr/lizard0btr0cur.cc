@@ -39,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict0mem.h"
 #include "lizard0mtr0log.h"
 #include "lizard0row.h"
+#include "lizard0row0gpp.h"
 
 namespace lizard {
 /**

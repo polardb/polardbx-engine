@@ -65,6 +65,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0row.h"
 #include "lizard0undo0types.h"
+#include "lizard0row0gpp.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there

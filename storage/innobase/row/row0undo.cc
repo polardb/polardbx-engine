@@ -50,6 +50,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
+#include "lizard0row0gpp.h"
+
 /* How to undo row operations?
 (1) For an insert, we have stored a prefix of the clustered index record
 in the undo log. Using it, we look for the clustered record, and using

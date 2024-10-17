@@ -68,6 +68,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0page.h"
 #include "lizard0row.h"
+#include "lizard0row0gpp.h"
 
 #include "lizard0data0data.h"
 /*************************************************************************

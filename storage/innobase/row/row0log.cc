@@ -58,6 +58,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "my_dbug.h"
 
+#include "lizard0row0gpp.h"
 /** Table row modification operations during online table rebuild.
 Delete-marked records are not copied to the rebuilt table. */
 enum row_tab_op {
