@@ -106,8 +106,8 @@
   .frm is left in this list so that any orphan files can be removed on upgrade.
   .SDI needs to be there for now... need to investigate why...
 */
-const char *del_exts[] = {".frm", ".BAK", ".TMD", ".opt",
-                          ".OLD", ".cfg", ".SDI", NullS};
+const char *del_exts[] = {".frm", ".BAK", ".TMD", ".opt", ".OLD",
+                          ".cfg", ".SDI", ".cfp", NullS};
 static TYPELIB deletable_extentions = {array_elements(del_exts) - 1, "del_exts",
                                        del_exts, nullptr};
 

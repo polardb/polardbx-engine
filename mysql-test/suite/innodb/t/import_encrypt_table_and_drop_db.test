@@ -1,0 +1,34 @@
+# Bug Scenario: After importing an encrypted table, the .cfg and .cfp files stay in the data directory
+# While droping database and removing files, the .cfg file is considered as a deletable file,
+# while the .cfp file is not.
+
+let $MYSQLD_DATADIR = `SELECT @@datadir`;
+
+--echo # Create a source table with encryption
+CREATE DATABASE source_db;
+CREATE TABLE source_db.t1(c1 INT, c2 char(20)) ENCRYPTION="Y" ENGINE = InnoDB;
+INSERT INTO source_db.t1 VALUES(0, "aaaaa");
+INSERT INTO source_db.t1 VALUES(1, "bbbbb");
+INSERT INTO source_db.t1 VALUES(2, "ccccc");
+INSERT INTO source_db.t1 VALUES(3, "ddddd");
+
+--echo # Create a dest table with encryption
+CREATE DATABASE dest_db;
+CREATE TABLE dest_db.t1(c1 INT, c2 char(20)) ENCRYPTION="Y" ENGINE = InnoDB;
+ALTER TABLE dest_db.t1 DISCARD TABLESPACE;
+FLUSH TABLES source_db.t1 For EXPORT;
+
+--echo # Copy ibd/cfg/cfp files
+--copy_file $MYSQLD_DATADIR/source_db/t1.cfg $MYSQLD_DATADIR/dest_db/t1.cfg
+--copy_file $MYSQLD_DATADIR/source_db/t1.cfp $MYSQLD_DATADIR/dest_db/t1.cfp
+--copy_file $MYSQLD_DATADIR/source_db/t1.ibd $MYSQLD_DATADIR/dest_db/t1.ibd
+UNLOCK TABLES;
+ALTER TABLE dest_db.t1 IMPORT TABLESPACE;
+
+SELECT * FROM dest_db.t1;
+
+--echo # DROP dest_db should be successfully executed.
+DROP DATABASE dest_db;
+
+--echo #Cleanup
+DROP DATABASE source_db;
