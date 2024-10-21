@@ -980,10 +980,7 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
 int MYSQL_BIN_LOG::truncate_logs_from_index(
     std::vector<std::string> &files_list, std::string last_file) {
   LOG_INFO log_info;
-  auto index_guard = create_lock_guard(
-    [&] { mysql_mutex_lock(&LOCK_index); },
-    [&] { mysql_mutex_unlock(&LOCK_index); }
-  );
+  mysql_mutex_assert_owner(&LOCK_index);
   if (find_log_pos(&log_info, last_file.c_str(),
                    false /*need_lock_index=false*/)) {
     xp::error(ER_XP_COMMIT)
