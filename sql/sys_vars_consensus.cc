@@ -86,6 +86,7 @@ bool opt_consensus_optimistic_heartbeat;
 ulong opt_consensus_sync_follower_meta_interval = 1;
 ulong opt_consensus_log_level;
 uint64 opt_consensus_start_index;
+uint64 opt_consensus_max_wait_seconds_for_next_trx_index;
 bool opt_mts_recover_use_index;
 bool opt_cluster_force_single_mode;
 bool opt_weak_consensus_mode;

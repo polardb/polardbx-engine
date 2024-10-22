@@ -841,24 +841,35 @@ int ConsensusLogManager::get_log_position(uint64 consensus_index,
   return error;
 }
 
-uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index) {
+uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index, bool enable_retry/*  = true */) {
   uint64 retIndex = consensus_index;
+  int curr_retry = 0;
   if (consensus_index != 0) {
-    auto consensus_guard = create_lock_guard(
-      [&] { rdlock_consensus_status(); },
-      [&] { unlock_consensus_status(); }
-    );
-    MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
-                             ? binlog
-                             : &(rli_info->relay_log);
+    const int max_retry_count = 2 * opt_consensus_max_wait_seconds_for_next_trx_index;
+    while (enable_retry && curr_retry <= max_retry_count) {
+      auto consensus_guard = create_lock_guard(
+        [&] { rdlock_consensus_status(); },
+        [&] { unlock_consensus_status(); }
+      );
+      MYSQL_BIN_LOG *log = status == Consensus_Log_System_Status::BINLOG_WORKING
+                              ? binlog
+                              : &(rli_info->relay_log);
 
-    retIndex = log->get_trx_end_index(consensus_index);
-    if (retIndex == 0) {
-      xp::error(ER_XP_0) << "fail to find next trx index.";
-      abort();
+      if (log->get_trx_end_index(consensus_index, retIndex) == 0) {
+        break;
+      } else if (retIndex > 0) {
+        consensus_guard.unlock();
+        curr_retry++;
+        xp::error(ER_XP_0) << "fail to find next trx index, retry after 500ms, current try " << curr_retry;
+        my_sleep(500);/* 500ms */
+      } else {
+        xp::error(ER_XP_0) << "fail to find next trx index from " << consensus_index;
+        abort();
+      }
     }
   }
   xp::system(ER_XP_0) << "get_next_trx_index"
+                    << ", curr_retry: " << curr_retry
                     << ", input index: " << consensus_index
                     << ", next transaction index is " << retIndex + 1;
   return retIndex + 1;

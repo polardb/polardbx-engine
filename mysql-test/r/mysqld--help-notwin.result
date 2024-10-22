@@ -414,6 +414,8 @@ The following options may be given as the first argument:
  Max one log size. (default: 20M)
  --consensus-max-packet-size[=#] 
  Max package size the consensus server send at once
+ --consensus-max-wait-seconds-for-next-trx-index=# 
+ wait timeout for get_next_trx_index
  --consensus-min-delay-index[=#] 
  Min index delay for pipeline log delivery
  --consensus-msg-compress-option[=name] 
@@ -2212,6 +2214,7 @@ consensus-log-level LOG_ERROR
 consensus-max-delay-index 50000
 consensus-max-log-size 20971520
 consensus-max-packet-size 131072
+consensus-max-wait-seconds-for-next-trx-index 10
 consensus-min-delay-index 5000
 consensus-msg-compress-option (No default value)
 consensus-mts-force-apply-index 0

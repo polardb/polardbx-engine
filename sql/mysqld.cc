@@ -9285,6 +9285,10 @@ struct my_option my_long_options[] = {
     {"cluster-start-index", OPT_CLUSTER, "Cluster start valid index",
      &opt_consensus_start_index, &opt_consensus_start_index, 0, GET_ULL,
      REQUIRED_ARG, 1, 1, ULLONG_MAX, 0, 0, 0},
+    {"consensus-max-wait-seconds-for-next-trx-index", OPT_CLUSTER, "wait timeout for get_next_trx_index",
+     &opt_consensus_max_wait_seconds_for_next_trx_index, &opt_consensus_max_wait_seconds_for_next_trx_index, 0,
+     GET_ULL, REQUIRED_ARG, 10, 0, 0, 0, 0, 0},
+
     {"recover-snapshot", 0,
      "recover from the backup of cloud storage and output the committed index",
      &opt_recover_snapshot, &opt_recover_snapshot, 0, GET_BOOL, NO_ARG, 0, 0, 0,

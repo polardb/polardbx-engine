@@ -88,6 +88,7 @@ extern bool opt_cluster_force_change_meta;
 extern bool opt_cluster_learner_node;
 extern char *opt_cluster_info;
 extern uint64 opt_consensus_start_index;
+extern uint64 opt_consensus_max_wait_seconds_for_next_trx_index;
 extern bool opt_cluster_dump_meta;
 extern ulonglong opt_cluster_current_term;
 extern ulonglong opt_cluster_force_recover_index;

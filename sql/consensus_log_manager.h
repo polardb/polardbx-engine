@@ -204,7 +204,7 @@ class ConsensusLogManager {
                             uint64 consensus_index);
   int get_log_position(uint64 consensus_index, bool need_lock, char *log_name,
                        uint64 *pos);
-  uint64 get_next_trx_index(uint64 consensus_index);
+  uint64 get_next_trx_index(uint64 consensus_index, bool enable_retry = true);
   uint32 serialize_cache(uchar **buffer);
   int truncate_log(uint64 consensus_index);
 

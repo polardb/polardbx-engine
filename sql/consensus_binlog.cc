@@ -518,37 +518,40 @@ int MYSQL_BIN_LOG::find_log_by_consensus_index(uint64 consensus_index,
       consensus_index, file_name);
 }
 
-uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex) {
+int MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex, uint64 &nextIndex) {
   std::string file_name;
+  int ret = -1;
+  nextIndex = 0;
   // use another io_cache , so do not need lock LOCK_log
   if (find_log_by_consensus_index(firstIndex, file_name)) {
     xp::error(ER_XP_RECOVERY)
         << "get_trx_end_index cannot find consensus index log " << firstIndex;
-    return 0;
+    return ret;
   }
 
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name.c_str())) {
     xp::error(ER_XP_RECOVERY) << "fail to open file " << file_name;
-    return 0;  // ??????
+    return ret;  // ??????
   }
 
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
   Log_event *ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
-  bool stop_scan = false;
   uint64 currentIndex = 0;
   uint64 currentFlag = 0;
   binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
-  while (!stop_scan && (ev = binlog_file_reader.read_event_object()) != NULL) {
+  while (ret && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {
       case binary_log::CONSENSUS_LOG_EVENT:
         consensus_log_ev = (Consensus_log_event *)ev;
         currentIndex = consensus_log_ev->get_index();
         currentFlag = consensus_log_ev->get_flag();
-        if (firstIndex <= currentIndex &&
-            !(currentFlag & Consensus_log_event_flag::FLAG_LARGE_TRX))
-          stop_scan = true;
+        if (firstIndex <= currentIndex) {
+          nextIndex = currentIndex;
+          if (!(currentFlag & Consensus_log_event_flag::FLAG_LARGE_TRX))
+            ret = 0;
+        }
         break;
       default:
         break;
@@ -559,13 +562,12 @@ uint64 MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex) {
 
   xp::info(ER_XP_RECOVERY) << "get_trx_end_index finish  "
                            << "log file " << file_name
-                           << ", stop_scan " << stop_scan 
+                           << ", ret " << ret 
                            << ", firstIndex " << firstIndex
                            << ", currentIndex " << currentIndex
                            << ", currentFlag " << currentFlag
                            << ", skip_event_count " << binlog_file_reader.get_skip_event_count();
-
-  return stop_scan ? currentIndex : 0;
+  return ret;
 }
 
 int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,

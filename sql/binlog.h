@@ -923,7 +923,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
       std::vector<std::string> &consensuslog_file_name_vector);
   int find_log_by_consensus_index(uint64 consensus_index,
                                   std::string &file_name);
-  uint64 get_trx_end_index(uint64 firstIndex);
+  int get_trx_end_index(uint64 firstIndex, uint64 &nextIndex);
 
   uint64 wait_xid_disappear();
   int read_log_by_consensus_index(const char *file_name, uint64 consensus_index,
