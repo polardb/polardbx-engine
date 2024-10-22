@@ -422,6 +422,7 @@ class Paxos : public Consensus {
   static void doPurgeLog(purgeLogArgType *arg);
   void updateAppliedIndex(uint64_t index);
   int forcePurgeLog(bool local, uint64_t forceIndex = UINT64_MAX);
+  uint64_t getSafetyIndexForPurge();
   uint64_t getAppliedIndex() { return appliedIndex_.load(); }
   void electionWeightAction(uint64_t term, uint64_t baseEpoch);
 

@@ -862,7 +862,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
     If all conditions are met, purge is done according to the configuration
     of the purge window.
    */
-  void auto_purge();
+  void auto_purge(bool need_lock = true);
 
   /**
     @brief This member function is to be called at server startup. It checks if
@@ -890,7 +890,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int purge_logs(const char *to_log, bool included, bool need_lock_index,
                  bool need_update_threads, ulonglong *decrease_log_space,
                  bool auto_purge);
-  int purge_logs_before_date(time_t purge_time, bool auto_purge);
+  int purge_logs_before_date(time_t purge_time, bool auto_purge, bool need_lock = true);
   int set_crash_safe_index_file_name(const char *base_file_name);
   int open_crash_safe_index_file();
   int close_crash_safe_index_file();
@@ -1170,5 +1170,4 @@ int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,
                            uint64 start_pos, uint64 end_pos,
                            Consensus_cluster_info_log_event *rci_ev,
                            std::string &log_content);
-
 #endif /* BINLOG_H_INCLUDED */

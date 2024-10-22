@@ -6169,6 +6169,7 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
   // truncate consensus log file index
   file_name = std::string(log_info.log_file_name);
   consensus_log_manager.get_log_file_index()->truncate_before(file_name);
+  xp::info(ER_XP_0) << "binlog will be purged before " << log_info.log_file_name;
 
   DBUG_EXECUTE_IF("crash_purge_before_update_index_after_truncate",
                   DBUG_SUICIDE(););
@@ -6464,7 +6465,8 @@ err:
                                 mysql_file_stat() or mysql_file_delete()
 */
 
-int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge) {
+int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge,
+                                          bool need_lock/*  = true */) {
   int error;
   int no_of_threads_locking_log = 0, no_of_log_files_purged = 0;
   bool log_is_active = false, log_is_in_use = false;
@@ -6472,14 +6474,24 @@ int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge) {
   LOG_INFO log_info;
   MY_STAT stat_area;
   THD *thd = current_thd;
+  uint64 consenus_minmatchindex;
+  std::string consensus_min_filename;
 
   DBUG_TRACE;
 
-  mysql_mutex_lock(&LOCK_index);
+  if (need_lock) mysql_mutex_lock(&LOCK_index);
   to_log[0] = 0;
 
   if ((error = find_log_pos(&log_info, NullS, false /*need_lock_index=false*/)))
     goto err;
+
+  if (consensus_ptr
+      && (consenus_minmatchindex = consensus_ptr->getSafetyIndexForPurge()) > 0
+      && find_log_by_consensus_index(consenus_minmatchindex, consensus_min_filename)) {
+    xp::error(ER_XP_COMMIT)
+        << "failed to find_log_by_consensus_index " << consenus_minmatchindex;
+    goto err;
+  }
 
   while (!(log_is_active = is_active(log_info.log_file_name))) {
     if (!mysql_file_stat(m_key_file_log, log_info.log_file_name, &stat_area,
@@ -6521,6 +6533,11 @@ int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge) {
         }
         break;
       }
+      //binlog is used by consensus
+      if (!consensus_min_filename.empty()
+          && strcmp(consensus_min_filename.c_str(), log_info.log_file_name) <= 0)
+        break;
+
       strmake(to_log, log_info.log_file_name,
               sizeof(log_info.log_file_name) - 1);
       no_of_log_files_purged++;
@@ -6565,7 +6582,7 @@ int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge) {
                      : 0);
 
 err:
-  mysql_mutex_unlock(&LOCK_index);
+  if (need_lock) mysql_mutex_unlock(&LOCK_index);
   return error;
 }
 
@@ -7349,7 +7366,7 @@ void MYSQL_BIN_LOG::auto_purge_at_server_startup() {
 /**
   The method executes logs purging routine.
 */
-void MYSQL_BIN_LOG::auto_purge() {
+void MYSQL_BIN_LOG::auto_purge(bool need_lock/*  = true */) {
   // first run the auto purge validations
   if (check_auto_purge_conditions()) return;
 
@@ -7379,7 +7396,7 @@ void MYSQL_BIN_LOG::auto_purge() {
     is persisted inside storage engines.
   */
   ha_flush_logs();
-  purge_logs_before_date(purge_time, auto_purge);
+  purge_logs_before_date(purge_time, auto_purge, need_lock);
 }
 
 /**

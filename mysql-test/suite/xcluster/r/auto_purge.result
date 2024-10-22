@@ -1,0 +1,132 @@
+############ init and add learner
+# start a new learner
+call dbms_consensus.add_learner(learner_cluster_info);
+call dbms_consensus.configure_learner(learner_cluster_info, "127.0.0.1:PAXOS_PORT_1");
+select server_id, role, learner_source from information_schema.alisql_cluster_global;
+server_id	role	learner_source
+1	Leader	0
+2	Follower	0
+3	Follower	0
+100	Learner	1
+############ check follower before
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+stop xpaxos_replication;
+SET @@global.binlog_expire_logs_seconds=1;
+############ check learner before
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+stop xpaxos_replication;
+SET @@global.binlog_expire_logs_seconds=1;
+############ check leader before
+create table t1(id int);
+insert into t1 values (1);
+insert into t1 values (2);
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+SET @@global.binlog_expire_logs_seconds=1;
+############ check follower before2
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+############ check learner before2
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+############ check leader after
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+SET SESSION debug="+d,force_rotate";
+insert into t1 values(6);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+insert into t1 values(7);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000003	#	#
+master-bin.000004	#	#
+flush logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000003	#	#
+master-bin.000004	#	#
+master-bin.000005	#	#
+SET @@global.binlog_expire_logs_seconds=default;
+############ check follower after
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+start xpaxos_replication;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+############ check learner after
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	#	#
+master-bin.000002	#	#
+master-bin.000003	#	#
+start xpaxos_replication;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+master-bin.000004	#	#
+############ check leader after2
+insert into t1 values(8);
+insert into t1 values(9);
+############ check follower after2
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000003	#	#
+master-bin.000004	#	#
+SET @@global.binlog_expire_logs_seconds=default;
+############ check learner after2
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000003	#	#
+master-bin.000004	#	#
+SET @@global.binlog_expire_logs_seconds=default;
+############ cleanup
+drop table t1;
