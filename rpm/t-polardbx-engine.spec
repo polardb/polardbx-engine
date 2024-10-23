@@ -1,31 +1,38 @@
+%define polardb_version 'PolarDB V2.0 OpenSource'
+%define product_version 2.4.0
+%define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
-%define release_date 20241014
-%define engine_version 8.4.19
-Version: 2.4.1
 
 Name: t-polardbx-engine
-Release: %(git rev-parse --short HEAD)%{?dist}
+Version: 8.4.19
+Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: cmake >= 3.8.2
 
-%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
-BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, autoconf
-%endif
- 
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel libaio-devel
+BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, libaio-devel, autoconf
+
+BuildRequires: alios7u-2_32-gcc-10-repo
+BuildRequires: gcc >= 10.2.1
+BuildRequires: gcc-c++ >= 10.2.1
+BuildRequires: libstdc++-devel >= 10.2.1
+BuildRequires: binutils >= 2.35
+
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 
 
-Packager: xiedao.yy@alibaba-inc.com
+Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
-#Source: %{name}-%{version}.tar.gz
-Prefix: /opt/polardbx_engine
-Summary: PolarDB-X engine 8.0 based on Oracle MySQL 8.0
+Prefix: /u01/xcluster80_%{release_date}_current
+Summary: PolarDB-X MySQL XCluster 8.0 based on Oracle MySQL 8.0
 
 %description
-PolarDB-X Engine is a MySQL branch originated from Alibaba Group. It is based on the MySQL official release and has many features and performance enhancements, PolarDB-X Engine has proven to be very stable and efficient in production environment. It can be used as a free, fully compatible, enhanced and open source drop-in replacement for MySQL.
+The MySQL(TM) software delivers a very fast, multi-threaded, multi-user,
+and robust SQL (Structured Query Language) database server. MySQL Server
+is intended for mission-critical, heavy-load production systems as well
+as for embedding into mass-deployed software.
 
 %define MYSQL_USER root
 %define MYSQL_GROUP root
@@ -92,16 +99,16 @@ $CMAKE_BIN .                            \
   -DENABLED_LOCAL_INFILE=1           \
   -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
   -DPOLARDBX_RELEASE_DATE=%{release_date} \
-  -DPOLARDBX_ENGINE_VERSION=%{engine_version} \
+  -DPOLARDBX_ENGINE_VERSION=%{version} \
+  -DPOLARDB_VERSION=%{polardb_version} \
+  -DPOLARDBX_PRODUCT_VERSION=%{product_version} \
   -DPOLARDBX_VERSION_EXTRA=%{version_extra} \
   -DWITH_TESTS=0                     \
   -DWITH_UNIT_TESTS=0
 
-make -j `cat /proc/cpuinfo | grep processor| wc -l`
-
 %install
 cd $OLDPWD/../
-make DESTDIR=$RPM_BUILD_ROOT install
+make DESTDIR=$RPM_BUILD_ROOT install -j `cat /proc/cpuinfo | grep processor| wc -l`
 # releaseNote.txt
 # cp releaseNote.txt $RPM_BUILD_ROOT%{prefix}
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
