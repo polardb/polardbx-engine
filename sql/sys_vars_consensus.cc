@@ -245,7 +245,7 @@ static bool fix_consensus_log_cache_size(sys_var *, THD *, enum_var_type) {
 }
 
 static Sys_var_ulonglong Sys_consensus_log_cache_size(
-    "consensus_log_cache_size", "Max cached logs size",
+    "consensus_log_cache_size", "Max fifo cached logs size",
     GLOBAL_VAR(opt_consensus_log_cache_size), CMD_LINE(OPT_ARG),
     VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),

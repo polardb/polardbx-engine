@@ -892,6 +892,39 @@ class Consensus_proc_force_purge_log final : public Consensus_proc {
 };
 
 /**
+  dbms_consensus.force_purge_cache(...)
+*/
+class Sql_cmd_consensus_proc_force_purge_cache : public Sql_cmd_consensus_proc {
+ public:
+  Sql_cmd_consensus_proc_force_purge_cache(THD *thd, mem_root_deque<Item *> *list,
+                                         const Consensus_proc *proc)
+      : Sql_cmd_consensus_proc(thd, list, proc) {}
+
+  bool pc_execute(THD *thd) override;
+};
+
+class Consensus_proc_force_purge_cache final : public Consensus_proc {
+  using Sql_cmd_type = Sql_cmd_consensus_proc_force_purge_cache;
+
+ public:
+  explicit Consensus_proc_force_purge_cache(PSI_memory_key key)
+      : Consensus_proc(key) {
+    static constexpr auto params = {
+        Consensus_proc_type_enum::UINT,  // index
+    };
+    fill_params(params);
+  }
+
+  ~Consensus_proc_force_purge_cache() override = default;
+  static Proc *instance();
+  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  const std::string str() const override {
+    return std::string("force_purge_cache");
+  }
+};
+
+
+/**
   dbms_consensus.drop_prefetch_channel(...)
 */
 class Sql_cmd_consensus_proc_drop_prefetch_channel

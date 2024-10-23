@@ -1424,6 +1424,9 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
   //   << ", flag " << log.flag
   //   << ", checksum " << log.checksum;
 
+  //NOTE::large event in fifo cache is different from which in pefetch (read from binlog).
+  //      because appended data will changed(timestamp/pos) after writed into binlog, 
+  //      SO, do not use one large event from fifo cahce + prefetch cache
   if (!error)
     error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
         log.term, *index, log.buf_size, log.buffer, log.outer, log.flag,
@@ -1577,6 +1580,9 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
     //   << ", flag " << iter->flag
     //   << ", checksum " << iter->checksum;
 
+    //NOTE::large event in fifo cache is different from which in pefetch (read from binlog).
+    //      because appended data will changed(timestamp/pos) after writed into binlog, 
+    //      SO, do not use one large event from fifo cahce + prefetch cache
     if (!error)
       error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
           iter->term, *max_index, iter->buf_size, iter->buffer, iter->outer,

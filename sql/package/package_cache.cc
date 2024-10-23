@@ -240,6 +240,7 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_local_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_force_purge_cache>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_drop_prefetch_channel>(
       CONSENSUS_PROC_SCHEMA);
 

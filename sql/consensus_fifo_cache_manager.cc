@@ -39,6 +39,7 @@ PSI_thread_key key_thread_cleaner;
 
 int ConsensusFifoCacheManager::init(uint64 max_log_cache_size_arg) {
   max_log_cache_size = max_log_cache_size_arg;
+  force_purge_index = 0;
   fifo_cache_size = 0;
   lock_blob_index = 0;
   current_log_count = 0;
@@ -240,8 +241,6 @@ uint64 ConsensusFifoCacheManager::get_first_index_of_fifo_cache() {
 
 void ConsensusFifoCacheManager::set_lock_blob_index(
     uint64 lock_blob_index_arg) {
-  xp::info(ER_XP_FIFO) << "Setting lock_lob_index = [" << lock_blob_index_arg
-                       << "] at ConsensusFifoCacheManager::set_lock_blob_index";
   lock_blob_index = lock_blob_index_arg;
 }
 
@@ -250,21 +249,45 @@ void ConsensusFifoCacheManager::clean_consensus_fifo_cache() {
   while (is_running.load()) {
     mysql_cond_wait(&cleaner_cond, &cleaner_mutex);
     mysql_rwlock_wrlock(&LOCK_consensuslog_cache);
-    while ((fifo_cache_size > max_log_cache_size ||
-            (current_log_count + 1) >= reserve_list_size) &&
-           (current_log_count > 1)) {
-      if (log_cache_list[rleft].index == lock_blob_index &&
-          (current_log_count + 1) < reserve_list_size)
-        break;
-      ConsensusLogEntry old_log = log_cache_list[rleft];
-      if (old_log.buf_size > 0) my_free(old_log.buffer);
-      fifo_cache_size -= old_log.buf_size;
-      current_log_count--;
-      rleft = (rleft + 1) % reserve_list_size;
+    while (current_log_count > 1) {
+      ConsensusLogEntry &old_log = log_cache_list[rleft];
+
+      //NOTE::large event in fifo cache is different from which in pefetch (read from binlog).
+      //      because appended data will changed(timestamp/pos) after writed into binlog, 
+      //      SO, do not use one large event from fifo cahce + prefetch cache.
+
+      // is_half_lob = lob body || lob tailer
+      //  normal  : 
+      //lob header: FLAG_BLOB_START | FLAG_BLOB
+      //lob body  : FLAG_BLOB
+      //lob tailer: FLAG_BLOB_END
+      const bool is_half_lob = (old_log.flag & (Consensus_log_event_flag::FLAG_BLOB | Consensus_log_event_flag::FLAG_BLOB_END))
+                                && !(old_log.flag & Consensus_log_event_flag::FLAG_BLOB_START);
+      if ((fifo_cache_size > max_log_cache_size
+           || current_log_count > reserve_list_size
+           || is_half_lob
+           || (force_purge_index > 0 && force_purge_index >= old_log.index))
+          && (old_log.index != lock_blob_index)) {
+        if (old_log.buf_size > 0) my_free(old_log.buffer);
+        fifo_cache_size -= old_log.buf_size;
+        current_log_count--;
+        rleft = (rleft + 1) % reserve_list_size;
+      } else {
+       break;
+      }
     }
+    force_purge_index.store(0);
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
   }
   mysql_mutex_unlock(&cleaner_mutex);
+}
+
+int ConsensusFifoCacheManager::force_purge_cache(uint64 index) {
+  mysql_mutex_lock(&cleaner_mutex);
+  force_purge_index.store(index);
+  mysql_cond_signal(&cleaner_cond);
+  mysql_mutex_unlock(&cleaner_mutex);
+  return 0;
 }
 
 void *fifo_cleaner_wrapper(void *arg) {

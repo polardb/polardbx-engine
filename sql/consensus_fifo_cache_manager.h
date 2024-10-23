@@ -86,8 +86,8 @@ class ConsensusFifoCacheManager {
     max_log_cache_size = max_log_cache_size_arg;
   }
   void set_lock_blob_index(uint64 lock_blob_index_arg);
-
   void clean_consensus_fifo_cache();
+  int force_purge_cache(uint64 index);
 
  private:
   bool inited;
@@ -99,6 +99,7 @@ class ConsensusFifoCacheManager {
   ConsensusLogEntry *log_cache_list;
   std::atomic<uint64> max_log_cache_size;  // FIFO CACHE MAX SIZE
   std::atomic<uint64> fifo_cache_size;     // FIFO cache status
+  std::atomic<uint64> force_purge_index;
   uint64 lock_blob_index;
   std::atomic<uint64> current_log_count;
   std::atomic<bool> is_running;

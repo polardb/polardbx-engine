@@ -242,6 +242,76 @@ if ($cnt1 == $cnt2)
 	}
 }
 
+--echo # --------- case 5 ---------
+--connection conn3
+set global debug="+d,crash_during_large_event_receive";
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.3.expect
+
+--connection conn2
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+set force_revise=0;
+set sql_log_bin=1;
+
 --connection conn1
+let $index_old= query_get_value("select * from information_schema.CONSENSUS_COMMIT_POSITION", INDEX, 1);
+let $binlog_old= query_get_value("select * from information_schema.CONSENSUS_COMMIT_POSITION", LOGNAME, 1);
+let $position_old= query_get_value("select * from information_schema.CONSENSUS_COMMIT_POSITION", POSITION, 1);
+insert into t1 values (23, repeat("a", 2048576));
+insert into t1 values (24, 'a');
+
+--let $index_trunc= `SELECT $index_old + 2`
+#--eval show binlog events in '$binlog_old' from $position_old;
+
+--connection conn2
+set global consensus_force_promote=1;
+
+show global status like '%fifo%';
+--eval call dbms_consensus.force_purge_cache($index_trunc);
+--sleep 2
+show global status like '%fifo%';
+
+--connection conn3
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.3.expect
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+
+--connection conn2
+
+insert into t1 values (25, repeat("a", 2048576));
+--source include/wait_follower_catchup.inc
+
+let $cnt1= query_get_value("select count(*) as cnt from t1", cnt, 1);
+
+--connection conn1
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+
+--source include/wait_apply_catchup.inc
+
+let $cnt2= query_get_value("select count(*) as cnt from t1", cnt, 1);
+
+--connection conn3
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+
+--source include/wait_apply_catchup.inc
+
+let $cnt3= query_get_value("select count(*) as cnt from t1", cnt, 1);
+if ($cnt1 == $cnt2)
+{
+	if ($cnt2 == $cnt3)
+	{
+		echo consistent!!!!!!!;
+	}
+}
+
+--connection conn2
 drop table t1;
 set global debug="";
+
+--connection conn1
+set global consensus_force_promote=1;
+
+

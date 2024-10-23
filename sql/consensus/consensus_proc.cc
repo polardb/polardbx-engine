@@ -815,6 +815,40 @@ bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
   return (res != 0);
 }
 
+
+/**
+  dbms_consensus.force_purge_cache(...)
+*/
+Proc *Consensus_proc_force_purge_cache::instance() {
+  static Proc *proc = new Consensus_proc_force_purge_cache(key_memory_package);
+  return proc;
+}
+
+Sql_cmd *Consensus_proc_force_purge_cache::evoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+bool Sql_cmd_consensus_proc_force_purge_cache::pc_execute(THD *thd) {
+  int res = 0;
+  const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
+  int consensus_proc_params_idx = 0;
+
+  uint64 index =
+      consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
+          m_list->front());
+
+  res = consensus_log_manager.get_fifo_cache_manager()->force_purge_cache(index);
+
+  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+         thd->m_main_security_ctx.user().str,
+         thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
+  if (res)
+    my_error(ER_CONSENSUS_COMMAND_ERROR, MYF(0), res,
+             alisql::pxserror(alisql::PaxosErrorCode::PE_DEFAULT));
+  return (res != 0);
+}
+
 /**
   dbms_consensus.drop_prefetch_channel(...)
 */

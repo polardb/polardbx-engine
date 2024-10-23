@@ -42,5 +42,29 @@ insert into t1 values (10, repeat("a", 2048576));
 insert into t1 values (11, repeat("a", 2048576));
 insert into t1 values (111, 'a');
 consistent!!!!!!!
+# --------- case 5 ---------
+set global debug="+d,crash_during_large_event_receive";
+set force_revise=1;
+set sql_log_bin=0;
+flush relay logs;
+set force_revise=0;
+set sql_log_bin=1;
+insert into t1 values (23, repeat("a", 2048576));
+insert into t1 values (24, 'a');
+set global consensus_force_promote=1;
+show global status like '%fifo%';
+Variable_name	Value
+consensus_fifo_cache_first_index	2
+consensus_fifo_cache_log_count	114
+consensus_fifo_cache_used_size	22540127
+call dbms_consensus.force_purge_cache(107);;
+show global status like '%fifo%';
+Variable_name	Value
+consensus_fifo_cache_first_index	114
+consensus_fifo_cache_log_count	3
+consensus_fifo_cache_used_size	369
+insert into t1 values (25, repeat("a", 2048576));
+consistent!!!!!!!
 drop table t1;
 set global debug="";
+set global consensus_force_promote=1;
