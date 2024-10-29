@@ -308,6 +308,34 @@ SET DEBUG_SYNC = 'RESET';
 SET DEBUG = '';
 SET GLOBAL innodb_monitor_disable = module_ddl;
 DROP TABLE t1;
+# Rollback delete-mark records after row_log_apply done and before index->is_committed() == true.
+# But after row_log_apply done and before rollback, insert a non-duplicate row with NULL values.
+# ddl shouldn't be aborted.
+CREATE TABLE t1 (id int primary key, c1 int,c2 int);
+INSERT INTO t1 VALUES (1,1,null);
+INSERT INTO t1 VALUES (2,2,null);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL s1 WAIT_FOR s2';
+SET DEBUG_SYNC = 'row_log_apply_after  WAIT_FOR s3';
+ALTER TABLE t1 ADD UNIQUE KEY uk1(c1,c2);
+SET DEBUG_SYNC = 'now WAIT_FOR s1';
+BEGIN;
+DELETE FROM t1 where id=1;
+SET DEBUG_SYNC = 'now SIGNAL s2';
+insert into t1 values (3,1,null);
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL s3';
+select id,c1,c2 from t1 force index(primary);
+id	c1	c2
+1	1	NULL
+2	2	NULL
+3	1	NULL
+select id,c1,c2 from t1 force index(uk1);
+id	c1	c2
+1	1	NULL
+3	1	NULL
+2	2	NULL
+drop table t1;
 SET GLOBAL DEBUG = '';
 SET GLOBAL innodb_file_per_table = @global_innodb_file_per_table_orig;
 SET GLOBAL innodb_monitor_reset = default;

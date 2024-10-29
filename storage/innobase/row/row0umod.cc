@@ -694,8 +694,9 @@ try_again:
             << " at: " << rec_index_print(btr_cur_get_rec(btr_cur), index);
       }
 
-      if (btr_cur->up_match >= dict_index_get_n_unique(index) ||
-          btr_cur->low_match >= dict_index_get_n_unique(index)) {
+      if ((btr_cur->up_match >= dict_index_get_n_unique(index) ||
+           btr_cur->low_match >= dict_index_get_n_unique(index)) &&
+          (!index->n_nullable || !dtuple_contains_null(entry))) {
         if (index->is_committed()) {
           ib::warn(ER_IB_MSG_1040) << "Record in index " << index->name
                                    << " was not found on rollback, and"
