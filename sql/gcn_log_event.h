@@ -113,11 +113,10 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
 #endif
 
   /**
-    Get XA info in Gcn_log_event.
-    @params[out]    gcn         GCN, CSR, PMMT_FLAG
-    @params[out]    xa_branch   xa branch info
+    Get XA info from Gcn_log_event and copy it to XA_specification.
+    @param[out] xa_spec  XA_specification
   */
-  void copy_xa(MyGCN *gcn, xa_branch_t *xa_branch) const;
+  void copy_to_xa_spec(XA_specification *xa_spec) const;
 
  private:
   size_t get_gcn_length() const { return have_gcn() ? GCN_LENGTH : 0; }

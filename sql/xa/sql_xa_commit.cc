@@ -90,6 +90,8 @@ bool Sql_cmd_xa_commit::trans_xa_commit(THD *thd) {
   /* Inform clone handler of XA operation. */
   Clone_handler::XA_Operation xa_guard(thd);
 
+  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
+
   if (!xid_state->has_same_xid(this->m_xid)) {
     return this->process_detached_xa_commit(thd);
   }
@@ -112,6 +114,8 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
     if ((res = r)) my_error(r == 1 ? ER_XA_RBROLLBACK : ER_XAER_RMERR, MYF(0));
   } else if (xid_state->has_state(XID_STATE::XA_PREPARED) &&
              m_xa_opt == XA_NONE) {
+    thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
+
     MDL_request mdl_request;
 
     /*
@@ -198,6 +202,7 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
 bool Sql_cmd_xa_commit::process_detached_xa_commit(THD *thd) {
   DBUG_TRACE;
 
+  thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
   raii::Sentry<> dispose_guard{[this]() -> void { this->dispose(); }};
   if (this->find_and_initialize_xa_context(thd)) return true;
   if (this->acquire_locks(thd)) return true;

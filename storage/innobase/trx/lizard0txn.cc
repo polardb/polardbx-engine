@@ -72,27 +72,21 @@ void txn_desc_t::resurrect_xa(const proposal_mark_t &txn_pmmt,
   maddr = txn_maddr;
 }
 
-void txn_desc_t::copy_xa_when_prepare(const MyGCN &xa_gcn,
+void txn_desc_t::copy_xa_when_prepare(const gcn_tuple_t &xa_gcn,
                                       const xa_branch_t &xa_branch) {
-  ut_ad(xa_gcn.is_pmmt_gcn());
-  ut_ad(xa_gcn.decided());
-  ut_ad(xa_gcn.pushed_up());
-  pmmt = xa_gcn.clone_pmmt();
+  pmmt.csr = xa_gcn.csr;
+  pmmt.gcn = xa_gcn.gcn;
 
   ut_ad(!xa_branch.is_null());
   branch = xa_branch;
 }
 
-void txn_desc_t::copy_xa_when_commit(const MyGCN &xa_gcn,
+void txn_desc_t::copy_xa_when_commit(const gcn_tuple_t &xa_gcn,
                                      const xa_addr_t &xa_maddr) {
-  ut_ad(xa_gcn.is_cmmt_gcn());
-  ut_ad(xa_gcn.decided());
-  ut_ad(xa_gcn.pushed_up());
-
-  cmmt.copy_gcn(xa_gcn.clone_cmmt());
+  cmmt.csr = xa_gcn.csr;
+  cmmt.gcn = xa_gcn.gcn;
   maddr = xa_maddr;
 }
-
 
 namespace lizard {
 

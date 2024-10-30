@@ -113,7 +113,7 @@
 
 #include "ppi/ppi_statement.h"
 
-#include "sql/lizard/lizard_service.h"  // gcn_t, struct MyGCN...
+#include "sql/lizard/lizard_service.h"  // gcn_t, struct MyVisionGCN...
 #include "sql/trans_proc/returning_parse.h"
 
 #include "sql/ccl/ccl.h"
@@ -121,6 +121,9 @@
 #include "sql/sql_common_ext.h"
 
 #include "polarx_proc/changeset_common.h"
+
+#include "sql/xa/lizard_cmmt_policy.h"
+#include "sql/lizard_sql_class.h"
 
 namespace im {
 namespace recycle_bin {
@@ -2081,10 +2084,6 @@ class THD : public MDL_context_owner,
     bool m_transaction_rollback_request;
 
     PPI_transaction *m_ppi_transaction;
-
-    /** owned_commnit_gcn might be set by loading SYS_GCN for attachable trx.
-    Bakcup and resotre owned_commit_gcn. */
-    MyGCN owned_commit_gcn;
   };
 
  public:
@@ -2123,6 +2122,8 @@ class THD : public MDL_context_owner,
 
     /// Transaction state data.
     Transaction_state m_trx_state;
+
+    lizard::Transaction_policy_state m_policy_state;
 
    private:
     Attachable_trx(const Attachable_trx &);
@@ -4874,13 +4875,9 @@ class THD : public MDL_context_owner,
 #endif
 
  public:
-  MyGCN owned_commit_gcn;
-
   MyVisionGCN owned_vision_gcn;
 
-  xa_branch_t owned_xa_branch;
-
-  xa_addr_t owned_master_addr;
+  lizard::Commit_policy_ctx cpolicy_ctx;
 
   struct im::ST_CONN_ATTR conn_attr;
   /** Returning clause lex */
@@ -4888,16 +4885,20 @@ class THD : public MDL_context_owner,
 
   bool xpaxos_replication_channel;
 
-  void reset_gcn_variables() {
+  void reset_trans_policy() {
     variables.innodb_snapshot_gcn = GCN_NULL;
     variables.innodb_commit_gcn = GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
     variables.opt_query_via_flashback_area = false;
 
-    owned_commit_gcn.reset();
-    owned_vision_gcn.reset();
-    owned_xa_branch.reset();
-    owned_master_addr.reset();
+    owned_vision_gcn = GCN_NULL;
+
+    cpolicy_ctx.reset();
+  }
+  /** For attachable transaction, use single shard instead*/
+  void new_attachable_policy() {
+    reset_trans_policy();
+    cpolicy_ctx.activate_single_shard();
   }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }

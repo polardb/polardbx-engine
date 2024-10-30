@@ -729,7 +729,6 @@ SET(SQL_SHARED_SOURCES
   inventory/inventory_hint.cc
   lizard/undo_proc.cc
   lizard_sql_class.cc
-  lizard/lizard_service.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

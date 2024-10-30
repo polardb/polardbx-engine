@@ -28,6 +28,7 @@
 #include "sql/xa.h"
 
 class THD;
+class TC_LOG;
 struct LEX;
 
 namespace lizard {

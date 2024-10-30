@@ -36,28 +36,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "event_reader.h"
 #include "event_reader_macros.h"
 
-#include "sql/lizard/lizard_service.h"
+#include "sql/xa/lizard_cmmt_policy.h"
 
 namespace binary_log {
 
-Gcn_event::Gcn_event(const MyGCN *owned_commit_gcn,
+Gcn_event::Gcn_event(const lizard::Commit_policy *policy,
                      const uint64_t innodb_commit_gcn,
-                     const uint64_t innodb_snapshot_gcn,
-                     const xa_branch_t *owned_xa_branch)
+                     const uint64_t innodb_snapshot_gcn)
     : Binary_log_event(GCN_LOG_EVENT), flags(0), gcn(GCN_NULL) {
-  if (!owned_commit_gcn->is_null()) {
-    flags |= FLAG_HAVE_GCN;
-    gcn = owned_commit_gcn->gcn();
-
-    if (owned_commit_gcn->is_assigned()) {
-      flags |= FLAG_GCN_ASSIGNED;
-    }
-
-    if (owned_commit_gcn->is_pmmt_gcn()) {
-      flags |= FLAG_GCN_PROPOSAL;
-    }
-  }
-
   if (innodb_commit_gcn != GCN_NULL) {
     flags |= FLAG_HAVE_COMMITTED_SEQ;
   }
@@ -66,10 +52,7 @@ Gcn_event::Gcn_event(const MyGCN *owned_commit_gcn,
     flags |= FLAG_HAVE_SNAPSHOT_SEQ;
   }
 
-  if (!owned_xa_branch->is_null()) {
-    flags |= FLAG_HAVE_BRANCH_COUNT;
-    branch = *owned_xa_branch;
-  }
+  policy->build_gcn_event(this);
 }
 
 Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
@@ -106,5 +89,42 @@ Gcn_event::Gcn_event(const char *buf, const Format_description_event *fde)
   READER_CATCH_ERROR;
   BAPI_VOID_RETURN;
 }
+
+void Gcn_event::build_gcn(const gcn_tuple_t &tuple, bool is_proposal) {
+  DBUG_EXECUTE_IF("simulate_old_8018_allow_null_gcn",
+                  { (const_cast<gcn_tuple_t &>(tuple)).reset(); });
+
+  if (!tuple.is_null()) {
+    flags |= FLAG_HAVE_GCN;
+    gcn = tuple.gcn;
+
+    if (tuple.csr == csr_t::CSR_ASSIGNED) {
+      flags |= FLAG_GCN_ASSIGNED;
+    }
+
+    if (is_proposal) {
+      flags |= FLAG_GCN_PROPOSAL;
+    }
+  }
+}
+
+void Gcn_event::build_branch(const xa_branch_t &in_branch) {
+  if (!in_branch.is_null()) {
+    flags |= FLAG_HAVE_BRANCH_COUNT;
+    branch = in_branch;
+  }
+}
+
+const gcn_tuple_t Gcn_event::clone_pmmt() const {
+  assert(is_pmmt_gcn());
+  return {gcn, csr()};
+}
+
+const gcn_tuple_t Gcn_event::clone_cmmt() const {
+  assert(is_cmmt_gcn());
+  return {gcn, csr()};
+}
+
+const xa_branch_t Gcn_event::clone_branch() const { return branch; }
 
 }  // end namespace binary_log

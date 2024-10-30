@@ -374,8 +374,6 @@ void THD::Transaction_state::backup(THD *thd) {
   this->m_transaction_rollback_request = thd->transaction_rollback_request;
 
   this->m_ppi_transaction = thd->ppi_transaction;
-
-  this->owned_commit_gcn = thd->owned_commit_gcn;
 }
 
 void THD::Transaction_state::restore(THD *thd) {
@@ -396,18 +394,19 @@ void THD::Transaction_state::restore(THD *thd) {
   thd->transaction_rollback_request = this->m_transaction_rollback_request;
 
   thd->ppi_transaction = this->m_ppi_transaction;
-
-  thd->owned_commit_gcn = this->owned_commit_gcn;
 }
 
 THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
     : m_thd(thd),
       m_reset_lex(RESET_LEX),
       m_prev_attachable_trx(prev_trx),
-      m_trx_state() {
+      m_trx_state(),
+      m_policy_state() {
   // Save the transaction state.
 
   m_trx_state.backup(m_thd);
+
+  m_policy_state.backup(m_thd);
 
   // Save and reset query-tables-list and reset the sql-command.
   //
@@ -496,7 +495,7 @@ THD::Attachable_trx::Attachable_trx(THD *thd, Attachable_trx *prev_trx)
 
   m_thd->ppi_transaction = nullptr;
 
-  m_thd->owned_commit_gcn.reset();
+  m_thd->new_attachable_policy();
 
   PPI_TRANSACTION_CALL(backup_transaction)(m_thd->ppi_thread);
 
@@ -537,6 +536,8 @@ THD::Attachable_trx::~Attachable_trx() {
   // Restore the transaction state.
 
   m_trx_state.restore(m_thd);
+
+  m_policy_state.restore(m_thd);
 
   m_thd->restore_backup_open_tables_state(&m_trx_state.m_open_tables_state);
 
@@ -741,8 +742,8 @@ THD::THD(bool enable_plugins)
       m_inside_system_variable_global_update(false),
       bind_parameter_values(nullptr),
       bind_parameter_values_count(0),
-      owned_commit_gcn(),
       owned_vision_gcn(),
+      cpolicy_ctx(),
       lex_returning(new im::Lex_returning(false, mem_root)),
       xpaxos_replication_channel(false) {
   main_lex->reset();
@@ -1166,6 +1167,12 @@ void THD::init(void) {
     ALTER USER statements.
   */
   m_disable_password_validation = false;
+
+  /** Lizard : init all gcn variables here. */
+  variables.innodb_snapshot_gcn = GCN_NULL;
+  variables.innodb_commit_gcn = GCN_NULL;
+  variables.innodb_current_snapshot_gcn = false;
+  variables.opt_query_via_flashback_area = false;
 }
 
 void THD::init_query_mem_roots() {

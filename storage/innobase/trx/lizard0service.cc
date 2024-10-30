@@ -49,7 +49,8 @@ void MyXAInfo::init_by_txn_undo(const trx_id_t tid,
 
   if (txn_undo) {
     if (!txn_undo->pmmt.is_null()) {
-      txn_undo->pmmt.copy_to_my_gcn(&gcn);
+      txn_undo->pmmt.copy_to_gcn(gcn);
+      is_proposal = true;
     }
     undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
     slot = {tid, slot_ptr};
@@ -73,7 +74,8 @@ void MyXAInfo::init_by_txn_slot(const txn_slot_t *txn_slot) {
   status = txn_slot->is_rollback() ? XA_status::ROLLBACK : XA_status::COMMIT;
   /** if TXN_UNDO_LOG_COMMITED or TXN_UNDO_LOG_PURGED, must be
   non proposal. */
-  txn_slot->image.copy_to_my_gcn(&gcn);
+  txn_slot->image.copy_to_gcn(gcn);
+  is_proposal = false;
 
   slot = {txn_slot->trx_id, txn_slot->slot_ptr};
   branch = txn_slot->branch;

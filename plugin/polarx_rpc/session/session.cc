@@ -408,7 +408,7 @@ err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
   auto thd = get_thd();
 #ifdef MYSQL8
   /// lizard specific GCN timestamp
-  if (!thd->in_active_multi_stmt_transaction()) thd->reset_gcn_variables();
+  if (!thd->in_active_multi_stmt_transaction()) thd->reset_trans_policy();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->variables.innodb_current_snapshot_gcn = true;
   if (msg.has_snapshot_seq()) {
@@ -417,7 +417,6 @@ err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
   }
   if (msg.has_commit_seq()) {
     thd->variables.innodb_commit_gcn = msg.commit_seq();
-    thd->owned_commit_gcn.assign_from_var(thd->variables.innodb_commit_gcn);
   }
   if (msg.has_query_via_flashback_area() && msg.query_via_flashback_area()) {
     thd->variables.opt_query_via_flashback_area = true;
@@ -640,7 +639,7 @@ err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
   auto thd = get_thd();
 #ifdef MYSQL8
   /// lizard specific GCN timestamp
-  if (!thd->in_active_multi_stmt_transaction()) thd->reset_gcn_variables();
+  if (!thd->in_active_multi_stmt_transaction()) thd->reset_trans_policy();
   if (msg.has_use_cts_transaction() && msg.use_cts_transaction())
     thd->variables.innodb_current_snapshot_gcn = true;
   if (msg.has_snapshot_seq()) {
@@ -649,7 +648,6 @@ err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
   }
   if (msg.has_commit_seq()) {
     thd->variables.innodb_commit_gcn = msg.commit_seq();
-    thd->owned_commit_gcn.assign_from_var(thd->variables.innodb_commit_gcn);
   }
   if (msg.has_query_via_flashback_area() && msg.query_via_flashback_area()) {
     thd->variables.opt_query_via_flashback_area = true;

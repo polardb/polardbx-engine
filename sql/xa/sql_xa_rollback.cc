@@ -62,6 +62,10 @@ bool Sql_cmd_xa_rollback::trans_xa_rollback(THD *thd) {
 
   /* Inform clone handler of XA operation. */
   Clone_handler::XA_Operation xa_guard(thd);
+
+  thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
+  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
+
   if (!xid_state->has_same_xid(this->m_xid)) {
     return this->process_detached_xa_rollback(thd);
   }
@@ -134,6 +138,7 @@ bool Sql_cmd_xa_rollback::process_detached_xa_rollback(THD *thd) {
 
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_rollback_xa_trx");
   this->assign_xid_to_thd(thd);
+
   if (tc_log == nullptr) {
     this->m_result =
         trx_coordinator::rollback_detached_by_xid(thd) || this->m_result;

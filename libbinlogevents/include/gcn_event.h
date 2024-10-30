@@ -34,9 +34,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define GCN_EVENT_H
 
 #include "control_events.h"
-#include "sql/lizard/lizard_service.h"  // MyGCN...
+#include "sql/lizard/lizard_service.h"  // MyVisionGCN...
 
 class THD;
+
+namespace lizard {
+class Commit_policy;
+}
 
 namespace binary_log {
 /**
@@ -127,10 +131,13 @@ class Gcn_event : public Binary_log_event {
   /**
     Constructor.
   */
-  explicit Gcn_event(const MyGCN *owned_commit_gcn,
+  explicit Gcn_event(const lizard::Commit_policy *policy,
                      const uint64_t innodb_commit_gcn,
-                     const uint64_t innodb_snapshot_gcn,
-                     const xa_branch_t *owned_xa_branch);
+                     const uint64_t innodb_snapshot_gcn);
+
+  void build_gcn(const gcn_tuple_t &tuple, bool is_proposal);
+
+  void build_branch(const xa_branch_t &in_branch);
 
 #ifndef HAVE_MYSYS
   // TODO(WL#7684): Implement the method print_event_info and print_long_info
@@ -148,6 +155,12 @@ class Gcn_event : public Binary_log_event {
   bool is_cmmt_gcn() const { return !is_pmmt_gcn(); }
 
   bool have_branch_count() const { return flags & FLAG_HAVE_BRANCH_COUNT; }
+
+  const gcn_tuple_t clone_pmmt() const;
+
+  const gcn_tuple_t clone_cmmt() const;
+
+  const xa_branch_t clone_branch() const;
 };
 
 }  // end namespace binary_log

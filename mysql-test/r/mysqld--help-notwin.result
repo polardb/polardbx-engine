@@ -350,6 +350,8 @@ The following options may be given as the first argument:
  --consensus-disable-election 
  Disable consensus election and stepdown. Disabled by
  default.
+ --consensus-disable-empty-xa 
+ disable empty xa for debug
  --consensus-disable-fifo-cache 
  disable consensus fifo cache (run with weak consensus
  mode)
@@ -2187,6 +2189,7 @@ consensus-checksum FALSE
 consensus-configure-change-timeout 60000
 consensus-disable-commit-before-change-leader FALSE
 consensus-disable-election FALSE
+consensus-disable-empty-xa FALSE
 consensus-disable-fifo-cache FALSE
 consensus-dynamic-easyindex TRUE
 consensus-election-timeout 5000

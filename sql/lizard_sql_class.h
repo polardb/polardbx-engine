@@ -37,29 +37,56 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_inttypes.h"
 
 #include "sql/lizard/lizard_service.h"
+#include "sql/xa/lizard_cmmt_policy.h"
 
 class THD;
 
 namespace lizard {
-class GCN_context_backup {
- public:
-  GCN_context_backup(THD *thd);
 
-  ~GCN_context_backup();
+/** Transaction policy state which included query policy and commit policy */
+class Transaction_policy_state {
+ public:
+  explicit Transaction_policy_state();
+
+  ~Transaction_policy_state() {}
+
+  /** Backup transaction policy
+   *
+   * @param[in]		which to backup.*/
+  void backup(const THD *thd);
+
+  /** Restore transtaction policy to thd.
+   *
+   * @param[out]	which to restore. */
+  void restore(THD *thd) const;
 
  private:
-  THD *m_thd;
-
-  ulonglong m_innodb_snapshot_gcn_var;
-  ulonglong m_innodb_commit_gcn_var;
-  ulonglong m_innodb_current_snapshot_gcn_var;
-  bool m_opt_query_via_flashback_area_var;
-
-  MyGCN m_owned_commit_gcn;
+  /** Query policy related context. */
+  ulonglong m_innodb_snapshot_gcn;
+  ulonglong m_innodb_commit_gcn;
+  ulonglong m_innodb_current_snapshot_gcn;
+  bool m_opt_query_via_flashback_area;
   MyVisionGCN m_owned_vision_gcn;
-  xa_branch_t m_owned_xa_branch;
-  xa_addr_t m_owned_master_addr;
+
+  /** Commit policy related context. */
+  Commit_policy_ctx m_cpolicy_ctx;
 };
+
+/** Backup current transaction policy and begin a single shard commit when
+ * statement cause implicit commit.*/
+class Implicit_trans_policy_guard {
+ public:
+  explicit Implicit_trans_policy_guard(THD *thd);
+
+  ~Implicit_trans_policy_guard() { m_state.restore(m_thd); }
+
+ private:
+  /** Backup target.*/
+  THD *m_thd;
+  /** backuped policy state. */
+  Transaction_policy_state m_state;
+};
+
 }  // namespace lizard
 
 #endif

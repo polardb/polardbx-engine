@@ -37,8 +37,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <limits>
 #include <tuple>
 
-struct MyGCN;
-
 /** Scn number type was defined unsigned long long */
 typedef uint64_t scn_t;
 
@@ -89,7 +87,9 @@ typedef enum cn_category_t ccr_t;
 
 /** GCN tuple structure, it will be used by:
  *
- *  1) MyGCN, which come from user client input
+ *  1) Commit policy, whichi is used to decide GCN when commit.
+ *
+ *  2) MyXAinfo, which is used to search gcn info.
  *
  *  2) Proposal gcn, which is proposed by CN customized XA.
  *

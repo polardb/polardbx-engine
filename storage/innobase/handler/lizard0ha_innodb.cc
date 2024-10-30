@@ -272,67 +272,6 @@ void innobase_flush_gpp_stat() {
   dict_sys->for_each_table(flusher);
 }
 
-void innobase_decide_xa_when_prepare(MyGCN *gcn) {
-  lizard::decide_xa_when_prepare(gcn);
-}
-
-void innobase_decide_xa_when_commit(THD *thd, MyGCN *gcn,
-                                    xa_addr_t *master_addr) {
-  /* We request to stop master thread in srv_shutdown, which is invoked
-  after DD has been shut down. Since that point of time, we must not need
-  transaction objects for any reasons. */
-  ut_ad(srv_shutdown_state_matches([](auto state) {
-    return state < SRV_SHUTDOWN_MASTER_STOP ||
-           state == SRV_SHUTDOWN_EXIT_THREADS;
-  }));
-
-  trx_t *trx = thd_to_trx_if_have(thd);
-
-  lizard::decide_xa_when_commit(trx, gcn, master_addr);
-}
-
-void innobase_decide_xa_when_commit_by_xid(handlerton *hton, XID *xid,
-                                           MyGCN *gcn, xa_addr_t *master_addr) {
-  trx_t *trx = trx_get_trx_by_xid(xid);
-
-  if (trx != nullptr) {
-    /* Side effect of retrieving the transaction is XID being set to null */
-    *trx->xid = *xid;
-  }
-
-  lizard::decide_xa_when_commit(trx, gcn, master_addr);
-}
-
-/**
- * InnoDB storage copy external commit number (gcn) if assigned by user when
- * commit
- *
- * @param[in]		user context
- * @param[in/out]	innobase trx context */
-void innobase_copy_user_commit(THD *thd, trx_t *trx) {
-  ut_ad(trx->txn_desc.cmmt.gcn == GCN_NULL);
-  innobase_decide_xa_when_commit(thd, &thd->owned_commit_gcn,
-                                 &thd->owned_master_addr);
-
-  trx->txn_desc.copy_xa_when_commit(thd->owned_commit_gcn, thd->owned_master_addr);
-}
-
-/**
- * InnoDB storage copy external proposal number (gcn) if assigned by user when
- * prepare
- * @param[in/out]	user context
- * @param[in/out]	innobase trx context */
-void innobase_copy_user_prepare(THD *thd, trx_t *trx) {
-  ut_ad(trx->txn_desc.pmmt.is_null());
-
-  innobase_decide_xa_when_prepare(&thd->owned_commit_gcn);
-
-  if (thd->owned_commit_gcn.is_pmmt_gcn()) {
-    trx->txn_desc.copy_xa_when_prepare(thd->owned_commit_gcn,
-                                       thd->owned_xa_branch);
-  }
-}
-
 /**
  * Check if all transaction slots is reserved enough time.
  * @return true if reserved enough time. */
@@ -340,6 +279,30 @@ bool innobase_trx_slot_check_retention() {
   DBUG_EXECUTE_IF("ac_not_care_txn_retention", return true;);
 
   return lizard::Undo_retention::retention_time || lizard::txn_retention_time;
+}
+
+trx_t *innobase_get_trx_by_thd(THD *thd) {
+  trx_t *trx;
+  auto xid_state = thd->get_transaction()->xid_state();
+
+  ut_ad(xid_state->check_in_xa(false));
+
+  if (!xid_state->is_detached()) {
+    ut_ad(srv_shutdown_state_matches([](auto state) {
+      return state < SRV_SHUTDOWN_MASTER_STOP ||
+             state == SRV_SHUTDOWN_EXIT_THREADS;
+    }));
+
+    trx = thd_to_trx_if_have(thd);
+  } else {
+    trx = trx_get_trx_by_xid(xid_state->get_xid());
+    if (trx != nullptr) {
+      /* Side effect of retrieving the transaction is XID being set to null */
+      *trx->xid = *xid_state->get_xid();
+    }
+  }
+
+  return trx;
 }
 
 /**
@@ -375,10 +338,6 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.trunc_status = innobase_trunc_status;
   hton->ext.purge_status = innobase_purge_status;
   hton->ext.flush_gpp_stat = innobase_flush_gpp_stat;
-  hton->ext.decide_xa_when_prepare = innobase_decide_xa_when_prepare;
-  hton->ext.decide_xa_when_commit = innobase_decide_xa_when_commit;
-  hton->ext.decide_xa_when_commit_by_xid =
-      innobase_decide_xa_when_commit_by_xid;
   hton->ext.trx_slot_check_retention = innobase_trx_slot_check_retention;
 }
 

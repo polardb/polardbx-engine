@@ -312,21 +312,11 @@ static Sys_var_ulonglong Sys_innodb_snapshot_seq(
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(set_owned_vision_gcn_on_update));
 
-static bool set_owned_commit_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
-  if (thd->variables.innodb_commit_gcn == GCN_NULL) {
-    thd->owned_commit_gcn.reset();
-  } else {
-    thd->owned_commit_gcn.assign_from_var(thd->variables.innodb_commit_gcn);
-  }
-  return false;
-}
-
 static Sys_var_ulonglong Sys_innodb_commit_seq(
     "innodb_commit_seq", "Innodb commit sequence",
     HINT_UPDATEABLE SESSION_ONLY(innodb_commit_gcn), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(GCN_INITIAL, GCN_NULL), DEFAULT(GCN_NULL),
-    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-    ON_UPDATE(set_owned_commit_gcn_on_update));
+    VALID_RANGE(GCN_INITIAL, GCN_NULL), DEFAULT(GCN_NULL), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0));
 
 static Sys_var_bool Sys_only_report_warning_when_skip(
     "only_report_warning_when_skip_sequence",

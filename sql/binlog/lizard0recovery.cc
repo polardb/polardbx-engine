@@ -96,11 +96,7 @@ void binlog::Binlog_recovery::process_gcn_event(const Gcn_log_event &ev) {
     return;
   }
 
-  MyGCN gcn;
-  xa_branch_t xa_branch;
-  ev.copy_xa(&gcn, &xa_branch);
-  m_xa_spec.set_when_recovery(gcn, xa_branch);
-  /** Master address info is not written into BINLOG. */
+  ev.copy_to_xa_spec(&m_xa_spec);
 }
 
 /** Gather internal commit xid and spec.*/

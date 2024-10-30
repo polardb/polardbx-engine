@@ -37,6 +37,9 @@ dbms_outln	del_outline	ADMIN_PROC	LONGLONG
 dbms_outln	flush_outline	ADMIN_PROC	NULL
 dbms_outln	preview_outline	ADMIN_PROC	VARCHAR, VARCHAR
 dbms_outln	show_outline	ADMIN_PROC	NULL
+dbms_proxy	get_token	ADMIN_PROC	NULL
+dbms_proxy	reset_db	TRANS_PROC	NULL
+dbms_proxy	switch_user	TRANS_PROC	VARCHAR, VARCHAR, VARCHAR
 dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL

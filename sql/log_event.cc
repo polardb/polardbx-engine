@@ -181,6 +181,7 @@ Error_log_throttle slave_ignored_err_throttle(
 
 #include "sql/gcn_log_event.h"
 #include "sql/xa/lizard_xa_trx.h"
+#include "sql/raii/sentry.h"
 
 struct mysql_mutex_t;
 
@@ -5261,6 +5262,11 @@ end:
   thd->first_successful_insert_id_in_prev_stmt = 0;
   thd->stmt_depends_on_first_successful_insert_id_in_prev_stmt = false;
   thd->mem_root->ClearForReuse();
+
+  if (ends_group()) {
+    thd->cpolicy_ctx.reset();
+  }
+
   return thd->is_slave_error;
 }
 
@@ -6320,6 +6326,7 @@ int Xid_apply_log_event::do_apply_event_worker(Slave_worker *w) {
       error = w->commit_positions(this, ptr_group, w->is_transactional());
   }
 err:
+  thd->cpolicy_ctx.reset();
   return error;
 }
 
@@ -6499,6 +6506,7 @@ err:
   mysql_cond_broadcast(&rli_ptr->data_cond);
   mysql_mutex_unlock(&rli_ptr->data_lock);
 
+  thd->cpolicy_ctx.reset();
   return error;
 }
 
@@ -12805,6 +12813,8 @@ void Incident_log_event::print(FILE *,
 int Incident_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_TRACE;
 
+  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
+
   /*
     It is not necessary to do GTID related check if the error
     'ER_SLAVE_INCIDENT' is ignored.
@@ -14176,6 +14186,9 @@ int Transaction_payload_log_event::do_apply_event(Relay_log_info const *rli) {
                      __FILE__, __LINE__);
   }
   THD_STAGE_INFO(thd, old_stage);
+
+  assert(ends_group());
+  thd->cpolicy_ctx.reset();
 
   return res;
 }

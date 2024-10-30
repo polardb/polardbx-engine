@@ -8290,7 +8290,9 @@ int MYSQL_BIN_LOG::prepare(THD *thd, bool all) {
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("after_ha_prepare_low");
   // Invoke `commit` if we're dealing with `XA PREPARE` in order to use BCG
   // to write the event to file.
-  if (!error && all && is_xa_prepare(thd)) return this->commit(thd, true);
+  if (!error && all && is_xa_prepare(thd)) {
+    return this->commit(thd, true);
+  }
 
   return error;
 }
@@ -8364,6 +8366,14 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       if (trx_coordinator::commit_in_engines(thd, all)) return RESULT_ABORTED;
       return RESULT_SUCCESS;
     }
+
+    /** When sql_log_bin is set as false for the current session before
+     * executing any statement, cache_mngr would haven't been allocated.
+     * For Xa prepare, @func:set_prepared_in_tc_in_engines will be skipped.
+     * However, we still need to call @func:commit_policy_decide to make sure
+     * that proper GCN is generated.
+     */
+    lizard::commit_policy_decide(thd);
 
     // xpaxos apply not use 2pc for xa prepare, no prepare undo saved. we need
     // fix it
@@ -8586,6 +8596,14 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
   } else if (!skip_commit) {
     if (trx_coordinator::commit_in_engines(thd, all))
       return RESULT_INCONSISTENT;
+  } else {
+    /** When sql_log_bin is set as false for the current session, no binlog will
+     * be written (cache_mngr may not be nullptr). Ordered_commit will not be
+     * called for this case. As a result, @func:set_prepared_in_tc_in_engines
+     * will be skipped when exectuing XA Prepare. However, we still need to call
+     * @func:commit_policy_decide to make sure that proper GCN is generated.
+     */
+    lizard::commit_policy_decide(thd);
   }
 
   return RESULT_SUCCESS;
@@ -12212,28 +12230,50 @@ bool Gcn_manager::write_gcn(THD *thd, Binlog_event_writer *writer) {
 bool Gcn_manager::assign_gcn_to_flush_group(THD *first_seen) {
   bool err = false;
 
+  /**
+    Some components, such as CDC, rely on the order of GCN and Binlog to meet
+    certain conditions. For example, if the Binlog has the form:
+    P1...C1...P2...C2, then it is assumed that the GCN of C1 must be less than
+    C2. In regular TSO transactions, this is satisfied. This is because the
+    timing is as follows:
+    1.  XA PREPARE (P1)
+    2.  GET GCN1
+    3.1 XA COMMIT with GCN1 (C1)
+    3.2 XA PREPARE (P2)
+    4.  GET GCN2
+    5.  XA COMMIT (C2)
+    Step-3.1 and Step-3.2 can happen in any order, but Step-4 definitely occurs
+    after Step-2.
+
+    However, for Async Commit, the above conditions may not be met:
+    1.  ac_prepare (P1 with PRE_GCN1 = 85)
+    2.  decide PROPOSAL_GCN1 = max(PRE_GCN1 = 85, SYS_GCN = 90)
+    3.1 ac_commit (C1 with GCN1 = 100), and SYS_GCN is not yet pushed up
+    3.2 ac_prepare (P2 with PRE_GCN2 = 87)
+    3.3 decide PROPOSAL_GCN2 = max(PRE_GCN2 = 87, SYS_GCN = 90)
+    3.4 push up SYS_GCN = 100 because C1 (GCN1 = 100)
+    4.  ac_commit (C2 with GCN2 = 87)
+    Notes, 3.1-3.4 belong to the same BGC (Binlog Group Commit).
+    The above situation obviously violates the preset assumptions because:
+    GCN1 > GCN2
+
+    Delaying the increase of SYS_GCN does not violate any distributed
+    consistency guarantee, but in order to maintain the original assumption, the
+    increase of SYS_GCN will be done when ac_commit deciding to ensure that the
+    following conditions are met:
+    GCN1 <= PROPOSAL_GCN2 <= GCN2
+
+    More specifically, for Async Commit, the above process will become:
+    1.  ac_prepare (P1 with PRE_GCN1 = 85)
+    2.  decide PROPOSAL_GCN1 = max(PRE_GCN1 = 85, SYS_GCN = 90)
+    3.1 ac_commit (C1 with GCN1 = 100), and SYS_GCN is also pushed up to 100
+    3.2 ac_prepare (P2 with PRE_GCN2 = 87)
+    3.3 decide PROPOSAL_GCN2 = max(PRE_GCN2 = 87, SYS_GCN = 100)
+    4.  ac_commit (C2 with GCN2 >= 100)
+
+  */
   for (THD *head = first_seen; head; head = head->next_to_commit) {
-    if (head->owned_commit_gcn.is_pmmt_gcn()) {
-      innodb_hton->ext.decide_xa_when_prepare(&head->owned_commit_gcn);
-    } else {
-      assert(head->owned_commit_gcn.is_cmmt_gcn() ||
-             head->owned_commit_gcn.is_null());
-      auto xid_state = head->get_transaction()->xid_state();
-
-      if (!xid_state->check_in_xa(false) || !xid_state->is_detached()) {
-        innodb_hton->ext.decide_xa_when_commit(head, &head->owned_commit_gcn,
-                                               &head->owned_master_addr);
-      } else {
-        innodb_hton->ext.decide_xa_when_commit_by_xid(
-            innodb_hton, xid_state->get_xid(), &head->owned_commit_gcn,
-            &head->owned_master_addr);
-      }
-    }
-
-    assert(!head->owned_commit_gcn.is_null());
-
-    DBUG_EXECUTE_IF("simulate_old_8018_allow_null_gcn",
-                    { head->owned_commit_gcn.reset(); });
+    lizard::commit_policy_decide(head);
   }
   return err;
 }

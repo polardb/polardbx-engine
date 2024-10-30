@@ -183,9 +183,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #ifdef MYSQL_SERVER
 Gcn_log_event::Gcn_log_event(THD *thd_arg)
-    : binary_log::Gcn_event(
-          &thd_arg->owned_commit_gcn, thd_arg->variables.innodb_commit_gcn,
-          thd_arg->variables.innodb_snapshot_gcn, &thd_arg->owned_xa_branch),
+    : binary_log::Gcn_event(thd_arg->cpolicy_ctx.current_policy(),
+                            thd_arg->variables.innodb_commit_gcn,
+                            thd_arg->variables.innodb_snapshot_gcn),
       Log_event(thd_arg, LOG_EVENT_IGNORABLE_F,
                 Log_event::EVENT_TRANSACTIONAL_CACHE,
                 Log_event::EVENT_NORMAL_LOGGING, header(), footer()) {
@@ -292,11 +292,10 @@ int Gcn_log_event::do_apply_event(Relay_log_info const *rli) {
   MY_UNUSED(rli);
   assert(rli->info_thd == thd);
 
-  copy_xa(&thd->owned_commit_gcn, &thd->owned_xa_branch);
-
-  if (have_gcn()) {
-    // thd->variables.innodb_commit_gcn = gcn;
-  }
+  /** When dealing with empty transactions which is specially caused by the
+   * filter rule in replica, we have no chance to reset it. Just do it here. */
+  thd->cpolicy_ctx.reset();
+  thd->cpolicy_ctx.activate_binlog(this);
 
   return 0;
 }
@@ -361,16 +360,32 @@ Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
   return Log_event::continue_group(rli);
 }
 
-void Gcn_log_event::copy_xa(MyGCN *my_gcn, xa_branch_t *xa_branch) const {
+void Gcn_log_event::copy_to_xa_spec(XA_specification *xa_spec) const {
+  gcn_tuple_t gcn_tuple;
+  xa_branch_t xa_branch;
   if (have_gcn()) {
     assert(gcn != GCN_NULL);
 
-    my_gcn->assign_from_binlog({gcn, csr()}, is_pmmt_gcn());
+    gcn_tuple = {gcn, csr()};
   }
 
   if (have_branch_count()) {
     assert(!branch.is_null());
-    *xa_branch = branch;
+    xa_branch = branch;
+  }
+  /** Generate the policy and set it. */
+  if (is_pmmt_gcn()) {
+    lizard::Binlog_ac_prepare_policy cpolicy;
+    cpolicy.init(gcn_tuple, xa_branch);
+    /** Just call decide here, but actually do nothing */
+    cpolicy.decide(nullptr);
+    xa_spec->set_when_recovery(&cpolicy);
+  } else {
+    lizard::Binlog_commit_policy cpolicy;
+    cpolicy.init(gcn_tuple);
+    /** Just call decide here, but actually do nothing */
+    cpolicy.decide(nullptr);
+    xa_spec->set_when_recovery(&cpolicy);
   }
 }
 

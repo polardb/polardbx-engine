@@ -83,7 +83,7 @@ class XA_specification_strategy {
    * @retval	true
    * @retval	false
    */
-  bool has_gtid();
+  bool has_gtid() const;
 
   /**
    * Judge storage way for gtid according to gtid source.
@@ -99,30 +99,18 @@ class XA_specification_strategy {
   void get_gtid_info(Gtid_desc *gtid_desc);
 
   /**
-   * Judge if has gcn when commit detached XA
+   * Judge if has gcn when recovering or commiting detached xa trxs.
    *
-   * @retval  true
-   * @retval  false
+   * @return true if has gcn, false otherwise
    */
-  bool has_commit_gcn() const;
+  bool has_gcn() const;
 
   /**
-   * Overwrite commit info in trx when commit detached XA
+   * Overwite GCN info in trx. There could be two cases:
+   * 1. we are recovering the xa transaction
+   * 2. we are commiting the detached xa transaction
    */
-  void overwrite_xa_when_commit(trx_t *trx) const;
-
-  /**
-   * Judge if has proposal gcn when set prepare in TC for detached XA
-   *
-   * @retval  true if has
-   * @retval  false
-   */
-  bool has_proposal_gcn() const;
-
-  /**
-   * Overwrite prepafe info in trx when prepare in TC for detached XA
-   */
-  void overwrite_xa_when_prepare(trx_t *trx) const;
+  void overwrite_xa(trx_t *trx) const;
 
  private:
   const trx_t *m_trx;
@@ -193,26 +181,6 @@ extern bool trx_search_rollback_background_by_xid(const XID *xid,
   @retval     true if the corresponding transaction is found, false otherwise.
 */
 bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info);
-
-/**
-  Decide (external/internal) XA releated status when prepare, including
-  PROPOSAL_GCN, CSR and others.
-
-  @params[in]       trx               releated trx
-  @params[in/out]   gcn               MyGCN that will be decided
-*/
-extern void decide_xa_when_prepare(MyGCN *gcn);
-
-/**
-  Decide (external/internal) XA releated status when commit, including
-  COMMIT_GCN, CSR, XA_MASTER_ADDR and others.
-
-  @params[in]       trx               releated trx
-  @params[in/out]   gcn               MyGCN that will be decided
-  @params[in/out]   master_addr       XA master address for AC
-*/
-extern void decide_xa_when_commit(const trx_t *trx, MyGCN *gcn,
-                                  xa_addr_t *master_addr);
 
 }  // namespace lizard
 

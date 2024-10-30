@@ -35,29 +35,47 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_class.h"
 
 namespace lizard {
-GCN_context_backup::GCN_context_backup(THD *thd)
-    : m_thd(thd),
-      m_innodb_snapshot_gcn_var(thd->variables.innodb_snapshot_gcn),
-      m_innodb_commit_gcn_var(),
-      m_innodb_current_snapshot_gcn_var(),
-      m_opt_query_via_flashback_area_var(),
-      m_owned_commit_gcn(thd->owned_commit_gcn),
-      m_owned_vision_gcn(thd->owned_vision_gcn),
-      m_owned_xa_branch(thd->owned_xa_branch),
-      m_owned_master_addr(thd->owned_master_addr) {}
+/** Constructor */
+Transaction_policy_state::Transaction_policy_state()
+    : m_innodb_snapshot_gcn(GCN_NULL),
+      m_innodb_commit_gcn(GCN_NULL),
+      m_innodb_current_snapshot_gcn(false),
+      m_opt_query_via_flashback_area(false),
+      m_owned_vision_gcn(),
+      m_cpolicy_ctx() {}
 
-GCN_context_backup::~GCN_context_backup() {
-  m_thd->variables.innodb_snapshot_gcn = m_innodb_snapshot_gcn_var;
-  m_thd->variables.innodb_commit_gcn = m_innodb_commit_gcn_var;
-  m_thd->variables.innodb_current_snapshot_gcn = m_innodb_current_snapshot_gcn_var;
-  m_thd->variables.opt_query_via_flashback_area = m_opt_query_via_flashback_area_var;
+/** Backup transaction policy
+ *
+ * @param[in]		which to backup.*/
+void Transaction_policy_state::backup(const THD *thd) {
+  m_innodb_snapshot_gcn = thd->variables.innodb_snapshot_gcn;
+  m_innodb_commit_gcn = thd->variables.innodb_commit_gcn;
+  m_innodb_current_snapshot_gcn = thd->variables.innodb_current_snapshot_gcn;
+  m_opt_query_via_flashback_area = thd->variables.opt_query_via_flashback_area;
+  m_owned_vision_gcn = thd->owned_vision_gcn;
 
-  m_thd->owned_commit_gcn = m_owned_commit_gcn;
-  m_thd->owned_vision_gcn = m_owned_vision_gcn;
-  m_thd->owned_xa_branch = m_owned_xa_branch;
-  m_thd->owned_master_addr = m_owned_master_addr;
+  m_cpolicy_ctx.copy_from(thd->cpolicy_ctx);
+}
 
-  m_thd = nullptr;
+  /** Restore transtaction policy to thd.
+   *
+   * @param[out]	which to restore. */
+void Transaction_policy_state::restore(THD *thd) const {
+  thd->variables.innodb_snapshot_gcn = m_innodb_snapshot_gcn;
+  thd->variables.innodb_commit_gcn = m_innodb_commit_gcn;
+  thd->variables.innodb_current_snapshot_gcn = m_innodb_current_snapshot_gcn;
+  thd->variables.opt_query_via_flashback_area = m_opt_query_via_flashback_area;
+  thd->owned_vision_gcn = m_owned_vision_gcn;
+
+  thd->cpolicy_ctx.copy_from(m_cpolicy_ctx);
+}
+
+Implicit_trans_policy_guard::Implicit_trans_policy_guard(THD *thd)
+    : m_thd(thd), m_state() {
+  m_state.backup(m_thd);
+  /** Reset query and commit policy, and take single shard. */
+  m_thd->reset_trans_policy();
+  m_thd->cpolicy_ctx.activate_single_shard();
 }
 
 }  // namespace lizard

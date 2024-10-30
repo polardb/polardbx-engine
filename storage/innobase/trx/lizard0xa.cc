@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_class.h"
 #include "sql/sql_plugin_var.h"
 
+#include "lizard0gcs.h"
 #include "lizard0ha_innodb.h"
 #include "lizard0read0types.h"
 #include "lizard0undo.h"
@@ -223,7 +224,7 @@ XA_specification_strategy::XA_specification_strategy(const trx_t *trx)
  * @retval	true
  * @retval	false
  */
-bool XA_specification_strategy::has_gtid() {
+bool XA_specification_strategy::has_gtid() const {
   auto binlog_xa_spec =
       dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
 
@@ -295,52 +296,21 @@ void XA_specification_strategy::get_gtid_info(Gtid_desc *gtid_desc) {
 }
 
 /**
- * Judge if has gcn when commit detached XA
+ * Judge if has gcn when recovering or commiting detached xa trxs.
  *
- * @retval  true
- * @retval  false
+ * @return true if has gcn, false otherwise
  */
-bool XA_specification_strategy::has_commit_gcn() const {
-  return m_xa_spec && m_xa_spec->gcn().is_cmmt_gcn();
-}
-
-bool XA_specification_strategy::has_proposal_gcn() const {
-  return m_xa_spec && m_xa_spec->gcn().is_pmmt_gcn();
+bool XA_specification_strategy::has_gcn() const {
+  return m_xa_spec != nullptr && m_xa_spec->has_gcn();
 }
 
 /**
- * Overwrite commit gcn in trx when commit detached XA
+ * Overwite GCN info in trx when recovery, or commit detached XA.
  */
-void XA_specification_strategy::overwrite_xa_when_commit(trx_t *trx) const {
-  ut_ad(has_commit_gcn());
-
+void XA_specification_strategy::overwrite_xa(trx_t *trx) const {
   if (trx_is_started(trx) && trx->rsegs.m_txn.rseg != nullptr &&
       trx_is_txn_rseg_updated(trx)) {
-    ut_ad(trx->txn_desc.cmmt.is_null());
-
-    MyGCN xa_gcn = m_xa_spec->gcn();
-    xa_addr_t xa_maddr = m_xa_spec->xa_maddr();
-
-    decide_xa_when_commit(trx, &xa_gcn, &xa_maddr);
-
-    trx->txn_desc.copy_xa_when_commit(xa_gcn, xa_maddr);
-  }
-}
-
-void XA_specification_strategy::overwrite_xa_when_prepare(trx_t *trx) const {
-  ut_ad(has_proposal_gcn());
-
-  if (trx_is_started(trx) && trx->rsegs.m_txn.rseg != nullptr &&
-      trx_is_txn_rseg_updated(trx)) {
-    ut_ad(trx->txn_desc.pmmt.is_null());
-
-    MyGCN xa_gcn = m_xa_spec->gcn();
-    const xa_branch_t xa_branch = m_xa_spec->xa_branch();
-
-    decide_xa_when_prepare(&xa_gcn);
-
-    ut_ad(has_proposal_gcn());
-    trx->txn_desc.copy_xa_when_prepare(xa_gcn, xa_branch);
+    m_xa_spec->copy_xa_to_trx(trx);
   }
 }
 
@@ -357,12 +327,8 @@ Guard_xa_specification::Guard_xa_specification(trx_t *trx,
     xss.overwrite_gtid_storage(trx);
   }
 
-  if (prepare && xss.has_proposal_gcn()) {
-    xss.overwrite_xa_when_prepare(trx);
-  }
-
-  if (!prepare && xss.has_commit_gcn()) {
-    xss.overwrite_xa_when_commit(trx);
+  if (xss.has_gcn()) {
+    xss.overwrite_xa(trx);
   }
 }
 
@@ -652,102 +618,6 @@ bool trx_slot_check_validity(const trx_t *trx) {
   }
 
   return true;
-}
-
-void decide_xa_when_prepare(MyGCN *gcn) {
-  gcn_t sys_gcn;
-  gcn_tuple_t proposal;
-
-  if (gcn->decided()) {
-    goto push_up;
-  }
-
-  /** Proposal GCN of Async Commit */
-  ut_a(gcn->is_assigned());
-  ut_a(gcn->is_pmmt_gcn());
-
-  sys_gcn = lizard::gcs_load_gcn();
-  if (sys_gcn > gcn->gcn()) {
-    proposal = {sys_gcn, CSR_AUTOMATIC};
-  } else {
-    proposal = {gcn->gcn(), CSR_ASSIGNED};
-  }
-
-  gcn->decide_if_ac_prepare(proposal);
-
-push_up:
-  gcn->push_up_sys_gcn();
-}
-
-/**
-  Decide (external/internal) XA releated status when commit, including
-  COMMIT_GCN, CSR, XA_MASTER_ADDR and others.
-
-  @params[in]       trx               releated trx
-  @params[in/out]   gcn               MyGCN that will be decided
-  @params[in/out]   master_addr       XA master address for AC
-*/
-void decide_xa_when_commit(const trx_t *trx, MyGCN *gcn,
-                           xa_addr_t *master_addr) {
-  proposal_mark_t pmmt;
-  trx_undo_t *txn_undo = nullptr;
-  csr_t csr;
-  bool external_automatic;
-
-  /** Load from SYS_GCN if no external commit GCN. */
-  if (gcn->is_null()) {
-    gcn->decide_if_null();
-    goto push_up;
-  }
-
-  /** If already decided, then just try to push up. */
-  if (gcn->decided()) {
-    goto push_up;
-  }
-
-  /**
-    Async Commit:
-    1. Decide commit GCN by external GCN and proposal GCN.
-    2. Decide master address.
-  */
-
-  if ((txn_undo = trx_undo_get_txn(trx))) {
-    pmmt = txn_undo->pmmt;
-  }
-  /**
-    If no TXN, can not do Async Commit. Like:
-    xa start '';
-    ...update...
-    xa end '';
-    xa prepare '';
-    call ac_commit(...);
-  */
-  if (pmmt.is_null()) {
-    /** Pretend to normal XA COMMIT rather than AC COMMIT. */
-    gcn->assign_from_var(gcn->gcn());
-    goto push_up;
-  }
-
-  ut_a(gcn->csr() == CSR_ASSIGNED);
-  assert_trx_commit_mark_state(trx, SCN_STATE_INITIAL);
-
-  if (gcn->gcn() < pmmt.gcn) {
-    char err_msg[128];
-    snprintf(err_msg, sizeof(err_msg),
-             "Transaction (%s), external commit gcn (%lu) < proposal gcn (%lu) "
-             "when commit.",
-             trx->xid->key(), gcn->gcn(), pmmt.gcn);
-    lizard_warn(ER_LIZARD) << err_msg;
-  }
-
-  external_automatic = (gcn->gcn() > pmmt.gcn);
-  csr = external_automatic ? CSR_AUTOMATIC : pmmt.csr;
-  gcn->decide_if_ac_commit(csr, external_automatic);
-
-push_up:
-  gcn->push_up_sys_gcn();
-
-  master_addr->decide_if_ac_commit(trx);
 }
 
 }  // namespace lizard

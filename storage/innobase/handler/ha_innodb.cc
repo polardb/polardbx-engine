@@ -209,6 +209,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <unistd.h>
 #endif /* HAVE_UNISTD_H */
 
+#include "handler/i_s_ext.h"
+
+#include "srv0file.h"
+
 #include "lizard0cleanout.h"
 #include "lizard0cleanout0safe.h"
 #include "lizard0dict.h"
@@ -225,12 +229,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0data0data.h"
 
-#include "handler/i_s_ext.h"
 #include "lizard0ha_innodb.h"
 #include "lizard0tcn.h"
 #include "lizard0xa.h"
 #include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
-#include "srv0file.h"
 #include "lizard0dict0mem.h"
 #include "lizard0undo0retent.h"
 
@@ -238,6 +240,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/lizard_policy_types.h"
 
 #include "sys_vars_ext.h"
+
+#include "sql/xa/lizard_cmmt_policy.h"
 
 static char *innodb_version_str = (char *)innodb_version;
 
@@ -6080,7 +6084,7 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
 
     assert_trx_commit_mark_initial(trx);
     if (trx_is_started(trx)) {
-      innobase_copy_user_commit(thd, trx);
+      lizard::commit_policy_copy(thd, trx);
     }
 
     innobase_commit_low(trx);
@@ -6182,7 +6186,7 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
       !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
     assert_trx_commit_mark_initial(trx);
     if (trx_is_started(trx)) {
-      innobase_copy_user_commit(thd, trx);
+      lizard::commit_policy_copy(thd, trx);
     }
 
     error = trx_rollback_for_mysql(trx);
@@ -20575,7 +20579,7 @@ static int innobase_set_prepared_in_tc(handlerton *hton, THD *thd) {
 
   ut_ad(trx_is_registered_for_2pc(trx) || thd == nullptr);
 
-  innobase_copy_user_prepare(thd, trx);
+  lizard::commit_policy_copy(thd, trx);
 
   dberr_t err = trx_set_prepared_in_tc_for_mysql(trx);
   ut_ad(err != DB_FORCED_ABORT);

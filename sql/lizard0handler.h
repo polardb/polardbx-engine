@@ -138,15 +138,6 @@ typedef void (*purge_status_t)(lizard::purge_status_t &status);
 
 typedef void (*flush_gpp_stat_t)();
 
-typedef void (*decide_xa_when_prepare_t)(MyGCN *gcn);
-
-typedef void (*decide_xa_when_commit_t)(THD *thd, MyGCN *my_gcn,
-                                        xa_addr_t *master_addr);
-
-typedef void (*decide_xa_when_commit_by_xid_t)(handlerton *hton, XID *xid,
-                                               MyGCN *my_gcn,
-                                               xa_addr_t *master_addr);
-
 typedef bool (*trx_slot_check_retention_t)();
 
 template <typename T>
@@ -180,9 +171,6 @@ struct handlerton_ext {
   trunc_status_t trunc_status;
   purge_status_t purge_status;
   flush_gpp_stat_t flush_gpp_stat;
-  decide_xa_when_prepare_t decide_xa_when_prepare;
-  decide_xa_when_commit_t decide_xa_when_commit;
-  decide_xa_when_commit_by_xid_t decide_xa_when_commit_by_xid;
   trx_slot_check_retention_t trx_slot_check_retention;
 };
 #endif

@@ -38,7 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0scn.h"
 #include "lizard0ut.h"
 
-#include "sql/lizard/lizard_service.h"  // MyGCN...
+#include "sql/lizard/lizard_service.h"  // MyVisionGCN...
 
 namespace lizard {
 
@@ -382,13 +382,15 @@ enum proposal_state_t proposal_mark_state(const proposal_mark_t &pmmt) {
 /*****************************************
  *              commit_mark_t            *
  *****************************************/
-void commit_mark_t::copy_to_my_gcn(MyGCN *my_gcn) const {
-  my_gcn->copy_cmmt({gcn, csr});
+void commit_mark_t::copy_to_gcn(gcn_tuple_t &my_gcn) const {
+  my_gcn.gcn = gcn;
+  my_gcn.csr = csr;
 }
 
 /*****************************************
  *              proposal_mark_t          *
  *****************************************/
-void proposal_mark_t::copy_to_my_gcn(MyGCN *my_gcn) const {
-  my_gcn->copy_pmmt({gcn, csr});
+void proposal_mark_t::copy_to_gcn(gcn_tuple_t &my_gcn) const {
+  my_gcn.gcn = gcn;
+  my_gcn.csr = csr;
 }

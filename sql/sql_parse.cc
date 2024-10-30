@@ -3239,7 +3239,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
         */
         binlog_gtid_end_transaction(thd);
         /* Lizard: DROP TRIGGER IF EXISTS might forget to reset it. */
-        thd->reset_gcn_variables();
+        thd->reset_trans_policy();
         return 0;
       }
 
@@ -3380,7 +3380,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
   */
   if (stmt_causes_implicit_commit(thd, CF_IMPLICIT_COMMIT_BEGIN)) {
     /** Implicit Commit might reset all lizard THD vars. Backup and restore it. */
-    lizard::GCN_context_backup gcn_ctx_backup(thd);
+    lizard::Implicit_trans_policy_guard guard(thd);
     /*
       Note that this should never happen inside of stored functions
       or triggers as all such statements prohibited there.
@@ -4512,7 +4512,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
-        thd->reset_gcn_variables();
+        thd->reset_trans_policy();
         if (trans_begin(thd)) goto error;
       } else {
         /* Reset the isolation level and access mode if no chaining

@@ -33,6 +33,9 @@
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xa/lizard_xa_trx.h"
 #include "sql/lizard/lizard_hb_freezer.h"
+#include "sql/raii/sentry.h"
+
+using namespace lizard;
 
 namespace im {
 
@@ -188,10 +191,10 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     case COMMIT:
     case ROLLBACK:
       /** 1. Return GCN info */
-      if (info.gcn.is_pmmt_gcn()) {
+      if (info.is_proposal) {
         ut_a(info.status == DETACHED_PREPARE);
-        protocol->store((ulonglong)info.gcn.gcn());
-        csr_str = get_csr_str(info.gcn.csr());
+        protocol->store((ulonglong)info.gcn.gcn);
+        csr_str = get_csr_str(info.gcn.csr);
         protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
       } else if (info.gcn.is_null()) {
         /** Prepare without ac_prepare. */
@@ -200,8 +203,8 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
         protocol->store_null();
       } else {
         assert(info.status == COMMIT || info.status == ROLLBACK);
-        protocol->store((ulonglong)info.gcn.gcn());
-        csr_str = get_csr_str(info.gcn.csr());
+        protocol->store((ulonglong)info.gcn.gcn);
+        csr_str = get_csr_str(info.gcn.csr);
         protocol->store_string(csr_str.str, csr_str.length, system_charset_info);
       }
 
@@ -434,13 +437,14 @@ Sql_cmd *Xa_proc_ac_prepare::evoke_cmd(THD *thd,
 
 bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
   DBUG_ENTER("Sql_cmd_xa_proc_ac_prepare::pc_execute");
-
   branch_num_t n_global;
   branch_num_t n_local;
   gcn_t pre_commit_gcn;
   XID xid;
-  XID_STATE *xid_state = thd->get_transaction()->xid_state();
+  XID_STATE *xid_state =nullptr;
+  AC_prepare_policy *policy = nullptr;
 
+  xid_state = thd->get_transaction()->xid_state();
   /** 0. Check retention for TXN (contains coordinator logs). */
   if (!trx_slot_check_retention()) {
     my_error(ER_XA_PROC_RETENTION_NOT_SATISFIED, MYF(0));
@@ -489,36 +493,21 @@ bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
     DBUG_RETURN(true);
   }
 
-  /** 4. Set owned commit gcn and branch info. */
-  thd->owned_commit_gcn.assign_from_ac_prepare(pre_commit_gcn);
-  thd->owned_xa_branch = {n_global, n_local};
+  /** 4. Take AC_prepare_policy from pocket, and init it. */
+  policy =
+      thd->cpolicy_ctx.activate_ac_prepare(pre_commit_gcn, {n_global, n_local});
 
-  /**
-    When binlog is the Transaction Coordinator and sql_log_bin is set as false
-    for some reasons, trx_set_prepared_in_tc is not called so proposal gcn decide
-    will not be processed.
-  */
-  if (!thd->variables.sql_log_bin) {
-    innodb_hton->ext.decide_xa_when_prepare(&thd->owned_commit_gcn);
-  }
-
-  /** 6. Do xa prepare. Will generate a new nested LEX to complete xa_prepare.
+  /** 5. Do xa prepare. Will generate a new nested LEX to complete xa_prepare.
   Because Sql_cmd_xa_prepare::execute will depend on the state on LEX in
   some places. */
   Nested_xa_prepare_lex nested_xa_prepare_lex(thd, &xid);
   Sql_cmd_xa_prepare *cmd_executor = nested_xa_prepare_lex.get_cmd_executor();
   cmd_executor->set_delay_ok();
   if (cmd_executor->execute(thd)) {
-    thd->reset_gcn_variables();
     DBUG_RETURN(true);
   }
 
-  MyGCN decided_gcn = cmd_executor->get_proposal_gcn();
-  assert(decided_gcn.decided());
-  m_pmmt = decided_gcn.clone_pmmt();
-
-  /** 8. reset gcn variables and status. */
-  thd->reset_gcn_variables();
+  m_pmmt = policy->clone_pmmt();
 
   DBUG_RETURN(false);
 }
@@ -643,8 +632,7 @@ bool Sql_cmd_xa_proc_ac_commit::get_master_parms(char server_uuid[],
 bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
   DBUG_ENTER("Sql_cmd_xa_proc_ac_commit::pc_execute");
 
-  gcn_t gcn;
-  MyGCN my_gcn;
+  gcn_t hlc_gcn;
   XID xid;
   char server_uuid[MAX_SERVER_UUID_LENGTH + 1] = "";
   xa_addr_t addr;
@@ -661,10 +649,9 @@ bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
     DBUG_RETURN(true);
   }
 
-  gcn = (*m_list)[Xa_proc_ac_commit::XA_PARAM_COMMIT_GCN]->val_int();
-
-  if (gcn == GCN_NULL || gcn < GCN_INITIAL) {
-    my_error(ER_XA_PROC_AC_INVALID_GCN, MYF(0), gcn);
+  hlc_gcn = (*m_list)[Xa_proc_ac_commit::XA_PARAM_COMMIT_GCN]->val_int();
+  if (hlc_gcn == GCN_NULL || hlc_gcn < GCN_INITIAL) {
+    my_error(ER_XA_PROC_AC_INVALID_GCN, MYF(0), hlc_gcn);
     DBUG_RETURN(true);
   }
 
@@ -672,13 +659,10 @@ bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
     DBUG_RETURN(true);
   }
 
-  /** 2. Set owned commit gcn and branch info. */
-  thd->owned_commit_gcn.assign_from_ac_commit(gcn);
+  /** 2. Take AC_commit_policy from pocket, and init it. */
+  thd->cpolicy_ctx.activate_ac_commit(hlc_gcn, addr);
 
-  /** TODO: Check master_uba ? <11-04-24, zanye.zjy> */
-  thd->owned_master_addr = addr;
-
-  /** 4. Do XA COMMIT. Will generate a new nested LEX to complete xa_commit.
+  /** 3. Do XA COMMIT. Will generate a new nested LEX to complete xa_commit.
   Because Sql_cmd_xa_commit::execute will depend on the state on LEX in
   some places. */
   Nested_xa_commit_lex nested_xa_commit_lex(thd, &xid);

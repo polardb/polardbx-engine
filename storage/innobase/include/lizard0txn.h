@@ -82,9 +82,11 @@ struct txn_desc_t {
   void resurrect_xa(const proposal_mark_t &pmmt, const xa_branch_t &branch,
                     const xa_addr_t &maddr);
 
-  void copy_xa_when_prepare(const MyGCN &xa_gcn, const xa_branch_t &xa_branch);
+  void copy_xa_when_prepare(const gcn_tuple_t &xa_gcn,
+                            const xa_branch_t &xa_branch);
 
-  void copy_xa_when_commit(const MyGCN &xa_gcn, const xa_addr_t &xa_maddr);
+  void copy_xa_when_commit(const gcn_tuple_t &xa_gcn,
+                           const xa_addr_t &xa_maddr);
 };
 
 /**

@@ -63,6 +63,8 @@
 #include "sql/xa.h"
 #include "thr_mutex.h"
 
+#include "sql/xa/lizard_cmmt_policy.h"
+
 namespace {
 /**
   Invokes the handler interface for the storage engine, the
@@ -187,11 +189,12 @@ bool commit_one_ht(THD *thd, plugin_ref plugin, void *arg) {
   DBUG_TRACE;
   auto ht = plugin_data<handlerton *>(plugin);
 
-  XA_specification xa_spec;
-  xa_spec.set_when_commit(thd->owned_commit_gcn, thd->owned_master_addr);
-
   if (ht->commit_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
+    XA_specification xa_spec;
+    lizard::commit_policy_decide(thd);
+    xa_spec.set_when_commit(thd->cpolicy_ctx.current_policy());
+
     xa_status_code ret =
         ht->commit_by_xid(ht, static_cast<XID *>(arg), &xa_spec);
 
@@ -212,11 +215,12 @@ bool rollback_one_ht(THD *thd, plugin_ref plugin, void *arg) {
   DBUG_TRACE;
   auto ht = plugin_data<handlerton *>(plugin);
 
-  XA_specification xa_spec;
-  xa_spec.set_when_commit(thd->owned_commit_gcn, thd->owned_master_addr);
-
   if (ht->rollback_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
+    XA_specification xa_spec;
+    lizard::commit_policy_decide(thd);
+    xa_spec.set_when_commit(thd->cpolicy_ctx.current_policy());
+
     xa_status_code ret =
         ht->rollback_by_xid(ht, static_cast<XID *>(arg), &xa_spec);
 
