@@ -4752,10 +4752,21 @@ String *udf_handler::val_str(String *str, String *save_str) {
       error = 1;
       return nullptr;
     }
+    res_length = MAX_FIELD_WIDTH;
   }
-  char *res =
-      func(&initid, &f_args, str->ptr(), &res_length, &is_null_tmp, &error);
-  DBUG_PRINT("info", ("udf func returned, res_length: %lu", res_length));
+
+  char *res;
+  do {
+    if (res_length > str->alloced_length()) {
+      if (str->alloc(res_length)) {
+        error = 1;
+        return nullptr;
+      }
+      error = 0;
+    }
+    res = func(&initid, &f_args, str->ptr(), &res_length, &is_null_tmp, &error);
+    DBUG_PRINT("info", ("udf func returned, res_length: %lu", res_length));
+  } while (error && res_length > str->alloced_length());
   if (is_null_tmp || !res || error)  // The !res is for safety
   {
     DBUG_PRINT("info", ("Null or error"));
