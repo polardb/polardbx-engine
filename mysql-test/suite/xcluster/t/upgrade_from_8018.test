@@ -1,0 +1,104 @@
+--disable_query_log
+call mtr.add_suppression('\\[Warning\\] .*');
+--enable_query_log
+
+# ------------------------------------------------------------
+# data created on earlier version with following
+# ------------------------------------------------------------
+# --connect follower
+# set force_revise=1;
+# set sql_log_bin=0; 
+# flush relay logs;
+# 
+# set force_revise=1;
+# set sql_log_bin=0; 
+# flush relay logs;
+# 
+# --connect leader
+# create table test.t1 (c1 int, c2 int, primary key(c1));
+# insert into test.t1 values (1, 100);
+# insert into test.t1 values (2, 200);
+# xa start 'x1'; 
+# insert into test.t1 values (3, 100);
+# xa end 'x1';
+# xa prepare 'x1';
+# --disconnect leader
+# 
+# --connect leader
+# flush logs;
+# insert into test.t1 values (4, 100);
+# call dbms_consensus.purge_log(1000);
+
+--echo # connect leader
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+
+create database d1;
+drop database d1;
+create table test.t1 (c1 int, c2 int, primary key(c1));
+insert into test.t1 values (1, 100);
+insert into test.t1 values (2, 200);
+xa start 'x1'; 
+insert into test.t1 values (3, 100);
+xa end 'x1';
+xa prepare 'x1';
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into test.t1 values (4, 100);
+xa recover;
+--disconnect leader
+
+
+--echo # connect follower2
+--connect (follower2,127.0.0.1,root,,test,$MYPORT_2)
+--connection follower2
+let $cluster_info = query_get_value("select cluster_info from mysql.consensus_info", cluster_info, 1);
+let $cluster_id = query_get_value("select cluster_id from mysql.consensus_info", cluster_id, 1);
+let $old_datadir = query_get_value("select @@datadir as datadir", datadir, 1);
+xa recover;
+show consensus logs;
+select * from mysql.slave_relay_log_info;
+
+--echo # Test upgrade from 8018 to 8032 
+
+--echo # Copy and unzip the datadir.
+--copy_file $MYSQLTEST_VARDIR/std_data/upgrade/data_8018_xcluster_follower.zip $MYSQL_TMP_DIR/data_8018_xcluster_follower.zip
+--file_exists $MYSQL_TMP_DIR/data_8018_xcluster_follower.zip
+--exec unzip -qo $MYSQL_TMP_DIR/data_8018_xcluster_follower.zip -d $old_datadir
+let $DATADIR = $old_datadir/data;
+
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--shutdown_server 300
+--source include/wait_until_disconnected.inc
+
+--echo # restart 1
+--exec echo "restart:--datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--enable_reconnect
+--sleep 10
+
+--echo # restart 2
+--exec echo "restart:--datadir=$DATADIR " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--source include/wait_apply_catchup.inc
+
+--echo # check
+--connect (follower21,127.0.0.1,root,,test,$MYPORT_2)
+--connection follower21
+xa recover;
+show consensus logs;
+select * from mysql.slave_relay_log_info;
+--disconnect follower21
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+xa rollback 'x1';
+drop table test.t1;
+--source include/wait_apply_catchup.inc
+--disconnect leader
+
+--echo # Remove copied files
+--file_exists $MYSQL_TMP_DIR/data_8018_xcluster_follower.zip
+--remove_file $MYSQL_TMP_DIR/data_8018_xcluster_follower.zip

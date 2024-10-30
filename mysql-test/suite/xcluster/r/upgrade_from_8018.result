@@ -1,0 +1,40 @@
+# connect leader
+create database d1;
+drop database d1;
+create table test.t1 (c1 int, c2 int, primary key(c1));
+insert into test.t1 values (1, 100);
+insert into test.t1 values (2, 200);
+xa start 'x1';
+insert into test.t1 values (3, 100);
+xa end 'x1';
+xa prepare 'x1';
+insert into test.t1 values (4, 100);
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+# connect follower2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000001	3175	1
+select * from mysql.slave_relay_log_info;
+Number_of_lines	Relay_log_name	Relay_log_pos	Master_log_name	Master_log_pos	Sql_delay	Number_of_workers	Id	Channel_name	Privilege_checks_username	Privilege_checks_hostname	Require_row_format	Require_table_primary_key_check	Assign_gtids_to_anonymous_transactions_type	Assign_gtids_to_anonymous_transactions_value	Consensus_apply_index
+15	./master-bin.000001	252		0	0	8	1		NULL	NULL	0	STREAM	OFF		0
+# Test upgrade from 8018 to 8032 
+# Copy and unzip the datadir.
+# restart 1
+# restart 2
+# check
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000003	661	9
+select * from mysql.slave_relay_log_info;
+Number_of_lines	Relay_log_name	Relay_log_pos	Master_log_name	Master_log_pos	Sql_delay	Number_of_workers	Id	Channel_name	Privilege_checks_username	Privilege_checks_hostname	Require_row_format	Require_table_primary_key_check	Assign_gtids_to_anonymous_transactions_type	Assign_gtids_to_anonymous_transactions_value	Consensus_apply_index
+15	./master-bin.000003	661		310	0	8	1		NULL	NULL	0	STREAM	OFF		9
+xa rollback 'x1';
+drop table test.t1;
+# Remove copied files

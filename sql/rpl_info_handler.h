@@ -305,6 +305,7 @@ class Rpl_info_handler {
     @return Number of fields handled by the handler.
   */
   int get_number_info() { return ninfo; }
+  void set_read_cursor(const int value) { cursor = value; }
 
   /**
     Configures the number of events after which the info (e.g.

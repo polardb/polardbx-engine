@@ -2298,6 +2298,11 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
 
   if (lines >= LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX) {
     if (!!from->get_info(&temp_consensus_apply_index, 0UL)) return true;
+  } else if (lines != LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX
+             && from->get_number_info() == LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX + 1) {
+    //NOTE:: do not depend lines from table when position not match, use the last column instead
+    from->set_read_cursor(LINES_IN_RELAY_LOG_INFO_WITH_CONSENSUS_APPLY_INDEX);
+    if (!!from->get_info(&temp_consensus_apply_index, 0UL)) return true;
   } else {
     // If the file contains the TYPE, then the VALUE is mandatory.
     if (lines >=
