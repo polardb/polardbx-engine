@@ -44,6 +44,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 struct trx_rseg_t;
 struct trx_undo_t;
+struct dict_index_t;
 
 /**
   Lizard transaction system undo format:
@@ -435,8 +436,6 @@ struct txn_slot_t {
   bool ac_prepare_allocated() const;
   bool ac_commit_allocated() const;
 };
-
-class dict_index_t;
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /** Check the UBA validation */

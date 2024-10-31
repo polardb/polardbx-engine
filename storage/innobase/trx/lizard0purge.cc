@@ -168,6 +168,59 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
   return (page_size);
 }
 
+/** Collect rsegs into the purge heap for the first time */
+bool trx_purge_collect_rsegs(TxnUndoRsegs *elem,
+                                 trx_undo_ptr_t *redo_rseg_undo_ptr,
+                                 trx_undo_ptr_t *temp_rseg_undo_ptr,
+                                 txn_undo_ptr_t *txn_rseg_undo_ptr) {
+  bool has = false;
+  trx_rseg_t *redo_rseg = nullptr;
+  trx_rseg_t *temp_rseg = nullptr;
+  trx_rseg_t *txn_rseg = nullptr;
+
+  if (redo_rseg_undo_ptr != nullptr) {
+    redo_rseg = redo_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&redo_rseg->mutex));
+  }
+
+  if (temp_rseg_undo_ptr != NULL) {
+    temp_rseg = temp_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&temp_rseg->mutex));
+  }
+
+  if (txn_rseg_undo_ptr != nullptr) {
+    txn_rseg = txn_rseg_undo_ptr->rseg;
+    ut_ad(mutex_own(&txn_rseg->mutex));
+  }
+
+  if (redo_rseg != NULL && redo_rseg->last_page_no == FIL_NULL) {
+    elem->insert(redo_rseg);
+    has = true;
+  }
+
+  if (temp_rseg != NULL && temp_rseg->last_page_no == FIL_NULL) {
+    elem->insert(temp_rseg);
+    has = true;
+  }
+
+  if (txn_rseg != NULL && txn_rseg->last_page_no == FIL_NULL) {
+    elem->insert(txn_rseg);
+    has = true;
+  }
+  return has;
+}
+
+/** Add the rseg into the purge queue heap */
+void trx_purge_add_rsegs(commit_mark_t &cmmt, TxnUndoRsegs *elem) {
+  ut_ad(cmmt.scn == elem->get_scn());
+  mutex_enter(&purge_sys->pq_mutex);
+  purge_sys->purge_heap->push(*elem);
+  lizard_purged_scn_validation();
+  mutex_exit(&purge_sys->pq_mutex);
+}
+
+
+
 /**
   Initialize / reload purged_scn from purge_sys->purge_heap
 
@@ -212,7 +265,7 @@ void trx_purge_set_purged_scn(scn_t txn_scn) {
 
   @retval       bool        true if the corresponding txn has been purged
 */
-bool precheck_if_txn_is_purged(const txn_rec_t *txn_rec) {
+bool txn_rec_is_purged_by_precheck(const txn_rec_t *txn_rec) {
   if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
     /** scn must allocated */
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
@@ -293,7 +346,6 @@ void trx_purge_migrate_last_log(trx_rseg_t *rseg, fil_addr_t hdr_addr) {
   mtr_commit(&mtr);
 }
 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
   Validate all transactions whose SCN > purged_scn is always unpurged.
 
@@ -326,7 +378,6 @@ bool purged_scn_validation() {
 
   return ret;
 }
-#endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 
 void trx_purge_start_history() {
   que_thr_t *thr = nullptr;

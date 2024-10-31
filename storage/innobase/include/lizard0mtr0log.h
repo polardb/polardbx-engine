@@ -37,7 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <cstdint>
 #include "data0type.h"
 
-class dict_index_t;
+struct dict_index_t;
 
 constexpr size_t REDO_SYS_FIELDS_LEN =
     14 /* 5(trx_id pos len) + 9(trx_id len)*/ + DATA_ROLL_PTR_LEN;

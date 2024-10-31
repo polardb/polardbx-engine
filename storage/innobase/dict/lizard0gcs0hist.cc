@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0sel.h"
 #include "srv0srv.h"
 #include "trx0trx.h"
+#include "lizard0undo0retent.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t scn_history_thread_key;
@@ -479,7 +480,7 @@ void CRing<Item>::add(Item &item) {
  * @retval	item pointer
  */
 template <typename Item>
-Item *CRing<Item>::biggest_less_equal_than(const Item &lhs) {
+Item *CRing<Item>::biggest_less_equal_than(const Item *lhs) {
   Item *ptr = nullptr;
   int upper, lower, mid;
 
@@ -487,9 +488,9 @@ Item *CRing<Item>::biggest_less_equal_than(const Item &lhs) {
   if (empty()) return nullptr;
 
   /** head and tail pre-check. */
-  if (tailer()->val_int() > lhs.val_int()) {
+  if (tailer()->val_int() > lhs->val_int()) {
     return nullptr;
-  } else if (header()->val_int() <= lhs.val_int()) {
+  } else if (header()->val_int() <= lhs->val_int()) {
     return header();
   } else {
     /** Binary search */
@@ -500,19 +501,19 @@ Item *CRing<Item>::biggest_less_equal_than(const Item &lhs) {
 
     while (upper >= lower) {
       mid = (upper + lower) / 2;
-      if (at(mid)->val_int() > lhs.val_int()) {
+      if (at(mid)->val_int() > lhs->val_int()) {
         upper = mid - 1;
       } else {
         lower = mid + 1;
         /** Next lower will larger than argument, break loop. */
         if (lower >= m_tail && lower <= m_head &&
-            at(lower)->val_int() > lhs.val_int()) {
+            at(lower)->val_int() > lhs->val_int()) {
           break;
         }
       }
     }
     ptr = at(mid);
-    if (ptr->val_int() <= lhs.val_int()) {
+    if (ptr->val_int() <= lhs->val_int()) {
       return ptr;
     } else {
       return nullptr;
@@ -523,7 +524,7 @@ Item *CRing<Item>::biggest_less_equal_than(const Item &lhs) {
 }
 
 template <typename Item>
-Item *CBuffer<Item>::biggest_less_equal_than(const Item &lhs) {
+Item *CBuffer<Item>::biggest_less_equal_than(const Item *lhs) {
   Item *ptr = nullptr;
 
   if ((ptr = m_ring_sec.biggest_less_equal_than(lhs)) != nullptr) {
@@ -534,7 +535,7 @@ Item *CBuffer<Item>::biggest_less_equal_than(const Item &lhs) {
 }
 
 template <typename Item>
-Item *CBuffer<Item>::biggest_less_than(const Item &lhs) {
+Item *CBuffer<Item>::biggest_less_than(const Item *lhs) {
   Item *ptr = nullptr;
   if ((ptr = m_ring_sec.biggest_less_than(lhs)) != nullptr) {
     return ptr;
@@ -549,7 +550,7 @@ Item *CBuffer<Item>::biggest_less_than(const Item &lhs) {
  * @retval	item pointer
  */
 template <typename Item>
-Item *CRing<Item>::biggest_less_than(const Item &lhs) {
+Item *CRing<Item>::biggest_less_than(const Item *lhs) {
   Item *ptr = nullptr;
   int upper, lower, mid = 0;
 
@@ -557,9 +558,9 @@ Item *CRing<Item>::biggest_less_than(const Item &lhs) {
   if (empty()) return nullptr;
 
   /** head and tail pre-check. */
-  if (tailer()->val_int() >= lhs.val_int()) {
+  if (tailer()->val_int() >= lhs->val_int()) {
     return nullptr;
-  } else if (header()->val_int() < lhs.val_int()) {
+  } else if (header()->val_int() < lhs->val_int()) {
     return header();
   } else {
     /** Binary search */
@@ -569,19 +570,19 @@ Item *CRing<Item>::biggest_less_than(const Item &lhs) {
 
     while (upper >= lower) {
       mid = (upper + lower) / 2;
-      if (at(mid)->val_int() >= lhs.val_int()) {
+      if (at(mid)->val_int() >= lhs->val_int()) {
         upper = mid - 1;
       } else {
         lower = mid + 1;
         /** Next lower will larger than argument, break loop. */
         if (lower >= m_tail && lower <= m_head &&
-            at(lower)->val_int() >= lhs.val_int()) {
+            at(lower)->val_int() >= lhs->val_int()) {
           break;
         }
       }
     }
     ptr = at(mid);
-    if (ptr->val_int() < lhs.val_int()) {
+    if (ptr->val_int() < lhs->val_int()) {
       return ptr;
     } else {
       return nullptr;
@@ -636,7 +637,7 @@ void CSnapshot_buffer::push(const commit_snap_t &snap) {
   m_scn_buffer.add(scn_vision, snap.utc_sec);
 
   /** Add gcn snapshot. */
-  Snapshot_gcn_vision gcn_vision(snap.gcn, snap.scn, snap.up_limit_tid);
+  Snapshot_gcn_vision gcn_vision(snap.gcn, snap.up_limit_tid);
   m_gcn_buffer.add(gcn_vision, snap.utc_sec);
 }
 
@@ -650,10 +651,10 @@ void CSnapshot_mgr::push(const commit_snap_t &snap) {
 }
 
 template <typename Item>
-trx_id_t CSnapshot_mgr::search_up_limit_tid(const Item &lhs) {
+trx_id_t CSnapshot_mgr::search_up_limit_tid(const Item *lhs) {
   Item *ptr = nullptr;
   trx_id_t tid = 0;
-  ut_ad(lhs.is_vision());
+  ut_ad(lhs->is_vision());
 
   /** If didn't enable, return 0 instead. */
   if (!srv_commit_snapshot_search_enabled) {
@@ -666,7 +667,7 @@ trx_id_t CSnapshot_mgr::search_up_limit_tid(const Item &lhs) {
   rw_lock_s_lock(m_latches + partition_num, UT_LOCATION_HERE);
   ptr = m_csnapshot_buffers[partition_num].buffer<Item>()->search(lhs);
   if (ptr != nullptr) {
-    ut_a(ptr->val_int() <= lhs.val_int());
+    ut_a(ptr->val_int() <= lhs->val_int());
     tid = ptr->up_limit_tid();
   }
   rw_lock_s_unlock(m_latches + partition_num);
@@ -675,9 +676,9 @@ trx_id_t CSnapshot_mgr::search_up_limit_tid(const Item &lhs) {
 }
 
 template trx_id_t CSnapshot_mgr::search_up_limit_tid<Snapshot_gcn_vision>(
-    const Snapshot_gcn_vision &lhs);
+    const Snapshot_gcn_vision *lhs);
 
 template trx_id_t CSnapshot_mgr::search_up_limit_tid<Snapshot_scn_vision>(
-    const Snapshot_scn_vision &lhs);
+    const Snapshot_scn_vision *lhs);
 
 }  // namespace lizard

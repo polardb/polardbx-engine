@@ -47,7 +47,8 @@ typedef enum {
   AS_OF_NONE,
   AS_OF_TIMESTAMP,
   AS_OF_SCN,
-  AS_OF_GCN
+  AS_OF_AUTOMATIC_GCN,
+  AS_OF_ASSIGNED_GCN
 } Snapshot_type;
 
 /*------------------------------------------------------------------------------*/
@@ -171,13 +172,10 @@ class Snapshot_time_hint : public Snapshot_hint {
 /** As of gcn hint */
 class Snapshot_gcn_hint : public Snapshot_hint {
  public:
-  explicit Snapshot_gcn_hint(Item *item)
-      : Snapshot_gcn_hint(item, csr_t::CSR_ASSIGNED, SCN_NULL) {}
+  explicit Snapshot_gcn_hint(Item *item) : Snapshot_hint(item) {}
 
-  explicit Snapshot_gcn_hint(Item *item, csr_t csr, scn_t scn)
-      : Snapshot_hint(item), m_csr(csr), m_current_scn(scn) {}
+  virtual Snapshot_type type() const override { return AS_OF_ASSIGNED_GCN; }
 
-  virtual Snapshot_type type() const override { return AS_OF_GCN; }
   /**
     Fix fields
 
@@ -190,6 +188,36 @@ class Snapshot_gcn_hint : public Snapshot_hint {
 
   /** Calculate gcn from hint item. */
   virtual bool val_int(uint64_t *value) override;
+};
+
+class Snapshot_simulate_gcn_hint : public Snapshot_hint {
+ public:
+  explicit Snapshot_simulate_gcn_hint(const MyVisionGCN &owned_gcn)
+      : Snapshot_hint(nullptr), m_owned_vision(owned_gcn) {}
+
+  virtual Snapshot_type type() const override {
+    switch (m_owned_vision.csr) {
+      case CSR_AUTOMATIC:
+        return AS_OF_AUTOMATIC_GCN;
+      case CSR_ASSIGNED:
+        return AS_OF_ASSIGNED_GCN;
+      default:
+        assert(0);
+        return AS_OF_NONE;
+    }
+  }
+
+  virtual bool fix_fields(THD *) override {
+    /** Will not use Item, because it's not from Parser. */
+    assert(m_item == nullptr);
+    return false;
+  }
+
+  /** Calculate gcn from hint item. */
+  virtual bool val_int(uint64_t *) override {
+    assert(0);
+    return false;
+  }
 
   /**
     Evoke table snapshot vision.
@@ -197,15 +225,11 @@ class Snapshot_gcn_hint : public Snapshot_hint {
 
     @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
     @retval 0 Success
-  */
+   */
   virtual int evoke_vision(TABLE *table, THD *thd) override;
 
-  csr_t get_csr() const { return m_csr; }
-  scn_t get_current_scn() const { return m_current_scn; }
-
  private:
-  csr_t m_csr;
-  scn_t m_current_scn;
+  MyVisionGCN m_owned_vision;
 };
 
 /*------------------------------------------------------------------------------*/
@@ -226,6 +250,8 @@ class Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   virtual Snapshot_type type() const = 0;
 
+  virtual void reset() = 0;
+
   /**
     Return static_cast number from vision.
   */
@@ -234,13 +260,10 @@ class Snapshot_vision {
   /**
     Do something after myself is activated.
   */
-  virtual void after_activate() = 0;
+  virtual void after_activate(THD *thd) = 0;
 
   /** Store number into vision. */
   virtual void store_int(uint64_t value) = 0;
-
-  /** Whether is it a real vision that can be used by innodb. */
-  virtual bool is_vision() const = 0;
 
   /** What kind of commit number that was used to check visible . */
   virtual ccr_t visible_by() const = 0;
@@ -253,12 +276,18 @@ class Snapshot_vision {
 
   virtual bool modification_visible(void *txn_rec) const = 0;
 
+  virtual trx_id_t up_limit_tid() const = 0;
+
+  /*------------------------------------------------------------------------------*/
+  /* Virtual function */
+  /*------------------------------------------------------------------------------*/
+
+  /** Whether is it a real vision that can be used by innodb. */
+  bool is_vision() const { return visible_by() != CCR_NONE; }
 
   void set_flashback_area(bool value) { m_flashback_area = value; }
 
   bool get_flashback_area() const { return m_flashback_area; }
-
-  virtual trx_id_t up_limit_tid() const { return 0; }
 
  protected:
   /** opt_query_via_flashback_area */
@@ -279,17 +308,14 @@ class Snapshot_time_vision : public Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   virtual Snapshot_type type() const override { return AS_OF_TIMESTAMP; }
 
+  virtual void reset() override { m_second = 0; }
+
   virtual void store_int(uint64_t value) override { m_second = value; }
 
   /** Do nothing since of never activated. */
-  virtual void after_activate() override {
-    // TODO:
-    // DBUG_ASSERT(0);
-  }
-  virtual uint64_t val_int() const override { return m_second; }
+  virtual void after_activate(THD *) override {}
 
-  /** Time snapshot cann't be used by innodb directly. */
-  virtual bool is_vision() const override { return false; }
+  virtual uint64_t val_int() const override { return m_second; }
 
   /** What kind of commit number that was used to check visible . */
   virtual ccr_t visible_by() const override { return CCR_NONE; }
@@ -309,6 +335,8 @@ class Snapshot_time_vision : public Snapshot_vision {
     assert(0);
     return false;
   }
+
+  virtual trx_id_t up_limit_tid() const override { return 0; }
 
  private:
   uint64_t m_second;
@@ -341,16 +369,19 @@ class Snapshot_scn_vision : public Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   virtual Snapshot_type type() const override { return AS_OF_SCN; }
 
+  virtual void reset() override {
+    m_scn = SCN_NULL;
+    m_up_limit_tid = 0;
+  }
+
   virtual void store_int(uint64_t value) override {
     m_scn = static_cast<scn_t>(value);
   }
-  virtual void after_activate() override;
+  virtual void after_activate(THD *thd) override;
 
   virtual uint64_t val_int() const override {
     return static_cast<uint64_t>(m_scn);
   }
-
-  virtual bool is_vision() const override { return true; }
 
   /** What kind of commit number that was used to check visible . */
   virtual ccr_t visible_by() const override { return CCR_SCN; }
@@ -367,39 +398,32 @@ class Snapshot_scn_vision : public Snapshot_vision {
 
   virtual trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
 
-  void set_up_limit_tid(trx_id_t tid) { m_up_limit_tid = tid; }
-
  private:
   scn_t m_scn;
   trx_id_t m_up_limit_tid;
 };
 
 /**
-  GCN vision, it's transformed by snapshot gcn hint,
+  GCN vision, only used by lizard0gcs0hit to save snapshot.
+
+  See snapshot_automatic_gcn_vision/snapshot_asssigned_gcn_vision, if act as
+  real vision,
 */
 class Snapshot_gcn_vision : public Snapshot_vision {
  public:
-  Snapshot_gcn_vision()
-      : m_gcn(GCN_NULL),
-        m_csr(csr_t::CSR_AUTOMATIC),
-        m_current_scn(SCN_NULL),
-        m_up_limit_tid(0) {}
+  explicit Snapshot_gcn_vision() : m_gcn(GCN_NULL), m_up_limit_tid(0) {}
 
-  Snapshot_gcn_vision(gcn_t gcn, scn_t scn, trx_id_t tid)
-      : m_gcn(gcn),
-        m_csr(csr_t::CSR_AUTOMATIC),
-        m_current_scn(scn),
-        m_up_limit_tid(tid) {}
+  explicit Snapshot_gcn_vision(gcn_t gcn, trx_id_t tid)
+      : m_gcn(gcn), m_up_limit_tid(tid) {}
 
   ~Snapshot_gcn_vision() override {}
 
   Snapshot_gcn_vision(const Snapshot_gcn_vision &v) = delete;
+  Snapshot_gcn_vision(const Snapshot_gcn_vision &&v) = delete;
 
   Snapshot_gcn_vision &operator=(const Snapshot_gcn_vision &v) {
     if (this != &v) {
       m_gcn = v.m_gcn;
-      m_csr = v.m_csr;
-      m_current_scn = v.m_current_scn;
       m_up_limit_tid = v.m_up_limit_tid;
     }
     return *this;
@@ -408,33 +432,86 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
-  virtual Snapshot_type type() const override { return AS_OF_GCN; }
+  virtual Snapshot_type type() const override { return AS_OF_NONE; }
+
+  virtual void reset() override {
+    m_gcn = GCN_NULL;
+    m_up_limit_tid = 0;
+  }
 
   virtual void store_int(uint64_t value) override {
     m_gcn = static_cast<gcn_t>(value);
   }
 
-  /** Do pushup GCS gcn if come from outer. */
-  virtual void after_activate() override;
-
   virtual uint64_t val_int() const override {
     return static_cast<uint64_t>(m_gcn);
   }
 
-  void store_current_scn(scn_t scn) { m_current_scn = scn; }
+  virtual trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
 
-  scn_t current_scn() const { return m_current_scn; }
+  /** Do pushup GCS gcn if come from outer. */
+  virtual void after_activate(THD *) override {
+    assert(0);
+    return;
+  }
 
-  void store_csr(csr_t csr) { m_csr = csr; }
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_NONE; }
 
-  csr_t csr() const { return m_csr; }
+  /**
+    Judge visible by txn relation info.
 
-  virtual bool is_vision() const override { return true; }
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override {
+    assert(0);
+    return false;
+  }
+
+  virtual bool too_old() const override { return true; }
+
+  /**
+    Inherit status from MyVisionGCN before activate.
+  */
+  virtual void init(const MyVisionGCN *) { assert(0); }
+
+ protected:
+  gcn_t m_gcn;
+  trx_id_t m_up_limit_tid;
+};
+
+/** Local query by automatic gcn from GCS.*/
+class Snapshot_automatic_gcn_vision : public Snapshot_gcn_vision {
+ public:
+  explicit Snapshot_automatic_gcn_vision()
+      : Snapshot_gcn_vision(), m_current_scn(SCN_NULL) {}
+
+  virtual ~Snapshot_automatic_gcn_vision() override {}
+
+  Snapshot_automatic_gcn_vision &operator=(
+      const Snapshot_automatic_gcn_vision &v) {
+    if (this != &v) {
+      Snapshot_gcn_vision::operator=(v);
+      m_current_scn = v.m_current_scn;
+    }
+    return *this;
+  }
+  /*------------------------------------------------------------------------------*/
+  /* Virtual function */
+  /*------------------------------------------------------------------------------*/
+  virtual Snapshot_type type() const override { return AS_OF_AUTOMATIC_GCN; }
+
+  virtual void reset() override {
+    m_current_scn = SCN_NULL;
+    Snapshot_gcn_vision::reset();
+  }
+
+  /** Do pushup GCS gcn if come from outer. */
+  virtual void after_activate(THD *thd) override;
 
   /** What kind of commit number that was used to check visible . */
   virtual ccr_t visible_by() const override { return CCR_ALL; }
-
-  virtual bool too_old() const override;
 
   /**
     Judge visible by txn relation info.
@@ -444,23 +521,49 @@ class Snapshot_gcn_vision : public Snapshot_vision {
   */
   virtual bool modification_visible(void *) const override;
 
-  virtual trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
+  virtual bool too_old() const override;
 
-  void set_up_limit_tid(trx_id_t tid) { m_up_limit_tid = tid; }
+  virtual void init(const MyVisionGCN *) override;
 
+ private:
   /**
     Some XA branchs should share a commit number.
   */
   bool modification_visible_by_share_cn(void *) const;
 
  private:
-  gcn_t m_gcn;
-
-  csr_t m_csr;
-
   scn_t m_current_scn;
+};
 
-  trx_id_t m_up_limit_tid;
+/** Global query by assigned gcn from TSO. */
+class Snapshot_assigned_gcn_vision : public Snapshot_gcn_vision {
+ public:
+  explicit Snapshot_assigned_gcn_vision() : Snapshot_gcn_vision() {}
+
+  virtual ~Snapshot_assigned_gcn_vision() {}
+
+  /*------------------------------------------------------------------------------*/
+  /* Virtual function */
+  /*------------------------------------------------------------------------------*/
+  virtual Snapshot_type type() const override { return AS_OF_ASSIGNED_GCN; }
+
+  /** Do pushup GCS gcn if come from outer. */
+  virtual void after_activate(THD *thd) override;
+
+  /** What kind of commit number that was used to check visible . */
+  virtual ccr_t visible_by() const override { return CCR_GCN; }
+
+  /**
+    Judge visible by txn relation info.
+
+    @retval     whether the vision sees the modifications of id.
+                True if visible
+  */
+  virtual bool modification_visible(void *) const override;
+
+  virtual bool too_old() const override;
+
+  virtual void init(const MyVisionGCN *) override;
 };
 
 /**
@@ -477,13 +580,13 @@ class Snapshot_noop_vision : public Snapshot_vision {
   /*------------------------------------------------------------------------------*/
   virtual Snapshot_type type() const override { return AS_OF_NONE; }
 
+  virtual void reset() override {}
+
   virtual void store_int(uint64_t) override { assert(0); }
 
-  virtual void after_activate() override { assert(0); }
+  virtual void after_activate(THD *) override { assert(0); }
 
   virtual uint64_t val_int() const override { return SCN_NULL; }
-
-  virtual bool is_vision() const override { return false; }
 
   /** What kind of commit number that was used to check visible . */
   virtual ccr_t visible_by() const override { return CCR_NONE; }
@@ -503,6 +606,8 @@ class Snapshot_noop_vision : public Snapshot_vision {
     assert(0);
     return false;
   }
+
+  virtual trx_id_t up_limit_tid() const override { return 0; }
 };
 
 /** Table snapshot worked on TABLE object.
@@ -514,7 +619,8 @@ class Table_snapshot {
       : m_noop_vision(),
         m_time_vision(),
         m_scn_vision(),
-        m_gcn_vision(),
+        m_automatic_gcn_vision(),
+        m_assigned_gcn_vision(),
         m_vision(&m_noop_vision) {}
 
   /** Return predefined vision */
@@ -525,12 +631,14 @@ class Table_snapshot {
       case AS_OF_SCN:
         return &m_scn_vision;
       case AS_OF_TIMESTAMP:
-        return &m_time_vision;
-      case AS_OF_GCN:
-        return &m_gcn_vision;
+        return  &m_time_vision;
+      case AS_OF_AUTOMATIC_GCN:
+        return &m_automatic_gcn_vision;
+      case AS_OF_ASSIGNED_GCN:
+        return &m_assigned_gcn_vision;
       default:
         assert(0);
-        return &m_noop_vision;
+        return  &m_noop_vision;
     }
   }
 
@@ -550,7 +658,7 @@ class Table_snapshot {
     if (!error) {
       m_vision = vision;
 
-      vision->after_activate();
+      vision->after_activate(thd);
     }
 
     return error;
@@ -562,6 +670,12 @@ class Table_snapshot {
 
   /** Whether it's a real vision. */
   bool is_vision() { return m_vision->is_vision(); }
+
+  Snapshot_vision *choose_once(Snapshot_type type) {
+    Snapshot_vision *vision = get(type);
+    vision->reset();
+    return vision;
+  }
 
  private:
   int exchange_timestamp_vision_to_scn_vision(Snapshot_vision **vision,
@@ -588,7 +702,8 @@ class Table_snapshot {
   Snapshot_noop_vision m_noop_vision;
   Snapshot_time_vision m_time_vision;
   Snapshot_scn_vision m_scn_vision;
-  Snapshot_gcn_vision m_gcn_vision;
+  Snapshot_automatic_gcn_vision m_automatic_gcn_vision;
+  Snapshot_assigned_gcn_vision m_assigned_gcn_vision;
 
   Snapshot_vision *m_vision;
 };

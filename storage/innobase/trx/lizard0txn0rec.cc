@@ -598,13 +598,13 @@ bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
   /** precheck, if the record has been cleanout, and the TXN has been purged,
   no need to hold TXN page latch and undo page latch */
   if (flashback_area) {
-    if (precheck_if_txn_is_erased(txn_rec)) {
+    if (txn_rec_is_erased_by_precheck(txn_rec)) {
       /** Must be cleanout, so no need to lookup again */
       ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
       return true;
     }
   } else {
-    if (precheck_if_txn_is_purged(txn_rec)) {
+    if (txn_rec_is_purged_by_precheck(txn_rec)) {
       /** Must be cleanout, so no need to lookup again */
       ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
       return true;

@@ -215,6 +215,7 @@ struct MyGCN {
   friend struct commit_mark_t;
   friend struct proposal_mark_t;
 };
+
 /*-----------------------------------------------------------------------------*/
 /** GCN vision represent user query readview. */
 struct MyVisionGCN {
@@ -222,11 +223,16 @@ struct MyVisionGCN {
   MyVisionGCN() { reset(); }
 
   MyVisionGCN(csr_t _csr, gcn_t _gcn, scn_t _scn) {
-    assert(_csr == csr_t::CSR_ASSIGNED ? _scn == SCN_NULL : _scn != SCN_NULL);
-
     csr = _csr;
     gcn = _gcn;
     current_scn = _scn;
+  }
+
+  MyVisionGCN &operator=(gcn_t _gcn) {
+    csr = CSR_ASSIGNED;
+    gcn = _gcn;
+    current_scn = SCN_NULL;
+    return *this;
   }
 
   void reset() {

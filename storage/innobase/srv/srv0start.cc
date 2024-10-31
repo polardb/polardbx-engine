@@ -134,6 +134,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "lizard0erase.h"
+#include "lizard0undo0retent.h"
 
 #include "srv0file.h"
 

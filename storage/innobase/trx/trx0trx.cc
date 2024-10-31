@@ -1640,7 +1640,7 @@ static bool trx_write_serialisation_history(
     /** Lizard: txn undo header */
     commit_mark_t cmmt;
     lizard::TxnUndoRsegs elem;
-    bool has_collected = lizard::trx_collect_rsegs_for_purge(
+    bool has_collected = lizard::trx_purge_collect_rsegs(
         &elem, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
 
     ulint txn_rseg_len = 0;
@@ -1737,7 +1737,7 @@ static bool trx_write_serialisation_history(
     /** Add the rseg into purge queue */
     if (has_collected) {
       ut_ad(elem.get_scn() != SCN_NULL);
-      lizard::trx_add_rsegs_for_purge(cmmt, &elem);
+      lizard::trx_purge_add_rsegs(cmmt, &elem);
     }
   }
 

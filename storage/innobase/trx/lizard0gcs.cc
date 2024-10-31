@@ -223,25 +223,25 @@ void gcs_t::new_snapshot(const commit_snap_t &snap) {
 }
 
 template <typename T>
-trx_id_t gcs_t::search_up_limit_tid(const T &lhs) {
+trx_id_t gcs_t::search_up_limit_tid(const T *lhs) {
   return csnapshot_mgr.search_up_limit_tid(lhs);
 }
 
 template <typename T>
-extern trx_id_t gcs_search_up_limit_tid(const T &lhs) {
+extern trx_id_t gcs_search_up_limit_tid(const T *lhs) {
   return gcs->search_up_limit_tid(lhs);
 }
 
 template trx_id_t gcs_t::search_up_limit_tid<Snapshot_gcn_vision>(
-    const Snapshot_gcn_vision &lhs);
+    const Snapshot_gcn_vision *lhs);
 template trx_id_t gcs_t::search_up_limit_tid<Snapshot_scn_vision>(
-    const Snapshot_scn_vision &lhs);
+    const Snapshot_scn_vision *lhs);
 
 template trx_id_t gcs_search_up_limit_tid<Snapshot_gcn_vision>(
-    const Snapshot_gcn_vision &lhs);
+    const Snapshot_gcn_vision *lhs);
 
 template trx_id_t gcs_search_up_limit_tid<Snapshot_scn_vision>(
-    const Snapshot_scn_vision &lhs);
+    const Snapshot_scn_vision *lhs);
 /**
   Persist gcn if current gcn > persisted gcn.
 

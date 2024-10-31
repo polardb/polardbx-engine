@@ -469,7 +469,7 @@ bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
     ut_a(trx_is_prepared_in_tc(trx));
 
     info->status = XA_status::DETACHED_PREPARE;
-    info->init_by_txn_undo(trx->id, txn_undo_get(trx));
+    info->init_by_txn_undo(trx->id, trx_undo_get_txn(trx));
     return true;
   }
 
@@ -555,11 +555,11 @@ bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info) {
   txn_slot_t txn_slot;
   bool found;
 
-  rseg = get_txn_rseg_by_xid(xid);
+  rseg = txn_rseg_assign_by_xid(xid);
 
   ut_ad(rseg);
 
-  found = txn_rseg_find_trx_info_by_xid(rseg, xid, &txn_slot);
+  found = txn_rseg_find_txn_slot_by_xid(rseg, xid, &txn_slot);
 
   if (!found) {
     return false;
@@ -610,7 +610,7 @@ bool trx_slot_check_validity(const trx_t *trx) {
 
   /** 3. Check the rseg must be mapped by xid_for_hash. */
   ut_ad(trx_is_txn_rseg_updated(trx));
-  ut_a(txn_check_xid_rseg_mapping(&undo_ptr->xid_for_hash, undo_ptr->rseg));
+  ut_a(txn_rseg_check_xid_mapping(&undo_ptr->xid_for_hash, undo_ptr->rseg));
 
   /** 4. Check trx_t::xid and xid_for_hash. */
   if (!trx->xid->is_null()) {
@@ -682,7 +682,7 @@ void decide_xa_when_commit(const trx_t *trx, MyGCN *gcn,
     2. Decide master address.
   */
 
-  if ((txn_undo = txn_undo_get(trx))) {
+  if ((txn_undo = trx_undo_get_txn(trx))) {
     pmmt = txn_undo->pmmt;
   }
   /**

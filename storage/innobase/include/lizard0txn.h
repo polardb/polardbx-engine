@@ -33,11 +33,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn_h
 #define lizard0txn_h
 
+#include "page0types.h"
+#include "log0types.h"
+
+#include "lizard0purge0types.h"
 #include "lizard0undo0types.h"
 #include "lizard0ut.h"
 
-/** TXN will be retained for a period of time after the database is restarted */
-extern ib_time_system_us_t server_start_time_for_txn;
+struct trx_undo_ptr_t;
 
 /**
   The transaction description:
@@ -239,6 +242,94 @@ struct txn_sys_t {
   txn_desc_t txn_desc_dd_upgrade;
 };
 
+/**
+ * prepare_in_tc is treated as first phase commit within 2PC, so we should
+ * mark our transaction system like trx_commit_mark, but only proposal xa
+ * transaction will really do something.
+ *
+ * @param[in]		trx	transaction context
+ * @param[in/out]	undo	undo memory structure
+ * @param[in]		hdr	undo log hdr
+ * @param[in]		mtr
+ *
+ * @retval		proposal commit mark.
+ * */
+proposal_mark_t trx_prepare_mark(trx_t *trx, trx_undo_t *undo,
+                                 trx_ulogf_t *log_hdr, mtr_t *mtr);
+
+/**
+  Assign a new commit scn for the transaction when commit
+
+  @param[in]      trx       current transaction
+  @param[in/out]  scn_ptr   Commit scn which was generated only once
+  @param[in]      undo      txn undo log
+  @param[in]      undo page txn undo log header page
+  @param[in]      offset    txn undo log header offset
+  @param[in]      mtr       mini transaction
+  @param[out]     serialised
+
+  @retval         scn       commit scn struture
+*/
+commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *scn_ptr,
+                              trx_undo_t *undo, page_t *undo_hdr_page,
+                              ulint hdr_offset, bool *serialised, mtr_t *mtr);
+
+/**
+   Resurrect txn undo log segment,
+   Maybe the trx didn't have m_redo update/insert undo log.
+*/
+void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg);
+
+/** Prepares a transaction for given rollback segment. */
+lsn_t txn_prepare_low(
+    trx_t *trx,               /*!< in/out: transaction */
+    txn_undo_ptr_t *undo_ptr, /*!< in/out: pointer to rollback
+                              segment scheduled for prepare. */
+    mtr_t *mtr);
+
+/**
+  Always assign transaction rollback segment for trx
+  @param[in]      trx
+*/
+void trx_assign_txn_rseg(trx_t *trx);
+/**
+  Whether the txn rollback segment has been assigned
+  @param[in]      trx
+*/
+bool trx_is_txn_rseg_assigned(const trx_t *trx);
+/**
+  Whether the txn undo log has modified.
+*/
+bool trx_is_txn_rseg_updated(const trx_t *trx);
+
+/**
+  Get a TXN rseg by XID.
+
+  @retval     rollback segment
+*/
+trx_rseg_t *txn_rseg_assign_by_xid(const XID *xid);
+
+/**
+  Find transactions slot in the finalized state by XID.
+
+  @param[in]  rseg         The rollseg where the transaction is being looked up.
+  @params[in] xid          xid
+  @param[out] txn_slot     Corresponding txn undo header
+
+  @retval     true if the corresponding transaction is found, false otherwise.
+*/
+bool txn_rseg_find_txn_slot_by_xid(trx_rseg_t *rseg, const XID *xid,
+                                   txn_slot_t *txn_slot);
+/**
+  If during an external XA, check whether the mapping relationship between xid
+  and rollback segment is as expected.
+
+  @param[in]        trx         current transaction
+
+  @return           true        if success
+*/
+bool txn_rseg_check_xid_mapping(const XID *xid, const trx_rseg_t *expect_rseg);
+
 }  // namespace lizard
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -259,10 +350,18 @@ struct txn_sys_t {
              SCN_STATE_INITIAL);                            \
   } while (0)
 
+#define assert_trx_in_recovery(trx)                                            \
+  do {                                                                         \
+    if ((trx)->rsegs.m_txn.rseg != NULL && (trx)->rsegs.m_redo.rseg == NULL) { \
+      ut_a((trx)->is_recovered);                                               \
+    }                                                                          \
+  } while (0)
+
 #else
 
 #define assert_txn_desc_initial(trx)
 #define assert_txn_desc_allocated(trx)
+#define assert_trx_in_recovery(trx)
 
 #endif
 

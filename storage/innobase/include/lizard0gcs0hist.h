@@ -216,14 +216,14 @@ class CRing {
    *
    * @retval	item pointer
    */
-  Item *biggest_less_equal_than(const Item &lhs);
+  Item *biggest_less_equal_than(const Item *lhs);
 
   /**
    * Find the biggest item which is less than or equal with argument.
    *
    * @retval	item pointer
    */
-  Item *biggest_less_than(const Item &lhs);
+  Item *biggest_less_than(const Item *lhs);
 
  private:
   /** Memory allocation metrics. */
@@ -254,19 +254,19 @@ class CBuffer {
    *
    * @retval	item pointer
    */
-  Item *biggest_less_equal_than(const Item &lhs);
+  Item *biggest_less_equal_than(const Item *lhs);
 
   /**
    * Find the biggest item which is less than or equal with argument.
    *
    * @retval	item pointer
    */
-  Item *biggest_less_than(const Item &lhs);
+  Item *biggest_less_than(const Item *lhs);
 
   template <typename T>
   struct Type_selector {};
 
-  Item *search(const Item &lhs, Type_selector<Snapshot_gcn_vision>) {
+  Item *search(const Item *lhs, Type_selector<Snapshot_gcn_vision>) {
     Item *ptr = biggest_less_than(lhs);
 #ifdef UNIV_DEBUG
     if (ptr != nullptr) {
@@ -276,7 +276,7 @@ class CBuffer {
     return ptr;
   }
 
-  Item *search(const Item &lhs, Type_selector<Snapshot_scn_vision>) {
+  Item *search(const Item *lhs, Type_selector<Snapshot_scn_vision>) {
     Item *ptr = biggest_less_equal_than(lhs);
 #ifdef UNIV_DEBUG
     if (ptr != nullptr) {
@@ -286,7 +286,7 @@ class CBuffer {
     return ptr;
   }
 
-  Item *search(const Item &lhs) { return search(lhs, Type_selector<Item>()); }
+  Item *search(const Item *lhs) { return search(lhs, Type_selector<Item>()); }
 
  private:
   /** Fill item by second */
@@ -337,7 +337,7 @@ class CSnapshot_mgr {
   void push(const commit_snap_t &snap);
 
   template <typename Item>
-  trx_id_t search_up_limit_tid(const Item &lhs);
+  trx_id_t search_up_limit_tid(const Item *lhs);
 
  private:
   CSnapshot_buffer *m_csnapshot_buffers;

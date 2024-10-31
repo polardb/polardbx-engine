@@ -170,7 +170,7 @@ void VisionContainer::vision_open(trx_t *trx) {
   /** Verify commit snapshot module correctness. */
   if (srv_vision_use_commit_snapshot_debug) {
     Snapshot_scn_vision v(vision->snapshot_scn(), 0);
-    vision->m_up_limit_id = gcs_search_up_limit_tid<Snapshot_scn_vision>(v);
+    vision->m_up_limit_id = gcs_search_up_limit_tid<Snapshot_scn_vision>(&v);
   }
 }
 
@@ -268,50 +268,70 @@ bool Snapshot_scn_vision::modification_visible(void *txn_rec) const {
   @retval     whether the vision sees the modifications of id.
               True if visible
 */
-bool Snapshot_gcn_vision::modification_visible(void *txn_rec) const {
-  csr_t rec_csr, vision_csr;
-  bool is_slave;
+bool Snapshot_assigned_gcn_vision::modification_visible(void *txn_rec) const {
   txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
 
   /** Promise committed trx and not myself. */
   ut_ad(rec->scn != SCN_NULL && rec->gcn != GCN_NULL);
   ut_ad(!undo_ptr_is_active(rec->undo_ptr));
 
-  vision_csr = m_csr;
-  rec_csr = undo_ptr_get_csr(rec->undo_ptr);
-  is_slave = undo_ptr_is_slave(rec->undo_ptr);
+  csr_t rec_csr = undo_ptr_get_csr(rec->undo_ptr);
 
   if (rec->gcn == m_gcn) {
-    if (vision_csr == CSR_ASSIGNED) {
-      if (rec_csr == CSR_ASSIGNED) {
-        /** Case 1: Usually, it is impossible for distributed writing and
-        distributed reading to have the same GCN. However, for the flashback
-        query, it might happen because the AS OF GCN might be converted by
-        timestamp.
+    if (rec_csr == CSR_ASSIGNED) {
+      /** Case 1: Usually, it is impossible for distributed writing and
+      distributed reading to have the same GCN. However, for the flashback
+      query, it might happen because the AS OF GCN might be converted by
+      timestamp.
 
-        In such a case, we think is's read-after-write. */
-        return true;
-      } else {
-        /** Case 2: If the record is generate by local trx, then it must happen
-        after the distribute reading. */
-        return false;
-      }
+      In such a case, we think is's read-after-write. */
+      return true;
     } else {
-      if (rec_csr == CSR_ASSIGNED) {
-        /** Case 3: If the record is generate by distributed trx, then it must
-        happen before the local reading opened. */
-        return true;
+      /** Case 2: If the record is generate by local trx, then it must happen
+      after the distribute reading. */
+      return false;
+    }
+  } else {
+    return rec->gcn < m_gcn;
+  }
+}
+
+/**
+  Judge visible by txn relation info.
+
+  Attention:
+   asof
+    1) Will see myself modification
+    2) Not see uncommitted modification
+
+  @retval     whether the vision sees the modifications of id.
+              True if visible
+*/
+bool Snapshot_automatic_gcn_vision::modification_visible(void *txn_rec) const {
+  txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
+
+  /** Promise committed trx and not myself. */
+  ut_ad(rec->scn != SCN_NULL && rec->gcn != GCN_NULL);
+  ut_ad(!undo_ptr_is_active(rec->undo_ptr));
+
+  csr_t rec_csr = undo_ptr_get_csr(rec->undo_ptr);
+  bool is_slave = undo_ptr_is_slave(rec->undo_ptr);
+
+  if (rec->gcn == m_gcn) {
+    if (rec_csr == CSR_ASSIGNED) {
+      /** Case 3: If the record is generate by distributed trx, then it must
+      happen before the local reading opened. */
+      return true;
+    } else {
+      if (!is_slave) {
+        /** Case 4: If the record is generate by local trx, the the visibility
+        judgment of the local read depends entirely on the local commit
+        number (SCN).*/
+        return rec->scn <= m_current_scn;
       } else {
-        if (!is_slave) {
-          /** Case 4: If the record is generate by local trx, the the visibility
-          judgment of the local read depends entirely on the local commit
-          number (SCN).*/
-          return rec->scn <= m_current_scn;
-        } else {
-          /** Case 5: If a single-shard read query two branchs of a global
-          transaction, then the two branchs shoud share a commit state. */
-          return modification_visible_by_share_cn(txn_rec);
-        }
+        /** Case 5: If a single-shard read query two branchs of a global
+        transaction, then the two branchs shoud share a commit state. */
+        return modification_visible_by_share_cn(txn_rec);
       }
     }
   } else {
@@ -319,14 +339,14 @@ bool Snapshot_gcn_vision::modification_visible(void *txn_rec) const {
   }
 }
 
-bool Snapshot_gcn_vision::modification_visible_by_share_cn(void *rec) const {
+bool Snapshot_automatic_gcn_vision::modification_visible_by_share_cn(
+    void *rec) const {
   txn_rec_t *txn_rec = static_cast<txn_rec_t *>(rec);
   txn_rec_t ref_txn_rec;
   bool active;
 
   /** Must be Single Shard Transaction, and the master branch must be distribute
   transation. So never: creator_trx_id == txn_rec->trx_id. */
-  ut_a(m_csr == CSR_AUTOMATIC);
 
   active = txn_rec_get_master_by_lookup(txn_rec, &ref_txn_rec);
 

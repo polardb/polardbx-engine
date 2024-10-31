@@ -195,7 +195,7 @@ static inline bool trx_erase_check_limit() {
 
   @retval       bool        true if the corresponding txn has been erased
 */
-bool precheck_if_txn_is_erased(const txn_rec_t *txn_rec);
+bool txn_rec_is_erased_by_precheck(const txn_rec_t *txn_rec);
 
 /**
  * Initializes the erase heap and related members in rseg.

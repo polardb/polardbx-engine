@@ -284,7 +284,7 @@ int Snapshot_hint::evoke_vision(TABLE *table, THD *thd) {
     return error;
   }
 
-  Snapshot_vision *vision = table->table_snapshot.get(type());
+  Snapshot_vision *vision = table->table_snapshot.choose_once(type());
   vision->store_int(value);
   vision->set_flashback_area(m_flashback_area);
 
@@ -352,14 +352,20 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
   return false;
 }
 
-int Snapshot_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
-  Snapshot_gcn_vision *vision =
-      dynamic_cast<Snapshot_gcn_vision *>(table->table_snapshot.get(type()));
+/**
+  Evoke table snapshot vision.
+  My_error if failure.
 
-  vision->store_csr(get_csr());
-  vision->store_current_scn(get_current_scn());
+  @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
+  @retval 0 Success
+ */
+int Snapshot_simulate_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
+  Snapshot_gcn_vision *vision = dynamic_cast<Snapshot_gcn_vision *>(
+      table->table_snapshot.choose_once(type()));
+  vision->init(&m_owned_vision);
+  vision->set_flashback_area(m_flashback_area);
 
-  return Snapshot_hint::evoke_vision(table, thd);
+  return table->table_snapshot.activate(vision, thd);
 }
 
 /** Whether is it too old.
@@ -376,10 +382,53 @@ bool Snapshot_scn_vision::too_old() const {
   return false;
 }
 
-void Snapshot_scn_vision::after_activate() {
+void Snapshot_scn_vision::after_activate(THD *) {
   handlerton *ttse = innodb_hton;
-  trx_id_t tid = ttse->ext.search_up_limit_tid_for_scn(*this);
-  set_up_limit_tid(tid);
+  trx_id_t tid = ttse->ext.search_up_limit_tid_for_scn(this);
+  m_up_limit_tid = tid;
+  return;
+}
+
+void Snapshot_automatic_gcn_vision::init(const MyVisionGCN *owned_gcn) {
+  assert(m_gcn == GCN_NULL);
+  m_gcn = owned_gcn->gcn;
+  m_current_scn = owned_gcn->current_scn;
+  m_up_limit_tid = 0;
+}
+
+void Snapshot_automatic_gcn_vision::after_activate(THD *thd) {
+  handlerton *ttse = innodb_hton;
+  MyVisionGCN *owned_gcn;
+
+  owned_gcn = &thd->owned_vision_gcn;
+
+  if (m_gcn == GCN_NULL) {
+    m_gcn = ttse->ext.load_gcn();
+    m_current_scn = ttse->ext.load_scn();
+
+    *owned_gcn = {(csr_t)CSR_AUTOMATIC, (gcn_t)m_gcn, (scn_t)m_current_scn};
+  } else {
+    // already inherit
+  }
+
+  m_up_limit_tid = ttse->ext.search_up_limit_tid_for_gcn(this);
+
+  return;
+}
+
+void Snapshot_assigned_gcn_vision::init(const MyVisionGCN *owned_gcn) {
+  assert(m_gcn == GCN_NULL);
+  assert(owned_gcn->gcn != GCN_NULL && owned_gcn->csr == CSR_ASSIGNED);
+  m_gcn = owned_gcn->gcn;
+  m_up_limit_tid = 0;
+}
+
+void Snapshot_assigned_gcn_vision::after_activate(THD *) {
+  handlerton *ttse = innodb_hton;
+
+  assert(ttse && m_gcn != GCN_NULL);
+
+  m_up_limit_tid = ttse->ext.search_up_limit_tid_for_gcn(this);
   return;
 }
 
@@ -388,33 +437,23 @@ void Snapshot_scn_vision::after_activate() {
  *  @retval	true	too old
  *  @retval	false	normal
  */
-bool Snapshot_gcn_vision::too_old() const {
-  switch (m_csr) {
-    case CSR_AUTOMATIC:
-      assert(m_current_scn != SCN_NULL && m_gcn != GCN_NULL);
-      return innodb_hton->ext.snapshot_scn_too_old(m_current_scn,
-                                                   m_flashback_area) ||
-             innodb_hton->ext.snapshot_automatic_gcn_too_old(m_gcn,
-                                                             m_flashback_area);
-    case CSR_ASSIGNED:
-      assert(m_current_scn == SCN_NULL && m_gcn != GCN_NULL);
-      return innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn,
-                                                            m_flashback_area);
-    default:
-      return true;
-  }
-
-  assert(0);
-  return true;
+bool Snapshot_automatic_gcn_vision::too_old() const {
+  assert(m_current_scn != SCN_NULL && m_gcn != GCN_NULL);
+  return innodb_hton->ext.snapshot_scn_too_old(m_current_scn,
+                                               m_flashback_area) ||
+         innodb_hton->ext.snapshot_automatic_gcn_too_old(m_gcn,
+                                                         m_flashback_area);
 }
 
-void Snapshot_gcn_vision::after_activate() {
-  handlerton *ttse = innodb_hton;
-  assert(ttse);
-
-  trx_id_t tid = ttse->ext.search_up_limit_tid_for_gcn(*this);
-  set_up_limit_tid(tid);
-  return;
+/** Whether is it too old.
+ *
+ *  @retval	true	too old
+ *  @retval	false	normal
+ */
+bool Snapshot_assigned_gcn_vision::too_old() const {
+  assert(m_gcn != GCN_NULL);
+  return innodb_hton->ext.snapshot_assigned_gcn_too_old(m_gcn,
+                                                        m_flashback_area);
 }
 
 /*
@@ -469,8 +508,8 @@ Simulate asof syntax by adding Item onto Table_snapshot.
 @param[in/out]    snapshot    ASOF attributes
 */
 void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
-  Item *item = nullptr;
-  assert(innodb_hton && innodb_hton->ext.load_gcn());
+  bool hint = false;
+  MyVisionGCN owned_gcn;
 
   if (thd->sp_runtime_ctx) {
     return;
@@ -480,22 +519,26 @@ void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
   internally */
   if (thd->owned_vision_gcn.is_null() &&
       thd->variables.innodb_current_snapshot_gcn) {
-    thd->owned_vision_gcn = {csr_t::CSR_AUTOMATIC, innodb_hton->ext.load_gcn(),
-                             innodb_hton->ext.load_scn()};
+    owned_gcn = {CSR_AUTOMATIC, GCN_NULL, SCN_NULL};
+    hint = true;
+
   } else if (!thd->owned_vision_gcn.is_null()) {
-    handlerton *ttse = innodb_hton;
-    ttse->ext.set_gcn_if_bigger(thd->owned_vision_gcn.gcn);
+    owned_gcn = thd->owned_vision_gcn;
+    hint = true;
+
+    if (owned_gcn.csr == CSR_ASSIGNED) {
+      handlerton *ttse = innodb_hton;
+      ttse->ext.set_gcn_if_bigger(owned_gcn.gcn);
+    }
   }
 
-  if (!thd->owned_vision_gcn.is_null()) {
+  if (hint) {
     Table_ref *table;
+    Snapshot_hint *hint_ptr;
     for (table = all_tables; table; table = table->next_global) {
       if (table->snapshot_hint == nullptr) {
-        item =
-            new (thd->mem_root) Item_int((ulonglong)thd->owned_vision_gcn.gcn);
-        Snapshot_hint *hint = new (thd->mem_root) Snapshot_gcn_hint(
-            item, thd->owned_vision_gcn.csr, thd->owned_vision_gcn.current_scn);
-        table->snapshot_hint = hint;
+        hint_ptr = new (thd->mem_root) Snapshot_simulate_gcn_hint(owned_gcn);
+        table->snapshot_hint = hint_ptr;
       }
     }
   }
@@ -506,8 +549,8 @@ void simulate_snapshot_clause(THD *thd, Table_ref *all_tables) {
       if (table->snapshot_hint == nullptr) {
         item = new (thd->mem_root)
             Item_int((ulonglong)innodb_hton->ext.load_scn());
-        Snapshot_hint *hint = new (thd->mem_root) Snapshot_scn_hint(item);
-        table->snapshot_hint = hint;
+        Snapshot_hint *hint_ptr = new (thd->mem_root) Snapshot_scn_hint(item);
+        table->snapshot_hint = hint_ptr;
       }
     }
   }

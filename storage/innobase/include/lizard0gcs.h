@@ -233,7 +233,7 @@ struct gcs_t {
   void new_snapshot(const commit_snap_t &snap);
 
   template <typename T>
-  trx_id_t search_up_limit_tid(const T &lhs);
+  trx_id_t search_up_limit_tid(const T *lhs);
 };
 
 /** Initialize GCS system memory structure. */
@@ -312,7 +312,7 @@ extern scn_t gcs_load_min_safe_scn();
 void gcs_erase_lists(trx_t *trx);
 
 template <typename T>
-extern trx_id_t gcs_search_up_limit_tid(const T &lhs);
+extern trx_id_t gcs_search_up_limit_tid(const T *lhs);
 
 extern void gcs_set_gcn_if_bigger(gcn_t gcn);
 

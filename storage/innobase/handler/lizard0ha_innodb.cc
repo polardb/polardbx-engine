@@ -32,6 +32,7 @@
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 #include "lizard0dict.h"
+#include "lizard0undo0retent.h"
 
 #include <sql_class.h>
 #include "sql/xa/lizard_xa_trx.h"
@@ -132,14 +133,14 @@ static bool innobase_search_history_trx_by_xid(const XID *xid, MyXAInfo *info) {
 }
 
 template <typename T>
-static trx_id_t innobase_search_up_limit_tid(const T &lhs) {
+static trx_id_t innobase_search_up_limit_tid(const T *lhs) {
   return static_cast<trx_id_t>(lizard::gcs_search_up_limit_tid<T>(lhs));
 }
 
 template trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>(
-    const lizard::Snapshot_scn_vision &lhs);
+    const lizard::Snapshot_scn_vision *lhs);
 template trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>(
-    const lizard::Snapshot_gcn_vision &lhs);
+    const lizard::Snapshot_gcn_vision *lhs);
 
 /**
  * Copy server XA attributes into innobase.

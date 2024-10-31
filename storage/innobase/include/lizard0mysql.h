@@ -47,7 +47,8 @@ struct asof_query_context_t {
   }
   bool is_asof_gcn() const {
     return m_snapshot_vision &&
-           m_snapshot_vision->type() == Snapshot_type::AS_OF_GCN;
+           (m_snapshot_vision->type() == Snapshot_type::AS_OF_AUTOMATIC_GCN ||
+            m_snapshot_vision->type() == Snapshot_type::AS_OF_ASSIGNED_GCN);
   }
 
   void assign_vision(const Snapshot_vision *v) {

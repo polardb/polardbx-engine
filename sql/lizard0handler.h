@@ -150,7 +150,7 @@ typedef void (*decide_xa_when_commit_by_xid_t)(handlerton *hton, XID *xid,
 typedef bool (*trx_slot_check_retention_t)();
 
 template <typename T>
-using search_up_limit_tid_t = trx_id_t (*)(const T &lhs);
+using search_up_limit_tid_t = trx_id_t (*)(const T *lhs);
 
 namespace lizard {
 class Snapshot_scn_vision;

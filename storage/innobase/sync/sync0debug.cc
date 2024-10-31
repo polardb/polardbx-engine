@@ -63,6 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0scn.h"
 #include "lizard0undo.h"
+#include "lizard0undo0retent.h"
 
 #include "srv0file.h"
 

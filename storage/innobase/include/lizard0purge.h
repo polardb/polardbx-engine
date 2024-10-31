@@ -131,6 +131,15 @@ struct min_safe_scn {
   scn_t m_scn;
 };
 
+/** Collect rsegs into the purge heap for the first time */
+bool trx_purge_collect_rsegs(TxnUndoRsegs *elem,
+                                 trx_undo_ptr_t *redo_rseg_undo_ptr,
+                                 trx_undo_ptr_t *temp_rseg_undo_ptr,
+                                 txn_undo_ptr_t *txn_rseg_undo_ptr);
+
+/** Add the rseg into the purge queue heap */
+void trx_purge_add_rsegs(commit_mark_t &scn, TxnUndoRsegs *elem);
+
 /**
   Initialize / reload purged_scn from purge_sys->purge_heap
 
@@ -153,7 +162,7 @@ void trx_purge_set_purged_scn(scn_t txn_scn);
 
   @retval       bool        true if the corresponding txn has been purged
 */
-bool precheck_if_txn_is_purged(const txn_rec_t *txn_rec);
+bool txn_rec_is_purged_by_precheck(const txn_rec_t *txn_rec);
 
 void trx_purge_add_sp_list(trx_rseg_t *rseg, trx_rsegf_t *rseg_hdr,
                            trx_ulogf_t *log_hdr, ulint type, mtr_t *mtr);
@@ -165,16 +174,6 @@ void trx_purge_add_sp_list(trx_rseg_t *rseg, trx_rsegf_t *rseg_hdr,
  * @param[in] hdr_addr        File address of log_hdr
  */
 void trx_purge_migrate_last_log(trx_rseg_t *rseg, fil_addr_t hdr_addr);
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-/**
-  Validate all transactions whose SCN > purged_scn is always unpurged.
-
-  @return         true      sucessful validation
-*/
-bool purged_scn_validation();
-
-#endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 
 extern void trx_purge_start_history();
 
@@ -194,6 +193,12 @@ extern void trx_purge_start_history();
 bool row_purge_optimistic_reposition_pcur(ulint mode, purge_node_t *node,
                                           btr_cur_t *sec_cursor, mtr_t *mtr);
 
+/**
+  Validate all transactions whose SCN > purged_scn is always unpurged.
+
+  @return         true      sucessful validation
+*/
+extern bool purged_scn_validation();
 }  // namespace lizard
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
@@ -205,7 +210,7 @@ bool row_purge_optimistic_reposition_pcur(ulint mode, purge_node_t *node,
 
 #else
 
-#define lizard_purged_scn_validation(page)
+#define lizard_purged_scn_validation()
 
 #endif /* UNIV_DEBUG || defined LIZARD_DEBUG */
 

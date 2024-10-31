@@ -295,6 +295,7 @@ SET(INNOBASE_SOURCES
   mtr/lizard0mtr0log.cc
   dict/lizard0dd0policy.cc
   btr/lizard0cleanout0safe.cc
+  trx/lizard0undo0retent.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

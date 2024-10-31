@@ -2096,7 +2096,7 @@ page_t *trx_undo_set_state_at_finish(
 
   if (undo->type == TRX_UNDO_TXN) {
     ut_ad(undo->size == 1);
-    state = lizard::decide_txn_undo_state_at_finish(free_offset);
+    state = lizard::txn_undo_decide_state_at_finish(free_offset);
   } else if (undo->size == 1 && free_offset < TRX_UNDO_PAGE_REUSE_LIMIT) {
     state = TRX_UNDO_CACHED;
   } else if (undo->type == TRX_UNDO_INSERT) {

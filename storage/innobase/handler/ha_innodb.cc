@@ -232,6 +232,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 #include "srv0file.h"
 #include "lizard0dict0mem.h"
+#include "lizard0undo0retent.h"
+
 #include "sql/xa_specification.h"
 #include "sql/dd/lizard_policy_types.h"
 

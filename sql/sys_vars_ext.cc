@@ -300,8 +300,7 @@ static bool set_owned_vision_gcn_on_update(sys_var *, THD *thd, enum_var_type) {
   if (thd->variables.innodb_snapshot_gcn == GCN_NULL) {
     thd->owned_vision_gcn.reset();
   } else {
-    thd->owned_vision_gcn = {csr_t::CSR_ASSIGNED,
-                             thd->variables.innodb_snapshot_gcn, SCN_NULL};
+    thd->owned_vision_gcn = (gcn_t)thd->variables.innodb_snapshot_gcn;
   }
   return false;
 }

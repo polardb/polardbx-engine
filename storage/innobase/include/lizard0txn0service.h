@@ -40,7 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0trx0service.h"
 #include "ut0dbg.h"
 
-class trx_t;
+struct trx_t;
 
 /** Transaction slot address */
 typedef uint64_t slot_ptr_t;
