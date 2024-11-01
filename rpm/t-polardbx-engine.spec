@@ -10,18 +10,11 @@ License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
-BuildRequires: cmake >= 3.8.2
 
-BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, libaio-devel, autoconf
-
-BuildRequires: alios7u-2_32-gcc-10-repo
-BuildRequires: gcc >= 10.2.1
-BuildRequires: gcc-c++ >= 10.2.1
-BuildRequires: libstdc++-devel >= 10.2.1
-BuildRequires: binutils >= 2.35
-
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
-
+%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
+BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, autoconf
+%endif
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel libaio-devel
 
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
@@ -40,6 +33,7 @@ as for embedding into mass-deployed software.
 %define commit_id %(git rev-parse --short HEAD)
 %define base_dir /u01/xcluster80
 %define copy_dir /u01/xcluster80_%{release_date}
+%define link_dir /opt/polardbx_engine
 
 %prep
 cd $OLDPWD/../
@@ -109,15 +103,8 @@ $CMAKE_BIN .                            \
 %install
 cd $OLDPWD/../
 make DESTDIR=$RPM_BUILD_ROOT install -j `cat /proc/cpuinfo | grep processor| wc -l`
-# releaseNote.txt
-# cp releaseNote.txt $RPM_BUILD_ROOT%{prefix}
-find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
-# mkdir -p $RPM_BUILD_ROOT%{prefix}/mysqlmisc
-# for misc in `ls $RPM_BUILD_ROOT%{prefix} | grep -v "bin\|man\|share\|include\|lib\|mysql-test\|mysqlmisc"`
-# do
-#         cp -rf $RPM_BUILD_ROOT%{prefix}/${misc} $RPM_BUILD_ROOT%{prefix}/mysqlmisc
-# done
+find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -177,6 +164,8 @@ else
     cp -rf %{prefix} %{copy_dir}
 fi
 
+rm -rf %{link_dir}
+ln -nsf %{copy_dir} %{link_dir}
 
 rm -rf %{prefix}
 
