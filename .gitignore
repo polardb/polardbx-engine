@@ -548,3 +548,4 @@ extra/jemalloc/jemalloc-patch
 extra/jemalloc/jemalloc-update
 extra/jemalloc/jemalloc-*info.txt
 router/tests/data/
+*.gcov

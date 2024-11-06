@@ -612,6 +612,17 @@ static TYPELIB innodb_change_buffering_typelib = {
     array_elements(innodb_change_buffering_names) - 1,
     "innodb_change_buffering_typelib", innodb_change_buffering_names, nullptr};
 
+/** Allowed values of encrypt_algorithm */
+static const char *innodb_encrypt_algorithm_names[] = {
+    "sm4",           /* SM4 */
+    "aes_256_cbc",   /* AES */
+    NullS};
+
+/** Enumeration of encrypt_algorithm */
+static TYPELIB innodb_encrypt_algorithm_typelib = {
+    array_elements(innodb_encrypt_algorithm_names) - 1,
+    "innodb_encrypt_algorithm_typelib", innodb_encrypt_algorithm_names, NULL};
+
 /** Retrieve the FTS Relevance Ranking result for doc with doc_id
 of m_prebuilt->fts_doc_id
 @param[in,out]  fts_hdl FTS handler
@@ -23337,6 +23348,11 @@ static MYSQL_SYSVAR_ENUM(change_buffering, innodb_change_buffering,
                          nullptr, nullptr, IBUF_USE_ALL,
                          &innodb_change_buffering_typelib);
 
+static MYSQL_SYSVAR_ENUM(encrypt_algorithm, encrypt_algorithm,
+                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                         "Page data encrypt algorithm: sm4, aes_256_cbc", NULL,
+                         NULL, AES_256_CBC, &innodb_encrypt_algorithm_typelib);
+
 static MYSQL_SYSVAR_UINT(
     change_buffer_max_size, srv_change_buffer_max_size, PLUGIN_VAR_RQCMDARG,
     "Maximum on-disk size of change buffer in terms of percentage"
@@ -24081,6 +24097,7 @@ static SYS_VAR *innobase_system_variables[] = {
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(dbug_gpp_no),
 #endif /* UNIV_DEBUG */
+MYSQL_SYSVAR(encrypt_algorithm),
     nullptr};
 
 mysql_declare_plugin(innobase){

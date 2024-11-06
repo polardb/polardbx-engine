@@ -1,0 +1,371 @@
+show global variables like 'innodb_encrypt_algorithm';
+Variable_name	Value
+innodb_encrypt_algorithm	sm4
+set global innodb_encrypt_algorithm=rc4;
+ERROR HY000: Variable 'innodb_encrypt_algorithm' is a read only variable
+create database db_encrypt;
+use db_encrypt;
+create table t_1(id int primary key auto_increment, col1 varchar(1000))engine=innodb, ENCRYPTION='y';
+insert into t_1 values(1, repeat('test', 200));
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+insert into t_1(col1) select col1 from t_1;
+commit;
+select count(*) from t_1;
+count(*)
+16384
+select * from t_1 limit 10;
+id	col1
+1	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+2	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+3	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+4	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+6	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+7	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+8	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+9	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+13	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+14	testtesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttesttest
+checksum table t_1;
+Table	Checksum
+db_encrypt.t_1	150438549
+create table t_2(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb, row_format=compact, ENCRYPTION='y';
+insert into t_2 select * from t_1;
+commit;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `t_2_index` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+drop index t_2_index on t_2;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 row_format=REDUNDANT;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `t_2_index` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+drop index t_2_index on t_2;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 row_format=COMPRESSED;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `t_2_index` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+drop index t_2_index on t_2;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 row_format=DYNAMIC;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `t_2_index` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+drop index t_2_index on t_2;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+create table t_3(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb,row_format=compressed,key_block_size=4,ENCRYPTION='y';
+insert into t_3 select * from t_1;
+commit;
+show create table t_3;
+Table	Create Table
+t_3	CREATE TABLE `t_3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4 ENCRYPTION='y'
+checksum table t_3;
+Table	Checksum
+db_encrypt.t_3	150438549
+use db_encrypt;
+checksum table t_1;
+Table	Checksum
+db_encrypt.t_1	150438549
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+checksum table t_3;
+Table	Checksum
+db_encrypt.t_3	150438549
+drop table t_2;
+drop table t_3;
+create table t_2(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=myisam, ENCRYPTION='y';
+ERROR 42000: The storage engine for the table doesn't support ENCRYPTION
+create table t_2(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb ENCRYPTION='y';
+insert into t_2 select * from t_1;
+commit;
+show create table t_2;
+Table	Create Table
+t_2	CREATE TABLE `t_2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='y'
+checksum table t_2;
+Table	Checksum
+db_encrypt.t_2	150438549
+alter table t_2 engine=myisam;
+ERROR 42000: The storage engine for the table doesn't support ENCRYPTION
+drop table t_2;
+create table t_p(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb, ENCRYPTION='y' partition by range(id)
+(
+partition p0 values less than (1000),
+partition p1 values less than (2000),
+partition p2 values less than (3000),
+partition p3 values less than (4000),
+partition p_max values less than maxvalue
+);
+insert into t_p select * from t_1;
+commit;
+alter table t_p add col2 int;
+alter table t_p drop column col2;
+alter table t_p engine=myisam;
+ERROR 42000: The storage engine for the table doesn't support native partitioning
+show create table t_p;
+Table	Create Table
+t_p	CREATE TABLE `t_p` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='y'
+/*!50100 PARTITION BY RANGE (`id`)
+(PARTITION p0 VALUES LESS THAN (1000) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (2000) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (3000) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (4000) ENGINE = InnoDB,
+ PARTITION p_max VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+checksum table t_p;
+Table	Checksum
+db_encrypt.t_p	150438549
+DROP TABLE t_p;
+create table t_p(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb, ENCRYPTION='y' partition by range(id)
+(
+partition p0 values less than (1000),
+partition p1 values less than (2000),
+partition p2 values less than (3000),
+partition p3 values less than (4000),
+partition p_max values less than maxvalue
+);
+insert into t_p select * from t_1;
+checksum table t_p;
+Table	Checksum
+db_encrypt.t_p	150438549
+create table t_2(id int primary key auto_increment,
+col1 varchar(1000)
+)engine= innodb, ENCRYPTION='y';
+alter table t_p exchange partition p0 with table t_2;
+select count(*) from t_p;
+count(*)
+15872
+select count(*) from t_2;
+count(*)
+512
+checksum table t_p;
+Table	Checksum
+db_encrypt.t_p	3864425760
+show create table t_p;
+Table	Create Table
+t_p	CREATE TABLE `t_p` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24563 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='y'
+/*!50100 PARTITION BY RANGE (`id`)
+(PARTITION p0 VALUES LESS THAN (1000) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (2000) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (3000) ENGINE = InnoDB,
+ PARTITION p3 VALUES LESS THAN (4000) ENGINE = InnoDB,
+ PARTITION p_max VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+create table t_3(id int primary key auto_increment,
+col1 varchar(1000)
+)engine= innodb;
+alter table t_p exchange partition p0 with table t_3;
+drop table t_p;
+drop table t_2;
+drop table t_3;
+use db_encrypt;
+create table t_c(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb, ENCRYPTION='y';
+insert into t_c select * from t_1;
+commit;
+create table t_c_1 as select * from t_c;
+show create table t_c_1;
+Table	Create Table
+t_c_1	CREATE TABLE `t_c_1` (
+  `id` int NOT NULL DEFAULT '0',
+  `col1` varchar(1000) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+checksum table t_c_1;
+Table	Checksum
+db_encrypt.t_c_1	150438549
+create table t_c_2 ENCRYPTION='y' as select * from t_c;
+show create table t_c_2;
+Table	Create Table
+t_c_2	CREATE TABLE `t_c_2` (
+  `id` int NOT NULL DEFAULT '0',
+  `col1` varchar(1000) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='y'
+checksum table t_c_2;
+Table	Checksum
+db_encrypt.t_c_2	150438549
+create table t_c_3 like t_c;
+show create table t_c_3;
+Table	Create Table
+t_c_3	CREATE TABLE `t_c_3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` varchar(1000) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='y'
+checksum table t_c_3;
+Table	Checksum
+db_encrypt.t_c_3	0
+drop table t_c_1;
+drop table t_c_2;
+drop table t_c_3;
+drop table t_c;
+set @old_innodb_file_per_table= @@global.innodb_file_per_table;
+set global innodb_file_per_table=off;
+set @old_innodb_strict_mode= @@session.innodb_strict_mode;
+set session innodb_strict_mode=0;
+use db_encrypt;
+create table t_i(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb, ENCRYPTION='y';
+ERROR HY000: Request to create 'encrypted' table while using an 'unencrypted' tablespace.
+set session innodb_strict_mode=1;
+create table t_i(id int primary key auto_increment,
+col1 varchar(1000)
+)engine=innodb ,ENCRYPTION='y';
+ERROR HY000: Request to create 'encrypted' table while using an 'unencrypted' tablespace.
+set global innodb_file_per_table= @old_innodb_file_per_table;
+set session innodb_strict_mode= @old_innodb_strict_mode;
+use db_encrypt;
+drop table t_1;
+drop database db_encrypt;

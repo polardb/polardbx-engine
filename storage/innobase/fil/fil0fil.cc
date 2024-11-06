@@ -2636,7 +2636,7 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
   /* For encrypted tablespace, we need to check the
   encryption key and iv(initial vector) is read. */
   if (FSP_FLAGS_GET_ENCRYPTION(space->flags) && !recv_recovery_is_on() &&
-      space->m_encryption_metadata.m_type != Encryption::AES) {
+      space->m_encryption_metadata.m_type == Encryption::NONE) {
     ib::error(ER_IB_MSG_273, file->name);
 
     return DB_ERROR;
@@ -7620,7 +7620,7 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
                           space->m_encryption_metadata.m_key_len,
                           space->m_encryption_metadata.m_iv);
 
-  req_type.encryption_algorithm(Encryption::AES);
+  req_type.encryption_algorithm(encrypt_type());
 }
 
 AIO_mode Fil_shard::get_AIO_mode(const IORequest &, bool sync) {
@@ -8423,7 +8423,7 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
       read_request.encryption_key(iter.m_encryption_key, Encryption::KEY_LEN,
                                   iter.m_encryption_iv);
 
-      read_request.encryption_algorithm(Encryption::AES);
+      read_request.encryption_algorithm(encrypt_type());
     }
 
     err = os_file_read(read_request, iter.m_filepath, iter.m_file, io_buffer,
@@ -8469,7 +8469,7 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
       write_request.encryption_key(iter.m_encryption_key, Encryption::KEY_LEN,
                                    iter.m_encryption_iv);
 
-      write_request.encryption_algorithm(Encryption::AES);
+      write_request.encryption_algorithm(encrypt_type());
     }
 
     /* For compressed table, set compressed information.

@@ -1,0 +1,4 @@
+$KEYRING_PLUGIN_OPT
+--innodb_encrypt_algorithm=sm4
+--early-plugin-load=keyring_file.so
+--keyring_file_data=$MYSQL_TMP_DIR/keyring_data

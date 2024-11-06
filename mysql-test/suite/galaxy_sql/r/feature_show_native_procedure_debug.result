@@ -18,6 +18,7 @@ dbms_consensus	drop_prefetch_channel	ADMIN_PROC	LONGLONG
 dbms_consensus	fix_cluster_id	ADMIN_PROC	LONGLONG
 dbms_consensus	fix_matchindex	ADMIN_PROC	VARCHAR, LONGLONG
 dbms_consensus	force_learner_node	ADMIN_PROC	NULL
+dbms_consensus	force_purge_cache	ADMIN_PROC	LONGLONG
 dbms_consensus	force_purge_log	ADMIN_PROC	LONGLONG
 dbms_consensus	force_single_mode	ADMIN_PROC	NULL
 dbms_consensus	local_purge_log	ADMIN_PROC	LONGLONG

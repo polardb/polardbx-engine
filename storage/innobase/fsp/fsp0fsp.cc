@@ -4685,7 +4685,8 @@ static void validate_tablespace_encryption(fil_space_t *space) {
     ut_ad(memcmp(space->m_encryption_metadata.m_iv, buf, Encryption::KEY_LEN) !=
           0);
     ut_ad(space->m_encryption_metadata.m_key_len != 0);
-    ut_ad(space->m_encryption_metadata.m_type == Encryption::AES);
+    ut_ad(space->m_encryption_metadata.m_type == Encryption::AES ||
+          space->m_encryption_metadata.m_type == Encryption::SM4);
   } else {
     ut_ad(memcmp(space->m_encryption_metadata.m_key, buf,
                  Encryption::KEY_LEN) == 0);

@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include "os0enc.h"
 #include "fil0fil.h"
+#include "my_sm4.h"
 #include "os0key.h"
 #ifdef UNIV_HOTBACKUP
 #include "fsp0file.h"
@@ -212,6 +213,7 @@ const char *Encryption::to_string(Type type) noexcept {
     case NONE:
       return ("N");
     case AES:
+    case SM4:
       return ("Y");
   }
 
@@ -816,15 +818,18 @@ bool Encryption::encrypt_log_block(const IORequest &, byte *src_ptr,
     case NONE:
       ut_error;
 
+    case SM4:
     case AES: {
       ut_ad(m_klen == KEY_LEN);
 
-      auto elen = my_aes_encrypt(
+      Encrypt_func encrypt_func = get_encrypt_func(m_type);
+      ut_ad(encrypt_func != NULL);
+      auto elen = encrypt_func(
           src_ptr + LOG_BLOCK_HDR_SIZE, static_cast<uint32>(main_len),
           dst_ptr + LOG_BLOCK_HDR_SIZE, m_key, static_cast<uint32>(m_klen),
-          my_aes_256_cbc, m_iv, false);
+          m_iv, false, nullptr);
 
-      if (elen == MY_AES_BAD_DATA) {
+      if (elen == ENCRYPT_BAD_DATA) {
         return (false);
       }
 
@@ -844,12 +849,12 @@ bool Encryption::encrypt_log_block(const IORequest &, byte *src_ptr,
       if (remain_len != 0) {
         remain_len = MY_AES_BLOCK_SIZE * 2;
 
-        elen = my_aes_encrypt(
-            dst_ptr + LOG_BLOCK_HDR_SIZE + data_len - remain_len,
-            static_cast<uint32>(remain_len), remain_buf, m_key,
-            static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv, false);
+        elen =
+            encrypt_func(dst_ptr + LOG_BLOCK_HDR_SIZE + data_len - remain_len,
+                         static_cast<uint32>(remain_len), remain_buf, m_key,
+                         static_cast<uint32>(m_klen), m_iv, false, nullptr);
 
-        if (elen == MY_AES_BAD_DATA) {
+        if (elen == ENCRYPT_BAD_DATA) {
           return (false);
         }
 
@@ -979,7 +984,10 @@ bool Encryption::encrypt_low(byte *src, ulint src_len, byte *dst,
     case NONE:
       ut_error;
 
+    case SM4:
     case AES: {
+      Encrypt_func encrypt_func = get_encrypt_func(m_type);
+      ut_ad(encrypt_func != NULL);
       ut_ad(m_klen == KEY_LEN);
 
       /* Total length of the data to encrypt. */
@@ -996,12 +1004,12 @@ bool Encryption::encrypt_low(byte *src, ulint src_len, byte *dst,
       const auto chunk_len = (data_len / MY_AES_BLOCK_SIZE) * MY_AES_BLOCK_SIZE;
       const auto remain_len = data_len - chunk_len;
 
-      auto elen = my_aes_encrypt(
-          src + FIL_PAGE_DATA, static_cast<uint32>(chunk_len),
-          dst + FIL_PAGE_DATA, m_key, static_cast<uint32>(m_klen),
-          my_aes_256_cbc, m_iv, false);
+      auto elen =
+          encrypt_func(src + FIL_PAGE_DATA, static_cast<uint32>(chunk_len),
+                       dst + FIL_PAGE_DATA, m_key, static_cast<uint32>(m_klen),
+                       m_iv, false, nullptr);
 
-      if (elen == MY_AES_BAD_DATA) {
+      if (elen == ENCRYPT_BAD_DATA) {
         const auto page_id = page_get_page_id(src);
 
         ib::error(ER_IB_MSG_844) << " Can't encrypt data of page " << page_id;
@@ -1021,12 +1029,11 @@ bool Encryption::encrypt_low(byte *src, ulint src_len, byte *dst,
         constexpr size_t trailer_len = MY_AES_BLOCK_SIZE * 2;
         byte buf[trailer_len];
 
-        elen = my_aes_encrypt(dst + FIL_PAGE_DATA + data_len - trailer_len,
-                              static_cast<uint32>(trailer_len), buf, m_key,
-                              static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv,
-                              false);
+        elen = encrypt_func(dst + FIL_PAGE_DATA + data_len - trailer_len,
+                            static_cast<uint32>(trailer_len), buf, m_key,
+                            static_cast<uint32>(m_klen), m_iv, false, nullptr);
 
-        if (elen == MY_AES_BAD_DATA) {
+        if (elen == ENCRYPT_BAD_DATA) {
           const auto page_id = page_get_page_id(src);
 
           ib::error(ER_IB_MSG_845) << " Can't encrypt data of page," << page_id;
@@ -1139,7 +1146,10 @@ dberr_t Encryption::decrypt_log_block(const IORequest &, byte *src,
 
   ptr += LOG_BLOCK_HDR_SIZE;
   switch (m_type) {
+    case SM4:
     case AES: {
+      Decrypt_func decrypt_func = get_decrypt_func(m_type);
+      ut_ad(decrypt_func != NULL);
       lint elen;
 
       /* First decrypt the last 2 blocks data of data, since
@@ -1152,11 +1162,10 @@ dberr_t Encryption::decrypt_log_block(const IORequest &, byte *src,
         /* Copy the last 2 blocks. */
         memcpy(remain_buf, ptr + data_len - remain_len, remain_len);
 
-        elen = my_aes_decrypt(remain_buf, static_cast<uint32>(remain_len),
-                              dst + data_len - remain_len, m_key,
-                              static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv,
-                              false);
-        if (elen == MY_AES_BAD_DATA) {
+        elen = decrypt_func(remain_buf, static_cast<uint32>(remain_len),
+                            dst + data_len - remain_len, m_key,
+                            static_cast<uint32>(m_klen), m_iv, false, nullptr);
+        if (elen == ENCRYPT_BAD_DATA) {
           return (DB_IO_DECRYPT_FAIL);
         }
 
@@ -1170,10 +1179,9 @@ dberr_t Encryption::decrypt_log_block(const IORequest &, byte *src,
       }
 
       /* Then decrypt the main data */
-      elen = my_aes_decrypt(dst, static_cast<uint32>(main_len), ptr, m_key,
-                            static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv,
-                            false);
-      if (elen == MY_AES_BAD_DATA) {
+      elen = decrypt_func(dst, static_cast<uint32>(main_len), ptr, m_key,
+                          static_cast<uint32>(m_klen), m_iv, false, nullptr);
+      if (elen == ENCRYPT_BAD_DATA) {
         return (DB_IO_DECRYPT_FAIL);
       }
 
@@ -1346,7 +1354,10 @@ dberr_t Encryption::decrypt(const IORequest &type, byte *src, ulint src_len,
   remain_len = data_len - main_len;
 
   switch (m_type) {
+    case SM4:
     case AES: {
+      Decrypt_func decrypt_func = get_decrypt_func(m_type);
+      ut_ad(decrypt_func != NULL);
       lint elen;
 
       /* First decrypt the last 2 blocks data of data, since
@@ -1359,12 +1370,11 @@ dberr_t Encryption::decrypt(const IORequest &type, byte *src, ulint src_len,
         /* Copy the last 2 blocks. */
         memcpy(remain_buf, ptr + data_len - remain_len, remain_len);
 
-        elen = my_aes_decrypt(remain_buf, static_cast<uint32>(remain_len),
-                              dst + data_len - remain_len, m_key,
-                              static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv,
-                              false);
+        elen = decrypt_func(remain_buf, static_cast<uint32>(remain_len),
+                            dst + data_len - remain_len, m_key,
+                            static_cast<uint32>(m_klen), m_iv, false, nullptr);
 
-        if (elen == MY_AES_BAD_DATA) {
+        if (elen == ENCRYPT_BAD_DATA) {
           if (block != nullptr) {
             os_free_block(block);
           }
@@ -1384,10 +1394,9 @@ dberr_t Encryption::decrypt(const IORequest &type, byte *src, ulint src_len,
       }
 
       /* Then decrypt the main data */
-      elen = my_aes_decrypt(dst, static_cast<uint32>(main_len), ptr, m_key,
-                            static_cast<uint32>(m_klen), my_aes_256_cbc, m_iv,
-                            false);
-      if (elen == MY_AES_BAD_DATA) {
+      elen = decrypt_func(dst, static_cast<uint32>(main_len), ptr, m_key,
+                          static_cast<uint32>(m_klen), m_iv, false, nullptr);
+      if (elen == ENCRYPT_BAD_DATA) {
         if (block != nullptr) {
           os_free_block(block);
         }
@@ -1551,4 +1560,95 @@ void Encryption::set_or_generate(Type type, byte *key, byte *iv,
   } else {
     ut_error;
   }
+}
+
+/** Data encrypt algorithm */
+ulong encrypt_algorithm;
+
+/** Get encrypt algorithm
+@return algorithm type */
+Encryption::Type encrypt_type() {
+  return encrypt_algorithm == SM4_128_CTR ? Encryption::SM4 : Encryption::AES;
+}
+
+/** Wrap SM4 encrypt function */
+static int wrap_sm4_encrypt(const unsigned char *source, uint32 source_length,
+                            unsigned char *dest, const unsigned char *key,
+                            uint32 key_length, const unsigned char *iv, bool,
+                            std::vector<std::string> *) {
+  int ret =
+      my_sm4_encrypt(source, source_length, dest, key, key_length, SM4_CTR, iv);
+  return (ret < 0) ? ENCRYPT_BAD_DATA : ret;
+}
+
+/** Wrap SM4 decrypt function */
+static int wrap_sm4_decrypt(const unsigned char *source, uint32 source_length,
+                            unsigned char *dest, const unsigned char *key,
+                            uint32 key_length, const unsigned char *iv, bool,
+                            std::vector<std::string> *) {
+  int ret =
+      my_sm4_decrypt(source, source_length, dest, key, key_length, SM4_CTR, iv);
+  return (ret < 0) ? ENCRYPT_BAD_DATA : ret;
+}
+
+/** Wrap AES encrypt function */
+static int wrap_aes_encrypt(const unsigned char *source, uint32 source_length,
+                            unsigned char *dest, const unsigned char *key,
+                            uint32 key_length, const unsigned char *iv,
+                            bool padding,
+                            std::vector<std::string> *kdf_options) {
+  int ret = my_aes_encrypt(source, source_length, dest, key, key_length,
+                           my_aes_256_cbc, iv, padding, kdf_options);
+  return (ret == MY_AES_BAD_DATA) ? ENCRYPT_BAD_DATA : ret;
+}
+
+/** Wrap AES decrypt function */
+static int wrap_aes_decrypt(const unsigned char *source, uint32 source_length,
+                            unsigned char *dest, const unsigned char *key,
+                            uint32 key_length, const unsigned char *iv,
+                            bool padding,
+                            std::vector<std::string> *kdf_options) {
+  int ret = my_aes_decrypt(source, source_length, dest, key, key_length,
+                           my_aes_256_cbc, iv, padding, kdf_options);
+  return (ret == MY_AES_BAD_DATA) ? ENCRYPT_BAD_DATA : ret;
+}
+
+/** Get enctypt function */
+Encrypt_func get_encrypt_func(Encryption::Type type) {
+  Encrypt_func func = NULL;
+
+  switch (type) {
+    case Encryption::AES:
+      ut_ad(encrypt_algorithm == AES_256_CBC);
+      func = wrap_aes_encrypt;
+      break;
+    case Encryption::SM4:
+      ut_ad(encrypt_algorithm == SM4_128_CTR);
+      func = wrap_sm4_encrypt;
+      break;
+    default:
+      ut_error;
+  }
+
+  return func;
+}
+
+/** Get dectypt function */
+Decrypt_func get_decrypt_func(Encryption::Type type) {
+  Encrypt_func func = NULL;
+
+  switch (type) {
+    case Encryption::AES:
+      ut_ad(encrypt_algorithm == AES_256_CBC);
+      func = wrap_aes_decrypt;
+      break;
+    case Encryption::SM4:
+      ut_ad(encrypt_algorithm == SM4_128_CTR);
+      func = wrap_sm4_decrypt;
+      break;
+    default:
+      ut_error;
+  }
+
+  return func;
 }

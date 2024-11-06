@@ -350,7 +350,7 @@ IORequest Log_file_handle::prepare_io_request(int req_type, os_offset_t offset,
   io_request.encryption_key(m_encryption_metadata.m_key,
                             m_encryption_metadata.m_key_len,
                             m_encryption_metadata.m_iv);
-  io_request.encryption_algorithm(m_encryption_metadata.m_type);
+  io_request.encryption_algorithm(encrypt_type());
 
   return io_request;
 }

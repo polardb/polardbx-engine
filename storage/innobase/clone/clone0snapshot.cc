@@ -844,7 +844,7 @@ static void set_page_encryption(IORequest &request, const page_id_t &page_id,
                          file_meta->m_encryption_metadata.m_key_len,
                          file_meta->m_encryption_metadata.m_iv);
 
-  request.encryption_algorithm(file_meta->m_encryption_metadata.m_type);
+  request.encryption_algorithm(encrypt_type());
 }
 
 int Clone_Snapshot::get_page_for_write(const page_id_t &page_id,

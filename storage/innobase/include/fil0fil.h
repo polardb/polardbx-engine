@@ -532,9 +532,11 @@ struct fil_space_t {
 
   /** Copy the encryption info from this object to the provided
   Encryption object.
-  @param[in]    en   Encryption object to which info is copied. */
+  @param[in,out]    en   Encryption object to which info is copied. */
   void get_encryption_info(Encryption &en) noexcept {
-    en.set_type(m_encryption_metadata.m_type);
+    if (can_encrypt()) {
+      en.set_type(encrypt_type());
+    }
     en.set_key(m_encryption_metadata.m_key);
     en.set_key_length(m_encryption_metadata.m_key_len);
     en.set_initial_vector(m_encryption_metadata.m_iv);

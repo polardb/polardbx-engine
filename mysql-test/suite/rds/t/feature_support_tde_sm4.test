@@ -1,0 +1,264 @@
+# skipping it for binlog_format=STATEMENT due to Unsafe statements.
+--source include/have_binlog_format_mixed_or_row.inc
+
+let $MYSQLD_DATADIR= `select @@datadir`;
+
+show global variables like 'innodb_encrypt_algorithm';
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+set global innodb_encrypt_algorithm=rc4;
+
+#------------------------------------------------------
+#create/alter innodb table with different options.
+#------------------------------------------------------
+
+#------------------------------------------------------
+#init sample table.
+#------------------------------------------------------
+create database db_encrypt;
+use db_encrypt;
+create table t_1(id int primary key auto_increment, col1 varchar(1000))engine=innodb, ENCRYPTION='y';
+insert into t_1 values(1, repeat('test', 200));
+
+let $count=14;
+
+while ($count) {
+     eval   insert into t_1(col1) select col1 from t_1;
+     dec $count;
+}
+commit;
+
+select count(*) from t_1;
+select * from t_1 limit 10;
+checksum table t_1;
+
+#------------------------------------------------------
+#different row_format 
+#------------------------------------------------------
+
+create table t_2(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb, row_format=compact, ENCRYPTION='y';
+
+insert into t_2 select * from t_1;
+commit;
+show create table t_2;
+checksum table t_2;
+
+#
+#add/drop index
+#
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+checksum table t_2;
+
+drop index t_2_index on t_2;
+show create table t_2;
+checksum table t_2;
+
+#
+# row_format=REDUNDANT
+#
+alter table t_2 row_format=REDUNDANT;
+show create table t_2;
+checksum table t_2;
+
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+checksum table t_2;
+
+drop index t_2_index on t_2;
+show create table t_2;
+checksum table t_2;
+
+#
+# row_format=COMPRESSED
+#
+alter table t_2 row_format=COMPRESSED;
+show create table t_2;
+checksum table t_2;
+
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+checksum table t_2;
+
+drop index t_2_index on t_2;
+show create table t_2;
+checksum table t_2;
+
+#
+# row_format=DYNAMIC
+#
+alter table t_2 row_format=DYNAMIC;
+show create table t_2;
+checksum table t_2;
+
+alter table t_2 add index t_2_index(id);
+show create table t_2;
+checksum table t_2;
+
+drop index t_2_index on t_2;
+show create table t_2;
+checksum table t_2;
+
+#
+# key_block_size
+#
+create table t_3(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb,row_format=compressed,key_block_size=4,ENCRYPTION='y'; 
+
+insert into t_3 select * from t_1;
+commit;
+show create table t_3;
+checksum table t_3;
+
+connection default;
+use db_encrypt;
+checksum table t_1;
+checksum table t_2;
+checksum table t_3;
+
+drop table t_2;
+drop table t_3;
+
+
+#------------------------------------------------------
+#only support innodb engine
+#------------------------------------------------------
+--error ER_CHECK_NOT_IMPLEMENTED
+create table t_2(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=myisam, ENCRYPTION='y';
+
+
+create table t_2(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb ENCRYPTION='y';
+
+insert into t_2 select * from t_1;
+commit;
+show create table t_2;
+checksum table t_2;
+
+--error ER_CHECK_NOT_IMPLEMENTED
+alter table t_2 engine=myisam;
+
+drop table t_2;
+
+#------------------------------------------------------
+#partition table test
+#------------------------------------------------------
+create table t_p(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb, ENCRYPTION='y' partition by range(id)
+                  (
+                    partition p0 values less than (1000),
+                    partition p1 values less than (2000),
+                    partition p2 values less than (3000),
+                    partition p3 values less than (4000),
+                    partition p_max values less than maxvalue
+                  );
+
+insert into t_p select * from t_1;
+commit;
+alter table t_p add col2 int;
+alter table t_p drop column col2;
+
+--error ER_CHECK_NOT_IMPLEMENTED
+alter table t_p engine=myisam;
+show create table t_p;
+checksum table t_p;
+
+DROP TABLE t_p;
+create table t_p(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb, ENCRYPTION='y' partition by range(id)
+                  (
+                    partition p0 values less than (1000),
+                    partition p1 values less than (2000),
+                    partition p2 values less than (3000),
+                    partition p3 values less than (4000),
+                    partition p_max values less than maxvalue
+                  );
+insert into t_p select * from t_1;
+checksum table t_p;
+create table t_2(id int primary key auto_increment,
+                 col1 varchar(1000)
+                )engine= innodb, ENCRYPTION='y';
+alter table t_p exchange partition p0 with table t_2;
+
+select count(*) from t_p;
+select count(*) from t_2;
+checksum table t_p;
+show create table t_p;
+
+create table t_3(id int primary key auto_increment,
+                 col1 varchar(1000)
+                )engine= innodb;
+
+alter table t_p exchange partition p0 with table t_3;
+
+drop table t_p;
+drop table t_2;
+drop table t_3;
+
+#------------------------------------------------------
+#create as, create like
+#------------------------------------------------------
+connection default;
+use db_encrypt;
+create table t_c(id int primary key auto_increment,
+                 col1 varchar(1000)
+                 )engine=innodb, ENCRYPTION='y';
+insert into t_c select * from t_1;
+commit;
+
+create table t_c_1 as select * from t_c;
+show create table t_c_1;
+checksum table t_c_1;
+
+create table t_c_2 ENCRYPTION='y' as select * from t_c;
+show create table t_c_2;
+checksum table t_c_2;
+
+create table t_c_3 like t_c;
+show create table t_c_3;
+checksum table t_c_3;
+
+drop table t_c_1;
+drop table t_c_2;
+drop table t_c_3;
+drop table t_c;
+
+#------------------------------------------------------
+#innodb_file_per_table, innodb_strict_mode.
+#------------------------------------------------------
+set @old_innodb_file_per_table= @@global.innodb_file_per_table;
+set global innodb_file_per_table=off;
+
+set @old_innodb_strict_mode= @@session.innodb_strict_mode;
+set session innodb_strict_mode=0;
+
+connection default;
+use db_encrypt;
+
+--error ER_INVALID_ENCRYPTION_REQUEST
+create table t_i(id int primary key auto_increment,
+                col1 varchar(1000)
+                )engine=innodb, ENCRYPTION='y';
+
+set session innodb_strict_mode=1;
+
+--error ER_INVALID_ENCRYPTION_REQUEST 
+create table t_i(id int primary key auto_increment,
+                col1 varchar(1000)
+                )engine=innodb ,ENCRYPTION='y';
+
+set global innodb_file_per_table= @old_innodb_file_per_table;
+set session innodb_strict_mode= @old_innodb_strict_mode;
+
+use db_encrypt;
+drop table t_1;
+drop database db_encrypt;
+

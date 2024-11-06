@@ -60,6 +60,9 @@ class Encryption {
 
     /** Use AES */
     AES = 1,
+
+    /** Use SM4 */
+    SM4 = 2,
   };
 
   /** Encryption information format version */
@@ -168,6 +171,7 @@ class Encryption {
     switch (m_type) {
       case NONE:
       case AES:
+      case SM4:
 
       default:
         ut_error;
@@ -476,4 +480,32 @@ struct Encryption_key {
   /** Master key id */
   uint32_t m_master_key_id{Encryption::DEFAULT_MASTER_KEY_ID};
 };
+
+/** Data encrypt algorithm */
+enum data_encrypt_algorithm { SM4_128_CTR, AES_256_CBC };
+extern ulong encrypt_algorithm;
+
+/** Get encrypt algorithm
+@return algorithm type */
+extern Encryption::Type encrypt_type();
+
+/** Encrtytion interfce */
+using Encrypt_func = std::function<int(
+    const unsigned char *source, uint32 source_length, unsigned char *dest,
+    const unsigned char *key, uint32 key_length, const unsigned char *iv,
+    bool padding, std::vector<std::string> *kdf_options)>;
+/** DEcrtytion interfce */
+using Decrypt_func = std::function<int(
+    const unsigned char *source, uint32 source_length, unsigned char *dest,
+    const unsigned char *key, uint32 key_length, const unsigned char *iv,
+    bool padding, std::vector<std::string> *kdf_options)>;
+
+#define ENCRYPT_BAD_DATA (-1)
+
+/** Get enctypt function */
+extern Encrypt_func get_encrypt_func(Encryption::Type type);
+
+/** Get dectypt function */
+extern Decrypt_func get_decrypt_func(Encryption::Type type);
+
 #endif /* os0enc_h */

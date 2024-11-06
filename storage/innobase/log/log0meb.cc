@@ -1956,7 +1956,7 @@ static void redo_log_archive_consumer() {
         request.encryption_key(log_sys->m_encryption_metadata.m_key,
                                log_sys->m_encryption_metadata.m_key_len,
                                log_sys->m_encryption_metadata.m_iv);
-        request.encryption_algorithm(log_sys->m_encryption_metadata.m_type);
+        request.encryption_algorithm(encrypt_type());
       }
 
       // Ensure, that the block written has a minimum size.
