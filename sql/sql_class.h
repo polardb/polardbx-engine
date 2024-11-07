@@ -4569,6 +4569,7 @@ class THD : public MDL_context_owner,
   */
 
   bool send_result_set_row(const mem_root_deque<Item *> &row_items);
+  bool send_returning_result_set_row(const mem_root_deque<Item *> &row_items, ptrdiff_t diff, bool is_before);
 
   /*
     Send the status of the current statement execution over network.

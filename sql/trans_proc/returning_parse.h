@@ -20,6 +20,7 @@
 #ifndef SQL_TRANS_PROC_RETURNING_PARSE_INCLUDED
 #define SQL_TRANS_PROC_RETURNING_PARSE_INCLUDED
 
+#include "field_types.h"
 #include "sql/query_result.h"
 #include "sql/sql_list.h"
 
@@ -28,6 +29,25 @@ struct LEX;
 class Query_block;
 
 namespace im {
+struct Fixed_item {
+ public:
+  Fixed_item(enum_field_types data_type = MYSQL_TYPE_NULL,
+             const char *name = "None")
+      : m_data_type(data_type), m_name(name) {}
+
+  bool is_null() const { return m_name == "None"; }
+
+  Item *allocate();
+
+  void reset() {
+    m_data_type = MYSQL_TYPE_NULL;
+    m_name = "None";
+  }
+
+ private:
+  enum_field_types m_data_type;
+  std::string m_name;
+};
 
 /**
   Returning clause lex object. it will be constructed within THD local,
@@ -43,18 +63,20 @@ class Lex_returning {
   /* Call it when lex_start() */
   void reset();
 
-  bool is_returning_clause() { return m_is_returning_clause; }
+  bool has_items() const { return m_has_items; }
 
-  bool is_returning_call() { return m_is_returning_call; }
+  bool is_returning_call() const { return m_is_returning_call; }
 
-  void set(bool value) { m_is_returning_clause = value; }
+  bool is_full_image() const { return !m_fixed_item.is_null(); }
 
-  void empty();
+  void set_fixed_item(const Fixed_item &item) { m_fixed_item = item; }
+
+  Fixed_item get_fixed_item() const { return m_fixed_item; }
 
   void add_item(Item *item);
   void inc_wild() { m_with_wild++; }
 
-  uint with_wild() { return m_with_wild; }
+  uint with_wild() const { return m_with_wild; }
 
   mem_root_deque<Item *> *get_fields() { return m_items; }
 
@@ -62,13 +84,15 @@ class Lex_returning {
 
  private:
   /* Whether define some returning items */
-  bool m_is_returning_clause;
+  bool m_has_items;
   /* Whether it's from dbms_trans.returning() */
   bool m_is_returning_call;
-
+  /* Used for quety of '*' */
   uint m_with_wild;
   /* Return field items */
   mem_root_deque<Item *> *m_items;
+
+  Fixed_item m_fixed_item;
 };
 
 /** Wrapper of the query result send */
@@ -76,7 +100,13 @@ class Update_returning_statement {
  public:
   explicit Update_returning_statement(THD *thd);
 
-  bool is_returning() { return m_returning; }
+  bool is_returning() const {
+    return m_lex_returning != nullptr && m_lex_returning->is_returning_call();
+  }
+
+  bool is_full_image() const {
+    return is_returning() && m_lex_returning->is_full_image();
+  }
 
   /**
     Itemize all the field_items from procedure parameters.
@@ -110,7 +140,7 @@ class Update_returning_statement {
     @retval         false         success
     @retval         true          failure
   */
-  bool send_data(THD *thd);
+  bool send_data(THD *thd, bool is_before = false, ptrdiff_t diff = 0);
 
   /**
     Send the EOF.
@@ -130,7 +160,6 @@ class Update_returning_statement {
 
  private:
   THD *m_thd;
-  bool m_returning;
   Lex_returning *m_lex_returning;
   Query_result_send result;
 };

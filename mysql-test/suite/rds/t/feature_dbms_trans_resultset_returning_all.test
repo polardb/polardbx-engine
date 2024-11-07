@@ -1,0 +1,202 @@
+--source include/have_binlog_format_row.inc
+ 
+call mtr.add_suppression("Unsafe statement written to the binary log");
+ 
+--disable_warnings
+drop table if exists t1,t2;
+ 
+ CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` int NOT NULL DEFAULT '1',
+  `name` varchar(12) DEFAULT 'tom',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+ CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `col1` int NOT NULL DEFAULT '1',
+  `name` varchar(12) DEFAULT 'tom',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB;
+
+insert into t1(col1, name) values(1, 'Tom');
+insert into t1(col1, name) values(2, 'Alice');
+
+insert into t2 select * from t1;
+ 
+#
+#test insert didn't returning any column
+#
+call dbms_trans.returning_all("*", "insert into t1(col1, name) values (3, 'tom1')");
+call dbms_trans.returning_all("col1", "insert into t1(col1, name) values (4, 'tom2')");
+call dbms_trans.returning_all("id, col1, name", "insert into t1(col1, name) values (5, 'tom3')");
+
+call dbms_trans.returning("*", "insert into t2(col1, name) values (3, 'tom1')");
+call dbms_trans.returning("col1", "insert into t2(col1, name) values (4, 'tom2')");
+call dbms_trans.returning("id, col1, name", "insert into t2(col1, name) values (5, 'tom3')");
+
+select * from t1;
+select * from t2;
+
+insert ignore into t2 select * from t1;
+
+
+#
+#test insert on duplicate key
+#
+call dbms_trans.returning_all("*", "INSERT INTO `t1` (`id`, `name`)VALUES (2, 'kk'),(6,'tt') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+call dbms_trans.returning_all("*", "INSERT INTO `t1` (`id`, `name`)VALUES (2, 'kk2'),(3,'tt1') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+call dbms_trans.returning_all("*", "INSERT INTO `t1` (`id`, `name`)VALUES (7, 'opq'),(8,'rts') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+
+call dbms_trans.returning("*", "INSERT INTO `t2` (`id`, `name`)VALUES (2, 'kk'),(6,'tt') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+call dbms_trans.returning("*", "INSERT INTO `t2` (`id`, `name`)VALUES (2, 'kk2'),(3,'tt1') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+call dbms_trans.returning("*", "INSERT INTO `t2` (`id`, `name`)VALUES (7, 'opq'),(8,'rts') ON DUPLICATE KEY UPDATE  `id` = VALUES(`id`),  `name` = VALUES(`name`);");
+
+select * from t1;
+select * from t2;
+
+insert ignore into t2 select * from t1;
+
+
+#
+#test update
+#
+call dbms_trans.returning_all("*", "update t1 set col1 = 2 where id = 1;");
+call dbms_trans.returning_all("*", "update t1 set col1 = 3, name = 'tt'  where id = 1;");
+
+call dbms_trans.returning("*", "update t2 set col1 = 2 where id = 1;");
+call dbms_trans.returning("*", "update t2 set col1 = 3, name = 'tt'  where id = 1;");
+
+select * from t1;
+select * from t2;
+
+#
+#test replace
+#
+call dbms_trans.returning_all("*", "replace INTO `t1` (`id`, `name`)VALUES (2, 'pp'),(9, 'll');");
+call dbms_trans.returning_all("*", "replace INTO `t1` (`id`, `name`)VALUES (10, 'kk1'),(11, 'kk2');");
+
+call dbms_trans.returning("*", "replace INTO `t2` (`id`, `name`)VALUES (2, 'pp'),(9, 'll');");
+call dbms_trans.returning("*", "replace INTO `t2` (`id`, `name`)VALUES (10, 'kk1'),(11, 'kk2');");
+
+select * from t1;
+select * from t2;
+
+
+create table returning (a int primary key, b int);
+
+insert into returning values (1,1), (2,2);
+
+# case 1: insert ignore
+call dbms_trans.returning_all('*', 'insert ignore into returning values(3,3),(3,4)');
+
+# case 2: replace into
+call dbms_trans.returning_all('*', 'replace into returning values(3,4), (1,10), (9,9)');
+
+# case 3: on duplicate key update
+call dbms_trans.returning_all('*', 'insert into returning values (3,5) on duplicate key update b=5');
+
+drop table returning;
+
+
+#
+#test insert ignore
+#
+call dbms_trans.returning_all("*", "insert ignore into t1(col1, name) values (12, 'tom1')");
+call dbms_trans.returning("id, col1, name", "insert ignore into t2(col1, name) values (12, 'tom1')");
+
+--enable_warnings
+
+#
+# test error
+#
+# 1. unsupport command (select)
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning_all("*", "select * from t1");
+ 
+# 2. syntax error
+--error 1064
+call dbms_trans.returning_all("*", "uppppdate t1 seet");
+ 
+# 3. unsupport command
+
+call dbms_trans.returning_all("*", "delete from t1 where id = 1");
+ 
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning_all("*", "delete t2 from t1, t2 where t1.id != t2.id");
+ 
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning_all("*", "delete t2 from t1, t2, t2 t3 where t1.id = t2.id and t1.id = t3.id");
+
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.returning_all("*", "delete t1, t2 from t1, t2 where t1.id = t2.id");
+ 
+
+#
+# test Large Object
+#
+CREATE TABLE large_fields_example (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    description TEXT default NULL,
+    image BLOB default NULL,
+    article LONGTEXT
+);
+call dbms_trans.returning_all("*", "INSERT INTO large_fields_example (description) 
+VALUES (REPEAT('here is test', 2000));");
+
+call dbms_trans.returning_all("*", "INSERT INTO large_fields_example (article) 
+VALUES (REPEAT('here is content', 2000));");
+
+call dbms_trans.returning_all("*", "REPLACE INTO large_fields_example (id, article) 
+VALUES (2, REPEAT('here is content 2', 2000));");
+
+
+call dbms_trans.returning_all("*", "update large_fields_example set description = CONCAT(description, 'add more content') where id = 1");
+
+call dbms_trans.returning_all("*", "update large_fields_example set article = CONCAT(article, 'add more content') where id = 2");
+
+call dbms_trans.returning_all("*", "delete from large_fields_example where id = 2");
+
+#
+# test violate constraints
+#
+
+CREATE TABLE parent (
+    id INT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE child (
+    id INT PRIMARY KEY,
+    parent_id INT,
+    UNIQUE (id),
+    FOREIGN KEY (parent_id) REFERENCES parent(id)
+);
+
+# Data type mismatch
+--error 1366
+call dbms_trans.returning_all("*", "INSERT INTO parent(id, name) VALUES ('abc', 'Parent Name');");
+
+call dbms_trans.returning_all("*", "INSERT INTO parent(id, name) VALUES (1, 'Parent Name');");
+
+# Foreign key constraint conflict
+--error 1452
+call dbms_trans.returning_all("*", "INSERT INTO child(id, parent_id) VALUES (1, 999);");
+
+call dbms_trans.returning_all("*", "INSERT INTO child(id, parent_id) VALUES (1, 1);");
+
+# Unique constraint conflict
+--error 1062
+call dbms_trans.returning_all("*", "INSERT INTO child(id, parent_id) VALUES (1, 1);");
+
+--error 1366
+call dbms_trans.returning_all("*", "UPDATE parent set id = 'new name' where id = 1");
+
+drop table t1;
+drop table t2;
+drop table large_fields_example;
+drop table child;
+drop table parent;

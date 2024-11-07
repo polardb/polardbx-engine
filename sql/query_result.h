@@ -194,6 +194,8 @@ class Query_result_send : public Query_result {
   bool send_result_set_metadata(THD *thd, const mem_root_deque<Item *> &list,
                                 uint flags) override;
   bool send_data(THD *thd, const mem_root_deque<Item *> &items) override;
+  /* Used by dbms_trans.returning_all. */
+  bool send_returning_data(THD *thd, const mem_root_deque<Item *> &items, bool is_before, ptrdiff_t diff);
   bool send_eof(THD *thd) override;
   bool check_supports_cursor() const override { return false; }
   void abort_result_set(THD *thd) override;

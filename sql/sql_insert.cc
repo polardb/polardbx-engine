@@ -654,7 +654,7 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
         has_error = true;
         break;
       }
-      if (write_record(thd, insert_table, &info, &update)) {
+      if (write_record(thd, insert_table, &info, &update, &returning_stmt)) {
         has_error = true;
         break;
       }
@@ -1843,7 +1843,8 @@ static bool last_uniq_key(TABLE *table, uint keynr) {
   @returns false if success, true if error
 */
 
-bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
+bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
+                  im::Update_returning_statement *returning_stmt) {
   int error, trg_error = 0;
   char *key = nullptr;
   MY_BITMAP *save_read_set, *save_write_set;
@@ -2004,6 +2005,16 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
           of the caller.
         */
         table->autoinc_field_has_explicit_non_null_value = false;
+        /* Send  before data image. */
+        if (returning_stmt != nullptr && returning_stmt->is_full_image()) {
+          /* Dont support trigger. */
+          if (table->triggers != nullptr) return true;
+          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) 
+              && returning_stmt->send_data(thd, true)) {
+            return true;
+          }
+        }
+
         bool is_row_changed = false;
         if (fill_record_n_invoke_before_triggers(
                 thd, update, *update->get_changed_columns(),
@@ -2113,6 +2124,17 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update) {
         goto ok_or_after_trg_err;
       } else /* DUP_REPLACE */
       {
+        /* Send before data iamge, the diff is used for move data_ptr */
+        if (returning_stmt != nullptr && returning_stmt->is_full_image()) {
+          ptrdiff_t diff = (table->record[1] - table->record[0]);
+          /* Dont support trigger. */
+          if (table->triggers != nullptr) return true; 
+          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) 
+              && returning_stmt->send_data(thd, true, diff)) {
+            return true;
+          }
+        }
+
         Table_ref *view = table->pos_in_table_list->belong_to_view;
 
         if (view && view->replace_filter) {

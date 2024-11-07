@@ -2934,6 +2934,52 @@ bool THD::send_result_set_row(const mem_root_deque<Item *> &row_items) {
     */
     str_buffer.set(buffer, sizeof(buffer), &my_charset_bin);
   }
+
+
+  return false;
+}
+
+bool THD::send_returning_result_set_row(const mem_root_deque<Item *> &row_items, ptrdiff_t diff, bool is_before) {
+  char buffer[MAX_FIELD_WIDTH];
+  String str_buffer(buffer, sizeof(buffer), &my_charset_bin);
+
+  DBUG_TRACE;
+  Item_field* item_field = nullptr;
+  Item_ref* item_ref = nullptr;
+  for (Item *item : VisibleFields(row_items)) {
+    if (is_before) {
+      /* Point data_ptr to the old data. */
+      item_field = dynamic_cast<Item_field*>(item);
+      if (item_field != nullptr) {
+        item_field->field->move_field_offset(diff);
+      }
+
+      item_ref = dynamic_cast<Item_ref*>(item);
+      if (item_ref != nullptr) {
+        item_ref->get_result_field()->move_field_offset(diff);
+      }
+    }
+    
+
+    if (item->send(m_protocol, &str_buffer) || is_error()) return true;
+    /*
+      Reset str_buffer to its original state, as it may have been altered in
+      Item::send().
+    */
+    str_buffer.set(buffer, sizeof(buffer), &my_charset_bin);
+
+    /* reset data_ptr */
+    if (is_before) {
+      if (item_field != nullptr) {
+        item_field->field->move_field_offset(-diff);
+      }
+      if (item_ref != nullptr) {
+        item_ref->get_result_field()->move_field_offset(-diff);
+      }
+    }
+  }
+
+
   return false;
 }
 

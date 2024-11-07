@@ -405,7 +405,7 @@ The following options may be given as the first argument:
  --consensus-learner-timeout=# 
  Consensus learner connection timeout
  --consensus-log-cache-size[=#] 
- Max cached logs size
+ Max fifo cached logs size
  --consensus-log-level[=name] 
  consensus log level
  --consensus-max-delay-index[=#] 

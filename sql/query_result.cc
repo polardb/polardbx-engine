@@ -106,6 +106,30 @@ bool Query_result_send::send_data(THD *thd,
   return protocol->end_row();
 }
 
+bool Query_result_send::send_returning_data(THD *thd,
+                                            const mem_root_deque<Item *> &items,
+                                            bool is_before, ptrdiff_t diff) {
+  Protocol *protocol = thd->get_protocol();
+  DBUG_TRACE;
+
+  protocol->start_row();
+  
+  /* 0 - before, 1 - after  */
+  if (is_before) {
+    thd->get_protocol()->store(longlong{0});
+  } else {
+    thd->get_protocol()->store(longlong{1});
+  }
+
+  if (thd->send_returning_result_set_row(items, diff, is_before)) {
+    protocol->abort_row();
+    return true;
+  }
+
+  thd->inc_sent_row_count(1);
+  return protocol->end_row();
+}
+
 bool Query_result_send::send_eof(THD *thd) {
   /*
     Don't send EOF if we're in error condition (which implies we've already

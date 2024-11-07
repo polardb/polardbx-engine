@@ -26,12 +26,25 @@
 
 namespace im {
 
+Item* Fixed_item::allocate() {
+    Item *returning_item;
+    switch (m_data_type) {
+      case MYSQL_TYPE_LONGLONG:
+        returning_item = new Item_return_int(m_name.c_str(), strlen(m_name.c_str()), MYSQL_TYPE_LONGLONG);
+        break;
+      default:
+        returning_item = new Item_empty_string(m_name.c_str(), strlen(m_name.c_str()), &my_charset_utf8mb4_bin);
+    }
+    return returning_item;
+}
+
 /* Constructor */
 Lex_returning::Lex_returning(bool is_returning_stmt, MEM_ROOT *mem_root)
-    : m_is_returning_clause(false),
+    : m_has_items(false),
       m_is_returning_call(is_returning_stmt),
       m_with_wild(0),
-      m_items() {
+      m_items(),
+      m_fixed_item() {
   m_items = new (mem_root) mem_root_deque<Item *>(mem_root);
 }
 
@@ -44,28 +57,31 @@ Lex_returning::~Lex_returning() {
 
 void Lex_returning::reset() {
   DBUG_ENTER("Lex_returning::reset");
-  m_is_returning_clause = false;
+  m_has_items = false;
   m_is_returning_call = false;
   m_with_wild = 0;
   m_items->clear();
+  m_fixed_item.reset();
   DBUG_VOID_RETURN;
 }
 
 Lex_returning &Lex_returning::operator=(const Lex_returning &tmp) {
-  m_is_returning_clause = tmp.m_is_returning_clause;
+  m_has_items = tmp.m_has_items;
   m_is_returning_call = tmp.m_is_returning_call;
   m_items = tmp.m_items;
+  m_with_wild = tmp.m_with_wild;
+  m_fixed_item = tmp.m_fixed_item;
   return *this;
 }
-void Lex_returning::empty() { m_items->empty(); }
 
 void Lex_returning::add_item(Item *item) {
   m_items->push_back(item);
-  if (!m_is_returning_clause) m_is_returning_clause = true;
+  if (!m_has_items) m_has_items = true;
 }
 /* Constructor */
 Update_returning_statement::Update_returning_statement(THD *thd)
-    : m_thd(thd), m_returning(false), m_lex_returning(nullptr) {
+    : m_thd(thd),
+      m_lex_returning(nullptr) {
   init();
 }
 
@@ -81,8 +97,7 @@ void Update_returning_statement::init() {
   lex_ret = m_thd->get_lex_returning();
 
   /* Must be dbms_trans.returning call and item list count > 0 */
-  if (lex_ret->is_returning_clause() && lex_ret->is_returning_call()) {
-    m_returning = true;
+  if (lex_ret->has_items() && lex_ret->is_returning_call()) {
     m_lex_returning = lex_ret;
   }
   DBUG_VOID_RETURN;
@@ -153,11 +168,14 @@ bool Update_returning_statement::itemize_fields(THD *thd,
 bool Update_returning_statement::setup(THD *thd, Query_block *query_block) {
   mem_root_deque<Item *> *fields;
   uint with_wild;
+  Fixed_item fixed_item;
+  bool returning = is_returning();
+  bool full_image = is_full_image();
   DBUG_ENTER("Update_returning_statement::setup");
-  if (m_returning) {
+  if (returning) {
     fields = m_lex_returning->get_fields();
     with_wild = m_lex_returning->with_wild();
-
+    fixed_item = m_lex_returning->get_fixed_item();
     /* Itemize all the field_item */
     itemize_fields(thd, *fields, query_block);
 
@@ -174,9 +192,18 @@ bool Update_returning_statement::setup(THD *thd, Query_block *query_block) {
 
     /* Prepare the result set */
     result.prepare(thd, *fields, thd->lex->unit);
+
+    /* push returning item to the front */
+    if (full_image) {
+      fields->push_front(fixed_item.allocate());
+    }
     if (result.send_result_set_metadata(
             thd, *fields, Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
       DBUG_RETURN(true);
+      
+    if (full_image) {
+      fields->pop_front();
+    }
   }
 
   DBUG_RETURN(false);
@@ -190,9 +217,15 @@ bool Update_returning_statement::setup(THD *thd, Query_block *query_block) {
   @retval         false         success
   @retval         true          failure
 */
-bool Update_returning_statement::send_data(THD *thd) {
-  if (m_returning) {
-    return result.send_data(thd, *(m_lex_returning->get_fields()));
+bool Update_returning_statement::send_data(THD *thd, bool is_before,
+                                           ptrdiff_t diff) {
+  if (is_returning()) {
+    if (is_full_image()) {
+      return result.send_returning_data(thd, *(m_lex_returning->get_fields()),
+                                        is_before, diff);
+    } else {
+      return result.send_data(thd, *(m_lex_returning->get_fields()));
+    }
   }
   return false;
 }
@@ -202,7 +235,7 @@ bool Update_returning_statement::send_data(THD *thd) {
   @param[in]      thd           thread context
 */
 void Update_returning_statement::send_eof(THD *thd) {
-  if (m_returning) {
+  if (is_returning()) {
     result.send_eof(thd);
   }
 }

@@ -913,6 +913,16 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       table->clear_partial_update_diffs();
 
       store_record(table, record[1]);
+      if (returning_stmt.is_full_image()) {
+        if (table->triggers) {
+          error = 1;
+          break;
+        }
+        if (!error && returning_stmt.send_data(thd, true)) {
+          error = 1;
+          break;
+        }
+      }
       bool is_row_changed = false;
       if (fill_record_n_invoke_before_triggers(
               thd, &update, query_block->fields, *update_value_list, table,

@@ -624,7 +624,7 @@ bool Sql_cmd_delete::delete_from_single_table(THD *thd) {
         break;
       }
       /* Send data if it is returning clause */
-      if (returning_stmt.send_data(thd)) {
+      if (returning_stmt.send_data(thd, true)) {
         error = 1;
         break;
       }

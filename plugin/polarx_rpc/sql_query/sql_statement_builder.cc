@@ -62,6 +62,7 @@ namespace polarx_rpc {
 const std::string HINT_RETURNING_FIELD = "fields";
 const std::string RETURNING_CLAUSE = "call dbms_trans.returning('?', '?')";
 const std::string BACKFILL_RETURNING_CLAUSE = "call dbms_trans.backfill('?', '?')";
+const std::string RETURNING_ALL_CLAUSE = "call dbms_trans.returning_all('?', '?')";
 
 #define HINT_RETURNING "returning"
 #define FIRST_PLACEHOLDER_OF_RETURNING_CLAUSE 27
@@ -70,6 +71,10 @@ const std::string BACKFILL_RETURNING_CLAUSE = "call dbms_trans.backfill('?', '?'
 #define HINT_BACKFILL_RETURNING "backfill"
 #define FIRST_PLACEHOLDER_OF_BACKFILL_RETURNING_CLAUSE 26
 #define SECOND_PLACEHOLDER_OF_BACKFILL_RETURNING_CLAUSE 31
+
+#define HINT_RETURNING_ALL "returning_all"
+#define FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE 31
+#define SECOND_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE 36
 
 namespace {
 
@@ -154,6 +159,27 @@ std::string trans_backfill_returning(const std::string &query,
   return returning;
 }
 
+std::string trans_returning_all(const std::string &query,
+                                     const std::string &fields) {
+  std::string returning;
+  returning.reserve(FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE + fields.length() +
+                    (SECOND_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE -
+                     FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE - 1) +
+                    query.length() + 3);
+  returning +=
+      RETURNING_ALL_CLAUSE.substr(0, FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE);
+  returning += fields;
+  returning +=
+      RETURNING_ALL_CLAUSE.substr(FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE + 1,
+                                SECOND_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE -
+                                  FIRST_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE - 1);
+  returning += query;
+  returning +=
+      RETURNING_ALL_CLAUSE.substr(SECOND_PLACEHOLDER_OF_RETURNING_ALL_CLAUSE + 1);
+  return returning;
+}
+
+
 void Sql_statement_builder::build(const std::string &query,
                                   const Arg_list &args,
                                   const CHARSET_INFO &charset,
@@ -162,7 +188,20 @@ void Sql_statement_builder::build(const std::string &query,
   build(query, args, charset);
 
   std::string out_query;
-  if (hint.find(HINT_RETURNING) != std::string::npos) {
+  if (hint.find(HINT_RETURNING_ALL) != std::string::npos) {
+    // escape inner sql string
+    auto sql_str(m_qb->get());
+    m_qb->clear();
+    m_qb->escape_string(sql_str.data(), sql_str.length());
+
+    /// build returning_all
+    std::string::size_type pos;
+    if ((pos = hint.find(HINT_RETURNING_FIELD)) != std::string::npos)
+      out_query = trans_returning_all(m_qb->get(), get_returning_field(hint, pos));
+    else
+      out_query = trans_returning_all(m_qb->get(), "*");
+
+  } else if (hint.find(HINT_RETURNING) != std::string::npos) {
     /// escape inner sql string
     auto sql_str(m_qb->get());
     m_qb->clear();

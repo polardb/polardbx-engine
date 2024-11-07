@@ -56,7 +56,7 @@ Proc *Trans_proc_returning::instance() {
 */
 Sql_cmd *Trans_proc_returning::evoke_cmd(THD *thd,
                                          mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+  return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this);
 }
 
 /**
@@ -90,7 +90,7 @@ LEX_CSTRING Sql_cmd_trans_proc_returning::get_field_items_and_stmt(THD *thd) {
 
     if (s == "*") thd->lex_returning->inc_wild();
   }
-
+  thd->lex_returning->set_fixed_item(m_fixed_item);
   res = (*m_list)[1]->val_str(&str);
   DBUG_RETURN(
       to_lex_cstring(strmake_root(thd->mem_root, res->ptr(), res->length())));
@@ -133,5 +133,18 @@ void Sql_cmd_trans_proc_returning::send_result(THD *, bool) {
   DBUG_ENTER("Sql_cmd_trans_proc_returning::send_result");
   DBUG_VOID_RETURN;
 }
+/* Singleton instance for returning */
+Proc *Trans_proc_returning_all::instance() {
+  static Proc *proc = new Trans_proc_returning_all(key_memory_package);
+  return proc;
+}
+/**
+  Evoke the sql_cmd object for returning() proc.
+*/
+Sql_cmd *Trans_proc_returning_all::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+  Fixed_item fixed_item {MYSQL_TYPE_LONGLONG, "returning_before_after"};
+  return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this, fixed_item);
+}
+
 
 } /* namespace im */
