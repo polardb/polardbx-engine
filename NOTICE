@@ -1,6 +1,10 @@
-/*****************************************************************************
+PolarDBX Engine project is developed by Alibaba and based on the MySQL project
+Copyright (c) 2024, Alibaba Group
+Copyright (c) 2000, 2023, Oracle and/or its affiliates.
+Licensed under the GNU General Public License, version 2.0.
 
-Copyright (c) 2023, 2024, Alibaba and/or its affiliates. All Rights Reserved.
+This product contains various third-party components under other open source licenses.
+This section summarizes those components and their licenses. 
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -21,25 +25,3 @@ for more details.
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-
-*****************************************************************************/
-
-
-#ifndef EASY_FILE_H_
-#define EASY_FILE_H_
-
-#include <easy_define.h>
-#include "easy_io_struct.h"
-
-/**
- * 对文件操作
- */
-
-EASY_CPP_START
-
-#define EASY_MAX_FILE_BUFFER 65536
-
-EASY_CPP_END
-
-#endif
-

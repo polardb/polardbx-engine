@@ -1,3 +1,10 @@
+PolarDBX-Engine project is developed by Alibaba and based on the MySQL program. 
+Code is distributed under the GNU General Public License, version 2.0.
+
+This product contains various third-party components under other open source licenses. 
+See the NOTICE file for more information.
+
+
 Copyright (c) 2000, 2023, Oracle and/or its affiliates.
 
 This is a release of MySQL, an SQL database server.
@@ -18,3 +25,4 @@ For additional downloads and the source of MySQL, visit
   http://dev.mysql.com/downloads/
 
 MySQL is brought to you by the MySQL team at Oracle.
+
