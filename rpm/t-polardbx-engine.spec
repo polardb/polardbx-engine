@@ -21,8 +21,8 @@
 # 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 
-%define polardb_version 'PolarDB V2.0 OpenSource'
-%define product_version 2.4.0
+%define polardb_version 'PolarDB V2.0'
+%define product_version 2.4.1
 %define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
 
@@ -34,10 +34,15 @@ License: GPL
 Group: applications/database
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
-%if "%{?dist}" == ".alios7" || "%{?dist}" == ".el7"
-BuildRequires: libarchive, ncurses-devel, bison, libstdc++-static, autoconf
+
+%if "%{?dist}" == ".alios7"
+BuildRequires: cmake >= 3.8.2, make, autoconf, libstdc++-static, alios7u-2_32-gcc-10-repo
+BuildRequires: gcc >= 10.2.1, gcc-c++ >= 10.2.1, libstdc++-devel >= 10.2.1, binutils >= 2.35
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
+BuildRequires: libev-devel, libcurl-devel, libaio-devel, libarchive, ncurses-devel
+BuildRequires: bison, libudev-devel, python-sphinx, procps-ng-devel, rsync
 %endif
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel libaio-devel
+
 
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
@@ -59,30 +64,45 @@ as for embedding into mass-deployed software.
 %define link_dir /opt/polardbx_engine
 
 %prep
-cd $OLDPWD/../
+echo "dist" %{?dist}
+echo "_arch" %{?_arch}
+echo "_target_cpu" %{?_target_cpu}
+echo "_target_os" %{?_target_os}
+echo "_target_vendor" %{?_target_vendor}
 
-#%setup -q
+echo "_host_cpu" %{?_host_cpu}
+echo "_host_os" %{?_host_os}
+echo "__host_vendor" %{?__host_vendor}
+
+echo "_build_cpu" %{?_build_cpu}
+echo "_build_os" %{?_build_os}
+echo "_build_vendor" %{?_build_vendor}
+cat /etc/redhat-release
+
 
 %build
 cd $OLDPWD/../
 
-cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
+%if "%{?dist}" == ".alios7"
+    CC=gcc
+    CXX=g++
+    CMAKE_BIN=cmake
+%else
+    CC=/opt/rh/devtoolset-10/root/usr/bin/gcc
+    CXX=/opt/rh/devtoolset-10/root/usr/bin/g++
+    CMAKE_BIN=cmake3
+%endif
 
-mach_type=`uname -m`;
-
-if [ x"$mach_type" = x"aarch64" ]; then
+%if "%{?_arch}" == "aarch64"
     CFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
     CXXFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
-else
+%else
     CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
     CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
-fi
+%endif
+export CC CXX CFLAGS CXXFLAGS CMAKE_BIN
 
-CC=gcc
-CXX=g++
-CMAKE_BIN=cmake
-
-export CC CFLAGS CXX CXXFLAGS
+cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
 
 $CMAKE_BIN .                            \
 %ifarch aarch64
@@ -125,7 +145,8 @@ $CMAKE_BIN .                            \
 
 %install
 cd $OLDPWD/../
-make DESTDIR=$RPM_BUILD_ROOT install -j `cat /proc/cpuinfo | grep processor| wc -l`
+MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
+make DESTDIR=$RPM_BUILD_ROOT install -j $MIN_PARALLEL
 
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
