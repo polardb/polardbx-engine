@@ -861,7 +861,7 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index, bool enab
         consensus_guard.unlock();
         curr_retry++;
         xp::error(ER_XP_0) << "fail to find next trx index, retry after 500ms, current try " << curr_retry;
-        my_sleep(500);/* 500ms */
+        my_sleep(500 * 1000);/* 500ms */
       } else {
         xp::error(ER_XP_0) << "fail to find next trx index from " << consensus_index;
         abort();
