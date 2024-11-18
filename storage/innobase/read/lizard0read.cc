@@ -77,7 +77,7 @@ void Vision::reset() {
   m_up_limit_id = TRX_ID_MAX;
   m_active = false;
   m_snapshot_vision = nullptr;
-  m_xa_vision.init();
+  m_xa_vision.reset();
 }
 
 VisionContainer::VisionList::VisionList() {
@@ -450,6 +450,17 @@ bool Vision::sees(trx_id_t id) const {
   }
 
   return id < m_up_limit_id;
+}
+
+/** Update xa related vision from xa transaction group context. */
+void Vision::xa_refresh(trx_t *trx) {
+  Xa_group *group = nullptr;
+  ut_ad(this == &trx->vision);
+
+  group = trx->xa_desc.group();
+  if (group) {
+    m_xa_vision.refresh(group);
+  }
 }
 
 /**

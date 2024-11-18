@@ -561,9 +561,11 @@ trx_rseg_t *txn_rseg_assign_by_xid(const XID *xid) {
   return (rseg);
 }
 
-struct Find_transaction_info_by_xid {
-  Find_transaction_info_by_xid(const XID *in_xid)
-      : xid(in_xid), found(false), txn_slot(), searched_pages() {}
+struct Find_txn_slot_by_xid {
+ public:
+  Find_txn_slot_by_xid(const XID *xid, txn_slot_t *txn_slot,
+                       std::unordered_set<page_no_t> *pages)
+      : m_xid(xid), m_txn_slot(txn_slot), m_searched_pages(pages) {}
 
   /**
     Check whether the page has been searched.
@@ -572,7 +574,7 @@ struct Find_transaction_info_by_xid {
     @retval     true       page has been searched
   */
   bool operator()(const page_no_t page_no) {
-    return (searched_pages.find(page_no) != searched_pages.end());
+    return (m_searched_pages->find(page_no) != m_searched_pages->end());
   }
 
   /**
@@ -584,50 +586,31 @@ struct Find_transaction_info_by_xid {
 
     @retval     true       found
   */
-  bool operator()(const page_no_t page_no, page_t *undo_page, mtr_t *mtr) {
-    trx_ulogf_t *txn_header;
-    uint32_t last_offset;
-    XID read_xid;
-
-    ut_ad(!found);
+  bool operator()(const page_no_t page_no, const page_t *undo_page,
+                  mtr_t *mtr) {
+    bool found = false;
 
     /** Skip page if it has already been searched. */
-    if (searched_pages.find(page_no) != searched_pages.end()) {
+    if (m_searched_pages->find(page_no) != m_searched_pages->end()) {
       return false;
     }
 
-    last_offset =
-        mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
+    found = txn_undo_log_iterate_by_offset(
+        undo_page, mtr,
+        [&](const page_t *undo_page, const trx_ulogf_t *log_hdr,
+            mtr_t *mtr) -> bool {
+          return txn_undo_hdr_read_by_xid(m_xid, undo_page, log_hdr, mtr,
+                                          m_txn_slot);
+        });
 
-    /** Iterate over the txn slots on the undo page. */
-    for (uint32_t txn_offset = TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE;
-         txn_offset <= last_offset; txn_offset += TXN_UNDO_LOG_EXT_HDR_SIZE) {
-      /** 1. get the txn header. */
-      txn_header = undo_page + txn_offset;
-
-      /** 2. Check if undo log has XID. */
-      auto flag = mach_read_ulint(txn_header + TRX_UNDO_FLAGS, MLOG_1BYTE);
-      if (!(flag & TRX_UNDO_FLAG_XID)) {
-        continue;
-      }
-
-      /** 3. Read and check XID. */
-      trx_undo_read_xid(const_cast<trx_ulogf_t *>(txn_header), &read_xid);
-      if (read_xid.eq(xid)) {
-        trx_undo_hdr_read_txn_slot(undo_page, txn_header, mtr, &txn_slot);
-        found = true;
-        break;
-      }
-    }
-
-    searched_pages.insert(page_no);
+    m_searched_pages->insert(page_no);
     return found;
   }
 
-  const XID *xid;
-  bool found;
-  txn_slot_t txn_slot;
-  std::unordered_set<page_no_t> searched_pages;
+ private:
+  const XID *m_xid;
+  txn_slot_t *m_txn_slot;
+  std::unordered_set<page_no_t> *m_searched_pages;
 };
 
 /**
@@ -638,7 +621,7 @@ struct Find_transaction_info_by_xid {
   @param[out] func       search function
 */
 template <typename Functor>
-static void txn_rseg_iterate_lists(trx_rseg_t *rseg, Functor &func) {
+static bool txn_rseg_iterate_lists(trx_rseg_t *rseg, Functor &func) {
   trx_rsegf_t *rseg_header;
   page_t *undo_page;
   fil_addr_t node_addr;
@@ -740,10 +723,13 @@ static void txn_rseg_iterate_lists(trx_rseg_t *rseg, Functor &func) {
     mtr.commit();
   }
 
+  mutex_exit(&(rseg->mutex));
+  return false;
+
 func_exit:
   mutex_exit(&(rseg->mutex));
+  return true;
 }
-
 
 /**
   Find transaction slot in the finalized state by XID.
@@ -756,16 +742,10 @@ func_exit:
 */
 bool txn_rseg_find_txn_slot_by_xid(trx_rseg_t *rseg, const XID *xid,
                                    txn_slot_t *txn_slot) {
-  Find_transaction_info_by_xid finder(xid);
+  std::unordered_set<page_no_t> undo_pages;
+  Find_txn_slot_by_xid finder(xid, txn_slot, &undo_pages);
 
-  txn_rseg_iterate_lists<Find_transaction_info_by_xid>(rseg, finder);
-
-  if (finder.found) {
-    *txn_slot = finder.txn_slot;
-    return true;
-  }
-
-  return false;
+  return txn_rseg_iterate_lists<Find_txn_slot_by_xid>(rseg, finder);
 }
 
 /**

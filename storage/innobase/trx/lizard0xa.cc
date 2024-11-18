@@ -45,6 +45,127 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0ut.h"
 #include "lizard0xa.h"
+#include "lizard0xa0types.h"
+
+/** @{ */
+
+/**
+  check if the xid match the format v1.
+
+  Requirement:
+  1) Buqal length must be greater than XID_GROUP_SUFFIX_SIZE
+  2) Split char must be right.
+  3) The suffix must be a numober except split char
+
+  @param[in]  xid   xid to be checked
+  @return true if match, otherwise false
+*/
+bool xa_desc_t::check_if_match_format_v1(const XID *xid) {
+  if (xid->is_null()) return false;
+
+  int prefix_len =
+      xid->gtrid_length + xid->bqual_length - XID_GROUP_SUFFIX_SIZE_V1;
+
+  if (xid->bqual_length <= XID_GROUP_SUFFIX_SIZE_V1 ||
+      xid->data[prefix_len] != XID_GROUP_SPLIT_CHAR_V1) {
+    return false;
+  }
+  for (unsigned int i = 1; i < XID_GROUP_SUFFIX_SIZE_V1; i++) {
+    if (!my_isdigit(&my_charset_latin1, xid->data[prefix_len + i])) {
+      return false;
+    }
+  }
+  return true;
+}
+/** @} */
+
+/**
+ * Before building the group id in format v1, we must check if the xid meet
+ * requirements (call @check_if_match_format_v1). The trxs that meet the
+ * following requirements are divided into a group in format v1:
+ *
+ * 1) gtrid must be equal
+ * 2) bqual prefix must be equal
+ * 3) formatID must be equal
+ *
+ * So we append bqual prefix and formatID to xa_desc_t::m_gid besides gtrid,
+ * which is quite different from format v2. To specify the version, format
+ * version is also appended.
+ *
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid_v1() {
+  ut_ad(m_gid.empty());
+
+  /** No need to build the group id. */
+  if (!check_if_match_format_v1(&m_xid)) {
+    return false;
+  }
+
+  auto formatID = std::to_string(m_xid.get_format_id());
+
+  int length = m_xid.get_gtrid_length() + m_xid.get_bqual_length() -
+               XID_GROUP_SUFFIX_SIZE_V1 + formatID.size() + sizeof(FORMAT_V1) -
+               1;
+
+  m_gid.reserve(length);
+
+  /** 1. append gtrid and bqual prefix */
+  m_gid.append(m_xid.get_data(), length);
+
+  /** 2. append formatID */
+  m_gid.append(formatID);
+
+  /** 3. append format version */
+  m_gid.append(FORMAT_V1, sizeof(FORMAT_V1) - 1);
+
+  return true;
+}
+
+/**
+ * Build the group id in format v2. The trxs that meet the following
+ * Requirements are divided into a group in format v2:
+ *
+ * 1) gtrid must be equal
+ *
+ * So we append gtrid to xa_desc_t::m_gid. To specify the version, format
+ * version is also appended.
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid_v2() {
+  ut_ad(m_gid.empty());
+  m_gid.reserve(m_xid.get_gtrid_length() + sizeof(FORMAT_V2) - 1);
+
+  /** 1. append gtrid */
+  m_gid.append(m_xid.get_data(), m_xid.get_gtrid_length());
+
+  /** 2. append format version */
+
+  m_gid.append(FORMAT_V2, sizeof(FORMAT_V2) - 1);
+
+  return true;
+}
+
+/**
+ * Build the group id. For 0-FORMAT_V1_RANGE, use the format v1.
+ * Otherwise, use the format v2.
+ *
+ * @return true if the group id is built successfully, otherwise false
+ */
+bool xa_desc_t::build_gid() {
+  ut_ad(!m_xid.is_null());
+  ut_ad(m_group == nullptr);
+
+  ut_ad(m_xid.get_format_id() >= 0);
+
+  if (m_xid.get_format_id() <= FORMAT_V1_RANGE) {
+    return build_gid_v1();
+  } else {
+    return build_gid_v2();
+  }
+}
+
+namespace lizard {
 
 /**
  * Release the reference of the Xa Group for a given trx. Remove
@@ -53,7 +174,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  * have been released or even not exist(i.e. disabled).
  * @param[in]  trx  innodb transaction
  */
-void trx_release_xa_group_reference_if_need(trx_t *trx) {
+void trx_release_xa_group_if_need(trx_t *trx) {
   ut_ad(trx != nullptr);
   auto &xa_desc = trx->xa_desc;
 
@@ -69,7 +190,7 @@ void trx_release_xa_group_reference_if_need(trx_t *trx) {
           [&](Xa_group_by_id &xa_group_by_id) {
             /* As we own xa_group_by_id mutex, nobody can reference the
             xa_group at now. */
-            if (xa_desc.group()->release_reference()) {
+            if (xa_desc.group()->release()) {
               xa_group_by_id.erase(xa_desc.gid());
             }
           },
@@ -85,105 +206,13 @@ void trx_release_xa_group_reference_if_need(trx_t *trx) {
  * @param[in]  trx   The transaction assumed to not be in the xa_group yet
  */
 void trx_add_to_xa_group_if_need(trx_t *trx) {
+  Xa_group *group = nullptr;
   ut_ad(trx != nullptr);
-  auto &xa_desc = trx->xa_desc;
-
-  if (!xa_desc.is_group_null()) {
-    ut_ad(!xa_desc.group()->latch_own());
-
-    xa_desc.group()->latch();
-    xa_desc.group()->insert(trx->id);
-    xa_desc.group()->unlatch();
+  group = trx->xa_desc.group();
+  if (group) {
+    group->insert(trx->id);
   }
 }
-/**
-  Loop the xa_group to find the same group transaction and
-  push trx_id into group container. Do nothing if transcation
-  group is disabled.
-
-  @param[in]    trx       current trx handler
-  @param[in]    vision    current query view
-*/
-void vision_collect_trx_group_ids(trx_t *my_trx, lizard::Vision *vision) {
-  /* Transaction group is disabled. */
-  if (my_trx->xa_desc.is_group_null()) return;
-
-  trx_mutex_enter(my_trx);
-  auto xa_group = my_trx->xa_desc.group();
-  ut_ad(!xa_group->latch_own());
-
-  xa_group->latch();
-
-  vision->update_xa_vision(xa_group);
-
-  xa_group->unlatch();
-  trx_mutex_exit(my_trx);
-}
-
-/** Init xa attributes from txn undo when active or prepare.
- *
- * @param[in]		trx id
- * @param[in]		txn undo if allocate */
-void MyXAInfo::init_by_txn_undo(const trx_id_t tid,
-                                const trx_undo_t *txn_undo) {
-  slot_ptr_t slot_ptr = 0;
-  /** Only used for detached xa for now. */
-  ut_ad(status == XA_status::DETACHED_PREPARE);
-  ut_ad(is_null());
-
-  if (txn_undo) {
-    if (!txn_undo->pmmt.is_null()) {
-      txn_undo->pmmt.copy_to_my_gcn(&gcn);
-    }
-    undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
-    slot = {tid, slot_ptr};
-    branch = txn_undo->branch;
-    maddr = txn_undo->maddr;
-  } else {
-    /** It seems impossible to get here for detached XA, because empty detached
-    xa trx will be rollback directly when doing "xa prepare". See
-    innodb_replace_trx_in_thd. */
-    slot = {tid, 0};
-  }
-}
-
-/** Init xa attributes from txn slot after transaction finished.
- *
- * @param[in]		txn slot */
-void MyXAInfo::init_by_txn_slot(const txn_slot_t *txn_slot) {
-  ut_ad(is_null());
-  ut_ad(txn_slot);
-
-  status = txn_slot->is_rollback() ? XA_status::ROLLBACK : XA_status::COMMIT;
-  /** if TXN_UNDO_LOG_COMMITED or TXN_UNDO_LOG_PURGED, must be
-  non proposal. */
-  txn_slot->image.copy_to_my_gcn(&gcn);
-
-  slot = {txn_slot->trx_id, txn_slot->slot_ptr};
-  branch = txn_slot->branch;
-  maddr = txn_slot->maddr;
-}
-
-/**
-  Decide master address when ac commit.
-  @param[in]    trx
-*/
-void xa_addr_t::decide_if_ac_commit(const trx_t *trx) {
-  if (is_null() || !trx) {
-    reset();
-    return;
-  }
-  ut_a(trx->txn_desc.maddr.is_null());
-  ut_ad(is_valid());
-
-  if (trx->id != tid) {
-    ut_a(undo_ptr_get_slot(trx->txn_desc.undo_ptr) != slot_ptr);
-  } else {
-    reset();
-  }
-}
-
-namespace lizard {
 
 XA_specification_strategy::XA_specification_strategy(const trx_t *trx)
     : m_trx(trx), m_xa_spec(trx->xa_spec) {}

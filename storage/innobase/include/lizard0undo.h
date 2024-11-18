@@ -383,6 +383,21 @@ void trx_undo_hdr_read_txn_slot(const page_t *undo_page,
                                 const trx_ulogf_t *undo_header, mtr_t *mtr,
                                 txn_slot_t *txn_slot);
 /**
+ * Read the txn undo log hdr if xid matched.
+ *
+ * @param[in]		xid
+ * @param[in]		undo page
+ * @param[in]		txn undo log header
+ * @param[in]		mini transaction
+ * @param[out]		txn slot
+ *
+ * @retval	true	Found
+ * @retval	false	Not found
+ * */
+bool txn_undo_hdr_read_by_xid(const XID *xid, const page_t *undo_page,
+                              const trx_ulogf_t *log_hdr, mtr_t *mtr,
+                              txn_slot_t *txn_slot);
+/**
   Read the scn, utc, gcn from prev image.
 
   @param[in]      log_hdr       undo log header
@@ -736,6 +751,34 @@ extern commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
 void trx_trunc_status(std::vector<trunc_status_t> &array);
 
 void trx_purge_status(purge_status_t &status);
+
+/** Iterate all txn undo log header according to offset.
+ *
+ * @param[in]		undo header page
+ * @param[in]		mini transaction
+ * @param[in]		function
+ * */
+template <typename Functor>
+bool txn_undo_log_iterate_by_offset(const page_t *undo_page, mtr_t *mtr,
+                                    Functor F) {
+  const trx_ulogf_t *log_hdr = nullptr;
+  uint32_t last_offset;
+  ut_ad(mtr->memo_contains_page_flagged(undo_page, MTR_MEMO_PAGE_S_FIX |
+                                                       MTR_MEMO_PAGE_X_FIX |
+                                                       MTR_MEMO_PAGE_SX_FIX));
+  last_offset =
+      mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
+
+  /** Iterate over the txn slots on the undo page. */
+  for (uint32_t txn_offset = TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE;
+       txn_offset <= last_offset; txn_offset += TXN_UNDO_LOG_EXT_HDR_SIZE) {
+      /** 1. get the txn header. */
+    log_hdr = undo_page + txn_offset;
+    if (F(undo_page, log_hdr, mtr)) return true;
+  }
+
+  return false;
+}
 
 }  // namespace lizard
 

@@ -35,6 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <string>
 #include <unordered_set>
+#include "ut0guarded.h"
+#include "ut0new.h"
 
 #include "lizard0ut.h"
 
@@ -49,6 +51,8 @@ struct SYS_VAR;
 struct Gtid_desc;
 struct trx_t;
 
+namespace lizard {
+
 /**
  * Release the reference of the Xa Group for a given trx. Remove
  * it from trx_sys->xa_group_shards when the reference count is 0.
@@ -56,7 +60,7 @@ struct trx_t;
  * have been released or even not exist(i.e. disabled).
  * @param[in]  trx  innodb transaction
  */
-extern void trx_release_xa_group_reference_if_need(trx_t *trx);
+extern void trx_release_xa_group_if_need(trx_t *trx);
 
 /**
  * Adds the transaction to Xa group if need. If transaction group is
@@ -65,31 +69,6 @@ extern void trx_release_xa_group_reference_if_need(trx_t *trx);
  * @param[in]  trx   The transaction assumed to not be in the xa_group yet
  */
 extern void trx_add_to_xa_group_if_need(trx_t *trx);
-
-/**
-  Loop the xa_group to find the same group transaction and
-  push trx_id into group container.Do nothing if transcation
-  group is disabled.
-
-  @param[in]    trx       current trx handler
-  @param[in]    vision    current query view
-*/
-extern void vision_collect_trx_group_ids(trx_t *my_trx, lizard::Vision *vision);
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-
-#define assert_xa_desc_state_initial(trx) \
-  do {                                    \
-    ut_a(trx->xa_desc.is_null() == true); \
-  } while (0)
-
-#else
-
-#define assert_xa_desc_state_initial(trx)
-
-#endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
-
-namespace lizard {
 
 /** Design transaction strategy for recovering if has xa specification. */
 class XA_specification_strategy {
@@ -236,5 +215,19 @@ extern void decide_xa_when_commit(const trx_t *trx, MyGCN *gcn,
                                   xa_addr_t *master_addr);
 
 }  // namespace lizard
+
+#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+
+#define assert_xa_desc_state_initial(trx) \
+  do {                                    \
+    ut_a(trx->xa_desc.is_null() == true); \
+  } while (0)
+
+#else
+
+#define assert_xa_desc_state_initial(trx)
+
+#endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
+
 
 #endif

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2013, 2021, Alibaba and/or its affiliates. All Rights Reserved.
+Copyright (c) 2013, 2020, Alibaba and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -24,50 +24,31 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0read0xa.h
-  Lizard XA transaction structure.
+/** @file include/lizard0txn0service.cc
+  Lizard transaction structure.
 
- Created 2021-08-10 by Jianwei.zhao
+ Created 2020-03-27 by Jianwei.zhao
  *******************************************************/
 
-#ifndef lizard0read0xa_h
-#define lizard0read0xa_h
+#include "lizard0txn0service.h"
 
-#include <string>
-#include <unordered_set>
-#include "trx0types.h"
-#include "trx0xa.h"
-#include "ut0guarded.h"
-
-#include "lizard0xa0types.h"
-
-/** Vision special for xa transaction */
-class Xa_vision {
- public:
-  Xa_vision() : m_ids(), m_clock(0) {}
-
-  void reset() {
-    m_ids.clear();
-    m_clock = 0;
+#include "trx0trx.h"
+/**
+  Decide master address when ac commit.
+  @param[in]    trx
+*/
+void xa_addr_t::decide_if_ac_commit(const trx_t *trx) {
+  if (is_null() || !trx) {
+    reset();
+    return;
   }
+  ut_a(trx->txn_desc.maddr.is_null());
+  ut_ad(is_valid());
 
-  /** Clone trx ids from xa group */
-  void refresh(Xa_group *xa_group) { xa_group->clone(m_ids, m_clock); }
-
-  bool modification_visible(const trx_id_t id) const { return find(id); }
-
- private:
-  /** The trx id container that belong to the same xa group. */
-  std::unordered_set<trx_id_t> m_ids;
-
-  /** A sequence number used to check whether the xa group has
-  changed quickly. */
-  ulint m_clock;
-
-  bool find(const trx_id_t id) const {
-    auto it = m_ids.find(id);
-    if (it != m_ids.end()) return true;
-    return false;
+  if (trx->id != tid) {
+    ut_a(undo_ptr_get_slot(trx->txn_desc.undo_ptr) != slot_ptr);
+  } else {
+    reset();
   }
-};
-#endif
+}
+

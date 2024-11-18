@@ -200,7 +200,7 @@ static bool innobase_register_xa_group(THD *thd) {
             closed = xa_group->is_closed();
             if (!closed) {
               /** fix the xa group. */
-              xa_group->reference();
+              xa_group->acquire();
               trx->xa_desc.set_group(xa_group);
             }
           },

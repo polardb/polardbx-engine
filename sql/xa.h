@@ -283,7 +283,7 @@ typedef struct xid_t {
 
   friend class XID_STATE;
 
-  friend bool check_if_match_format_v1(const struct xid_t *xid);
+  friend struct xa_desc_t;
 
 } XID;
 

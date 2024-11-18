@@ -733,6 +733,7 @@ slot_addr_t trx_undo_hdr_write_slot(trx_ulogf_t *log_hdr, const trx_t *trx,
   }
 }
 
+
 /**
   Read the txn undo log header extension information.
 
@@ -800,6 +801,40 @@ void trx_undo_hdr_read_txn_slot(const page_t *undo_page,
     ut_ad(!txn_slot->maddr.is_null());
   }
   ut_ad(txn_slot->magic_n == TXN_MAGIC_N);
+}
+
+/**
+ * Read the txn undo log hdr if xid matched.
+ *
+ * @param[in]		xid
+ * @param[in]		undo page
+ * @param[in]		txn undo log header
+ * @param[in]		mini transaction
+ * @param[out]		txn slot
+ *
+ * @retval	true	Found
+ * @retval	false	Not found
+ * */
+bool txn_undo_hdr_read_by_xid(const XID *xid, const page_t *undo_page,
+                              const trx_ulogf_t *log_hdr, mtr_t *mtr,
+                              txn_slot_t *txn_slot) {
+  bool found = false;
+  XID read_xid;
+
+  /** 1. Check if undo log has XID. */
+  auto flag = mach_read_ulint(log_hdr + TRX_UNDO_FLAGS, MLOG_1BYTE);
+  if (!(flag & TRX_UNDO_FLAG_XID)) {
+    return found;
+  }
+
+  /** 2. Read and check XID. */
+  trx_undo_read_xid(log_hdr, &read_xid);
+
+  if (read_xid.eq(xid)) {
+    trx_undo_hdr_read_txn_slot(undo_page, log_hdr, mtr, txn_slot);
+    found = true;
+  }
+  return found;
 }
 
 /** Allocate txn undo and return transaction slot address.
@@ -2079,37 +2114,6 @@ bool trx_undo_log_iterate_by_list(const page_t *undo_page,
     }
     start = next == 0 ? nullptr : undo_page + next;
   }
-  return false;
-}
-
-/** Iterate all txn undo log header according to offset.
- *
- * @param[in]		undo header page
- * @param[in]		page size
- * @param[in]		start log header or nullptr
- * @param[in]		function
- * @param[in]		reverse or not
- * */
-template <typename Functor>
-bool txn_undo_log_iterate_by_offset(const page_t *undo_page,
-                                    const page_size_t &page_size, mtr_t *mtr,
-                                    Functor F) {
-  const trx_ulogf_t *log_hdr = nullptr;
-  uint32_t last_offset;
-  ut_ad(mtr->memo_contains_page_flagged(undo_page, MTR_MEMO_PAGE_S_FIX |
-                                                       MTR_MEMO_PAGE_X_FIX |
-                                                       MTR_MEMO_PAGE_SX_FIX));
-  last_offset =
-      mach_read_from_2(undo_page + TRX_UNDO_SEG_HDR + TRX_UNDO_LAST_LOG);
-
-  /** Iterate over the txn slots on the undo page. */
-  for (uint32_t txn_offset = TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE;
-       txn_offset <= last_offset; txn_offset += TXN_UNDO_LOG_EXT_HDR_SIZE) {
-      /** 1. get the txn header. */
-    log_hdr = undo_page + txn_offset;
-    if (F(log_hdr)) return true;
-  }
-
   return false;
 }
 

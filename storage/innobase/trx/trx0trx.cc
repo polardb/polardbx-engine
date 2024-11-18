@@ -263,7 +263,7 @@ static void trx_init(trx_t *trx) {
 
   trx->vision.reset();
 
-  trx_release_xa_group_reference_if_need(trx);
+  lizard::trx_release_xa_group_if_need(trx);
 
   trx->xa_desc.reset();
 
@@ -559,7 +559,7 @@ static void trx_free(trx_t *&trx) {
 
   trx->mod_tables.clear();
 
-  trx_release_xa_group_reference_if_need(trx);
+  lizard::trx_release_xa_group_if_need(trx);
 
   trx->xa_desc.reset();
 
@@ -1508,7 +1508,7 @@ static void trx_start_low(
 
     trx_sys_rw_trx_add(trx);
 
-    trx_add_to_xa_group_if_need(trx);
+    lizard::trx_add_to_xa_group_if_need(trx);
 
     trx_set_trx_id_for_audit_trx_ctx(trx);
   } else {
@@ -2496,7 +2496,7 @@ lizard::Vision *trx_assign_read_view(
   }
 
   /* NOTES: This may result in performance degradation. */
-  vision_collect_trx_group_ids(trx, &trx->vision);
+  trx->vision.xa_refresh(trx);
 
   return (&trx->vision);
 }
@@ -3728,7 +3728,7 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
 
   trx_sys_rw_trx_add(trx);
 
-  trx_add_to_xa_group_if_need(trx);
+  lizard::trx_add_to_xa_group_if_need(trx);
 
   trx_set_trx_id_for_audit_trx_ctx(trx);
 }

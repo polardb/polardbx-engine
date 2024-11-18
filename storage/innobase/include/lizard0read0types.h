@@ -156,9 +156,7 @@ class Vision {
 
   const Snapshot_vision *snapshot_vision() const { return m_snapshot_vision; }
 
-  void update_xa_vision(const Xa_group *xa_group) {
-    m_xa_vision.update_group_ids(xa_group);
-  }
+  void xa_refresh(trx_t *trx);
 
   bool is_asof_gcn() const {
     return m_snapshot_vision &&
