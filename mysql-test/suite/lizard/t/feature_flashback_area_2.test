@@ -26,7 +26,7 @@ select * from information_schema.innodb_table_status where table_name='bar';
 set query_via_flashback_area = 1;
 --error ER_SNAPSHOT_OUT_OF_RANGE
 select * from bar as of timestamp date_add(now(), interval 2 hour);
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 
 --echo
 --echo === test flashback to purged data ===
@@ -49,10 +49,10 @@ update bar set c2 = 4 where c1 = 1;
 sleep 2;
 set query_via_flashback_area = 1;
 select * from bar as of timestamp @past_timestamp;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 set query_via_flashback_area = 1;
 select c1 from bar as of timestamp @past_timestamp force index(c2) where c2 = 3;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 
 --echo
 --echo === test flashback to erased data via flashback area ===
@@ -65,11 +65,11 @@ sleep 2;
 set query_via_flashback_area = 1;
 --error ER_SNAPSHOT_TOO_OLD
 select * from bar as of timestamp @past_timestamp;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 set query_via_flashback_area = 1;
 --error ER_SNAPSHOT_TOO_OLD
 select c1 from bar as of timestamp @past_timestamp force index(c2) where c2 = 4;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 
 drop table bar;
 
@@ -131,7 +131,7 @@ alter table t1 add c3 int default 100, ALGORITHM = copy;
 set query_via_flashback_area = 1;
 --error ER_AS_OF_TABLE_DEF_CHANGED
 select * from t1 as of timestamp @past_timestamps;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 
 --echo
 --echo === Index Operations ===
@@ -512,7 +512,7 @@ ALTER TABLESPACE test_space RENAME TO new_space;
 --let $CONTAIN_FBA=1
 --source suite/lizard/include/table_has_fba.inc
 
-INSTALL PLUGIN keyring_file SONAME 'keyring_file.so';
+eval INSTALL PLUGIN keyring_file SONAME '$KEYRING_PLUGIN';
 ALTER TABLESPACE new_space ENCRYPTION='Y';
 --let $SCHEMA_NAME=test
 --let $TABLE_NAME=t10
@@ -569,7 +569,7 @@ ALTER TABLE t9 IMPORT TABLESPACE;
 set query_via_flashback_area = 1;
 --error ER_SNAPSHOT_TOO_OLD
 select * from t9 as of timestamp @past_timestamps;
-SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
+
 
 set opt_flashback_area = default;
 set global innodb_undo_retention = default;

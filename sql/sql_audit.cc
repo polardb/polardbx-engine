@@ -1098,7 +1098,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
 
   thd_get_audit_query(thd, &event.query);
 
-  event.lock_utime = (thd->get_lock_usec() - thd->start_utime);
+  event.lock_utime = thd->get_lock_usec();
   event.cost_utime = (current_utime - thd->start_utime);
   event.examined_rows = (ulonglong)thd->get_examined_row_count();
 
