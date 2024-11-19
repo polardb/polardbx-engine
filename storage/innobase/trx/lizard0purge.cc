@@ -364,7 +364,7 @@ bool purged_scn_validation() {
   /* purge sys not init yet */
   if (!purge_sys) return true;
 
-  ut_a(mutex_own(&purge_sys->pq_mutex));
+  ut_ad(mutex_own(&purge_sys->pq_mutex));
 
   ut_a(purge_sys->purged_scn.load() != PURGED_SCN_INVALID);
 
