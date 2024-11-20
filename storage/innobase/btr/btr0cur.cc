@@ -823,12 +823,13 @@ void btr_cur_search_to_nth_level(
       /* Most of delete-intended operations are purging.
       Free blocks and read IO bandwidth should be prior
       for them, when the history list is glowing huge. */
-      if (lock_intention == BTR_INTENTION_DELETE &&
+      /*if (lock_intention == BTR_INTENTION_DELETE &&
           trx_sys->rseg_history_len.load() > BTR_CUR_FINE_HISTORY_LENGTH &&
           buf_get_n_pending_read_ios()) {
         mtr_x_lock(dict_index_get_lock(index), mtr, UT_LOCATION_HERE);
-      } else if (dict_index_is_spatial(index) &&
-                 lock_intention <= BTR_INTENTION_BOTH) {
+      } else */
+      if (dict_index_is_spatial(index) &&
+          lock_intention <= BTR_INTENTION_BOTH) {
         /* X lock the if there is possibility of
         pessimistic delete on spatial index. As we could
         lock upward for the tree */
