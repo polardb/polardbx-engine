@@ -89,7 +89,7 @@ static size_t execute_cmd(const char *cmd, char *ret_buf, size_t buf_len) {
     Here rely on the correctness of the KMS/Agent command.
   */
   if (ret_size >= 5 && memcmp(ret_buf, "ERROR", 5) == 0) {
-    Logger::log(ERROR_LEVEL, "error pipe output [%s]", ret_buf);
+    Logger::log(ERROR_LEVEL, "pipe output [%s]", ret_buf);
     return 0;
   }
 
@@ -101,7 +101,8 @@ static size_t execute_cmd(const char *cmd, char *ret_buf, size_t buf_len) {
     ret_size--;
   }
 
-  if (ret_size == 0) Logger::log(ERROR_LEVEL, "pipe output length = 0");
+  if (ret_size == 0)
+    Logger::log(ERROR_LEVEL, "pipe input [%s], output length = 0", cmd);
 
   return ret_size;
 }

@@ -84,7 +84,7 @@ extern void keyring_rds_deinit();
 /**
   The lock that protecting plugin (de-)initializing, master key id accessing
 */
-extern mysql_rwlock_t LOCK_keyring_rds;
+extern mysql_mutex_t LOCK_keyring_rds;
 
 /**
   PSI memory key id traced in performance_schema

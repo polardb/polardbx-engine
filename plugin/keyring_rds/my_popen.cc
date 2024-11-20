@@ -245,11 +245,14 @@ size_t keyring_read(int fd, pid_t pid, char *buf, size_t buf_len,
     if (now < start || (diff = (now - start)) >= INT_MAX)
       break; /* Should not be here */
 
-    can_wait_sec -= (int)diff;
+    can_wait_sec = timeout_sec - (int)diff;
   }
 
   epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
   close(epfd);
+
+  if (can_wait_sec <= 0)
+    keyring_rds::Logger::log(ERROR_LEVEL, "keyring_read timeout");
 
   buf[total_read] = 0;
   return total_read;

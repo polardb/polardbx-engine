@@ -20,8 +20,9 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "include/mutex_lock.h"
 #include "mysql/psi/mysql_memory.h"
-#include "mysql/psi/mysql_rwlock.h"
+#include "mysql/psi/mysql_mutex.h"
 
 #include "keyring_rds_common.h"
 #include "keyring_rds_key_id.h"
@@ -31,16 +32,16 @@
 namespace keyring_rds {
 
 // The lock that protecting plugin (de-)initializing, master key id accessing
-mysql_rwlock_t LOCK_keyring_rds;
+mysql_mutex_t LOCK_keyring_rds;
 
 // PSI memory key id traced in performance_schema
 PSI_memory_key key_memory_KEYRING_rds;
 
 // PSI rwlock key
-static PSI_rwlock_key key_LOCK_keyring_rds;
+static PSI_mutex_key key_LOCK_keyring_rds;
 
 #ifdef HAVE_PSI_INTERFACE
-static PSI_rwlock_info all_keyring_rds_rwlocks[] = {
+static PSI_mutex_info all_keyring_rds_mutex[] = {
     {&key_LOCK_keyring_rds, "LOCK_keyring_rds", 0, 0, PSI_DOCUMENT_ME}};
 
 static PSI_memory_info all_keyring_rds_memory[] = {
@@ -54,8 +55,8 @@ static void keyring_rds_init_psi_keys(void) {
   count = static_cast<int>(array_elements(all_keyring_rds_memory));
   mysql_memory_register(category, all_keyring_rds_memory, count);
 
-  count = static_cast<int>(array_elements(all_keyring_rds_rwlocks));
-  mysql_rwlock_register(category, all_keyring_rds_rwlocks, count);
+  count = static_cast<int>(array_elements(all_keyring_rds_mutex));
+  mysql_mutex_register(category, all_keyring_rds_mutex, count);
 }
 #endif
 
@@ -71,10 +72,10 @@ bool keyring_rds_init(void) {
   keyring_rds_init_psi_keys();
 #endif
 
-  if (mysql_rwlock_init(key_LOCK_keyring_rds, &LOCK_keyring_rds)) return true;
+  mysql_mutex_init(key_LOCK_keyring_rds, &LOCK_keyring_rds, MY_MUTEX_INIT_FAST);
 
   if (init_key_id_mgr()) {
-    mysql_rwlock_destroy(&LOCK_keyring_rds);
+    mysql_mutex_destroy(&LOCK_keyring_rds);
     return true;
   }
 
@@ -88,7 +89,7 @@ bool keyring_rds_init(void) {
 void keyring_rds_deinit() {
   if (initialized) {
     deinit_key_id_mgr();
-    mysql_rwlock_destroy(&LOCK_keyring_rds);
+    mysql_mutex_destroy(&LOCK_keyring_rds);
     initialized = false;
   }
 }
@@ -113,7 +114,7 @@ class Key_imp : public Key_interface {
     *key_type = my_strdup(key_memory_KEYRING_rds, "rds-tde", MYF(MY_WME));
     *key = NULL;  // Assume that it will fail
 
-    Lock_helper rdlock(&LOCK_keyring_rds, false);
+    MUTEX_LOCK(lock, &LOCK_keyring_rds);
 
     if (key_id == NULL)
       return fetch_latest_key_id(key, key_len);
@@ -133,7 +134,7 @@ class Key_imp : public Key_interface {
                 size_t key_len MY_ATTRIBUTE((unused))) override {
     if (!initialized) return true;
 
-    Lock_helper wrlock(&LOCK_keyring_rds, true);
+    MUTEX_LOCK(lock, &LOCK_keyring_rds);
 
     // Interact with KMS to generate a new key, and fetch its id
     char k[MAX_KEY_ID_LENGTH];
@@ -155,7 +156,7 @@ class Key_imp : public Key_interface {
 
     if (!initialized) return;
 
-    Lock_helper rdlock(&LOCK_keyring_rds, false);
+    MUTEX_LOCK(lock, &LOCK_keyring_rds);
 
     Keys_iterator *k_it = new Keys_iterator();
     if (k_it == NULL) {
