@@ -140,6 +140,13 @@ bool Sql_cmd_xa_prepare::trans_xa_prepare(THD *thd) {
     return true;
   }
 
+  if (!thd->xpaxos_replication_channel
+      && opt_consensus_disable_empty_xa
+      && is_empty_xa_prepare(thd)) {
+    my_error(ER_EMPTY_XA_NOT_ALLOWED, MYF(0));
+    return true;
+  }
+
   auto rollback_xa_tran = create_scope_guard([&]() {
 #ifdef HAVE_PSI_TRANSACTION_INTERFACE
     assert(thd->m_transaction_psi == nullptr);

@@ -1111,6 +1111,7 @@ int check_trx_rw_engines(THD *thd, Transaction_ctx::enum_trx_scope trx_scope);
   @retval false Otherwise.
 */
 bool is_empty_transaction_in_binlog_cache(const THD *thd);
+bool is_empty_xa_prepare(const THD *thd);
 bool trans_has_updated_trans_table(const THD *thd);
 bool stmt_has_updated_trans_table(Ha_trx_info_list const &ha_list);
 bool ending_trans(THD *thd, const bool all);

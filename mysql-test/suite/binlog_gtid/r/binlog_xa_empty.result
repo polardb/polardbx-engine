@@ -1,0 +1,47 @@
+RESET MASTER;
+set global consensus_disable_empty_xa=1;
+create database if not exists d1;
+drop table if exists d1.t0;
+Warnings:
+Note	1051	Unknown table 'd1.t0'
+create table d1.t0(c1 int , c2 varchar(100));
+xa start 'x1';
+insert into d1.t0 values(3, "dd");
+delete from  d1.t0 where c1=3;
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+xa start 'x1';
+delete from  d1.t0 where c1=3;
+xa end 'x1';
+xa prepare 'x1';
+ERROR HY000: Empty XA transactions not allowed from @@consensus_disable_empty_xa.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'x1';
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  IDLE state
+xa start 'x1';
+select * from d1.t0;
+c1	c2
+xa end 'x1';
+xa prepare 'x1';
+ERROR HY000: Empty XA transactions not allowed from @@consensus_disable_empty_xa.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa commit 'x1';
+ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  IDLE state
+xa start 'x1';
+xa end 'x1';
+xa prepare 'x1';
+ERROR HY000: Empty XA transactions not allowed from @@consensus_disable_empty_xa.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+xa rollback 'x1';
+drop database if exists d1;
+drop table if exists d1.t0;
+Warnings:
+Note	1051	Unknown table 'd1.t0'
+set global consensus_disable_empty_xa=DEFAULT;

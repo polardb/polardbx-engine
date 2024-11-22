@@ -1,0 +1,68 @@
+
+--source include/have_binlog_format_row.inc
+
+RESET MASTER;
+
+--connect(con1, localhost, root,,)
+--connection con1
+set global consensus_disable_empty_xa=1;
+create database if not exists d1;
+drop table if exists d1.t0;
+create table d1.t0(c1 int , c2 varchar(100));
+--disconnect con1
+
+--connect(con1, localhost, root,,)
+--connection con1
+xa start 'x1'; 
+insert into d1.t0 values(3, "dd");
+delete from  d1.t0 where c1=3;
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+xa commit 'x1';
+--disconnect con1
+
+
+--connect(con1, localhost, root,,)
+--connection con1
+xa start 'x1'; 
+delete from  d1.t0 where c1=3;
+xa end 'x1';
+--error 7576
+xa prepare 'x1';
+xa recover;
+--error 1399
+xa commit 'x1';
+--disconnect con1
+
+
+--connect(con1, localhost, root,,)
+--connection con1
+xa start 'x1'; 
+select * from d1.t0;
+xa end 'x1';
+--error 7576
+xa prepare 'x1';
+xa recover;
+--error 1399
+xa commit 'x1';
+--disconnect con1
+
+
+--connect(con1, localhost, root,,)
+--connection con1
+xa start 'x1'; 
+xa end 'x1';
+--error 7576
+xa prepare 'x1';
+xa recover;
+xa rollback 'x1';
+--disconnect con1
+
+
+--connect(con1, localhost, root,,)
+--connection con1
+drop database if exists d1;
+drop table if exists d1.t0;
+set global consensus_disable_empty_xa=DEFAULT;
+--disconnect con1

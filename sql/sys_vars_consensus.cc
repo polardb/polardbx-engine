@@ -110,6 +110,7 @@ bool opt_consensus_auto_leader_transfer;
 ulonglong opt_consensus_auto_leader_transfer_check_seconds;
 ulonglong opt_consensus_wait_milliseconds_before_change_leader;
 bool opt_consensus_disable_commit_before_change_leader;
+bool opt_consensus_disable_empty_xa;
 bool opt_consensuslog_revise;
 bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
@@ -877,3 +878,9 @@ static Sys_var_bool Sys_consensus_disable_commit_before_change_leader(
     GLOBAL_VAR(opt_consensus_disable_commit_before_change_leader), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
+
+static Sys_var_bool Sys_consensus_disable_empty_xa(
+    "consensus_disable_empty_xa",
+    "disable empty xa for debug",
+    GLOBAL_VAR(opt_consensus_disable_empty_xa), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);

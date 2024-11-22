@@ -104,6 +104,7 @@ extern bool opt_consensus_auto_leader_transfer;
 extern ulonglong opt_consensus_auto_leader_transfer_check_seconds;
 extern ulonglong opt_consensus_wait_milliseconds_before_change_leader;
 extern bool opt_consensus_disable_commit_before_change_leader;
+extern bool opt_consensus_disable_empty_xa;
 extern bool opt_consensuslog_revise;
 extern bool opt_recover_snapshot;
 extern ulong thread_stack_warning;

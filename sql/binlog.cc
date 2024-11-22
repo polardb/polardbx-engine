@@ -3193,6 +3193,14 @@ bool is_empty_transaction_in_binlog_cache(const THD *thd) {
   return false;
 }
 
+bool is_empty_xa_prepare(const THD *thd) {
+  DBUG_TRACE;
+  binlog_cache_mngr *const cache_mngr = thd_get_cache_mngr(thd);
+  return (thd->lex
+          && SQLCOM_XA_PREPARE == thd->lex->sql_command
+          && (cache_mngr == nullptr || cache_mngr->is_binlog_empty()));
+}
+
 /**
   This function checks if a transactional table was updated by the
   current transaction.

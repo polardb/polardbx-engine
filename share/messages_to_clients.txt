@@ -10194,6 +10194,9 @@ ER_XA_GROUP_TRX_SLOT_ALLOC_ERROR
 ER_XA_GROUP_CLOSE_ERROR
   eng "Cannot start a new xa branch when enable transaction group, if there has been already one xa branch in prepared state."
 
+ER_EMPTY_XA_NOT_ALLOWED
+  eng "Empty XA transactions not allowed from @@consensus_disable_empty_xa."
+
 #
 #  End of RDS error message.
 #
