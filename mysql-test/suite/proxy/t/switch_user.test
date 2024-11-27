@@ -1,0 +1,21 @@
+
+select user();
+
+let $token=query_get_value(call dbms_proxy.get_token(), token, 1);
+
+create user 'admin'@'%' IDENTIFIED WITH mysql_native_password BY 'test_password';
+
+--disable_query_log
+--error 1045
+eval call dbms_proxy.switch_user('$token', 'root', 'test_host');
+
+eval call dbms_proxy.switch_user('$token', 'admin', 'test_host');
+--enable_query_log
+
+select user();
+
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'root', 'localhost');
+--enable_query_log
+
+drop user 'admin'@'%';

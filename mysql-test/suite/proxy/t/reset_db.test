@@ -1,0 +1,7 @@
+
+show tables;
+
+call dbms_proxy.reset_db();
+
+--error 1046
+show tables;

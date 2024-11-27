@@ -299,6 +299,7 @@ our @DEFAULT_SUITES = qw(
   xcluster
   changeset
   polarx_rpc
+  proxy
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

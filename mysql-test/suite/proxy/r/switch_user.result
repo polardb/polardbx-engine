@@ -1,0 +1,9 @@
+select user();
+user()
+root@localhost
+create user 'admin'@'%' IDENTIFIED WITH mysql_native_password BY 'test_password';
+ERROR 28000: Access denied for user ''@'' (using password: NO)
+select user();
+user()
+admin@test_host
+drop user 'admin'@'%';

@@ -1,0 +1,5 @@
+show tables;
+Tables_in_test
+call dbms_proxy.reset_db();
+show tables;
+ERROR 3D000: No database selected

@@ -49,6 +49,7 @@
 #include "sql/lizard/undo_proc.h"
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xrpc/xrpc_proc.h"
+#include "sql/proxy/proxy_proc.h"
 
 #include "sql/polarx_proc/changeset_proc.h"
 
@@ -252,6 +253,13 @@ void package_context_init() {
   register_package<Proc, Proc_perf_hist>(XRPC_PROC_SCHEMA);
   /** xrpc.cmd() */
   register_package<Proc, Proc_cmd>(im::XRPC_PROC_SCHEMA);
+
+  /** proxy.reset_db() */
+  register_package<Proc, Proc_reset_db>(im::PROXY_PROC_SCHEMA);
+  /** proxy.get_token() */
+  register_package<Proc, Proc_get_token>(im::PROXY_PROC_SCHEMA);
+  /** proxy.switch_user() */
+  register_package<Proc, Proc_switch_user>(im::PROXY_PROC_SCHEMA);
 
   /* procedures: polarx.changeset_* */
   register_package<Proc, Changeset_proc_start>(POLARX_PROC_SCHEMA);
