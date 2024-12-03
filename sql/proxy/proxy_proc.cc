@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "plugin/polarx_rpc/global_defines.h"
 
+#include "mutex_lock.h"
 #include "mysql_com.h"
 #include "sql/auth/auth_common.h"
 #include "sql/auth/sql_security_ctx.h"
@@ -127,6 +128,13 @@ Sql_cmd *Proc_switch_user::evoke_cmd(THD *thd, List<Item> *list) const {
 }
 
 bool Cmd_switch_user::pc_execute(THD *thd) {
+  /*
+    LOCK_thd_security_ctx protects the THD's security-context from
+    inspection by SHOW PROCESSLIST while we're updating it. Nested
+    acquiring of LOCK_thd_data is fine (see below).
+  */
+  MUTEX_LOCK(grd_secctx, &thd->LOCK_thd_security_ctx);
+
   Security_context *sctx = thd->security_context();
   if (nullptr == sctx) {
     my_error(ER_NO, MYF(0));
@@ -159,7 +167,7 @@ bool Cmd_switch_user::pc_execute(THD *thd) {
   sctx->assign_user(user->ptr(), user->length());
   sctx->assign_host(host->ptr(), host->length());
   sctx->assign_ip(nullptr, 0);
-  thd->peer_port = 0; // remove port info
+  thd->peer_port = 0;  // remove port info
   sctx->set_host_or_ip_ptr();
 
   // try switch user
