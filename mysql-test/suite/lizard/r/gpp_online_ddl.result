@@ -171,7 +171,6 @@ ALTER TABLE t1 ADD PRIMARY KEY (c), ALGORITHM=INPLACE, LOCK=NONE;
 # connection con1
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';
@@ -188,9 +187,9 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 call dbms_stat.flush_gpp();
 SELECT a FROM t1 FORCE INDEX (b) WHERE b>=6;
-include/assert.inc [gpp hit/miss times shoule be 3]
+include/assert.inc [gpp hit/miss times shoule be 4]
 include/assert.inc [gpp hit times shoule be 2]
-include/assert.inc [gpp miss times shoule be 1]
+include/assert.inc [gpp miss times shoule be 2]
 # -----3.2. Rebuild ddl and apply row_log_table (DEBUG_SYNC=row_log_table_apply1_before, change opt_index_format_gpp_enabled while rebuilding)-------------
 SET opt_index_format_gpp_enabled = TRUE;
 call table_t1_creation();
@@ -203,7 +202,6 @@ ALTER TABLE t1 ADD PRIMARY KEY (c), ALGORITHM=INPLACE, LOCK=NONE;
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 SET opt_index_format_gpp_enabled = FALSE;
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';
@@ -220,9 +218,9 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 call dbms_stat.flush_gpp();
 SELECT a FROM t1 FORCE INDEX (b) WHERE b>=6;
-include/assert.inc [gpp hit/miss times shoule be 3]
+include/assert.inc [gpp hit/miss times shoule be 4]
 include/assert.inc [gpp hit times shoule be 2]
-include/assert.inc [gpp miss times shoule be 1]
+include/assert.inc [gpp miss times shoule be 2]
 SET opt_index_format_gpp_enabled = FALSE;
 call table_t1_creation();
 # Make alter table wait
@@ -233,7 +231,6 @@ ALTER TABLE t1 ADD PRIMARY KEY (c), ALGORITHM=INPLACE, LOCK=NONE;
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 SET opt_index_format_gpp_enabled = TRUE;
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';
@@ -265,7 +262,6 @@ ALTER TABLE t1 ADD INDEX `c_b` (c,b), ALGORITHM=INPLACE, LOCK=NONE;
 # connection con1
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, 'a');
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';
@@ -282,8 +278,8 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 call dbms_stat.flush_gpp();
 SELECT a FROM t1 FORCE INDEX (`c_b`) WHERE c>=6;
-include/assert.inc [gpp hit/miss times shoule be 3]
-include/assert.inc [gpp hit times shoule be 3]
+include/assert.inc [gpp hit/miss times shoule be 4]
+include/assert.inc [gpp hit times shoule be 4]
 include/assert.inc [gpp miss times shoule be 0]
 # -------------------4. Non-rebuild ddl test (within row_log) -------------
 # -----4.2. Non-rebuild ddl and apply row_log (DEBUG_SYNC=row_log_apply_before)-------------
@@ -298,7 +294,6 @@ ALTER TABLE t1 ADD INDEX `c_b` (c,b), ALGORITHM=INPLACE, LOCK=NONE;
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 SET opt_index_format_gpp_enabled = FALSE;
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';
@@ -315,8 +310,8 @@ t1	CREATE TABLE `t1` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 call dbms_stat.flush_gpp();
 SELECT a FROM t1 FORCE INDEX (`c_b`) WHERE c>=6;
-include/assert.inc [gpp hit/miss times shoule be 3]
-include/assert.inc [gpp hit times shoule be 3]
+include/assert.inc [gpp hit/miss times shoule be 4]
+include/assert.inc [gpp hit times shoule be 4]
 include/assert.inc [gpp miss times shoule be 0]
 SET opt_index_format_gpp_enabled = FALSE;
 call table_t1_creation();
@@ -329,7 +324,6 @@ ALTER TABLE t1 ADD INDEX `c_b` (c,b), ALGORITHM=INPLACE, LOCK=NONE;
 SET DEBUG_SYNC = 'now WAIT_FOR s1';
 SET opt_index_format_gpp_enabled = TRUE;
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 # Let Alter table continue
 SET DEBUG_SYNC = 'now SIGNAL s2';

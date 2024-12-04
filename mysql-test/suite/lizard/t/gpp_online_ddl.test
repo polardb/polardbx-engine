@@ -154,7 +154,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 
 # Produce row_table_log.
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 
 --echo # Let Alter table continue
@@ -168,9 +167,9 @@ connection default;
 # rows from row_table_log should be hit, and rows from normal rebuilding should be missed.
 SHOW CREATE TABLE t1;
 --let $SELECT_STATEMENTS=SELECT a FROM t1 FORCE INDEX (b) WHERE b>=6
---let $HIT_MISS_TIMES=3
+--let $HIT_MISS_TIMES=4
 --let $HIT_TIMES=2
---let $MISS_TIMES=1
+--let $MISS_TIMES=2
 --source suite/lizard/include/gpp_hit_miss_assert.inc
 # ---- 3.1. End -------------------------------------------------------------------------------------------
 
@@ -194,7 +193,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 # Disable gpp and produce row_table_log.
 SET opt_index_format_gpp_enabled = FALSE;
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 
 --echo # Let Alter table continue
@@ -209,9 +207,9 @@ connection default;
 # While the opt_index_format_gpp_enabled is changed to FALSE, the row_table_log should be applied with gpp column.
 SHOW CREATE TABLE t1;
 --let $SELECT_STATEMENTS=SELECT a FROM t1 FORCE INDEX (b) WHERE b>=6
---let $HIT_MISS_TIMES=3
+--let $HIT_MISS_TIMES=4
 --let $HIT_TIMES=2
---let $MISS_TIMES=1
+--let $MISS_TIMES=2
 --source suite/lizard/include/gpp_hit_miss_assert.inc
 
 # Disable gpp and create table
@@ -232,7 +230,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 # Enable gpp and produce row_table_log.
 SET opt_index_format_gpp_enabled = TRUE;
 UPDATE t1 SET b=8 where b=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 
 --echo # Let Alter table continue
@@ -273,7 +270,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 
 # Produce row_log.
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, 'a');
 
 --echo # Let Alter table continue
@@ -287,8 +283,8 @@ connection default;
 # All rows should be hit.
 SHOW CREATE TABLE t1;
 --let $SELECT_STATEMENTS=SELECT a FROM t1 FORCE INDEX (`c_b`) WHERE c>=6
---let $HIT_MISS_TIMES=3
---let $HIT_TIMES=3
+--let $HIT_MISS_TIMES=4
+--let $HIT_TIMES=4
 --let $MISS_TIMES=0
 --source suite/lizard/include/gpp_hit_miss_assert.inc
 # ---- 4.1. End -------------------------------------------------------------------------------------------
@@ -314,7 +310,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 # Disable gpp and produce row_log.
 SET opt_index_format_gpp_enabled = FALSE;
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 
 --echo # Let Alter table continue
@@ -329,8 +324,8 @@ connection default;
 # While the opt_index_format_gpp_enabled is changed to FALSE, the row_table_log should be applied with gpp column.
 SHOW CREATE TABLE t1;
 --let $SELECT_STATEMENTS=SELECT a FROM t1 FORCE INDEX (`c_b`) WHERE c>=6
---let $HIT_MISS_TIMES=3
---let $HIT_TIMES=3
+--let $HIT_MISS_TIMES=4
+--let $HIT_TIMES=4
 --let $MISS_TIMES=0
 --source suite/lizard/include/gpp_hit_miss_assert.inc
 
@@ -353,7 +348,6 @@ SET DEBUG_SYNC = 'now WAIT_FOR s1';
 # Enable gpp and produce row_log.
 SET opt_index_format_gpp_enabled = TRUE;
 UPDATE t1 SET c=8 where c=3;
-DELETE FROM t1 where c=7;
 INSERT INTO t1 VALUES (9, 9, 9, REPEAT('a',3000));
 
 --echo # Let Alter table continue

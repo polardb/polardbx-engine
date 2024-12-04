@@ -347,7 +347,7 @@ else
       -DENABLE_GCOV=$gcov                \
       -DINSTALL_LAYOUT=STANDALONE        \
       -DMYSQL_MAINTAINER_MODE=1          \
-      -DWITH_SSL=openssl                 \
+      -DWITH_SSL=system                  \
       -DWITH_ZLIB=bundled                \
       -DWITH_ZSTD=bundled                \
       -DWITH_MYISAM_STORAGE_ENGINE=1     \
