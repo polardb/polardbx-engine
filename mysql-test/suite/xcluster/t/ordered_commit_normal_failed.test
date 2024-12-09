@@ -1,0 +1,76 @@
+--source include/have_log_bin.inc
+--source include/have_gtid.inc
+--source include/have_debug_sync.inc
+--source include/paxos.inc
+--source include/gtid_utils.inc
+
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+call mtr.add_suppression('Binary logging not possible.*');
+
+let $master_uuid= `SELECT @@GLOBAL.SERVER_UUID`;
+
+--echo init"
+--connection default
+create table t1(id int);
+insert into t1 values(0);
+
+select count(*) from t1;
+xa recover;
+--replace_result $master_uuid MASTER_UUID
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+
+
+--echo =================================
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global xa_detach_on_prepare=0;
+set global binlog_order_commits=0;
+--disconnect conn1
+
+--echo **** test xa_detach=0, binlog_order_commits=0
+--source suite/xcluster/t/ordered_commit_normal_failed_common.inc
+
+
+--echo =================================
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global xa_detach_on_prepare=1;
+set global binlog_order_commits=0;
+--disconnect conn1
+
+--echo **** test xa_detach=1, binlog_order_commits=0
+--source suite/xcluster/t/ordered_commit_normal_failed_common.inc
+
+
+--echo =================================
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global xa_detach_on_prepare=1;
+set global binlog_order_commits=1;
+--disconnect conn1
+
+--echo **** test xa_detach=1, binlog_order_commits=1
+--source suite/xcluster/t/ordered_commit_normal_failed_common.inc
+
+
+
+--echo =================================
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global xa_detach_on_prepare=0;
+set global binlog_order_commits=1;
+--disconnect conn1
+
+--echo **** test xa_detach=0, binlog_order_commits=1
+--source suite/xcluster/t/ordered_commit_normal_failed_common.inc
+
+
+--echo =================================
+--echo end"
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+drop table t1;
+--source include/gtid_utils_end.inc
+
+--disconnect conn1

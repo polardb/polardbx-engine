@@ -1658,43 +1658,64 @@ int MYSQL_BIN_LOG::rotate_consensus_log() {
   return error;
 }
 
-void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
+void MYSQL_BIN_LOG::consensus_rollback_with_flush_nothing(THD *thd, bool is_my_thd) {
+  /*
+    If xa commit error, we can not simply roll back the trx of this THD.
+    Because the trx is prepared by 'xa prepare' and its consensus index
+    may reach a majority in the cluster. It must not be rolled back.
+    Currently, we crash the server to handle the consistency by recovery.
+  */
+  if (thd->consensus_error != THD::CSS_NONE) {
+    if (thd->get_transaction()->xid_state()->has_state(XID_STATE::XA_PREPARED)) {
+      xp::warn(ER_XP_COMMIT) << "xa commit/rollback fail, restart to deal with it"
+        << ", commit_error: " << thd->commit_error
+        << ", consensus_error: " << thd->consensus_error
+        << ", sql_command: " << thd->lex->sql_command
+        << ", xid " << *thd->get_transaction()->xid_state()->get_xid();
+      flush_error_log_messages();
+      exec_binlog_error_action_exit(
+        "xa commit/rollback fail, restart to deal with it");
+    }
+
+    if (thd->get_transaction()->m_flags.commit_low )
+      trx_coordinator::rollback_in_engines(thd, thd->get_transaction()->m_flags.real_commit);
+    gtid_state->update_on_rollback(thd);
+    thd_get_cache_mngr(thd)->reset();
+    if (thd->get_stmt_da()->is_ok())
+      thd->get_stmt_da()->reset_diagnostics_area();
+    if (is_my_thd)
+      my_error(THD::Consensus_error_code[thd->consensus_error], MYF(0));
+  }
+}
+
+void MYSQL_BIN_LOG::consensus_wait_commit(THD *thd) {
   if (opt_initialize) return;
-  if (thd->commit_error != THD::CE_NONE ||
-      ((consensus_ptr->waitCommitIndexUpdate(thd->consensus_index - 1,
-                                             thd->consensus_term) <
-        thd->consensus_index) &&
-       (thd->consensus_index >
-        consensus_log_manager.get_consensus_info()->get_start_apply_index()))) {
-    // TODO: need write apply index to consensus info table???
+  if (thd->commit_error == THD::CE_NONE
+      && thd->consensus_error == THD::CSS_NONE
+      && (DBUG_EVALUATE_IF("force_in_wait_commit", true, false)
+          || (consensus_ptr->waitCommitIndexUpdate(thd->consensus_index - 1, thd->consensus_term) < thd->consensus_index
+              && thd->consensus_index > consensus_log_manager.get_consensus_info()->get_start_apply_index()))) {
     xp::warn(ER_XP_COMMIT)
-        << "Failed to commit, because previous error or shutdown or leadership "
-           "changed, system current term:" 
+        << "Failed to commit, because previous error or shutdown or leadership changed"
+        << ", system current term:" 
         << consensus_log_manager.get_consensus_info()->get_current_term()
         << ", system apply index:"
         << consensus_log_manager.get_consensus_info()->get_start_apply_index()
         << ", thd consensus term:" << thd->consensus_term
-        << ", consensus index:" << thd->consensus_index
-        << ", commit_error:" << thd->commit_error
-        << ", consensus_error:" << thd->consensus_error;
+        << ", thd consensus index:" << thd->consensus_index
+        << ", isShutdown:" << consensus_ptr->isShutdown()
+        << ", sql_command:" << thd->lex->sql_command;
 
-    if (thd->commit_error == THD::CE_NONE) {
-      xp::warn(ER_XP_COMMIT)
-          << "'There are some dirty binlogs, restert to deal with them";
-      flush_error_log_messages();
-      abort();
-    }
-
-    thd->mark_transaction_to_rollback(true);
-    thd->commit_error = THD::CE_COMMIT_ERROR;
+    //skip commit
     thd->get_transaction()->m_flags.commit_low = false;
-    // define error code
-    // if code is not shutdown or log too large, it must be leadership change
-    if (consensus_ptr->isShutdown()) thd->consensus_error = THD::CSS_SHUTDOWN;
-    if (thd->consensus_error == THD::CSS_NONE)
+    if (consensus_ptr->isShutdown())
+      thd->consensus_error = THD::CSS_SHUTDOWN;
+    else
       thd->consensus_error = THD::CSS_LEADERSHIP_CHANGED;
+    thd->commit_error = THD::CE_COMMIT_ERROR;
 
-    my_error(THD::Consensus_error_code[thd->consensus_error], MYF(0));
+    exec_binlog_error_action_exit(
+          "Consensus wait majority to commit failed, restart to deal with it");
   }
 }
 
@@ -1995,9 +2016,7 @@ int flush_consensus_log(THD *thd, binlog_cache_data *, Binlog_event_writer *,
   if (mark_as_rollback || (!opt_consensus_large_trx && is_large_trx)) {
     xp::warn(ER_XP_COMMIT)
         << "Failed to flush log ,because consensus log is too large.";
-    thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
-    thd->get_transaction()->m_flags.commit_low = false;
     thd->consensus_error = THD::CSS_LOG_TOO_LARGE;
     bytes_in_cache = 0;
     // clear the cache

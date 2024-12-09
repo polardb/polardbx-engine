@@ -224,6 +224,7 @@ static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 */
 static int binlog_set_prepared_in_tc(handlerton *hton, THD *thd);
 static void exec_binlog_error_action_abort(const char *err_string);
+static void exec_binlog_error_action_exit(const char *err_string);
 static void binlog_prepare_row_images(const THD *thd, TABLE *table);
 static bool is_loggable_xa_prepare(THD *thd);
 static int check_instance_backup_locked();
@@ -240,9 +241,7 @@ namespace {
   @param run_after_commit In the case of a commit being issued, whether or
                           not to run the `after_commit` hook.
  */
-void finish_transaction_in_engines(
-    THD *thd, bool all, bool run_after_commit,
-    bool need_check_transaction_rollback_request = false);
+void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit);
 }  // namespace
 
 bool normalize_binlog_name(char *to, const char *from, bool is_relay_log) {
@@ -2508,6 +2507,42 @@ static void exec_binlog_error_action_abort(const char *err_string) {
 
   if (thd) thd->send_statement_status();
   my_abort();
+}
+
+static void exec_binlog_error_action_exit(const char *err_string) {
+  THD *thd = current_thd;
+  /*
+    When the code enters here it means that there was an error at higher layer
+    and my_error function could have been invoked to let the client know what
+    went wrong during the execution.
+
+    But these errors will not let the client know that the server is going to
+    abort. Even if we add an additional my_error function call at this point
+    client will be able to see only the first error message that was set
+    during the very first invocation of my_error function call.
+
+    The advantage of having multiple my_error function calls are visible when
+    the server is up and running and user issues SHOW WARNINGS or SHOW ERROR
+    calls. In this special scenario server will be immediately aborted and
+    user will not be able execute the above SHOW commands.
+
+    Hence we clear the previous errors and push one critical error message to
+    clients.
+   */
+  if (thd) {
+    if (thd->is_error()) thd->clear_error();
+    /*
+      Send error to both client and to the server error log.
+    */
+    my_error(ER_BINLOG_LOGGING_IMPOSSIBLE, MYF(ME_FATALERROR), err_string);
+  }
+
+  LogErr(ERROR_LEVEL, ER_BINLOG_LOGGING_NOT_POSSIBLE, err_string);
+  flush_error_log_messages();
+
+  if (thd) thd->send_statement_status();
+  _exit(MYSQLD_FAILURE_EXIT);  // Using _exit(), since exit() is not async
+                               // signal safe
 }
 
 /**
@@ -8518,28 +8553,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       return RESULT_ABORTED;
     }
 
-    if (ordered_commit(thd, all, skip_commit)) {
-      /*
-        If xa commit error, we can not simply roll back the trx of this THD.
-        Because the trx is prepared by 'xa prepare' and its consensus index
-        may reach a majority in the cluster. It must not be rolled back.
-
-      Currently, we crash the server to handle the consistency by recovery.
-                         */
-      if (thd && thd->lex &&
-          (thd->lex->sql_command == SQLCOM_XA_COMMIT ||
-           thd->lex->sql_command == SQLCOM_XA_ROLLBACK)) {
-        xp::warn(ER_XP_COMMIT) << "xa commit/rollback fail, restart to recover";
-        flush_error_log_messages();
-        abort();
-      }
-
-      // if consensus commit failed, transaction should rollback
-      if (thd->transaction_rollback_request) {
-        ha_rollback_low(thd, all);
-      }
-      return RESULT_INCONSISTENT;
-    }
+    if (ordered_commit(thd, all, skip_commit)) return RESULT_INCONSISTENT;
 
     DBUG_EXECUTE_IF("ensure_binlog_cache_is_reset", {
       /* Assert that binlog cache is reset at commit time. */
@@ -8730,21 +8744,15 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
   // before flush do consensus check
   if (term == 0
       || consensus_log->getCurrentTerm() != term
-      || term != consensus_log_manager.get_current_term()
-      || (opt_consensus_disable_commit_before_change_leader
-          && is_in_leader_transfer())) {
+      || DBUG_EVALUATE_IF("force_after_leader_transfer", true, false)
+      || term != consensus_log_manager.get_current_term()) {
+    xp::warn(ER_XP_COMMIT) << "Failed to flush, because leadership changing, "
+                              "replicate log or check term failed"
+                           << ", consensus_term: " << consensus_log->getCurrentTerm() 
+                           << ", term: " << term 
+                           << ", current term: " << consensus_log_manager.get_current_term();
     for (THD *head = first_seen; head; head = head->next_to_commit) {
-      binlog_cache_mngr *cache_mngr = thd_get_cache_mngr(head);
-      cache_mngr->reset();
-      xp::warn(ER_XP_COMMIT) << "Failed to commit, because leadership changed, "
-                                "replicate log or check term failed"
-                            << ", term: " << term 
-                            << ", current term: " << consensus_log_manager.get_current_term() 
-                            << ", disable_ordered_commit: " << disable_ordered_commit 
-                            << ", isInLeaderTransfer: " << consensus_ptr->isInLeaderTransfer();
-      head->mark_transaction_to_rollback(true);
       head->commit_error = THD::CE_COMMIT_ERROR;
-      head->get_transaction()->m_flags.commit_low = false;
       head->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
     }
     mysql_mutex_unlock(consensus_log_manager.get_term_lock());
@@ -8827,8 +8835,14 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
         "block_leader_after_delete",
         if (thd != head) { DBUG_SET("+d,after_delete_wait"); };);
 
-    // xa prepare and normal commit both should wait commit index update
-    MYSQL_BIN_LOG::consensus_before_commit(head);
+    if (thd->consensus_error == THD::CSS_NONE) {
+      /* Wait until the logs are received by more than half of the nodes */
+      MYSQL_BIN_LOG::consensus_wait_commit(head);
+      ut_a(head->consensus_error == THD::CSS_NONE);
+    } else {
+      consensus_rollback_with_flush_nothing(head, thd == head);
+      continue;
+    }
 
     /*
       If flushing failed, set commit_error for the session, skip the
@@ -8841,8 +8855,7 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
 #ifndef NDEBUG
     Commit_stage_manager::get_instance().clear_preempt_status(head);
 #endif
-    if (head->get_transaction()->sequence_number != SEQ_UNINIT &&
-        head->consensus_error == THD::CSS_NONE) {
+    if (head->get_transaction()->sequence_number != SEQ_UNINIT) {
       mysql_mutex_lock(&LOCK_replica_trans_dep_tracker);
       m_dependency_tracker.update_max_committed(head);
       mysql_mutex_unlock(&LOCK_replica_trans_dep_tracker);
@@ -8861,7 +8874,7 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
 
     assert(!head->get_transaction()->m_flags.commit_low ||
            head->get_transaction()->m_flags.ready_preempt);
-    ::finish_transaction_in_engines(head, all, false, true);
+    ::finish_transaction_in_engines(head, all, false);
     DBUG_PRINT("debug", ("commit_error: %d, commit_pending: %s",
                          head->commit_error, YESNO(head->tx_commit_pending)));
 
@@ -8879,9 +8892,15 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
 
   for (THD *head = first; head; head = head->next_to_commit) {
     Thd_backup_and_restore switch_thd(thd, head);
-    auto all = head->get_transaction()->m_flags.real_commit;
-    // Mark transaction as prepared in TC, if applicable
-    trx_coordinator::set_prepared_in_tc_in_engines(head, all);
+
+    // if consensus error, continue next one
+    if (head->consensus_error == THD::CSS_NONE) {
+      auto all = head->get_transaction()->m_flags.real_commit;
+      // Mark transaction as prepared in TC, if applicable
+      trx_coordinator::set_prepared_in_tc_in_engines(head, all);
+    }
+    ut_a(head->get_transaction()->m_flags.xid_written == (head->consensus_error == THD::CSS_NONE));
+
     /*
       Decrement the prepared XID counter after storage engine commit.
       We also need decrement the prepared XID when encountering a
@@ -9029,14 +9048,16 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     if (cache_mngr) cache_mngr->reset();
   }
 
-  if (!opt_binlog_order_commits || thd->get_transaction()->m_flags.commit_low ||
-      thd->consensus_error != THD::CSS_NONE) {
+  if (thd->consensus_error == THD::CSS_NONE) {
     /* Wait until the logs are received by more than half of the nodes */
-    MYSQL_BIN_LOG::consensus_before_commit(thd);
+    MYSQL_BIN_LOG::consensus_wait_commit(thd);
+    ut_a(thd->consensus_error == THD::CSS_NONE);
+  } else {
+    consensus_rollback_with_flush_nothing(thd, true);
+    return 1;
   }
 
-  if (thd->get_transaction()->sequence_number != SEQ_UNINIT &&
-      thd->consensus_error == THD::CSS_NONE) {
+  if (thd->get_transaction()->sequence_number != SEQ_UNINIT) {
     mysql_mutex_lock(&LOCK_replica_trans_dep_tracker);
     m_dependency_tracker.update_max_committed(thd);
     mysql_mutex_unlock(&LOCK_replica_trans_dep_tracker);
@@ -9051,8 +9072,7 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
   auto committed_low = thd->get_transaction()->m_flags.commit_low;
   bool save_gtid_for_non_trans = thd->save_gtid_for_non_transactional_ops();
 
-  assert(thd->commit_error != THD::CE_COMMIT_ERROR ||
-         thd->consensus_error != THD::CSS_NONE);
+  assert(thd->commit_error != THD::CE_COMMIT_ERROR);
   ::finish_transaction_in_engines(thd, all, false);
 
   if (save_gtid_for_non_trans) {
@@ -9076,7 +9096,6 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     dec_prep_xids(thd);
   }
 
-  // FIXME: ordered commit need it
   if (opt_enable_appliedindex_checker)
     appliedindex_checker.commit(thd->consensus_index);
   else {
@@ -9233,23 +9252,35 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     [&] { consensus_log_manager.unlock_consensus_status(); }
   );
 
+  XID empty_xid;
   // check this function should return early
   if ((!opt_initialize
         && consensus_log_manager.get_status() != Consensus_Log_System_Status::BINLOG_WORKING)
       || opt_cluster_log_type_instance
+      || DBUG_EVALUATE_IF("force_in_leader_transfer", true, false)
       || (opt_consensus_disable_commit_before_change_leader
           && is_in_leader_transfer())) {
-    thd_get_cache_mngr(thd)->reset();
-    thd->mark_transaction_to_rollback(true);
     thd->commit_error = THD::CE_COMMIT_ERROR;
-    if (opt_consensus_disable_commit_before_change_leader
-        && is_in_leader_transfer()) {
+    if (DBUG_EVALUATE_IF("force_in_leader_transfer", true, false)
+        || (opt_consensus_disable_commit_before_change_leader
+            && is_in_leader_transfer())) {
       thd->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
-      my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
+      xp::warn(ER_XP_COMMIT) << "Failed to ordered_commit, because leadership changing, "
+                            << ", subState: " << consensus_ptr->getSubState()
+                            << ", sql_command: " << thd->lex->sql_command
+                            << ", xid " 
+                            << (thd->get_transaction()->xid_state()
+                              && thd->get_transaction()->xid_state()->get_xid()
+                                ? *thd->get_transaction()->xid_state()->get_xid()
+                                : empty_xid)
+                            << ", status " << (thd->get_transaction()->xid_state()
+                              ? thd->get_transaction()->xid_state()->state_name()
+                              : "null");
     } else {
-      my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
+      thd->consensus_error = THD::CSS_SERVER_NOT_READY;
     }
-    return thd->commit_error;
+    consensus_rollback_with_flush_nothing(thd, true);
+    return RESULT_ABORTED;
   }
 
   /*
@@ -9410,7 +9441,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   }
 
   // protected by LOCK_sync
-  if (opt_enable_appliedindex_checker) {
+  if (opt_enable_appliedindex_checker && sync_error == 0) {
     uint64 maxi = 0, mini = UINT64_MAX, size = 0;
     for (THD *head = final_queue; head; head = head->next_to_commit) {
       if (head->consensus_index == 0) continue;
@@ -9426,9 +9457,12 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
 
   DEBUG_SYNC(thd, "bgc_after_sync_stage_before_commit_stage");
 
-  // leave_mutex_before_commit_stage = &LOCK_sync;
-  // must release LOCK_sync after fetch_queue_for()
-  mysql_mutex_unlock(&LOCK_sync);
+  if (opt_binlog_order_commits || Clone_handler::need_commit_order()) {
+    leave_mutex_before_commit_stage = &LOCK_sync;
+  } else {
+    mysql_mutex_unlock(&LOCK_sync);
+    leave_mutex_before_commit_stage = nullptr;
+  }
 
   // set last index and write log done out of order is supported
   for (THD *head = final_queue; head; head = head->next_to_commit) {
@@ -9442,8 +9476,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
     consensus_log_manager.set_sync_index_if_greater(group_max_log_index);
     if (!opt_initialize) alisql_server->writeLogDone(group_max_log_index);
   }
-
-  leave_mutex_before_commit_stage = nullptr;
 
   DBUG_EXECUTE_IF("simulate_crash_after_consensus_append_log",
                   { DBUG_SUICIDE(); });
@@ -9557,9 +9589,11 @@ commit_stage :
     If we need to rotate, we do it without commit error.
     Otherwise the thd->commit_error will be possibly reset.
    */
-  if (DBUG_EVALUATE_IF("force_rotate", 1, 0) ||
-      (do_rotate && thd->commit_error == THD::CE_NONE &&
-       !is_rotating_caused_by_incident)) {
+  if (DBUG_EVALUATE_IF("force_rotate", 1, 0)
+      || (do_rotate
+          && thd->commit_error == THD::CE_NONE
+          && !is_rotating_caused_by_incident 
+          && sync_error == 0)) {
     auto consensus_guard2 = create_lock_guard(
       [&] { consensus_log_manager.rdlock_consensus_status(); },
       [&] { consensus_log_manager.unlock_consensus_status(); }
@@ -12104,13 +12138,9 @@ int THD::binlog_query(THD::enum_binlog_query_type qtype, const char *query_arg,
 }
 
 namespace {
-void finish_transaction_in_engines(
-    THD *thd, bool all, bool run_after_commit,
-    bool need_check_transaction_rollback_request) {
+void finish_transaction_in_engines(THD *thd, bool all, bool run_after_commit) {
   if (thd->get_transaction()->m_flags.commit_low) {
-    if ((!need_check_transaction_rollback_request ||
-         !thd->transaction_rollback_request) &&
-        trx_coordinator::commit_in_engines(thd, all, run_after_commit))
+    if (trx_coordinator::commit_in_engines(thd, all, run_after_commit))
       thd->commit_error = THD::CE_COMMIT_ERROR;
   } else if (is_xa_rollback(thd)) {
     if (trx_coordinator::rollback_in_engines(thd, all))

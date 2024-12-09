@@ -849,7 +849,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
                          const char *new_name);
   int truncate_logs_from_index(std::vector<std::string> &files_list,
                                std::string last_file);
-  static void consensus_before_commit(THD *thd);
+  static void consensus_rollback_with_flush_nothing(THD *thd, bool is_my_thd);
+  static void consensus_wait_commit(THD *thd);
   int recover_intergrity_for_normandy(Binlog_file_reader *binlog_file_reader,
                                       Format_description_log_event *fdle,
                                       my_off_t *valid_pos);
