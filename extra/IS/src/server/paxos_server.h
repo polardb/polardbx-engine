@@ -212,6 +212,10 @@ class RemoteServer : public Server {
   std::atomic<uint64_t> nextIndex;
   std::atomic<uint64_t> matchIndex;
   std::atomic<uint64_t> lastAckEpoch;
+  std::atomic<bool> applyThreadRunning{false};
+  std::atomic<uint64_t> applyDelaySeconds{0};
+  std::atomic<bool> disableElection{false};
+  bool logInstance{false};
   bool hasVote;
   bool isLeader;
   bool isLearner;

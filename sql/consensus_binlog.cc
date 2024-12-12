@@ -1696,7 +1696,7 @@ void MYSQL_BIN_LOG::consensus_wait_commit(THD *thd) {
           || (consensus_ptr->waitCommitIndexUpdate(thd->consensus_index - 1, thd->consensus_term) < thd->consensus_index
               && thd->consensus_index > consensus_log_manager.get_consensus_info()->get_start_apply_index()))) {
     xp::warn(ER_XP_COMMIT)
-        << "Failed to commit, because previous error or shutdown or leadership changed"
+        << "Failed to commit from shutdown or leadership changed"
         << ", system current term:" 
         << consensus_log_manager.get_consensus_info()->get_current_term()
         << ", system apply index:"
@@ -1715,7 +1715,7 @@ void MYSQL_BIN_LOG::consensus_wait_commit(THD *thd) {
     thd->commit_error = THD::CE_COMMIT_ERROR;
 
     exec_binlog_error_action_exit(
-          "Consensus wait majority to commit failed, restart to deal with it");
+          "Waiting for consensus majority commit failed, restart to deal with it");
   }
 }
 
@@ -1962,6 +1962,7 @@ uint64 MYSQL_BIN_LOG::wait_xid_disappear() {
     mysql_cond_wait(&m_prep_xids_cond, &LOCK_xids);
   }
   uint64 sync_index = consensus_log_manager.get_sync_index();
+  assert(get_prep_xids() == 0);
   mysql_mutex_unlock(&LOCK_xids);
   return sync_index;
 }
@@ -2066,5 +2067,5 @@ end:
 
 bool MYSQL_BIN_LOG::is_in_leader_transfer()
 {
-  return disable_ordered_commit || consensus_ptr->isInLeaderTransfer();
+  return consensus_log_manager.is_in_leader_transfer();
 }

@@ -592,6 +592,10 @@ void StableConfiguration::mergeFollowerMeta(
       learner->matchIndex.store(cit->matchindex());
       learner->nextIndex.store(cit->nextindex());
       learner->appliedIndex.store(cit->appliedindex());
+      learner->applyDelaySeconds.store(cit->applydelayseconds());
+      learner->applyThreadRunning.store(cit->applythreadrunning());
+      learner->disableElection.store(cit->disableelection());
+      learner->logInstance = cit->loginstance();
       learner->lastMergeTP = learner->now();
     }
   }

@@ -31,6 +31,7 @@
 #include "sql/tc_log.h"              // tc_log
 #include "sql/transaction.h"  // trans_reset_one_shot_chistics, trans_track_end_trx
 #include "sql/transaction_info.h"  // Transaction_ctx
+#include "sql/bl_consensus_log.h"
 
 Sql_cmd_xa_rollback::Sql_cmd_xa_rollback(xid_t *xid_arg)
     : Sql_cmd_xa_second_phase{xid_arg} {}
@@ -40,7 +41,30 @@ enum_sql_command Sql_cmd_xa_rollback::sql_command_code() const {
 }
 
 bool Sql_cmd_xa_rollback::execute(THD *thd) {
+  if (opt_consensus_disable_commit_before_change_leader
+      && consensus_log_manager.is_in_limit_xa_finish()) {
+    XID empty_xid;
+    xp::warn(ER_XP_COMMIT) << "Cannot do xa rollback, because leadership changing"
+                          << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state()
+                          << ", xa_finishing_count: " << xa_finishing_count.load()
+                          << ", xid " 
+                          << ((thd->get_transaction()->xid_state() 
+                              && thd->get_transaction()->xid_state()->get_xid()) 
+                            ? *thd->get_transaction()->xid_state()->get_xid()
+                            : empty_xid)
+                          << ", status "
+                          << (thd->get_transaction()->xid_state()
+                            ? thd->get_transaction()->xid_state()->state_name()
+                            : "null");
+    my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
+    return 1;
+  }
+  xa_finishing_count++;
+
   bool st = trans_xa_rollback(thd);
+
+  xa_finishing_count--;
+  assert(xa_finishing_count >= 0);
 
   if (!st) {
     thd->mdl_context.release_transactional_locks();

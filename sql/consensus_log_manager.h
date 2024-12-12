@@ -63,6 +63,13 @@ enum Consensus_log_event_flag {
   FLAG_BLOB_START = 1 << 7 /* we should mark the start for SDK */
 };
 
+enum Consensus_Leader_Transfer_State {
+  CLTS_LIMIT_NONE = 0,
+  CLTS_LIMIT_NEW_TRX = 1,
+  CLTS_LIMIT_XA_FINISH = 2,
+  CLTS_LIMIT_ALL = 3,
+};
+
 struct ConsensusStateChange;
 
 class ConsensusCommitPos {
@@ -177,6 +184,10 @@ class ConsensusLogManager {
   void set_cache_index(uint64 cache_index_arg);
   uint64 get_sync_index(bool serious = false);
   uint64 get_final_sync_index();
+  uint64 get_wait_milliseconds_for_old_trx_finish();
+  void wait_old_trx_finish();
+  void wait_old_xa_finish();
+  uint64 wait_old_bgc_finish();
   void set_sync_index(uint64 sync_index_arg);
   void set_sync_index_if_greater(uint64 sync_index_arg);
   void set_enable_rotate(bool arg) { enable_rotate = arg; }
@@ -242,6 +253,17 @@ class ConsensusLogManager {
   bool is_state_machine_ready();
   void set_event_timestamp(uint32 t) { ev_tt_.store(t); }
   uint32 get_event_timestamp() { return ev_tt_.load(); }
+
+  void set_limit_none() { leader_transfer_state.store(CLTS_LIMIT_NONE); }
+  void set_limit_new_trx() { leader_transfer_state.store(CLTS_LIMIT_NEW_TRX); }
+  void set_limit_xa_finish() { leader_transfer_state.store(CLTS_LIMIT_XA_FINISH); }
+  void set_limit_all() { leader_transfer_state.store(CLTS_LIMIT_ALL); }
+  bool is_in_leader_transfer() const { return leader_transfer_state.load() != CLTS_LIMIT_NONE; }
+  bool is_in_limit_all() const { return leader_transfer_state.load() == CLTS_LIMIT_ALL; }
+  bool is_in_limit_xa_finish() const { return leader_transfer_state.load() >= CLTS_LIMIT_XA_FINISH; }
+  uint64_t get_leader_transfer_state() const { return leader_transfer_state.load(); }
+  uint64_t get_limit_new_trx_state() const { return CLTS_LIMIT_NEW_TRX; }
+  uint64_t get_limit_none_state() const { return CLTS_LIMIT_NONE; }
 
  private:
   void wait_replay_log_finished();
@@ -339,6 +361,7 @@ class ConsensusLogManager {
 
   std::atomic<uint32>
       ev_tt_;  // store last log event timestamp received from leader
+  std::atomic<uint32> leader_transfer_state{CLTS_LIMIT_NONE};
 
   MYSQL_BIN_LOG *binlog;  // point to the MySQL binlog object
   Relay_log_info

@@ -1,6 +1,6 @@
 # large trx crash cases:
 # 1. leader, large trx write half, crash
-# 2. leader, large trx write all, waitting to commit, crash
+# 2. leader, large trx write all, waiting to commit, crash
 # 3. follower, large trx apply half, crash
 #
 # leader large trx commit, crash

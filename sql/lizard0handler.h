@@ -140,6 +140,8 @@ typedef void (*flush_gpp_stat_t)();
 
 typedef bool (*trx_slot_check_retention_t)();
 
+typedef bool (*has_started_mysql_trx_t)();
+
 template <typename T>
 using search_up_limit_tid_t = trx_id_t (*)(const T *lhs);
 
@@ -172,5 +174,6 @@ struct handlerton_ext {
   purge_status_t purge_status;
   flush_gpp_stat_t flush_gpp_stat;
   trx_slot_check_retention_t trx_slot_check_retention;
+  has_started_mysql_trx_t has_started_mysql_trx;
 };
 #endif

@@ -10183,7 +10183,7 @@ ER_XA_PROC_INVALID_XA_BRANCH_PARAM
   eng "Invalid xa branch parms. global branch: %d, local branch: %d."
 
 ER_CONSENSUS_LEADERSHIP_IS_CHANGING
-  eng "The cluster's leadership is changing, please relocate consensus leader and retry."
+  eng "The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry."
 
 ER_XA_PROC_RETENTION_NOT_SATISFIED
   eng "Transaction slots may be cleaned up immediately because the retention time of transaction slots is not set. It is recommended to adjust innodb_txn_retention to a large enough value."

@@ -90,6 +90,10 @@ message ClusterInfoEntry
   optional uint64 learnerSource = 8;
   optional uint64 appliedIndex = 9;
   optional uint32 pipelining = 10;
+  optional uint64 applyDelaySeconds = 11;
+  optional uint32 applyThreadRunning = 12;
+  optional uint32 disableElection = 13;
+  optional uint32 logInstance = 14;
 }
 
 message PaxosMsg
@@ -170,6 +174,11 @@ message PaxosMsg
 
   //ClusterIdNotMatch
   optional uint64 myServerId = 31;
+
+  optional uint64 applyDelaySeconds = 32;
+  optional bool applyThreadRunning = 33;
+  optional bool disableElection = 34;
+  optional bool logInstance = 35;
 };
 
 message TestMsg1

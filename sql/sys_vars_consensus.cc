@@ -62,7 +62,8 @@ ulonglong opt_consensus_prefetch_window_size;
 ulonglong opt_consensus_prefetch_wakeup_ratio;
 ulonglong opt_consensus_max_log_size;
 ulonglong opt_consensus_large_trx_split_size;
-ulonglong opt_consensus_new_follower_threshold = 10000;
+ulonglong opt_consensus_new_follower_threshold;
+ulonglong opt_consensus_new_leader_max_apply_delay_seconds;
 bool opt_consensus_large_trx;
 bool opt_consensus_check_large_event;
 ulonglong opt_consensus_large_event_size_limit;
@@ -104,11 +105,15 @@ ulonglong opt_consensus_check_commit_index_interval = 0;
 bool opt_commit_pos_watcher = false;
 ulonglong opt_commit_pos_watcher_interval = 0;
 bool opt_consensus_force_promote = 0;
+bool opt_consensus_force_leader_transfer = 0;
 bool opt_consensus_auto_reset_match_index = 1;
 bool opt_consensus_learner_heartbeat;
 bool opt_consensus_auto_leader_transfer;
 ulonglong opt_consensus_auto_leader_transfer_check_seconds;
 ulonglong opt_consensus_wait_milliseconds_before_change_leader;
+ulonglong opt_consensus_wait_unfinished_trx_timeout;
+ulonglong opt_consensus_wait_unfinished_xa_timeout;
+ulonglong opt_consensus_wait_unfinished_bgc_timeout;
 bool opt_consensus_disable_commit_before_change_leader;
 bool opt_consensus_disable_empty_xa;
 bool opt_consensuslog_revise;
@@ -116,6 +121,8 @@ bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
 ulong opt_configured_event_scheduler = Events::EVENTS_OFF;
 bool opt_consensus_reset_mts_info = false;
+
+std::atomic<int64> xa_finishing_count = (0);
 
 static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type) {
   consensus_ptr->setChecksumMode(opt_consensus_checksum);
@@ -388,6 +395,21 @@ static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
     VALID_RANGE(0, ULLONG_MAX), DEFAULT(10000), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_new_follower_threshold));
+
+static bool fix_consensus_new_leader_max_apply_delay_seconds(sys_var *, THD *,
+                                                 enum_var_type) {
+  consensus_ptr->setMaxDelaySeconds4NewLeader(
+      opt_consensus_new_leader_max_apply_delay_seconds);
+  return false;
+}
+
+static Sys_var_ulonglong Sys_consensus_new_leader_max_apply_delay_seconds(
+    "consensus_new_leader_max_apply_delay_seconds",
+    "Max apply delay seconds to allow a follower becomes a leader",
+    GLOBAL_VAR(opt_consensus_new_leader_max_apply_delay_seconds), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(3600), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_new_leader_max_apply_delay_seconds));
 
 static Sys_var_bool Sys_consensus_large_trx(
     "consensus_large_trx", "support consensus large trx or not",
@@ -805,6 +827,19 @@ static Sys_var_bool Sys_consensus_force_promote(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
     ON_UPDATE(handle_consensus_force_promote));
 
+static bool handle_consensus_force_leader_transfer(sys_var *, THD *, enum_var_type) {
+  DBUG_ENTER("handle_reset_consensus_prefetch_cache");
+  if (opt_consensus_force_leader_transfer) consensus_ptr->setForceLeaderTransfer(true);
+  opt_consensus_force_leader_transfer = 0;
+  DBUG_RETURN(false);
+}
+
+static Sys_var_bool Sys_consensus_force_leader_transfer(
+    "consensus_force_leader_transfer", "Try to force leader_transfer to other",
+    GLOBAL_VAR(opt_consensus_force_leader_transfer), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
+    ON_UPDATE(handle_consensus_force_leader_transfer));
+
 static bool fix_consensus_auto_reset_match_index(sys_var *, THD *,
                                                  enum_var_type) {
   consensus_ptr->setEnableAutoResetMatchIndex(
@@ -869,14 +904,36 @@ static Sys_var_ulonglong Sys_consensus_wait_milliseconds_before_change_leader(
     "consensus_wait_milliseconds_before_change_leader",
     "the waiting time before change leader",
     GLOBAL_VAR(opt_consensus_wait_milliseconds_before_change_leader),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 60000), DEFAULT(1000), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(200), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulonglong Sys_consensus_wait_unfinished_trx_timeout(
+    "consensus_wait_unfinished_trx_timeout",
+    "the max waiting time for unfinished trx before change leader",
+    GLOBAL_VAR(opt_consensus_wait_unfinished_trx_timeout),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(800), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulonglong Sys_consensus_wait_unfinished_xa_timeout(
+    "consensus_wait_unfinished_xa_timeout",
+    "the max waiting time for unfinished xa before change leader",
+    GLOBAL_VAR(opt_consensus_wait_unfinished_xa_timeout),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(500), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulonglong Sys_consensus_wait_unfinished_bgc_timeout(
+    "consensus_wait_unfinished_bgc_timeout",
+    "the max waiting time for unfinished bgc before change leader",
+    GLOBAL_VAR(opt_consensus_wait_unfinished_bgc_timeout),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 60000), DEFAULT(500), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_bool Sys_consensus_disable_commit_before_change_leader(
     "consensus_disable_commit_before_change_leader",
-    "disable_commit_before_change_leader",
+    "disable commit before change leader",
     GLOBAL_VAR(opt_consensus_disable_commit_before_change_leader), CMD_LINE(OPT_ARG),
-    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
 
 
 static Sys_var_bool Sys_consensus_disable_empty_xa(

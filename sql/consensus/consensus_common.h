@@ -45,6 +45,8 @@ typedef struct Consensus_show_global_result {
   ulonglong applied_index;
   LEX_CSTRING pipelining;
   LEX_CSTRING send_applied;
+  LEX_CSTRING instance_type;
+  LEX_CSTRING disable_election;
 } Consensus_show_global_result;
 
 /* Result structure for show_cluster_local */
@@ -60,6 +62,8 @@ typedef struct Consensus_show_local_result {
   ulonglong applied_index;
   LEX_CSTRING server_ready_for_rw;
   LEX_CSTRING instance_type;
+  LEX_CSTRING disable_election;
+  LEX_CSTRING apply_running;
 } Consensus_show_local_result;
 
 /* Result structure for show_logs */

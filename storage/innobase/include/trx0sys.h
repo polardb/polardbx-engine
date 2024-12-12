@@ -230,6 +230,11 @@ equal to TRX_STATE_ACTIVE (so are not prepared transactions).
 @return number of active recovered transactions */
 size_t trx_sys_recovered_active_trxs_count();
 
+/** Check if contain started mysql transaction
+@returns True if the some trx started
+*/
+bool has_started_mysql_trx();
+
 /** Validates lists of transactions at the very beginning of the
 pre-dd-shutdown phase. */
 void trx_sys_before_pre_dd_shutdown_validate();

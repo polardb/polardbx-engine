@@ -162,6 +162,10 @@ int SingleLeader::onAppendLogResponce(PaxosMsg *msg) {
     return -1;
   }
   learnerServer_->waitForReply = 0;
+  learnerServer_->applyDelaySeconds = msg->applydelayseconds();
+  learnerServer_->applyThreadRunning = msg->applythreadrunning();
+  learnerServer_->disableElection = msg->disableelection();
+  learnerServer_->logInstance = msg->loginstance();
   learnerServer_->appliedIndex =
       msg->appliedindex(); /* we do not care about appliedIndex here, just
                               update */

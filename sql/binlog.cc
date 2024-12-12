@@ -8773,11 +8773,13 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
       || consensus_log->getCurrentTerm() != term
       || DBUG_EVALUATE_IF("force_after_leader_transfer", true, false)
       || term != consensus_log_manager.get_current_term()) {
-    xp::warn(ER_XP_COMMIT) << "Failed to flush, because leadership changing, "
+    xp::warn(ER_XP_COMMIT) << "Failed to flush, because leadership changing"
                               "replicate log or check term failed"
                            << ", consensus_term: " << consensus_log->getCurrentTerm() 
                            << ", term: " << term 
-                           << ", current term: " << consensus_log_manager.get_current_term();
+                           << ", current term: " << consensus_log_manager.get_current_term()
+                           << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state();
+
     for (THD *head = first_seen; head; head = head->next_to_commit) {
       head->commit_error = THD::CE_COMMIT_ERROR;
       head->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
@@ -9286,14 +9288,14 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
       || opt_cluster_log_type_instance
       || DBUG_EVALUATE_IF("force_in_leader_transfer", true, false)
       || (opt_consensus_disable_commit_before_change_leader
-          && is_in_leader_transfer())) {
+          && consensus_log_manager.is_in_limit_all())) {
     thd->commit_error = THD::CE_COMMIT_ERROR;
     if (DBUG_EVALUATE_IF("force_in_leader_transfer", true, false)
         || (opt_consensus_disable_commit_before_change_leader
-            && is_in_leader_transfer())) {
+            && consensus_log_manager.is_in_limit_all())) {
       thd->consensus_error = THD::CSS_LEADERSHIP_CHANGING;
-      xp::warn(ER_XP_COMMIT) << "Failed to ordered_commit, because leadership changing, "
-                            << ", subState: " << consensus_ptr->getSubState()
+      xp::warn(ER_XP_COMMIT) << "Failed to ordered_commit, because leadership changing"
+                            << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state()
                             << ", sql_command: " << thd->lex->sql_command
                             << ", xid " 
                             << (thd->get_transaction()->xid_state()

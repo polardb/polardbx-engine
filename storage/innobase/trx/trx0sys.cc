@@ -718,6 +718,21 @@ size_t trx_sys_recovered_active_trxs_count() {
   return (total_trx);
 }
 
+bool has_started_mysql_trx() {
+  bool ret = false;
+
+  trx_sys_mutex_enter();
+  for (auto trx : trx_sys->mysql_trx_list) {
+    if (trx_was_started(trx)) {
+      trx_sys_mutex_exit();
+      return true;
+    }
+  }
+  trx_sys_mutex_exit();
+
+  return ret;
+}
+
 #ifdef UNIV_DEBUG
 /** Validate the trx_sys_t::rw_trx_list.
  @return true if the list is valid. */

@@ -38,7 +38,6 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       heartbeatTimeout_(electionTimeout / 5),
       purgeLogTimeout_(purgeLogTimeout),
       currentTerm_(1),
-      leaderStepDowning_(false),
       commitIndex_(0),
       leaderId_(0),
       leaderAddr_(""),
@@ -47,8 +46,6 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       currentEpoch_(0),
       forceSyncEpochDiff_(0),
       state_(FOLLOWER),
-      subState_(SubNone),
-      weightElecting_(false),
       leaderForceSyncStatus_(true),
       consensusAsync_(false),
       replicateWithCacheLog_(false),
@@ -62,7 +59,8 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       followerMetaNo_(0),
       lastSyncMetaNo_(0),
       syncMetaInterval_(1),
-      maxDelayIndex4NewMember_(100),
+      maxDelayIndex4NewMember_(10000),
+      maxDelaySeconds4NewLeader_(3600),
       maxMergeReportTimeout_(2000),
       nextEpochCheckStatemachine_(0),
       compactOldMode_(true),
@@ -150,12 +148,13 @@ void Paxos::changeState_(enum State newState) {
   state_.store(newState);
   leaderForceSyncStatus_.store(true);
   if (newState == LEADER) {
+    //reset after became leader
+    setForceLeaderTransfer(false);
     if (autoPurge_ == true) {
       purgeLogTimer_->restart();
     }
   } else {
-    subState_.store(SubNone);
-    weightElecting_ = false;
+    log_->setLimitNone();
   }
 
   if (newState == LEADER) {
@@ -453,35 +452,122 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
   return 0;
 }
 
-int Paxos::leaderTransfer_(uint64_t targetId) {
+int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
+
   if (state_ != LEADER) return PaxosErrorCode::PE_NOTLEADR;
-  auto server = config_->getServer(targetId);
-  if (nullptr == server || targetId == 0) return PaxosErrorCode::PE_NOTFOUND;
-  if (subState_ == SubLeaderTransfer) {
-    easy_system_log(
+
+  if (preState != log_->getLeaderTransferState() && log_->isInLeaderTransfer()) {
+    easy_warn_log(
         "Server %d : leaderTransfer to server(%ld), Now we're in another "
-        "leader transfer, skip this action!",
-        localServer_->serverId, targetId);
+        "leader transfer(%ld-%ld), skip this action!",
+        localServer_->serverId, targetId, preState, log_->getLeaderTransferState());
     return PaxosErrorCode::PE_CONFLICTS;
   }
+
   if (cdrMgr_.inRecovery) {
-    easy_system_log(
+    easy_warn_log(
         "Server %d : leaderTransfer to server(%ld), Now we're in commit "
         "dependency recovery, skip this action!",
         localServer_->serverId, targetId);
     return PaxosErrorCode::PE_CONFLICTS;
   }
-  if (targetId == localServer_->serverId) return PaxosErrorCode::PE_NONE;
-  if (std::dynamic_pointer_cast<RemoteServer>(server)
-          ->isLearner)  // server == nullptr already checked
-  {
-    easy_system_log(
-        "Server %d : leaderTransfer to server(%ld), it is a learner, skip this "
-        "action!",
+
+  if (targetId == localServer_->serverId) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), I am the target one"
+        ", skip this action!",
+        localServer_->serverId, targetId);
+    return PaxosErrorCode::PE_NONE;
+  }
+
+  std::shared_ptr<RemoteServer> server =
+    std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+
+  if (nullptr == server || targetId == 0) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), no available server"
+        ", skip this action!",
+        localServer_->serverId, targetId);
+    return PaxosErrorCode::PE_NOTFOUND;
+  }
+
+  if (server->isLearner) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), skip this "
+        "action because it is a learner",
         localServer_->serverId, targetId);
     return PaxosErrorCode::PE_NOTFOLLOWER;
   }
 
+  if (server->logInstance) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld),skip this action "
+        "because target is logger instance",
+        localServer_->serverId, targetId);
+    return PaxosErrorCode::PE_NOTFOLLOWER;
+  }
+
+  if (server->electionWeight == 0) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), skip this action "
+        "because electionWeight is 0",
+        localServer_->serverId, targetId);
+    return PaxosErrorCode::PE_WEIGHT_FOLLOWER;
+  }
+
+  if (server->disableElection) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), skip this action "
+        "because target disable election",
+        localServer_->serverId, targetId);
+    return PaxosErrorCode::PE_DISABLE_ELECTION;
+  }
+
+  //only print warning into log
+  if (config_->needWeightElection(server->electionWeight)) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld) maybe rollback to another server, "
+        "because there electionWeight bigger then it %lu",
+        localServer_->serverId, targetId, server->electionWeight);
+  }
+
+  if (server->applyThreadRunning
+      && maxDelaySeconds4NewLeader_ > 0
+      && server->applyDelaySeconds > maxDelaySeconds4NewLeader_) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld), skip because "
+        "applyDelaySeconds delay too much %llu > %llu",
+        localServer_->serverId, targetId,
+        server->applyDelaySeconds.load(),
+        maxDelaySeconds4NewLeader_);
+    return PaxosErrorCode::PE_DELAY;
+  }
+
+  //only print warning into log
+  if (maxDelayIndex4NewMember_> 0
+      && server->getAppliedIndex() + maxDelayIndex4NewMember_ < getAppliedIndex()) {
+    easy_warn_log(
+        "Server %d : leaderTransfer to server(%ld) maybe cost long time"
+        " because appliedIndex delay too much %llu + %llu < %llu",
+        localServer_->serverId, targetId,
+        server->getAppliedIndex(),
+        maxDelayIndex4NewMember_,
+        getAppliedIndex());
+  }
+
+  return PaxosErrorCode::PE_DEFAULT;
+}
+
+int Paxos::leaderTransfer_(uint64_t targetId) {
+  int ret = PaxosErrorCode::PE_NONE;
+  if (targetId == localServer_->serverId) return ret;
+
+  ret = leaderTransferPrecheck_(targetId, log_->getLimitNewTrxState());
+  if (ret != PaxosErrorCode::PE_DEFAULT)
+    return ret;
+
+  auto server = config_->getServer(targetId);
+  assert(server != nullptr);
   ++(stats_.countLeaderTransfer);
 
   easy_system_log(
@@ -489,28 +575,30 @@ int Paxos::leaderTransfer_(uint64_t targetId) {
       localServer_->serverId, targetId, currentTerm_.load(),
       log_->getLastLogIndex());
   /* Stop new replicateLog */
-  subState_.store(SubLeaderTransfer);
+  log_->setLimitXaFinish();
   MembershipChangeType mc;
   mc.cctype = CCMemberOp;
   mc.optype = CCLeaderTransfer;
   mc.address = server->strAddr;
   membershipChangeHistoryUpdate_(mc);
-
-  auto term = currentTerm_.load();
-  auto lli = log_->getLastLogIndex();
-
   lock_.unlock();
-  auto slli = log_->getSafeLastLogIndex();
-  // sleep for 500ms to let log sync to disk
-  if (lli < slli) msleep(500);
-  int ret = leaderTransferSend_(targetId, term, slli, 5);
-  lock_.lock();
+
+  log_->waitOldXaFinish();
+  log_->setLimitAll();
+
+  auto slli = log_->waitOldBgcFinish();
+  ret = leaderTransferSend_(targetId, currentTerm_.load(), slli, 5);
   return ret;
 }
 
 int Paxos::leaderTransfer(uint64_t targetId) {
   std::lock_guard<std::mutex> lg(lock_);
   return leaderTransfer_(targetId);
+}
+
+int Paxos::leaderTransferPrecheck(uint64_t targetId) {
+  std::lock_guard<std::mutex> lg(lock_);
+  return leaderTransferPrecheck_(targetId, log_->getLimitNoneState());
 }
 
 int Paxos::leaderTransfer(const std::string &addr) {
@@ -522,90 +610,87 @@ int Paxos::leaderTransfer(const std::string &addr) {
 int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
                                uint64_t logIndex, uint64_t leftCnt) {
   std::lock_guard<std::mutex> lg(lock_);
+  int check_result = 0;
 
   --leftCnt;
+  std::shared_ptr<RemoteServer> server =
+    std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+  uint64_t lastLogIndex = log_->getLastLogIndex();
 
-  if (checkLeaderTransfer(targetId, term, logIndex, leftCnt) > 0) {
-    std::shared_ptr<RemoteServer> server =
-        std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
-    if (server == nullptr) {
-      subState_ = SubNone;
-      easy_system_log(
-          "Server %d : try transfer leader to id(%d), which is not in the "
-          "configuration!!",
-          localServer_->serverId, targetId);
-      return PaxosErrorCode::PE_NOTFOUND;
-    }
-    if (commitIndex_ == logIndex && commitIndex_ == server->matchIndex)
-      leaderCommand(LeaderTransfer, server);
-    else {
-      easy_system_log(
-          "Server %d : skip send cmd LeaderTransfer because the pos is not "
-          "catch up. commitIndex(%llu), lli(%llu), li(%llu), target matchIndex(%llu)",
-          localServer_->serverId, commitIndex_.load(), log_->getLastLogIndex(), logIndex,
-          server->matchIndex.load());
-    }
-    // TODO we also need to call leaderCommand in tryUpdateCommitIndex_
-
-    /* do not conflict with heartbeat timeout */
-    new ThreadTimer(srv_->getThreadTimerService(), srv_,
-                    getLeaderTransferInterval_(), ThreadTimer::Oneshot,
-                    &Paxos::leaderTransferSend_, this, targetId, term, logIndex,
-                    leftCnt);
+  if (server == nullptr) {
+    easy_system_log(
+        "Server %d : try transfer leader to id(%d), which is not in the "
+        "configuration!!",
+        localServer_->serverId, targetId);
+    log_->setLimitNone();
+    return PaxosErrorCode::PE_NOTFOUND;
   }
 
-  return PaxosErrorCode::PE_NONE;
-}
+  if (state_ == LEADER && !log_->isInLimitAll()) {
+    easy_system_log(
+        "Server %d : LeaderTransfer to server %ld fail "
+        "because of not inLimitAll, state(%ld)\n",
+        localServer_->serverId, targetId, log_->getLeaderTransferState());
+    log_->setLimitNone();
+    return PaxosErrorCode::PE_DEFAULT;
+  }
 
-int Paxos::checkLeaderTransfer(uint64_t targetId, uint64_t term,
-                               uint64_t &logIndex, uint64_t leftCnt) {
-  uint64_t lastLogIndex = log_->getLastLogIndex();
-  if (state_ == LEADER && subState_ == SubLeaderTransfer &&
-      term == currentTerm_) {
+  if (state_ == LEADER && term == currentTerm_) {
+    if (leftCnt == 0) {
+      easy_error_log(
+          "Server %d : LeaderTransfer to server %ld fail "
+          "because of timeout currentTerm(%llu), lli(%llu)\n",
+          localServer_->serverId, targetId, term, logIndex);
+      log_->setLimitNone();
+      return PaxosErrorCode::PE_TIMEOUT;
+    }
+
     if (lastLogIndex > logIndex) {
       easy_system_log(
-          "Server %d : checkLeaderTransfer: In transfer to server %ld local "
+          "Server %d : In transfer to server %ld local "
           "lli:%llu is bigger than target lli:%llu, we update target lli to "
           "current lli.\n",
           localServer_->serverId, targetId, lastLogIndex, logIndex);
       logIndex = lastLogIndex;
     }
-
-    if (leftCnt > 0) {
-      easy_warn_log(
-          "Server %d : checkLeaderTransfer: LeaderTransfer to server %ld not "
-          "complete, left check time %llu",
-          localServer_->serverId, targetId, leftCnt);
-      return 1;
-    } else {
-      subState_.store(SubNone);
-      weightElecting_ = false;
-      easy_error_log(
-          "Server %d : checkLeaderTransfer: LeaderTransfer to server %ld fail "
-          "because of timeout currentTerm(%ld), lli(%ld)\n",
-          localServer_->serverId, targetId, term, logIndex);
-      return -1;
-    }
   } else if (state_ == FOLLOWER && currentTerm_ > term &&
              lastLogIndex > logIndex && leaderId_ == targetId) {
     easy_system_log(
-        "Server %d : checkLeaderTransfer: LeaderTransfer success target(id:%ld "
+        "Server %d : LeaderTransfer success target(id:%ld "
         "t:%ld lli:%ld) current(t:%ld lli:%ld)\n",
         localServer_->serverId, targetId, term, logIndex, currentTerm_.load(),
         lastLogIndex);
-    return 0;
+    log_->setLimitNone();
+    return PaxosErrorCode::PE_NONE;
   } else {
-    subState_.store(SubNone);
-    weightElecting_ = false;
     easy_error_log(
-        "Server %d : checkLeaderTransfer: Nonleader election may happened "
+        "Server %d : Nonleader election may happened "
         "during the leadertransfer, please check the status! target(id:%ld "
         "t:%ld lli:%ld) current(id:%ld t:%ld lli:%ld)\n",
         localServer_->serverId, targetId, term, logIndex, leaderId_.load(),
         currentTerm_.load(), lastLogIndex);
-    return -1;
+    log_->setLimitNone();
+    return PaxosErrorCode::PE_DEFAULT;
   }
-  return 0;
+
+  if (commitIndex_ == logIndex && commitIndex_ == server->matchIndex) {
+    leaderCommand(LeaderTransfer, server);
+  } else {
+    easy_system_log(
+        "Server %d : skip send cmd LeaderTransfer because the pos is not "
+        "catch up. commitIndex(%llu), lli(%llu), li(%llu), target matchIndex(%llu)",
+        localServer_->serverId, commitIndex_.load(), log_->getLastLogIndex(), logIndex,
+        server->matchIndex.load());
+
+  }
+
+  /* do not conflict with heartbeat timeout */
+  new ThreadTimer(srv_->getThreadTimerService(), srv_,
+                  getLeaderTransferInterval_(), ThreadTimer::Oneshot,
+                  &Paxos::leaderTransferSend_, this, targetId, term, logIndex,
+                  leftCnt);
+
+  return PaxosErrorCode::PE_NONE;
 }
 
 int Paxos::checkConfigure_(
@@ -1142,13 +1227,14 @@ void Paxos::becameLeader_() {
     /* Deal with the election weight things. */
     if (config_->needWeightElection(localServer_->electionWeight)) {
       easy_system_log(
-          "Server %d : Try weight election for this election term(%llu)!!\n",
-          localServer_->serverId, currentTerm_.load());
-      subState_.store(SubLeaderTransfer);
-      weightElecting_ = true;
+          "Server %d : Try do weight election for this leaderTransfer term(%llu), weight(%llu) after %llu ms"
+          "skip LimitNewTrx!!\n",
+          localServer_->serverId, currentTerm_.load(),
+          localServer_->electionWeight, electionTimeout_);
       new ThreadTimer(srv_->getThreadTimerService(), srv_, electionTimeout_,
                       ThreadTimer::Oneshot, &Paxos::electionWeightAction, this,
-                      currentTerm_.load(), currentEpoch_.fetch_add(1));
+                      currentTerm_.load(), currentEpoch_.fetch_add(1),
+                      log_->getLimitNoneState(), UINT64_MAX);
     }
     /* become leader. */
     changeState_(LEADER);
@@ -1252,17 +1338,12 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
 uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock) {
   uint64_t term = currentTerm_.load();
   auto state = state_.load();
-  auto subState = subState_.load();
-  if (leaderStepDowning_.load() || state != LEADER ||
-      (subState == SubLeaderTransfer && needLock) ||
+  if (state != LEADER ||
+      (needLock && log_->isInLimitAll()) ||
       term != currentTerm_.load()) {
     if (state != LEADER) {
       easy_error_log(
           "Server %d : replicateLog fail because we're not leader!\n",
-          localServer_->serverId);
-    } else if (subState == SubLeaderTransfer) {
-      easy_error_log(
-          "Server %d : replicateLog fail because we're in LeaderTransfer!\n",
           localServer_->serverId);
     } else {
       easy_error_log(
@@ -1528,6 +1609,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
         "bigger than me(%d).\n",
         localServer_->serverId, msg->candidateid(), msg->term(),
         currentTerm_.load());
+    //TODO::@yanhua check debugDisableStepDown??
     newTerm(msg->term());
 
     // TODO handle leader case. need stepDown ?
@@ -1785,7 +1867,7 @@ int Paxos::appendLogToServerByPtr(std::shared_ptr<RemoteServer> server,
   PaxosMsg msg;
   if (lockless4force) {
     uint64_t savedTerm = currentTerm_.load();
-    if (leaderStepDowning_.load() || state_.load() != LEADER ||
+    if (state_.load() != LEADER ||
         savedTerm != currentTerm_.load())
       return -1;
     msg.set_term(savedTerm);
@@ -1847,7 +1929,11 @@ bool Paxos::onHeartbeatOptimistically_(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_issuccess(false);
   rsp->set_ignorecheck(true);
   rsp->set_term(currentTerm);
-  rsp->set_appliedindex(0);
+  rsp->set_appliedindex(appliedIndex_.load());
+  rsp->set_applydelayseconds(applyDelaySeconds_.load());
+  rsp->set_applythreadrunning(applyThreadRunning_.load());
+  rsp->set_disableelection(debugDisableElection);
+  rsp->set_loginstance(logInstance_);
 
   return true;
 }
@@ -1884,6 +1970,10 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     rsp->set_serverid(msg->serverid());
     rsp->set_issuccess(false);
     rsp->set_lastlogindex(lastLogIndex);
+    rsp->set_applydelayseconds(applyDelaySeconds_.load());
+    rsp->set_applythreadrunning(applyThreadRunning_.load());
+    rsp->set_disableelection(debugDisableElection);
+    rsp->set_loginstance(logInstance_);
     rsp->set_ignorecheck(true);
     rsp->set_term(currentTerm_);
     rsp->set_appliedindex(0);
@@ -1956,6 +2046,10 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_lastlogindex(lastLogIndex);
   rsp->set_ignorecheck(false);
   rsp->set_appliedindex(appliedIndex_.load());
+  rsp->set_applydelayseconds(applyDelaySeconds_.load());
+  rsp->set_applythreadrunning(applyThreadRunning_.load());
+  rsp->set_disableelection(debugDisableElection);
+  rsp->set_loginstance(logInstance_);
 
   /* in some case we should step down */
   if (msg->term() > currentTerm_) {
@@ -2388,6 +2482,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         localServer_->serverId, msg->msgid(), msg->serverid(), msg->term(),
         currentTerm_.load());
     if (state_.load() != LEADER) {
+      //TODO::@yanhua check debugDisableStepDown??
       newTerm(msg->term());
     } else {
       if (server->matchIndex.load() != 0) {
@@ -2411,6 +2506,10 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
     /* Inc epoch for RemoteServer's. we reset RemoteServer's heartbeat in
      * sendMsgFunc. */
     server->setLastAckEpoch(currentEpoch_);
+    server->applyDelaySeconds = msg->applydelayseconds();
+    server->applyThreadRunning = msg->applythreadrunning();
+    server->disableElection = msg->disableelection();
+    server->logInstance = msg->loginstance();
     if (server->appliedIndex < msg->appliedindex())
       server->appliedIndex = msg->appliedindex();
     /*
@@ -2764,6 +2863,7 @@ int Paxos::leaderCommand(LcTypeT type, std::shared_ptr<RemoteServer> server) {
 
   return 0;
 }
+
 int Paxos::onLeaderCommandResponce(PaxosMsg *msg) {
   easy_warn_log(
       "Server %d : msgId(%llu) receive leaderCommandResponce from server(%ld), "
@@ -2865,7 +2965,6 @@ uint64_t Paxos::checkCommitIndex(uint64_t baseIndex, uint64_t term) {
 
 void Paxos::newTerm(uint64_t newTerm) {
   if (state_ == LEADER) {
-    leaderStepDowning_.store(true);
     easy_system_log(
         "Server %d : new term(old:%ld,new:%ld), This is a Leader Step Down!!\n",
         localServer_->serverId, currentTerm_.load(), newTerm);
@@ -2893,8 +2992,6 @@ void Paxos::newTerm(uint64_t newTerm) {
   } else {
     changeState_(LEARNER);
   }
-  leaderStepDowning_.store(false);
-
   logRecvCache_.clear();
 
   /* TODO only step down when we are Leader */
@@ -3475,7 +3572,7 @@ void Paxos::heartbeatCallback(std::weak_ptr<RemoteServer> wserver) {
 }
 
 uint64_t Paxos::getLeaderTransferInterval_() {
-  return (electionTimeout_ / 5) + 100;
+  return (electionTimeout_ / 5) / 4;
 }
 
 uint64_t Paxos::getNextEpochCheckStatemachine_(uint64_t epoch) {
@@ -3492,14 +3589,19 @@ uint64_t Paxos::leaderTransferIfNecessary_(uint64_t epoch) {
   bool run = false;
   std::string reason;
   uint64_t target;
-  if (!option.enableAutoLeaderTransfer_.load() || state_ != LEADER ||
-      subState_ == SubLeaderTransfer) {
+  if (!option.enableAutoLeaderTransfer_.load()
+      || state_ != LEADER
+      || log_->isInLeaderTransfer()) {
     return 0;
   }
 
   if (localServer_->logType) {
     run = true;
     reason = "instance is log node";
+  } else if (forceLeaderTransfer_) {
+    run = true;
+    reason = "use @@consensus_force_leader_transfer";
+    forceLeaderTransfer_ = false;
   } else if (nextEpochCheckStatemachine_ != UINT64_MAX) {
     if (log_->isStateMachineHealthy()) {
       nextEpochCheckStatemachine_ = UINT64_MAX;
@@ -3508,6 +3610,8 @@ uint64_t Paxos::leaderTransferIfNecessary_(uint64_t epoch) {
       reason = "state machine not healthy";
       nextEpochCheckStatemachine_ = getNextEpochCheckStatemachine_(epoch);
     }
+  } else {
+    nextEpochCheckStatemachine_ = getNextEpochCheckStatemachine_(epoch);
   }
 
   if (!run) {
@@ -3535,7 +3639,7 @@ uint64_t Paxos::leaderTransferIfNecessary_(uint64_t epoch) {
 
   target = choices[rand() % choices.size()];
   easy_system_log(
-      "Server %d: try to do an auto leader transfer, reason: %s, target: %llu",
+      "Server %d: try to do an auto leaderTransfer, reason: %s, target: %llu",
       localServer_->serverId, reason.c_str(), target);
 
   return target;
@@ -3598,16 +3702,25 @@ void Paxos::epochTimerCallback() {
   } else {
     assert(currentEpoch_.load() == quorumEpoch);
     uint64_t prevEpoch = currentEpoch_.fetch_add(1);
-    uint64_t target = leaderTransferIfNecessary_(prevEpoch);
-    if (target) {
-      subState_.store(SubLeaderTransfer);
-      weightElecting_ = true;
-      ul.unlock();
-      /* try time should not exceed one epoch */
-      uint64_t times = std::max(
-          (electionTimeout_ / getLeaderTransferInterval_() + 1), (uint64_t)3);
-      leaderTransferSend_(target, currentTerm_.load(), log_->getLastLogIndex(),
-                          times);
+    uint64_t waitMilliseconds4OldTrxFinish = log_->getWaitMilliseconds4OldTrxFinish();
+    uint64_t targetId = leaderTransferIfNecessary_(prevEpoch);
+
+    if (targetId
+        && PaxosErrorCode::PE_DEFAULT == leaderTransferPrecheck_(targetId, log_->getLeaderTransferState())) {
+      easy_system_log(
+          "Server %d : Try do auto leaderTransfer term(%llu), targetId(%llu), wait %llums!!\n",
+          localServer_->serverId, currentTerm_.load(), targetId, waitMilliseconds4OldTrxFinish);
+
+      if (waitMilliseconds4OldTrxFinish > 0) {
+        log_->setLimitNewTrx();
+      } else {
+        waitMilliseconds4OldTrxFinish = heartbeatTimeout_ / 2;
+      }
+
+      new ThreadTimer(srv_->getThreadTimerService(), srv_, waitMilliseconds4OldTrxFinish,
+                      ThreadTimer::Oneshot, &Paxos::electionWeightAction, this,
+                      currentTerm_.load(), currentEpoch_.load(),
+                      log_->getLeaderTransferState(), targetId);
     }
   }
 }
@@ -3648,6 +3761,8 @@ void Paxos::doPurgeLog(purgeLogArgType *arg) {
 }
 
 void Paxos::updateAppliedIndex(uint64_t index) { appliedIndex_.store(index); }
+void Paxos::updateApplyDelaySeconds(uint64_t sec) { applyDelaySeconds_.store(sec); }
+void Paxos::updateApplyThreadRunning(bool value) { applyThreadRunning_.store(value); }
 
 uint64_t Paxos::collectMinMatchIndex(std::vector<ClusterInfoType> &cis,
                                      bool local, uint64_t forceIndex) {
@@ -3712,44 +3827,52 @@ int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
   }
 }
 
-void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch) {
-  easy_system_log("Server %d : electionWeightAction start, term:%llu epoch:%llu",
+void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch,
+  uint64_t preState, uint64_t targetId)
+{
+  easy_system_log("Server %d : leaderTransfer electionWeightAction start, term:%llu epoch:%llu",
                  localServer_->serverId, term, baseEpoch);
   std::lock_guard<std::mutex> lg(lock_);
   if (term != currentTerm_.load() || state_.load() != LEADER) {
-    subState_.store(SubNone);
-    weightElecting_ = false;
     easy_error_log(
-        "Server %d : electionWeightAction fail, action term(%llu), "
+        "Server %d : leaderTransfer electionWeightAction fail, action term(%llu), "
         "currentTerm(%llu), current state(%s)\n",
         localServer_->serverId, term, currentTerm_.load(), stateString[state_]);
+    log_->setLimitNone();
     return;
   }
 
-  uint64_t targetId = config_->getMaxWeightServerId(baseEpoch, localServer_);
+  if (targetId == UINT64_MAX)
+    targetId = config_->getMaxWeightServerId(baseEpoch, localServer_);
 
-  if (targetId != localServer_->serverId && targetId != 0) {
-    auto term = currentTerm_.load();
-    auto lli = log_->getLastLogIndex();
+  auto ret = leaderTransferPrecheck_(targetId, preState);
 
-    easy_system_log(
-        "Server %d : electionWeightAction try to transfer leader to server "
-        "%llu, term(%llu)\n",
-        localServer_->serverId, targetId, term);
-
-    uint64_t retryTimes = 5;
-    lock_.unlock();
-    leaderTransferSend_(targetId, term, lli, retryTimes);
-    lock_.lock();
-  } else {
-    subState_.store(SubNone);
-    weightElecting_ = false;
-    easy_system_log(
-        "Server %d : electionWeightAction skip transfer leader because %s.\n",
-        localServer_->serverId,
-        targetId == 0 ? "no available server"
-                      : "I am the max weight available server");
+  if (ret == PaxosErrorCode::PE_NONE) {
+    easy_system_log("Server %d : leaderTransfer electionWeightAction finish as it is myself",
+                  localServer_->serverId);
+    log_->setLimitNone();
+    return;
   }
+
+  if (ret != PaxosErrorCode::PE_DEFAULT) {
+    log_->setLimitNone();
+    return;
+  }
+
+  easy_system_log(
+      "Server %d : leaderTransfer electionWeightAction try to transfer leader to server "
+      "%llu, term(%llu)\n",
+      localServer_->serverId, targetId, term);
+
+  log_->setLimitXaFinish();
+  lock_.unlock();
+
+  log_->waitOldXaFinish();
+  log_->setLimitAll();
+
+  auto slli = log_->waitOldBgcFinish();
+  leaderTransferSend_(targetId, term, slli, 5);
+  return;
 }
 
 void Paxos::resetNextIndexForServer(std::shared_ptr<RemoteServer> server) {
@@ -3824,6 +3947,9 @@ int Paxos::getClusterHealthInfo(std::vector<HealthInfoType> &healthInfo) {
         lastLogIndex > e.matchIndex ? lastLogIndex - e.matchIndex : 0;
     hi.applyDelayNum =
         appliedIndex > e.appliedIndex ? appliedIndex - e.appliedIndex : 0;
+    hi.applyThreadRunning = e.applyThreadRunning;
+    hi.applyDelaySeconds = e.applyDelaySeconds;
+
     healthInfo.push_back(hi);
   }
 
@@ -3858,7 +3984,7 @@ void Paxos::getMemberInfo(MemberInfoType *mi) {
 
   mi->lastLogTerm = lastLogTerm;
   mi->lastLogIndex = lastLogIndex;
-  if (weightElecting_.load() || leaderStepDowning_.load())
+  if (log_->isInLimitAll())
     mi->role = NOROLE;
   else
     mi->role = state_;

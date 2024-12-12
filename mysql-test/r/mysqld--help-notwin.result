@@ -346,7 +346,8 @@ The following options may be given as the first argument:
  --consensus-configure-change-timeout=# 
  Consensus configure change timeout (ms). Default 1 min
  --consensus-disable-commit-before-change-leader 
- disable_commit_before_change_leader
+ disable commit before change leader
+ (Defaults to on; use --skip-consensus-disable-commit-before-change-leader to disable.)
  --consensus-disable-election 
  Disable consensus election and stepdown. Disabled by
  default.
@@ -364,6 +365,8 @@ The following options may be given as the first argument:
  consensus flow control (<-1: no log send, -1: only send
  log during heartbeat, 0: no flow control, >0: [TODO] flow
  control).
+ --consensus-force-leader-transfer 
+ Try to force leader_transfer to other
  --consensus-force-promote 
  Try to force promote a follower to leader
  --consensus-force-recovery 
@@ -416,6 +419,15 @@ The following options may be given as the first argument:
  Max one log size. (default: 20M)
  --consensus-max-packet-size[=#] 
  Max package size the consensus server send at once
+ --consensus-max-wait-milliseconds-for-unfinished-bgc[=#] 
+ the max waiting time for unfinished bgc before change
+ leader
+ --consensus-max-wait-milliseconds-for-unfinished-trx[=#] 
+ the max waiting time for unfinished trx before change
+ leader
+ --consensus-max-wait-milliseconds-for-unfinished-xa[=#] 
+ the max waiting time for unfinished xa before change
+ leader
  --consensus-max-wait-seconds-for-next-trx-index=# 
  wait timeout for get_next_trx_index
  --consensus-min-delay-index[=#] 
@@ -430,6 +442,9 @@ The following options may be given as the first argument:
  Update consensus_apply_index in slave_relay_log_info
  --consensus-new-follower-threshold[=#] 
  Max delay index to allow a learner becomes a follower
+ --consensus-new-leader-max-apply-delay-seconds[=#] 
+ Max apply delay seconds to allow a follower becomes a
+ leader
  --consensus-old-compact-mode 
  set server to old compact mode to use to be compactible
  with version before 1.2.0.2
@@ -2187,13 +2202,14 @@ consensus-check-commit-index-interval 1000
 consensus-check-large-event TRUE
 consensus-checksum FALSE
 consensus-configure-change-timeout 60000
-consensus-disable-commit-before-change-leader FALSE
+consensus-disable-commit-before-change-leader TRUE
 consensus-disable-election FALSE
 consensus-disable-empty-xa FALSE
 consensus-disable-fifo-cache FALSE
 consensus-dynamic-easyindex TRUE
 consensus-election-timeout 5000
 consensus-flow-control (No default value)
+consensus-force-leader-transfer FALSE
 consensus-force-promote FALSE
 consensus-force-recovery FALSE
 consensus-force-sync-epoch-diff 0
@@ -2217,11 +2233,15 @@ consensus-log-level LOG_ERROR
 consensus-max-delay-index 50000
 consensus-max-log-size 20971520
 consensus-max-packet-size 131072
+consensus-max-wait-milliseconds-for-unfinished-bgc 500
+consensus-max-wait-milliseconds-for-unfinished-trx 800
+consensus-max-wait-milliseconds-for-unfinished-xa 500
 consensus-max-wait-seconds-for-next-trx-index 10
 consensus-min-delay-index 5000
 consensus-msg-compress-option (No default value)
 consensus-mts-force-apply-index 0
 consensus-new-follower-threshold 10000
+consensus-new-leader-max-apply-delay-seconds 3600
 consensus-old-compact-mode TRUE
 consensus-optimistic-heartbeat FALSE
 consensus-pipelining-timeout 1
@@ -2235,7 +2255,7 @@ consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
-consensus-wait-milliseconds-before-change-leader 1000
+consensus-wait-milliseconds-before-change-leader 200
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE
 console FALSE

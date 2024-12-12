@@ -169,6 +169,10 @@ void Sql_cmd_consensus_proc_show_global::send_result(THD *thd, bool error) {
                            system_charset_info);
     protocol->store_string(result->send_applied.str,
                            result->send_applied.length, system_charset_info);
+    protocol->store_string(result->instance_type.str,
+                           result->instance_type.length, system_charset_info);
+    protocol->store_string(result->disable_election.str,
+                           result->disable_election.length, system_charset_info);
     if (protocol->end_row()) return;
   }
 
@@ -219,6 +223,12 @@ void Sql_cmd_consensus_proc_show_local::send_result(THD *thd, bool error) {
                          system_charset_info);
   protocol->store_string(result->instance_type.str,
                          result->instance_type.length, system_charset_info);
+  protocol->store_string(result->disable_election.str,
+                         result->disable_election.length,
+                         system_charset_info);
+  protocol->store_string(result->apply_running.str,
+                         result->apply_running.length,
+                         system_charset_info);
   if (protocol->end_row()) return;
 
   my_eof(thd);
@@ -379,15 +389,18 @@ bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  mysql_bin_log.disable_ordered_commit.store(true);
-  my_sleep(opt_consensus_wait_milliseconds_before_change_leader * 1000);
+  res = consensus_ptr->leaderTransferPrecheck(node_id);
+  if (res == alisql::PaxosErrorCode::PE_DEFAULT) {
+    xp::system(ER_XP_0) << "begin leaderTransfer to server " << node_id;
+    consensus_log_manager.set_limit_new_trx();
+    consensus_log_manager.wait_old_trx_finish();
 
-  res = consensus_ptr->leaderTransfer(node_id);
+    res = consensus_ptr->leaderTransfer(node_id);
+  }
+
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
-
-  mysql_bin_log.disable_ordered_commit.store(false);
 
   if (res)
     my_error(ER_CONSENSUS_COMMAND_ERROR, MYF(0), res, alisql::pxserror(res));

@@ -1,4 +1,5 @@
 --source include/paxos.inc
+--source include/have_debug.inc
 
 --echo ############ init and add learner
 let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);

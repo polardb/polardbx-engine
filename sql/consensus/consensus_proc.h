@@ -662,6 +662,8 @@ class Consensus_proc_show_global final : public Consensus_proc {
     COLUMN_APPLIED_INDEX,
     COLUMN_PIPELINING,
     COLUMN_SEND_APPLIED,
+    COLUMN_INSTANCE_TYPE,
+    COLUMN_DISABLE_ELECTION,
     COLUMN_LAST
   };
 
@@ -682,6 +684,8 @@ class Consensus_proc_show_global final : public Consensus_proc {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("APPLIED_INDEX"), 0},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("PIPELINING"), 8},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("SEND_APPLIED"), 8},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("INSTANCE_TYPE"), 8},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("DISABLE_ELECTION"), 0},
     };
 
     for (size_t i = 0; i < COLUMN_LAST; i++) {
@@ -722,6 +726,8 @@ class Consensus_proc_show_local final : public Consensus_proc {
     COLUMN_APPLIED_INDEX,
     COLUMN_SERVER_READY_FOR_RW,
     COLUMN_INSTANCE_TYPE,
+    COLUMN_DISABLE_ELECTION,
+    COLUMN_APPLY_RUNNING,
     COLUMN_LAST
   };
 
@@ -741,6 +747,8 @@ class Consensus_proc_show_local final : public Consensus_proc {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("APPLIED_INDEX"), 0},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("SERVER_READY_FOR_RW"), 0},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("INSTANCE_TYPE"), 8},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("DISABLE_ELECTION"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("APPLY_RUNNING"), 0},
     };
 
     for (size_t i = 0; i < COLUMN_LAST; i++) {

@@ -67,6 +67,10 @@ void LocalServer::fillInfo(void *ptr) {
   ci.electionWeight = electionWeight;
   ci.learnerSource = 0;
   ci.appliedIndex = getAppliedIndex();
+  ci.applyDelaySeconds = paxos->getApplyDelaySeconds();
+  ci.applyThreadRunning = paxos->getApplyThreadRunning();
+  ci.disableElection = paxos->debugDisableElection;
+  ci.logInstance = paxos->getLogInstance();
   ci.pipelining = false;
   ci.useApplied = false;
 
@@ -605,6 +609,10 @@ void RemoteServer::fillInfo(void *ptr) {
   else
     ci.learnerSource = learnerSource;
   ci.appliedIndex = getAppliedIndex();
+  ci.applyDelaySeconds = applyDelaySeconds.load();
+  ci.applyThreadRunning = applyThreadRunning.load();
+  ci.disableElection = disableElection.load();
+  ci.logInstance = logInstance;
   if (isLearner && !paxos->getEnableLearnerPipelining())
     ci.pipelining = false;
   else
@@ -631,6 +639,10 @@ void RemoteServer::fillFollowerMeta(void *ptr) {
   entry->set_nextindex(nextIndex.load());
   entry->set_appliedindex(appliedIndex.load());
   entry->set_learnersource(learnerSource);  // for check in leader
+  entry->set_applydelayseconds(applyDelaySeconds.load());
+  entry->set_applythreadrunning(applyThreadRunning.load());
+  entry->set_disableelection(disableElection.load());
+  entry->set_loginstance(logInstance);
 }
 
 void RemoteServer::setMsgCompressOption(void *ptr) {

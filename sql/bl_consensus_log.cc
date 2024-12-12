@@ -120,6 +120,22 @@ uint64_t BLConsensusLog::getSafeLastLogIndex() {
   return (this->consensusLogManager_->get_final_sync_index());
 }
 
+uint64_t BLConsensusLog::getWaitMilliseconds4OldTrxFinish() {
+  return this->consensusLogManager_->get_wait_milliseconds_for_old_trx_finish();
+}
+
+void BLConsensusLog::waitOldTrxFinish() {
+  this->consensusLogManager_->wait_old_trx_finish();
+}
+
+void BLConsensusLog::waitOldXaFinish() {
+  this->consensusLogManager_->wait_old_xa_finish();
+}
+
+uint64_t BLConsensusLog::waitOldBgcFinish() {
+  return this->consensusLogManager_->wait_old_bgc_finish();
+}
+
 uint64_t BLConsensusLog::appendWithCheck(const alisql::LogEntry &entry) {
   uint64 index = 0;
   if (entry.optype() == UNCERTAIN) {

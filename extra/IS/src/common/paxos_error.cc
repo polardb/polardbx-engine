@@ -33,7 +33,9 @@ static const char *paxos_error_msg[PE_TOTAL] = {
     "This node is already a learner.",                // PE_DOWNGRADLEARNER
     "Downgrade a leader is not allowed.",             // PE_DOWNGRADELEADER
     "Configure forcesync or weight to a learner is not allowed.",  // PE_WEIGHTLEARNER
-    "Leader transfer to a learner is not allowed.",  // PE_NOTFOLLOWER
+    "Leader transfer to a learner/logger is not allowed.",  // PE_NOTFOLLOWER
+    "Follower weight is not available.",            // PE_WEIGHT_FOLLOWER
+    "Follower is disable election.",                // PE_DISABLE_ELECTION
     "For test."                                      // PE_TEST
 };
 

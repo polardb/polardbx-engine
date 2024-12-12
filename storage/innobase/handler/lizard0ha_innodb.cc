@@ -305,6 +305,10 @@ trx_t *innobase_get_trx_by_thd(THD *thd) {
   return trx;
 }
 
+bool innobase_has_started_mysql_trx() {
+  return has_started_mysql_trx();
+}
+
 /**
   Initialize innobase extension.
 
@@ -339,6 +343,7 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.purge_status = innobase_purge_status;
   hton->ext.flush_gpp_stat = innobase_flush_gpp_stat;
   hton->ext.trx_slot_check_retention = innobase_trx_slot_check_retention;
+  hton->ext.has_started_mysql_trx = innobase_has_started_mysql_trx;
 }
 
 enum_tx_isolation thd_get_trx_isolation(const THD *thd);

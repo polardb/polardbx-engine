@@ -442,6 +442,8 @@ int ConsensusLogManager::init_service() {
         opt_consensus_configure_change_timeout);
     consensus_ptr->setMaxDelayIndex4NewMember(
         opt_consensus_new_follower_threshold);
+    consensus_ptr->setMaxDelaySeconds4NewLeader(
+        opt_consensus_new_leader_max_apply_delay_seconds);
     consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
     consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
     consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
@@ -452,6 +454,7 @@ int ConsensusLogManager::init_service() {
     consensus_ptr->setAutoLeaderTransferCheckSeconds(
         opt_consensus_auto_leader_transfer_check_seconds);
     consensus_ptr->setThreadHook([]() { my_thread_init(); }, my_thread_end);
+    consensus_ptr->setLogInstance(opt_cluster_log_type_instance);
     if (!opt_consensus_force_recovery) {
       if (!is_learner) {
         // startup as normal node
@@ -1384,6 +1387,58 @@ uint64 ConsensusLogManager::get_final_sync_index() {
   mysql_mutex_lock(get_sequence_stage1_lock());
   uint64_t final_sync_index = current_index ? current_index - 1 : 0;
   mysql_mutex_unlock(get_sequence_stage1_lock());
+  return final_sync_index;
+}
+
+uint64 ConsensusLogManager::get_wait_milliseconds_for_old_trx_finish() {
+  return opt_consensus_wait_milliseconds_before_change_leader + opt_consensus_wait_unfinished_trx_timeout;
+}
+
+void ConsensusLogManager::wait_old_trx_finish()
+{
+  const ulonglong min_wait_time_ms = opt_consensus_wait_milliseconds_before_change_leader;
+  const ulonglong max_wait_time_ms = opt_consensus_wait_unfinished_trx_timeout;
+  ulonglong wait_time_ms = 0;
+
+  if (min_wait_time_ms)
+    my_sleep(min_wait_time_ms * 1000);
+
+  while (wait_time_ms++ < max_wait_time_ms
+         && innodb_hton->ext.has_started_mysql_trx()) {
+    my_sleep(1000);//1ms
+  }
+  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_trx_finish"
+                         << ", wait_time_ms " << min_wait_time_ms + wait_time_ms
+                         << ", has_started_mysql_trx " << innodb_hton->ext.has_started_mysql_trx();
+}
+
+void ConsensusLogManager::wait_old_xa_finish()
+{
+  const int max_wait_time_ms = opt_consensus_wait_unfinished_xa_timeout;
+  int wait_time_ms = 0;
+  while (wait_time_ms++ < max_wait_time_ms
+        && xa_finishing_count.load() > 0) {
+    my_sleep(1000);//1ms
+  }
+  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_xa_finish"
+                         << ", wait_time_ms " << wait_time_ms
+                         << ", xa_finishing_count " << xa_finishing_count.load();
+}
+
+uint64 ConsensusLogManager::wait_old_bgc_finish()
+{
+  uint64 final_sync_index = get_final_sync_index();
+  const int max_wait_time_ms = opt_consensus_wait_unfinished_bgc_timeout;
+  int wait_time_ms = 0;
+  while (wait_time_ms++ < max_wait_time_ms
+        && consensus_ptr->getCommitIndex() < final_sync_index) {
+    my_sleep(1000);//1ms
+  }
+  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_bgc_finish"
+                         << ", wait_time_ms " << wait_time_ms
+                         << ", commitIndex " << consensus_ptr->getCommitIndex()
+                         << ", final_sync_index " << final_sync_index;
+
   return final_sync_index;
 }
 

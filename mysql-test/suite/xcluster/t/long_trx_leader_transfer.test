@@ -28,6 +28,7 @@ let $wait_condition= select count(*)=0 from information_schema.alisql_cluster_lo
 SET debug_sync = "now SIGNAL continue";
 
 --replace_result $PAXOS_PORT_2 PAXOS_PORT_2
+--error ER_CONSENSUS_COMMAND_ERROR
 eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_2");
 
 --connect (conn4,127.0.0.1,root,,test,$MYPORT_2)

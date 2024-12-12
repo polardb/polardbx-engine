@@ -5031,6 +5031,9 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       rli->last_master_timestamp =
           ev->common_header->when.tv_sec + (time_t)ev->exec_time;
       assert(rli->last_master_timestamp >= 0);
+      long time_diff = ((long)(time(nullptr) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
+      time_diff = max(0L, time_diff);
+      consensus_ptr->updateApplyDelaySeconds(time_diff);
     }
 
     if (rli->is_until_satisfied_before_dispatching_event(ev)) {
@@ -5338,6 +5341,7 @@ static int try_to_reconnect(THD *thd, MYSQL *mysql, Master_info *mi,
                             uint *retry_count, bool suppress_warnings,
                             const Reconnect_messages &messages) {
   mi->slave_running = MYSQL_SLAVE_RUN_NOT_CONNECT;
+  consensus_ptr->updateApplyThreadRunning(false);
   THD_STAGE_INFO(thd, messages.stage_waiting_to_reconnect);
   DBUG_EXECUTE_IF("hang_in_stage_replica_waiting_to_reconnect", {
     while (!io_slave_killed(thd, mi)) my_sleep(100000);  // 0.1 second
@@ -5433,6 +5437,8 @@ extern "C" void *handle_slave_io(void *arg) {
     thd->thread_stack = (char *)&thd;  // remember where our stack is
     mi->clear_error();
     mi->slave_running = 1;
+    consensus_ptr->updateApplyThreadRunning(true);
+
     if (init_replica_thread(thd, SLAVE_THD_IO)) {
       mysql_cond_broadcast(&mi->start_cond);
       mysql_mutex_unlock(&mi->run_lock);
@@ -5516,6 +5522,8 @@ extern "C" void *handle_slave_io(void *arg) {
     };);
     mysql_mutex_lock(&mi->run_lock);
     mi->slave_running = MYSQL_SLAVE_RUN_CONNECT;
+    consensus_ptr->updateApplyThreadRunning(true);
+
     mysql_mutex_unlock(&mi->run_lock);
 
     THD_STAGE_INFO(thd, stage_checking_source_version);
@@ -5881,6 +5889,7 @@ extern "C" void *handle_slave_io(void *arg) {
 
     mi->abort_slave = false;
     mi->slave_running = 0;
+    consensus_ptr->updateApplyThreadRunning(false);
     mi->atomic_is_stopping = false;
     mysql_mutex_lock(&mi->info_thd_lock);
     mi->info_thd = nullptr;
@@ -7108,6 +7117,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     /* Inform waiting threads that slave has started */
     rli->slave_run_id++;
     rli->slave_running = 1;
+    consensus_ptr->updateApplyThreadRunning(true);
     rli->reported_unsafe_warning = false;
     rli->sql_thread_kill_accepted = false;
     rli->last_event_start_time = 0;
@@ -7466,6 +7476,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     assert(rli->slave_running == 1);  // tracking buffer overrun
     /* When source_pos_wait() wakes up it will check this and terminate */
     rli->slave_running = 0;
+    consensus_ptr->updateApplyThreadRunning(false);
     rli->atomic_is_stopping = false;
     /* Forget the relay log's format */
     if (rli->set_rli_description_event(nullptr)) {

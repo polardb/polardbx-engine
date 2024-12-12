@@ -665,10 +665,8 @@ TEST(consensus, Paxos_requestVote3) {
   paxos2->leaderTransfer(3);
   sleep(1);
   EXPECT_EQ(paxos2->getState(), Paxos::LEADER);
-  EXPECT_EQ(paxos2->getSubState(), Paxos::SubLeaderTransfer);
   sleep(2);
   EXPECT_EQ(paxos2->getState(), Paxos::LEADER);
-  EXPECT_EQ(paxos2->getSubState(), Paxos::SubNone);
 
   delete paxos1;
   delete learner2;

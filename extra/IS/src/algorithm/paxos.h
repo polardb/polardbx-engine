@@ -148,11 +148,6 @@ class Paxos : public Consensus {
   } StateType;
   const char stateString[5][5] = {"FOLL", "CAND", "LEDR", "LENR", "NORO"};
 
-  typedef enum SubState {
-    SubNone = 0,
-    SubLeaderTransfer = 1,
-  } SubStateType;
-
   typedef enum FlowControlMode {
     Slow = -1,
     Normal = 0,
@@ -237,6 +232,10 @@ class Paxos : public Consensus {
     uint electionWeight;
     uint64_t learnerSource;
     uint64_t appliedIndex;
+    uint64_t applyDelaySeconds{0};
+    bool applyThreadRunning{false};
+    bool disableElection{false};
+    bool logInstance{false};
     bool pipelining;
     bool useApplied;
   } ClusterInfoType;
@@ -263,6 +262,8 @@ class Paxos : public Consensus {
         logDelayNum;  // how many logs follower or learner are behind leader
     uint64_t applyDelayNum;  // how many applied logs follower or learner are
                              // behind leader
+    bool applyThreadRunning{false};
+    uint64_t applyDelaySeconds{0};
   } HealthInfoType;
 
   typedef class ChangeStateArg {
@@ -300,6 +301,7 @@ class Paxos : public Consensus {
   int onRequestVoteResponce(PaxosMsg *msg) override;
   /* LEADER */
   virtual int leaderTransfer(uint64_t targetId);
+  virtual int leaderTransferPrecheck(uint64_t targetId);
   virtual int leaderTransfer(
       const std::string &addr); /* support ip:port argument */
   virtual int changeLearners(CCOpTypeT type,
@@ -355,8 +357,6 @@ class Paxos : public Consensus {
   uint64_t getMyServerId() { return myServerId_.load(); }
   int setMyServerId(uint64_t ci) { myServerId_.store(ci); return 0; }
 
-  int checkLeaderTransfer(uint64_t targetId, uint64_t term, uint64_t &logIndex,
-                          uint64_t leftCnt);
   int getClusterInfo(std::vector<ClusterInfoType> &cis);
   static void printClusterInfo(const std::vector<ClusterInfoType> &cis);
   int getClusterHealthInfo(std::vector<HealthInfoType> &healthInfo);
@@ -421,11 +421,18 @@ class Paxos : public Consensus {
       std::function<bool(const LogEntry &le)> handler = nullptr);
   static void doPurgeLog(purgeLogArgType *arg);
   void updateAppliedIndex(uint64_t index);
+  void updateApplyDelaySeconds(uint64_t sec);
+  void updateApplyThreadRunning(bool is_running);
+
   int forcePurgeLog(bool local, uint64_t forceIndex = UINT64_MAX);
   uint64_t getSafetyIndexForPurge();
   uint64_t getAppliedIndex() { return appliedIndex_.load(); }
-  void electionWeightAction(uint64_t term, uint64_t baseEpoch);
-
+  void electionWeightAction(uint64_t term, uint64_t baseEpoch,
+                            uint64_t preState, uint64_t targetId);
+  bool getLogInstance() { return logInstance_; }
+  void setLogInstance(bool value) { logInstance_ = value; }
+  uint64_t getApplyDelaySeconds() { return applyDelaySeconds_.load(); }
+  bool getApplyThreadRunning() { return applyThreadRunning_.load(); }
   uint64_t getTerm() { return currentTerm_; }
   void setService(std::shared_ptr<Service> srvArg) { srv_ = srvArg; }
   std::shared_ptr<Service> getService() { return srv_; }
@@ -437,8 +444,6 @@ class Paxos : public Consensus {
     electionTimer_->setRandWeight(ls->electionWeight);
   }
   enum State getState() { return state_.load(); }
-  enum SubState getSubState() { return subState_.load(); }
-  bool isInLeaderTransfer() { return subState_.load() == SubState::SubLeaderTransfer; }
   const uint64_t &getElectionTimeout() { return electionTimeout_; }
   const uint64_t &getHeartbeatTimeout() { return heartbeatTimeout_; }
   uint64_t getCommitIndex() {
@@ -481,9 +486,13 @@ class Paxos : public Consensus {
   void setMaxDelayIndex4NewMember(uint64_t val) {
     maxDelayIndex4NewMember_ = val;
   }
+  void setMaxDelaySeconds4NewLeader(uint64_t val) {
+    maxDelaySeconds4NewLeader_ = val;
+  }
   uint64_t getMaxMergeReportTimeout() { return maxMergeReportTimeout_; }
   void setMaxMergeReportTimeout(uint64_t val) { maxMergeReportTimeout_ = val; }
   void setCompactOldMode(bool val) { compactOldMode_ = val; }
+  void setForceLeaderTransfer(bool val) { forceLeaderTransfer_ = val; }
   void setConsensusAsync(bool val) {
     consensusAsync_.store(val);
     cond_.notify_all();
@@ -613,6 +622,7 @@ class Paxos : public Consensus {
 
   /* common part of the corresponding public functions */
   int leaderTransfer_(uint64_t targetId);
+  int leaderTransferPrecheck_(uint64_t targetId, uint64_t preState);
   int leaderTransferSend_(uint64_t targetId, uint64_t term, uint64_t logIndex,
                           uint64_t leftCnt);
   int configureLearner_(uint64_t serverId, uint64_t source, bool applyMode,
@@ -652,7 +662,6 @@ class Paxos : public Consensus {
   const uint64_t heartbeatTimeout_;
   const uint64_t purgeLogTimeout_;
   std::atomic<uint64_t> currentTerm_;
-  std::atomic<bool> leaderStepDowning_;
   std::atomic<uint64_t> commitIndex_;
   std::atomic<uint64_t> leaderId_;
   std::string leaderAddr_;
@@ -661,12 +670,11 @@ class Paxos : public Consensus {
   std::atomic<uint64_t> currentEpoch_;
   uint64_t forceSyncEpochDiff_;
   std::atomic<StateType> state_;
-  std::atomic<SubStateType> subState_;
-  std::atomic<bool> weightElecting_;
   std::atomic<bool> leaderForceSyncStatus_;
   std::atomic<bool> consensusAsync_;
   std::atomic<bool> replicateWithCacheLog_;
   std::atomic<bool> optimisticHeartbeat_;
+  bool logInstance_{false};
   /* TODO need optimize lock granularity. */
   mutable std::mutex lock_;
   mutable std::condition_variable cond_;
@@ -683,13 +691,17 @@ class Paxos : public Consensus {
                           // purgelog
   uint64_t minMatchIndex_;
   std::atomic<uint64_t> appliedIndex_;
+  std::atomic<uint64_t> applyDelaySeconds_{0};
+  std::atomic<bool> applyThreadRunning_{false};
   /* For follower sync learner source. */
   std::atomic<uint64_t> followerMetaNo_;
   uint64_t lastSyncMetaNo_;
   uint64_t syncMetaInterval_;
   uint64_t maxDelayIndex4NewMember_;
+  uint64_t maxDelaySeconds4NewLeader_;
   uint64_t maxMergeReportTimeout_;
   uint64_t nextEpochCheckStatemachine_;
+  bool forceLeaderTransfer_{false};
   bool compactOldMode_;
   bool enableLogCache_;
   bool enableDynamicEasyIndex_;

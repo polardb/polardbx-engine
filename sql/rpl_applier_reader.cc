@@ -30,6 +30,7 @@
 #include "sql/rpl_rli_pdb.h"
 #include "sql/sql_backup_lock.h"
 #include "sql/consensus_admin.h"
+#include "sql/bl_consensus_log.h"
 
 /**
    It manages a stage and the related mutex and makes the process of
@@ -588,6 +589,8 @@ void Rpl_applier_reader::reset_seconds_behind_master() {
     Commit) of a group.  Coordinator resets SBM when notices no more groups left
     neither to read from Relay-log nor to process by Workers.
   */
-  if (!m_rli->is_parallel_exec() || m_rli->gaq->empty())
+  if (!m_rli->is_parallel_exec() || m_rli->gaq->empty()) {
     m_rli->last_master_timestamp = 0;
+    consensus_ptr->updateApplyDelaySeconds(0);
+  }
 }

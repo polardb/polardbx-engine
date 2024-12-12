@@ -400,8 +400,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /** Manage the MTS dependency tracking */
   Transaction_dependency_tracker m_dependency_tracker;
 
-  std::atomic<bool> disable_ordered_commit{false};
-
   /**
     Find the oldest binary log referenced by the index file
 
