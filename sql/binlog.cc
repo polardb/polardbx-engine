@@ -2539,6 +2539,7 @@ static void exec_binlog_error_action_exit(const char *err_string) {
 
   LogErr(ERROR_LEVEL, ER_BINLOG_LOGGING_NOT_POSSIBLE, err_string);
   flush_error_log_messages();
+  flush_gcov();
 
   if (thd) thd->send_statement_status();
   _exit(MYSQLD_FAILURE_EXIT);  // Using _exit(), since exit() is not async

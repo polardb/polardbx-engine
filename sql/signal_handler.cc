@@ -283,6 +283,7 @@ void my_server_abort() {
     while (abort_processing.exchange(true)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    flush_gcov();
     abort();
   }
   /*

@@ -684,3 +684,22 @@ static Sys_var_bool Sys_opt_transaction_group(
     "are visible to all transactions in the same group",
     SESSION_VAR(innodb_transaction_group), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+
+#ifdef HAVE_GCOV
+static bool check_flush_gcov_enabled(sys_var *self, THD *thd, enum_var_type type) {
+    (void)self;
+    (void)thd;
+    if (!self->is_global_persist(type)) {
+        flush_gcov();
+    }
+    return false;
+}
+static Sys_var_bool Sys_flush_gcov_enabled("flush_gcov_enabled",
+                                           "Actively flush gcov data.",
+                                           SESSION_VAR(flush_gcov_enabled),
+                                           CMD_LINE(OPT_ARG), DEFAULT(0),
+                                           NO_MUTEX_GUARD, NOT_IN_BINLOG,
+                                           ON_CHECK(0),
+                                           ON_UPDATE(check_flush_gcov_enabled));
+#endif

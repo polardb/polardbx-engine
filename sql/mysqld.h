@@ -132,6 +132,7 @@ void refresh_status();
 void reset_status_by_thd();
 bool is_secure_file_path(const char *path);
 ulong sql_rnd_with_mutex();
+extern void flush_gcov();
 
 struct System_status_var *get_thd_status_var(THD *thd, bool *aggregated);
 

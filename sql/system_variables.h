@@ -540,6 +540,11 @@ struct System_variables {
   bool auto_savepoint;
 
   bool opt_index_format_gpp_enabled;
+
+#ifdef HAVE_GCOV
+  bool flush_gcov_enabled;
+#endif
+
 };
 
 /**

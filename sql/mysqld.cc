@@ -3675,6 +3675,22 @@ static void start_signal_handler() {
 /** This thread handles SIGTERM, SIGQUIT, SIGHUP, SIGUSR1 and SIGUSR2 signals.
  */
 /* ARGSUSED */
+#ifdef HAVE_GCOV
+#if defined(__GNUC__) && __GNUC__ >= 11
+extern "C" void __gcov_dump();
+void dump_gcov_data() { __gcov_dump(); }
+#else
+extern "C" void __gcov_flush();
+void dump_gcov_data() { __gcov_flush(); }
+#endif
+#endif
+void flush_gcov() {
+#ifdef HAVE_GCOV
+  // Gcov will assert() if we try to flush in parallel.
+  dump_gcov_data();
+#endif
+}
+
 extern "C" void *signal_hand(void *arg [[maybe_unused]]) {
   my_thread_init();
 
@@ -3713,6 +3729,11 @@ extern "C" void *signal_hand(void *arg [[maybe_unused]]) {
     siginfo_t sig_info;
     while ((rc = sigwaitinfo(&set, &sig_info)) == -1 && errno == EINTR) {
     }
+    /*
+      For all signals received, flush_gcov is called to output statistics,
+      thus avoiding the loss of coverage statistics when exiting due to signals.
+    */
+    flush_gcov();
     error = rc == -1;
     if (!error) sig = sig_info.si_signo;
 #endif             // __APPLE__
