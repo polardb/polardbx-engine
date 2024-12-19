@@ -81,7 +81,7 @@ bool trx_search_tcn(txn_rec_t *txn_rec, txn_status_t *txn_status) {
       txn_rec->gcn = tcn.gcn;
       *txn_status = tcn.status;
 
-      ut_ad(txn_rec->is_committed());
+      ut_ad(txn_rec->is_whole_committed());
 
       TCN_CACHE_AGGR(srv_tcn_cache_level, HIT);
       return true;
@@ -98,10 +98,8 @@ bool trx_search_tcn(txn_rec_t *txn_rec, txn_status_t *txn_status) {
  * @param[in]	txn rec info that looked up */
 void trx_cache_tcn(const txn_rec_t &txn_rec, const txn_status_t &status) {
   Cache_tcn *cont = nullptr;
-  ut_a(txn_rec.scn != SCN_NULL);
-  ut_a(txn_rec.gcn != GCN_NULL);
+  ut_a(txn_rec.is_whole_committed());
   ut_a(txn_rec.trx_id != 0);
-  ut_ad(!undo_ptr_is_active(txn_rec.undo_ptr));
 
   switch (srv_tcn_cache_level) {
     case NONE_LEVEL:
@@ -146,7 +144,7 @@ void trx_cache_tcn(const trx_t *trx, bool serialised) {
   if (cont) {
     if (trx->id > 0 && serialised) {
       assert_trx_commit_mark_allocated(trx);
-      ut_ad(!undo_ptr_is_active(trx->txn_desc.undo_ptr));
+      ut_ad(trx->txn_desc.is_whole_committed());
 
       tcn_t value(trx->id, trx->txn_desc.cmmt, trx->txn_desc.undo_ptr,
                   txn_status_t::COMMITTED);

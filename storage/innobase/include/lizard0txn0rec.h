@@ -125,6 +125,14 @@ struct txn_lookup_t {
     return !valid;
   }
 
+  /** Judge uba have been missing. */
+  bool txn_missing() {
+    if (real_status == Status::REUSE || real_status == Status::UNDO_CORRUPTED)
+      return true;
+
+    return false;
+  }
+
   /** The raw data in txn slot. */
   txn_slot_t txn_slot;
   /**

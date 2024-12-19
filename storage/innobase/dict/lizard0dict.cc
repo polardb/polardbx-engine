@@ -184,9 +184,7 @@ bool dd_index_modification_visible(
 
     mutex_exit(&dict_sys->mutex);
   } else {
-    ut_ad(!undo_ptr_is_active(index->txn.uba.load()));
-    ut_ad(index->txn.scn.load() != SCN_NULL &&
-          index->txn.gcn.load() != GCN_NULL);
+    ut_ad(index->txn.is_whole_committed());
     rec_txn.scn = index->txn.scn.load();
     rec_txn.gcn = index->txn.gcn.load();
   }

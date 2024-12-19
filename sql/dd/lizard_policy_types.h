@@ -41,8 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/table.h"
 
 class THD;
-class dict_table_t;
-class dict_index_t;
+struct dict_table_t;
+struct dict_index_t;
 
 namespace lizard {
 

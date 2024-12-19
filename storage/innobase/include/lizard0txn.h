@@ -87,6 +87,10 @@ struct txn_desc_t {
 
   void copy_xa_when_commit(const gcn_tuple_t &xa_gcn,
                            const xa_addr_t &xa_maddr);
+
+  bool is_whole_committed() const {
+    return !undo_ptr_is_active(undo_ptr) && cmmt.is_whole_committed();
+  }
 };
 
 /**
@@ -96,12 +100,18 @@ struct txn_desc_t {
    3) gcn
 */
 struct txn_index_t {
+ public:
   /** undo log header address */
   std::atomic<undo_ptr_t> uba;
   /** scn number */
   std::atomic<scn_t> scn;
   /** gcn number */
   std::atomic<gcn_t> gcn;
+
+  bool is_whole_committed() const {
+    return !undo_ptr_is_active(uba.load()) && scn.load() != SCN_NULL &&
+           gcn.load() != GCN_NULL;
+  }
 };
 
 /**

@@ -156,6 +156,10 @@ struct commit_mark_t {
     csr = CSR_AUTOMATIC;
   }
 
+  bool is_whole_committed() const {
+    return scn != SCN_NULL && us != US_NULL && gcn != GCN_NULL;
+  }
+
   bool is_zero() const { return scn == 0 && us == 0 && gcn == 0; }
 
   bool is_uninitial() const { return scn == 0 && us == 0 && gcn == 0; }

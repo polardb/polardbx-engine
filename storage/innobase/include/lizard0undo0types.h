@@ -294,13 +294,23 @@ inline bool undo_ptr_is_slave(const undo_ptr_t &undo_ptr) {
   return static_cast<bool>((undo_ptr & UBA_MASK_IS_SLAVE) >> UBA_POS_IS_SLAVE);
 }
 
+inline void undo_ptr_clear_slave(undo_ptr_t *undo_ptr) {
+  *undo_ptr &= (~(((undo_ptr_t)(1)) << UBA_POS_IS_SLAVE));
+}
+
+inline void undo_ptr_clear_csr(undo_ptr_t *undo_ptr) {
+  *undo_ptr &= (~(((undo_ptr_t)(1)) << UBA_POS_CSR));
+}
+
 inline void undo_ptr_set_commit(undo_ptr_t *undo_ptr, unsigned int csr,
                                 bool is_slave) {
   *undo_ptr |= ((undo_ptr_t)1 << UBA_POS_STATE);
 
+  undo_ptr_clear_csr(undo_ptr);
   undo_ptr_t value = static_cast<undo_ptr_t>(csr);
   *undo_ptr |= (value << UBA_POS_CSR);
 
+  undo_ptr_clear_slave(undo_ptr);
   value = static_cast<undo_ptr_t>(is_slave);
   *undo_ptr |= (value << UBA_POS_IS_SLAVE);
 }

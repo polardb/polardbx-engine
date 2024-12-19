@@ -293,7 +293,7 @@ void row_upd_rec_lizard_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_temporary());
 
-  lizard_ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
+  ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
   row_upd_rec_lizard_fields_low(rec, page_zip, index, offsets, txn_rec->scn,
                                 txn_rec->undo_ptr, txn_rec->gcn);
 }

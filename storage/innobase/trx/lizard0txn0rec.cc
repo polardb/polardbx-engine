@@ -344,9 +344,7 @@ static bool txn_rec_real_state_by_lookup_low(txn_rec_t *txn_rec,
 
   cache_hit = trx_search_tcn(txn_rec, txn_status);
   if (cache_hit) {
-    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
-    ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+    ut_ad(txn_rec->is_whole_committed());
     return false;
   }
 
@@ -422,21 +420,17 @@ void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
 
   /** If record is not active, return directly. */
   if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+    ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
+    ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
     return;
   }
 
   /** Search tcn cache */
   cache_hit = trx_search_tcn(txn_rec, &txn_status);
   if (cache_hit) {
-    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
-
+    ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later. */
     scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
-
     return;
   }
 
@@ -445,13 +439,9 @@ void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   std::tie(active, txn_status) =
       txn_slot_read_low(txn_rec, &txn_lookup, Cache_hint::KEEP_OLD, nullptr);
   if (!active) {
-    ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
-
+    ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later.*/
     scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
-
     /** Cache txn info into tcn. */
     trx_cache_tcn(*txn_rec, txn_status);
   }
@@ -526,40 +516,49 @@ bool txn_rec_get_master_by_lookup(txn_rec_t *txn_rec, txn_rec_t *ref_txn_rec) {
   bool active = false;
   txn_status_t ref_txn_status = txn_status_t::ACTIVE;
   txn_lookup_t txn_lookup;
+  ut_ad(txn_rec->is_slave());
+  ut_ad(txn_rec->is_committed());
 
-  /** Must be non-active. */
+  /** Try to read master address. */
   txn_slot_read_low(txn_rec, &txn_lookup, Cache_hint::KEEP_OLD, nullptr);
+  /** Task myself txn as master if have lost transaction slot.
+   * It will be safe for query since transaction group will be purged
+   * simultaneously */
+  if (txn_lookup.txn_missing()) {
+    *ref_txn_rec = *txn_rec;
+    ref_txn_rec->clear_slave();
 
-  ut_a(!txn_lookup.txn_slot.maddr.is_null());
+    ut_ad(!ref_txn_rec->is_slave() && ref_txn_rec->slot() == txn_rec->slot());
+    return ref_txn_rec->is_active();
+  }
 
   const auto &master = txn_lookup.txn_slot.maddr;
+  ut_a(!master.is_null());
 
   /** Pretend a un-cleanout record. */
   ref_txn_rec->trx_id = master.tid;
   ref_txn_rec->undo_ptr = master.slot_ptr;
   ref_txn_rec->gcn = GCN_NULL;
   ref_txn_rec->scn = SCN_NULL;
-
-  ut_a(undo_ptr_is_active(ref_txn_rec->undo_ptr));
+  ut_a(ref_txn_rec->is_active());
 
   active = txn_rec_real_state_by_lookup_low(ref_txn_rec, &ref_txn_status,
                                             Cache_hint::KEEP_OLD);
   switch (ref_txn_status) {
     case txn_status_t::ACTIVE:
-      ut_ad(active);
-      ut_ad(!undo_ptr_is_slave(ref_txn_rec->undo_ptr));
+      ut_ad(active && ref_txn_rec->is_active());
+      ut_ad(!ref_txn_rec->is_slave());
       break;
     case txn_status_t::COMMITTED:
     case txn_status_t::PURGED:
     case txn_status_t::ERASED:
-      ut_ad(!active);
-
-      if (undo_ptr_is_slave(ref_txn_rec->undo_ptr)) {
+      ut_ad(!active && ref_txn_rec->is_committed());
+      if (ref_txn_rec->is_slave()) {
         lizard_error(ER_LIZARD)
             << "There should be only one master branch in a XA GROUP.";
         /** Reset slave info to skip infinite recursion when decision
         visibility. */
-        undo_ptr_set_commit(&ref_txn_rec->undo_ptr, ref_txn_rec->csr(), false);
+        ref_txn_rec->clear_slave();
       }
 
       if (txn_rec->gcn != ref_txn_rec->gcn) {
@@ -570,11 +569,12 @@ bool txn_rec_get_master_by_lookup(txn_rec_t *txn_rec, txn_rec_t *ref_txn_rec) {
       break;
     case txn_status_t::REUSE:
     case txn_status_t::UNDO_CORRUPTED:
-      ut_ad(!active);
-      ut_ad(!undo_ptr_is_slave(ref_txn_rec->undo_ptr));
+      ut_ad(!active && ref_txn_rec->is_committed());
+      ut_ad(!ref_txn_rec->is_slave());
       break;
   }
 
+  ut_ad(!ref_txn_rec->is_slave());
   return active;
 }
 
