@@ -109,14 +109,20 @@ class XA_specification {
    */
   void set_when_recovery(const lizard::Commit_policy *cpolicy) {
     /**
+     * When binlog is enabled and the non-atomic DDL is executed, GCN Log
+     * Event and Gtid (if enabled) are still generated. However, the GCN Log
+     * Event is meaningless for this case, and the XA spec is too.
+     *
+     * So, If this case really happens, we just skip it cause that the
+     * meaningful XA spec has always been collected.
+     */
+    clear();
+    /**
      * There has only two cases when recovering:
      * 1. Binlog_ac_prepare_policy
      * 2. Binlog_commit_policy
      */
-    assert(m_cpolicy == nullptr);
     assert(cpolicy != nullptr && cpolicy->has_decided());
-    assert(!m_allocated);
-
     assert(dynamic_cast<const lizard::Binlog_commit_policy *>(cpolicy) !=
                nullptr ||
            dynamic_cast<const lizard::Binlog_ac_prepare_policy *>(cpolicy) !=
