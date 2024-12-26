@@ -76,6 +76,17 @@ BEGIN;
 COMMIT;
 SET GTID_NEXT=AUTOMATIC;
 ################################
+# Empty transaction with assign GTID on follower
+################################
+SET GTID_NEXT='MASTER_UUID:1100';
+SET force_revise=1;
+SET sql_log_bin=0;
+BEGIN;
+COMMIT;
+SELECT "succ" FROM mysql.gtid_executed where interval_end = 1100;
+succ
+succ
+################################
 # Check if written to table.
 ################################
 SET @@GLOBAL.DEBUG= '+d,compress_gtid_table_from_clone_thread';
@@ -97,9 +108,10 @@ source_uuid	interval_start	interval_end
 MASTER_UUID	1	34
 MASTER_UUID	35	35
 MASTER_UUID	1000	1000
+MASTER_UUID	1100	1100
 SELECT @@GLOBAL.GTID_EXECUTED;
 @@GLOBAL.GTID_EXECUTED
-MASTER_UUID:1-35:1000
+MASTER_UUID:1-35:1000:1100
 drop table tt1;
 drop table tt2;
 drop table tt3;

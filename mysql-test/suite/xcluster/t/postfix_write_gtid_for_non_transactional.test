@@ -101,6 +101,20 @@ COMMIT;
 SET GTID_NEXT=AUTOMATIC;
 
 --echo ################################
+--echo # Empty transaction with assign GTID on follower
+--echo ################################
+--connection conn2
+--replace_result $master_uuid MASTER_UUID
+--eval SET GTID_NEXT='$master_uuid:1100'
+--eval SET force_revise=1
+--eval SET sql_log_bin=0
+BEGIN;
+COMMIT;
+
+--sleep 2
+SELECT "succ" FROM mysql.gtid_executed where interval_end = 1100;
+
+--echo ################################
 --echo # Check if written to table.
 --echo ################################
 --sleep 1

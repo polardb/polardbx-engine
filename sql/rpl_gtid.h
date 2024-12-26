@@ -3288,7 +3288,7 @@ class Gtid_state {
     @retval
         -1   Error
   */
-  int save(THD *thd);
+  int save(THD *thd, bool xpaxos_check = true);
 
   /**
     Write the THD::owned_gtid into gtid_executed table directly and the

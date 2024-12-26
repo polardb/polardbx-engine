@@ -1828,6 +1828,7 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
     assert(thd->variables.gtid_next.type == ASSIGNED_GTID);
 
     if (!opt_bin_log ||
+        !thd->variables.sql_log_bin ||
         (thd->slave_thread &&
          (!opt_log_replica_updates || thd->xpaxos_replication_channel))) {
       /*
@@ -1841,11 +1842,15 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
         table and release ownership inside ha_commit_trans.)
       */
       /*
-        Revision:
-        xpaxos_replication_channel = true only it's worker thread and sql thread.
-        Allow follower to save gtid for non-transactional operations.
+        Allow the followers to save gtid:
+        1. xpaxos_replication_channel = true,only it's worker thread and sql thread.
+        2. force_revise=1 && sql_log_bin=0 for apply correct
       */
-      if (thd->xpaxos_replication_channel && gtid_state->save(thd) != 0) {
+      const bool need_save_gtid = (thd->xpaxos_replication_channel
+                                  || (opt_bin_log
+                                      && !thd->variables.sql_log_bin
+                                      && thd->variables.opt_force_revise));
+      if (need_save_gtid && gtid_state->save(thd, false) != 0) {
         gtid_state->update_on_rollback(thd);
         return 1;
       } else if (!has_commit_order_manager(thd)) {
@@ -1936,7 +1941,6 @@ int MYSQL_BIN_LOG::gtid_end_transaction(THD *thd) {
                because its binlog transaction cache is empty.
              */
              thd->has_gtid_consistency_violation)
-
   {
     gtid_state->update_on_commit(thd);
   } else if (thd->variables.gtid_next.type == ASSIGNED_GTID &&

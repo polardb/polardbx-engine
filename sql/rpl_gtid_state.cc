@@ -701,11 +701,13 @@ int Gtid_state::init() {
   return 0;
 }
 
-int Gtid_state::save(THD *thd) {
+int Gtid_state::save(THD *thd, bool xpaxos_check/* = true */) {
   DBUG_TRACE;
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
-  assert(thd->xpaxos_replication_channel);
+  if (xpaxos_check) {
+    assert(thd->xpaxos_replication_channel);
+  }
   int error = 0;
 
   int ret = gtid_table_persistor->save(thd, &thd->owned_gtid);
