@@ -1073,7 +1073,7 @@ ulint trx_erase(ulint n_purge_threads, /*!< in: number of purge tasks
   @retval       bool        true if the corresponding txn has been purged
 */
 bool txn_rec_is_erased_by_precheck(const txn_rec_t *txn_rec) {
-  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
+  if (txn_rec->is_committed()) {
     /** scn must allocated */
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
 

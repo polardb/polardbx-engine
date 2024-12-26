@@ -138,6 +138,31 @@ class Vision {
 
     return CCR_SCN;
   }
+
+  bool valid_txn_rec_check(txn_rec_t *txn_rec) const {
+    if (txn_rec->is_committed()) {
+      switch (visible_by()) {
+        case CCR_SCN:
+          ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
+          break;
+        case CCR_GCN:
+          ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+          break;
+        case CCR_ALL:
+          ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
+          ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+          break;
+        case CCR_NONE:
+        default:
+          ut_ad(0);
+          break;
+      }
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   /**
     Return active state of the vision
     @retval   active state of the vision

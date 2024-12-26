@@ -293,7 +293,7 @@ void row_upd_rec_lizard_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_temporary());
 
-  ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
+  ut_ad(txn_rec->is_whole_committed());
   row_upd_rec_lizard_fields_low(rec, page_zip, index, offsets, txn_rec->scn,
                                 txn_rec->undo_ptr, txn_rec->gcn);
 }
@@ -636,7 +636,8 @@ bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
   txn_rec_t txn_rec;
   row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  return !txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
+  return !txn_rec_cached_or_real_state(&txn_rec, Cache_hint::KEEP_OLD,
+                                       ccr_t::CCR_ALL);
 }
 
 /**

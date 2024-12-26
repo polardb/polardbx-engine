@@ -277,6 +277,7 @@ static std::pair<bool, txn_status_t> txn_slot_read_low(txn_rec_t *txn_rec,
   bool ret = false;
   undo_addr_t undo_addr;
   ut_ad(txn_lookup);
+  ut_ad(!lizard::txn_sys_t::instance()->is_special(txn_rec->undo_ptr));
 
   /** In theory, lizard has to findout the real acutal scn (if have) by
   uba */
@@ -331,16 +332,17 @@ static std::pair<bool, txn_status_t> txn_slot_read_low(txn_rec_t *txn_rec,
   @retval true    active
           false   committed
 */
-static bool txn_rec_real_state_by_lookup_low(txn_rec_t *txn_rec,
-                                             txn_status_t *txn_status,
-                                             Cache_hint hint) {
+static bool txn_rec_cached_or_real_state_by_lookup_low(txn_rec_t *txn_rec,
+                                                       txn_status_t *txn_status,
+                                                       Cache_hint hint) {
   bool active = false;
   bool cache_hit = false;
   txn_lookup_t txn_lookup;
 
   /** Unknown the real state */
-  ut_ad(undo_ptr_is_active(txn_rec->undo_ptr));
+  // ut_ad(txn_rec->need_lookup(ccr));
   ut_ad(txn_rec && txn_status);
+  ut_ad(!lizard::txn_sys_t::instance()->is_special(txn_rec->undo_ptr));
 
   cache_hit = trx_search_tcn(txn_rec, txn_status);
   if (cache_hit) {
@@ -368,41 +370,43 @@ static bool txn_rec_cleanout_state(txn_rec_t *txn_rec, Cache_hint hint) {
   txn_status_t txn_status = txn_status_t::ACTIVE;
   bool active = false;
 
-  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
+  if (txn_rec->is_committed()) {
     return false;
   }
 
-  active = txn_rec_real_state_by_lookup_low(txn_rec, &txn_status, hint);
+  active =
+      txn_rec_cached_or_real_state_by_lookup_low(txn_rec, &txn_status, hint);
   return !active;
 }
 
 /**
-  Determine the real trx state through a lookup.
+  Determine the cached or real trx state.
   Return whether the trx corresponding to the record is active.
 
-  @param[in/out]  txn record
-  @param[in]      cache hint
+  @param[in/out]  txn_rec   txn record
+  @param[in]      hint      cache hint
+  @param[in]      ccr       category of commit number combination.
 
   @retval true    active
           false   committed
 */
-bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint) {
+bool txn_rec_cached_or_real_state(txn_rec_t *txn_rec, Cache_hint hint,
+                                  ccr_t ccr) {
   txn_status_t txn_status = txn_status_t::ACTIVE;
 
-  /** If record is not active, the trx must be committed. */
-  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    lizard_ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
+  if (!txn_rec->need_lookup(ccr)) {
+    ut_ad(txn_rec->is_committed());
+
     return false;
   }
 
-  return txn_rec_real_state_by_lookup_low(txn_rec, &txn_status, hint);
+  return txn_rec_cached_or_real_state_by_lookup_low(txn_rec, &txn_status, hint);
 }
 
 /**
-  Determine whether the record needs to be cleaned out during the query.
-  If cleaning is needed, attempt to collect the cursor, and it will be cleaned
-  out when the query finishes.
+  Clean out the record during the query.
+  Attempt to collect the cursor, and it will be cleaned out when the query
+  finishes.
 
   @param[in/out]  txn_rec	  txn record
   @param[in]      pcur      btr_pcur
@@ -410,20 +414,16 @@ bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint) {
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
 */
-void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                 const rec_t *rec, const dict_index_t *index,
-                                 const ulint *offsets) {
+static void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                        const rec_t *rec,
+                                        const dict_index_t *index,
+                                        const ulint *offsets) {
   bool active = false;
   bool cache_hit = false;
   txn_lookup_t txn_lookup;
   txn_status_t txn_status;
 
-  /** If record is not active, return directly. */
-  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
-    ut_ad(txn_rec->scn > 0 && txn_rec->scn <= SCN_MAX);
-    ut_ad(txn_rec->gcn > 0 && txn_rec->gcn <= GCN_MAX);
-    return;
-  }
+  ut_ad(txn_rec->is_active());
 
   /** Search tcn cache */
   cache_hit = trx_search_tcn(txn_rec, &txn_status);
@@ -438,6 +438,7 @@ void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
 
   std::tie(active, txn_status) =
       txn_slot_read_low(txn_rec, &txn_lookup, Cache_hint::KEEP_OLD, nullptr);
+
   if (!active) {
     ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later.*/
@@ -448,7 +449,30 @@ void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
 }
 
 /**
-  Determine whether the record needs to be cleaned out during modification.
+  Fill the txn_rec and attempt to clean out the record during the query.
+  If cleaning is needed, collect the cursor, and it will be cleaned
+  out when the query finishes.
+  If cleaning is not needed, lookup and fill the txn_rec if necessary.
+
+  @param[in/out]  txn_rec	  txn record
+  @param[in]      pcur      btr_pcur
+  @param[in]      rec       record
+  @param[in]      index     index
+  @param[in]      offsets   rec_get_offsets(rec)
+  @param[in]      ccr       category of commit number combination.
+*/
+void txn_rec_execute_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                const rec_t *rec, const dict_index_t *index,
+                                const ulint *offsets, ccr_t ccr) {
+  if (txn_rec->is_active()) {
+    txn_rec_cleanout_when_query(txn_rec, pcur, rec, index, offsets);
+  } else {
+    txn_rec_cached_or_real_state(txn_rec, Cache_hint::KEEP_OLD, ccr);
+  }
+}
+
+/**
+  Clean out the record during modification.
   If cleaning is needed, attempt to look up the txn_rec and perform the
   cleanout.
 
@@ -540,10 +564,11 @@ bool txn_rec_get_master_by_lookup(txn_rec_t *txn_rec, txn_rec_t *ref_txn_rec) {
   ref_txn_rec->undo_ptr = master.slot_ptr;
   ref_txn_rec->gcn = GCN_NULL;
   ref_txn_rec->scn = SCN_NULL;
+
   ut_a(ref_txn_rec->is_active());
 
-  active = txn_rec_real_state_by_lookup_low(ref_txn_rec, &ref_txn_status,
-                                            Cache_hint::KEEP_OLD);
+  active = txn_rec_cached_or_real_state_by_lookup_low(
+      ref_txn_rec, &ref_txn_status, Cache_hint::KEEP_OLD);
   switch (ref_txn_status) {
     case txn_status_t::ACTIVE:
       ut_ad(active && ref_txn_rec->is_active());
@@ -600,13 +625,13 @@ bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
   if (flashback_area) {
     if (txn_rec_is_erased_by_precheck(txn_rec)) {
       /** Must be cleanout, so no need to lookup again */
-      ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
+      ut_ad(txn_rec->is_committed());
       return true;
     }
   } else {
     if (txn_rec_is_purged_by_precheck(txn_rec)) {
       /** Must be cleanout, so no need to lookup again */
-      ut_ad(!undo_ptr_is_active(txn_rec->undo_ptr));
+      ut_ad(txn_rec->is_committed());
       return true;
     }
   }

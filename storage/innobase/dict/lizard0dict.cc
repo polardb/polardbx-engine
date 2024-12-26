@@ -157,7 +157,7 @@ bool dd_index_modification_visible(
       index->trx_id,
       SCN_NULL,
       index->txn.uba.load(),
-      GCN_NULL,
+      GCN_NULL
   };
 
   if (undo_ptr_is_active(rec_txn.undo_ptr)) {
@@ -168,10 +168,12 @@ bool dd_index_modification_visible(
       rec_txn.gcn = index->txn.gcn.load();
       rec_txn.undo_ptr = index->txn.uba.load();
       mutex_exit(&dict_sys->mutex);
+      ut_ad(rec_txn.is_whole_committed());
       goto judge;
     }
 
-    lizard::txn_rec_real_state(&rec_txn, Cache_hint::KEEP_OLD);
+    lizard::txn_rec_cached_or_real_state(&rec_txn, Cache_hint::KEEP_OLD,
+                                         ccr_t::CCR_ALL);
     /** It might be stored many times but they should be the same value */
     index->txn.scn.store(rec_txn.scn);
     index->txn.gcn.store(rec_txn.gcn);
@@ -187,6 +189,7 @@ bool dd_index_modification_visible(
     ut_ad(index->txn.is_whole_committed());
     rec_txn.scn = index->txn.scn.load();
     rec_txn.gcn = index->txn.gcn.load();
+    ut_ad(rec_txn.is_whole_committed());
   }
 
 judge:

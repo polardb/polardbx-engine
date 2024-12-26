@@ -446,12 +446,21 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
     auto vision = &m_trx->vision;
 
     if (m_config.m_index->is_clustered()) {
+      if (m_config.m_index->table->is_temporary()) {
+        /* Temp-tables are not shared across connections and multiple
+        transactions from different connections cannot simultaneously
+        operate on same temp-table and so read of temp-table is
+        always consistent read. */
+        goto sees;
+      }
+
       txn_rec_t txn_rec;
       lizard::row_get_txn_rec(rec, m_config.m_index, offsets, &txn_rec);
 
       {
         if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
+          lizard::txn_rec_cached_or_real_state(&txn_rec, Cache_hint::KEEP_OLD,
+                                               vision->visible_by());
         }
       }
 
@@ -475,6 +484,7 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
     }
   }
 
+sees:
   if (rec_get_deleted_flag(rec, m_config.m_is_compact)) {
     /* This record was deleted in the latest committed version, or it was
     deleted and then reinserted-by-update before purge kicked in. Skip it. */

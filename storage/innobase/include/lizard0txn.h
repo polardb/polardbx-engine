@@ -241,6 +241,13 @@ struct txn_sys_t {
            is_dd_index_of_dd_upgrade(undo_addr);
   }
 
+  bool is_special(const undo_ptr_t &undo_ptr) {
+    undo_addr_t undo_addr;
+    undo_decode_undo_ptr(undo_ptr, &undo_addr);
+
+    return is_special(undo_addr);
+  }
+
  public:
   /** Special for temporary table record. */
   txn_desc_t txn_desc_temp;

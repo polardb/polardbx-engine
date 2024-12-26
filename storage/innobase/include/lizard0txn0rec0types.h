@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0txn0rec0types_h
 
 #include "lizard0undo0types.h"
+#include "lizard0txn.h"
 
 /**
   Lizard transaction attributes in record (used by Vision)
@@ -78,7 +79,8 @@ struct txn_rec_t {
    * @retval	false	active */
   bool is_committed() const {
     if (!undo_ptr_is_active(undo_ptr)) {
-      ut_ad(scn != SCN_NULL && gcn != GCN_NULL && trx_id != 0);
+      ut_ad(trx_id != 0);
+
       return true;
     } else {
       /** Active trx didn't known Commit Info. */
@@ -111,6 +113,37 @@ struct txn_rec_t {
   csr_t csr() const { return undo_ptr_get_csr(undo_ptr); }
   bool is_slave() const { return undo_ptr_is_slave(undo_ptr); }
   void clear_slave() { undo_ptr_clear_slave(&undo_ptr); }
+
+  /**
+   * Determine whether a lookup of the txn is needed based on the different
+   * categories of commit number combinations (CCR). If the current txn_rec
+   * satisfies the CCR, no further lookup is required. Otherwise, a lookup is
+   * needed to fill the txn_rec.
+   */
+  bool need_lookup(ccr_t vision_ccr) {
+    if (lizard::txn_sys_t::instance()->is_special(undo_ptr)) {
+      ut_ad(!undo_ptr_is_active(undo_ptr));
+      return false;
+    }
+
+    if (is_active()) {
+      return true;
+    }
+
+    ut_ad(!undo_ptr_is_active(undo_ptr));
+    switch (vision_ccr) {
+      case CCR_SCN:
+        return (scn == SCN_NULL);
+      case CCR_GCN:
+        return (gcn == GCN_NULL);
+      case CCR_ALL:
+        return (scn == SCN_NULL || gcn == GCN_NULL);
+      case CCR_NONE: /* unreachable */
+      default:
+        ut_ad(0);
+        return false;
+    }
+  }
 };
 
-#endif 
+#endif

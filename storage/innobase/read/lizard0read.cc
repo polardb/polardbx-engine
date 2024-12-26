@@ -390,7 +390,7 @@ bool Vision::modifications_visible_mvcc(txn_rec_t *txn_rec,
       Modification scn is less than snapshot mean that
       the trx commit is prior the query lanuch.
     */
-    ut_ad(!check_consistent || txn_rec->is_committed());
+    ut_ad(!check_consistent || valid_txn_rec_check(txn_rec));
 
     /** Use snapshot vision first when committed txn and not myself. */
     if (m_snapshot_vision) {

@@ -157,35 +157,38 @@ typedef txn_lookup_t::Status txn_status_t;
 namespace lizard {
 
 /**
-  Determine the real trx state through a lookup.
+  Determine the real trx state.
   Return whether the trx corresponding to the record is active.
 
-  @param[in/out]  txn record
-  @param[in]      cache hint
+  @param[in/out]  txn_rec   txn record
+  @param[in]      hint      cache hint
+  @param[in]      ccr       category of commit number combination.
 
   @retval true    active
           false   committed
 */
-extern bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint);
+extern bool txn_rec_cached_or_real_state(txn_rec_t *txn_rec, Cache_hint hint,
+                                         ccr_t ccr = ccr_t::CCR_ALL);
 
 /**
-  Determine whether the record needs to be cleaned out during the query.
-  If cleaning is needed, attempt to collect the cursor, and it will be cleaned
+  Fill the txn_rec and attempt to clean out the record during the query.
+  If cleaning is needed, collect the cursor, and it will be cleaned
   out when the query finishes.
+  If cleaning is not needed, lookup and fill the txn_rec if necessary.
 
   @param[in/out]  txn_rec	  txn record
   @param[in]      pcur      btr_pcur
   @param[in]      rec       record
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
+  @param[in]      ccr       category of commit number combination.
 */
-extern void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                        const rec_t *rec,
-                                        const dict_index_t *index,
-                                        const ulint *offsets);
-
+extern void txn_rec_execute_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                       const rec_t *rec,
+                                       const dict_index_t *index,
+                                       const ulint *offsets, ccr_t ccr);
 /**
-  Determine whether the record needs to be cleaned out during modification.
+  Clean out the record during modification.
   If cleaning is needed, attempt to look up the txn_rec and perform the
   cleanout.
 

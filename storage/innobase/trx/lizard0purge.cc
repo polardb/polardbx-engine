@@ -266,7 +266,7 @@ void trx_purge_set_purged_scn(scn_t txn_scn) {
   @retval       bool        true if the corresponding txn has been purged
 */
 bool txn_rec_is_purged_by_precheck(const txn_rec_t *txn_rec) {
-  if (!undo_ptr_is_active(txn_rec->undo_ptr)) {
+  if (txn_rec->is_committed()) {
     /** scn must allocated */
     lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
 

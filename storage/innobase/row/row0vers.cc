@@ -585,7 +585,7 @@ trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
  index record, because it is >= the purge view.
- @param[in]	txn_rec		transaction info in the version
+ @param[in]	    txn_rec		      transaction info in the version
  @param[in]     name            Table name
  @param[in,out] mtr             Mini-transaction holding the latch on the
                                  clustered index record; it will also hold
@@ -597,7 +597,8 @@ bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
 
   mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD);
+  lizard::txn_rec_cached_or_real_state(txn_rec, Cache_hint::KEEP_OLD,
+                                       purge_sys->vision.visible_by());
 
   return (!purge_sys->vision.modifications_visible(txn_rec, name));
 }
@@ -1340,7 +1341,8 @@ dberr_t row_vers_build_for_consistent_read(
 
     txn_rec_t txn_rec;
     lizard::row_get_txn_rec(prev_version, index, *offsets, &txn_rec);
-    lizard::txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD);
+    lizard::txn_rec_cached_or_real_state(&txn_rec, Cache_hint::KEEP_OLD,
+                                         vision->visible_by());
 
     if (vision->modifications_visible(&txn_rec, index->table->name)) {
       /* The view already sees this version: we can copy

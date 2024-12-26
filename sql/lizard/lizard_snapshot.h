@@ -265,7 +265,8 @@ class Snapshot_vision {
   /** Store number into vision. */
   virtual void store_int(uint64_t value) = 0;
 
-  /** What kind of commit number that was used to check visible . */
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
   virtual ccr_t visible_by() const = 0;
 
   /** Whether this vision is too old.
@@ -317,7 +318,8 @@ class Snapshot_time_vision : public Snapshot_vision {
 
   virtual uint64_t val_int() const override { return m_second; }
 
-  /** What kind of commit number that was used to check visible . */
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
   virtual ccr_t visible_by() const override { return CCR_NONE; }
 
   virtual bool too_old() const override {
@@ -383,7 +385,8 @@ class Snapshot_scn_vision : public Snapshot_vision {
     return static_cast<uint64_t>(m_scn);
   }
 
-  /** What kind of commit number that was used to check visible . */
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
   virtual ccr_t visible_by() const override { return CCR_SCN; }
 
   virtual bool too_old() const override;
@@ -510,7 +513,8 @@ class Snapshot_automatic_gcn_vision : public Snapshot_gcn_vision {
   /** Do pushup GCS gcn if come from outer. */
   virtual void after_activate(THD *thd) override;
 
-  /** What kind of commit number that was used to check visible . */
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
   virtual ccr_t visible_by() const override { return CCR_ALL; }
 
   /**
@@ -588,7 +592,8 @@ class Snapshot_noop_vision : public Snapshot_vision {
 
   virtual uint64_t val_int() const override { return SCN_NULL; }
 
-  /** What kind of commit number that was used to check visible . */
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
   virtual ccr_t visible_by() const override { return CCR_NONE; }
 
   virtual bool too_old() const override {
@@ -668,14 +673,17 @@ class Table_snapshot {
 
   void release_vision() { m_vision = &m_noop_vision; }
 
-  /** Whether it's a real vision. */
-  bool is_vision() { return m_vision->is_vision(); }
+  /** What kind of commit number that was used to check visible. It cannot be
+   * CCR_NONE for a valid vision that can be used by InnoDB. */
+  ccr_t visible_by() const { return m_vision->visible_by(); }
 
   Snapshot_vision *choose_once(Snapshot_type type) {
     Snapshot_vision *vision = get(type);
     vision->reset();
     return vision;
   }
+
+  bool is_vision() const { return m_vision->is_vision(); }
 
  private:
   int exchange_timestamp_vision_to_scn_vision(Snapshot_vision **vision,

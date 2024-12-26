@@ -462,7 +462,7 @@ void gp_wait_suspend_thread(trx_t *trx) {
   @param[in]      rec     user record which should be read
   @param[in]      index   cluster index
   @param[in]      offset  rec_get_offsets(rec, index)
-  @param[in]      pcur
+  @param[in]      pcur    used in cleanout
   @param[in]      vision  consistent read view
 
   @retval         true    visible = true
@@ -494,11 +494,14 @@ retry:
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  txn_rec_cleanout_when_query(&txn_rec, pcur, rec, index, offsets);
+  txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
+                             vision->visible_by());
+
   /** 1. Already committed; */
   if (txn_rec.is_committed()) {
     ut_a(txn_rec.gcn != GCN_NULL);
     ut_a(txn_rec.scn != SCN_NULL);
+    vision->valid_txn_rec_check(&txn_rec);
 
     return (vision->modifications_visible(&txn_rec, index->table->name));
   } else {

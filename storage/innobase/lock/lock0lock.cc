@@ -263,7 +263,8 @@ bool lock_clust_rec_cons_read_sees(
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-  lizard::txn_rec_cleanout_when_query(&txn_rec, pcur, rec, index, offsets);
+  lizard::txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
+                                     vision->visible_by());
 
   return (vision->modifications_visible(&txn_rec, index->table->name));
 }
