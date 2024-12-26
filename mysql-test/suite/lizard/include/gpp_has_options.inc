@@ -21,11 +21,7 @@
 if($FULL_TABLE_NAME){
   --let $tmp_table_name = $FULL_TABLE_NAME
 }
---let $options = query_get_value(SELECT options FROM information_schema.innodb_index_status WHERE SCHEMA_NAME = '$SCHEMA_NAME' AND TABLE_NAME = '$tmp_table_name' AND INDEX_NAME = '$INDEX_NAME', options, 1)
-# Extract the IFT value from the options
---let $ift_value = `SELECT CAST(SUBSTRING_INDEX(SUBSTRING_INDEX('$options', 'IFT=', -1), ';', 1) AS UNSIGNED)`
-# Check if IFT's lowest bit is set to 1
---let $has_gpp = `SELECT $ift_value & 1`
+--let $has_gpp = query_get_value(SELECT gpp_enabled FROM information_schema.innodb_index_status WHERE SCHEMA_NAME = '$SCHEMA_NAME' AND TABLE_NAME = '$tmp_table_name' AND INDEX_NAME = '$INDEX_NAME', gpp_enabled, 1)
 
 # Assert that the gpp option is equal to CONTAIN_GPP
 --let $assert_text = The options for $SCHEMA_NAME.$TABLE_NAME.$INDEX_NAME should match the expected IFT=$CONTAIN_GPP condition

@@ -5947,7 +5947,8 @@ information_schema.innodb_indexes table with related index information
 @param[in]      thd             thread
 @param[in,out]  tables          tables to fill
 @return 0 on success */
-static int i_s_innodb_indexes_fill_table(THD *thd, Table_ref *tables, Item *) {
+int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
+                                Fill_func fill_func) {
   btr_pcur_t pcur;
   const rec_t *rec;
   mem_heap_t *heap;
@@ -5986,7 +5987,7 @@ static int i_s_innodb_indexes_fill_table(THD *thd, Table_ref *tables, Item *) {
     dict_sys_mutex_exit();
 
     if (ret) {
-      i_s_dict_fill_innodb_indexes(thd, index_rec, tables->table);
+      fill_func(thd, index_rec, tables->table);
     }
 
     mem_heap_empty(heap);
@@ -6013,6 +6014,11 @@ static int i_s_innodb_indexes_fill_table(THD *thd, Table_ref *tables, Item *) {
   mem_heap_free(heap);
 
   return 0;
+}
+
+static int i_s_innodb_indexes_fill_table(THD *thd, Table_ref *tables, Item *) {
+  return fill_i_s_innodb_indexes_low(thd, tables, nullptr,
+                                     i_s_dict_fill_innodb_indexes);
 }
 
 /** Bind the dynamic table INFORMATION_SCHEMA.innodb_indexes

@@ -33,6 +33,7 @@
 #include "dd/types/partition_index.h"
 #include "fil0key.h"
 #include "fil0purge.h"
+#include "i_s.h"
 #include "lizard0dict.h"
 #include "mysql/plugin.h"
 #include "sql/dd/cache/dictionary_client.h"
@@ -708,96 +709,34 @@ ST_FIELD_INFO innodb_index_status_fields_info[] = {
      STRUCT_FLD(field_flags, MY_I_S_MAYBE_NULL), STRUCT_FLD(old_name, ""),
      STRUCT_FLD(open_method, 0)},
 
-#define IDX_IS_OPTIONS 3
-    {STRUCT_FLD(field_name, "OPTIONS"), STRUCT_FLD(field_length, 8192),
-     STRUCT_FLD(field_type, MYSQL_TYPE_STRING), STRUCT_FLD(value, 0),
-     STRUCT_FLD(field_flags, MY_I_S_MAYBE_NULL), STRUCT_FLD(old_name, ""),
+#define IDX_IS_GPP_ENABLED 3
+    {STRUCT_FLD(field_name, "GPP_ENABLED"), STRUCT_FLD(field_length, 1),
+     STRUCT_FLD(field_type, MYSQL_TYPE_LONG), STRUCT_FLD(value, 0),
+     STRUCT_FLD(field_flags, 0), STRUCT_FLD(old_name, ""),
      STRUCT_FLD(open_method, 0)},
 
     END_OF_ST_FIELD_INFO};
 
-template <typename Index>
-static int innodb_index_status_fill_one(THD *thd, TABLE *table,
-                                        const char *schema_name,
-                                        const char *table_name,
-                                        const Index *dd_index) {
+static int innodb_index_status_fill_one(THD *thd, const dict_index_t *index,
+                                        TABLE *table) {
   DBUG_ENTER("innodb_index_status_fill_one");
 
   Field **fields = table->field;
-  OK(field_store_string(fields[IDX_IS_SCHEMA_NAME], schema_name));
-  fields[IDX_IS_SCHEMA_NAME]->set_notnull();
-  OK(field_store_string(fields[IDX_IS_TABLE_NAME], table_name));
-  fields[IDX_IS_TABLE_NAME]->set_notnull();
-  OK(field_store_string(fields[IDX_IS_INDEX_NAME], dd_index->name().c_str()));
-  dd::String_type options = dd_index->options().raw_string();
-  if (options.empty()) {
-    fields[IDX_IS_OPTIONS]->set_null();
-  } else {
-    OK(field_store_string(fields[IDX_IS_OPTIONS], options.c_str()));
-    fields[IDX_IS_OPTIONS]->set_notnull();
-  }
+  std::string schema_name, table_name;
+  index->table->get_table_name(schema_name, table_name);
+
+  OK(field_store_string(fields[IDX_IS_SCHEMA_NAME], schema_name.c_str()));
+  OK(field_store_string(fields[IDX_IS_TABLE_NAME], table_name.c_str()));
+  OK(field_store_string(fields[IDX_IS_INDEX_NAME], index->name));
+  OK(fields[IDX_IS_GPP_ENABLED]->store(index->gpp_stored));
+
   OK(schema_table_store_record(thd, table));
   DBUG_RETURN(0);
 }
 
-template int innodb_index_status_fill_one<dd::Index>(THD *thd, TABLE *table,
-                                                     const char *schema_name,
-                                                     const char *table_name,
-                                                     const dd::Index *dd_index);
-template int innodb_index_status_fill_one<dd::Partition_index>(
-    THD *thd, TABLE *table, const char *schema_name, const char *table_name,
-    const dd::Partition_index *dd_index);
-
 static int innodb_index_status_fill_table(THD *thd, Table_ref *tables, Item *) {
-  TABLE *table;
-  std::vector<const dd::Schema *> dd_schemas;
-  std::vector<const dd::Table *> dd_tables;
-  std::unordered_map<dd::Object_id, dd::String_type> schema_map;
-  DBUG_ENTER("innodb_index_status_fill_table");
-
-  table = tables->table;
-
-  auto dc = dd::get_dd_client(thd);
-  dd::cache::Dictionary_client::Auto_releaser releaser(dc);
-
-  if (dc->fetch_global_components(&dd_schemas)) {
-    DBUG_RETURN(1);
-  }
-  for (auto schema : dd_schemas) {
-    schema_map[schema->id()] = schema->name();
-  }
-
-  if (dc->fetch_global_components(&dd_tables)) {
-    DBUG_RETURN(1);
-  }
-
-  for (auto dd_table : dd_tables) {
-    auto it = schema_map.find(dd_table->schema_id());
-    if (it == schema_map.end()) {
-      continue;
-    }
-    const char *schema_name = it->second.c_str();
-    const char *table_name = dd_table->name().c_str();
-    for (auto dd_index : dd_table->indexes()) {
-      if (innodb_index_status_fill_one(thd, table, schema_name, table_name,
-                                       dd_index)) {
-        DBUG_RETURN(1);
-      }
-    }
-
-    for (auto dd_par : dd_table->partitions()) {
-      for (auto dd_par_index : dd_par->indexes()) {
-        std::string par_name =
-            std::string(table_name) + "_" + dd_par->name().c_str();
-        if (innodb_index_status_fill_one(thd, table, schema_name,
-                                         par_name.c_str(), dd_par_index)) {
-          DBUG_RETURN(1);
-        }
-      }
-    }
-  }
-
-  DBUG_RETURN(0);
+  return fill_i_s_innodb_indexes_low(thd, tables, nullptr,
+                                     innodb_index_status_fill_one);
 }
 
 static int innodb_index_status_init(void *p) {
