@@ -1763,6 +1763,12 @@ static Sys_var_bool Sys_binlog_order_commits(
     " written to the binary log. Default is to order commits.",
     GLOBAL_VAR(opt_binlog_order_commits), CMD_LINE(OPT_ARG), DEFAULT(true));
 
+static Sys_var_bool Sys_disable_binlog_savepoint(
+    "disable_binlog_savepoint",
+    "Determine whether to disable the binary log checkpointing."
+    "Default is True.",
+    GLOBAL_VAR(opt_disable_binlog_savepoint), CMD_LINE(OPT_ARG), DEFAULT(true));
+
 static Sys_var_ulong Sys_bulk_insert_buff_size(
     "bulk_insert_buffer_size",
     "Size of tree cache used in bulk "

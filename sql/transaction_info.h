@@ -49,6 +49,7 @@ struct SAVEPOINT {
   Ha_trx_info *ha_list;
   /** State of metadata locks before this savepoint was set. */
   MDL_savepoint mdl_savepoint;
+  bool binlog_savepoint_disabled;
 };
 
 class Transaction_ctx {

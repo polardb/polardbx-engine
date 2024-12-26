@@ -532,6 +532,10 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
+ --disable-binlog-savepoint 
+ Determine whether to disable the binary log
+ checkpointing.Default is True.
+ (Defaults to on; use --skip-disable-binlog-savepoint to disable.)
  --disable-wait-commitindex 
  Whether to wait commitdex when applying binlog in
  follower, it may detory the cluster data if some crash
@@ -2287,6 +2291,7 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
+disable-binlog-savepoint TRUE
 disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE

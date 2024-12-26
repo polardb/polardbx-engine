@@ -792,8 +792,8 @@ int ConsensusLogManager::get_log_entry(uint64 channel_id,
   error = fifo_cache_manager->get_log_from_cache(
       consensus_index, consensus_term, log_content, outer, flag, checksum);
   DBUG_EXECUTE_IF("get_log_from_fifo_fail_when_blob_end",
-                  error = ALREADY_SWAP_OUT;);
-  if (error == ALREADY_SWAP_OUT) {
+                  error = CLC_ALREADY_SWAP_OUT;);
+  if (error == CLC_ALREADY_SWAP_OUT) {
     uint64_t last_sync_index = sync_index;
     if (consensus_index > last_sync_index) {
       // don't prefetch log if it is not written to disk
@@ -817,7 +817,7 @@ int ConsensusLogManager::get_log_entry(uint64 channel_id,
       }
       channel->set_prefetch_request(consensus_index);
     }
-  } else if (error == OUT_OF_RANGE) {
+  } else if (error == CLC_OUT_OF_RANGE) {
     xp::error(ER_XP_0) << "ConsensusLogManager::get_log_entry fail, out of "
                           "fifo range. channel_id "
                        << channel_id

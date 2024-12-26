@@ -27,7 +27,7 @@ VARIABLE_NAME LIKE '%source%') AND
 'print_gtid_info_during_recovery', 'recovery_apply_binlog'))
 ORDER BY VARIABLE_NAME;
 
-include/assert.inc [Expect 117 variables in the table.]
+include/assert.inc [Expect 118 variables in the table.]
 
 # Test SET PERSIST
 SET PERSIST binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -62,6 +62,7 @@ SET PERSIST binlog_transaction_dependency_history_size = @@GLOBAL.binlog_transac
 SET PERSIST binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
 SET PERSIST consensus_replicate_with_cache_log = @@GLOBAL.consensus_replicate_with_cache_log;
 SET PERSIST consensus_safe_for_reset_master = @@GLOBAL.consensus_safe_for_reset_master;
+SET PERSIST disable_binlog_savepoint = @@GLOBAL.disable_binlog_savepoint;
 SET PERSIST enforce_gtid_consistency = @@GLOBAL.enforce_gtid_consistency;
 SET PERSIST group_replication_consistency = @@GLOBAL.group_replication_consistency;
 SET PERSIST gtid_executed = @@GLOBAL.gtid_executed;
@@ -247,16 +248,16 @@ SET PERSIST sync_relay_log = @@GLOBAL.sync_relay_log;
 SET PERSIST sync_relay_log_info = @@GLOBAL.sync_relay_log_info;
 SET PERSIST sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 93 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 94 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 93 persisted variables in persisted_variables table.']
-include/assert.inc [Expect 93 persisted variables shown as PERSISTED in variables_info table.']
-include/assert.inc [Expect 93 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 94 persisted variables in persisted_variables table.']
+include/assert.inc [Expect 94 persisted variables shown as PERSISTED in variables_info table.']
+include/assert.inc [Expect 94 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST IF EXISTS. Verify persisted variable
@@ -293,6 +294,7 @@ RESET PERSIST IF EXISTS binlog_transaction_dependency_history_size;
 RESET PERSIST IF EXISTS binlog_transaction_dependency_tracking;
 RESET PERSIST IF EXISTS consensus_replicate_with_cache_log;
 RESET PERSIST IF EXISTS consensus_safe_for_reset_master;
+RESET PERSIST IF EXISTS disable_binlog_savepoint;
 RESET PERSIST IF EXISTS enforce_gtid_consistency;
 RESET PERSIST IF EXISTS group_replication_consistency;
 RESET PERSIST IF EXISTS gtid_executed;

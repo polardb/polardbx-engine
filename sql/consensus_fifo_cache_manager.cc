@@ -83,12 +83,12 @@ int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
                                                   std::string &log_content,
                                                   bool *outer, uint *flag,
                                                   uint64 *checksum) {
-  DBUG_EXECUTE_IF("skip_consensus_fifo_cache", { return ALREADY_SWAP_OUT; });
+  DBUG_EXECUTE_IF("skip_consensus_fifo_cache", { return CLC_ALREADY_SWAP_OUT; });
   mysql_rwlock_rdlock(&LOCK_consensuslog_cache);
   if (max_log_cache_size == 0 || current_log_count == 0 ||
       index < log_cache_list[rleft].index) {
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
-    return ALREADY_SWAP_OUT;
+    return CLC_ALREADY_SWAP_OUT;
   }
 
   size_t lasti = (rright + reserve_list_size - 1) % reserve_list_size;
@@ -99,7 +99,7 @@ int ConsensusFifoCacheManager::get_log_from_cache(uint64 index, uint64 *term,
         << "] at ConsensusFifoCacheManager::get_log_from_cache";
 
     mysql_rwlock_unlock(&LOCK_consensuslog_cache);
-    return OUT_OF_RANGE;
+    return CLC_OUT_OF_RANGE;
   }
   ConsensusLogEntry &log_entry =
       log_cache_list[(rleft + index - log_cache_list[rleft].index) %

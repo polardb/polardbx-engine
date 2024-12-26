@@ -51,12 +51,12 @@ struct ConsensusLogEntry {
 };
 
 enum ConsensusLogCacheResultCode {
-  SUCCESS = 0,
-  ALREADY_SWAP_OUT = 1,
-  OUT_OF_RANGE = 2,
-  FULL = 3,
-  INTERRUPT = 4,
-  EMPTY = 5
+  CLC_SUCCESS = 0,
+  CLC_ALREADY_SWAP_OUT = 1,
+  CLC_OUT_OF_RANGE = 2,
+  CLC_FULL = 3,
+  CLC_INTERRUPT = 4,
+  CLC_EMPTY = 5
 };
 
 #define RESERVE_LIST_SIZE (1024 * 1024)

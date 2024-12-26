@@ -45,7 +45,6 @@ master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_1`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
@@ -96,7 +95,6 @@ master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_1`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
@@ -136,7 +134,6 @@ master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_2`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t3)
@@ -149,6 +146,7 @@ DROP TABLE t3;
 DROP PROCEDURE p1;
 # Test case 3:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t (f1 int(10) unsigned NOT NULL, PRIMARY KEY (f1)) ENGINE=InnoDB;
 Warnings:
@@ -173,18 +171,16 @@ END
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `savepoint_1`
 master-bin.000001	#	Xid	#	#	COMMIT /* XID */
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `savepoint_1`
 master-bin.000001	#	Xid	#	#	COMMIT /* XID */
 SELECT * FROM t;
 f1
 2
 3
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t;
 f1
 2
@@ -193,6 +189,7 @@ f1
 DROP TABLE t;
 # Test case 4:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t (f1 int(10) unsigned NOT NULL) ENGINE=InnoDB;
 Warnings:
@@ -223,7 +220,6 @@ master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: #
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `savepoint_1`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: #
@@ -242,7 +238,7 @@ f1
 5
 5
 30
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t;
 f1
 2
@@ -257,6 +253,7 @@ DROP TABLE t;
 DROP TABLE t1;
 # Test case 5:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t (f1 int(10) unsigned NOT NULL) ENGINE=InnoDB;
 Warnings:
@@ -283,7 +280,6 @@ END
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `savepoint_1`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
 master-bin.000001	#	Xid	#	#	COMMIT /* XID */
@@ -298,7 +294,7 @@ f1
 SELECT * FROM t1;
 f1
 30
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t;
 f1
 2
@@ -311,6 +307,7 @@ DROP TABLE t;
 DROP TABLE t1;
 # Test case 6:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t1 (f1 INTEGER ) ENGINE=INNODB;
 CREATE TABLE t2 (f1 INTEGER ) ENGINE=INNODB;
@@ -340,7 +337,6 @@ master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_2`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -359,7 +355,7 @@ f1
 10
 SELECT * FROM t1;
 f1
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t2;
 f1
 1
@@ -375,6 +371,7 @@ DROP TABLE t2;
 DROP FUNCTION f1;
 # Test case 7:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t1 (f1 INTEGER ) ENGINE=INNODB;
 CREATE TABLE t2 (f1 INTEGER ) ENGINE=INNODB;
@@ -402,7 +399,6 @@ master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_2`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t2)
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: #
@@ -423,7 +419,7 @@ f1
 SELECT * FROM t1;
 f1
 1
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t2;
 f1
 1
@@ -440,6 +436,7 @@ DROP TABLE t2;
 DROP FUNCTION f1;
 # Test case 8:
 include/rpl_reset.inc
+rpl_channel_name='test'
 [connection master]
 CREATE TABLE t1 (f1 INTEGER ) ENGINE=INNODB;
 CREATE FUNCTION f1() RETURNS INT
@@ -462,7 +459,6 @@ END
 master-bin.000001	#	Query	#	#	BEGIN
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-master-bin.000001	#	Query	#	#	SAVEPOINT `event_logging_2`
 master-bin.000001	#	Table_map	#	#	table_id: # (test.t1)
 master-bin.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
 master-bin.000001	#	Xid	#	#	COMMIT /* XID */
@@ -478,7 +474,7 @@ f1
 2
 4
 10
-include/sync_slave_sql_with_master.inc
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 SELECT * FROM t1;
 f1
 1

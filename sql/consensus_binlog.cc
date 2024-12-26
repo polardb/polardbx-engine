@@ -793,10 +793,10 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
             while ((result = prefetch_channel->add_log_to_prefetch_cache(
                         current_term, current_index, log_content.size(),
                         get_uchar_str(log_content), false, current_flag,
-                        current_crc32)) == FULL) {
+                        current_crc32)) == CLC_FULL) {
               // wait condition already executed in add log to prefetch cache
             }
-            if (result == INTERRUPT ||
+            if (result == CLC_INTERRUPT ||
                 current_index == consensus_log_manager.get_sync_index())
               stop_prefetch = true;
             end_pos = start_pos + consensus_log_length;
@@ -847,11 +847,11 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                               blob_term_list[i], blob_index_list[i],
                               log_content.size(), get_uchar_str(log_content),
                               false, blob_flag_list[i], current_crc32)) ==
-                         FULL) {
+                         CLC_FULL) {
                     // wait condition already executed in add log to prefetch
                     // cache
                   }
-                  if (result == INTERRUPT) {
+                  if (result == CLC_INTERRUPT) {
                     stop_prefetch = true;
                     break;  // break iterate blob_index_list
                   }
@@ -878,11 +878,11 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                 while ((result = prefetch_channel->add_log_to_prefetch_cache(
                             current_term, current_index, log_content.size(),
                             get_uchar_str(log_content), (rci_ev != NULL),
-                            current_flag, current_crc32)) == FULL) {
+                            current_flag, current_crc32)) == CLC_FULL) {
                   // wait condition already executed in add log to prefetch
                   // cache
                 }
-                if (result == INTERRUPT ||
+                if (result == CLC_INTERRUPT ||
                     current_index == consensus_log_manager.get_sync_index()) {
                   stop_prefetch = true;  // because truncate log happened, stop
                                          // prefetch and retry

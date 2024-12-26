@@ -1,0 +1,151 @@
+--source include/paxos.inc
+
+--source include/not_valgrind.inc
+--source include/not_windows.inc
+#--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+--source include/have_log_bin.inc
+
+# connect 3 server. must have test database
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+
+# test savepoint
+#--echo "source_verify_checksum=ON, replica_sql_verify_checksum=ON"
+--connection conn1
+create table t1(a int, b int);
+insert into t1 values (1,1);
+
+# null
+start transaction;
+savepoint a1;
+insert into t1 values (2,2);
+rollback to a1;
+commit;
+
+# null
+start transaction;
+savepoint a2;
+insert into t1 values (3,3);
+savepoint a3;
+insert into t1 values (4,4);
+rollback to a3;
+insert into t1 values (5,5);
+rollback to a2;
+commit;
+
+# 33, 55
+start transaction;
+savepoint a2;
+insert into t1 values (3,3);
+savepoint a3;
+insert into t1 values (4,4);
+rollback to a3;
+insert into t1 values (5,5);
+commit;
+
+# set savepoint a5 66, 77
+start transaction;
+savepoint a4;
+insert into t1 values (6,6);
+set global disable_binlog_savepoint = false;
+savepoint a5;
+insert into t1 values (7,7);
+set global disable_binlog_savepoint = true;
+commit;
+
+# set savepoint a7 88
+start transaction;
+savepoint a6;
+insert into t1 values (8,8);
+set global disable_binlog_savepoint = false;
+savepoint a7;
+insert into t1 values (9,9);
+rollback to a7;
+set global disable_binlog_savepoint = true;
+commit;
+
+# null
+start transaction;
+savepoint a6;
+insert into t1 values (9,9);
+set global disable_binlog_savepoint = false;
+savepoint a8;
+insert into t1 values (9,9);
+rollback to a8;
+rollback to a6;
+commit;
+
+
+# test trigger savepoint
+CREATE TABLE employees (
+    id INT ,
+    name VARCHAR(100) NOT NULL,
+    created_at int
+);
+delimiter |;
+CREATE TRIGGER before_insert_employees
+BEFORE INSERT ON employees
+FOR EACH ROW
+begin
+    SET NEW.created_at = 2;
+    insert into t1 values(11,11);
+    savepoint a9;
+    insert into t1 values(10,10);
+    rollback to a9;
+end |
+delimiter ;|
+
+INSERT INTO employees (name) VALUES ('John Doe');
+
+set global disable_binlog_savepoint = true;
+
+INSERT INTO employees (name) VALUES ('Doe John');
+
+
+
+--let $binlog_file1 = query_get_value(SHOW MASTER STATUS, File, 1)
+#let $MYSQLD_DATADIR= `select @@datadir`;
+#--eval SHOW BINLOG EVENTS IN '$binlog_file1';
+--source include/show_binlog_events.inc
+select * from t1;
+select * from employees;
+
+
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--source include/wait_apply_catchup.inc
+--let $binlog_file2 = query_get_value(SHOW MASTER STATUS, File, 1)
+# let $MYSQLD_DATADIR= `select @@datadir`;
+#--eval SHOW BINLOG EVENTS IN '$binlog_file2'; 
+--source include/show_binlog_events.inc
+select * from t1;
+select * from employees;
+
+
+# --exec $MYSQL_BINLOG -c $MYSQLD_DATADIR/binlog.saved | $MYSQL
+#--source include/show_binlog_events.inc
+
+
+
+# cleanup
+--connection conn1
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS employees;
+--disconnect conn1
+#--connect (conn2,127.0.0.1,root,test,$MYPORT_2)
+--connection conn2
+
+--disconnect conn2
+
+
+
+#-- remove_file $MYSQLD_DATADIR/binlog1.saved
+#-- remove_file $MYSQLD_DATADIR/binlog2.saved
+
+
+
+
+
+

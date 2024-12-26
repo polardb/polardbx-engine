@@ -53,7 +53,6 @@ binlog.000001	#	Query	#	#	COMMIT
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	SAVEPOINT `my_savepoint`
 binlog.000001	#	Xid	#	#	COMMIT /* XID */
 delete from t1;
 delete from t2;
@@ -81,7 +80,6 @@ binlog.000001	#	Query	#	#	COMMIT
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	SAVEPOINT `my_savepoint`
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
 binlog.000001	#	Xid	#	#	COMMIT /* XID */
@@ -190,7 +188,6 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	SAVEPOINT `my_savepoint`
 binlog.000001	#	Xid	#	#	COMMIT /* XID */
 delete from t1;
 delete from t2;
@@ -212,7 +209,6 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	SAVEPOINT `my_savepoint`
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
 binlog.000001	#	Xid	#	#	COMMIT /* XID */
@@ -273,7 +269,6 @@ Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	SAVEPOINT `my_savepoint`
 binlog.000001	#	Table_map	#	#	table_id: # (test.t1)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
 binlog.000001	#	Xid	#	#	COMMIT /* XID */

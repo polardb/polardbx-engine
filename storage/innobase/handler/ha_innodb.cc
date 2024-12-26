@@ -240,6 +240,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/lizard_policy_types.h"
 
 #include "sys_vars_ext.h"
+#include "polarx_proc/changeset_manager.h"
 
 #include "sql/xa/lizard_cmmt_policy.h"
 
@@ -6279,7 +6280,10 @@ static int innobase_rollback_to_savepoint(
   if (error == DB_SUCCESS && trx->fts_trx != nullptr) {
     fts_savepoint_rollback(trx, name);
   }
-
+  /* For changeset rollback. */
+  if (error == DB_SUCCESS) {
+    im::gChangesetManager.rollback_to_save_point(thd, mysql_binlog_cache_pos);
+  }
   return convert_error_code_to_mysql(error, 0, nullptr);
 }
 
@@ -6373,7 +6377,9 @@ static int innobase_savepoint(
   if (error == DB_SUCCESS && trx->fts_trx != nullptr) {
     fts_savepoint_take(trx->fts_trx, name);
   }
-
+  if (error == DB_SUCCESS) {
+    im::gChangesetManager.set_save_point(thd, *(my_off_t *)savepoint);
+  }
   return convert_error_code_to_mysql(error, 0, nullptr);
 }
 

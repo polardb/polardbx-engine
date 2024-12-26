@@ -792,7 +792,7 @@ bool trans_rollback_to_savepoint(THD *thd, LEX_STRING name) {
     thd->get_transaction()->push_unsafe_rollback_warnings(thd);
 
   thd->get_transaction()->m_savepoints = sv;
-
+  
   /**
     Checking whether it is safe to release metadata locks acquired after
     savepoint, if rollback to savepoint is successful.

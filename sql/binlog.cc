@@ -2873,6 +2873,21 @@ end:
 }
 
 /**
+  This function is used to handle special testcase. It will
+  set stmt end flag and flush pending events to the binary log. 
+  More information, see the remarks in function write_event.
+  @return true if error.
+ */
+static bool binlog_savepoint_end_stmt_and_flush(THD *thd) {
+    bool const end_stmt =
+      (thd->in_sub_stmt && thd->lex->sql_command == SQLCOM_SAVEPOINT)
+          ? true
+          : (thd->locked_tables_mode && thd->lex->requires_prelocking());
+    if (thd->binlog_flush_pending_rows_event(end_stmt, true))
+      return true;
+    return false;
+} 
+/**
   @note
   How do we handle this (unlikely but legal) case:
   @verbatim
@@ -2896,39 +2911,46 @@ end:
   that case there is no need to have it in the binlog).
 */
 
-static int binlog_savepoint_set(handlerton *, THD *thd, void *sv) {
+static int binlog_savepoint_set(handlerton *ht, THD *thd, void *sv) {
   DBUG_TRACE;
-  int error = 1;
-
-  String log_query;
-  if (log_query.append(STRING_WITH_LEN("SAVEPOINT ")))
-    return error;
-  else
-    append_identifier(thd, &log_query, thd->lex->ident.str,
-                      thd->lex->ident.length);
-
-  int errcode = query_error_code(thd, thd->killed == THD::NOT_KILLED);
-  Query_log_event qinfo(thd, log_query.c_ptr_safe(), log_query.length(), true,
-                        false, true, errcode);
-  /*
-    We cannot record the position before writing the statement
-    because a rollback to a savepoint (.e.g. consider it "S") would
-    prevent the savepoint statement (i.e. "SAVEPOINT S") from being
-    written to the binary log despite the fact that the server could
-    still issue other rollback statements to the same savepoint (i.e.
-    "S").
-    Given that the savepoint is valid until the server releases it,
-    ie, until the transaction commits or it is released explicitly,
-    we need to log it anyway so that we don't have "ROLLBACK TO S"
-    or "RELEASE S" without the preceding "SAVEPOINT S" in the binary
-    log.
-  */
-  if (!(error = mysql_bin_log.write_event(&qinfo)))
+  /* Compute savpoint place. Variable sv is from ha_savepoint. */
+  auto sv_diff = static_cast<uchar*>(sv) - ht->savepoint_offset;
+  auto sv_ptr = reinterpret_cast<SAVEPOINT*>(sv_diff) - 1;
+  if (sv_ptr->binlog_savepoint_disabled) {
+    int error = binlog_savepoint_end_stmt_and_flush(thd);
     binlog_trans_log_savepos(thd, (my_off_t *)sv);
+    return error;
+  } else {
+    int error = 1;
 
-  im::gChangesetManager.set_save_point(thd, *(my_off_t *)sv);
+    String log_query;
+    if (log_query.append(STRING_WITH_LEN("SAVEPOINT ")))
+      return error;
+    else
+      append_identifier(thd, &log_query, thd->lex->ident.str,
+                        thd->lex->ident.length);
 
-  return error;
+    int errcode = query_error_code(thd, thd->killed == THD::NOT_KILLED);
+    Query_log_event qinfo(thd, log_query.c_ptr_safe(), log_query.length(), true,
+                          false, true, errcode);
+    /*
+      We cannot record the position before writing the statement
+      because a rollback to a savepoint (.e.g. consider it "S") would
+      prevent the savepoint statement (i.e. "SAVEPOINT S") from being
+      written to the binary log despite the fact that the server could
+      still issue other rollback statements to the same savepoint (i.e.
+      "S").
+      Given that the savepoint is valid until the server releases it,
+      ie, until the transaction commits or it is released explicitly,
+      we need to log it anyway so that we don't have "ROLLBACK TO S"
+      or "RELEASE S" without the preceding "SAVEPOINT S" in the binary
+      log.
+    */
+    if (!(error = mysql_bin_log.write_event(&qinfo)))
+      binlog_trans_log_savepos(thd, (my_off_t *)sv);
+
+    return error;
+  }
 }
 
 bool MYSQL_BIN_LOG::is_current_stmt_binlog_enabled_and_caches_empty(
@@ -2946,51 +2968,61 @@ bool MYSQL_BIN_LOG::is_current_stmt_binlog_enabled_and_caches_empty(
   return cache_mngr->is_binlog_empty();
 }
 
-static int binlog_savepoint_rollback(handlerton *, THD *thd, void *sv) {
+static int binlog_savepoint_rollback(handlerton *ht, THD *thd, void *sv) {
   DBUG_TRACE;
   binlog_cache_mngr *const cache_mngr = thd_get_cache_mngr(thd);
   my_off_t pos = *(my_off_t *)sv;
   assert(pos != ~(my_off_t)0);
 
-  /*
-    Write ROLLBACK TO SAVEPOINT to the binlog cache if we have updated some
-    non-transactional table. Otherwise, truncate the binlog cache starting
-    from the SAVEPOINT command.
-  */
-  if (trans_cannot_safely_rollback(thd)) {
-    String log_query;
-    if (log_query.append(STRING_WITH_LEN("ROLLBACK TO ")))
-      return 1;
-    else {
-      /*
-        Before writing identifier to the binlog, make sure to
-        quote the identifier properly so as to prevent any SQL
-        injection on the slave.
-      */
-      append_identifier(thd, &log_query, thd->lex->ident.str,
-                        thd->lex->ident.length);
+  auto sv_diff = static_cast<uchar*>(sv) - ht->savepoint_offset;
+  auto sv_ptr = reinterpret_cast<SAVEPOINT*>(sv_diff) - 1;
+
+  if (sv_ptr->binlog_savepoint_disabled) {
+    if (trans_cannot_safely_rollback(thd)) {
+      my_error(ER_MYISAM_NOT_SUPPORT_ROLLBACK, MYF(0));
+      return 0;
     }
+    cache_mngr->trx_cache.restore_savepoint(pos);
+    if (thd->in_sub_stmt) thd->clear_binlog_table_maps();
+    return 0;
+  } else {
+    /*
+      Write ROLLBACK TO SAVEPOINT to the binlog cache if we have updated some
+      non-transactional table. Otherwise, truncate the binlog cache starting
+      from the SAVEPOINT command.
+    */
+    if (trans_cannot_safely_rollback(thd)) {
+      String log_query;
+      if (log_query.append(STRING_WITH_LEN("ROLLBACK TO ")))
+        return 1;
+      else {
+        /*
+          Before writing identifier to the binlog, make sure to
+          quote the identifier properly so as to prevent any SQL
+          injection on the slave.
+        */
+        append_identifier(thd, &log_query, thd->lex->ident.str,
+                          thd->lex->ident.length);
+      }
 
-    int errcode = query_error_code(thd, thd->killed == THD::NOT_KILLED);
-    Query_log_event qinfo(thd, log_query.c_ptr_safe(), log_query.length(), true,
-                          false, true, errcode);
-    return mysql_bin_log.write_event(&qinfo);
+      int errcode = query_error_code(thd, thd->killed == THD::NOT_KILLED);
+      Query_log_event qinfo(thd, log_query.c_ptr_safe(), log_query.length(),
+                            true, false, true, errcode);
+      return mysql_bin_log.write_event(&qinfo);
+    }
+    // Otherwise, we truncate the cache
+    cache_mngr->trx_cache.restore_savepoint(pos);
+    /*
+      When a SAVEPOINT is executed inside a stored function/trigger we force the
+      pending event to be flushed with a STMT_END_F flag and clear the table
+      maps as well to ensure that following DMLs will have a clean state to
+      start with. ROLLBACK inside a stored routine has to finalize possibly
+      existing current row-based pending event with cleaning up table maps. That
+      ensures that following DMLs will have a clean state to start with.
+     */
+    if (thd->in_sub_stmt) thd->clear_binlog_table_maps();
+    return 0;
   }
-  // Otherwise, we truncate the cache
-  cache_mngr->trx_cache.restore_savepoint(pos);
-
-  // changeset truncate the cache
-  im::gChangesetManager.rollback_to_save_point(thd, pos);
-  /*
-    When a SAVEPOINT is executed inside a stored function/trigger we force the
-    pending event to be flushed with a STMT_END_F flag and clear the table maps
-    as well to ensure that following DMLs will have a clean state to start
-    with. ROLLBACK inside a stored routine has to finalize possibly existing
-    current row-based pending event with cleaning up table maps. That ensures
-    that following DMLs will have a clean state to start with.
-   */
-  if (thd->in_sub_stmt) thd->clear_binlog_table_maps();
-  return 0;
 }
 
 /**

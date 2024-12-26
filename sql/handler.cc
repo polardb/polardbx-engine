@@ -228,6 +228,7 @@ using std::log2;
 using std::max;
 using std::min;
 
+bool opt_disable_binlog_savepoint = true;
 /**
   While we have legacy_db_type, we have this array to
   check for dups and to find handlerton from legacy_db_type.
@@ -2348,8 +2349,14 @@ int ha_savepoint(THD *thd, SAVEPOINT *sv) {
       !thd->in_sub_stmt ? Transaction_ctx::SESSION : Transaction_ctx::STMT;
 
   DBUG_TRACE;
-
   auto ha_list = thd->get_transaction()->ha_trx_info(trx_scope);
+
+  /* 
+  ** Store the state into struct SAVEPOINT, try to ensure that the pair's status won't be changed. 
+  ** Read the variable outside the loop to ensure consistent states between different storage engines.  
+  */
+  sv->binlog_savepoint_disabled = opt_disable_binlog_savepoint;
+
   for (auto const &ha_info : ha_list) {
     int err;
     auto ht = ha_info.ht();
@@ -2359,6 +2366,7 @@ int ha_savepoint(THD *thd, SAVEPOINT *sv) {
       error = 1;
       break;
     }
+
     if ((err = ht->savepoint_set(
              ht, thd,
              (uchar *)(sv + 1) + ht->savepoint_offset))) {  // cannot happen

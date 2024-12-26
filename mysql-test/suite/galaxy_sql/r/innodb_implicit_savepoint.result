@@ -360,6 +360,7 @@ FULLTEXT (title)
 show variables like "%savepoint";
 Variable_name	Value
 auto_savepoint	ON
+disable_binlog_savepoint	ON
 start transaction;
 insert into articles(id, title) values(1, 'mysql');
 savepoint sp1;

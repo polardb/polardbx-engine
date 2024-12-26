@@ -10263,6 +10263,9 @@ ER_IC_NOT_ALLOWED_IN_AUTOCOMMIT
 ER_IC_NOT_MATCH_TARGET
   eng "Inventory conditional hints didn't match with result"
 
+ER_MYISAM_NOT_SUPPORT_ROLLBACK
+  eng "When disable_binlog_savepoint is on, don't use MyISAM table, because MyISAM table can't rollback"
+
 #
 # End of PolarDB-X special error messages intended to be return to CN.
 #

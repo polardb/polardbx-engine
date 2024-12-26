@@ -160,6 +160,7 @@ constexpr const char mysql_implicit_savepoint[] =
     "__MySQL_Implicit_Savepoint__";
 
 extern ulong savepoint_alloc_size;
+extern bool opt_disable_binlog_savepoint;
 
 /// Maps from slot to plugin. May return NULL if plugin has been unloaded.
 st_plugin_int *hton2plugin(uint slot);
