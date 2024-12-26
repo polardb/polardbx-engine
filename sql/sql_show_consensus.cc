@@ -341,9 +341,9 @@ int fill_alisql_cluster_health(THD *thd, Table_ref *tables, Item *) {
     table->field[field_num++]->store(role.c_str(), role.length(),
                                      system_charset_info);
     if (e.connected) {
-      connected = "Yes";
+      connected = "YES";
     } else {
-      connected = "No";
+      connected = "NO";
     }
     table->field[field_num++]->store(connected.c_str(), connected.length(),
                                      system_charset_info);
