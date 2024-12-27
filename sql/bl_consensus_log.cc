@@ -124,6 +124,10 @@ uint64_t BLConsensusLog::getWaitMilliseconds4OldTrxFinish() {
   return this->consensusLogManager_->get_wait_milliseconds_for_old_trx_finish();
 }
 
+void BLConsensusLog::forceUpdateAppliedIndex(const uint64_t index) {
+  this->consensusLogManager_->force_update_applied_index(index);
+}
+
 void BLConsensusLog::waitOldTrxFinish() {
   this->consensusLogManager_->wait_old_trx_finish();
 }

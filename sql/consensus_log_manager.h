@@ -221,7 +221,6 @@ class ConsensusLogManager {
   uint64 get_next_trx_index(uint64 consensus_index, bool enable_retry = true);
   uint32 serialize_cache(uchar **buffer);
   int truncate_log(uint64 consensus_index);
-
   int purge_log(uint64 consensus_index);
 
   uint64 get_exist_log_length();
@@ -231,6 +230,7 @@ class ConsensusLogManager {
     atomic_logging_flag = 3 - atomic_logging_flag;
   }
 
+  void force_update_applied_index(const uint64_t index);
   void lock_consensus_state_change();
   void unlock_consensus_state_change();
   void wait_state_change_cond();

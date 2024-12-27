@@ -172,8 +172,6 @@ cte_max_recursion_depth
 cte_max_recursion_depth
 default_collation_for_utf8mb4
 default_collation_for_utf8mb4
-disable_binlog_savepoint
-disable_binlog_savepoint
 disable_wait_commitindex
 disable_wait_commitindex
 disabled_storage_engines

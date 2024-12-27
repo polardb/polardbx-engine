@@ -266,6 +266,7 @@ insert into t1 values (24, 'a');
 
 --connection conn2
 set global consensus_force_promote=1;
+--sleep 2
 
 show global status like '%fifo%';
 --eval call dbms_consensus.force_purge_cache($index_trunc);

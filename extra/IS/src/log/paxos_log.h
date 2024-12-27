@@ -104,6 +104,7 @@ class PaxosLog {
   // AliSQLServer
   virtual uint64_t getSafeLastLogIndex() { return getLastLogIndex(); }
   virtual uint64_t getWaitMilliseconds4OldTrxFinish() { return 0; }
+  virtual void forceUpdateAppliedIndex(const uint64_t) { }
   virtual void waitOldTrxFinish() { }
   virtual void waitOldXaFinish() { }
   virtual uint64_t waitOldBgcFinish() { return 0; }

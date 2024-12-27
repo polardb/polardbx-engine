@@ -37,8 +37,10 @@ SET @@global.expire_logs_days = 0;
 SET @@global.binlog_expire_logs_auto_purge = OFF;
 # create new log file
 --let $first_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d1;
 FLUSH LOGS;
 --let $second_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d2;
 FLUSH LOGS;
 # set a low expiration window
 --eval SET GLOBAL binlog_expire_logs_seconds=$retention_time_in_seconds
@@ -47,6 +49,7 @@ FLUSH LOGS;
 --sleep $sleep_time_in_seconds
 
 # force a rotation, so that auto purge has a chance to try to kick in
+create database ap_d3;
 FLUSH LOGS;
 
 --file_exists $MYSQLD_DATADIR/$first_binlog_file
@@ -62,6 +65,7 @@ SET @@global.binlog_expire_logs_auto_purge = ON;
 # since we have already slept sometime in the previous assertion
 # on rotation the files shall be deleted because they have already
 # aged the expiration time
+create database ap_d4;
 FLUSH LOGS;
 --error 1
 --file_exists $MYSQLD_DATADIR/$first_binlog_file
@@ -81,8 +85,10 @@ SET @@global.binlog_expire_logs_seconds = 0;
 
 # create new log file
 --let $first_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d5;
 FLUSH LOGS;
 --let $second_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d6;
 FLUSH LOGS;
 
 # sleep
@@ -91,6 +97,7 @@ FLUSH LOGS;
 # force a rotation, so that auto purge has a chance to try to kick in
 # but it won't purge because the purge window is configured to be 0
 # seconds
+create database ap_d7;
 FLUSH LOGS;
 
 --file_exists $MYSQLD_DATADIR/$first_binlog_file
@@ -105,8 +112,10 @@ SET @@global.binlog_expire_logs_auto_purge = OFF;
 
 # create new log file
 --let $first_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d8;
 FLUSH LOGS;
 --let $second_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d9;
 FLUSH LOGS;
 
 --replace_result $second_binlog_file SECOND_BINLOG_FILE
@@ -126,8 +135,10 @@ SET @@global.binlog_expire_logs_auto_purge = 0;
 
 # create new log file
 --let $first_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d10;
 FLUSH LOGS;
 --let $second_binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+create database ap_d11;
 FLUSH LOGS;
 
 # just sleep a couple of seconds to not have the statement issued
@@ -139,8 +150,10 @@ FLUSH LOGS;
 # rotation was fast enough to happen whithin the NOW() second)
 # and then it would issue a warning, causing the test to fail
 # sporadically
+create database ap_d12;
 --sleep 2
 FLUSH LOGS;
+create database ap_d13;
 --replace_result $date DATE
 --eval PURGE BINARY LOGS BEFORE '$date'
 FLUSH LOGS;
@@ -158,3 +171,16 @@ FLUSH LOGS;
 --eval SET GLOBAL binlog_expire_logs_auto_purge=$saved_binlog_expire_logs_auto_purge
 --eval SET GLOBAL expire_logs_days=$saved_expire_logs_days
 RESET MASTER;
+drop database ap_d13;
+drop database ap_d12;
+drop database ap_d11;
+drop database ap_d10;
+drop database ap_d9;
+drop database ap_d8;
+drop database ap_d7;
+drop database ap_d6;
+drop database ap_d5;
+drop database ap_d4;
+drop database ap_d3;
+drop database ap_d2;
+drop database ap_d1;

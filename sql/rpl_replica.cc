@@ -7366,6 +7366,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     last_real_index = consensus_log_manager.get_next_trx_index(
         rli->get_consensus_apply_index(), false) - 1;
     mts_init_consensus_apply_index(rli, last_real_index);
+    consensus_log_manager.set_real_apply_index(last_real_index);
 
     /* Read queries from the IO/THREAD until this thread is killed */
 

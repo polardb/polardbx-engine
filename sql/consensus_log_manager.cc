@@ -645,6 +645,10 @@ int ConsensusLogManager::write_log_entry(ConsensusLogEntry &log,
     if (*consensus_index == 0) goto end;
     assert(*consensus_index != 0);
 
+    if (opt_enable_appliedindex_checker && log.outer) {
+      intervalType inv{*consensus_index, *consensus_index, 1};
+      appliedindex_checker.prepare(inv);
+    }
     // do not rotate if binlog working because of 2 stage recovery
   } else {
     bool do_rotate = false;
@@ -1549,6 +1553,14 @@ void *run_consensus_commit_pos_watcher(void *arg) {
 bool ConsensusLogManager::is_state_machine_ready() {
   return status == Consensus_Log_System_Status::BINLOG_WORKING &&
          consensus_ptr->getTerm() == get_current_term();
+}
+
+void ConsensusLogManager::force_update_applied_index(const uint64_t index) {
+  if (opt_enable_appliedindex_checker) {
+    appliedindex_checker.commit(index);
+  } else {
+    update_applied_index(index);
+  }
 }
 
 IO_CACHE *ConsensusLogManager::get_cache() { return cache_log->get_io_cache(); }

@@ -3264,6 +3264,7 @@ int Paxos::tryUpdateCommitIndex_() {
      * leader. In this case, we should clear ccMgr info.
      */
     if (ccMgr_.needNotify != 1) ccMgr_.clear();
+    log_->forceUpdateAppliedIndex(newCommitIndex);
   }
 
   easy_warn_log("Server %d : Leader commitIndex change from %ld to %ld\n",

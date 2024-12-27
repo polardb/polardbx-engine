@@ -55,12 +55,12 @@ set global consensus_force_promote=1;
 show global status like '%fifo%';
 Variable_name	Value
 consensus_fifo_cache_first_index	2
-consensus_fifo_cache_log_count	116
-consensus_fifo_cache_used_size	22540173
-call dbms_consensus.force_purge_cache(109);;
+consensus_fifo_cache_log_count	115
+consensus_fifo_cache_used_size	22540150
+call dbms_consensus.force_purge_cache(107);;
 show global status like '%fifo%';
 Variable_name	Value
-consensus_fifo_cache_first_index	116
+consensus_fifo_cache_first_index	114
 consensus_fifo_cache_log_count	3
 consensus_fifo_cache_used_size	369
 insert into t1 values (25, repeat("a", 2048576));
