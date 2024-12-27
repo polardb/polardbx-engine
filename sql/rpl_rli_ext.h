@@ -81,15 +81,6 @@ class Index_link_buf {
   @return tail position in original unit */
   uint64 advance_tail();
 
-  /** atomic<bool> lock
-
-  @see lock()/unlock
-
-  @return whether lock success */
-  bool lock(bool retry = false);
-
-  void unlock();
-
  private:
   /** Capacity of the buffer. */
   uint64 m_capacity;
@@ -104,7 +95,7 @@ class Index_link_buf {
   std::atomic<uint64> m_tail;
 
   /** atomic lock*/
-  std::atomic<bool> m_locked;
+  std::mutex m_lock;
 };
 
 #endif

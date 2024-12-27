@@ -95,7 +95,7 @@ void mts_force_consensus_apply_index(Relay_log_info *rli,
 }
 
 Index_link_buf::Index_link_buf(uint64 capacity)
-    : m_capacity(capacity), m_indexes(nullptr), m_tail(0), m_locked(false) {
+    : m_capacity(capacity), m_indexes(nullptr), m_tail(0) {
   if (capacity == 0) return;
 
   m_indexes = (std::atomic<uint64> *)my_malloc(
@@ -109,33 +109,6 @@ Index_link_buf::Index_link_buf(uint64 capacity)
 
 Index_link_buf::~Index_link_buf() {
   if (m_indexes) my_free(m_indexes);
-}
-
-bool Index_link_buf::lock(bool retry) {
-  uint retry_times = 0;
-  bool expected = false;
-  if (m_locked.compare_exchange_strong(expected, true,
-                                       std::memory_order_seq_cst))
-    return true;
-
-  if (retry) {
-    expected = false;
-    while (!m_locked.compare_exchange_strong(expected, true,
-                                             std::memory_order_seq_cst)) {
-      expected = false;
-      retry_times++;
-      usleep(1000);
-
-      if (retry_times > 10) return false;
-    }
-    return true;
-  }
-
-  return false;
-}
-
-void Index_link_buf::unlock() {
-  m_locked.store(false, std::memory_order_seq_cst);
 }
 
 inline void Index_link_buf::init_tail(uint64 index) { m_tail.store(index); }
@@ -165,7 +138,8 @@ inline uint64 Index_link_buf::add_index_advance_tail(uint64 index) {
 }
 
 inline uint64 Index_link_buf::advance_tail() {
-  if (!lock()) return 0;
+  std::lock_guard<std::mutex> lg(m_lock);
+
   auto current_index = m_tail.load();
 
   while (true) {
@@ -178,24 +152,16 @@ inline uint64 Index_link_buf::advance_tail() {
     current_index = ++m_tail;
   }
 
-  unlock();
   return current_index;
 }
 
 inline void Index_link_buf::force_advance_tail(uint64 index) {
+  std::lock_guard<std::mutex> lg(m_lock);
   if (m_tail.load() >= index) return;
-
-  if (!lock(true)) return;
-
-  if (m_tail.load() >= index) {
-    unlock();
-    return;
-  }
 
   // xp::info(ER_XP_APPLIER) << "force_advance_tail " << index
   //   << ", old tail " << m_tail.load()
   //   << ", old count " << (index > m_tail.load() ? index - m_tail.load() : 0);
 
   m_tail.store(index);
-  unlock();
 }
