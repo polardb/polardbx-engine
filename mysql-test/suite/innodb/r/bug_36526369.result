@@ -1,0 +1,27 @@
+CREATE TABLE `t1` (
+`id` bigint NOT NULL AUTO_INCREMENT,
+`c1` varchar(32) NOT NULL,
+`c2` varchar(64) NOT NULL,
+`c3` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c4` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+`c5` varchar(64) DEFAULT NULL,
+`c6` varchar(16) DEFAULT NULL,
+`c7` varchar(32) NOT NULL,
+`c8` varchar(64) DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci row_format=compact;
+ALTER TABLE `t1`
+	MODIFY COLUMN `c8` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL AFTER `c3`,
+ADD COLUMN `c9` varchar(64) NULL AFTER `c8`, algorithm=instant;
+CREATE PROCEDURE InsertMultipleRows()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 30 DO
+INSERT INTO `t1` (c1, c2, c3, c8, c9, c4, c5, c6, c7)
+VALUES ('c1c1', 'c2c2', REPEAT('c3', 500), 'c8', 'c9', 'c4', 'c5', 'c6', 'c7');
+SET i = i + 1;
+END WHILE;
+END /
+CALL InsertMultipleRows();
+DROP TABLE t1;
+DROP PROCEDURE InsertMultipleRows;
