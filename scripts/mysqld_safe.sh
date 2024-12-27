@@ -861,6 +861,28 @@ mysqld daemon not started"
 fi
 
 #
+#rename the core file, pid replaced by mysqld_port.
+#
+rename_core_file() {
+  log_notice "Rename corefile from $CORE_FILE to $TARGET_FILE"
+  PID_FILE="$1"
+  MYSQLD_PORT="$2"
+  CORE_PATTERN="/proc/sys/kernel/core_pattern"
+  if test -f "$PID_FILE"
+  then
+     PID=`cat "$PID_FILE"`
+     CORE_PREFIX=`cat "$CORE_PATTERN"`
+     CORE_FILE="$CORE_PREFIX.$PID"
+     if test -f "$CORE_FILE"
+     then
+       TARGET_FILE="$CORE_PREFIX.MYSQLD.$MYSQLD_PORT"
+       mv "$CORE_FILE" "$TARGET_FILE"
+       log_notice "Rename corefile from $CORE_FILE to $TARGET_FILE"
+     fi
+   fi
+}
+
+#
 # Uncomment the following lines if you want all tables to be automatically
 # checked and repaired during startup. You should add sensible key_buffer
 # and sort_buffer values to my.cnf to improve check performance or require
@@ -907,6 +929,19 @@ do
   else
     dont_restart_mysqld=true
   fi
+  
+  # When core_pattern is defiend with '%' pecifier, rename_core_file function not work. 
+  #
+  # /proc/sys/kernel/core_pattern     | core file                            | renamed core file                 |
+  # configuration                     | set pid=50101                        | set port=4000                     |
+  # -------------------------------------------------------------------------------------------------------------
+  # core                              | $DATADIR/core.50101                  | $DATADIR/core.MYSQLD.4000         |
+  # /u01/corefiles/core               | /u01/corefiles/core.50101            | /u01/corefiles/core.MYSQLD.4000   |
+ 
+  oldpwd_befrename="`pwd`"
+  cd "$DATADIR"
+  rename_core_file "$pid_file" "$mysql_tcp_port"
+  cd "$oldpwd_befrename"
 
   # hypothetical: log was renamed but not
   # flushed yet. we'd recreate it with
@@ -949,6 +984,8 @@ do
         fi
     fi
   fi
+
+  
 
   if test -f "$pid_file.shutdown"	# created to signal that it must stop
   then
