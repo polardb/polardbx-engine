@@ -656,19 +656,32 @@ int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
   DBUG_ENTER("check_wait_commitindex");
   if (is_xpaxos_replication && !opt_disable_wait_commitindex) {
     uint64 tmpCommitIndex = 0;
-    // when the followe case, continue read, return 0
+    // xp::system(ER_XP_APPLIER)
+    //     << "check_wait_commitindex "
+    //     << ", current term: " << consensus_log_manager.get_current_term()
+    //     << ", apply term: " << consensus_log_manager.get_apply_term()
+    //     << ", stop term: " << consensus_log_manager.get_stop_term()
+    //     << ", tmpCommitIndex: " << consensus_ptr->getCommitIndex()
+    //     << ", get_real_apply_index: " << consensus_log_manager.get_real_apply_index()
+    //     << ", get_consensus_apply_index: " << rli->get_consensus_apply_index()
+    //     << ", get_apply_index_current_pos: " << consensus_log_manager.get_apply_index_current_pos()
+    //     << ", get_apply_index_end_pos: " << consensus_log_manager.get_apply_index_end_pos()
+    //     << ", get_apply_ev_sequence: " << consensus_log_manager.get_apply_ev_sequence()
+    //     << ", get_apply_ev_finish_count: " << consensus_log_manager.get_apply_ev_finish_count();
+
+    // when any the followe case match, continue read, return 0
     //   commitIndex > applyIndex
     //   commitIndex == applyIndex && apply_current_pos < apply_end_pos
-    // any the followe case, wait and retry
+    //   !is_trx_apply_finished
+    // when any the followe case, wait and retry
     //   commitIndex < applyIndex
-    //   commitIndex == applyIndex && apply_current_pos >= apply_end_pos
-    while (((tmpCommitIndex = consensus_ptr->checkCommitIndex(
-                 consensus_log_manager.get_real_apply_index() - 1,
-                 consensus_log_manager.get_current_term())) <
-            consensus_log_manager.get_real_apply_index()) ||
-           (tmpCommitIndex == consensus_log_manager.get_real_apply_index() &&
-            consensus_log_manager.get_apply_index_current_pos() >=
-                consensus_log_manager.get_apply_index_end_pos())) {
+    //   commitIndex == applyIndex && apply_current_pos >= apply_end_pos && is_trx_apply_finished
+    while (((tmpCommitIndex = consensus_ptr->checkCommitIndex(consensus_log_manager.get_current_term())) <
+              consensus_log_manager.get_real_apply_index())
+            || (tmpCommitIndex == consensus_log_manager.get_real_apply_index()
+                && consensus_log_manager.get_apply_index_current_pos() >=
+                      consensus_log_manager.get_apply_index_end_pos()
+                && consensus_log_manager.is_trx_apply_finished())) {
       if (consensus_ptr->isShutdown()) {
         xp::info(ER_XP_APPLIER)
             << "Apply thread is terminated because of shutdown";
@@ -697,13 +710,14 @@ int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
       } else if (check_exec_consensus_log_end_condition(rli)) {
         DBUG_RETURN(1);
       } else if (consensus_ptr->getCommitIndex() >
-                     consensus_log_manager.get_real_apply_index() ||
-                 (consensus_ptr->getCommitIndex() ==
-                      consensus_log_manager.get_real_apply_index() &&
-                  consensus_log_manager.get_apply_index_current_pos() <
-                      consensus_log_manager.get_apply_index_end_pos()) ||
-                 (consensus_ptr->getCommitIndex() == 1 &&
-                  consensus_log_manager.get_real_apply_index() == 1)) {
+                     consensus_log_manager.get_real_apply_index()
+                 || (consensus_ptr->getCommitIndex() ==
+                        consensus_log_manager.get_real_apply_index()
+                     && (consensus_log_manager.get_apply_index_current_pos() <
+                          consensus_log_manager.get_apply_index_end_pos()
+                         || !consensus_log_manager.is_trx_apply_finished()))
+                || (consensus_ptr->getCommitIndex() == 1
+                    && consensus_log_manager.get_real_apply_index() == 1)) {
         // not reach commit index, continue to read log
         break;
       } else {
@@ -753,10 +767,13 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
       //                       << ", consensus_index: " << consensus_index
       //                       << ", consensus_term: " << consensus_term
       //                       << ", consensus_index: " << consensus_index
+      //                       << ", get_flag: " << r_ev->get_flag()
       //                       << ", consensus_index_end_pos: " <<
       //                       consensus_index_end_pos
       //                       << ", consensus_index_current_pos: " <<
-      //                       ev->future_event_relay_log_pos;
+      //                       ev->future_event_relay_log_pos
+      //                       << ", apply_ev_sequence: " <<
+      //                       consensus_log_manager.get_apply_ev_sequence();
     }
 
     consensus_log_manager.set_apply_index_current_pos(

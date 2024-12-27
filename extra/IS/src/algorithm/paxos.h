@@ -349,9 +349,7 @@ class Paxos : public Consensus {
   /* ALL */
   int onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) override;
   virtual uint64_t waitCommitIndexUpdate(uint64_t baseIndex, uint64_t term = 0);
-  virtual uint64_t checkCommitIndex(
-      uint64_t baseIndex,
-      uint64_t term = 0); /* A lock-free interface for follower */
+  virtual uint64_t checkCommitIndex(uint64_t term = 0); /* A lock-free interface for follower */
   uint64_t getClusterId() override { return clusterId_.load(); }
   int setClusterId(uint64_t ci) override;
   uint64_t getMyServerId() { return myServerId_.load(); }

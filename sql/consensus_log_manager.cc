@@ -180,17 +180,18 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
   current_index = fake_current_index_arg;
   cache_index = 0;
   sync_index = 0;
-  apply_index = 1;
-  real_apply_index = 1;
+  apply_index = 0;
+  real_apply_index = 0;
   apply_index_end_pos = 0;
   apply_index_current_pos = 0;
+  apply_ev_finish_count = 0;
   apply_term = 1;
   apply_catchup = 0;
   current_term = 1;
   stop_term = UINT64_MAX;
   already_set_start_index = false;
   already_set_start_term = false;
-  apply_ev_seq = 1;
+  apply_ev_seq = 0;
   in_large_trx_applying = false;
   enable_rotate = false;
   in_large_trx_appending = false;
@@ -1291,8 +1292,8 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
   set_consensus_system_status(BINLOG_WORKING);
 
   // reset apply start point displayed in information_schema
-  apply_index = 1;
-  real_apply_index = 1;
+  apply_index = 0;
+  real_apply_index = 0;
   already_set_start_index = false;
   already_set_start_term = false;
 

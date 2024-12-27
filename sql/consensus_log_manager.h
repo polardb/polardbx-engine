@@ -109,6 +109,8 @@ class ConsensusLogManager {
   uint64 get_apply_term() { return apply_term; }
   uint64 get_apply_ev_sequence() { return apply_ev_seq; }
   uint64 get_stop_term() { return stop_term; }
+  uint64 get_apply_ev_finish_count() { return apply_ev_finish_count; }
+  bool is_trx_apply_finished() { return apply_ev_finish_count == apply_ev_seq; }
   bool get_in_large_trx_applying() { return in_large_trx_applying; }
   bool get_in_large_trx_appending() { return in_large_trx_appending; }
   bool get_in_large_event_appending() { return in_large_event_appending; }
@@ -161,6 +163,7 @@ class ConsensusLogManager {
   void set_apply_term(uint64 apply_term_arg) { apply_term = apply_term_arg; }
   void set_apply_ev_sequence(uint64 apply_ev_seq_arg) {
     apply_ev_seq = apply_ev_seq_arg;
+    apply_ev_finish_count = apply_ev_seq_arg;
   }
   void set_apply_catchup(uint apply_catchup_arg) {
     apply_catchup = apply_catchup_arg;
@@ -180,6 +183,7 @@ class ConsensusLogManager {
   }
   void incr_current_index() { current_index++; }
   void incr_apply_ev_sequence() { apply_ev_seq++; }
+  void incr_apply_ev_finish_count() { apply_ev_finish_count++; }
   uint64 get_cache_index();
   void set_cache_index(uint64 cache_index_arg);
   uint64 get_sync_index(bool serious = false);
@@ -295,20 +299,17 @@ class ConsensusLogManager {
       current_index;  // last log index in the log system, protected by LOCK_log
   std::atomic<uint64> cache_index;  // used to tell last cache log entry
   std::atomic<uint64> sync_index;   // used to tell last log entry
-  std::atomic<uint64>
-      apply_index;  // used to record sql thread coordinator apply index
-  std::atomic<uint64> real_apply_index;     // for large trx
-  std::atomic<uint64> apply_index_end_pos;  // used to record sql thread
-                                            // coordinator apply index end pos
-  std::atomic<uint64>
-      apply_index_current_pos;  // used to record sql thread coordinator apply
-                                // index current pos
-  std::atomic<uint64>
-      apply_term;  // used to record sql thread coordinator apply term
-  std::atomic<uint64>
-      stop_term;  // used to mark sql thread coordinator stop condition
-  std::atomic<uint64> apply_ev_seq;  // used to record sql thread coordinator
-                                     // apply event sequence in one index
+  std::atomic<uint64> stop_term;  // used to mark sql thread coordinator stop condition
+  uint64 apply_index;  // used to record sql thread coordinator apply index
+  uint64 real_apply_index;     // for large trx
+  uint64 apply_index_end_pos;  // used to record sql thread
+                               // coordinator apply index end pos
+  uint64 apply_index_current_pos;  // used to record sql thread coordinator apply
+                                   // index current pos
+  uint64 apply_term;  // used to record sql thread coordinator apply term
+  uint64 apply_ev_seq;  // used to record sql thread coordinator
+                        // apply event sequence in one index
+  uint64 apply_ev_finish_count;
   std::atomic<uint64> current_term;  // record the current system term, changed
                                      // by stageChange callback
   std::atomic<bool> in_large_trx_applying;

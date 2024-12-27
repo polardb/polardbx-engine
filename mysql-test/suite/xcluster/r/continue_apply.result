@@ -1,0 +1,58 @@
+set global innodb_strict_mode=0;
+CREATE TABLE `creed` (   `id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '主键\n',   `order_id` bigint(32) DEFAULT NULL COMMENT '订单ID',   `code` char(64) DEFAULT NULL COMMENT '编号',   `name` varchar(254) DEFAULT NULL COMMENT '名称',   `instance_code` varchar(255) NOT NULL COMMENT '实例编码',   `business_catalog` varchar(255) DEFAULT NULL COMMENT '业务类型',   `business_name` varchar(120) DEFAULT NULL COMMENT '业务名称',   `carrier_type` varchar(32) DEFAULT NULL COMMENT '履约载体类型，数量或者金额',   `state` char(64) DEFAULT NULL COMMENT '状态',   `source_id` char(255) DEFAULT NULL COMMENT '来源单号',   `source_code` varchar(255) DEFAULT NULL COMMENT '来源单号',   `source_type` char(18) DEFAULT NULL COMMENT '来源，订单[order]，合同[contract]',   `supplier_org_id` bigint(32) DEFAULT NULL COMMENT '供应商的组织机构id',   `supplier_org_name` varchar(200) DEFAULT NULL COMMENT '供应商机构名称',   `supplier_id` bigint(32) DEFAULT NULL COMMENT '供应商经办人ID',   `supplier_emp_id` bigint(32) DEFAULT NULL COMMENT '供应商经办人empId',   `supplier_name` varchar(128) DEFAULT NULL,   `supplier_mobile` varchar(32) DEFAULT NULL COMMENT '供应商联系电话',   `supplier_address` varchar(256) DEFAULT NULL COMMENT '供应商地址',   `purchase_org_id` bigint(32) DEFAULT NULL COMMENT '采购单位组织机构id',   `purchase_org_name` varchar(200) DEFAULT NULL COMMENT '采购单位名称',   `purchaser_id` bigint(32) DEFAULT NULL COMMENT '采购人ID',   `purchaser_emp_id` bigint(32) DEFAULT NULL COMMENT '采购单位经办人empId',   `purchaser_name` varchar(128) DEFAULT NULL,   `purchaser_mobile` varchar(32) DEFAULT NULL COMMENT '采购机构联系电话',   `purchaser_address` varchar(256) DEFAULT NULL COMMENT '采购机构地址',   `trace_chain` varchar(510) DEFAULT NULL COMMENT '追踪链',   `logistics_time` varchar(100) DEFAULT NULL COMMENT '物流时间',   `logistic_deadline` varchar(100) DEFAULT NULL COMMENT '物流期限',   `shipping_address` varchar(256) DEFAULT NULL COMMENT '收货地址',   `shipping_address_id` bigint(32) DEFAULT NULL COMMENT '收货地址ID',   `receiver_address` varchar(256) DEFAULT NULL COMMENT '收货人地址',   `receiver_address_id` bigint(20) DEFAULT NULL COMMENT '用户中心处收货地址id',   `receiver_name` varchar(100) DEFAULT NULL COMMENT '收货人姓名',   `receiver_mobile` varchar(32) DEFAULT NULL COMMENT '收货人联系方式',   `district_code` char(20) DEFAULT NULL COMMENT '采购单位区划code',   `goods_type` varchar(20) DEFAULT NULL COMMENT '货物类型，product-货物，service-服务',   `message` varchar(510) DEFAULT NULL COMMENT '给供应商的留言',   `purchase_signature` bigint(32) DEFAULT NULL COMMENT '采购单位签章id',   `supplier_signature` bigint(32) DEFAULT NULL COMMENT '供应商签章id',   `audit_result` varchar(100) DEFAULT NULL COMMENT '审核结果',   `current_operators` varchar(255) DEFAULT NULL COMMENT '当前操作人',   `creator_name` varchar(128) DEFAULT NULL,   `creator` bigint(32) DEFAULT NULL COMMENT '创建人Id',   `modifier` bigint(32) DEFAULT NULL COMMENT '修改人Id',   `gmt_created` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',   `gmt_modified` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '修改时间',   `is_del` tinyint(1) unsigned zerofill DEFAULT '0' COMMENT '是否被删除：0-未删除；1-已删除',   `is_history` tinyint(1) unsigned zerofill DEFAULT '0' COMMENT '1：数据迁移',   `is_finish` tinyint(1) unsigned zerofill DEFAULT '0' COMMENT '流程是否结束，0-未结束；1-已结束',   `pay_method` varchar(64) DEFAULT NULL COMMENT '支付方式',   `payable` bigint(20) DEFAULT NULL COMMENT '应付金额',   `paid` bigint(20) DEFAULT NULL COMMENT '可退金额（实付金额）',   `is_settlement` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否结算',   `is_interrupted` tinyint(1) DEFAULT '0',   `auto_acceptance_time` datetime DEFAULT NULL,   `snapshot_id` bigint(32) DEFAULT NULL COMMENT '快照id',   `all_delivered` tinyint(4) NOT NULL DEFAULT '0',   `has_receipt` tinyint(1) DEFAULT '0' COMMENT '是否收货',   `all_receipted` tinyint(4) DEFAULT '0',   `receiver_district_code` char(20) DEFAULT NULL,   `receipt_state` char(18) DEFAULT NULL COMMENT '三种状态，已经全部收货，部分全部收货，需要收货',   `allow_return_or_replace` tinyint(1) unsigned zerofill DEFAULT NULL COMMENT '是否允许退换货',   `source_project_id` bigint(20) DEFAULT NULL COMMENT '项目id 当来源是合同时必传',   `source_project_name` varchar(500) DEFAULT NULL COMMENT '项目名称 当来源是合同时必传',   `trade_type` varchar(32) DEFAULT 'NORMAL_PURCHASE' COMMENT '采购类型：普通采购：NORMAL_PURCHASE 个人采购PERSONAL_PURCHASE',   `expected_start_time` datetime DEFAULT NULL COMMENT '期望送达起始时间',   `expected_end_time` datetime DEFAULT NULL COMMENT '期望送达截止时间',   `timeout_time` datetime DEFAULT NULL COMMENT '履约单超时时间',   `contract_status` int(11) DEFAULT NULL COMMENT '合同状态同步',   `out_order_id` varchar(80) DEFAULT NULL COMMENT '外部订单号',   `parent_creed_Id` bigint(32) DEFAULT NULL COMMENT '父履约单id（优选商城对应履约单）',   `contract_signing` tinyint(1) DEFAULT '0' COMMENT '是否合同签订流程',   `delivered_time_out` datetime DEFAULT NULL COMMENT '发货超时时间',   `is_creed_return` tinyint(1) DEFAULT '0' COMMENT '是否履约退回',   PRIMARY KEY (`id`),   KEY `idx_order_id_purchaser` (`order_id`,`purchase_org_id`) USING BTREE,   KEY `idx_acceptance_time` (`auto_acceptance_time`) USING BTREE,   KEY `idx_creed_order_id_supplier` (`order_id`,`supplier_org_id`) USING BTREE,   KEY `idx_timeout_time` (`timeout_time`) USING BTREE,   KEY `idx_create_time` (`gmt_created`) USING BTREE,   KEY `idx_instanceCode_districtCode_businessCatalog` (`instance_code`,`district_code`,`business_catalog`) USING BTREE,   KEY `idx_source_supplier` (`source_id`,`supplier_org_id`) USING BTREE,   KEY `source_id` (`source_id`,`source_type`) USING BTREE,   KEY `idx_gmtModified_districtCode` (`gmt_modified`,`district_code`) USING BTREE,   KEY `source_code` (`source_code`) USING BTREE,   KEY `idx_is_interrupted_is_del_auto_acceptance_time` (`is_interrupted`,`is_del`,`auto_acceptance_time`) USING BTREE,   KEY `idx_source_purchaser` (`source_id`,`purchase_org_id`) USING BTREE,   KEY `idx_parent_creed_Id` (`parent_creed_Id`),   KEY `out_order_id_index` (`out_order_id`),   KEY `idx_delivered_time_out` (`delivered_time_out`) ) ENGINE=InnoDB AUTO_INCREMENT=404 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT COMMENT='履约单表';
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+Warning	139	Row size too large (> 8126). Changing some columns to TEXT or BLOB or using ROW_FORMAT=DYNAMIC or ROW_FORMAT=COMPRESSED may help. In current row format, BLOB prefix of 768 bytes is stored inline.
+Timeout in wait_condition.inc for select count(distinct match_index)=1 && count(distinct applied_index)=1 && sum(match_index - applied_index) = 0 from information_schema.alisql_cluster_global where role<>'Leader'
+No
+set global innodb_strict_mode=0;
+start xpaxos_replication;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Yes
+set global innodb_strict_mode=1;
+No
+set global innodb_strict_mode=0;
+start xpaxos_replication;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Yes
+set global innodb_strict_mode=1;
+set global innodb_strict_mode=1;
+drop table creed;
+Timeout in wait_condition.inc for select count(distinct match_index)=1 && count(distinct applied_index)=1 && sum(match_index - applied_index) = 0 from information_schema.alisql_cluster_global where role<>'Leader'

@@ -2166,7 +2166,6 @@ class Relay_log_info : public Rpl_info {
   virtual LOG_POS_COORD get_log_pos_coord(Relay_log_info *rli);
   virtual int get_log_position(LOG_INFO *linfo, my_off_t &log_position);
   virtual void set_xpaxos_relay_log_info() {}
-  virtual void set_xpaxos_apply_ev_sequence() {}
   virtual void update_xpaxos_applied_index() {}
 
  private:

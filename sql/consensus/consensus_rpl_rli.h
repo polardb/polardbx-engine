@@ -104,7 +104,6 @@ class XPaxos_relay_log_info final : public Relay_log_info {
   virtual int get_log_position(LOG_INFO *linfo,
                                my_off_t &log_position) override;
   virtual void set_xpaxos_relay_log_info() override;
-  virtual void set_xpaxos_apply_ev_sequence() override;
   virtual void update_xpaxos_applied_index() override;
 };
 

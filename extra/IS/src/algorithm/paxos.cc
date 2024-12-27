@@ -2950,7 +2950,7 @@ uint64_t Paxos::waitCommitIndexUpdate(uint64_t baseIndex, uint64_t term) {
              : commitIndex_.load();
 }
 
-uint64_t Paxos::checkCommitIndex(uint64_t baseIndex, uint64_t term) {
+uint64_t Paxos::checkCommitIndex(uint64_t term) {
   uint64_t ret = 0;
   /* should call the blocking interface (waitCommitIndexUpdate)
      if term is 0 */

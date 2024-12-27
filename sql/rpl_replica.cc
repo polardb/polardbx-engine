@@ -3636,7 +3636,7 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
     /* GalaxyEngine does not maintain master log info currently. */
     bool is_no_delay = 0;
     if (mi->rli->info_thd->xpaxos_replication_channel) {
-      is_no_delay = consensus_ptr->getCommitIndex() <= consensus_log_manager.get_real_apply_index();;
+      is_no_delay = consensus_ptr->getCommitIndex() <= consensus_ptr->getAppliedIndex();
     } else {
       is_no_delay = mi->get_master_log_pos() == mi->rli->get_group_master_log_pos()
                       && !strcmp(mi->get_master_log_name(), mi->rli->get_group_master_log_name());
@@ -5088,8 +5088,7 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
         return 1;
     }
 
-    update_consensus_apply_pos(rli, ev,
-                               Multisource_info::is_xpaxos_channel(rli));
+    update_consensus_apply_pos(rli, ev, Multisource_info::is_xpaxos_channel(rli));
 
     /* ptr_ev can change to NULL indicating MTS coorinator passed to a Worker */
     exec_res = apply_event_and_update_pos(ptr_ev, thd, rli);
@@ -5097,6 +5096,9 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       Note: the above call to apply_event_and_update_pos executes
       mysql_mutex_unlock(&rli->data_lock);
     */
+
+    if (exec_res == SLAVE_APPLY_EVENT_AND_UPDATE_POS_OK)
+      consensus_log_manager.incr_apply_ev_finish_count();
 
     /* For deferred events, the ptr_ev is set to NULL
         in Deferred_log_events::add() function.
@@ -5261,6 +5263,7 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       mysql_mutex_unlock(&rli->data_lock);
       return SLAVE_APPLY_EVENT_UNTIL_REACHED;
     }
+
     return exec_res;
   }
 
@@ -7051,7 +7054,6 @@ extern "C" void *handle_slave_sql(void *arg) {
   my_off_t saved_skip = 0;
 
   Relay_log_info *rli = ((Master_info *)arg)->rli;
-  rli->set_xpaxos_apply_ev_sequence();
 
   const char *errmsg;
   longlong slave_errno = 0;

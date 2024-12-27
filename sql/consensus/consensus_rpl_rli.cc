@@ -112,10 +112,6 @@ void XPaxos_relay_log_info::set_xpaxos_relay_log_info() {
   consensus_log_manager.set_relay_log_info(this);
 }
 
-void XPaxos_relay_log_info::set_xpaxos_apply_ev_sequence() {
-  consensus_log_manager.set_apply_ev_sequence(1);
-}
-
 void XPaxos_relay_log_info::update_xpaxos_applied_index() {
   ulonglong rli_appliedindex = 0;
   set_consensus_apply_index(gaq->lwm.consensus_index);
