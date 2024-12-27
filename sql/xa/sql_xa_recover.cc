@@ -62,18 +62,22 @@ bool Sql_cmd_xa_recover::trans_xa_recover(THD *thd) {
                                 Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
 
-  auto list = xa::Transaction_cache::get_cached_transactions();
-  for (const auto &transaction : list) {
-    XID_STATE *xs = transaction->xid_state();
-    if (xs->has_state(XID_STATE::XA_PREPARED)) {
-      protocol->start_row();
-      xs->store_xid_info(protocol, m_print_xid_as_hex);
+  // auto list = xa::Transaction_cache::get_cached_transactions();
+  bool res = xa::Transaction_cache::process_cached_transactions(
+      [&](const xa::Transaction_cache::transaction_ptr &transaction) -> bool {
+        XID_STATE *xs = transaction->xid_state();
+        if (xs->has_state(XID_STATE::XA_PREPARED)) {
+          protocol->start_row();
+          xs->store_xid_info(protocol, m_print_xid_as_hex);
 
-      if (protocol->end_row()) {
-        return true;
-      }
-    }
-  }
+          if (protocol->end_row()) {
+            return true;
+          }
+        }
+        return false;
+      });
+  DEBUG_SYNC(thd, "after_get_cached_transactions");
+  if (res) return true;
 
   my_eof(thd);
   return false;

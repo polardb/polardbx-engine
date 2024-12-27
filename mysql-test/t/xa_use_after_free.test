@@ -1,0 +1,135 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+connection default;
+set global xa_detach_on_prepare=0;
+set xa_detach_on_prepare=0;
+CREATE TABLE t1 (id INT);
+
+--echo ################################################################
+--echo # Test 1: XA RECOVER
+--echo # If the bug exists, the 'XA RECOVER' statement will cause heap-use-after-free error in asan mode, 
+--echo # or have chance to cause crash at transaction_free_hash in non-asan mode. 
+connect (con1,localhost,root,,);
+XA BEGIN 'x1';
+INSERT INTO t1 VALUES (1);
+XA END 'x1';
+XA PREPARE 'x1';
+
+connection default;
+SET DEBUG_SYNC='RESET';
+SET DEBUG_SYNC='after_get_cached_transactions signal s1 wait_for s2';
+--send XA RECOVER
+
+connection con1;
+SET DEBUG_SYNC='now wait_for s1';
+disconnect con1;
+connect (con2,localhost,root,,);
+XA COMMIT 'x1';
+SET DEBUG_SYNC='now signal s2';
+
+connection default;
+# If the bug exists, the 'XA RECOVER' statement will cause heap-use-after-free error in asan mode, 
+# or have chance to cause crash at transaction_free_hash in non-asan mode. 
+--reap
+
+disconnect con2;
+--echo ################################################################
+
+--echo ################################################################
+--echo # Test 1.5: XA RECOVER stoped in m_LOCK_transaction_cache, everything should be blocked.
+connect (con1,localhost,root,,);
+XA BEGIN 'x1_5';
+INSERT INTO t1 VALUES (1);
+XA END 'x1_5';
+XA PREPARE 'x1_5';
+
+connection default;
+SET DEBUG_SYNC='RESET';
+SET DEBUG_SYNC='in_process_cached_transactions signal s1 wait_for s2';
+--send XA RECOVER
+
+connection con1;
+SET DEBUG_SYNC='now wait_for s1';
+disconnect con1;
+connect (con2,localhost,root,,);
+# this connection should be blocked by m_LOCK_transaction_cache
+--send XA COMMIT 'x1_5'
+
+connect (con3,localhost,root,,);
+set debug_sync='now signal s2';
+
+connection default;
+--reap
+
+connection con2;
+--reap
+
+connection default;
+disconnect con2;
+disconnect con3;
+--echo ################################################################
+
+
+--echo ################################################################
+--echo # Test 2: dbms_xa.find_by_xid
+--echo # If the bug exists, the 'dbms_xa.find_by_xid' statement will cause heap-use-after-free error in asan mode, 
+--echo # or have chance to cause crash at transaction_free_hash in non-asan mode. 
+connect (con1,localhost,root,,);
+XA BEGIN 'x2';
+INSERT INTO t1 VALUES (1);
+XA END 'x2';
+XA PREPARE 'x2';
+
+connection default;
+SET DEBUG_SYNC='RESET';
+set debug_sync='after_find_detached_trn_and_get_its_state signal s1 wait_for s2';
+--send call dbms_xa.find_by_xid('x2','',1);
+
+connection con1;
+SET DEBUG_SYNC='now wait_for s1';
+disconnect con1;
+connect (con2,localhost,root,,);
+XA COMMIT 'x2';
+SET DEBUG_SYNC='now signal s2';
+
+connection default;
+# If the bug exists, the 'dbms_xa.find_by_xid' statement will cause heap-use-after-free error in asan mode, 
+# or have chance to cause crash at transaction_free_hash in non-asan mode. 
+--reap
+
+disconnect con2;
+--echo ################################################################
+
+
+#--echo ################################################################
+#--echo # Test 3: dbms_xa.find_by_xid special case
+
+#connect (con1,localhost,root,,);
+#XA BEGIN 'x3';
+#INSERT INTO t1 VALUES (1);
+#XA END 'x3';
+#XA PREPARE 'x3';
+#
+#disconnect con1;
+#connection default;
+#SET DEBUG_SYNC='RESET';
+#set debug_sync='after_find_detached_trn_and_get_its_state signal s1 wait_for s2';
+#--send call dbms_xa.find_by_xid('x3','',1);
+#
+#connect (con1,localhost,root,,);
+#XA COMMIT 'x3';
+## Start 'x3' again
+#XA BEGIN 'x3';
+#SET DEBUG_SYNC='now signal s2';
+#
+#
+#connection default;
+## Currently, it will assert.
+#--reap
+#
+
+connection default;
+DROP TABLE t1;
+set global xa_detach_on_prepare=1;
+set xa_detach_on_prepare=1;

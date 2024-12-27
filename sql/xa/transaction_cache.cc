@@ -176,12 +176,41 @@ std::shared_ptr<Transaction_ctx> xa::Transaction_cache::find(
   return found->second;
 }
 
-xa::Transaction_cache::list xa::Transaction_cache::get_cached_transactions() {
+std::pair<bool /* exists or not */, std::shared_ptr<Transaction_ctx>>
+xa::Transaction_cache::find_detached(XID *xid) {
+  auto &instance = xa::Transaction_cache::instance();
+  MUTEX_LOCK(mutex_guard, &instance.m_LOCK_transaction_cache);
+  auto found = instance.m_transaction_cache.find(to_string(*xid));
+  if (found == instance.m_transaction_cache.end())
+    return std::make_pair(false, nullptr);
+  if (!found->second->xid_state()->get_xid()->eq(xid))
+    return std::make_pair(false, nullptr);
+  if (found->second->xid_state()->is_detached()) {
+    return std::make_pair(true, found->second);
+  } else {
+    return std::make_pair(true, nullptr);
+  }
+}
+
+// xa::Transaction_cache::list xa::Transaction_cache::get_cached_transactions()
+// {
+//   auto &instance = xa::Transaction_cache::instance();
+//   list to_return;
+//   MUTEX_LOCK(mutex_guard, &instance.m_LOCK_transaction_cache);
+//   for (auto [_, trx] : instance.m_transaction_cache)
+//   to_return.push_back(trx); return to_return;
+// }
+
+bool xa::Transaction_cache::process_cached_transactions(
+    std::function<bool(const transaction_ptr &)> func) {
   auto &instance = xa::Transaction_cache::instance();
   list to_return;
   MUTEX_LOCK(mutex_guard, &instance.m_LOCK_transaction_cache);
-  for (auto [_, trx] : instance.m_transaction_cache) to_return.push_back(trx);
-  return to_return;
+  for (auto [_, trx] : instance.m_transaction_cache) {
+    if (func(trx)) return true;
+  }
+  DEBUG_SYNC_C("in_process_cached_transactions");
+  return false;
 }
 
 void xa::Transaction_cache::initialize() { xa::Transaction_cache::instance(); }

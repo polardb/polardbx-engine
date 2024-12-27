@@ -166,23 +166,18 @@ bool prepare_xa_group_and_check(THD *thd, const XID *xid) {
 
 /**
   Find Transaction_ctx in Transaction_cache by XID
+
+  @return pair, the first shows xid exists in cache or not, the second is the
+  transaction_ptr if exists and detached. So if an attached transaction_ptr
+  exists in cache, the function will return (true, nullptr).
 */
-static std::shared_ptr<Transaction_ctx> find_trn_for_search_and_get_its_state(
-    xid_t *xid_for_trn, bool *is_detached) {
-  *is_detached = false;
-
-  auto foundit = ::xa::Transaction_cache::find(
-      xid_for_trn, [&](std::shared_ptr<Transaction_ctx> const &item) -> bool {
-        *is_detached = item->xid_state()->is_detached();
-        return true;
-      });
-
-  return foundit;
+static std::pair<bool /* exists or not */, std::shared_ptr<Transaction_ctx>>
+find_detached_trn_and_get_its_state(xid_t *xid_for_trn) {
+  return ::xa::Transaction_cache::find_detached(xid_for_trn);
 }
 
 static bool search_detach_prepare_trx(std::shared_ptr<Transaction_ctx> &trx_ctx,
                                       xid_t *xid, MyXAInfo *info) {
-  bool is_detached;
   bool found;
   auto detached_xs = trx_ctx->xid_state();
   handlerton_ext &ibh_ext = innodb_hton->ext;
@@ -198,8 +193,9 @@ static bool search_detach_prepare_trx(std::shared_ptr<Transaction_ctx> &trx_ctx,
       [detached_xs]() -> void { detached_xs->get_xa_lock().unlock(); }};
 
   /** 2. Detached prepared XA transaction. */
-  if (find_trn_for_search_and_get_its_state(xid, &is_detached) != nullptr) {
-    assert(is_detached);
+  auto [exists, trx_ctx2] = find_detached_trn_and_get_its_state(xid);
+  if (exists) {
+    assert(trx_ctx2);
 
     found = ibh_ext.search_detach_prepare_trx_by_xid(xid, info);
     assert(!found || info->status == XA_status::DETACHED_PREPARE);
@@ -229,14 +225,13 @@ static bool search_detach_prepare_trx(std::shared_ptr<Transaction_ctx> &trx_ctx,
   @param[out]   info    XA info
 */
 void search_trx_info(xid_t *xid, MyXAInfo *info) {
-  bool is_detached;
   handlerton_ext &ibh_ext = innodb_hton->ext;
 
-  std::shared_ptr<Transaction_ctx> trx_ctx =
-      find_trn_for_search_and_get_its_state(xid, &is_detached);
+  auto [exists, trx_ctx] = find_detached_trn_and_get_its_state(xid);
+  DEBUG_SYNC_C("after_find_detached_trn_and_get_its_state");
 
-  if (trx_ctx != nullptr) {
-    if (!is_detached) {
+  if (exists) {
+    if (!trx_ctx) {
       /** Attached XA transaction. */
       *info = MY_XA_INFO_ATTACH;
       return;

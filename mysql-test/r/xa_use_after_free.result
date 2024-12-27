@@ -1,0 +1,55 @@
+set global xa_detach_on_prepare=0;
+set xa_detach_on_prepare=0;
+CREATE TABLE t1 (id INT);
+################################################################
+# Test 1: XA RECOVER
+# If the bug exists, the 'XA RECOVER' statement will cause heap-use-after-free error in asan mode, 
+# or have chance to cause crash at transaction_free_hash in non-asan mode. 
+XA BEGIN 'x1';
+INSERT INTO t1 VALUES (1);
+XA END 'x1';
+XA PREPARE 'x1';
+SET DEBUG_SYNC='RESET';
+SET DEBUG_SYNC='after_get_cached_transactions signal s1 wait_for s2';
+XA RECOVER;
+SET DEBUG_SYNC='now wait_for s1';
+XA COMMIT 'x1';
+SET DEBUG_SYNC='now signal s2';
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+################################################################
+################################################################
+# Test 1.5: XA RECOVER stoped in m_LOCK_transaction_cache, everything should be blocked.
+XA BEGIN 'x1_5';
+INSERT INTO t1 VALUES (1);
+XA END 'x1_5';
+XA PREPARE 'x1_5';
+SET DEBUG_SYNC='RESET';
+SET DEBUG_SYNC='in_process_cached_transactions signal s1 wait_for s2';
+XA RECOVER;
+SET DEBUG_SYNC='now wait_for s1';
+XA COMMIT 'x1_5';
+set debug_sync='now signal s2';
+formatID	gtrid_length	bqual_length	data
+1	4	0	x1_5
+################################################################
+################################################################
+# Test 2: dbms_xa.find_by_xid
+# If the bug exists, the 'dbms_xa.find_by_xid' statement will cause heap-use-after-free error in asan mode, 
+# or have chance to cause crash at transaction_free_hash in non-asan mode. 
+XA BEGIN 'x2';
+INSERT INTO t1 VALUES (1);
+XA END 'x2';
+XA PREPARE 'x2';
+SET DEBUG_SYNC='RESET';
+set debug_sync='after_find_detached_trn_and_get_its_state signal s1 wait_for s2';
+call dbms_xa.find_by_xid('x2','',1);;
+SET DEBUG_SYNC='now wait_for s1';
+XA COMMIT 'x2';
+SET DEBUG_SYNC='now signal s2';
+STATUS	GCN	CSR	TRX_ID	UBA	N_BRANCH	N_LOCAL_BRANCH	MASTER_TRX_ID	MASTER_UBA	SERVER_UUID
+ATTACHED	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+################################################################
+DROP TABLE t1;
+set global xa_detach_on_prepare=1;
+set xa_detach_on_prepare=1;

@@ -131,13 +131,43 @@ class Transaction_cache {
 
     @return The transaction context if found and valid, nullptr otherwise.
    */
+  /* Attention:!!! If this function returns an attached transaction_ptr, without
+   * the protection by m_LOCK_transaction_cache, the transaction_ptr is not safe
+   * from race condition with `~THD()`. So make sure the provided filter
+   * contains the transaction can't be attached. */
   static transaction_ptr find(XID *xid, filter_predicate_t filter = nullptr);
+
+  /**
+   Similar with find() but provide explicit filter to filter out attached
+   transaction.
+
+   @return pair, the first shows xid exists in cache or not, the second is the
+   transaction_ptr if exists and detached. So if an attached transaction_ptr
+   exists in cache, the function will return (true, nullptr). */
+  static std::pair<bool /* exists or not */, transaction_ptr> find_detached(
+      XID *xid);
   /**
     Retrieves the list of transaction contexts cached.
 
     @return A vector with all transaction contexts cached so far.
    */
-  static list get_cached_transactions();
+
+  /* This API returns a transaction list which is not protected by
+   * m_LOCK_transaction_cache, and it is not safe from race condition with
+   * `~THD()`. */
+  // static list get_cached_transactions();
+
+  /**
+    Retrieves the list of transaction contexts cached and process them with a
+    lambda function.
+
+    @param func The lambda function to be applied to each cached transaction, if
+    the function returns true, the loop is broken.
+    @return A vector with all transaction contexts cached so far.
+   */
+  static bool process_cached_transactions(
+      std::function<bool(const transaction_ptr &)> func);
+
   /**
     Initializes the transaction cache underlying resources.
    */
