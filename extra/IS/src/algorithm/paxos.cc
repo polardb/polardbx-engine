@@ -1484,8 +1484,8 @@ int Paxos::requestVote(bool force) {
     epochTimer_->restart();
     votedFor_ = localServer_->serverId;
     log_->setMetaData(keyVoteFor, votedFor_);
-    easy_system_log("Server %d : Start new requestVote: new term(%ld)\n",
-                   localServer_->serverId, currentTerm_.load());
+    easy_system_log("Server %d : Start new requestVote: new term(%ld), force(%d)\n",
+                   localServer_->serverId, currentTerm_.load(), force);
 
     PaxosMsg msg;
     msg.set_term(currentTerm_);
@@ -1578,9 +1578,11 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
                     msg->lastlogindex() >= lastLogIndex));
 
   easy_system_log(
-      "Server %d : leaderStickiness check: msg::force(%d) state_:%d "
-      "electionTimer_::Stage:%d leaderId_:%llu .\n",
-      localServer_->serverId, msg->force(), state_.load(),
+      "Server %d : leaderStickiness check: msgid(%d), force(%d), msgsrvid(%llu), "
+      "msgterm(%d), state_:%d, "
+      "electionTimer_::Stage:%d, leaderId_:%llu .\n",
+      localServer_->serverId, msg->msgid(), msg->force(), msg->myserverid(),
+      msg->term(), state_.load(),
       electionTimer_->getCurrentStage(), leaderId_.load());
   // if (state_ == LEADER || (state_ == FOLLOWER &&
   // electionTimer_->getCurrentStage() == 0 && !msg->force()))

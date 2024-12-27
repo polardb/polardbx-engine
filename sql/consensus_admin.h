@@ -45,4 +45,5 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
 int calculate_consensus_apply_start_pos(Relay_log_info *rli,
                                         bool is_xpaxos_channel);
 
+void update_applied_index(const unsigned long long commitIndex);
 #endif

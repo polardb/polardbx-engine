@@ -145,6 +145,7 @@
 #include "sql/consensus_log_manager.h"
 #include "sql/gcn_log_event.h"
 #include "sql/lizard_binlog.h"
+#include "sql/consensus_admin.h"
 
 #include "polarx_proc/changeset_manager.h"
 
@@ -9178,14 +9179,8 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
   if (consensus_ptr) {
     if (opt_enable_appliedindex_checker)
       appliedindex_checker.commit(thd->consensus_index);
-    else {
-      uint64 commitIndex = consensus_ptr->getCommitIndex();
-      uint64 tmpi = opt_appliedindex_force_delay >= commitIndex
-                        ? 0
-                        : commitIndex - opt_appliedindex_force_delay;
-      consensus_ptr->updateAppliedIndex(tmpi);
-      replica_read_manager.update_lsn(tmpi);
-    }
+    else
+      update_applied_index(consensus_ptr->getCommitIndex());
   }
 
   if (thd->session_tracker.get_tracker(SESSION_INDEX_TRACKER)->is_enabled())

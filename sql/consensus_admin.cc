@@ -795,7 +795,6 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
   bool recover_outer = false;
   uint recover_flag = 0;
   uint64 recover_checksum = 0;
-  uint64 rli_appliedindex = 0;
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
 
@@ -954,12 +953,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
     }
 
     // deal with appliedindex
-    rli_appliedindex = rli->get_consensus_apply_index();
-    rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex
-                           ? 0
-                           : rli_appliedindex - opt_appliedindex_force_delay;
-    consensus_ptr->updateAppliedIndex(rli_appliedindex);
-    replica_read_manager.update_lsn(rli_appliedindex);
+    update_applied_index(rli->get_consensus_apply_index());
 
     /*
      * Wait until new leader empty log is committed,
@@ -983,4 +977,13 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
   }
 
   return 0;
+}
+
+void update_applied_index(const unsigned long long commitIndex)
+{
+  uint64 tmpi = opt_appliedindex_force_delay >= commitIndex
+                    ? 0
+                    : commitIndex - opt_appliedindex_force_delay;
+  consensus_ptr->updateAppliedIndex(tmpi);
+  replica_read_manager.update_lsn(tmpi);
 }

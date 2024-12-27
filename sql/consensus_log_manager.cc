@@ -1259,6 +1259,7 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
   while (!(recovery_manager->is_pending_recovering_trx_empty())) {
     my_sleep(1000);
   }
+
   // prefetch stop, and release LOCK_consensuslog_status
   prefetch_manager->disable_all_prefetch_channels();
 
@@ -1315,21 +1316,8 @@ int ConsensusLogManager::wait_follower_upgraded(uint64 term, uint64 index) {
 
   // log type instance do not to recover start index
   if (!opt_cluster_log_type_instance) {
-    /*
-      TODO: the global set gtid_state->binlog_previous_gtids is not maintenaned
-      correctly on followers, and as a result the content of previous gtid event
-      in binlog file is incorrect at binlog rotation.
-
-      So, when follower upgrading to leader, that using the previous gtid event
-      in binlog to adjust the value in memory is unreliable.
-
-      Actually in xdb cluster, binlog previous gtid set are always equivalent to
-      executed gtid set, we disable adjusting temporarily.
-    */
-    // if (index > 0 && binlog->reset_previous_gtids_logged(index)) {
-    //   xp::error(ER_XP_0) << "Failed to reset previous gtids logged.";
-    // }
     consensus_info->set_last_leader_term(term);
+    update_applied_index(consensus_ptr->getCommitIndex());
   }
   consensus_info->set_recover_status(
       Consensus_Log_System_Status::BINLOG_WORKING);
