@@ -864,7 +864,7 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index, bool enab
   int curr_retry = 0;
   if (consensus_index != 0) {
     const int max_retry_count = 2 * opt_consensus_max_wait_seconds_for_next_trx_index;
-    while (enable_retry && curr_retry <= max_retry_count) {
+    while (curr_retry <= max_retry_count) {
       auto consensus_guard = create_lock_guard(
         [&] { rdlock_consensus_status(); },
         [&] { unlock_consensus_status(); }
@@ -875,7 +875,7 @@ uint64 ConsensusLogManager::get_next_trx_index(uint64 consensus_index, bool enab
 
       if (log->get_trx_end_index(consensus_index, retIndex) == 0) {
         break;
-      } else if (retIndex > 0) {
+      } else if (retIndex > 0 && enable_retry) {
         consensus_guard.unlock();
         curr_retry++;
         xp::error(ER_XP_0) << "fail to find next trx index, retry after 500ms, current try " << curr_retry;

@@ -7063,6 +7063,7 @@ extern "C" void *handle_slave_sql(void *arg) {
   my_off_t saved_log_pos = 0;
   my_off_t saved_master_log_pos = 0;
   my_off_t saved_skip = 0;
+  uint64 last_real_index = 0;
 
   Relay_log_info *rli = ((Master_info *)arg)->rli;
 
@@ -7362,7 +7363,9 @@ extern "C" void *handle_slave_sql(void *arg) {
     }
     mysql_mutex_unlock(&rli->data_lock);
 
-    mts_init_consensus_apply_index(rli, rli->get_consensus_apply_index());
+    last_real_index = consensus_log_manager.get_next_trx_index(
+        rli->get_consensus_apply_index(), false) - 1;
+    mts_init_consensus_apply_index(rli, last_real_index);
 
     /* Read queries from the IO/THREAD until this thread is killed */
 
