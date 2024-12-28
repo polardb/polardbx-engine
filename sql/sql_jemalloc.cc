@@ -189,6 +189,10 @@ bool check_active_memory_profiling(sys_var *, THD *thd, set_var *var) {
   return false;
 }
 
+void jemalloc_malloc_stats_print() {
+  malloc_stats_print(NULL, NULL, NULL);
+}
+
 } /* namespace im */
 
 #endif /* RDS_HAVE_JEMALLOC */

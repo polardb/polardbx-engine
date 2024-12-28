@@ -46,6 +46,8 @@ extern "C" MYSQL_PLUGIN_IMPORT char innodb_version[SERVER_VERSION_LENGTH];
 static constexpr uint DEFAULT_RPC_PORT = 33660;
 extern int32 opt_rpc_port;
 extern bool opt_enable_polarx_rpc;
+extern ulonglong opt_changeset_threads;
+
 
 static constexpr ulonglong DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL = 0;
 extern ulonglong opt_import_tablespace_iterator_interval_ms;

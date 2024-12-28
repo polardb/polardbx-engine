@@ -1,6 +1,7 @@
 call mtr.add_suppression("can not open rds audit log");
 call mtr.add_suppression("audit my_pwrite got");
 call mtr.add_suppression("Some audit logs have lost before");
+--source include/have_debug.inc
 
 set global rds_audit_log_version=MYSQL_V1;
 set global rds_audit_log_enabled=on;

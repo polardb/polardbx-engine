@@ -94,8 +94,6 @@ class ConsensusLogManager {
   int init_service();
   int cleanup();
 
-  bool option_invalid(bool log_bin);
-
   // class args
   Relay_log_info *get_relay_log_info() { return rli_info; }
   IO_CACHE *get_cache();
@@ -126,6 +124,7 @@ class ConsensusLogManager {
   ConsensusPreFetchManager *get_prefetch_manager() { return prefetch_manager; }
   ConsensusLogIndex *get_log_file_index() { return log_file_index; }
   mysql_mutex_t *get_sequence_stage1_lock() {
+    //TODD::@yanhua remove it better
     return &LOCK_consensuslog_sequence_stage1;
   }
   mysql_mutex_t *get_term_lock() { return &LOCK_consensuslog_term; }
@@ -268,6 +267,8 @@ class ConsensusLogManager {
   uint64_t get_leader_transfer_state() const { return leader_transfer_state.load(); }
   uint64_t get_limit_new_trx_state() const { return CLTS_LIMIT_NEW_TRX; }
   uint64_t get_limit_none_state() const { return CLTS_LIMIT_NONE; }
+
+  static bool enable_consensus() { return opt_enable_consensus; }
 
  private:
   void wait_replay_log_finished();

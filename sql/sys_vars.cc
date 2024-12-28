@@ -497,6 +497,26 @@ static Sys_var_bool Sys_pfs_enabled("performance_schema",
                                     CMD_LINE(OPT_ARG), DEFAULT(true),
                                     PFS_TRAILING_PROPERTIES);
 
+static Sys_var_bool Sys_rds_audit_flush_thread_enabled("rds_audit_flush_thread_enabled",
+                                    "Enable the audit thread create.",
+                                    READ_ONLY GLOBAL_VAR(opt_rds_audit_flush_thread_enabled),
+                                    CMD_LINE(OPT_ARG), DEFAULT(true),
+                                    PFS_TRAILING_PROPERTIES);
+
+static Sys_var_ulong Sys_server_max_threads(
+    "server_max_threads",
+    "Variable to set the value for the number of threads.",
+    READ_ONLY GLOBAL_VAR(opt_server_max_threads),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 1000 * 1024), DEFAULT(100 * 1024),
+    BLOCK_SIZE(1), PFS_TRAILING_PROPERTIES);
+
+static Sys_var_ulong Sys_error_log_ring_buffer_size(
+    "error_log_ring_buffer_size",
+    "Default startup value for the size of the ring buffer.",
+    READ_ONLY GLOBAL_VAR(opt_error_log_ring_buffer_size),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 10 * 1024 * 1024), DEFAULT(5 * 1024 * 1024),
+    BLOCK_SIZE(1), PFS_TRAILING_PROPERTIES);
+
 static Sys_var_charptr Sys_pfs_instrument(
     "performance_schema_instrument",
     "Default startup value for a performance schema instrument.",

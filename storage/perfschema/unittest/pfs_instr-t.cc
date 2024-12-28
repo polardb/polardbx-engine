@@ -501,6 +501,7 @@ static void do_all_tests() {
 
 int main(int, char **) {
   plan(103);
+  pfs_param.m_enabled = 1;
   MY_INIT("pfs_instr-t");
   do_all_tests();
   my_end(0);

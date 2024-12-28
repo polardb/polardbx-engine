@@ -40,7 +40,7 @@ namespace im {
  */
 class ChangesetManager {
  public:
-  ChangesetManager() { InitThreadPool(8); }
+  ChangesetManager() { }
 
   ~ChangesetManager() = default;
 

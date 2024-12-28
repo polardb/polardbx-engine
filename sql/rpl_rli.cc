@@ -426,9 +426,11 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
     mysql_mutex_lock(&data_lock);
     last_master_timestamp = new_ts;
 
-    long time_diff = ((long)(time(nullptr) - last_master_timestamp) - mi->clock_diff_with_master);
-    time_diff = (last_master_timestamp ? max(0L, time_diff) : 0);
-    consensus_ptr->updateApplyDelaySeconds(time_diff);
+    if (consensus_ptr) {
+      long time_diff = ((long)(time(nullptr) - last_master_timestamp) - mi->clock_diff_with_master);
+      time_diff = (last_master_timestamp ? max(0L, time_diff) : 0);
+      consensus_ptr->updateApplyDelaySeconds(time_diff);
+    }
 
     mysql_mutex_unlock(&data_lock);
   }

@@ -25,11 +25,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 #include "sys_vars_consensus.h"
+#include <malloc.h>
 #include "bl_consensus_log.h"          // ConsensusLogManager and alisql::Paxos
 #include "sql/appliedindex_checker.h"  // AppliedIndexChecker
 #include "sql/events.h"
 #include "sql/log.h"
 #include "sql/sys_vars.h"
+
+#ifdef RDS_HAVE_JEMALLOC
+#include "sql/sql_jemalloc.h"
+#endif
 
 #include "sql/replica_read_manager.h"
 
@@ -106,6 +111,7 @@ bool opt_commit_pos_watcher = false;
 ulonglong opt_commit_pos_watcher_interval = 0;
 bool opt_consensus_force_promote = 0;
 bool opt_consensus_force_leader_transfer = 0;
+bool opt_print_malloc_stats = 0;
 bool opt_consensus_auto_reset_match_index = 1;
 bool opt_consensus_learner_heartbeat;
 bool opt_consensus_auto_leader_transfer;
@@ -116,6 +122,7 @@ ulonglong opt_consensus_wait_unfinished_xa_timeout;
 ulonglong opt_consensus_wait_unfinished_bgc_timeout;
 bool opt_consensus_disable_commit_before_change_leader;
 bool opt_consensus_disable_empty_xa;
+bool opt_enable_consensus = true;
 bool opt_consensuslog_revise;
 bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
@@ -125,7 +132,8 @@ bool opt_consensus_reset_mts_info = false;
 std::atomic<int64> xa_finishing_count = (0);
 
 static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setChecksumMode(opt_consensus_checksum);
+  if (consensus_ptr)
+    consensus_ptr->setChecksumMode(opt_consensus_checksum);
   return false;
 }
 
@@ -137,10 +145,12 @@ static Sys_var_bool Sys_consensus_checksum(
     ON_UPDATE(fix_consensus_checksum));
 
 static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type) {
-  if (!consensus_ptr->getConsensusAsync() && opt_consensus_disable_election)
-    xp::warn(ER_XP_0) << "Disable election while cluster is not in weak mode.";
-  consensus_ptr->debugDisableElection = opt_consensus_disable_election;
-  consensus_ptr->debugDisableStepDown = opt_consensus_disable_election;
+  if (consensus_ptr) {
+    if (!consensus_ptr->getConsensusAsync() && opt_consensus_disable_election)
+      xp::warn(ER_XP_0) << "Disable election while cluster is not in weak mode.";
+    consensus_ptr->debugDisableElection = opt_consensus_disable_election;
+    consensus_ptr->debugDisableStepDown = opt_consensus_disable_election;
+  }
   return false;
 }
 
@@ -152,7 +162,8 @@ static Sys_var_bool Sys_consensus_disable_election(
     ON_UPDATE(fix_consensus_disable_election));
 
 static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
+  if (consensus_ptr)
+    consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
   return false;
 }
 
@@ -164,8 +175,10 @@ static Sys_var_bool Sys_consensus_dynamic_easyindex(
     ON_UPDATE(fix_consensus_dynamic_easyindex));
 
 static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type) {
-  replica_exec_mode_options = opt_weak_consensus_mode ? 2 : 0;
-  consensus_ptr->setConsensusAsync(opt_weak_consensus_mode);
+  if (consensus_ptr) {
+    replica_exec_mode_options = opt_weak_consensus_mode ? 2 : 0;
+    consensus_ptr->setConsensusAsync(opt_weak_consensus_mode);
+  }
   return false;
 }
 
@@ -177,7 +190,8 @@ static Sys_var_bool Sys_weak_consensus_mode(
 
 static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *,
                                                       enum_var_type) {
-  consensus_ptr->setReplicateWithCacheLog(
+  if (consensus_ptr)
+    consensus_ptr->setReplicateWithCacheLog(
       opt_consensus_replicate_with_cache_log);
   return false;
 }
@@ -190,7 +204,8 @@ static Sys_var_bool Sys_consensus_replicate_with_cache_log(
     ON_UPDATE(handle_consensus_replicate_with_cache_log));
 
 static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setCompactOldMode(opt_consensus_old_compact_mode);
+  if (consensus_ptr)
+    consensus_ptr->setCompactOldMode(opt_consensus_old_compact_mode);
   return false;
 }
 
@@ -221,7 +236,8 @@ static Sys_var_ulonglong Sys_consensus_stop_apply_index(
 
 static bool fix_consensus_force_sync_epoch_diff(sys_var *, THD *,
                                                 enum_var_type) {
-  consensus_ptr->setForceSyncEpochDiff(opt_consensus_force_sync_epoch_diff);
+  if (consensus_ptr)
+    consensus_ptr->setForceSyncEpochDiff(opt_consensus_force_sync_epoch_diff);
   return false;
 }
 
@@ -247,8 +263,9 @@ static Sys_var_ulonglong Sys_cluster_id("cluster_id", "cluster id",
                                         BLOCK_SIZE(1));
 
 static bool fix_consensus_log_cache_size(sys_var *, THD *, enum_var_type) {
-  consensus_log_manager.get_fifo_cache_manager()->set_max_log_cache_size(
-      opt_consensus_log_cache_size);
+  if (consensus_log_manager.get_fifo_cache_manager())
+    consensus_log_manager.get_fifo_cache_manager()->set_max_log_cache_size(
+        opt_consensus_log_cache_size);
   return false;
 }
 
@@ -275,7 +292,8 @@ static Sys_var_bool Sys_consensus_prefetch_fast_fetch(
     DEFAULT(false));
 
 static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type) {
-  consensus_log_manager.get_prefetch_manager()->set_max_prefetch_cache_size(
+  if (consensus_log_manager.get_prefetch_manager())
+    consensus_log_manager.get_prefetch_manager()->set_max_prefetch_cache_size(
       opt_consensus_prefetch_cache_size);
   return false;
 }
@@ -305,7 +323,8 @@ static Sys_var_ulonglong Sys_consensus_prefetch_cache_size(
 
 static bool fix_consensus_prefetch_window_size(sys_var *, THD *,
                                                enum_var_type) {
-  consensus_log_manager.get_prefetch_manager()->set_prefetch_window_size(
+  if (consensus_log_manager.get_prefetch_manager())
+    consensus_log_manager.get_prefetch_manager()->set_prefetch_window_size(
       opt_consensus_prefetch_window_size);
   return false;
 }
@@ -318,7 +337,8 @@ static Sys_var_ulonglong Sys_consensus_prefetch_window_size(
 
 static bool fix_consensus_prefetch_wakeup_ratio(sys_var *, THD *,
                                                 enum_var_type) {
-  consensus_log_manager.get_prefetch_manager()->set_prefetch_wakeup_ratio(
+  if (consensus_log_manager.get_prefetch_manager())
+    consensus_log_manager.get_prefetch_manager()->set_prefetch_wakeup_ratio(
       opt_consensus_prefetch_wakeup_ratio);
   return false;
 }
@@ -383,7 +403,8 @@ static Sys_var_ulonglong Sys_consensus_large_trx_split_size(
 
 static bool fix_consensus_new_follower_threshold(sys_var *, THD *,
                                                  enum_var_type) {
-  consensus_ptr->setMaxDelayIndex4NewMember(
+  if (consensus_ptr)
+    consensus_ptr->setMaxDelayIndex4NewMember(
       opt_consensus_new_follower_threshold);
   return false;
 }
@@ -458,7 +479,8 @@ static Sys_var_ulonglong Sys_consensus_large_event_split_size(
     ON_CHECK(check_consensus_large_event_split_size), ON_UPDATE(NULL));
 
 static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setSendPacketTimeout(opt_consensus_send_timeout);
+  if (consensus_ptr)
+    consensus_ptr->setSendPacketTimeout(opt_consensus_send_timeout);
   return false;
 }
 
@@ -469,7 +491,8 @@ static Sys_var_uint Sys_consensus_send_timeout(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_send_timeout));
 
 static bool fix_consensus_learner_timeout(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setLearnerConnTimeout(opt_consensus_learner_timeout);
+  if (consensus_ptr)
+    consensus_ptr->setLearnerConnTimeout(opt_consensus_learner_timeout);
   return false;
 }
 
@@ -480,7 +503,8 @@ static Sys_var_uint Sys_consensus_learner_timeout(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_timeout));
 
 static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
+  if (consensus_ptr)
+    consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
   return false;
 }
 
@@ -492,7 +516,8 @@ static Sys_var_bool Sys_consensus_learner_pipelining(
 
 static bool fix_consensus_configure_change_timeout(sys_var *, THD *,
                                                    enum_var_type) {
-  consensus_ptr->setConfigureChangeTimeout(
+  if (consensus_ptr)
+    consensus_ptr->setConfigureChangeTimeout(
       opt_consensus_configure_change_timeout);
   return false;
 }
@@ -527,7 +552,8 @@ static Sys_var_uint Sys_consensus_heartbeat_thread_count(
     VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
 
 static bool fix_consensus_max_packet_size(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setMaxPacketSize(opt_consensus_max_packet_size);
+  if (consensus_ptr)
+    consensus_ptr->setMaxPacketSize(opt_consensus_max_packet_size);
   return false;
 }
 
@@ -541,6 +567,7 @@ static Sys_var_ulong Sys_consensus_max_packet_size(
 
 static bool fix_consensus_msg_compress_option(sys_var *, THD *, enum_var_type) {
   if (NULL == opt_consensus_msg_compress_option) return false;
+  if (!consensus_ptr)  return false;
   // format: ip1:port1 type threshold checksum; ip2:port2 type threshold
   // checksum...
   std::size_t current, previous = 0;
@@ -618,7 +645,8 @@ static Sys_var_charptr Sys_consensus_msg_compress_option(
     ON_UPDATE(fix_consensus_msg_compress_option));
 
 static bool fix_consensus_pipelining_timeout(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setPipeliningTimeout(opt_consensus_pipelining_timeout);
+  if (consensus_ptr)
+    consensus_ptr->setPipeliningTimeout(opt_consensus_pipelining_timeout);
   return false;
 }
 
@@ -631,7 +659,8 @@ static Sys_var_ulong Sys_consensus_pipelining_timeout(
     ON_UPDATE(fix_consensus_pipelining_timeout));
 
 static bool fix_consensus_large_batch_ratio(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setLargeBatchRatio(opt_consensus_large_batch_ratio);
+  if (consensus_ptr)
+    consensus_ptr->setLargeBatchRatio(opt_consensus_large_batch_ratio);
   return false;
 }
 
@@ -643,7 +672,8 @@ static Sys_var_ulong Sys_consensus_large_batch_ratio(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_large_batch_ratio));
 
 static bool fix_consensus_max_delay_index(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setMaxDelayIndex(opt_consensus_max_delay_index);
+  if (consensus_ptr)
+    consensus_ptr->setMaxDelayIndex(opt_consensus_max_delay_index);
   return false;
 }
 
@@ -654,7 +684,8 @@ static Sys_var_ulonglong Sys_consensus_max_delay_index(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_max_delay_index));
 
 static bool fix_consensus_min_delay_index(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setMinDelayIndex(opt_consensus_min_delay_index);
+  if (consensus_ptr)
+    consensus_ptr->setMinDelayIndex(opt_consensus_min_delay_index);
   return false;
 }
 
@@ -666,7 +697,8 @@ static Sys_var_ulonglong Sys_consensus_min_delay_index(
 
 static bool fix_consensus_optimistic_heartbeat(sys_var *, THD *,
                                                enum_var_type) {
-  consensus_ptr->setOptimisticHeartbeat(opt_consensus_optimistic_heartbeat);
+  if (consensus_ptr)
+    consensus_ptr->setOptimisticHeartbeat(opt_consensus_optimistic_heartbeat);
   return false;
 }
 
@@ -679,7 +711,8 @@ static Sys_var_bool Sys_consensus_optimistic_heartbeat(
 
 static bool fix_consensus_sync_follower_meta_interval(sys_var *, THD *,
                                                       enum_var_type) {
-  consensus_ptr->setSyncFollowerMetaInterval(
+  if (consensus_ptr)
+    consensus_ptr->setSyncFollowerMetaInterval(
       opt_consensus_sync_follower_meta_interval);
   return false;
 }
@@ -712,6 +745,7 @@ static Sys_var_ulonglong Sys_appliedindex_force_delay(
 
 static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type) {
   if (NULL == opt_consensus_flow_control) return false;
+  if (!consensus_ptr) return false;
   // format: ip1:port1 fc1;ip2:port2 fc2...
   std::size_t current, previous = 0;
   std::string fcstr(opt_consensus_flow_control);
@@ -749,7 +783,8 @@ static Sys_var_charptr Sys_consensus_flow_control(
 
 static bool fix_consensus_log_level(sys_var *, THD *, enum_var_type) {
   // opt_consensus_log_level + 3 equal to easy log level
-  consensus_ptr->setAlertLogLevel(
+  if (consensus_ptr)
+    consensus_ptr->setAlertLogLevel(
       alisql::Paxos::AlertLogLevel(opt_consensus_log_level + 3));
   return false;
 }
@@ -772,7 +807,8 @@ static Sys_var_ulonglong Sys_consensus_check_commit_index_interval(
 static bool handler_reset_consensus_prefetch_cache(sys_var *, THD *,
                                                    enum_var_type) {
   DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-  consensus_log_manager.get_prefetch_manager()->reset_prefetch_cache();
+  if (consensus_log_manager.get_prefetch_manager())
+    consensus_log_manager.get_prefetch_manager()->reset_prefetch_cache();
   opt_reset_consensus_prefetch_cache = 0;
   DBUG_RETURN(false);
 }
@@ -816,7 +852,7 @@ static Sys_var_bool Sys_session_track_index(
 
 static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
   DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-  if (opt_consensus_force_promote) consensus_ptr->forcePromote();
+  if (consensus_ptr && opt_consensus_force_promote) consensus_ptr->forcePromote();
   opt_consensus_force_promote = 0;
   DBUG_RETURN(false);
 }
@@ -840,9 +876,31 @@ static Sys_var_bool Sys_consensus_force_leader_transfer(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
     ON_UPDATE(handle_consensus_force_leader_transfer));
 
+static bool handle_print_malloc_stats(sys_var *, THD *, enum_var_type) {
+  DBUG_ENTER("print_malloc_stats");
+  if (opt_print_malloc_stats) {
+#ifdef RDS_HAVE_JEMALLOC
+    im::jemalloc_malloc_stats_print();
+#else
+    malloc_stats();
+#endif
+  }
+
+  opt_print_malloc_stats = 0;
+  DBUG_RETURN(false);
+}
+
+static Sys_var_bool Sys_print_malloc_stats(
+    "print_malloc_stats", "print sys mem",
+    GLOBAL_VAR(opt_print_malloc_stats), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
+    ON_UPDATE(handle_print_malloc_stats));
+
+
 static bool fix_consensus_auto_reset_match_index(sys_var *, THD *,
                                                  enum_var_type) {
-  consensus_ptr->setEnableAutoResetMatchIndex(
+  if (consensus_ptr)
+    consensus_ptr->setEnableAutoResetMatchIndex(
       opt_consensus_auto_reset_match_index);
   return false;
 }
@@ -855,7 +913,8 @@ static Sys_var_bool Sys_consensus_auto_reset_match_index(
     ON_UPDATE(fix_consensus_auto_reset_match_index));
 
 static bool fix_consensus_learner_heartbeat(sys_var *, THD *, enum_var_type) {
-  consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
+  if (consensus_ptr)
+    consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
   return false;
 }
 
@@ -867,7 +926,8 @@ static Sys_var_bool Sys_consensus_learner_heartbeat(
 
 static bool fix_consensus_auto_leader_transfer(sys_var *, THD *,
                                                enum_var_type) {
-  consensus_ptr->setEnableAutoLeaderTransfer(
+  if (consensus_ptr)
+    consensus_ptr->setEnableAutoLeaderTransfer(
       opt_consensus_auto_leader_transfer);
   return false;
 }
@@ -881,7 +941,8 @@ static Sys_var_bool Sys_consensus_auto_leader_transfer(
 
 static bool fix_consensus_auto_leader_transfer_check_seconds(sys_var *, THD *,
                                                              enum_var_type) {
-  consensus_ptr->setAutoLeaderTransferCheckSeconds(
+  if (consensus_ptr)
+    consensus_ptr->setAutoLeaderTransferCheckSeconds(
       opt_consensus_auto_leader_transfer_check_seconds);
   return false;
 }
@@ -941,3 +1002,9 @@ static Sys_var_bool Sys_consensus_disable_empty_xa(
     "disable empty xa for debug",
     GLOBAL_VAR(opt_consensus_disable_empty_xa), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_bool Sys_enable_consensus(
+    "enable_consensus",
+    "enable consensus for xcluster node",
+    READ_ONLY GLOBAL_VAR(opt_enable_consensus), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);

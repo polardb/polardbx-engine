@@ -486,7 +486,7 @@ constexpr ulong INNODB_LOG_BUFFER_SIZE_MAX = ULONG_MAX;
 /** Default value of innodb_log_recent_written_size (in bytes). */
 constexpr ulong INNODB_LOG_RECENT_WRITTEN_SIZE_DEFAULT = 1024 * 1024;
 
-/** Minimum allowed value of innodb_log_recent_written_size. */
+/** Minimum allowed value of innodb_log_recent_written_size. 512 */
 constexpr ulong INNODB_LOG_RECENT_WRITTEN_SIZE_MIN = OS_FILE_LOG_BLOCK_SIZE;
 
 /** Maximum allowed value of innodb_log_recent_written_size. */
@@ -495,7 +495,7 @@ constexpr ulong INNODB_LOG_RECENT_WRITTEN_SIZE_MAX = 1024 * 1024 * 1024UL;
 /** Default value of innodb_log_recent_closed_size (in bytes). */
 constexpr ulong INNODB_LOG_RECENT_CLOSED_SIZE_DEFAULT = 2 * 1024 * 1024;
 
-/** Minimum allowed value of innodb_log_recent_closed_size. */
+/** Minimum allowed value of innodb_log_recent_closed_size. 512 */
 constexpr ulong INNODB_LOG_RECENT_CLOSED_SIZE_MIN = OS_FILE_LOG_BLOCK_SIZE;
 
 /** Maximum allowed value of innodb_log_recent_closed_size. */

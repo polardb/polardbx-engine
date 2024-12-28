@@ -30,6 +30,7 @@
 #include "sql/rpl_commit_stage_manager.h"
 #include "sql/rpl_replica_commit_order_manager.h"  // Commit_order_manager
 #include "sql/rpl_rli_pdb.h"                       // Slave_worker
+#include "sql/consensus_log_manager.h"
 
 class Slave_worker;
 class Commit_order_manager;
@@ -347,8 +348,14 @@ bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
       We do not lock the enter_mutex if it is LOCK_log when rotating binlog
       caused by logging incident log event, since it is already locked.
     */
-    need_lock_enter_mutex = !(mysql_bin_log.is_rotating_caused_by_incident &&
-                              enter_mutex == mysql_bin_log.get_log_lock());
+    if (stage == Commit_stage_manager::BINLOG_FLUSH_STAGE) {
+      //TODO::@yanhua remove later
+      need_lock_enter_mutex = !(mysql_bin_log.is_rotating_caused_by_incident
+                                && enter_mutex == consensus_log_manager.get_sequence_stage1_lock());
+    } else {
+      need_lock_enter_mutex = !(mysql_bin_log.is_rotating_caused_by_incident
+                                && enter_mutex == mysql_bin_log.get_log_lock());
+    }
 
     if (need_lock_enter_mutex)
       mysql_mutex_lock(enter_mutex);

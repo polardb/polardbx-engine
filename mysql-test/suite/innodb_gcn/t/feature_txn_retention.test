@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 --source suite/innodb_gcn/include/init_conn_base_seq.inc
 set global innodb_purge_rseg_truncate_frequency = 1;
 

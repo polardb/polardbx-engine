@@ -1611,6 +1611,7 @@ uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader,
   PolarDB-X Engine: checkCommitIndex to make sure only send committed log
 */
 int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index) {
+  if (!consensus_ptr) return 0;
 #ifndef NDEBUG
   ulong hb_info_counter = 0;
 #endif

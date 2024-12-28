@@ -35,6 +35,9 @@ syslog_facility=daemon
 
 # For jemalloc memory profiling
 malloc_conf=
+cpus=
+je_narenas_num=
+pt_narenas_num=
 
 trap '' 1 2 3 15			# we shouldn't let anyone kill us
 trap '' 13                              # not even SIGPIPE
@@ -287,7 +290,14 @@ parse_arguments() {
       --malloc-conf=*)
           malloc_conf="$val";
           export  MALLOC_CONF="$malloc_conf"; ;;
+      --cpus=*)
+          cpus="$val"; 
+          je_narenas_num=$((cpus * 4));
+          export MALLOC_CONF="narenas:$je_narenas_num";
 
+          pt_narenas_num=$((cpus * 2));
+          export MALLOC_ARENA_MAX="$pt_narenas_num";
+          ;;
       --help) usage ;;
 
       *)

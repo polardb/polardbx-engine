@@ -1176,7 +1176,7 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
     ret = mysql_bin_log.reset_logs(thd);
 
     //append empty log for crash recover
-    if (!ret && thd->variables.opt_consensus_safe_for_reset_master) {
+    if (!ret && thd->variables.opt_consensus_safe_for_reset_master && consensus_ptr) {
       alisql::LogEntry entry1;
       consensus_ptr->getLog()->getEmptyEntry(entry1);
       consensus_ptr->replicateLog(entry1);

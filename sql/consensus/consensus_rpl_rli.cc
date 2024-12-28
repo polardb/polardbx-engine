@@ -65,7 +65,7 @@ void XPaxos_relay_log_info::overwrite_log_name(const char **ln,
   *ln = opt_bin_logname;
   *log_index_name = opt_binlog_index_name;
 
-  relay_log.is_xpaxos_log = true;
+  relay_log.is_xpaxos_log = ConsensusLogManager::enable_consensus();
   return;
 }
 

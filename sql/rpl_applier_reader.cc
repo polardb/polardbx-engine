@@ -591,6 +591,6 @@ void Rpl_applier_reader::reset_seconds_behind_master() {
   */
   if (!m_rli->is_parallel_exec() || m_rli->gaq->empty()) {
     m_rli->last_master_timestamp = 0;
-    consensus_ptr->updateApplyDelaySeconds(0);
+    if (consensus_ptr) consensus_ptr->updateApplyDelaySeconds(0);
   }
 }

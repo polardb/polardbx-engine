@@ -83,70 +83,70 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
     protocol->start_row();
     protocol->store("work queue", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_work_queue_hist.histogram();
+    hist += polarx_rpc::g_work_queue_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "recv first")) {
     protocol->start_row();
     protocol->store("recv first", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_recv_first_hist.histogram();
+    hist += polarx_rpc::g_recv_first_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "recv all")) {
     protocol->start_row();
     protocol->store("recv all", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_recv_all_hist.histogram();
+    hist += polarx_rpc::g_recv_all_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "decode")) {
     protocol->start_row();
     protocol->store("decode", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_decode_hist.histogram();
+    hist += polarx_rpc::g_decode_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "schedule")) {
     protocol->start_row();
     protocol->store("schedule", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_schedule_hist.histogram();
+    hist += polarx_rpc::g_schedule_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "run")) {
     protocol->start_row();
     protocol->store("run", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_run_hist.histogram();
+    hist += polarx_rpc::g_run_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "timer")) {
     protocol->start_row();
     protocol->store("timer", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_timer_hist.histogram();
+    hist += polarx_rpc::g_timer_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "cleanup")) {
     protocol->start_row();
     protocol->store("cleanup", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_cleanup_hist.histogram();
+    hist += polarx_rpc::g_cleanup_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "fin")) {
     protocol->start_row();
     protocol->store("fin", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_fin_hist.histogram();
+    hist += polarx_rpc::g_fin_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "auth")) {
     protocol->start_row();
     protocol->store("auth", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_auth_hist.histogram();
+    hist += polarx_rpc::g_auth_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "all")) {
@@ -154,84 +154,84 @@ void Cmd_perf_hist::send_result(THD *thd, bool error) {
     protocol->start_row();
     protocol->store("work queue", system_charset_info);
     std::string hist("hist:\n");
-    hist += polarx_rpc::g_work_queue_hist.histogram();
+    hist += polarx_rpc::g_work_queue_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("recv first", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_recv_first_hist.histogram();
+    hist += polarx_rpc::g_recv_first_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("recv all", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_recv_all_hist.histogram();
+    hist += polarx_rpc::g_recv_all_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("decode", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_decode_hist.histogram();
+    hist += polarx_rpc::g_decode_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("schedule", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_schedule_hist.histogram();
+    hist += polarx_rpc::g_schedule_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("run", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_run_hist.histogram();
+    hist += polarx_rpc::g_run_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("timer", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_timer_hist.histogram();
+    hist += polarx_rpc::g_timer_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("cleanup", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_cleanup_hist.histogram();
+    hist += polarx_rpc::g_cleanup_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("fin", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_fin_hist.histogram();
+    hist += polarx_rpc::g_fin_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
 
     protocol->start_row();
     protocol->store("auth", system_charset_info);
     hist = "hist:\n";
-    hist += polarx_rpc::g_auth_hist.histogram();
+    hist += polarx_rpc::g_auth_hist->histogram();
     protocol->store(hist.c_str(), system_charset_info);
     if (protocol->end_row()) return;
   } else if (0 == ::strcasecmp(name_.c_str(), "reset")) {
     /// reset all
-    polarx_rpc::g_work_queue_hist.reset();
-    polarx_rpc::g_recv_first_hist.reset();
-    polarx_rpc::g_recv_all_hist.reset();
-    polarx_rpc::g_decode_hist.reset();
-    polarx_rpc::g_schedule_hist.reset();
-    polarx_rpc::g_run_hist.reset();
-    polarx_rpc::g_timer_hist.reset();
-    polarx_rpc::g_cleanup_hist.reset();
-    polarx_rpc::g_fin_hist.reset();
-    polarx_rpc::g_auth_hist.reset();
+    polarx_rpc::g_work_queue_hist->reset();
+    polarx_rpc::g_recv_first_hist->reset();
+    polarx_rpc::g_recv_all_hist->reset();
+    polarx_rpc::g_decode_hist->reset();
+    polarx_rpc::g_schedule_hist->reset();
+    polarx_rpc::g_run_hist->reset();
+    polarx_rpc::g_timer_hist->reset();
+    polarx_rpc::g_cleanup_hist->reset();
+    polarx_rpc::g_fin_hist->reset();
+    polarx_rpc::g_auth_hist->reset();
 
     protocol->start_row();
     protocol->store("reset", system_charset_info);

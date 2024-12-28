@@ -30,7 +30,7 @@ namespace im {
 
 void collect_show_global_results(
     MEM_ROOT *mem_root, std::vector<Consensus_show_global_result *> &results) {
-  if (opt_consensus_force_recovery) return;
+  if (opt_consensus_force_recovery || !consensus_ptr) return;
   alisql::Paxos::MemberInfoType mi;
   std::vector<alisql::Paxos::ClusterInfoType> cis;
   consensus_ptr->getMemberInfo(&mi);
@@ -103,7 +103,7 @@ void collect_show_global_results(
 
 void collect_show_local_results(MEM_ROOT *mem_root,
                                 Consensus_show_local_result *result) {
-  if (opt_consensus_force_recovery) return;
+  if (opt_consensus_force_recovery || !consensus_ptr) return;
   const char *res = NULL;
   Consensus_Log_System_Status rw_status = consensus_log_manager.get_status();
   alisql::Paxos::MemberInfoType mi;

@@ -23,6 +23,7 @@
 
 #include "sys_vars_ext.h"
 #include "my_config.h"
+#include "plugin/x/src/module_mysqlx.h"
 #include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
 #include "sql/ccl/ccl.h"
@@ -76,6 +77,7 @@ static char *polardbx_product_version_ptr = NULL;
 
 int32 opt_rpc_port = DEFAULT_RPC_PORT;
 bool opt_enable_polarx_rpc = true;
+ulonglong opt_changeset_threads;
 
 ulonglong opt_import_tablespace_iterator_interval_ms =
     DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
@@ -592,6 +594,12 @@ static Sys_var_bool Sys_enable_polarx_rpc(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_deprecated_alias Sys_new_rpc("new_rpc", Sys_enable_polarx_rpc);
+
+static Sys_var_ulonglong Sys_changeset_threads("changeset_threads",
+    "changeset threads count",
+    READ_ONLY GLOBAL_VAR(opt_changeset_threads), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 32), DEFAULT(8), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulonglong Sys_import_tablespace_iterator_interval_ms(
     "import_tablespace_iterator_interval_ms",

@@ -262,6 +262,8 @@ The following options may be given as the first argument:
  The max concurrency allowed when use ccl queue
  --ccl-wait-timeout=# 
  Timeout in seconds to wait when concurrency control.
+ --changeset-threads[=#] 
+ changeset threads count
  --character-set-client-handshake 
  Don't ignore client side character set value sent during
  handshake.
@@ -419,15 +421,6 @@ The following options may be given as the first argument:
  Max one log size. (default: 20M)
  --consensus-max-packet-size[=#] 
  Max package size the consensus server send at once
- --consensus-max-wait-milliseconds-for-unfinished-bgc[=#] 
- the max waiting time for unfinished bgc before change
- leader
- --consensus-max-wait-milliseconds-for-unfinished-trx[=#] 
- the max waiting time for unfinished trx before change
- leader
- --consensus-max-wait-milliseconds-for-unfinished-xa[=#] 
- the max waiting time for unfinished xa before change
- leader
  --consensus-max-wait-seconds-for-next-trx-index=# 
  wait timeout for get_next_trx_index
  --consensus-min-delay-index[=#] 
@@ -478,6 +471,15 @@ The following options may be given as the first argument:
  source
  --consensus-wait-milliseconds-before-change-leader[=#] 
  the waiting time before change leader
+ --consensus-wait-unfinished-bgc-timeout[=#] 
+ the max waiting time for unfinished bgc before change
+ leader
+ --consensus-wait-unfinished-trx-timeout[=#] 
+ the max waiting time for unfinished trx before change
+ leader
+ --consensus-wait-unfinished-xa-timeout[=#] 
+ the max waiting time for unfinished xa before change
+ leader
  --consensus-worker-thread-cnt[=#] 
  Number of consensus worker thread
  --consensuslog-revise 
@@ -557,9 +559,13 @@ The following options may be given as the first argument:
  enable applied index checker during ordered_commit
  --enable-changeset  Whether open the polarx changeset proc
  (Defaults to on; use --skip-enable-changeset to disable.)
+ --enable-consensus  enable consensus for xcluster node
+ (Defaults to on; use --skip-enable-consensus to disable.)
  --enable-implicit-primary-key 
  MySQL add the primary key for every tables that haven't
  any unique indexes automaticly
+ --enable-mysqlx     Variable used to enable/disable mysqlx
+ (Defaults to on; use --skip-enable-mysqlx to disable.)
  --enable-polarx-rpc Use new open PolarDB-X RPC
  (Defaults to on; use --skip-enable-polarx-rpc to disable.)
  --enable-show-ipk-info 
@@ -582,6 +588,8 @@ The following options may be given as the first argument:
  of doing index dives for equality ranges if the number of
  equality ranges for the index is larger than or equal to
  this number. If set to 0, index dives are always used.
+ --error-log-ring-buffer-size=# 
+ Default startup value for the size of the ring buffer.
  --event-scheduler[=name] 
  Enable the event scheduler. Possible values are ON, OFF,
  and DISABLED (keep the event scheduler completely
@@ -1462,6 +1470,8 @@ The following options may be given as the first argument:
  --print-identified-with-as-hex 
  SHOW CREATE USER will print the AS clause as HEX if it
  contains non-prinable characters
+ --print-malloc-stats 
+ print sys mem
  --profiling-history-size=# 
  Limit of query profiling memory
  --protocol-compression-algorithms=name 
@@ -1492,6 +1502,9 @@ The following options may be given as the first argument:
  optimization of a query, index range scan will not be
  considered for this query. A value of 0 means range
  optimizer does not have any cap on memory. 
+ --rds-audit-flush-thread-enabled 
+ Enable the audit thread create.
+ (Defaults to on; use --skip-rds-audit-flush-thread-enabled to disable.)
  --rds-audit-log-buffer-size=# 
  Buffer size for log buffer.
  --rds-audit-log-connection-policy=name 
@@ -1808,6 +1821,8 @@ The following options may be given as the first argument:
  --server-id=#       Uniquely identifies the server instance in the community
  of replication partners
  --server-id-bits=#  Set number of significant bits in server-id
+ --server-max-threads=# 
+ Variable to set the value for the number of threads.
  --session-track-gtids=name 
  Controls the amount of global transaction ids to be
  included in the response packet sent by the
@@ -2167,6 +2182,7 @@ ccl-max-waiting-count 0
 ccl-queue-bucket-count 4
 ccl-queue-bucket-size 64
 ccl-wait-timeout 86400
+changeset-threads 8
 character-set-client-handshake TRUE
 character-set-filesystem binary
 character-set-server utf8mb4
@@ -2233,9 +2249,6 @@ consensus-log-level LOG_ERROR
 consensus-max-delay-index 50000
 consensus-max-log-size 20971520
 consensus-max-packet-size 131072
-consensus-max-wait-milliseconds-for-unfinished-bgc 500
-consensus-max-wait-milliseconds-for-unfinished-trx 800
-consensus-max-wait-milliseconds-for-unfinished-xa 500
 consensus-max-wait-seconds-for-next-trx-index 10
 consensus-min-delay-index 5000
 consensus-msg-compress-option (No default value)
@@ -2256,6 +2269,9 @@ consensus-send-timeout 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
 consensus-wait-milliseconds-before-change-leader 200
+consensus-wait-unfinished-bgc-timeout 500
+consensus-wait-unfinished-trx-timeout 800
+consensus-wait-unfinished-xa-timeout 500
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE
 console FALSE
@@ -2280,13 +2296,16 @@ disconnect-slave-event-count 0
 div-precision-increment 4
 enable-appliedindex-checker FALSE
 enable-changeset TRUE
+enable-consensus TRUE
 enable-implicit-primary-key FALSE
+enable-mysqlx TRUE
 enable-polarx-rpc TRUE
 enable-show-ipk-info FALSE
 enable-writeset-tracking-for-ipk TRUE
 end-markers-in-json FALSE
 enforce-gtid-consistency false
 eq-range-index-dive-limit 200
+error-log-ring-buffer-size 5242880
 event-scheduler ON
 expire-logs-days 0
 explain-format TRADITIONAL
@@ -2564,6 +2583,7 @@ port ####
 port-open-timeout 0
 preload-buffer-size 32768
 print-identified-with-as-hex FALSE
+print-malloc-stats FALSE
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
 query-alloc-block-size 8192
@@ -2571,6 +2591,7 @@ query-prealloc-size 8192
 query-via-flashback-area FALSE
 range-alloc-block-size 4096
 range-optimizer-max-mem-size 8388608
+rds-audit-flush-thread-enabled TRUE
 rds-audit-log-buffer-size 8388608
 rds-audit-log-connection-policy ALL
 rds-audit-log-dir (No default value)
@@ -2645,6 +2666,7 @@ select-into-disk-sync FALSE
 select-into-disk-sync-delay 0
 server-id 1
 server-id-bits 32
+server-max-threads 102400
 session-track-gtids OFF
 session-track-index FALSE
 session-track-schema TRUE

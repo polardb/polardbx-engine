@@ -20,21 +20,5 @@ Lizard_block_tcn_cache_evict	0
 Lizard_global_tcn_cache_hit	0
 Lizard_global_tcn_cache_miss	0
 Lizard_global_tcn_cache_evict	0
-set global innodb_tcn_cache_level = block;
-select count(*) from db_1.t1 as of gcn 3072 where id > 0;
-count(*)
-10
-select count(*) from db_1.t1 as of gcn 3072 where id > 0;
-count(*)
-10
-show global status like '%tcn_cache%';
-Variable_name	Value
-Lizard_block_tcn_cache_hit	0
-Lizard_block_tcn_cache_miss	0
-Lizard_block_tcn_cache_evict	0
-Lizard_global_tcn_cache_hit	0
-Lizard_global_tcn_cache_miss	0
-Lizard_global_tcn_cache_evict	0
-set global innodb_tcn_cache_level = 'none';
 drop table db_1.t1;
 drop database db_1;

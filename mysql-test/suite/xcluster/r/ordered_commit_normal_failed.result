@@ -19,6 +19,7 @@ set global binlog_order_commits=0;
 **** test xa_detach=0, binlog_order_commits=0
 =================================
 **** test xa commit in_leader_transfer failed
+delete from t1;
 xa start 'x1';
 insert into t1 values(0);
 xa end 'x1';
@@ -30,6 +31,35 @@ SET SESSION debug="+d,force_in_leader_transfer";
 select @@debug;
 @@debug
 d,force_in_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test xa commit after_leader_transfer failed
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	x1
@@ -47,35 +77,6 @@ select ROLE from information_schema.ALISQL_CLUSTER_local;
 ROLE
 Leader
 =================================
-**** test xa commit after_leader_transfer failed
-xa start 'x1';
-insert into t1 values(0);
-xa end 'x1';
-xa prepare 'x1';
-xa recover;
-formatID	gtrid_length	bqual_length	data
-1	2	0	x1
-SET SESSION debug="+d,force_after_leader_transfer";
-select @@debug;
-@@debug
-d,force_after_leader_transfer
-xa recover;
-formatID	gtrid_length	bqual_length	data
-1	2	0	x1
-xa commit 'x1';
-ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
-xa recover;
-ERROR HY000: Lost connection to MySQL server during query
-xa commit 'x1';
-select count(*) from t1;
-count(*)
-3
-xa recover;
-formatID	gtrid_length	bqual_length	data
-select ROLE from information_schema.ALISQL_CLUSTER_local;
-ROLE
-Leader
-=================================
 **** test commit after_leader_transfer failed
 SET SESSION debug="+d,force_after_leader_transfer";
 select @@debug;
@@ -89,7 +90,7 @@ xa recover;
 formatID	gtrid_length	bqual_length	data
 select count(*) from t1;
 count(*)
-3
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -113,9 +114,6 @@ commit;
 ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
 select count(*) from t1;
 ERROR HY000: Lost connection to MySQL server during query
-select count(*) from t1;
-count(*)
-3
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -127,6 +125,7 @@ set global binlog_order_commits=0;
 **** test xa_detach=1, binlog_order_commits=0
 =================================
 **** test xa commit in_leader_transfer failed
+delete from t1;
 xa start 'x1';
 insert into t1 values(0);
 xa end 'x1';
@@ -148,7 +147,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-4
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -177,7 +176,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-5
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -197,7 +196,7 @@ xa recover;
 formatID	gtrid_length	bqual_length	data
 select count(*) from t1;
 count(*)
-5
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -221,9 +220,6 @@ commit;
 ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
 select count(*) from t1;
 ERROR HY000: Lost connection to MySQL server during query
-select count(*) from t1;
-count(*)
-5
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -235,6 +231,7 @@ set global binlog_order_commits=1;
 **** test xa_detach=1, binlog_order_commits=1
 =================================
 **** test xa commit in_leader_transfer failed
+delete from t1;
 xa start 'x1';
 insert into t1 values(0);
 xa end 'x1';
@@ -256,7 +253,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-6
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -285,7 +282,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-7
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -305,7 +302,7 @@ xa recover;
 formatID	gtrid_length	bqual_length	data
 select count(*) from t1;
 count(*)
-7
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -329,9 +326,6 @@ commit;
 ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
 select count(*) from t1;
 ERROR HY000: Lost connection to MySQL server during query
-select count(*) from t1;
-count(*)
-7
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -343,6 +337,7 @@ set global binlog_order_commits=1;
 **** test xa_detach=0, binlog_order_commits=1
 =================================
 **** test xa commit in_leader_transfer failed
+delete from t1;
 xa start 'x1';
 insert into t1 values(0);
 xa end 'x1';
@@ -364,7 +359,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-8
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -393,7 +388,7 @@ ERROR HY000: Lost connection to MySQL server during query
 xa commit 'x1';
 select count(*) from t1;
 count(*)
-9
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -413,7 +408,7 @@ xa recover;
 formatID	gtrid_length	bqual_length	data
 select count(*) from t1;
 count(*)
-9
+2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;
@@ -437,9 +432,6 @@ commit;
 ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
 select count(*) from t1;
 ERROR HY000: Lost connection to MySQL server during query
-select count(*) from t1;
-count(*)
-9
 xa recover;
 formatID	gtrid_length	bqual_length	data
 select ROLE from information_schema.ALISQL_CLUSTER_local;

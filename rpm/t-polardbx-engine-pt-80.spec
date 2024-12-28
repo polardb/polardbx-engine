@@ -22,12 +22,12 @@
 
 
 %define polardb_version 'PolarDB V2.0'
-%define product_version 2.4.1
+%define product_version 2.5.0
 %define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
 
-Name: t-polardbx-engine
-Version: 8.4.19
+Name: t-polardbx-engine-pt-80
+Version: 8.4.20
 Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
@@ -46,8 +46,8 @@ BuildRequires: bison, libudev-devel, python-sphinx, procps-ng-devel, rsync
 
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
-Prefix: /u01/xcluster80_%{release_date}_current
-Summary: PolarDB-X MySQL XCluster 8.0 based on Oracle MySQL 8.0
+Prefix: /u01/polardbx_engine_%{release_date}_current
+Summary: PolarDB-X Engine 8.0 based on Oracle MySQL 8.0
 
 %description
 The MySQL(TM) software delivers a very fast, multi-threaded, multi-user,
@@ -59,9 +59,9 @@ as for embedding into mass-deployed software.
 %define MYSQL_GROUP root
 %define __os_install_post %{nil}
 %define commit_id %(git rev-parse --short HEAD)
-%define base_dir /u01/xcluster80
-%define copy_dir /u01/xcluster80_%{release_date}
-%define link_dir /opt/polardbx_engine
+%define base_dir /u01/polardbx_engine
+%define copy_dir /u01/polardbx_engine_%{release_date}
+
 
 %prep
 echo "dist" %{?dist}
@@ -94,8 +94,8 @@ cd $OLDPWD/../
 %endif
 
 %if "%{?_arch}" == "aarch64"
-    CFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
-    CXXFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
+    CFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer  -fno-strict-aliasing -Wl,-Bsymbolic"
+    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer  -fno-strict-aliasing -Wl,-Bsymbolic"
 %else
     CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
     CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
@@ -103,6 +103,9 @@ cd $OLDPWD/../
 export CC CXX CFLAGS CXXFLAGS CMAKE_BIN
 
 cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
+
+sed -i '486 i export MALLOC_ARENA_MAX=2' scripts/mysqld_safe.sh
+grep "export" scripts/mysqld_safe.sh
 
 $CMAKE_BIN .                            \
 %ifarch aarch64
@@ -115,8 +118,20 @@ $CMAKE_BIN .                            \
   -DWITH_PROTOBUF:STRING=bundled     \
   -DINSTALL_LAYOUT=STANDALONE        \
   -DMYSQL_MAINTAINER_MODE=0          \
-  -DWITH_SSL=openssl                 \
-  -DWITH_ZLIB=bundled                \
+  -DWITH_SSL=system                 \
+  -DENABLE_EXPERIMENT_SYSVARS=1      \
+  -DWITH_JEMALLOC=no                 \
+  -DWITH_ZLIB=system                \
+  -DWITH_ZSTD=system                \
+  -DWITH_LZ4=system                 \
+  -DWITH_LZMA=system                \
+  -DWITH_ICU=system                 \
+  -DWITH_FIDO=system                \
+  -DWITH_EDITLINE=system            \
+  -DWITH_LIBEVENT=system            \
+  -DWITH_RAPIDJSON=system           \
+  -DWITH_RE2=system                 \
+  -DWITH_ROUTER=OFF                  \
   -DWITH_MYISAM_STORAGE_ENGINE=1     \
   -DWITH_INNOBASE_STORAGE_ENGINE=1   \
   -DWITH_PARTITION_STORAGE_ENGINE=1  \
@@ -146,8 +161,7 @@ $CMAKE_BIN .                            \
 %install
 cd $OLDPWD/../
 MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
-make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
-
+make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL VERBOSE=1  install
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 %clean
@@ -208,8 +222,6 @@ else
     cp -rf %{prefix} %{copy_dir}
 fi
 
-rm -rf %{link_dir}
-ln -nsf %{copy_dir} %{link_dir}
 
 rm -rf %{prefix}
 

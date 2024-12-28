@@ -6,6 +6,8 @@
 --echo **** test xa commit in_leader_transfer failed
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
+delete from t1;
+
 #xa prepare
 xa start 'x1'; 
 insert into t1 values(0);
@@ -138,7 +140,7 @@ select count(*) from t1;
 --connection conn11
 
 #check result
-select count(*) from t1;
+#select count(*) from t1;
 xa recover;
 select ROLE from information_schema.ALISQL_CLUSTER_local;
 

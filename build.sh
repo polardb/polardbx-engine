@@ -345,6 +345,7 @@ else
       -DMYSQL_UNIX_ADDR="$dest_dir/mysql.sock"   \
       -DWITH_DEBUG=$debug                \
       -DENABLE_GCOV=$gcov                \
+      -DENABLE_EXPERIMENT_SYSVARS=1      \
       -DINSTALL_LAYOUT=STANDALONE        \
       -DMYSQL_MAINTAINER_MODE=1          \
       -DWITH_SSL=system                  \
@@ -376,6 +377,7 @@ else
       -DPOLARDBX_RELEASE_DATE="20241014" \
       -DWITH_UNIT_TESTS=$debug           \
       -DWITH_TESTS=$debug
+      #-DWITH_JEMALLOC=no                 \
 fi
 
 make -j $(nproc) install

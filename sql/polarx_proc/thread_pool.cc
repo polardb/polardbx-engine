@@ -35,13 +35,14 @@ namespace im {
 
 ThreadPool *thread_pool = nullptr;
 
-int InitThreadPool(uint32_t count) {
-  thread_pool = new ThreadPool(count);
-  return 0;
-}
 }  // namespace im
 
 void UninitChangesetThreadPool() {
   delete im::thread_pool;
   im::thread_pool = nullptr;
+}
+
+void InitChangesetThreadPool(uint64_t thread_count) {
+  if (thread_count > 0 && im::thread_pool == nullptr)
+    im::thread_pool = new im::ThreadPool(thread_count);
 }

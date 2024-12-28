@@ -45,15 +45,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/system_variables.h"
 
 namespace xp {
-
-bool Recovery_manager::is_xpaxos_instance_recovering() const {
-  return !opt_initialize && is_xpaxos_instance();
-}
-
 std::unique_ptr<binlog::Binlog_recovery> Recovery_manager::create_recovery(
     Binlog_file_reader &binlog_file_reader) {
   binlog::Binlog_recovery *recovery = nullptr;
-  if (is_xpaxos_instance()) {
+  if (ConsensusLogManager::enable_consensus()) {
     recovery = new Consensus_binlog_recovery(binlog_file_reader);
   } else {
     recovery = new binlog::Binlog_recovery(binlog_file_reader);

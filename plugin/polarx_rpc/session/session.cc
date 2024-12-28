@@ -184,7 +184,7 @@ _retry:
             msgs.swap(message_queue_);
             if (enable_perf_hist && schedule_time_ != 0) {
               auto delay_time = Ctime::steady_ns() - schedule_time_;
-              g_schedule_hist.update(static_cast<double>(delay_time) / 1e9);
+              g_schedule_hist->update(static_cast<double>(delay_time) / 1e9);
             }
             schedule_time_ = 0;  /// clear it anyway
           }
@@ -230,7 +230,7 @@ _retry:
               if (run_start_time != 0) {
                 auto run_end_time = Ctime::steady_ns();
                 auto run_time = run_end_time - run_start_time;
-                g_run_hist.update(static_cast<double>(run_time) / 1e9);
+                g_run_hist->update(static_cast<double>(run_time) / 1e9);
               }
               if (run) detacher.set_run();
             }

@@ -41,15 +41,6 @@ class Recovery_manager {
     return instance;
   }
 
-  bool is_xpaxos_instance_recovering() const;
-
-  bool is_xpaxos_instance_initializing() const;
-
-  bool is_xpaxos_instance() const {
-    // todo is xpaxos instance by default for now
-    return true;
-  }
-
   std::unique_ptr<binlog::Binlog_recovery> create_recovery(
       Binlog_file_reader &binlog_file_reader);
 };

@@ -94,8 +94,8 @@ cd $OLDPWD/../
 %endif
 
 %if "%{?_arch}" == "aarch64"
-    CFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
-    CXXFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
+    CFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
+    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
 %else
     CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
     CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
@@ -146,7 +146,7 @@ $CMAKE_BIN .                            \
 %install
 cd $OLDPWD/../
 MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
-make DESTDIR=$RPM_BUILD_ROOT install -j $MIN_PARALLEL
+make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 %clean

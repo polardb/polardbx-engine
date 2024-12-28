@@ -86,8 +86,6 @@ master-bin.000001	#	#
 master-bin.000002	#	#
 master-bin.000003	#	#
 start xpaxos_replication;
-Warnings:
-Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
 set force_revise=1;
 set sql_log_bin=0;
 flush relay logs;
@@ -103,8 +101,6 @@ master-bin.000001	#	#
 master-bin.000002	#	#
 master-bin.000003	#	#
 start xpaxos_replication;
-Warnings:
-Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
 set force_revise=1;
 set sql_log_bin=0;
 flush relay logs;

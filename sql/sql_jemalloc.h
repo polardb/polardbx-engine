@@ -36,6 +36,7 @@ namespace im {
 extern bool opt_rds_active_memory_profiling;
 
 extern void jemalloc_profiling_state();
+extern void jemalloc_malloc_stats_print();
 
 extern const LEX_CSTRING JEMALLOC_PROC_SCHEMA;
 

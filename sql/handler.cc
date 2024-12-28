@@ -1575,7 +1575,8 @@ std::pair<int, bool> commit_owned_gtids(THD *thd, bool all,
       longer allowed.
     */
     if (thd->owned_gtid.sidno > 0 && !thd->se_persists_gtid() &&
-        thd->xpaxos_replication_channel && !is_xa_second_phase) {
+        (!ConsensusLogManager::enable_consensus() ||
+         (thd->xpaxos_replication_channel && !is_xa_second_phase))) {
       error = gtid_state->save(thd);
     }
   }

@@ -18,6 +18,7 @@ dbms_consensus	drop_prefetch_channel	ADMIN_PROC	LONGLONG
 dbms_consensus	fix_cluster_id	ADMIN_PROC	LONGLONG
 dbms_consensus	fix_matchindex	ADMIN_PROC	VARCHAR, LONGLONG
 dbms_consensus	force_learner_node	ADMIN_PROC	NULL
+dbms_consensus	force_purge_cache	ADMIN_PROC	LONGLONG
 dbms_consensus	force_purge_log	ADMIN_PROC	LONGLONG
 dbms_consensus	force_single_mode	ADMIN_PROC	NULL
 dbms_consensus	local_purge_log	ADMIN_PROC	LONGLONG
@@ -36,11 +37,15 @@ dbms_outln	del_outline	ADMIN_PROC	LONGLONG
 dbms_outln	flush_outline	ADMIN_PROC	NULL
 dbms_outln	preview_outline	ADMIN_PROC	VARCHAR, VARCHAR
 dbms_outln	show_outline	ADMIN_PROC	NULL
+dbms_proxy	get_token	ADMIN_PROC	NULL
+dbms_proxy	reset_db	TRANS_PROC	NULL
+dbms_proxy	switch_user	TRANS_PROC	VARCHAR, VARCHAR, VARCHAR
 dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
 dbms_stat	flush_gpp	ADMIN_PROC	NULL
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR
+dbms_trans	returning_all	TRANS_PROC	VARCHAR, VARCHAR
 dbms_trans	rollback_to_implicit_savepoint	TRANS_PROC	NULL
 dbms_tso	get_timestamp	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_undo	purge_status	ADMIN_PROC	NULL

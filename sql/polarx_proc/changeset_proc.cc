@@ -29,6 +29,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 // Created by wumu on 2022/10/19.
 //
 #include "changeset_proc.h"
+#include "thread_pool.h"
 
 namespace im {
 /**
@@ -45,7 +46,7 @@ Sql_cmd *Changeset_proc_start::evoke_cmd(THD *thd,
 }
 
 void Sql_cmd_changeset_proc_start::send_result(THD *thd, bool error) {
-  if (!opt_enable_changeset) {
+  if (!opt_enable_changeset || !thread_pool) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
              "call changeset proc failed, the changeset proc is not support");
     return;
@@ -222,7 +223,7 @@ bool Changeset_proc_fetch::my_send_result_metadata(
 }
 
 void Sql_cmd_changeset_proc_fetch::send_result(THD *thd, bool error) {
-  if (!opt_enable_changeset) {
+  if (!opt_enable_changeset || !thread_pool) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
              "call changeset proc failed, the changeset proc is not support");
     return;
@@ -435,7 +436,7 @@ Sql_cmd *Changeset_proc_times::evoke_cmd(THD *thd,
 }
 
 void Sql_cmd_changeset_proc_times::send_result(THD *thd, bool error) {
-  if (!opt_enable_changeset) {
+  if (!opt_enable_changeset || !thread_pool) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
              "call changeset proc failed, the changeset proc is not support");
     return;

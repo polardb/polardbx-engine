@@ -23,6 +23,7 @@
 #include <time.h>
 #include <atomic>
 
+#include "consensus_log_manager.h"
 #include "lex_string.h"
 #include "libbinlogevents/include/control_events.h"
 #include "my_compiler.h"
@@ -50,6 +51,7 @@
 #include "sql/sql_error.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
+#include "sql/consensus_log_manager.h"
 
 class Table_ref;
 
@@ -705,7 +707,7 @@ int Gtid_state::save(THD *thd, bool xpaxos_check/* = true */) {
   DBUG_TRACE;
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
-  if (xpaxos_check) {
+  if (xpaxos_check && ConsensusLogManager::enable_consensus()) {
     assert(thd->xpaxos_replication_channel);
   }
   int error = 0;
@@ -757,7 +759,7 @@ int Gtid_state::save_gtids_of_last_binlog_into_table() {
     return ER_RPL_GTID_TABLE_CANNOT_OPEN;
   }
 
-  if (xp::Recovery_manager::instance().is_xpaxos_instance_recovering())
+  if (!opt_initialize && ConsensusLogManager::enable_consensus())
     return ret;
 
   /*

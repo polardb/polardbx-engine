@@ -201,7 +201,7 @@ class CtcpConnection final : public CepollCallback {
         if (fin_start_time != 0) {
           auto fin_end_time = Ctime::steady_ns();
           auto fin_time = fin_end_time - fin_start_time;
-          g_fin_hist.update(static_cast<double>(fin_time) / 1e9);
+          g_fin_hist->update(static_cast<double>(fin_time) / 1e9);
         }
       }
     }
@@ -597,7 +597,7 @@ class CtcpConnection final : public CepollCallback {
               if (start_time != 0) {
                 auto now = Ctime::steady_ns();
                 auto recv_time = now - start_time;
-                g_recv_first_hist.update(static_cast<double>(recv_time) / 1e9);
+                g_recv_first_hist->update(static_cast<double>(recv_time) / 1e9);
               }
             }
 
@@ -701,7 +701,7 @@ class CtcpConnection final : public CepollCallback {
                   if (start_time != 0) {
                     auto now = Ctime::steady_ns();
                     auto recv_time = now - start_time;
-                    g_recv_all_hist.update(static_cast<double>(recv_time) /
+                    g_recv_all_hist->update(static_cast<double>(recv_time) /
                                            1e9);
                   }
                 }
@@ -720,7 +720,7 @@ class CtcpConnection final : public CepollCallback {
                   if (auth_start_time != 0) {
                     auto auth_end_time = Ctime::steady_ns();
                     auto auth_time = auth_end_time - auth_start_time;
-                    g_auth_hist.update(static_cast<double>(auth_time) / 1e9);
+                    g_auth_hist->update(static_cast<double>(auth_time) / 1e9);
                   }
                 }
 
@@ -805,7 +805,7 @@ class CtcpConnection final : public CepollCallback {
       if (decode_start_time != 0) {
         auto decode_end_time = Ctime::steady_ns();
         auto decode_time = decode_end_time - decode_start_time;
-        g_decode_hist.update(static_cast<double>(decode_time) / 1e9);
+        g_decode_hist->update(static_cast<double>(decode_time) / 1e9);
       }
 
       /// dealing notify or direct run outside the read lock.

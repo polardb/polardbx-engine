@@ -105,7 +105,7 @@ int fill_consensus_commit_pos(THD *thd, Table_ref *tables, Item *) {
 int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
   DBUG_ENTER("fill_alisql_cluster_global");
   int res = 0;
-  if (opt_consensus_force_recovery) DBUG_RETURN(res);
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(res);
   TABLE *table = tables->table;
   // get from consensus alg layer
   uint64 id = server_id;
@@ -215,7 +215,7 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
 int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
   DBUG_ENTER("fill_alisql_cluster_local");
   int res = 0;
-  if (opt_consensus_force_recovery) DBUG_RETURN(res);
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(res);
   TABLE *table = tables->table;
   // get from consensus alg layer
   uint64 id = server_id;
@@ -306,7 +306,7 @@ int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
 
 int fill_alisql_cluster_health(THD *thd, Table_ref *tables, Item *) {
   DBUG_ENTER("fill_alisql_cluster_health");
-  if (opt_consensus_force_recovery) DBUG_RETURN(0);
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(0);
   TABLE *table = tables->table;
 
   std::vector<alisql::Paxos::HealthInfoType> hi;
@@ -366,6 +366,8 @@ int fill_alisql_cluster_learner_source(THD *thd, Table_ref *tables, Item *) {
   DBUG_ENTER("fill_alisql_cluster_learner_source");
   int res = 0;
   TABLE *table = tables->table;
+
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(res);
 
   // get from consensus alg layer
   uint64 learner_id = 0;
@@ -467,6 +469,8 @@ int fill_alisql_cluster_prefetch_channel(THD *thd, Table_ref *tables, Item *) {
 int fill_alisql_cluster_consensus_status(THD *thd, Table_ref *tables, Item *) {
   DBUG_ENTER("fill_alisql_cluster_consensus_status");
   int res = 0;
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(res);
+
   TABLE *table = tables->table;
 
   // get from consensus alg layer
@@ -512,6 +516,7 @@ int fill_alisql_cluster_consensus_membership_change(THD *thd, Table_ref *tables,
                                                     Item *) {
   DBUG_ENTER("fill_alisql_cluster_consensus_membership_change");
   TABLE *table = tables->table;
+  if (opt_consensus_force_recovery || !consensus_ptr) DBUG_RETURN(0);
 
   std::vector<alisql::Paxos::MembershipChangeType> mch =
       consensus_ptr->getMembershipChangeHistory();

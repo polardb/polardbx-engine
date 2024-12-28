@@ -62,6 +62,12 @@ SET(WITH_JEMALLOC ${WITH_JEMALLOC_DEFAULT} CACHE STRING
     "Which jemalloc to use. Possible values are 'no', 'bundled', 'system', 'yes' (system if possible, otherwise bundled)")
 
 MACRO (MYSQL_CHECK_JEMALLOC)
+  IF(NOT WITH_JEMALLOC)
+    SET(WITH_JEMALLOC ${WITH_JEMALLOC_DEFAULT} CACHE STRING
+      "Which jemalloc to use. Possible values are 'no', 'bundled', 'system', 'yes' (system if possible, otherwise bundled)")
+  ENDIF()
+
+
   IF(WITH_JEMALLOC STREQUAL "system" OR WITH_JEMALLOC STREQUAL "yes")
     CHECK_LIBRARY_EXISTS(jemalloc malloc_stats_print "" HAVE_JEMALLOC)
     IF (HAVE_JEMALLOC)

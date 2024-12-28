@@ -60,6 +60,8 @@ void *pfs_malloc(PFS_builtin_memory_class *klass, size_t size, myf flags) {
   assert(klass != nullptr);
   assert(size > 0);
 
+  if (!pfs_param.m_enabled) return nullptr;
+
   void *ptr = nullptr;
 
 #ifdef PFS_ALIGNEMENT
@@ -143,6 +145,9 @@ void *pfs_malloc_array(PFS_builtin_memory_class *klass, size_t n, size_t size,
   assert(klass != nullptr);
   assert(n > 0);
   assert(size > 0);
+
+  if (!pfs_param.m_enabled) return nullptr;
+  
   void *ptr = nullptr;
   size_t array_size = n * size;
   /* Check for overflow before allocating. */

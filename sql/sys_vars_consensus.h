@@ -100,6 +100,7 @@ extern bool opt_commit_pos_watcher;
 extern ulonglong opt_commit_pos_watcher_interval;
 extern bool opt_consensus_force_promote;
 extern bool opt_consensus_force_leader_transfer;
+extern bool opt_print_malloc_stats;
 extern bool opt_consensus_auto_reset_match_index;
 extern bool opt_consensus_learner_heartbeat;
 extern bool opt_consensus_auto_leader_transfer;
@@ -110,6 +111,8 @@ extern ulonglong opt_consensus_wait_unfinished_xa_timeout;
 extern ulonglong opt_consensus_wait_unfinished_bgc_timeout;
 extern bool opt_consensus_disable_commit_before_change_leader;
 extern bool opt_consensus_disable_empty_xa;
+extern bool opt_enable_consensus;
+
 extern bool opt_consensuslog_revise;
 extern bool opt_recover_snapshot;
 extern ulong thread_stack_warning;

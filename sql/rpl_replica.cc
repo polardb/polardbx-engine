@@ -459,7 +459,7 @@ ReplicaInitializer::ReplicaInitializer(bool opt_initialize,
       init_replica() must be called after the thread keys are created.
     */
 
-    if (server_id != 0 && !opt_consensus_force_recovery) {
+    if (server_id != 0 && (!ConsensusLogManager::enable_consensus() || !opt_consensus_force_recovery)) {
       m_init_code = init_replica();
     }
 
@@ -477,7 +477,7 @@ ReplicaInitializer::ReplicaInitializer(bool opt_initialize,
       'group_replication_applier' which is disallowed, then the
       per-channel replication filter is discarded with a warning.
     */
-    if (!opt_consensus_force_recovery) {
+    if (!ConsensusLogManager::enable_consensus() || !opt_consensus_force_recovery) {
       filters.discard_all_unattached_filters();
     }
   }
@@ -511,7 +511,7 @@ void ReplicaInitializer::start_replication_threads(bool skip_replica_start) {
 
 void ReplicaInitializer::start_threads() {
   //XPaxos should not arrive here
-  ut_a(false);
+  ut_a(!ConsensusLogManager::enable_consensus());
   /*
     Loop through the channel_map and start slave threads for each channel.
   */
@@ -635,7 +635,10 @@ bool start_slave(THD *thd) {
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
     assert(mi);
-    if (is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi) &&
+    const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+      || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
+
+    if (enable_cmd &&
         start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                     thd->lex->slave_thd_opt, mi, true))
       return true;
@@ -656,13 +659,14 @@ bool start_slave(THD *thd) {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       mi = it->second;
+      const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+        || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
 
       channel_configured =
           mi &&                      // Master_info exists
           (mi->inited || mi->reset)  // It is inited or was reset
           && mi->host[0]             // host is set
-          && (is_xpaxos_replication_cmd ==
-              Multisource_info::is_xpaxos_channel(mi));
+          && enable_cmd;
 
       if (channel_configured) {
         if (start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
@@ -699,22 +703,23 @@ int stop_slave(THD *thd) {
   int error = 0;
   const bool is_xpaxos_replication_cmd =
       thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
-
   if (channel_map.get_num_instances() == 1) {
     mi = channel_map.get_default_channel_mi();
 
+    const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+      || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
     assert(!strcmp(mi->get_channel(), channel_map.get_default_channel()));
-    if (is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi))
+    if (enable_cmd)
       error = stop_slave(thd, mi, true, false /*for_one_channel*/,
-                         &push_temp_table_warning);
+                        &push_temp_table_warning);
   } else {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       mi = it->second;
 
-      if (Master_info::is_configured(mi) &&
-          is_xpaxos_replication_cmd ==
-              Multisource_info::is_xpaxos_channel(mi)) {
+      const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+        || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
+      if (Master_info::is_configured(mi) && enable_cmd) {
         if (stop_slave(thd, mi, true, false /*for_one_channel*/,
                        &push_temp_table_warning)) {
           LogErr(ERROR_LEVEL, ER_RPL_SLAVE_CANT_STOP_SLAVE_FOR_CHANNEL,
@@ -820,9 +825,10 @@ bool start_slave_cmd(THD *thd) {
 
     const bool is_xpaxos_replication_cmd =
         thd->lex->sql_command == SQLCOM_START_XPAXOS_REPLICATION;
+    const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+      || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
 
-    if (mi &&
-        is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi))
+    if (mi && enable_cmd)
       res = start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                         thd->lex->slave_thd_opt, mi, true);
     else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
@@ -929,12 +935,13 @@ bool stop_slave_cmd(THD *thd) {
 
     const bool is_xpaxos_replication_cmd =
         thd->lex->sql_command == SQLCOM_STOP_XPAXOS_REPLICATION;
+    const bool enable_cmd = (!ConsensusLogManager::enable_consensus()
+      || is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi));
 
-    if (mi &&
-        is_xpaxos_replication_cmd == Multisource_info::is_xpaxos_channel(mi))
+    if (mi && enable_cmd) {
       res = stop_slave(thd, mi, true /*net report */, true /*for_one_channel*/,
                        &push_temp_table_warning);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
+    } else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
              strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
@@ -1387,7 +1394,8 @@ int load_mi_and_rli_from_repositories(Master_info *mi, bool ignore_if_no_info,
   }
 
   // bind relay log info to global consensuslog
-  mi->rli->set_xpaxos_relay_log_info();
+  if (Multisource_info::is_xpaxos_channel(mi))
+    mi->rli->set_xpaxos_relay_log_info();
 
   DBUG_EXECUTE_IF("enable_mta_worker_failure_init",
                   { DBUG_SET("+d,mta_worker_thread_init_fails"); });
@@ -2220,7 +2228,8 @@ void end_slave() {
   */
   channel_map.wrlock();
 
-  channel_map.reset_default_channel_mi();
+  if (ConsensusLogManager::enable_consensus())
+    channel_map.reset_default_channel_mi();
 
   /* traverse through the map and terminate the threads */
   for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
@@ -3529,7 +3538,7 @@ static bool show_slave_status_send_data(THD *thd, Master_info *mi,
   protocol->store((ulonglong)mi->rli->get_group_relay_log_pos());
   protocol->store(mi->rli->get_group_master_log_name_info(), &my_charset_bin);
   const bool is_mi_slave_io_running = (mi->slave_running == MYSQL_SLAVE_RUN_CONNECT)
-      || (channel_map.is_xpaxos_replication_channel_name(mi->get_channel())
+      || (channel_map.is_xpaxos_channel(mi)
           && consensus_log_manager.get_status() == RELAY_LOG_WORKING);
   protocol->store(
       is_mi_slave_io_running
@@ -5031,9 +5040,11 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       rli->last_master_timestamp =
           ev->common_header->when.tv_sec + (time_t)ev->exec_time;
       assert(rli->last_master_timestamp >= 0);
-      long time_diff = ((long)(time(nullptr) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
-      time_diff = max(0L, time_diff);
-      consensus_ptr->updateApplyDelaySeconds(time_diff);
+      if (consensus_ptr) {
+        long time_diff = ((long)(time(nullptr) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
+        time_diff = max(0L, time_diff);
+        consensus_ptr->updateApplyDelaySeconds(time_diff);
+      }
     }
 
     if (rli->is_until_satisfied_before_dispatching_event(ev)) {
@@ -5344,7 +5355,7 @@ static int try_to_reconnect(THD *thd, MYSQL *mysql, Master_info *mi,
                             uint *retry_count, bool suppress_warnings,
                             const Reconnect_messages &messages) {
   mi->slave_running = MYSQL_SLAVE_RUN_NOT_CONNECT;
-  consensus_ptr->updateApplyThreadRunning(false);
+  if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(false);
   THD_STAGE_INFO(thd, messages.stage_waiting_to_reconnect);
   DBUG_EXECUTE_IF("hang_in_stage_replica_waiting_to_reconnect", {
     while (!io_slave_killed(thd, mi)) my_sleep(100000);  // 0.1 second
@@ -5440,7 +5451,7 @@ extern "C" void *handle_slave_io(void *arg) {
     thd->thread_stack = (char *)&thd;  // remember where our stack is
     mi->clear_error();
     mi->slave_running = 1;
-    consensus_ptr->updateApplyThreadRunning(true);
+    if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(true);
 
     if (init_replica_thread(thd, SLAVE_THD_IO)) {
       mysql_cond_broadcast(&mi->start_cond);
@@ -5525,7 +5536,7 @@ extern "C" void *handle_slave_io(void *arg) {
     };);
     mysql_mutex_lock(&mi->run_lock);
     mi->slave_running = MYSQL_SLAVE_RUN_CONNECT;
-    consensus_ptr->updateApplyThreadRunning(true);
+    if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(true);
 
     mysql_mutex_unlock(&mi->run_lock);
 
@@ -5892,7 +5903,7 @@ extern "C" void *handle_slave_io(void *arg) {
 
     mi->abort_slave = false;
     mi->slave_running = 0;
-    consensus_ptr->updateApplyThreadRunning(false);
+    if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(false);
     mi->atomic_is_stopping = false;
     mysql_mutex_lock(&mi->info_thd_lock);
     mi->info_thd = nullptr;
@@ -7119,7 +7130,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     /* Inform waiting threads that slave has started */
     rli->slave_run_id++;
     rli->slave_running = 1;
-    consensus_ptr->updateApplyThreadRunning(true);
+    if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(true);
     rli->reported_unsafe_warning = false;
     rli->sql_thread_kill_accepted = false;
     rli->last_event_start_time = 0;
@@ -7478,7 +7489,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     assert(rli->slave_running == 1);  // tracking buffer overrun
     /* When source_pos_wait() wakes up it will check this and terminate */
     rli->slave_running = 0;
-    consensus_ptr->updateApplyThreadRunning(false);
+    if (consensus_ptr) consensus_ptr->updateApplyThreadRunning(false);
     rli->atomic_is_stopping = false;
     /* Forget the relay log's format */
     if (rli->set_rli_description_event(nullptr)) {
@@ -9029,13 +9040,9 @@ bool start_slave(THD *thd, LEX_SLAVE_CONNECTION *connection_param,
   DBUG_TRACE;
 
   /** Disable IO thread when xpaxos channel.*/
-  if (Multisource_info::is_xpaxos_channel(mi)) {
-    assert(Multisource_info::is_xpaxos_replication_channel_name(
-        mi->get_channel()));
-  } else {
-    assert(!Multisource_info::is_xpaxos_replication_channel_name(
-        mi->get_channel()));
-  }
+  assert(Multisource_info::is_xpaxos_channel(mi) ==
+    Multisource_info::is_xpaxos_replication_channel_name(mi->get_channel()));
+
   /*
     START SLAVE command should ignore 'read-only' and 'super_read_only'
     options so that it can update 'mysql.slave_master_info' and

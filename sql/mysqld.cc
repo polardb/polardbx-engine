@@ -686,6 +686,7 @@ MySQL clients support the protocol:
 */
 /* clang-format on */
 
+#include <malloc.h>
 #include <memory>
 #include "consensus_admin.h"
 #define LOG_SUBSYSTEM_TAG "Server"
@@ -1055,6 +1056,7 @@ inline void setup_fpu() {
 extern "C" void handle_fatal_signal(int sig);
 void my_server_abort();
 void UninitChangesetThreadPool();
+void InitChangesetThreadPool(uint64_t thread_count);
 
 /* Constants */
 
@@ -1172,6 +1174,8 @@ static PSI_mutex_key key_LOCK_global_conn_mem_limit;
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
 PSI_statement_info stmt_info_rpl;
 #endif
+
+bool opt_rds_audit_flush_thread_enabled = true;
 
 /* the default log output is log tables */
 static bool lower_case_table_names_used = false;
@@ -1381,6 +1385,8 @@ uint replica_rows_last_search_algorithm_used;
 #endif
 ulong mts_parallel_option;
 ulong binlog_cache_size = 0;
+ulong opt_server_max_threads;
+ulong opt_error_log_ring_buffer_size;
 ulonglong max_binlog_cache_size = 0;
 ulong replica_max_allowed_packet = 0;
 ulong binlog_stmt_cache_size = 0;
@@ -6340,8 +6346,11 @@ static int init_server_components() {
 
   /* need to configure logging for xpaxos */
   if (!opt_bin_log &&
-      xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
+      !opt_initialize &&
+      ConsensusLogManager::enable_consensus()) {
+    xp::error(ER_XP_0) << "PolarDB-X Engine log_bin must be set to ON";
     LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-bin");
+    unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
   /* need to configure logging before initializing storage engines */
@@ -6451,18 +6460,20 @@ static int init_server_components() {
       file name would be used in following call path,
         Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
     */
-    // if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
-    //     log_bin_index) {
-    //   strmake(default_binlog_index_name,
-    //           log_bin_index + dirname_length(log_bin_index),
-    //           FN_REFLEN + index_ext_length - 1);
-    //   opt_binlog_index_name = default_binlog_index_name;
-    // }
+    if (!ConsensusLogManager::enable_consensus()) {
+      if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
+          log_bin_index) {
+        strmake(default_binlog_index_name,
+                log_bin_index + dirname_length(log_bin_index),
+                FN_REFLEN + index_ext_length - 1);
+        opt_binlog_index_name = default_binlog_index_name;
+      }
 
-    // if (log_bin_basename == nullptr || log_bin_index == nullptr) {
-    //   LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN,
-    //   (int)FN_LEN); unireg_abort(MYSQLD_ABORT_EXIT);
-    // }
+      if (log_bin_basename == nullptr || log_bin_index == nullptr) {
+        LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN,
+        (int)FN_LEN); unireg_abort(MYSQLD_ABORT_EXIT);
+      }
+    }
   }
 
   DBUG_PRINT("debug",
@@ -6997,7 +7008,7 @@ static int init_server_components() {
                                  opt_consensus_start_index))
     unireg_abort(MYSQLD_ABORT_EXIT);
   consensus_log_manager.set_binlog(&mysql_bin_log);
-  mysql_bin_log.is_xpaxos_log = true;
+  mysql_bin_log.is_xpaxos_log = ConsensusLogManager::enable_consensus();
 
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
@@ -7010,62 +7021,58 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (opt_bin_log) {
-    if (!opt_consensus_force_recovery) {
-      std::vector<std::string> binlog_file_list;
-      mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
+  if (ConsensusLogManager::enable_consensus()) {
+    if (opt_bin_log) {
+      if (!opt_consensus_force_recovery) {
+        std::vector<std::string> binlog_file_list;
+        mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
 
-      if (binlog_file_list.empty()) {
-        /*
-          Configures what object is used by the current log to store processed
-          gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
-          correctly compute the set of previous gtids.
-        */
-        assert(!mysql_bin_log.is_relay_log);
-        mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
-        mysql_mutex_lock(log_lock);
+        if (binlog_file_list.empty()) {
+          /*
+            Configures what object is used by the current log to store processed
+            gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
+            correctly compute the set of previous gtids.
+          */
+          assert(!mysql_bin_log.is_relay_log);
+          mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
+          mysql_mutex_lock(log_lock);
 
-        if (mysql_bin_log.open_binlog(opt_bin_logname, nullptr, max_binlog_size,
-                                      false, true /*need_lock_index=true*/,
-                                      true /*need_sid_lock=true*/, nullptr)) {
+          if (mysql_bin_log.open_binlog(opt_bin_logname, nullptr, max_binlog_size,
+                                        false, true /*need_lock_index=true*/,
+                                        true /*need_sid_lock=true*/, nullptr)) {
+            mysql_mutex_unlock(log_lock);
+            unireg_abort(MYSQLD_ABORT_EXIT);
+          }
           mysql_mutex_unlock(log_lock);
+        } else if (opt_initialize) {
+          // in boostrap case but binlog_file_list is not empty
+          xp::error(ER_XP_0)
+              << "--initialize specified but the binlog index file '"
+              << mysql_bin_log.get_index_fname() << "' is not empty.";
           unireg_abort(MYSQLD_ABORT_EXIT);
         }
-        mysql_mutex_unlock(log_lock);
-      } else if (opt_initialize) {
-        // in boostrap case but binlog_file_list is not empty
-        xp::error(ER_XP_0)
-            << "--initialize specified but the binlog index file '"
-            << mysql_bin_log.get_index_fname() << "' is not empty.";
-        unireg_abort(MYSQLD_ABORT_EXIT);
       }
     }
-  }
 
-  ReplicaInitializer replica_initializer(
-      opt_initialize, /*opt_skip_replica_start*/ true, rpl_channel_filters,
-      &opt_replica_skip_errors);
+    ReplicaInitializer replica_initializer(
+        opt_initialize, /*opt_skip_replica_start*/ true, rpl_channel_filters,
+        &opt_replica_skip_errors);
 
-  /* If running with --initialize, do not start replication. */
-  if (!opt_initialize && !opt_consensus_force_recovery &&
-      consensus_log_manager.init_consensus_info())
-    unireg_abort(MYSQLD_ABORT_EXIT);
+    /* If running with --initialize, do not start replication. */
+    if (!opt_initialize && !opt_consensus_force_recovery &&
+        consensus_log_manager.init_consensus_info())
+      unireg_abort(MYSQLD_ABORT_EXIT);
 
-  /* Save pid of this process in a file, because init_service maybe wait long time*/
-  if (!opt_initialize && create_pid_file()) {
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
-
-  int consensus_error = consensus_log_manager.init_service();
-  if (consensus_error < 0)
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  else if (consensus_error > 0)
-    unireg_abort(MYSQLD_SUCCESS_EXIT);
-
-  if (!xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
-    if (ha_recover(0)) {
+    /* Save pid of this process in a file, because init_service maybe wait long time*/
+    if (!opt_initialize && create_pid_file()) {
       unireg_abort(MYSQLD_ABORT_EXIT);
     }
+
+    int consensus_error = consensus_log_manager.init_service();
+    if (consensus_error < 0)
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    else if (consensus_error > 0)
+      unireg_abort(MYSQLD_SUCCESS_EXIT);
   }
 
   if (dd::reset_tables_and_tablespaces()) {
@@ -7096,6 +7103,26 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
+  if (!ConsensusLogManager::enable_consensus() && opt_bin_log) {
+    /*
+      Configures what object is used by the current log to store processed
+      gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
+      correctly compute the set of previous gtids.
+    */
+    assert(!mysql_bin_log.is_relay_log);
+    mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
+    mysql_mutex_lock(log_lock);
+
+    if (mysql_bin_log.open_binlog(opt_bin_logname, nullptr, max_binlog_size,
+                                  false, true /*need_lock_index=true*/,
+                                  true /*need_sid_lock=true*/, nullptr)) {
+      mysql_mutex_unlock(log_lock);
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
+    mysql_mutex_unlock(log_lock);
+  }
+
+
   /*
     When we pass non-zero values for both expire_logs_days and
     binlog_expire_logs_seconds at the server start-up, the value of
@@ -7118,7 +7145,7 @@ static int init_server_components() {
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--expire_logs_days");
   }
 
-  if (opt_bin_log && !opt_initialize) {
+  if (opt_bin_log && !opt_initialize && ConsensusLogManager::enable_consensus()) {
     mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
   }
 
@@ -7515,7 +7542,7 @@ int mysqld_main(int argc, char **argv)
 
   init_variable_default_paths();
 
-  xp::system(ER_XP_0) << "XPaxos server start.";
+  xp::system(ER_XP_0) << "XPaxos server start, pid:" << getpid();
 
   int heo_error;
 
@@ -7790,7 +7817,7 @@ int mysqld_main(int argc, char **argv)
     be added again.
   */
   if (persisted_variables_cache.append_read_only_variables(
-          &remaining_argc, &remaining_argv, arg_separator_added, false)) {
+      &remaining_argc, &remaining_argv, arg_separator_added, false)) {
     flush_error_log_messages();
     return 1;
   }
@@ -8059,14 +8086,6 @@ int mysqld_main(int argc, char **argv)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
   /*
-    For GalaxyEngine:
-    bin_log must be set to ON
-  */
-  if (!opt_initialize && consensus_log_manager.option_invalid(opt_bin_log)) {
-    unireg_abort(MYSQLD_SUCCESS_EXIT);
-  }
-
-  /*
     Add server_uuid to the sid_map.  This must be done after
     server_uuid has been initialized in init_server_auto_options and
     after the binary log (and sid_map file) has been initialized in
@@ -8096,7 +8115,8 @@ int mysqld_main(int argc, char **argv)
   }
 
   if (opt_bin_log &&
-      !xp::Recovery_manager::instance().is_xpaxos_instance_recovering()) {
+      !opt_initialize &&
+      !ConsensusLogManager::enable_consensus()) {
     /*
       Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
       gtid_executed table and binlog files during server startup.
@@ -8248,10 +8268,10 @@ int mysqld_main(int argc, char **argv)
 
   bool abort = false;
 
-  // /* Save pid of this process in a file */
-  // if (!opt_initialize) {
-  //   if (create_pid_file()) abort = true;
-  // }
+  /* Save pid of this process in a file */
+  if (!opt_initialize && !ConsensusLogManager::enable_consensus()) {
+    if (create_pid_file()) abort = true;
+  }
 
   /* Read the optimizer cost model configuration tables */
   if (!opt_initialize) reload_optimizer_cost_constants();
@@ -8277,7 +8297,6 @@ int mysqld_main(int argc, char **argv)
       that there are unprocessed options.
     */
     my_getopt_skip_unknown = false;
-
     if ((ho_error = handle_options(&remaining_argc, &remaining_argv, no_opts,
                                    mysqld_get_one_option)))
       abort = true;
@@ -8343,16 +8362,17 @@ int mysqld_main(int argc, char **argv)
   check_binlog_cache_size(nullptr);
   check_binlog_stmt_cache_size(nullptr);
 
-  xpaxos_set_privilege_checks_user();
-
   binlog_unsafe_map_init();
 
-  if (!opt_initialize) {
-    if (!opt_consensus_force_recovery) {
-      if (!opt_cluster_log_type_instance) {
-        start_consensus_apply_threads();
-      }
-    }
+  if (ConsensusLogManager::enable_consensus()) {
+    xpaxos_set_privilege_checks_user();
+
+    if (!opt_initialize && !opt_consensus_force_recovery && !opt_cluster_log_type_instance)
+      start_consensus_apply_threads();
+  } else {
+    ReplicaInitializer replica_initializer(opt_initialize, opt_skip_replica_start,
+                                          rpl_channel_filters,
+                                          &opt_replica_skip_errors);
   }
 
 #ifdef WITH_LOCK_ORDER
@@ -8438,6 +8458,10 @@ int mysqld_main(int argc, char **argv)
   start_handle_manager();
 
   create_compress_gtid_table_thread();
+
+  InitChangesetThreadPool(opt_changeset_threads);
+
+  if (!opt_initialize)  malloc_stats();
 
   LogEvent()
       .type(LOG_TYPE_ERROR)
@@ -8937,6 +8961,8 @@ static int handle_early_options() {
   vector<my_option> all_early_options;
   all_early_options.reserve(100);
 
+  xp::info(ER_XP_0) << "handle_early_options begin";
+
   my_getopt_register_get_addr(nullptr);
   /* Skip unknown options so that they may be processed later */
   my_getopt_skip_unknown = true;
@@ -8965,6 +8991,8 @@ static int handle_early_options() {
 
   // Swap with an empty vector, i.e. delete elements and free allocated space.
   vector<my_option>().swap(all_early_options);
+
+  xp::info(ER_XP_0) << "handle_early_options end";
 
   return ho_error;
 }
