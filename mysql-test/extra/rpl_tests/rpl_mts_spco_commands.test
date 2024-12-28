@@ -240,7 +240,7 @@ SET @@global.binlog_transaction_dependency_tracking = COMMIT_ORDER;
 --echo # $tc_count. DROP TABLE and DROP TABLE IF EXISTS
 --echo ####################################################################
 
---let $mts_num_preceding_trans= 8
+--let $mts_num_preceding_trans= 7
 
 --let $mts_spco_skip_init_statement= 1
 --let $mts_spco_start_statement = CREATE TABLE t3 LIKE t1; CREATE TABLE t4 LIKE t1; CREATE TABLE t5 LIKE t1

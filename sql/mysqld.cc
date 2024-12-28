@@ -7542,8 +7542,6 @@ int mysqld_main(int argc, char **argv)
 
   init_variable_default_paths();
 
-  xp::system(ER_XP_0) << "XPaxos server start, pid:" << getpid();
-
   int heo_error;
 
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
@@ -7552,6 +7550,8 @@ int mysqld_main(int argc, char **argv)
   */
   init_pfs_instrument_array();
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
+
+  xp::system(ER_XP_0) << "XPaxos server start, pid:" << getpid();
 
   heo_error = handle_early_options();
 

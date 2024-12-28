@@ -1589,6 +1589,7 @@ uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader,
     uchar *event_ptr;
     uint32 event_len = 0;
     if (unlikely(read_event(*reader, &event_ptr, &event_len))) break;
+    if (event_ptr == nullptr) break;
     if (!Log_event::is_local_event_type(
             static_cast<Log_event_type>(event_ptr[EVENT_TYPE_OFFSET]))) {
       create_time = uint4korr(event_ptr);

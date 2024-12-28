@@ -22,6 +22,7 @@
 
 #include "sql/binlog.h"
 
+#include "consensus_log_manager.h"
 #include "my_config.h"
 
 #include <errno.h>
@@ -8734,7 +8735,7 @@ void MYSQL_BIN_LOG::init_thd_variables(THD *thd, bool all, bool skip_commit) {
 }
 
 THD *MYSQL_BIN_LOG::fetch_and_process_flush_stage_queue(
-    const bool no_process, const bool check_and_skip_flush_logs) {
+    const bool check_and_skip_flush_logs) {
   /*
     Fetch the entire flush queue and empty it, so that the next batch
     has a leader. We must do this before invoking ha_flush_logs(...)
@@ -8748,12 +8749,6 @@ THD *MYSQL_BIN_LOG::fetch_and_process_flush_stage_queue(
       Commit_stage_manager::get_instance().fetch_queue_skip_acquire_lock(
           Commit_stage_manager::BINLOG_FLUSH_STAGE);
   assert(first_seen != nullptr);
-
-  if (no_process) {
-    Commit_stage_manager::get_instance().unlock_queue(
-        Commit_stage_manager::BINLOG_FLUSH_STAGE);
-    return first_seen;
-  }
 
   THD *commit_order_thd =
       Commit_stage_manager::get_instance().fetch_queue_skip_acquire_lock(
@@ -8805,7 +8800,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     term = log_entry.term();
   }
 
-  THD *first_seen = fetch_and_process_flush_stage_queue(true, false);
+  THD *first_seen = fetch_and_process_flush_stage_queue(false);
 
   //TODO::@yanhua remove later
   if (mysql_bin_log.is_rotating_caused_by_incident) {
@@ -9398,7 +9393,7 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   my_off_t flush_end_pos = 0;
   bool update_binlog_end_pos_after_sync;
   if (unlikely(!is_open())) {
-    final_queue = fetch_and_process_flush_stage_queue(false, true);
+    final_queue = fetch_and_process_flush_stage_queue(true);
     leave_mutex_before_commit_stage =
         consensus_log_manager.get_sequence_stage1_lock();
     /*
@@ -11346,6 +11341,9 @@ bool THD::is_dml_gtid_compatible(bool some_transactional_table,
 bool THD::is_xa_gtid_compatible(bool some_non_transactional_table,
                                 bool non_transactional_tables_are_tmp) {
   DBUG_TRACE;
+
+  if (!ConsensusLogManager::enable_consensus())
+    return true;
 
   // If @@session.sql_log_bin has been manually turned off (only
   // doable by SUPER), then no problem, we can execute any statement.

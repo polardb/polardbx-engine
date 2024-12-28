@@ -548,3 +548,8 @@ rpl_gtid.rpl_trx_boundary_parser_stmt             : WL#002 xcluster rpl not supp
 rpl_gtid.rpl_verify_delay_time             : WL#002 xcluster rpl not support
 rpl_gtid.rpl_wait_for_executed_gtid_set             : WL#002 xcluster rpl not support
 rpl_gtid.rpl_xa_with_filters_error_msg             : WL#002 xcluster rpl not support
+
+rpl_gtid_no_xpaxos.rpl_log_info_repository_persistence_gtid_only         : WL#002 repository=FILE not support
+rpl_gtid_no_xpaxos.rpl_gtid_commit_order_manager_seq_nr_wrap_around      : WL#002 bad case
+rpl_gtid_no_xpaxos.rpl_async_conn_auto_failover_highest_weight           : WL#002 asynchronous_connection_failover_delete_source
+rpl_gtid_no_xpaxos.rpl_gtid_while_super_read_only                        : WL#002 encryption

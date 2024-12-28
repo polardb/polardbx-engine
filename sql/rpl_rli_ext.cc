@@ -82,11 +82,11 @@ void mts_advance_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
 void mts_force_consensus_apply_index(Relay_log_info *rli,
                                      uint64 consensus_index) {
   /** rli->m_consensus_index_buf will be inited in mts and xpaxos_replication */
-  if (rli && rli->m_consensus_index_buf) {
-    assert(rli->is_parallel_exec());
-    assert(rli->info_thd->xpaxos_replication_channel);
-    rli->m_consensus_index_buf->force_advance_tail(consensus_index);
-  }
+  if (!rli || !rli->m_consensus_index_buf) return;
+
+  assert(rli->is_parallel_exec());
+  assert(rli->info_thd->xpaxos_replication_channel);
+  rli->m_consensus_index_buf->force_advance_tail(consensus_index);
 
   if (consensus_index > consensus_ptr->getAppliedIndex()) {
     consensus_ptr->updateAppliedIndex(consensus_index);

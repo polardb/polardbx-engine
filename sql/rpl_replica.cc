@@ -32,6 +32,7 @@
 
 #include "sql/rpl_replica.h"
 
+#include "consensus_log_manager.h"
 #include "my_config.h"
 
 #include <errno.h>
@@ -831,8 +832,9 @@ bool start_slave_cmd(THD *thd) {
     if (mi && enable_cmd)
       res = start_slave(thd, &thd->lex->slave_connection, &thd->lex->mi,
                         thd->lex->slave_thd_opt, mi, true);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
-             strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel)
+            || (ConsensusLogManager::enable_consensus()
+                && strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel)))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
 
     if (!res) my_ok(thd);
@@ -941,8 +943,9 @@ bool stop_slave_cmd(THD *thd) {
     if (mi && enable_cmd) {
       res = stop_slave(thd, mi, true /*net report */, true /*for_one_channel*/,
                        &push_temp_table_warning);
-    } else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
-             strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
+    } else if (strcmp(channel_map.get_default_channel(), lex->mi.channel)
+               || (ConsensusLogManager::enable_consensus()
+                   && strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel)))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
 
@@ -9355,8 +9358,9 @@ int reset_slave(THD *thd) {
     /* Do while iteration for rest of the channels */
     it = channel_map.begin();
     while (it != channel_map.end()) {
-      if (!it->first.compare(channel_map.get_default_channel()) ||
-          !it->first.compare(channel_map.get_xpaxos_channel())) {
+      if (!it->first.compare(channel_map.get_default_channel())
+          || (ConsensusLogManager::enable_consensus()
+              && !it->first.compare(channel_map.get_xpaxos_channel()))) {
         it++;
         continue;
       }
@@ -9387,8 +9391,9 @@ int reset_slave(THD *thd) {
   } else {
     it = channel_map.begin();
     while (it != channel_map.end()) {
-      if (!it->first.compare(channel_map.get_default_channel()) ||
-          !it->first.compare(channel_map.get_xpaxos_channel())) {
+      if (ConsensusLogManager::enable_consensus()
+          && (!it->first.compare(channel_map.get_default_channel())
+              || !it->first.compare(channel_map.get_xpaxos_channel()))) {
         it++;
         continue;
       }
@@ -9585,8 +9590,9 @@ bool reset_slave_cmd(THD *thd) {
 
     if (mi)
       res = reset_slave(thd, mi, thd->lex->reset_slave_info.all);
-    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel) ||
-             strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel))
+    else if (strcmp(channel_map.get_default_channel(), lex->mi.channel)
+            || (ConsensusLogManager::enable_consensus()
+                && strcmp(channel_map.get_xpaxos_channel(), lex->mi.channel)))
       my_error(ER_SLAVE_CHANNEL_DOES_NOT_EXIST, MYF(0), lex->mi.channel);
   }
 

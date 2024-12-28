@@ -172,7 +172,7 @@ Log_event *Rpl_applier_reader::read_next_event() {
   });
   DBUG_EXECUTE_IF("force_sql_thread_error", return nullptr;);
 
-  if (m_reading_active_log) {
+  if (m_rli->relay_log.is_xpaxos_log && m_reading_active_log) {
     reopen_log_reader_if_needed();
   }
 
@@ -250,8 +250,9 @@ Log_event *Rpl_applier_reader::read_next_event() {
     if (!move_to_next_log()) return read_next_event();
   }
 
-  if (m_relaylog_file_reader.get_error_type() == Binlog_read_error::READ_EOF &&
-      m_reading_active_log) {
+  if (m_rli->relay_log.is_xpaxos_log
+      && m_relaylog_file_reader.get_error_type() == Binlog_read_error::READ_EOF
+      && m_reading_active_log) {
     read_active_log_end_pos();
     return read_next_event();
   }

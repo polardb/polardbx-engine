@@ -420,8 +420,9 @@ static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
 
 static bool fix_consensus_new_leader_max_apply_delay_seconds(sys_var *, THD *,
                                                  enum_var_type) {
-  consensus_ptr->setMaxDelaySeconds4NewLeader(
-      opt_consensus_new_leader_max_apply_delay_seconds);
+  if (consensus_ptr)
+    consensus_ptr->setMaxDelaySeconds4NewLeader(
+        opt_consensus_new_leader_max_apply_delay_seconds);
   return false;
 }
 
