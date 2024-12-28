@@ -4885,6 +4885,23 @@ class THD : public MDL_context_owner,
 
   bool xpaxos_replication_channel;
 
+#ifndef NDEBUG
+  /** Replaced m_cond_preempt. Protected by LOCK_tx_commit_pending_mutex. */
+  mysql_cond_t COND_bgc_preempt_cond_var;
+#endif
+
+  /** Replaced m_stage_cond_commit_order and m_stage_cond_binlog. During the
+  binlog group commit process, when the status of tx_commit_pending changes,
+  this condition variable will be used to notify the sleeping followers.
+
+  Protected by LOCK_tx_commit_pending_mutex.*/
+  mysql_cond_t COND_tx_commit_pending_cond_var;
+
+  /** Protect tx_commit_pending flag during binlog group commit (and other
+  related variables and condition like next_to_commit,
+  COND_tx_commit_pending_cond_var and so on.) */
+  mysql_mutex_t LOCK_tx_commit_pending_mutex;
+
   void reset_trans_policy() {
     variables.innodb_snapshot_gcn = GCN_NULL;
     variables.innodb_commit_gcn = GCN_NULL;

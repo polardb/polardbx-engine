@@ -856,6 +856,20 @@ dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr,
 
   auto undo_ptr = &trx->rsegs.m_txn;
   if (!undo_ptr->txn_undo) {
+    // auto &gtid_persistor = clone_sys->get_gtid_persistor();
+    // gtid_persistor.set_persist_gtid(trx, true);
+    /** For External XA transaction, THD::se_persists_gtid must be always true.
+    That's mean that the GTID is always persisted by SE for External XA
+    transaction.
+
+    Now this function is only used for External XA transaction, so the GTID must
+    be always persisted by SE. If in the future, this function is not only used
+    for External XA transaction, the gtid_persistor.set_persist_gtid might be
+    called to set the SE_GTID_PERSIST flag. */
+    ut_ad(trx->mysql_thd && trx->mysql_thd->get_transaction() &&
+          !trx->mysql_thd->get_transaction()->xid_state()->has_state(
+              XID_STATE::XA_NOTR));
+
     mutex_enter(&trx->undo_mutex);
     err = trx_always_assign_txn_undo(trx);
     mutex_exit(&trx->undo_mutex);

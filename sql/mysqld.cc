@@ -1117,7 +1117,7 @@ static PSI_mutex_key key_LOCK_compress_gtid_table;
 static PSI_mutex_key key_LOCK_collect_instance_log;
 static PSI_mutex_key key_BINLOG_LOCK_commit;
 static PSI_mutex_key key_BINLOG_LOCK_commit_queue;
-static PSI_mutex_key key_BINLOG_LOCK_done;
+/* static PSI_mutex_key key_BINLOG_LOCK_done; */
 static PSI_mutex_key key_BINLOG_LOCK_flush_queue;
 static PSI_mutex_key key_BINLOG_LOCK_index;
 static PSI_mutex_key key_BINLOG_LOCK_log;
@@ -4921,11 +4921,11 @@ int init_common_variables() {
   */
   mysql_bin_log.set_psi_keys(
       key_BINLOG_LOCK_index, key_BINLOG_LOCK_commit,
-      key_BINLOG_LOCK_commit_queue, key_BINLOG_LOCK_done,
+      key_BINLOG_LOCK_commit_queue, /* key_BINLOG_LOCK_done, */
       key_BINLOG_LOCK_flush_queue, key_BINLOG_LOCK_log,
       key_BINLOG_LOCK_binlog_end_pos, key_BINLOG_LOCK_sync,
       key_BINLOG_LOCK_sync_queue, key_BINLOG_LOCK_xids, key_BINLOG_LOCK_rotate,
-      key_BINLOG_LOCK_wait_for_group_turn, key_BINLOG_COND_done,
+      key_BINLOG_LOCK_wait_for_group_turn, /* key_BINLOG_COND_done, */
       key_BINLOG_COND_flush_queue, key_BINLOG_update_cond,
       key_BINLOG_prep_xids_cond, key_BINLOG_COND_wait_for_group_turn,
       key_file_binlog, key_file_binlog_index, key_file_binlog_cache,
@@ -12155,6 +12155,7 @@ PSI_mutex_key key_mutex_replica_worker_hash;
 PSI_mutex_key key_monitor_info_run_lock;
 PSI_mutex_key key_LOCK_delegate_connection_mutex;
 PSI_mutex_key key_LOCK_group_replication_connection_mutex;
+PSI_mutex_key key_LOCK_tx_commit_pending_mutex;
 
 /* clang-format off */
 static PSI_mutex_info all_server_mutexes[]=
@@ -12162,7 +12163,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_tc, "TC_LOG_MMAP::LOCK_tc", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_commit, "MYSQL_BIN_LOG::LOCK_commit", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_commit_queue, "MYSQL_BIN_LOG::LOCK_commit_queue", 0, 0, PSI_DOCUMENT_ME},
-  { &key_BINLOG_LOCK_done, "MYSQL_BIN_LOG::LOCK_done", 0, 0, PSI_DOCUMENT_ME},
+  /* { &key_BINLOG_LOCK_done, "MYSQL_BIN_LOG::LOCK_done", 0, 0, PSI_DOCUMENT_ME}, */
   { &key_BINLOG_LOCK_flush_queue, "MYSQL_BIN_LOG::LOCK_flush_queue", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_index, "MYSQL_BIN_LOG::LOCK_index", 0, 0, PSI_DOCUMENT_ME},
   { &key_BINLOG_LOCK_log, "MYSQL_BIN_LOG::LOCK_log", 0, 0, PSI_DOCUMENT_ME},
@@ -12251,6 +12252,7 @@ static PSI_mutex_info all_server_mutexes[]=
 { &key_LOCK_authentication_policy, "LOCK_authentication_policy", PSI_FLAG_SINGLETON, 0, "A lock to ensure execution of CREATE USER or ALTER USER sql and SET @@global.authentication_policy variable are serialized"},
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_tx_commit_pending_mutex, "LOCK_tx_commit_pending_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 
   { &key_consensus_info_data_lock, "consensus_info::data_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_run_lock, "consensus_info::run_lock", 0, 0, PSI_DOCUMENT_ME},
@@ -12341,6 +12343,10 @@ PSI_cond_key key_cond_slave_worker_hash;
 PSI_cond_key key_monitor_info_run_cond;
 PSI_cond_key key_COND_delegate_connection_cond_var;
 PSI_cond_key key_COND_group_replication_connection_cond_var;
+PSI_cond_key key_COND_tx_commit_pending_cond_var;
+#ifndef NDEBUG
+PSI_cond_key key_COND_bgc_preempt_cond_var;
+#endif
 
 /* clang-format off */
 static PSI_cond_info all_server_conds[]=
@@ -12385,6 +12391,10 @@ static PSI_cond_info all_server_conds[]=
   { &key_monitor_info_run_cond, "Source_IO_monitor::run_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_delegate_connection_cond_var, "THD::COND_delegate_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
   { &key_COND_group_replication_connection_cond_var, "THD::COND_group_replication_connection_cond_var", 0, 0, PSI_DOCUMENT_ME},
+  { &key_COND_tx_commit_pending_cond_var, "THD::COND_tx_commit_pending_cond_var", 0, 0, PSI_DOCUMENT_ME},
+#ifndef NDEBUG
+  { &key_COND_bgc_preempt_cond_var, "THD::COND_bgc_preempt_cond_var", 0, 0, PSI_DOCUMENT_ME},
+#endif
 
   { &key_consensus_info_data_cond, "Consensus_info::data_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_start_cond, "Consensus_info::start_cond", 0, 0, PSI_DOCUMENT_ME},

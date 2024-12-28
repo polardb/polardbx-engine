@@ -821,6 +821,15 @@ THD::THD(bool enable_plugins)
   mysql_cond_init(key_COND_group_replication_connection_cond_var,
                   &COND_group_replication_connection_cond_var);
 
+  mysql_mutex_init(key_LOCK_tx_commit_pending_mutex,
+                   &LOCK_tx_commit_pending_mutex, MY_MUTEX_INIT_FAST);
+  mysql_cond_init(key_COND_tx_commit_pending_cond_var,
+                  &COND_tx_commit_pending_cond_var);
+#ifndef NDEBUG
+  mysql_cond_init(key_COND_bgc_preempt_cond_var,
+                  &COND_bgc_preempt_cond_var);
+#endif
+
   /* Variables with default values */
   set_proc_info("login");
   where = THD::DEFAULT_WHERE;
@@ -1486,10 +1495,13 @@ THD::~THD() {
   mysql_mutex_destroy(&LOCK_thd_security_ctx);
   mysql_mutex_destroy(&LOCK_current_cond);
   mysql_mutex_destroy(&LOCK_group_replication_connection_mutex);
+  mysql_mutex_destroy(&LOCK_tx_commit_pending_mutex);
 
   mysql_cond_destroy(&COND_thr_lock);
   mysql_cond_destroy(&COND_group_replication_connection_cond_var);
+  mysql_cond_destroy(&COND_tx_commit_pending_cond_var);
 #ifndef NDEBUG
+  mysql_cond_destroy(&COND_bgc_preempt_cond_var);
   dbug_sentry = THD_SENTRY_GONE;
 #endif
 

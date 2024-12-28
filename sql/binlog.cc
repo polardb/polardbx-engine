@@ -3733,7 +3733,7 @@ void MYSQL_BIN_LOG::init_pthread_objects() {
   if (!is_relay_log) {
     Commit_stage_manager::get_instance().init(
         m_key_LOCK_flush_queue, m_key_LOCK_sync_queue, m_key_LOCK_commit_queue,
-        m_key_LOCK_done, m_key_LOCK_wait_for_group_turn, m_key_COND_done,
+        /* m_key_LOCK_done, */ m_key_LOCK_wait_for_group_turn, /* m_key_COND_done, */
         m_key_COND_flush_queue, m_key_COND_wait_for_group_turn);
   }
 }

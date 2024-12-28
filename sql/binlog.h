@@ -166,7 +166,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /** The PFS instrumentation key for @ LOCK_commit_queue. */
   PSI_mutex_key m_key_LOCK_commit_queue;
   /** The PFS instrumentation key for @ LOCK_done. */
-  PSI_mutex_key m_key_LOCK_done;
+  /* PSI_mutex_key m_key_LOCK_done; */
   /** The PFS instrumentation key for @ LOCK_flush_queue. */
   PSI_mutex_key m_key_LOCK_flush_queue;
   /** The PFS instrumentation key for @ LOCK_sync_queue. */
@@ -174,7 +174,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /** The PFS instrumentation key for @ LOCK_wait_for_group_turn. */
   PSI_mutex_key m_key_LOCK_wait_for_group_turn;
   /** The PFS instrumentation key for @ COND_done. */
-  PSI_mutex_key m_key_COND_done;
+  /* PSI_mutex_key m_key_COND_done; */
   /** The PFS instrumentation key for @ COND_flush_queue. */
   PSI_mutex_key m_key_COND_flush_queue;
   /** The instrumentation key to use for @ LOCK_commit. */
@@ -360,21 +360,21 @@ class MYSQL_BIN_LOG : public TC_LOG {
 
   void set_psi_keys(
       PSI_mutex_key key_LOCK_index, PSI_mutex_key key_LOCK_commit,
-      PSI_mutex_key key_LOCK_commit_queue, PSI_mutex_key key_LOCK_done,
+      PSI_mutex_key key_LOCK_commit_queue, /* PSI_mutex_key key_LOCK_done, */
       PSI_mutex_key key_LOCK_flush_queue, PSI_mutex_key key_LOCK_log,
       PSI_mutex_key key_LOCK_binlog_end_pos, PSI_mutex_key key_LOCK_sync,
       PSI_mutex_key key_LOCK_sync_queue, PSI_mutex_key key_LOCK_xids,
       PSI_mutex_key key_LOCK_rotate, PSI_mutex_key key_LOCK_wait_for_group_turn,
-      PSI_cond_key key_COND_done, PSI_cond_key key_COND_flush_queue,
+      /* PSI_cond_key key_COND_done, */ PSI_cond_key key_COND_flush_queue,
       PSI_cond_key key_update_cond, PSI_cond_key key_prep_xids_cond,
       PSI_cond_key key_COND_wait_for_group_turn, PSI_file_key key_file_log,
       PSI_file_key key_file_log_index, PSI_file_key key_file_log_cache,
       PSI_file_key key_file_log_index_cache) {
-    m_key_COND_done = key_COND_done;
+    /* m_key_COND_done = key_COND_done; */
     m_key_COND_flush_queue = key_COND_flush_queue;
 
     m_key_LOCK_commit_queue = key_LOCK_commit_queue;
-    m_key_LOCK_done = key_LOCK_done;
+    /* m_key_LOCK_done = key_LOCK_done; */
     m_key_LOCK_flush_queue = key_LOCK_flush_queue;
     m_key_LOCK_sync_queue = key_LOCK_sync_queue;
 

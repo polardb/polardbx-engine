@@ -196,9 +196,9 @@ class Commit_stage_manager {
   */
   void init(PSI_mutex_key key_LOCK_flush_queue,
             PSI_mutex_key key_LOCK_sync_queue,
-            PSI_mutex_key key_LOCK_commit_queue, PSI_mutex_key key_LOCK_done,
+            PSI_mutex_key key_LOCK_commit_queue, /* PSI_mutex_key key_LOCK_done, */
             PSI_mutex_key key_LOCK_wait_for_group_turn,
-            PSI_cond_key key_COND_done, PSI_cond_key key_COND_flush_queue,
+            /* PSI_cond_key key_COND_done, */ PSI_cond_key key_COND_flush_queue,
             PSI_cond_key key_COND_wait_for_group_turn);
 
   /**
@@ -433,16 +433,16 @@ class Commit_stage_manager {
      Condition variable to indicate that the binlog threads can wake up
      and continue.
   */
-  mysql_cond_t m_stage_cond_binlog;
+  /* mysql_cond_t m_stage_cond_binlog; */
 
   /**
      Condition variable to indicate that the flush to storage engine
      is done and commit order threads can again wake up and continue.
   */
-  mysql_cond_t m_stage_cond_commit_order;
+  /* mysql_cond_t m_stage_cond_commit_order; */
 
   /** Mutex used for the condition variable above */
-  mysql_mutex_t m_lock_done;
+  /* mysql_mutex_t m_lock_done; */
 
   /** Mutex used for the stage level locks */
   mysql_mutex_t m_queue_lock[STAGE_COUNTER - 1];
@@ -452,10 +452,10 @@ class Commit_stage_manager {
   THD *leader_thd;
 
   /** Flag is set by Leader when it starts waiting for follower's all-clear */
-  bool leader_await_preempt_status;
+  /* bool leader_await_preempt_status; */
 
   /** Condition variable to indicate a follower started waiting for commit */
-  mysql_cond_t m_cond_preempt;
+  /* mysql_cond_t m_cond_preempt; */
 #endif
 
   /** Condition variable to wait for a given ticket to become active. */
