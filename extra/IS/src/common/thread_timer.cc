@@ -90,7 +90,10 @@ void ThreadTimerService::loopAsync(EV_P, ev_async *w, int revents) {
 ThreadTimer::~ThreadTimer() { stop(); }
 
 void ThreadTimer::start() {
-  if (type_ == Stage) setStageExtraTime(time_);
+  if (type_ == Stage) {
+    updateStageExtraTime();
+    currentStage_.store(0);
+  }
 
   service_->ldlock();
   ev_now_update(service_->getEvLoop());
@@ -111,7 +114,10 @@ void ThreadTimer::restart(double t) {
   // repeat:%lf\n", ev_now(loop), ev_mn_now(loop), w->at, w->repeat);
 
   if (t != 0.0) time_ = t;
-  if (type_ == Stage) setStageExtraTime(time_);
+  if (type_ == Stage) {
+    updateStageExtraTime();
+    currentStage_.store(0);
+  }
 
   if (t == 0.0) {
     service_->ldlock();
@@ -160,16 +166,18 @@ void ThreadTimer::stop() {
   }
 }
 
-void ThreadTimer::setStageExtraTime(double baseTime) {
+void ThreadTimer::updateStageExtraTime() {
   assert(type_ == Stage);
+  double baseTime = time_;
   uint64_t base = 10000, randn = rand() % base;
   if (randWeight_ != 0) {
     /* if weigth == 9 we use lest time here. */
     randn = randn / 10 + 1000 * (9 - randWeight_);
   }
+  if (backoffTimeout_ > 0.0)
+    baseTime = std::min(backoffTimeout_, time_);
   double tmp = baseTime * randn / base;
   stageExtraTime_ = (tmp < 0.001 ? 0.001 : tmp);
-  currentStage_.store(0);
 }
 
 uint64_t ThreadTimer::getAndSetStage() {
@@ -206,7 +214,9 @@ void ThreadTimer::timerCallbackInternal(struct ev_loop *loop, ev_timer *w,
     double t;
     if (tt->getAndSetStage() == 0) {
       t = tt->getStageExtraTime();
-      easy_warn_log("ThreadTimer change stage from 0 to 1, extraTime:%lf", t);
+      easy_warn_log("ThreadTimer change stage from 0 to 1, time:%lf, "
+                    "maxBackoffTime(%lf), extraTime:%lf",
+                    tt->getTime(), tt->getBackoffTimeout(), tt->getStageExtraTime());
     } else {
       t = tt->getTime();
       if (tt->getService() != nullptr) {

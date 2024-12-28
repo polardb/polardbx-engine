@@ -178,8 +178,12 @@ class ThreadTimer {
   TimerType getType() { return type_; }
   double getTime() { return time_; }
   double getStageExtraTime() { return stageExtraTime_; }
-  void setStageExtraTime(double baseTime);
+  void updateStageExtraTime();
   void setRandWeight(uint64_t w) { randWeight_ = w % 10; }
+  double getBackoffTimeout() { return backoffTimeout_; }
+  void setBackoffTimeout(uint64_t time_ms) {
+    backoffTimeout_ = (time_ms > 0 ? (time_ms / 1000) : 0.0);
+  }
   uint64_t getCurrentStage() { return currentStage_.load(); }
   uint64_t getAndSetStage();
   std::shared_ptr<Service> &getService() { return srv_; }
@@ -205,6 +209,7 @@ class ThreadTimer {
   double time_;
   TimerType type_;
   ev_timer timer_;
+  double backoffTimeout_{0.0};
   double stageExtraTime_;
   std::atomic<uint64_t> currentStage_;
   uint64_t randWeight_;

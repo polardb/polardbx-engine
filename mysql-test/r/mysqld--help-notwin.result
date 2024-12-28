@@ -469,6 +469,9 @@ The following options may be given as the first argument:
  --consensus-sync-follower-meta-interva[=#] 
  Interval of leader sync follower's meta for learner
  source
+ --consensus-vote-backoff-timeout=# 
+ consensus vote backoff timeout(milliseconds) for election
+ timer
  --consensus-wait-milliseconds-before-change-leader[=#] 
  the waiting time before change leader
  --consensus-wait-unfinished-bgc-timeout[=#] 
@@ -2266,6 +2269,7 @@ consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
+consensus-vote-backoff-timeout 1000
 consensus-wait-milliseconds-before-change-leader 200
 consensus-wait-unfinished-bgc-timeout 500
 consensus-wait-unfinished-trx-timeout 800

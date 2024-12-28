@@ -14,6 +14,7 @@ CREATE TABLE creed (   `id` bigint(32) NOT NULL AUTO_INCREMENT COMMENT '主键\n
 
 --source include/wait_follower_catchup.inc
 
+--disable_warnings
 --connection f1
 --let $sql_running= query_get_value("show slave status", Slave_SQL_Running, 1)
 --echo $sql_running
@@ -31,6 +32,8 @@ start xpaxos_replication;
 --echo $sql_running
 set global innodb_strict_mode=0;
 --disconnect f2
+--enable_warnings
+
 
 --connect (f2,127.0.0.1,root,,test,$MYPORT_3)
 --connection f2

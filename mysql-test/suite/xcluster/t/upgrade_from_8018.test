@@ -50,7 +50,7 @@ insert into test.t1 values (4, 100);
 xa recover;
 --disconnect leader
 
-
+--sleep 5
 --echo # connect follower2
 --connect (follower2,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower2
@@ -78,15 +78,18 @@ let $DATADIR = $old_datadir/data;
 --source include/wait_until_disconnected.inc
 
 --echo # restart 1
---exec echo "restart:--datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
---enable_reconnect
---sleep 10
+let NEW_CMD = $MYSQLD --datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term </dev/null>>$MYSQLTEST_VARDIR/tmp/force-change-meta.log 2>&1;
+--error 0
+--exec $NEW_CMD
+
 
 --echo # restart 2
 --exec echo "restart:--datadir=$DATADIR " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --enable_reconnect
 --source include/wait_until_connected_again_old.inc
 --source include/wait_apply_catchup.inc
+
+--remove_file $MYSQLTEST_VARDIR/tmp/force-change-meta.log
 
 --echo # check
 --connect (follower21,127.0.0.1,root,,test,$MYPORT_2)

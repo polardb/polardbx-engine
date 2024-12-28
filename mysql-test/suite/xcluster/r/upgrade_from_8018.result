@@ -15,6 +15,7 @@ formatID	gtrid_length	bqual_length	data
 # connect follower2
 xa recover;
 formatID	gtrid_length	bqual_length	data
+1	2	0	x1
 show consensus logs;
 Log_name	File_size	Start_log_index
 master-bin.000001	3175	1

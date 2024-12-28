@@ -13,7 +13,16 @@ SERVER_ID	ROLE	FORCE_SYNC	ELECTION_WEIGHT
 call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_3");
 select role from information_schema.alisql_cluster_local;
 role
-No Role
+Leader
+select role from information_schema.alisql_cluster_local;
+role
+Leader
+select role from information_schema.alisql_cluster_local;
+role
+Follower
+select role from information_schema.alisql_cluster_local;
+role
+Follower
 select role from information_schema.alisql_cluster_local;
 role
 Leader

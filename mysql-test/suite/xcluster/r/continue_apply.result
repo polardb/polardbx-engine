@@ -42,8 +42,6 @@ Timeout in wait_condition.inc for select count(distinct applied_index)=1 from in
 No
 set global innodb_strict_mode=0;
 start xpaxos_replication;
-Warnings:
-Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Yes
 No
 set global innodb_strict_mode=0;

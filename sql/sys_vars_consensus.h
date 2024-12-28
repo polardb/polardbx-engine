@@ -50,6 +50,7 @@ extern uint opt_consensus_learner_timeout;
 extern bool opt_consensus_learner_pipelining;
 extern uint opt_consensus_configure_change_timeout;
 extern uint opt_consensus_election_timeout;
+extern uint opt_consensus_vote_backoff_timeout;
 extern uint opt_consensus_io_thread_cnt;
 extern uint opt_consensus_worker_thread_cnt;
 extern uint opt_consensus_heartbeat_thread_cnt;

@@ -468,6 +468,10 @@ class Paxos : public Consensus {
     return maxPacketSize_;
   }  // 1000000 BW * RTT/2/pipelines
   void setMaxPacketSize(uint64_t size) { maxPacketSize_ = size; }
+  void setVoteBackoffTimeout(uint64_t time_ms) {
+    electionTimer_->setBackoffTimeout(time_ms);
+    electionTimer_->updateStageExtraTime();
+  }
   uint64_t getMaxDelayIndex() { return maxDelayIndex_; }
   uint64_t getMinDelayIndex() { return minDelayIndex_; }
   void setLargeBatchRatio(uint64_t v) { largeBatchRatio_ = v; }

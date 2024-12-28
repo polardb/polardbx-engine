@@ -1227,8 +1227,8 @@ void Paxos::becameLeader_() {
     /* Deal with the election weight things. */
     if (config_->needWeightElection(localServer_->electionWeight)) {
       easy_system_log(
-          "Server %d : Try do weight election for this leaderTransfer term(%llu), weight(%llu) after %llu ms"
-          "skip LimitNewTrx!!\n",
+          "Server %d : Try do weight election for this leaderTransfer "
+          "term(%llu), weight(%llu) after %llu ms, skip LimitNewTrx!!\n",
           localServer_->serverId, currentTerm_.load(),
           localServer_->electionWeight, electionTimeout_);
       new ThreadTimer(srv_->getThreadTimerService(), srv_, electionTimeout_,

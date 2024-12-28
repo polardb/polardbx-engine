@@ -79,6 +79,7 @@ uint opt_consensus_learner_timeout;
 bool opt_consensus_learner_pipelining = 0;
 uint opt_consensus_configure_change_timeout = 60 * 1000;
 uint opt_consensus_election_timeout;
+uint opt_consensus_vote_backoff_timeout;
 uint opt_consensus_io_thread_cnt;
 uint opt_consensus_worker_thread_cnt;
 uint opt_consensus_heartbeat_thread_cnt;
@@ -535,6 +536,20 @@ static Sys_var_uint Sys_consensus_election_timeout(
     READ_ONLY GLOBAL_VAR(opt_consensus_election_timeout),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(2000, 200000), DEFAULT(5000),
     BLOCK_SIZE(1));
+
+static bool fix_consensus_vote_backoff_timeout(sys_var *, THD *, enum_var_type) {
+  if (consensus_ptr)
+    consensus_ptr->setVoteBackoffTimeout(opt_consensus_vote_backoff_timeout);
+  return false;
+}
+
+static Sys_var_uint Sys_consensus_vote_backoff_timeout(
+    "consensus_vote_backoff_timeout",
+    "consensus vote backoff timeout(milliseconds) for election timer",
+    GLOBAL_VAR(opt_consensus_vote_backoff_timeout),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 1000000), DEFAULT(1000),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_vote_backoff_timeout));
 
 static Sys_var_uint Sys_consensus_io_thread_count(
     "consensus_io_thread_cnt", "Number of consensus io thread",

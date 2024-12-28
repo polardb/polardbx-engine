@@ -5543,7 +5543,7 @@ sub run_testcase ($) {
     }
 
     # It's not mysqltest that has exited, kill it
-    mtr_report("Killing mysqltest pid $test");
+    mtr_report("Killing mysqltest pid2 $test");
     $test->kill();
 
     # Check if testcase timer expired
