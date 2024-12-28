@@ -94,7 +94,7 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 # cleanup
 ###############################
 [connection master]
-set global xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
 drop table tt;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 ###############################
@@ -190,7 +190,7 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 # cleanup
 ###############################
 [connection master]
-set global xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
 drop table tt;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 ###############################
@@ -286,7 +286,7 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 # cleanup
 ###############################
 [connection master]
-set global xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
 drop table tt;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 ###############################

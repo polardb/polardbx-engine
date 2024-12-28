@@ -591,14 +591,14 @@ static Sys_var_int32 Sys_rpc_port("rpc_port", "RPC port for PolarDB-X",
 static Sys_var_bool Sys_enable_polarx_rpc(
     "enable_polarx_rpc", "Use new open PolarDB-X RPC",
     READ_ONLY GLOBAL_VAR(opt_enable_polarx_rpc), CMD_LINE(OPT_ARG),
-    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_deprecated_alias Sys_new_rpc("new_rpc", Sys_enable_polarx_rpc);
 
 static Sys_var_ulonglong Sys_changeset_threads("changeset_threads",
     "changeset threads count",
     READ_ONLY GLOBAL_VAR(opt_changeset_threads), CMD_LINE(OPT_ARG),
-    VALID_RANGE(0, 32), DEFAULT(8), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    VALID_RANGE(0, 32), DEFAULT(2), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulonglong Sys_import_tablespace_iterator_interval_ms(

@@ -201,7 +201,7 @@ if ($check_gcn) {
 --echo # cleanup
 --echo ###############################
 --source include/rpl_connection_master.inc
-set global xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
 drop table tt;
 --source include/sync_slave_sql_with_master.inc
 connection default;

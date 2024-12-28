@@ -442,6 +442,6 @@ disconnect con2;
 disconnect con3;
 connection default;
 set global innodb_undo_retention = default;
-set global xa_detach_on_prepare = default;
-set session xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
+set session xa_detach_on_prepare = ON;
 drop table t1;

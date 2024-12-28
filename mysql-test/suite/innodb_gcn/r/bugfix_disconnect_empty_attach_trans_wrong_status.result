@@ -71,5 +71,5 @@ include/assert.inc [expect_status == actual_status]
 connection con1;
 connection con1;
 set global innodb_undo_retention = default;
-set global xa_detach_on_prepare = default;
+set global xa_detach_on_prepare = ON;
 disconnect con1;

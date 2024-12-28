@@ -1761,7 +1761,7 @@ static Sys_var_bool Sys_binlog_order_commits(
     "binlog_order_commits",
     "Issue internal commit calls in the same order as transactions are"
     " written to the binary log. Default is to order commits.",
-    GLOBAL_VAR(opt_binlog_order_commits), CMD_LINE(OPT_ARG), DEFAULT(true));
+    GLOBAL_VAR(opt_binlog_order_commits), CMD_LINE(OPT_ARG), DEFAULT(false));
 
 static Sys_var_bool Sys_disable_binlog_savepoint(
     "disable_binlog_savepoint",
@@ -6586,7 +6586,7 @@ static Sys_var_enforce_gtid_consistency Sys_enforce_gtid_consistency(
     PERSIST_AS_READONLY GLOBAL_VAR(_gtid_consistency_mode),
     CMD_LINE(OPT_ARG, OPT_ENFORCE_GTID_CONSISTENCY),
     enforce_gtid_consistency_aliases, 3,
-    DEFAULT(3 /*position of "false" in enforce_gtid_consistency_aliases*/),
+    DEFAULT(1 /*position of "ON" in enforce_gtid_consistency_aliases*/),
     DEFAULT(GTID_CONSISTENCY_MODE_ON), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin_outside_trx_outside_sf_outside_sp));
 const char *fixup_enforce_gtid_consistency_command_line(char *value_arg) {
@@ -6835,7 +6835,7 @@ static Sys_var_gtid_mode Sys_gtid_mode(
     "be replicated and executed on all servers, and finally set all "
     "servers to GTID_MODE = ON.",
     PERSIST_AS_READONLY GLOBAL_VAR(Gtid_mode::sysvar_mode),
-    CMD_LINE(REQUIRED_ARG), Gtid_mode::names, DEFAULT(Gtid_mode::DEFAULT),
+    CMD_LINE(REQUIRED_ARG), Gtid_mode::names, DEFAULT(Gtid_mode::ON),
     NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin_outside_trx_outside_sf_outside_sp));
 
@@ -7727,7 +7727,7 @@ static Sys_var_bool Sys_xa_detatch_on_prepare(
     "until the session disconnects. ON is the only safe choice for "
     "replication.",
     HINT_UPDATEABLE SESSION_VAR(xa_detach_on_prepare), CMD_LINE(OPT_ARG),
-    DEFAULT(true), NO_MUTEX_GUARD, IN_BINLOG,
+    DEFAULT(false), NO_MUTEX_GUARD, IN_BINLOG,
     ON_CHECK(check_session_admin_outside_trx_outside_sf));
 
 #ifndef NDEBUG
