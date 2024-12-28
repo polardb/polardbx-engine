@@ -4,6 +4,7 @@ t-polardbx-engine:
     DOCKER: 1
     DO_TAG: 1
     NO_BUILDNUMBER: 1
+    BUILD_RESOURCE: 32-128Gi
   machine:
     docker:
       el8:
@@ -16,6 +17,7 @@ t-polardbx-engine-80:
     DOCKER: 1
     DO_TAG: 1
     NO_BUILDNUMBER: 1
+    BUILD_RESOURCE: 32-128Gi
   machine:
     docker:
       alios7:
