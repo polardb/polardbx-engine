@@ -24,45 +24,31 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0row.h
- lizard row multi-version operation.
+/** @file include/lizard0row0sel.h
+ lizard row select operation.
 
- Created 2025-01-02 by Jianwei.zhao
+ Created 2025-01-08 by Jianwei.zhao
  *******************************************************/
 
-#ifndef lizard0row0vers_h
-#define lizard0row0vers_h
+#ifndef lizard0row0sel_h
+#define lizard0row0sel_h
 
-#include "lizard0txn0rec.h"
-#include "lizard0read0types.h"
+/** Cluster or secondary record lock ignore strategy. */
+struct lock_ignore_t {
+ public:
+  /** Whether record has been del-marked. */
+  bool del_marked;
+  /** Whether lock can be released if not-match */
+  bool skip_gap_lock;
 
-namespace lizard {
+ public:
+  lock_ignore_t() : del_marked(false), skip_gap_lock(false) {}
 
-/** Simulate a invalid vision which took as a faked asof query,
- * then trx_undo_prev_version_build will try to get prev image
- * until txn slot state was changed to purged.
- *
- * Simulated vision is only used by row_vers_old_has_index_entry,
- * TRX_UNDO_PURGED state is enough for secondary index, so ignore
- * flashback area.
- * */
-extern const Vision *row_vers_old_simulate_vision();
+  lock_ignore_t(bool del_marked_arg, bool skip_gap_lock_arg)
+      : del_marked(del_marked_arg), skip_gap_lock(skip_gap_lock_arg) {}
 
-/** Jedge whether the cluster delete marked record still was needed.
- *
- * Before, it judge through purge_sys view, it promise that will never older
- * query to see it.
- *
- * after, we support asof query, so change dependency to txn slot.
- *
- *
- * @param[in/out]	txn rec
- * @param[in]		dict table
- *
- * @retval	true	maybe still usable by query or asof query. */
-extern bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
-                                              const dict_table_t *table);
-
-}  // namespace lizard
-
+  /** whether it's safe to ignore lock creation if unconflicit on del-marked
+   * record. */
+  bool allowed() const { return del_marked && skip_gap_lock; }
+};
 #endif

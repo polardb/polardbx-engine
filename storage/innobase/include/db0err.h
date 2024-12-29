@@ -214,6 +214,8 @@ enum dberr_t {
   /** Lizard: Blocking global query */
   DB_GP_WAIT,
   DB_GP_WAIT_TIMEOUT,
+  /**Ignore create lock if allowed */
+  DB_LOCK_IGNORE_CREATE,
 
   /* The following are partial failure codes */
 

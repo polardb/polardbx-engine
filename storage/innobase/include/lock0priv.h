@@ -592,7 +592,9 @@ enum lock_rec_req_status {
   /** Succeeded in acquiring a lock (implicit or already acquired) */
   LOCK_REC_SUCCESS,
   /** Explicitly created a new lock */
-  LOCK_REC_SUCCESS_CREATED
+  LOCK_REC_SUCCESS_CREATED,
+  /** Skip lock if lock can be created safely since it will be release later.*/
+  LOCK_REC_IGNORE_CREATE
 };
 
 /**

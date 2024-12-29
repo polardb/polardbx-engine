@@ -1348,17 +1348,18 @@ static dberr_t row_ins_set_rec_lock(lock_mode mode, ulint type,
                                     dict_index_t *index, const ulint *offsets,
                                     que_thr_t *thr) {
   dberr_t err;
+  lock_ignore_t ignore;
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (index->is_clustered()) {
     err = lock_clust_rec_read_check_and_lock(
         lock_duration_t::AT_LEAST_STATEMENT, block, rec, index, offsets,
-        SELECT_ORDINARY, mode, type, thr);
+        SELECT_ORDINARY, mode, type, thr, ignore);
   } else {
-    err = lock_sec_rec_read_check_and_lock(lock_duration_t::AT_LEAST_STATEMENT,
-                                           block, rec, index, offsets,
-                                           SELECT_ORDINARY, mode, type, thr);
+    err = lock_sec_rec_read_check_and_lock(
+        lock_duration_t::AT_LEAST_STATEMENT, block, rec, index, offsets,
+        SELECT_ORDINARY, mode, type, thr, ignore);
   }
 
   return (err);

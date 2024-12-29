@@ -69,6 +69,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0txn0rec.h"
 #include "lizard0lock.h"
+#include "lizard0row0sel.h"
 
 /* Flag to enable/disable deadlock detector. */
 bool innobase_deadlock_detect = true;
@@ -1729,7 +1730,8 @@ static inline lock_rec_req_status lock_rec_lock_fast(
                               the record */
     ulint heap_no,            /*!< in: heap number of record */
     dict_index_t *index,      /*!< in: index of record */
-    que_thr_t *thr)           /*!< in: query thread */
+    que_thr_t *thr,           /*!< in: query thread */
+    const lock_ignore_t &ignore)
 {
   ut_ad(locksys::owns_page_shard(block->get_page_id()));
   ut_ad(!srv_read_only_mode);
@@ -1756,13 +1758,17 @@ static inline lock_rec_req_status lock_rec_lock_fast(
 
   if (lock == nullptr) {
     if (!impl) {
-      RecLock rec_lock(index, block, heap_no, mode);
+      if (ignore.allowed()) {
+        status = LOCK_REC_IGNORE_CREATE;
+      } else {
+        RecLock rec_lock(index, block, heap_no, mode);
 
-      trx_mutex_enter(trx);
-      rec_lock.create(trx);
-      trx_mutex_exit(trx);
+        trx_mutex_enter(trx);
+        rec_lock.create(trx);
+        trx_mutex_exit(trx);
 
-      status = LOCK_REC_SUCCESS_CREATED;
+        status = LOCK_REC_SUCCESS_CREATED;
+      }
     }
   } else {
     trx_mutex_enter(trx);
@@ -1776,15 +1782,19 @@ static inline lock_rec_req_status lock_rec_lock_fast(
       then we do not set a new lock bit, otherwise we do
       set */
       if (!lock_rec_get_nth_bit(lock, heap_no)) {
-        lock_rec_set_nth_bit(lock, heap_no);
-        status = LOCK_REC_SUCCESS_CREATED;
+        if (ignore.allowed()) {
+          status = LOCK_REC_IGNORE_CREATE;
+        } else {
+          lock_rec_set_nth_bit(lock, heap_no);
+          status = LOCK_REC_SUCCESS_CREATED;
+        }
       }
     }
 
     trx_mutex_exit(trx);
   }
   ut_ad(status == LOCK_REC_SUCCESS || status == LOCK_REC_SUCCESS_CREATED ||
-        status == LOCK_REC_FAIL);
+        status == LOCK_REC_FAIL || status == LOCK_REC_IGNORE_CREATE);
   return (status);
 }
 
@@ -1844,7 +1854,8 @@ lock, or in the case of a page supremum record, a gap type lock.
 DB_SKIP_LOCKED, or DB_LOCK_NOWAIT */
 static dberr_t lock_rec_lock_slow(bool impl, select_mode sel_mode, ulint mode,
                                   const buf_block_t *block, ulint heap_no,
-                                  dict_index_t *index, que_thr_t *thr) {
+                                  dict_index_t *index, que_thr_t *thr,
+				  const lock_ignore_t &ignore) {
   ut_ad(locksys::owns_page_shard(block->get_page_id()));
   ut_ad(!srv_read_only_mode);
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S ||
@@ -1931,10 +1942,13 @@ static dberr_t lock_rec_lock_slow(bool impl, select_mode sel_mode, ulint mode,
   create an explicit lock so it is easier to track the wait-for relation.*/
   if (!impl || conflicting.bypassed) {
     /* Set the requested lock on the record. */
+    if (ignore.allowed()) {
+      return DB_LOCK_IGNORE_CREATE;
+    } else {
+      lock_rec_add_to_queue(LOCK_REC | mode, block, heap_no, index, trx);
 
-    lock_rec_add_to_queue(LOCK_REC | mode, block, heap_no, index, trx);
-
-    return (DB_SUCCESS_LOCKED_REC);
+      return (DB_SUCCESS_LOCKED_REC);
+    }
   }
   return (DB_SUCCESS);
 }
@@ -1959,7 +1973,8 @@ of a page supremum record, a gap type lock.
 DB_SKIP_LOCKED, or DB_LOCK_NOWAIT */
 static dberr_t lock_rec_lock(bool impl, select_mode sel_mode, ulint mode,
                              const buf_block_t *block, ulint heap_no,
-                             dict_index_t *index, que_thr_t *thr) {
+                             dict_index_t *index, que_thr_t *thr,
+                             const lock_ignore_t &ignore) {
   ut_ad(locksys::owns_page_shard(block->get_page_id()));
   ut_ad(!srv_read_only_mode);
   ut_ad((LOCK_MODE_MASK & mode) != LOCK_S ||
@@ -1976,14 +1991,16 @@ static dberr_t lock_rec_lock(bool impl, select_mode sel_mode, ulint mode,
   ut_ad(!impl || ((mode & LOCK_REC_NOT_GAP) == LOCK_REC_NOT_GAP));
   /* We try a simplified and faster subroutine for the most
   common cases */
-  switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr)) {
+  switch (lock_rec_lock_fast(impl, mode, block, heap_no, index, thr, ignore)) {
     case LOCK_REC_SUCCESS:
       return (DB_SUCCESS);
     case LOCK_REC_SUCCESS_CREATED:
       return (DB_SUCCESS_LOCKED_REC);
+    case LOCK_REC_IGNORE_CREATE:
+      return (DB_LOCK_IGNORE_CREATE);
     case LOCK_REC_FAIL:
-      return (
-          lock_rec_lock_slow(impl, sel_mode, mode, block, heap_no, index, thr));
+      return (lock_rec_lock_slow(impl, sel_mode, mode, block, heap_no, index,
+                                 thr, ignore));
     default:
       ut_error;
   }
@@ -5594,6 +5611,7 @@ dberr_t lock_clust_rec_modify_check_and_lock(
 {
   dberr_t err;
   ulint heap_no;
+  lock_ignore_t ignore;
 
   ut_ad(rec_offs_validate(rec, index, offsets));
   ut_ad(index->is_clustered());
@@ -5617,7 +5635,7 @@ dberr_t lock_clust_rec_modify_check_and_lock(
     ut_ad(lock_table_has(thr_get_trx(thr), index->table, LOCK_IX));
 
     err = lock_rec_lock(true, SELECT_ORDINARY, LOCK_X | LOCK_REC_NOT_GAP, block,
-                        heap_no, index, thr);
+                        heap_no, index, thr, ignore);
 
     MONITOR_INC(MONITOR_NUM_RECLOCK_REQ);
   }
@@ -5650,6 +5668,7 @@ dberr_t lock_sec_rec_modify_check_and_lock(
 {
   dberr_t err;
   ulint heap_no;
+  lock_ignore_t ignore;
 
   ut_ad(!index->is_clustered());
   ut_ad(!dict_index_is_online_ddl(index) || (flags & BTR_CREATE_FLAG));
@@ -5672,7 +5691,7 @@ dberr_t lock_sec_rec_modify_check_and_lock(
     ut_ad(lock_table_has(thr_get_trx(thr), index->table, LOCK_IX));
 
     err = lock_rec_lock(true, SELECT_ORDINARY, LOCK_X | LOCK_REC_NOT_GAP, block,
-                        heap_no, index, thr);
+                        heap_no, index, thr, ignore);
 
     MONITOR_INC(MONITOR_NUM_RECLOCK_REQ);
   }
@@ -5695,7 +5714,8 @@ dberr_t lock_sec_rec_modify_check_and_lock(
 dberr_t lock_sec_rec_read_check_and_lock(
     const lock_duration_t duration, const buf_block_t *block, const rec_t *rec,
     dict_index_t *index, const ulint *offsets, const select_mode sel_mode,
-    const lock_mode mode, const ulint gap_mode, que_thr_t *thr) {
+    const lock_mode mode, const ulint gap_mode, que_thr_t *thr,
+    const lock_ignore_t &ignore) {
   dberr_t err;
   ulint heap_no;
 
@@ -5728,7 +5748,7 @@ dberr_t lock_sec_rec_read_check_and_lock(
           lock_table_has(thr_get_trx(thr), index->table, LOCK_IS));
 
     err = lock_rec_lock(false, sel_mode, mode | gap_mode, block, heap_no, index,
-                        thr);
+                        thr, ignore);
 
     MONITOR_INC(MONITOR_NUM_RECLOCK_REQ);
   }
@@ -5736,15 +5756,16 @@ dberr_t lock_sec_rec_read_check_and_lock(
 
   ut_d(locksys::rec_queue_latch_and_validate(block, rec, index, offsets));
   ut_ad(err == DB_SUCCESS || err == DB_SUCCESS_LOCKED_REC ||
-        err == DB_LOCK_WAIT || err == DB_DEADLOCK || err == DB_SKIP_LOCKED ||
-        err == DB_LOCK_NOWAIT);
+        err == DB_LOCK_IGNORE_CREATE || err == DB_LOCK_WAIT ||
+        err == DB_DEADLOCK || err == DB_SKIP_LOCKED || err == DB_LOCK_NOWAIT);
   return (err);
 }
 
 dberr_t lock_clust_rec_read_check_and_lock(
     const lock_duration_t duration, const buf_block_t *block, const rec_t *rec,
     dict_index_t *index, const ulint *offsets, const select_mode sel_mode,
-    const lock_mode mode, const ulint gap_mode, que_thr_t *thr) {
+    const lock_mode mode, const ulint gap_mode, que_thr_t *thr,
+    const lock_ignore_t &ignore) {
   dberr_t err;
   ulint heap_no;
   DEBUG_SYNC_C("before_lock_clust_rec_read_check_and_lock");
@@ -5779,7 +5800,7 @@ dberr_t lock_clust_rec_read_check_and_lock(
           lock_table_has(thr_get_trx(thr), index->table, LOCK_IS));
 
     err = lock_rec_lock(false, sel_mode, mode | gap_mode, block, heap_no, index,
-                        thr);
+                        thr, ignore);
 
     MONITOR_INC(MONITOR_NUM_RECLOCK_REQ);
   }
@@ -5788,8 +5809,8 @@ dberr_t lock_clust_rec_read_check_and_lock(
   ut_d(locksys::rec_queue_latch_and_validate(block, rec, index, offsets));
 
   ut_ad(err == DB_SUCCESS || err == DB_SUCCESS_LOCKED_REC ||
-        err == DB_LOCK_WAIT || err == DB_DEADLOCK || err == DB_SKIP_LOCKED ||
-        err == DB_LOCK_NOWAIT);
+        err == DB_LOCK_IGNORE_CREATE || err == DB_LOCK_WAIT ||
+        err == DB_DEADLOCK || err == DB_SKIP_LOCKED || err == DB_LOCK_NOWAIT);
   return (err);
 }
 /** Checks if locks of other transactions prevent an immediate read, or passing
@@ -5817,9 +5838,11 @@ dberr_t lock_clust_rec_read_check_and_lock_alt(
                              LOCK_REC_NOT_GAP */
     que_thr_t *thr)           /*!< in: query thread */
 {
+  lock_ignore_t ignore;
   dberr_t err = lock_clust_rec_read_check_and_lock(
       lock_duration_t::REGULAR, block, rec, index,
-      Rec_offsets().compute(rec, index), SELECT_ORDINARY, mode, gap_mode, thr);
+      Rec_offsets().compute(rec, index), SELECT_ORDINARY, mode, gap_mode, thr,
+      ignore);
 
   if (err == DB_SUCCESS_LOCKED_REC) {
     err = DB_SUCCESS;

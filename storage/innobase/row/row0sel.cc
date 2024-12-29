@@ -84,6 +84,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row.h"
 #include "lizard0data0data.h"
 #include "lizard0row0gpp.h"
+#include "lizard0row0sel.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
@@ -824,6 +825,7 @@ static inline bool row_sel_test_other_conds(
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
+  lock_ignore_t ignore;
 
   *out_rec = nullptr;
 
@@ -875,7 +877,8 @@ static inline bool row_sel_test_other_conds(
     err = lock_clust_rec_read_check_and_lock(
         lock_duration_t::REGULAR, plan->clust_pcur.get_block(), clust_rec,
         index, offsets, SELECT_ORDINARY,
-        static_cast<lock_mode>(node->row_lock_mode), lock_type, thr);
+        static_cast<lock_mode>(node->row_lock_mode), lock_type, thr,
+        ignore);
 
     switch (err) {
       case DB_SUCCESS:
@@ -984,6 +987,7 @@ static inline dberr_t sel_set_rtr_rec_lock(
   rec_t *rec = const_cast<rec_t *>(first_rec);
   rtr_rec_vector *match_rec;
   rtr_rec_vector::iterator end;
+  lock_ignore_t ignore;
 
   rec_offs_init(offsets_);
 
@@ -1003,7 +1007,7 @@ retry:
 
   err = lock_sec_rec_read_check_and_lock(
       lock_duration_t::REGULAR, cur_block, rec, index, my_offsets, sel_mode,
-      static_cast<lock_mode>(mode), type, thr);
+      static_cast<lock_mode>(mode), type, thr, ignore);
 
   switch (err) {
     case DB_SUCCESS:
@@ -1099,7 +1103,7 @@ lock_match:
 
     err = lock_sec_rec_read_check_and_lock(
         lock_duration_t::REGULAR, &match->block, rtr_rec->r_rec, index,
-        my_offsets, sel_mode, static_cast<lock_mode>(mode), type, thr);
+        my_offsets, sel_mode, static_cast<lock_mode>(mode), type, thr, ignore);
 
     switch (err) {
       case DB_SUCCESS:
@@ -1149,7 +1153,8 @@ static inline dberr_t sel_set_rec_lock(btr_pcur_t *pcur, const rec_t *rec,
                                        dict_index_t *index,
                                        const ulint *offsets,
                                        select_mode sel_mode, ulint mode,
-                                       ulint type, que_thr_t *thr, mtr_t *mtr) {
+                                       ulint type, que_thr_t *thr, mtr_t *mtr,
+                                       const lock_ignore_t &ignore) {
   trx_t *trx;
   dberr_t err = DB_SUCCESS;
   const buf_block_t *block;
@@ -1168,7 +1173,7 @@ static inline dberr_t sel_set_rec_lock(btr_pcur_t *pcur, const rec_t *rec,
   if (index->is_clustered()) {
     err = lock_clust_rec_read_check_and_lock(
         lock_duration_t::REGULAR, block, rec, index, offsets, sel_mode,
-        static_cast<lock_mode>(mode), type, thr);
+        static_cast<lock_mode>(mode), type, thr, ignore);
   } else {
     if (dict_index_is_spatial(index)) {
       if (type == LOCK_GAP || type == LOCK_ORDINARY) {
@@ -1182,7 +1187,7 @@ static inline dberr_t sel_set_rec_lock(btr_pcur_t *pcur, const rec_t *rec,
     } else {
       err = lock_sec_rec_read_check_and_lock(
           lock_duration_t::REGULAR, block, rec, index, offsets, sel_mode,
-          static_cast<lock_mode>(mode), type, thr);
+          static_cast<lock_mode>(mode), type, thr, ignore);
     }
   }
 
@@ -1459,6 +1464,7 @@ func_exit:
   rec_t *clust_rec;
   bool search_latch_locked;
   bool consistent_read;
+  lock_ignore_t ignore;
 
   /* The following flag becomes true when we are doing a
   consistent read from a non-clustered index and we must look
@@ -1651,7 +1657,7 @@ rec_loop:
 
       err = sel_set_rec_lock(&plan->pcur, next_rec, index, offsets,
                              SELECT_ORDINARY, node->row_lock_mode, lock_type,
-                             thr, &mtr);
+                             thr, &mtr, ignore);
 
       switch (err) {
         case DB_SUCCESS_LOCKED_REC:
@@ -1701,7 +1707,8 @@ skip_lock:
     }
 
     err = sel_set_rec_lock(&plan->pcur, rec, index, offsets, SELECT_ORDINARY,
-                           node->row_lock_mode, lock_type, thr, &mtr);
+                           node->row_lock_mode, lock_type, thr, &mtr,
+                           ignore);
 
     switch (err) {
       case DB_SUCCESS_LOCKED_REC:
@@ -3265,8 +3272,7 @@ clust_rec_found:
     page_no_t gpp_no = page_get_page_no(prebuilt->clust_pcur->get_page());
     scursor->set_gpp_no(gpp_no);
   }
-     
-  
+
   *offsets = rec_get_offsets(clust_rec, clust_index, *offsets, ULINT_UNDEFINED,
                              UT_LOCATION_HERE, offset_heap);
 
@@ -3275,15 +3281,20 @@ clust_rec_found:
     the clust rec with a unique condition, hence
     we set a LOCK_REC_NOT_GAP type lock */
 
+    lock_ignore_t ignore(
+        rec_get_deleted_flag(clust_rec, dict_table_is_comp(clust_index->table)),
+        trx->releases_non_matching_rows());
+
     err = lock_clust_rec_read_check_and_lock(
         lock_duration_t::REGULAR, prebuilt->clust_pcur->get_block(), clust_rec,
         clust_index, *offsets, prebuilt->select_mode,
         static_cast<lock_mode>(prebuilt->select_lock_type), LOCK_REC_NOT_GAP,
-        thr);
+        thr, ignore);
 
     switch (err) {
       case DB_SUCCESS:
       case DB_SUCCESS_LOCKED_REC:
+      case DB_LOCK_IGNORE_CREATE:
         break;
       default:
         goto err_exit;
@@ -4177,6 +4188,7 @@ dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
       err = row_sel_get_clust_rec_for_mysql(prebuilt, index, rec, thr,
                                             &clust_rec, &offsets, &heap,
                                             nullptr, mtr, nullptr);
+      ut_ad(err != DB_LOCK_IGNORE_CREATE);
 
       if (err != DB_SUCCESS) {
         break;
@@ -4977,7 +4989,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
                                 UT_LOCATION_HERE, &heap);
       err = sel_set_rec_lock(pcur, next_rec, index, offsets,
                              prebuilt->select_mode, prebuilt->select_lock_type,
-                             LOCK_GAP, thr, &mtr);
+                             LOCK_GAP, thr, &mtr, lock_ignore_t());
 
       switch (err) {
         case DB_SUCCESS_LOCKED_REC:
@@ -5085,7 +5097,7 @@ rec_loop:
                                 UT_LOCATION_HERE, &heap);
       err = sel_set_rec_lock(pcur, rec, index, offsets, prebuilt->select_mode,
                              prebuilt->select_lock_type, LOCK_ORDINARY, thr,
-                             &mtr);
+                             &mtr, lock_ignore_t());
 
       switch (err) {
         case DB_SUCCESS_LOCKED_REC:
@@ -5204,7 +5216,8 @@ rec_loop:
           prebuilt->select_lock_type != LOCK_NONE &&
           !dict_index_is_spatial(index)) {
         err = sel_set_rec_lock(pcur, rec, index, offsets, prebuilt->select_mode,
-                               prebuilt->select_lock_type, LOCK_GAP, thr, &mtr);
+                               prebuilt->select_lock_type, LOCK_GAP, thr, &mtr,
+                               lock_ignore_t());
 
         switch (err) {
           case DB_SUCCESS_LOCKED_REC:
@@ -5238,7 +5251,8 @@ rec_loop:
           prebuilt->select_lock_type != LOCK_NONE &&
           !dict_index_is_spatial(index)) {
         err = sel_set_rec_lock(pcur, rec, index, offsets, prebuilt->select_mode,
-                               prebuilt->select_lock_type, LOCK_GAP, thr, &mtr);
+                               prebuilt->select_lock_type, LOCK_GAP, thr, &mtr,
+                               lock_ignore_t());
 
         switch (err) {
           case DB_SUCCESS_LOCKED_REC:
@@ -5295,13 +5309,21 @@ rec_loop:
     const bool use_semi_consistent =
         prebuilt->row_read_type == ROW_READ_TRY_SEMI_CONSISTENT &&
         !unique_search && index == clust_index && !trx_is_high_priority(trx);
+
+    lock_ignore_t ignore(rec_get_deleted_flag(rec, comp),
+                         trx->releases_non_matching_rows());
     err = sel_set_rec_lock(
         pcur, rec, index, offsets,
         use_semi_consistent ? SELECT_SKIP_LOCKED : prebuilt->select_mode,
-        prebuilt->select_lock_type, lock_type, thr, &mtr);
+        prebuilt->select_lock_type, lock_type, thr, &mtr, ignore);
 
     switch (err) {
       const rec_t *old_vers;
+      case DB_LOCK_IGNORE_CREATE:
+        if (row_to_range_relation.row_must_be_at_end) {
+          prebuilt->m_stop_tuple_found = true;
+        }
+        break;
       case DB_SUCCESS_LOCKED_REC:
         if (trx->releases_non_matching_rows()) {
           /* Note that a record of
@@ -5574,6 +5596,10 @@ rec_loop:
           ut_ad(!prebuilt->new_rec_lock[row_prebuilt_t::LOCK_CLUST_PCUR]);
           prebuilt->new_rec_lock[row_prebuilt_t::LOCK_CLUST_PCUR] = true;
         }
+        err = DB_SUCCESS;
+        break;
+      case DB_LOCK_IGNORE_CREATE:
+        ut_ad(clust_rec != nullptr);
         err = DB_SUCCESS;
         break;
       default:

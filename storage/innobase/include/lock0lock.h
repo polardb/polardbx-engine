@@ -50,6 +50,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lock0latches.h"
 #include "lock0prdt.h"
 
+#include "lizard0row0sel.h"
+
 /**
 @page PAGE_INNODB_LOCK_SYS Innodb Lock-sys
 
@@ -535,7 +537,8 @@ dberr_t lock_sec_rec_read_check_and_lock(lock_duration_t duration,
                                          const rec_t *rec, dict_index_t *index,
                                          const ulint *offsets,
                                          select_mode sel_mode, lock_mode mode,
-                                         ulint gap_mode, que_thr_t *thr);
+                                         ulint gap_mode, que_thr_t *thr,
+                                         const lock_ignore_t &ignore);
 
 /** Checks if locks of other transactions prevent an immediate read, or passing
 over by a read cursor, of a clustered index record. If they do, first tests
@@ -565,7 +568,8 @@ DB_SKIP_LOCKED, or DB_LOCK_NOWAIT */
 dberr_t lock_clust_rec_read_check_and_lock(
     lock_duration_t duration, const buf_block_t *block, const rec_t *rec,
     dict_index_t *index, const ulint *offsets, select_mode sel_mode,
-    lock_mode mode, ulint gap_mode, que_thr_t *thr);
+    lock_mode mode, ulint gap_mode, que_thr_t *thr,
+    const lock_ignore_t &ignore);
 
 /** Checks if locks of other transactions prevent an immediate read, or passing
  over by a read cursor, of a clustered index record. If they do, first tests

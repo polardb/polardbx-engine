@@ -503,6 +503,9 @@ const char *ut_strerr(dberr_t num) {
     case DB_GP_WAIT_TIMEOUT:
       return ("Prepare wait timeout");
 
+    case DB_LOCK_IGNORE_CREATE:
+      return("Ignore lock create");
+
     case DB_ERROR_UNSET:;
       /* Fall through. */
 

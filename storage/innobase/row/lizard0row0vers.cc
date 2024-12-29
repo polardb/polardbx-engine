@@ -44,9 +44,9 @@ namespace lizard {
  * TRX_UNDO_PURGED state is enough for secondary index, so ignore
  * flashback area.
  * */
-Vision *row_vers_old_simulate_vision() {
+const Vision *row_vers_old_simulate_vision() {
   static Snapshot_scn_vision simulate_snapshot;
-  static Vision simulate_vision(&simulate_snapshot);
+  static const Vision simulate_vision(&simulate_snapshot);
   /** It's a faked as of scn vision to get prev version instead of purge vision.
    */
   return &simulate_vision;
