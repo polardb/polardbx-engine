@@ -63,6 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "lizard0txn0rec.h"
 #include "lizard0txn.h"
+#include "lizard0row0vers.h"
 
 /** Check whether all non-virtual columns in a index entries match
 @param[in]      index           the secondary index
@@ -593,17 +594,18 @@ txn_rw_t row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
                                  clustered index record; it will also hold
                                  the latch on purge_view
  @return true if earlier version should be preserved */
-bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
-                                       const table_name_t &name, mtr_t *mtr) {
-  ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_S));
+// bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
+//                                        const table_name_t &name, mtr_t *mtr)
+//                                        {
+//   ut_ad(!rw_lock_own(&(purge_sys->latch), RW_LOCK_S));
 
-  mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
+//  mtr_s_lock(&purge_sys->latch, mtr, UT_LOCATION_HERE);
 
-  lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD,
-                             purge_sys->vision.visible_by());
-
-  return (!purge_sys->vision.modifications_visible(txn_rec, name));
-}
+// lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD,
+//                             purge_sys->vision.visible_by());
+//
+//  return (!purge_sys->vision.modifications_visible(txn_rec, name));
+//}
 
 /** Check whether all non-virtual columns in a index entries match
 @param[in]      index           the secondary index
@@ -1166,7 +1168,8 @@ bool row_vers_old_has_index_entry(
     trx_undo_prev_version_build(
         rec, mtr, version, clust_index, clust_offsets, heap, &prev_version,
         nullptr, dict_index_has_virtual(index) ? &vrow : nullptr, 0, nullptr,
-        nullptr /* Only purge sys, or rollback run into here */,
+        lizard::row_vers_old_simulate_vision()
+        /* Only purge sys, or rollback run into here */,
         Cache_hint::MAKE_YOUNG);
     mem_heap_free(heap2); /* free version and clust_offsets */
 

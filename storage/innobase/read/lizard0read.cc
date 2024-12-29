@@ -69,6 +69,15 @@ Vision::Vision()
       m_snapshot_vision(nullptr),
       m_xa_vision() {}
 
+Vision::Vision(Snapshot_vision *sv)
+    : m_snapshot_scn(SCN_NULL),
+      m_list_idx(VISION_LIST_IDX_NULL),
+      m_creator_trx_id(TRX_ID_MAX),
+      m_up_limit_id(TRX_ID_MAX),
+      m_active(false),
+      m_snapshot_vision(sv),
+      m_xa_vision() {}
+
 /** Reset as initialzed values */
 void Vision::reset() {
   m_snapshot_scn = SCN_NULL;

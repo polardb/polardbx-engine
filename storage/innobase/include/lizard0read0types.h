@@ -63,6 +63,7 @@ typedef ib_mutex_t VisionListMutex;
 class Vision {
  public:
   Vision();
+  Vision(Snapshot_vision *);
   virtual ~Vision() {}
 
  private:
