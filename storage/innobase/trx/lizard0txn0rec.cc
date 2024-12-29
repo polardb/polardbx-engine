@@ -39,6 +39,37 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "row0row.h"
 
+/**
+ * Determine whether a lookup of the txn is needed based on the different
+ * categories of commit number combinations (CCR). If the current txn_rec
+ * satisfies the CCR, no further lookup is required. Otherwise, a lookup is
+ * needed to fill the txn_rec.
+ */
+bool txn_rec_t::need_lookup(ccr_t vision_ccr) {
+  if (lizard::txn_sys_t::instance()->is_special(undo_ptr)) {
+    ut_ad(!undo_ptr_is_active(undo_ptr));
+    return false;
+  }
+
+  if (is_active()) {
+    return true;
+  }
+
+  ut_ad(!undo_ptr_is_active(undo_ptr));
+  switch (vision_ccr) {
+    case CCR_SCN:
+      return (scn == SCN_NULL);
+    case CCR_GCN:
+      return (gcn == GCN_NULL);
+    case CCR_ALL:
+      return (scn == SCN_NULL || gcn == GCN_NULL);
+    case CCR_NONE: /* unreachable */
+    default:
+      ut_ad(0);
+      return false;
+  }
+}
+
 namespace lizard {
 
 /**
@@ -332,9 +363,9 @@ static std::pair<bool, txn_status_t> txn_slot_read_low(txn_rec_t *txn_rec,
   @retval true    active
           false   committed
 */
-static bool txn_rec_cached_or_real_state_by_lookup_low(txn_rec_t *txn_rec,
-                                                       txn_status_t *txn_status,
-                                                       Cache_hint hint) {
+static bool txn_rec_real_state_by_lookup_low(txn_rec_t *txn_rec,
+                                             txn_status_t *txn_status,
+                                             Cache_hint hint) {
   bool active = false;
   bool cache_hit = false;
   txn_lookup_t txn_lookup;
@@ -374,8 +405,7 @@ static bool txn_rec_cleanout_state(txn_rec_t *txn_rec, Cache_hint hint) {
     return false;
   }
 
-  active =
-      txn_rec_cached_or_real_state_by_lookup_low(txn_rec, &txn_status, hint);
+  active = txn_rec_real_state_by_lookup_low(txn_rec, &txn_status, hint);
   return !active;
 }
 
@@ -390,8 +420,7 @@ static bool txn_rec_cleanout_state(txn_rec_t *txn_rec, Cache_hint hint) {
   @retval true    active
           false   committed
 */
-bool txn_rec_cached_or_real_state(txn_rec_t *txn_rec, Cache_hint hint,
-                                  ccr_t ccr) {
+bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint, ccr_t ccr) {
   txn_status_t txn_status = txn_status_t::ACTIVE;
 
   if (!txn_rec->need_lookup(ccr)) {
@@ -400,7 +429,7 @@ bool txn_rec_cached_or_real_state(txn_rec_t *txn_rec, Cache_hint hint,
     return false;
   }
 
-  return txn_rec_cached_or_real_state_by_lookup_low(txn_rec, &txn_status, hint);
+  return txn_rec_real_state_by_lookup_low(txn_rec, &txn_status, hint);
 }
 
 /**
@@ -467,7 +496,7 @@ void txn_rec_execute_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   if (txn_rec->is_active()) {
     txn_rec_cleanout_when_query(txn_rec, pcur, rec, index, offsets);
   } else {
-    txn_rec_cached_or_real_state(txn_rec, Cache_hint::KEEP_OLD, ccr);
+    txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD, ccr);
   }
 }
 
@@ -567,7 +596,7 @@ bool txn_rec_get_master_by_lookup(txn_rec_t *txn_rec, txn_rec_t *ref_txn_rec) {
 
   ut_a(ref_txn_rec->is_active());
 
-  active = txn_rec_cached_or_real_state_by_lookup_low(
+  active = txn_rec_real_state_by_lookup_low(
       ref_txn_rec, &ref_txn_status, Cache_hint::KEEP_OLD);
   switch (ref_txn_status) {
     case txn_status_t::ACTIVE:

@@ -39,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0purge0types.h"
 #include "lizard0undo0types.h"
 #include "lizard0ut.h"
+#include "lizard0txn0rec.h"
 
 struct trx_undo_ptr_t;
 
@@ -50,6 +51,11 @@ struct trx_undo_ptr_t;
 */
 struct txn_desc_t {
  public:
+  /* Attention
+   * undo_ptr will be protected by trx->mutex since there will be third
+   * observer which is to judge transaction committed or not by read undo_ptr.
+   */
+
   /** undo log header address */
   undo_ptr_t undo_ptr;
   /** scn number */
@@ -91,6 +97,49 @@ struct txn_desc_t {
   bool is_whole_committed() const {
     return !undo_ptr_is_active(undo_ptr) && cmmt.is_whole_committed();
   }
+
+  /** Whether has allocated txn slot for active transaction. */
+  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
+};
+
+/** Transaction object if active. */
+struct txn_rw_t {
+ public:
+  trx_t *trx;
+  undo_ptr_t undo_ptr;
+
+ public:
+  txn_rw_t() : trx(nullptr), undo_ptr(UNDO_PTR_NULL) {}
+
+  txn_rw_t(trx_t *trx_arg, undo_ptr_t undo_ptr_arg)
+      : trx(trx_arg), undo_ptr(undo_ptr_arg) {}
+
+  void reset() {
+    trx = nullptr;
+    undo_ptr = UNDO_PTR_NULL;
+  }
+
+  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
+
+  bool is_active() const {
+    return trx != nullptr && undo_ptr != UNDO_PTR_NULL &&
+           undo_ptr_is_active(undo_ptr);
+  }
+};
+
+/** transaction identity include trx_id and txn slot address.*/
+struct txn_id_t {
+ public:
+  trx_id_t trx_id;
+  undo_ptr_t undo_ptr;
+
+ public:
+  txn_id_t() : trx_id(0), undo_ptr(UNDO_PTR_NULL) {}
+
+  txn_id_t(trx_id_t trx_id_arg, undo_ptr_t undo_ptr_arg)
+      : trx_id(trx_id_arg), undo_ptr(undo_ptr_arg) {}
+
+  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
 };
 
 /**
@@ -292,6 +341,49 @@ proposal_mark_t trx_prepare_mark(trx_t *trx, trx_undo_t *undo,
 commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *scn_ptr,
                               trx_undo_t *undo, page_t *undo_hdr_page,
                               ulint hdr_offset, bool *serialised, mtr_t *mtr);
+
+/** Commit txn memory structure after txn slot mini-transaction commit.
+ *
+ * @param[in/out]		trx
+ * @param[in]			serialised */
+void txn_commit_in_memory(trx_t *trx, bool serialised);
+
+/** Get active transaction according to txn rec.
+ *
+ * @param[in/out]	txn rec
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count);
+
+/** Get active transaction according to txn rw.
+ *
+ * @param[in]		txn rw
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count);
+
+/** Get active transaction according to txn identity.
+ *
+ * @param[in]		txn identity
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count);
+
+/**
+ * Judge transaction have committed through txn slot.
+ *
+ * @param[in]	txn rw object
+ *
+ * @retval	true	Committed
+ * @retval	false	Active
+ * */
+bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw);
 
 /**
    Resurrect txn undo log segment,

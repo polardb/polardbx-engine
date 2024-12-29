@@ -240,6 +240,104 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
   return cmmt;
 }
 
+/** Commit txn memory structure after txn slot mini-transaction commit.
+ *
+ * @param[in/out]		trx
+ * @param[in]			serialised */
+void txn_commit_in_memory(trx_t *trx, bool serialised) {
+  if (serialised) {
+    trx_mutex_enter(trx);
+    /** Commit undo ptr */
+    undo_ptr_set_commit(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr,
+                        !trx->txn_desc.maddr.is_null());
+    trx_mutex_exit(trx);
+    ut_ad(trx->txn_desc.is_whole_committed());
+
+    /** Update tcn cache. */
+    lizard::trx_cache_tcn(trx, serialised);
+  } else {
+    ut_ad(!trx->txn_desc.alloced());
+  }
+}
+
+/** Get active transaction according to txn rec.
+ *
+ * @param[in/out]	txn rec
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count) {
+  txn_rw_t txn_rw;
+
+  /** lookup txn slot. */
+  bool active = txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD, CCR_SCN);
+  if (!active) {
+    ut_ad(txn_rec->is_committed());
+    return txn_rw;
+  }
+
+  ut_ad(txn_rec->is_active());
+
+  /** Maybe commit walk here. */
+  trx_t *trx = trx_rw_is_active(txn_rec->trx_id, do_ref_count);
+  /** Find active trx. */
+  if (trx) {
+    txn_rw = {trx, txn_rec->undo_ptr};
+    ut_ad(txn_rw.is_active());
+  }
+
+  return txn_rw;
+}
+
+/** Get active transaction according to txn rw.
+ *
+ * @param[in]		txn rw
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count) {
+  ut_ad(txn_rw.is_active());
+
+  txn_rec_t txn_rec = {txn_rw.trx->id, SCN_NULL, txn_rw.undo_ptr, GCN_NULL};
+  return txn_rw_is_active(&txn_rec, do_ref_count);
+}
+
+/** Get active transaction according to trx id and slot.
+ *
+ * @param[in]		txn identity
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count) {
+  txn_rw_t rw;
+  if (!undo_ptr_is_active(txn_id.undo_ptr)) {
+    return rw;
+  }
+
+  txn_rec_t txn_rec = {txn_id.trx_id, SCN_NULL, txn_id.undo_ptr, GCN_NULL};
+  return txn_rw_is_active(&txn_rec, do_ref_count);
+}
+
+/**
+ * Judge transaction have committed through txn slot.
+ *
+ * @param[in]	txn rw object
+ *
+ * @retval	true	Committed
+ * @retval	false	Active
+ * */
+bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw) {
+  ut_ad(txn_rw.is_active());
+
+  txn_rec_t txn_rec = {txn_rw.trx->id, SCN_NULL, txn_rw.undo_ptr, GCN_NULL};
+  ut_ad(txn_rec.is_active());
+
+  return !txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD, CCR_SCN);
+}
+
 /**
    Resurrect txn undo log segment,
    Maybe the trx didn't have m_redo update/insert undo log.
@@ -347,8 +445,10 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     }
   }
 
+  trx_mutex_enter(trx);
   /** Resurrect trx->txn_desc.undo_ptr */
   trx->txn_desc.assemble_undo_ptr(undo->slot_addr);
+  trx_mutex_exit(trx);
 
   /** Resurrect XA info. */
   trx->txn_desc.resurrect_xa(undo->pmmt, undo->branch, undo->maddr);

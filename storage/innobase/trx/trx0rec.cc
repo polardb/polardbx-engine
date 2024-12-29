@@ -2490,8 +2490,8 @@ err_exit:
 
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  lizard::txn_rec_cached_or_real_state(txn_rec, Cache_hint::KEEP_OLD,
-                                       purge_sys->vision.visible_by());
+  lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD,
+                             purge_sys->vision.visible_by());
   missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
 
   if (!missing_history) {
@@ -2682,8 +2682,8 @@ bool trx_undo_prev_version_build(
       txn_rec_t undo_txn_rec = {trx_id, txn_info.scn, txn_info.undo_ptr,
                                 txn_info.gcn};
 
-      lizard::txn_rec_cached_or_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD,
-                                           purge_sys->vision.visible_by());
+      lizard::txn_rec_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD,
+                                 purge_sys->vision.visible_by());
 
       missing_extern = purge_sys->vision.modifications_visible(
           &undo_txn_rec, index->table->name);

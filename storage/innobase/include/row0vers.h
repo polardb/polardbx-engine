@@ -60,8 +60,8 @@ class Vision;
  negatives. The caller must confirm all positive results by checking if the trx
  is still active.
 */
-trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
-                              const ulint *offsets);
+txn_rw_t row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
+                                const ulint *offsets);
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
  index record, because it is >= the purge view.

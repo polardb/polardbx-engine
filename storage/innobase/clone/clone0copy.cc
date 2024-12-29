@@ -39,6 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/mysqld.h"
 #include "srv0start.h"
 
+#include "lizard0txn.h"
 /** Callback to add an archived redo file to current snapshot
 @param[in]      file_name       file name
 @param[in]      file_size       file size in bytes
@@ -398,16 +399,16 @@ int Clone_Snapshot::update_binlog_position() {
   return (0);
 }
 
-int Clone_Snapshot::wait_trx_end(THD *thd, trx_id_t trx_id) {
-  auto trx = trx_rw_is_active(trx_id, false);
-  if (trx == nullptr) {
+int Clone_Snapshot::wait_trx_end(THD *thd, const txn_id_t &txn_id) {
+  auto txn_rw = lizard::txn_rw_is_active(txn_id, false);
+  if (txn_rw.trx == nullptr) {
     return (0);
   }
 
   auto wait_cond = [&](bool alert, bool &result) {
     /* Check if transaction is still active. */
-    auto trx = trx_rw_is_active(trx_id, false);
-    if (trx == nullptr) {
+    auto txn_rw = lizard::txn_rw_is_active(txn_id, false);
+    if (txn_rw.trx == nullptr) {
       result = false;
       return (0);
     }
@@ -457,12 +458,12 @@ int Clone_Snapshot::wait_for_binlog_prepared_trx() {
   }
   auto thd = thd_get_current_thd();
   /* Get all binlog prepared transactions. */
-  std::vector<trx_id_t> trx_ids;
-  trx_sys_get_binlog_prepared(trx_ids);
+  std::vector<txn_id_t> txn_ids;
+  trx_sys_get_binlog_prepared(txn_ids);
 
   /* Now wait for the transactions to finish. */
-  for (auto trx_id : trx_ids) {
-    auto err = wait_trx_end(thd, trx_id);
+  for (auto txn_id : txn_ids) {
+    auto err = wait_trx_end(thd, txn_id);
     if (err != 0) {
       return (err);
     }

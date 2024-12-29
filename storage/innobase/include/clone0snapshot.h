@@ -45,6 +45,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <map>
 #include <vector>
 
+#include "lizard0txn.h"
+
 struct Clone_file_ctx {
   /** File state:
   [CREATED] -------------> [DROPPING] --> [DROPPED] --> [DROPPED_HANDLED]
@@ -705,9 +707,9 @@ class Clone_Snapshot {
 
   /** Wait for a transaction to end.
   @param[in]    thd     current THD
-  @param[in]    trx_id  transaction to wait for
+  @param[in]    txn_id  transaction to wait for
   @return error code. */
-  int wait_trx_end(THD *thd, trx_id_t trx_id);
+  int wait_trx_end(THD *thd, const txn_id_t &txn_id);
 
   /** Begin state transition before waiting for DDL. */
   void begin_transit_ddl_wait() {

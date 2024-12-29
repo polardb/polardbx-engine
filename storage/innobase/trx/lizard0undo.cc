@@ -1393,7 +1393,9 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx) {
       ut_ad(undo->slot_addr.equal_with(undo->space, undo->hdr_page_no,
                                        undo->hdr_offset));
 
+      trx_mutex_enter(trx);
       trx->txn_desc.assemble_undo_ptr(undo->slot_addr);
+      trx_mutex_exit(trx);
 
       assert_commit_mark_allocated(undo->prev_image);
     }

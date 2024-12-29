@@ -151,7 +151,7 @@ void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn) {
   mtr.commit();
 }
 
-void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
+void trx_sys_get_binlog_prepared(std::vector<txn_id_t> &txn_ids) {
   trx_sys_mutex_enter();
   /* Exit fast if no prepared transaction. */
   if (trx_sys->n_prepared_trx == 0) {
@@ -161,9 +161,14 @@ void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids) {
   /* Check and find binary log prepared transaction. */
   for (auto trx : trx_sys->rw_trx_list) {
     assert_trx_in_rw_list(trx);
-    if (trx_state_eq(trx, TRX_STATE_PREPARED) && trx_is_mysql_xa(trx)) {
-      trx_ids.push_back(trx->id);
+    trx_mutex_enter(trx);
+    if (trx_state_eq(trx, TRX_STATE_PREPARED) && trx_is_mysql_xa(trx) &&
+        /** Temporary table modification maybe didn't allocate txn slot,
+         * we also didn't care of those data modification. */
+        trx->txn_desc.alloced()) {
+      txn_ids.push_back({trx->id, trx->txn_desc.undo_ptr});
     }
+    trx_mutex_exit(trx);
   }
   trx_sys_mutex_exit();
 }

@@ -299,6 +299,7 @@ SET(INNOBASE_SOURCES
   trx/lizard0undo0retent.cc
   trx/lizard0service.cc
   trx/lizard0txn0service.cc
+  lock/lizard0lock.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

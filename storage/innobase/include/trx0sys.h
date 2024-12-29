@@ -192,7 +192,7 @@ void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn);
 
 /** Get a list of all binlog prepared transactions.
 @param[out]     trx_ids all prepared transaction IDs. */
-void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids);
+void trx_sys_get_binlog_prepared(std::vector<txn_id_t> &trx_ids);
 
 /** Get current binary log positions stored.
 @param[out]     file    binary log file name

@@ -167,8 +167,8 @@ namespace lizard {
   @retval true    active
           false   committed
 */
-extern bool txn_rec_cached_or_real_state(txn_rec_t *txn_rec, Cache_hint hint,
-                                         ccr_t ccr = ccr_t::CCR_ALL);
+extern bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint,
+                               ccr_t ccr = ccr_t::CCR_ALL);
 
 /**
   Fill the txn_rec and attempt to clean out the record during the query.

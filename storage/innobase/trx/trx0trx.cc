@@ -255,6 +255,7 @@ static void trx_init(trx_t *trx) {
   trx->flush_observer = nullptr;
 
   /** Lizard added */
+  /** Have held trx->mutex after commit. */
   trx->txn_desc.reset();
 
   trx->gp_state = GP_STATE_NULL;
@@ -2371,7 +2372,7 @@ void trx_commit_low(trx_t *trx, mtr_t *mtr) {
 
     mtr_commit(mtr);
 
-    lizard::trx_cache_tcn(trx, serialised);
+    lizard::txn_commit_in_memory(trx, serialised);
 
     DBUG_PRINT("trx_commit", ("commit lsn at " LSN_PF, mtr->commit_lsn()));
 
