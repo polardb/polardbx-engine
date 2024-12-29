@@ -196,6 +196,12 @@ _retry:
               success_enter = false;  /// no recheck needed
               break;
             } else if (killed_.load(std::memory_order_acquire)) {
+              /// Send the fatal message first.
+              encoder_.message_encoder().encode_error(
+                  PolarXRPC::Error::FATAL, ER_POLARX_RPC_ERROR_MSG,
+                  "Session killed and abort following requests.", "HY000");
+              flush();
+              
               /// safe to access it because we check shutdown before
               tcp_.session_manager().remove_and_shutdown(
                   tcp_.epoll().session_count(),
