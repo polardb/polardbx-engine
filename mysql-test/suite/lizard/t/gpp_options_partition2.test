@@ -22,7 +22,7 @@ PARTITION BY RANGE(a) (
     PARTITION p1 VALUES LESS THAN (5),
     PARTITION p2 VALUES LESS THAN (20)
 );
---let $FULL_TABLE_NAME=t1_p0
+--let $FULL_TABLE_NAME=t1#p#p0
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=3
 insert into gpp_options.t1 values (1,1,1,'11111');
@@ -177,7 +177,7 @@ ALTER TABLE gpp_options.t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LES
 --echo # Test EXCHANGE PARTITION
 #Before exchange, p2's indexes all have gpp.
 insert into gpp_options.t1 values (9,9,9,'99999');
---let $FULL_TABLE_NAME=t1_p2
+--let $FULL_TABLE_NAME=t1#p#p2
 --let $TABLE_NAME=t1
 --let $INDEX_COL_MIN_VAL=5
 --let $INDEX_COL_MAX_VAL=20
@@ -203,20 +203,20 @@ ALTER TABLE gpp_options.t1 EXCHANGE PARTITION p2 WITH TABLE gpp_options.exchange
 --let $CONTAIN_GPP=1
 --source suite/lizard/include/gpp_has_options.inc
 
---let $FULL_TABLE_NAME=t1_p2
+--let $FULL_TABLE_NAME=t1#p#p2
 --let $TABLE_NAME=t1
 --let $INDEX_COL_MIN_VAL=5
 --let $INDEX_COL_MAX_VAL=20
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
---let $FULL_TABLE_NAME=t1_p2
+--let $FULL_TABLE_NAME=t1#p#p2
 --let $INDEX_NAME=b_c
 --let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
 
 # p0 doesn't change
---let $FULL_TABLE_NAME=t1_p0
+--let $FULL_TABLE_NAME=t1#p#p0
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=3
 --let $INDEX_NAME=b
@@ -312,7 +312,7 @@ PARTITION BY RANGE(a) (
     PARTITION p1 VALUES LESS THAN (5),
     PARTITION p2 VALUES LESS THAN (20)
 );
---let $FULL_TABLE_NAME=t1_p0
+--let $FULL_TABLE_NAME=t1#p#p0
 insert into gpp_options.t1 values (1,1,1,'11111');
 insert into gpp_options.t1 values (2,2,2,'22222');
 insert into gpp_options.t1 values (3,3,3,'33333');
@@ -628,7 +628,7 @@ ALTER TABLE gpp_options.t1 ALTER INDEX b VISIBLE;
 --echo # Rename table, ensure indexes b and b_c are not affected.
 SET opt_index_format_gpp_enabled=true;
 RENAME TABLE gpp_options.t1 TO gpp_options.t1_renamed;
---let FULL_TABLE_NAME=t1_renamed_p0
+--let FULL_TABLE_NAME=t1_renamed#p#p0
 --let $TABLE_NAME=t1_renamed
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=1
@@ -647,7 +647,7 @@ RENAME TABLE gpp_options.t1 TO gpp_options.t1_renamed;
 
 SET opt_index_format_gpp_enabled=false;
 RENAME TABLE gpp_options.t1_renamed TO gpp_options.t1;
---let FULL_TABLE_NAME=t1_p0
+--let FULL_TABLE_NAME=t1#p#p0
 --let $TABLE_NAME=t1
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=1

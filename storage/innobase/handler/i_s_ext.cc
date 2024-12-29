@@ -722,8 +722,11 @@ static int innodb_index_status_fill_one(THD *thd, const dict_index_t *index,
   DBUG_ENTER("innodb_index_status_fill_one");
 
   Field **fields = table->field;
-  std::string schema_name, table_name;
-  index->table->get_table_name(schema_name, table_name);
+  std::string schema_name, table_name, partition_name;
+  index->table->get_table_name(schema_name, table_name, partition_name);
+  if (!partition_name.empty()) {
+    table_name.append(partition_name);
+  }
 
   OK(field_store_string(fields[IDX_IS_SCHEMA_NAME], schema_name.c_str()));
   OK(field_store_string(fields[IDX_IS_TABLE_NAME], table_name.c_str()));
@@ -736,7 +739,7 @@ static int innodb_index_status_fill_one(THD *thd, const dict_index_t *index,
 
 static int innodb_index_status_fill_table(THD *thd, Table_ref *tables, Item *) {
   return fill_i_s_innodb_indexes_low(thd, tables, nullptr,
-                                     innodb_index_status_fill_one);
+                                     innodb_index_status_fill_one, false);
 }
 
 static int innodb_index_status_init(void *p) {

@@ -5948,7 +5948,8 @@ information_schema.innodb_indexes table with related index information
 @param[in,out]  tables          tables to fill
 @return 0 on success */
 int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
-                                Fill_func fill_func) {
+                                Fill_func fill_func,
+                                bool exclude_partition_index) {
   btr_pcur_t pcur;
   const rec_t *rec;
   mem_heap_t *heap;
@@ -6010,6 +6011,59 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
 
   mtr_commit(&mtr);
   dd_table_close(dd_indexes, thd, &mdl, true);
+
+  if (exclude_partition_index) {
+    goto exit;
+  }
+
+  /* Scan mysql.index_partitions */
+  mem_heap_empty(heap);
+  mtr_start(&mtr);
+
+  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr,
+                            dd_partition_indexes_name.c_str(), &dd_indexes);
+
+  /* Process each record in the table */
+  while (rec) {
+    const dict_index_t *index_rec;
+    MDL_ticket *mdl_on_tab = nullptr;
+    dict_table_t *parent = nullptr;
+    MDL_ticket *mdl_on_parent = nullptr;
+
+    /* Populate a dict_index_t structure with information from a
+     * mysql.index_partitions row */
+    ret = dd_process_dd_partition_indexes_rec(heap, rec, &index_rec,
+                                              &mdl_on_tab, &parent,
+                                              &mdl_on_parent, dd_indexes, &mtr);
+
+    dict_sys_mutex_exit();
+
+    if (ret) {
+      fill_func(thd, index_rec, tables->table);
+    }
+
+    mem_heap_empty(heap);
+
+    /* Get the next record */
+    dict_sys_mutex_enter();
+
+    if (index_rec != nullptr) {
+      dd_table_close(index_rec->table, thd, &mdl_on_tab, true);
+
+      /* Close parent table if it's a fts aux table. */
+      if (index_rec->table->is_fts_aux() && parent) {
+        dd_table_close(parent, thd, &mdl_on_parent, true);
+      }
+    }
+
+    mtr_start(&mtr);
+    rec = dd_getnext_system_rec(&pcur, &mtr);
+  }
+
+  mtr_commit(&mtr);
+  dd_table_close(dd_indexes, thd, &mdl, true);
+
+exit:
   dict_sys_mutex_exit();
   mem_heap_free(heap);
 
@@ -6018,7 +6072,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
 
 static int i_s_innodb_indexes_fill_table(THD *thd, Table_ref *tables, Item *) {
   return fill_i_s_innodb_indexes_low(thd, tables, nullptr,
-                                     i_s_dict_fill_innodb_indexes);
+                                     i_s_dict_fill_innodb_indexes, true);
 }
 
 /** Bind the dynamic table INFORMATION_SCHEMA.innodb_indexes

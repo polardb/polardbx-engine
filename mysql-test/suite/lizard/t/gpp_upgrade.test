@@ -197,7 +197,7 @@ CREATE INDEX b_c ON gpp_upgrade.t1(b,c);
 
 --let $SCHEMA_NAME=gpp_upgrade
 --let $TABLE_NAME=t2
---let $FULL_TABLE_NAME=t2_p0
+--let $FULL_TABLE_NAME=t2#p#p0
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=3
 --let $NON_INDEX_COL=pad
@@ -207,7 +207,7 @@ CREATE INDEX b_c ON gpp_upgrade.t1(b,c);
 --source suite/lizard/include/gpp_has_options.inc
 
 insert into gpp_upgrade.t2 values (28,28,28,'28282828');
---let $FULL_TABLE_NAME=t2_p3
+--let $FULL_TABLE_NAME=t2#p#p3
 --let $INDEX_COL_MIN_VAL=25
 --let $INDEX_COL_MAX_VAL=30
 --let $CONTAIN_GPP=0
@@ -216,13 +216,13 @@ insert into gpp_upgrade.t2 values (28,28,28,'28282828');
 SET opt_index_format_gpp_enabled=true;
 ALTER TABLE gpp_upgrade.t2 TRUNCATE PARTITION p2;
 insert into gpp_upgrade.t2 values (9,9,9,'99999');
---let $FULL_TABLE_NAME=t2_p2
+--let $FULL_TABLE_NAME=t2#p#p2
 --let $INDEX_COL_MIN_VAL=5
 --let $INDEX_COL_MAX_VAL=19
 --let $CONTAIN_GPP=1
 --source suite/lizard/include/gpp_has_options.inc
 
---let $FULL_TABLE_NAME=t2_p0
+--let $FULL_TABLE_NAME=t2#p#p0
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=3
 --let $CONTAIN_GPP=0

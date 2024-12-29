@@ -47,6 +47,7 @@
 #include "sql/dd/impl/system_registry.h"                // dd::System_tables
 #include "sql/dd/impl/tables/columns.h"                 // dd::tables::Columns
 #include "sql/dd/impl/tables/dd_properties.h"     // get_actual_dd_version()
+#include "sql/dd/impl/tables/index_partitions.h"
 #include "sql/dd/impl/tables/indexes.h"           // dd::tables::Indexes
 #include "sql/dd/impl/tables/table_partitions.h"  // dd::tables::Table_partitions
 #include "sql/dd/impl/tables/tables.h"            // dd::tables::Tables
@@ -59,6 +60,7 @@
 #include "sql/dd/types/index.h"           // dd::Index::DD_table
 #include "sql/dd/types/object_table_definition.h"
 #include "sql/dd/types/partition.h"  // dd::Partition::DD_table
+#include "sql/dd/types/partition_index.h"
 #include "sql/dd/types/system_view.h"
 #include "sql/dd/types/table.h"         // dd::Table::DD_table
 #include "sql/dd/types/tablespace.h"    // dd::Tablespace::DD_table
@@ -744,6 +746,7 @@ template const Object_table &get_dd_table<dd::Index>();
 template const Object_table &get_dd_table<dd::Partition>();
 template const Object_table &get_dd_table<dd::Table>();
 template const Object_table &get_dd_table<dd::Tablespace>();
+template const Object_table &get_dd_table<dd::Partition_index>();
 
 void rename_tablespace_mdl_hook(THD *thd, MDL_ticket *src, MDL_ticket *dst) {
   if (!thd->locked_tables_mode) {

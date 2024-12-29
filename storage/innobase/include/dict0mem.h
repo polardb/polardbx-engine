@@ -1983,6 +1983,9 @@ struct dict_table_t {
   @param[out]   table   table name */
   void get_table_name(std::string &schema, std::string &table) const;
 
+  void get_table_name(std::string &schema, std::string &table,
+                      std::string &partition) const;
+
   bool is_system_schema() const {
     std::string schema_name;
     std::string table_name;

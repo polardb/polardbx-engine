@@ -38,26 +38,24 @@ include/assert.inc [The actual gpp hit/miss for gpp_upgrade.t2.b should match th
 include/assert.inc [The options for gpp_upgrade.t2.b should match the expected IFT=0 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_upgrade.t2.b should match the expected IFT=0 condition]
 SELECT * FROM information_schema.INNODB_INDEX_STATUS where table_name like 't2%';
-SCHEMA_NAME	TABLE_NAME	INDEX_NAME	OPTIONS
-gpp_upgrade	t2	PRIMARY	flags=0;
-gpp_upgrade	t2	b	flags=0;
-gpp_upgrade	t2_p0	PRIMARY	NULL
-gpp_upgrade	t2_p0	b	NULL
-gpp_upgrade	t2_p1	PRIMARY	NULL
-gpp_upgrade	t2_p1	b	NULL
-gpp_upgrade	t2_p2	PRIMARY	IFT=0;
-gpp_upgrade	t2_p2	b	IFT=1;
-gpp_upgrade	t2_p3	PRIMARY	NULL
-gpp_upgrade	t2_p3	b	NULL
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED
+gpp_upgrade	t2#p#p0	PRIMARY	0
+gpp_upgrade	t2#p#p0	b	0
+gpp_upgrade	t2#p#p1	PRIMARY	0
+gpp_upgrade	t2#p#p1	b	0
+gpp_upgrade	t2#p#p2	PRIMARY	0
+gpp_upgrade	t2#p#p2	b	1
+gpp_upgrade	t2#p#p3	PRIMARY	0
+gpp_upgrade	t2#p#p3	b	0
 SELECT * FROM information_schema.INNODB_INDEX_STATUS where table_name like 't1%';
-SCHEMA_NAME	TABLE_NAME	INDEX_NAME	OPTIONS
-gpp_upgrade	t1	PRIMARY	IFT=0;flags=0;
-gpp_upgrade	t1	c	IFT=0;flags=0;
-gpp_upgrade	t1	b	IFT=0;flags=0;
-gpp_upgrade	t1	spatial_idx	IFT=0;flags=0;
-gpp_upgrade	t1	b_c	IFT=1;flags=0;
-gpp_upgrade	t1	fts	IFT=0;flags=0;
-gpp_upgrade	t1	FTS_DOC_ID_INDEX	IFT=0;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED
+gpp_upgrade	t1	PRIMARY	0
+gpp_upgrade	t1	c	0
+gpp_upgrade	t1	b	0
+gpp_upgrade	t1	spatial_idx	0
+gpp_upgrade	t1	b_c	1
+gpp_upgrade	t1	fts	0
+gpp_upgrade	t1	FTS_DOC_ID_INDEX	0
 SELECT * FROM information_schema.INNODB_GPP_STATS;
 TABLE_NAME	INDEX_NAME	GPP_HIT	GPP_MISS
 gpp_upgrade/t1	b_c	0	0

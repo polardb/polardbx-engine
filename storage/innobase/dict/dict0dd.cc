@@ -6017,6 +6017,157 @@ bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
   return true;
 }
 
+/** Process one mysql.index_partitions record and get the dict_index_t
+@param[in]      heap            Temp memory heap
+@param[in,out]  rec             mysql.indexes record
+@param[in,out]  index           dict_index_t to fill
+@param[in]      mdl             MDL on index->table
+@param[in,out]  parent          Parent table if it's fts aux table.
+@param[in,out]  parent_mdl      MDL on parent if it's fts aux table.
+@param[in]      dd_indexes      dict_table_t obj of mysql.indexes
+@param[in]      mtr             Mini-transaction
+@retval true if index is filled */
+bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
+                                         const dict_index_t **index,
+                                         MDL_ticket **mdl,
+                                         dict_table_t **parent,
+                                         MDL_ticket **parent_mdl,
+                                         dict_table_t *dd_indexes, mtr_t *mtr) {
+  ulint len;
+  const byte *field;
+  uint32_t index_id;
+  uint32_t space_id;
+  uint64_t table_id;
+
+  *index = nullptr;
+
+  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_indexes)));
+
+  ulint *offsets = rec_get_offsets(rec, dd_indexes->first_index(), nullptr,
+                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+
+  const dd::Object_table &dd_object_table =
+      dd::get_dd_table<dd::Partition_index>();
+
+  /* Get the se_private_data field. */
+  field = (const byte *)rec_get_nth_field(
+      nullptr, rec, offsets,
+      dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
+      &len);
+
+  if (len == 0 || len == UNIV_SQL_NULL) {
+    mtr_commit(mtr);
+    return false;
+  }
+
+  /* Get index id. */
+  dd::String_type prop((char *)field);
+  dd::Properties *p = dd::Properties::parse_properties(prop);
+
+  if (!p || !p->exists(dd_index_key_strings[DD_INDEX_ID]) ||
+      !p->exists(dd_index_key_strings[DD_INDEX_SPACE_ID])) {
+    if (p) {
+      delete p;
+    }
+    mtr_commit(mtr);
+    return false;
+  }
+
+  if (p->get(dd_index_key_strings[DD_INDEX_ID], &index_id)) {
+    delete p;
+    mtr_commit(mtr);
+    return false;
+  }
+
+  /* Get the tablespace id. */
+  if (p->get(dd_index_key_strings[DD_INDEX_SPACE_ID], &space_id)) {
+    delete p;
+    mtr_commit(mtr);
+    return false;
+  }
+
+  /* Skip mysql.* indexes. */
+  if (space_id == dict_sys->s_dict_space_id) {
+    delete p;
+    mtr_commit(mtr);
+    return false;
+  }
+
+  /* Load the table and get the index. */
+  if (!p->exists(dd_index_key_strings[DD_TABLE_ID])) {
+    delete p;
+    mtr_commit(mtr);
+    return false;
+  }
+
+  if (!p->get(dd_index_key_strings[DD_TABLE_ID], &table_id)) {
+    THD *thd = current_thd;
+    dict_table_t *table;
+
+    /* Commit before load the table */
+    mtr_commit(mtr);
+    table = dd_table_open_on_id(table_id, thd, mdl, true, true);
+
+    if (!table) {
+      delete p;
+      return false;
+    }
+
+    /* For fts aux table, we need to acquire mdl lock on parent. */
+    if (table->is_fts_aux()) {
+      fts_aux_table_t fts_table;
+
+      /* Find the parent ID. */
+      ut_d(bool is_fts =) fts_is_aux_table_name(&fts_table, table->name.m_name,
+                                                strlen(table->name.m_name));
+      ut_ad(is_fts);
+
+      table_id_t parent_id = fts_table.parent_id;
+
+      dd_table_close(table, thd, mdl, true);
+
+      *parent = dd_table_open_on_id(parent_id, thd, parent_mdl, true, true);
+
+      if (*parent == nullptr) {
+        delete p;
+        return false;
+      }
+
+      table = dd_table_open_on_id(table_id, thd, mdl, true, true);
+
+      if (!table) {
+        dd_table_close(*parent, thd, parent_mdl, true);
+        delete p;
+        return false;
+      }
+    }
+
+    for (const dict_index_t *t_index = table->first_index(); t_index != nullptr;
+         t_index = t_index->next()) {
+      if (t_index->space == space_id && t_index->id == index_id) {
+        *index = t_index;
+      }
+    }
+
+    if (*index == nullptr) {
+      dd_table_close(table, thd, mdl, true);
+      if (table->is_fts_aux() && *parent) {
+        dd_table_close(*parent, thd, parent_mdl, true);
+      }
+      delete p;
+      return false;
+    }
+
+    delete p;
+  } else {
+    delete p;
+    mtr_commit(mtr);
+    return false;
+  }
+
+  return true;
+}
+
 /** Process one mysql.indexes record and get brief info to dict_index_t
 @param[in]      heap            temp memory heap
 @param[in,out]  rec             mysql.indexes record
@@ -7226,6 +7377,13 @@ void dict_table_t::get_table_name(std::string &schema,
                                   std::string &table) const {
   std::string dict_table_name(name.m_name);
   dict_name::get_table(dict_table_name, schema, table);
+}
+
+void dict_table_t::get_table_name(std::string &schema, std::string &table,
+                                  std::string &partition) const {
+  bool is_tmp;
+  std::string dict_table_name(name.m_name);
+  dict_name::get_table(dict_table_name, true, schema, table, partition, is_tmp);
 }
 #endif /* !UNIV_HOTBACKUP */
 
