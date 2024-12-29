@@ -241,7 +241,6 @@ innodb/scn_history_thread	BACKGROUND
 rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
-sql/consensus_commit_pos_watcher	BACKGROUND
 sql/consensus_stage_change	BACKGROUND
 sql/event_scheduler	FOREGROUND
 sql/fifo_cleaner	BACKGROUND
@@ -298,7 +297,6 @@ innodb/scn_history_thread	BACKGROUND
 rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
-sql/consensus_commit_pos_watcher	BACKGROUND
 sql/consensus_stage_change	BACKGROUND
 sql/event_scheduler	FOREGROUND
 sql/fifo_cleaner	BACKGROUND

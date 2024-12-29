@@ -80,9 +80,9 @@ CREATE TABLE t (
 # --let $events_for_2 = Gtid/.*GTID_NEXT= '$gtid_uuid:2' # !Begin # !Insert # !Commit
 # --let $events_for_3 = Gtid/.*GTID_NEXT= '$gtid_uuid:3' # !Begin # !Insert # !Commit
 
---let $events_for_1 = !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:1' # !Begin # !Insert # !Commit
---let $events_for_2 = !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:2' # !Begin # !Insert # !Commit
---let $events_for_3 = !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:3' # !Begin # !Insert # !Commit
+--let $events_for_1 = Consensus_log # !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:1' # !Begin # !Insert # !Commit
+--let $events_for_2 = Consensus_log # !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:2' # !Begin # !Insert # !Commit
+--let $events_for_3 = Consensus_log # !GCN # Gtid/.*GTID_NEXT= '$gtid_uuid:3' # !Begin # !Insert # !Commit
 
 --let $event_sequence = $events_for_2 # $events_for_3 # $events_for_1
 --source include/assert_binlog_events.inc

@@ -981,14 +981,14 @@ static Sys_var_ulonglong Sys_consensus_wait_milliseconds_before_change_leader(
     "consensus_wait_milliseconds_before_change_leader",
     "the waiting time before change leader",
     GLOBAL_VAR(opt_consensus_wait_milliseconds_before_change_leader),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(200), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(120), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_wait_unfinished_trx_timeout(
     "consensus_wait_unfinished_trx_timeout",
     "the max waiting time for unfinished trx before change leader",
     GLOBAL_VAR(opt_consensus_wait_unfinished_trx_timeout),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(800), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(880), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_wait_unfinished_xa_timeout(

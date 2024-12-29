@@ -59,22 +59,22 @@ set global gtid_mode = OFF;
 set global gtid_mode = NULL;
 select @@global.gtid_mode;
 
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 
 set global gtid_mode = OFF_PERMISSIVE;
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 
 set global gtid_mode = OFF_PERMISSIVE;
 set global gtid_mode = ON_PERMISSIVE;
 --error ER_GTID_MODE_CAN_ONLY_CHANGE_ONE_STEP_AT_A_TIME
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 
 set global gtid_mode = ON;
 --error ER_GTID_MODE_CAN_ONLY_CHANGE_ONE_STEP_AT_A_TIME
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 
 --error ER_GLOBAL_VARIABLE

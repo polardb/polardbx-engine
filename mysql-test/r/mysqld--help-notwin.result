@@ -188,7 +188,6 @@ The following options may be given as the first argument:
  Issue internal commit calls in the same order as
  transactions are written to the binary log. Default is to
  order commits.
- (Defaults to on; use --skip-binlog-order-commits to disable.)
  --binlog-rotate-encryption-master-key-at-startup 
  Force binlog encryption master key rotation at startup
  --binlog-row-event-max-size=# 
@@ -312,7 +311,6 @@ The following options may be given as the first argument:
  --commit-pos-watcher 
  background thread checking and updating binlog commit
  position
- (Defaults to on; use --skip-commit-pos-watcher to disable.)
  --commit-pos-watcher-interval[=#] 
  interval(us) for background thread commit_pos_watcher
  --completion-type=name 
@@ -535,6 +533,10 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
+ --disable-binlog-savepoint 
+ Determine whether to disable the binary log
+ checkpointing.Default is True.
+ (Defaults to on; use --skip-disable-binlog-savepoint to disable.)
  --disable-wait-commitindex 
  Whether to wait commitdex when applying binlog in
  follower, it may detory the cluster data if some crash
@@ -568,7 +570,6 @@ The following options may be given as the first argument:
  MySQL add the primary key for every tables that haven't
  any unique indexes automaticly
  --enable-polarx-rpc Use new open PolarDB-X RPC
- (Defaults to on; use --skip-enable-polarx-rpc to disable.)
  --enable-show-ipk-info 
  Show everything about implicit key info
  --enable-writeset-tracking-for-ipk 
@@ -1025,7 +1026,6 @@ The following options may be given as the first argument:
  connection before aborting the write
  -n, --new           Use very new possible "unsafe" functions
  --new-rpc           This option is deprecated. Use enable_polarx_rpc instead.
- (Defaults to on; use --skip-new-rpc to disable.)
  --no-dd-upgrade     Abort restart if automatic upgrade or downgrade of the
  data dictionary is needed. Deprecated option. Use
  --upgrade=NONE instead.
@@ -2123,7 +2123,6 @@ The following options may be given as the first argument:
  When disabled, XA transactions are associated with the
  same connection until the session disconnects. ON is the
  only safe choice for replication.
- (Defaults to on; use --skip-xa-detach-on-prepare to disable.)
 
 Variables (--variable-name=value)
 abort-slave-event-count 0
@@ -2162,7 +2161,7 @@ binlog-group-commit-sync-delay 0
 binlog-group-commit-sync-no-delay-count 0
 binlog-gtid-simple-recovery TRUE
 binlog-max-flush-queue-time 0
-binlog-order-commits TRUE
+binlog-order-commits FALSE
 binlog-rotate-encryption-master-key-at-startup FALSE
 binlog-row-event-max-size 8192
 binlog-row-image FULL
@@ -2183,7 +2182,7 @@ ccl-max-waiting-count 0
 ccl-queue-bucket-count 4
 ccl-queue-bucket-size 64
 ccl-wait-timeout 86400
-changeset-threads 8
+changeset-threads 2
 character-set-client-handshake TRUE
 character-set-filesystem binary
 character-set-server utf8mb4
@@ -2205,7 +2204,7 @@ cluster-mts-recover-use-index TRUE
 cluster-purged-gtid (No default value)
 cluster-start-index 1
 collation-server utf8mb4_0900_ai_ci
-commit-pos-watcher TRUE
+commit-pos-watcher FALSE
 commit-pos-watcher-interval 1000000
 completion-type NO_CHAIN
 concurrent-insert AUTO
@@ -2291,6 +2290,7 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
+disable-binlog-savepoint TRUE
 disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
@@ -2300,11 +2300,11 @@ enable-appliedindex-checker FALSE
 enable-changeset TRUE
 enable-consensus TRUE
 enable-implicit-primary-key FALSE
-enable-polarx-rpc TRUE
+enable-polarx-rpc FALSE
 enable-show-ipk-info FALSE
 enable-writeset-tracking-for-ipk TRUE
 end-markers-in-json FALSE
-enforce-gtid-consistency false
+enforce-gtid-consistency ON
 eq-range-index-dive-limit 200
 error-log-ring-buffer-size 5242880
 event-scheduler ON
@@ -2329,7 +2329,7 @@ global-connection-memory-tracking FALSE
 group-concat-max-len 1024
 group-replication-consistency EVENTUAL
 gtid-executed-compression-period 0
-gtid-mode OFF
+gtid-mode ON
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
@@ -2438,7 +2438,7 @@ net-read-timeout 30
 net-retry-count 10
 net-write-timeout 60
 new FALSE
-new-rpc TRUE
+new-rpc FALSE
 no-dd-upgrade FALSE
 offline-mode FALSE
 old FALSE
@@ -2748,7 +2748,7 @@ verbose TRUE
 wait-timeout 28800
 weak-consensus-mode FALSE
 windowing-use-high-precision TRUE
-xa-detach-on-prepare TRUE
+xa-detach-on-prepare FALSE
 
 To see what values a running MySQL server is using, type
 'mysqladmin variables' instead of 'mysqld --verbose --help'.
