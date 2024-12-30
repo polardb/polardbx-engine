@@ -384,8 +384,6 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
   }
 
 #if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
-  txn_rec_t txn_rec;
-  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
   /* Some blob refs can be NULL during crash recovery before
   trx_rollback_active() has completed execution, or when a concurrently
   executing insert or update has committed the B-tree mini-transaction
@@ -394,7 +392,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
   times, and the cursor restore can happen multiple times for single
   insert or update statement.  */
   ut_a(!rec_offs_any_null_extern(index, rec, offsets) ||
-       lizard::txn_rw_is_active(&txn_rec, false).trx);
+       trx_rw_is_active(row_get_rec_trx_id(rec, index, offsets), false));
 #endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
   if (type != ROW_COPY_POINTERS) {

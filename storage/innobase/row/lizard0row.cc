@@ -510,6 +510,7 @@ void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
 
   ut_ad(index->is_clustered());
   ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(!index->table || !index->table->is_intrinsic());
 
   offset = index->trx_id_offset;
 
