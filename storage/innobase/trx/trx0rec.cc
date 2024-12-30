@@ -2675,20 +2675,20 @@ bool trx_undo_prev_version_build(
 
     if ((update->info_bits & REC_INFO_DELETED_FLAG) &&
         row_upd_changes_disowned_external(update)) {
-      bool missing_extern;
-
-      rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
-
+      bool missing_extern = false;
       txn_rec_t undo_txn_rec = {trx_id, txn_info.scn, txn_info.undo_ptr,
                                 txn_info.gcn};
+      lizard::txn_rec_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD, CCR_SCN);
 
-      lizard::txn_rec_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD,
-                                 purge_sys->vision.visible_by());
-
-      missing_extern = purge_sys->vision.modifications_visible(
-          &undo_txn_rec, index->table->name);
-
-      rw_lock_s_unlock(&purge_sys->latch);
+      if (is_as_of) {
+        missing_extern = lizard::txn_rec_is_missing_history(
+            &undo_txn_rec, flashback_area, nullptr);
+      } else {
+        rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
+        missing_extern = purge_sys->vision.modifications_visible(
+            &undo_txn_rec, index->table->name);
+        rw_lock_s_unlock(&purge_sys->latch);
+      }
 
       if (missing_extern) {
         /* treat as a fresh insert, not to
