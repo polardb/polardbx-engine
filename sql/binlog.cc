@@ -1555,7 +1555,7 @@ static int binlog_close_connection(handlerton *, THD *thd) {
 
 int binlog_cache_data::write_event(Log_event *ev) {
   DBUG_TRACE;
-  my_off_t oldpos = get_byte_position();
+  const my_off_t oldpos = get_byte_position();
 
   if (ev != nullptr) {
     DBUG_EXECUTE_IF("simulate_disk_full_at_flush_pending",
@@ -1592,19 +1592,40 @@ int binlog_cache_data::write_event(Log_event *ev) {
     event_counter++;
     DBUG_PRINT("debug",
                ("event_counter= %lu", static_cast<ulong>(event_counter)));
-  }
 
-  /* X-Cluster do not allow a log event larger than
-   * opt_consensus_large_event_size_limit */
-  my_off_t newpos = get_byte_position();
-  if (ConsensusLogManager::enable_consensus() && opt_consensus_check_large_event) {
-    if (newpos - oldpos > opt_consensus_large_event_size_limit ||
-        DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
-      xp::warn(ER_XP_COMMIT)
-          << "Log event too large, event type " << ev->get_type_str()
-          << ", event size " << newpos - oldpos;
-      mark_as_rollback = true;
-      return 1;
+    /* X-Cluster do not allow a log event larger than
+    * opt_consensus_large_event_size_limit */
+    const my_off_t newpos = get_byte_position();
+    if (ConsensusLogManager::enable_consensus() && opt_consensus_check_large_event) {
+      const char *query_str = 
+        (ev->thd->query().str && ev->thd->query().length > 0)
+          ? ev->thd->query().str
+          : "";
+
+      if (newpos - oldpos > opt_consensus_large_event_size_limit ||
+          DBUG_EVALUATE_IF("force_large_event", 1, 0)) {
+        char local_time_buff[iso8601_size];
+        make_iso8601_timestamp(local_time_buff, ev->thd->start_utime,
+                              iso8601_sysvar_logtimestamps);
+        xp::warn(ER_XP_COMMIT)
+            << "Log event too large, event type " << ev->get_type_str()
+            << ", event size " << newpos - oldpos
+            << ", begin time: " << local_time_buff
+            << ", sql: " << std::string(query_str, 512);
+        mark_as_rollback = true;
+        return 1;
+      }
+
+      if (oldpos <= opt_consensus_max_log_size
+          && newpos > opt_consensus_max_log_size
+          && !opt_consensus_large_trx) {
+        char local_time_buff[iso8601_size];
+        make_iso8601_timestamp(local_time_buff, ev->thd->start_utime,
+                              iso8601_sysvar_logtimestamps);
+        xp::warn(ER_XP_COMMIT) << "Trx is too large trx, but @@consensus_large_trx disabled"
+          << ", begin time: " << local_time_buff
+          << ", sql: " << std::string(query_str, 512);
+      }
     }
   }
   return 0;

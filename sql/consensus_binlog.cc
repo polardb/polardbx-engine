@@ -2019,8 +2019,18 @@ int flush_consensus_log(THD *thd, binlog_cache_data *, Binlog_event_writer *,
     }
   });
   if (mark_as_rollback || (!opt_consensus_large_trx && is_large_trx)) {
+    const char *query_str = 
+      (thd->query().str && thd->query().length > 0)
+        ? thd->query().str
+        : "";
+    char local_time_buff[iso8601_size];
+    make_iso8601_timestamp(local_time_buff, thd->start_utime,
+                          iso8601_sysvar_logtimestamps);
     xp::warn(ER_XP_COMMIT)
-        << "Failed to flush log ,because consensus log is too large.";
+        << "Trx is too large trx, but @@consensus_large_trx disabled"
+        << ", size " << buf_size
+        << ", begin time: " << local_time_buff
+        << ", sql: " << std::string(query_str, 512);
     thd->commit_error = THD::CE_COMMIT_ERROR;
     thd->consensus_error = THD::CSS_LOG_TOO_LARGE;
     bytes_in_cache = 0;

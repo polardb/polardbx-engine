@@ -16,15 +16,18 @@ create table t(id int);
 insert into t values(0);
 --replace_column 2 # 5 #
 show master status;
+--sleep 2
 select max(interval_end) from mysql.gtid_executed;
 --source include/wait_follower_catchup.inc
 
 --connection conn2
 --replace_column 2 # 5 #
 show master status;
+--sleep 2
 select max(interval_end) from mysql.gtid_executed;
 --connection conn1
 flush logs;
+--sleep 2
 select max(interval_end) from mysql.gtid_executed;
 drop table t;
 

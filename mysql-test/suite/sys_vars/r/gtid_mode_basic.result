@@ -53,24 +53,24 @@ ERROR 42000: Variable 'gtid_mode' can't be set to the value of 'NULL'
 select @@global.gtid_mode;
 @@global.gtid_mode
 OFF
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 @@global.gtid_mode
 OFF
 set global gtid_mode = OFF_PERMISSIVE;
-set global gtid_mode = default;
+set global gtid_mode = off;
 select @@global.gtid_mode;
 @@global.gtid_mode
 OFF
 set global gtid_mode = OFF_PERMISSIVE;
 set global gtid_mode = ON_PERMISSIVE;
-set global gtid_mode = default;
+set global gtid_mode = off;
 ERROR HY000: The value of @@GLOBAL.GTID_MODE can only be changed one step at a time: OFF <-> OFF_PERMISSIVE <-> ON_PERMISSIVE <-> ON. Also note that this value must be stepped up or down simultaneously on all servers. See the Manual for instructions.
 select @@global.gtid_mode;
 @@global.gtid_mode
 ON_PERMISSIVE
 set global gtid_mode = ON;
-set global gtid_mode = default;
+set global gtid_mode = off;
 ERROR HY000: The value of @@GLOBAL.GTID_MODE can only be changed one step at a time: OFF <-> OFF_PERMISSIVE <-> ON_PERMISSIVE <-> ON. Also note that this value must be stepped up or down simultaneously on all servers. See the Manual for instructions.
 select @@global.gtid_mode;
 @@global.gtid_mode

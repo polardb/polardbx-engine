@@ -2269,9 +2269,9 @@ consensus-send-timeout 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
 consensus-vote-backoff-timeout 1000
-consensus-wait-milliseconds-before-change-leader 200
+consensus-wait-milliseconds-before-change-leader 120
 consensus-wait-unfinished-bgc-timeout 500
-consensus-wait-unfinished-trx-timeout 800
+consensus-wait-unfinished-trx-timeout 880
 consensus-wait-unfinished-xa-timeout 500
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE

@@ -4941,14 +4941,14 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_EXPLAIN_OTHER:
     case SQLCOM_RESTART_SERVER:
     case SQLCOM_CREATE_SRS:
-    case SQLCOM_DROP_SRS: {
-      case SQLCOM_ADMIN_PROC:
-      case SQLCOM_TRANS_PROC:
-        assert(lex->m_sql_cmd != nullptr);
+    case SQLCOM_DROP_SRS:
+    case SQLCOM_ADMIN_PROC:
+    case SQLCOM_TRANS_PROC: {
+      assert(lex->m_sql_cmd != nullptr);
 
-        res = lex->m_sql_cmd->execute(thd);
+      res = lex->m_sql_cmd->execute(thd);
 
-        break;
+      break;
     }
     case SQLCOM_ALTER_USER: {
       LEX_USER *user, *tmp_user;

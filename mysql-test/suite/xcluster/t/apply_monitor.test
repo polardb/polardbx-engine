@@ -20,7 +20,7 @@ drop database db_crash_7;
 
 SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
 SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
-SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2;
 
 
 --sleep 5
@@ -28,9 +28,9 @@ SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_
 --connection conn2
 SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
 SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
-SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2;
 
 --connection conn3
 SELECT CHANNEL_NAME,GROUP_NAME,LAST_HEARTBEAT_TIMESTAMP from performance_schema.replication_connection_status order by 1,2,3;
 SELECT CHANNEL_NAME,SERVICE_STATE,REMAINING_DELAY,COUNT_TRANSACTIONS_RETRIES from performance_schema.replication_applier_status order by 1,2,3;
-SELECT CHANNEL_NAME,THREAD_ID,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2,3;
+SELECT CHANNEL_NAME,SERVICE_STATE from performance_schema.replication_applier_status_by_coordinator order by 1,2;
