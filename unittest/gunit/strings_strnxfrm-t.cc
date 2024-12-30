@@ -2407,6 +2407,8 @@ TEST(StrmxfrmHashTest, HashStability) {
       {"gb18030_bin", {{0xb6240d9a0a0f7efcLL, 0x000002b0LL}}},
       {"gb18030_chinese_ci", {{0xb7b6676124243e73LL, 0x00000abdLL}}},
       {"gb18030_unicode_520_ci", {{0x5c1f019a21e3d464LL, 0x0000055fLL}}},
+      {"gb18030_2022_bin", {{0xb6240d9a0a0f7efcLL, 0x000002b0LL}}},
+      {"gb18030_2022_chinese_ci", {{0xb7b6676124243e73LL, 0x00000abdLL}}},
       {"gb2312_bin", {{0xb6240d9a0a0f7efcLL, 0x000002b0LL}}},
       {"gb2312_chinese_ci", {{0xdae43ea5cabac97cLL, 0x000002b0LL}}},
       {"gbk_bin", {{0xb6240d9a0a0f7efcLL, 0x000002b0LL}}},

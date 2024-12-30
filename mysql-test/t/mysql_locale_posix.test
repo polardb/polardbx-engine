@@ -61,6 +61,7 @@ DROP DATABASE IF EXISTS `ó`;
 #  {"eucKR",          "euckr",    my_cs_exact},
 #
 #  {"gb18030",        "gb18030",  my_cs_exact},
+#  {"gb18030_2022",   "gb18030_2022",  my_cs_exact},
 #
 #  {"gb2312",         "gb2312",   my_cs_exact},
 #  {"gbk",            "gbk",      my_cs_exact},

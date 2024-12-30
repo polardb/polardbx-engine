@@ -80,6 +80,26 @@ HEX(a)	CHAR_LENGTH(a)
 DROP DATABASE db1_std_csets;
 CREATE DATABASE db1_std_csets;
 USE db1_std_csets;
+SET NAMES gb18030_2022;
+CREATE TABLE t_gb18030_2022 (a VARCHAR(30) CHARACTER SET gb18030_2022 COLLATE gb18030_2022_bin) CHARACTER SET gb18030_2022 COLLATE gb18030_2022_bin;
+INSERT INTO t_gb18030_2022 VALUES (_gb18030_2022'MYSQLPUMP'), (_gb18030_2022'cāt?기?會意');
+Warnings:
+Warning	1300	Invalid gb18030_2022 character string: 'B03FE6'
+Warning	1366	Incorrect string value: '\xB0?\xE6\x9C\x83\xE6...' for column 'a' at row 2
+SELECT HEX(a) , CHAR_LENGTH(a) FROM db1_std_csets.t_gb18030_2022 ORDER BY 1;
+HEX(a)	CHAR_LENGTH(a)
+4D5953514C50554D50	9
+63C481743FEAB8	5
+DROP DATABASE db1_std_csets;
+CREATE DATABASE db1_std_csets;
+SET NAMES gb18030_2022;
+SELECT HEX(a) , CHAR_LENGTH(a) FROM db1_std_csets.t_gb18030_2022 ORDER BY 1;
+HEX(a)	CHAR_LENGTH(a)
+4D5953514C50554D50	9
+63C481743FEAB8	5
+DROP DATABASE db1_std_csets;
+CREATE DATABASE db1_std_csets;
+USE db1_std_csets;
 SET NAMES cp932;
 CREATE TABLE t_cp932 (a VARCHAR(30) CHARACTER SET cp932 COLLATE cp932_bin) CHARACTER SET cp932 COLLATE cp932_bin;
 INSERT INTO t_cp932 VALUES (_cp932'MYSQLPUMP'), (_cp932'cāt?기?會意');
@@ -296,6 +316,45 @@ HEX(ÐÏÌÑ)	CHAR_LENGTH(ÐÏÌÑ)
 ED959CEAB880EC9E85EBA0A5EAB8	7
 SELECT `straÃe`(_gb18030'한글');
 `straÃe`(_gb18030'한글')
+頃滉竴
+SELECT * FROM `±í¸ñ`;
+脳脰露脦脪禄
+脳脰露脦脪禄
+DROP DATABASE `Êý¾Ý¿â`;
+SET NAMES utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+CREATE DATABASE `Êý¾Ý¿â`;
+USE `Êý¾Ý¿â`;
+CREATE TABLE ÔÁÂÌÉÃÁ (ÐÏÌÑ VARCHAR(30) CHARACTER SET gb18030_2022 COLLATE gb18030_2022_bin) CHARACTER SET gb18030_2022 COLLATE gb18030_2022_bin;
+CREATE VIEW `±í¸ñ` AS SELECT _gb18030_2022'×Ö¶ÎÒ»';
+INSERT INTO ÔÁÂÌÉÃÁ VALUES (_gb18030_2022'MYSQLPUMP'), (_gb18030_2022'한글입력기');
+Warnings:
+Warning	1300	Invalid gb18030_2022 character string: 'B0'
+Warning	1366	Incorrect string value: '\xB0' for column 'ÐÏÌÑ' at row 2
+SELECT HEX(ÐÏÌÑ) , CHAR_LENGTH(ÐÏÌÑ) FROM ÔÁÂÌÉÃÁ ORDER BY 1;
+HEX(ÐÏÌÑ)	CHAR_LENGTH(ÐÏÌÑ)
+4D5953514C50554D50	9
+ED959CEAB880EC9E85EBA0A5EAB8	7
+CREATE FUNCTION `straÃe` ( `饽紴缽菠` CHAR(20) CHARACTER SET gb18030_2022 COLLATE gb18030_2022_bin)
+RETURNS CHAR(50)  CHARACTER SET gb18030_2022 DETERMINISTIC RETURN `饽紴缽菠`;
+SELECT * FROM `±í¸ñ`;
+脳脰露脦脪禄
+脳脰露脦脪禄
+SELECT `straÃe`(_gb18030_2022'한글');
+`straÃe`(_gb18030_2022'한글')
+頃滉竴
+DROP DATABASE `Êý¾Ý¿â`;
+SET NAMES utf8;
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+USE `Êý¾Ý¿â`;
+SELECT HEX(ÐÏÌÑ) , CHAR_LENGTH(ÐÏÌÑ) FROM ÔÁÂÌÉÃÁ ORDER BY 1;
+HEX(ÐÏÌÑ)	CHAR_LENGTH(ÐÏÌÑ)
+4D5953514C50554D50	9
+ED959CEAB880EC9E85EBA0A5EAB8	7
+SELECT `straÃe`(_gb18030_2022'한글');
+`straÃe`(_gb18030_2022'한글')
 頃滉竴
 SELECT * FROM `±í¸ñ`;
 脳脰露脦脪禄

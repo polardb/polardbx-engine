@@ -564,8 +564,6 @@ The following options may be given as the first argument:
  --enable-implicit-primary-key 
  MySQL add the primary key for every tables that haven't
  any unique indexes automaticly
- --enable-mysqlx     Variable used to enable/disable mysqlx
- (Defaults to on; use --skip-enable-mysqlx to disable.)
  --enable-polarx-rpc Use new open PolarDB-X RPC
  (Defaults to on; use --skip-enable-polarx-rpc to disable.)
  --enable-show-ipk-info 
@@ -2298,7 +2296,6 @@ enable-appliedindex-checker FALSE
 enable-changeset TRUE
 enable-consensus TRUE
 enable-implicit-primary-key FALSE
-enable-mysqlx TRUE
 enable-polarx-rpc TRUE
 enable-show-ipk-info FALSE
 enable-writeset-tracking-for-ipk TRUE

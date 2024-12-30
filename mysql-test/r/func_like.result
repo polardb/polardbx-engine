@@ -299,6 +299,9 @@ SELECT 'aa' LIKE CONVERT('%a' USING utf8mb4);
 SELECT 'aa' LIKE CONVERT('%a' USING gb18030);
 'aa' LIKE CONVERT('%a' USING gb18030)
 1
+SELECT 'aa' LIKE CONVERT('%a' USING gb18030_2022);
+'aa' LIKE CONVERT('%a' USING gb18030_2022)
+1
 SELECT 'aa' LIKE CONVERT('%a' USING binary);
 'aa' LIKE CONVERT('%a' USING binary)
 1
@@ -337,6 +340,15 @@ select 1 where 'b%a' like '#%a' escape '#';
 select 1 where 'b_a' like '#_a' escape '#';
 1
 SET NAMES gb18030;
+select 1 where 'b%a' like '%%a' escape '%';
+1
+select 1 where 'b_a' like '__a' escape '_';
+1
+select 1 where 'b%a' like '#%a' escape '#';
+1
+select 1 where 'b_a' like '#_a' escape '#';
+1
+SET NAMES gb18030_2022;
 select 1 where 'b%a' like '%%a' escape '%';
 1
 select 1 where 'b_a' like '__a' escape '_';

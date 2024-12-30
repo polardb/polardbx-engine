@@ -3862,6 +3862,7 @@ const MY_CSET_OS_NAME charsets[] = {
 
     {"utf8", "utf8mb4", my_cs_exact},
     {"utf-8", "utf8mb4", my_cs_exact},
+    {"gb18030_2022", "gb18030_2022", my_cs_exact},
 #endif
     {nullptr, nullptr, my_cs_exact}};
 

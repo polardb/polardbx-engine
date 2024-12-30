@@ -282,6 +282,9 @@ SET sql_mode = 'NO_ENGINE_SUBSTITUTION';
 select st_difference((convert(st_polygonfromwkb(linestring(point(1,1))) using gb18030)),
 st_geomcollfromwkb(point(1,1)));
 ERROR 22023: Invalid GIS data provided to function linestring.
+select st_difference((convert(st_polygonfromwkb(linestring(point(1,1))) using gb18030_2022)),
+st_geomcollfromwkb(point(1,1)));
+ERROR 22023: Invalid GIS data provided to function linestring.
 SET sql_mode = default;
 select ST_astext(ST_geomfromwkb(ST_AsWKB(st_intersection(linestring(point(-59,82),point(32,29)), point(2,-5))))) as result;
 result

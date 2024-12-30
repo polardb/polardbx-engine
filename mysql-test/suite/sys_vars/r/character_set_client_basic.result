@@ -327,6 +327,10 @@ SET @@global.character_set_client = gb18030;
 SELECT @@global.character_set_client;
 @@global.character_set_client
 gb18030
+SET @@global.character_set_client = gb18030_2022;
+SELECT @@global.character_set_client;
+@@global.character_set_client
+gb18030_2022
 SET @@global.character_set_client = latin5;
 SELECT @@global.character_set_client;
 @@global.character_set_client
@@ -476,7 +480,7 @@ ERROR 42000: Unknown character set: '100'
 SET @total_charset = (SELECT count(*) FROM INFORMATION_SCHEMA.CHARACTER_SETS);
 SELECT @total_charset;
 @total_charset
-41
+42
 '#--------------------FN_DYNVARS_010_10-------------------------#'
 SET @@character_set_client = abc;
 ERROR 42000: Unknown character set: 'abc'

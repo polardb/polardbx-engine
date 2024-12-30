@@ -231,6 +231,8 @@ SELECT 'aa' LIKE CONVERT('%a' USING big5);
 SELECT 'aa' LIKE CONVERT('%a' USING utf8mb4);
 # GB18030 wildcmp
 SELECT 'aa' LIKE CONVERT('%a' USING gb18030);
+# GB18030_2022 wildcmp
+SELECT 'aa' LIKE CONVERT('%a' USING gb18030_2022);
 # Binary wildcmp
 SELECT 'aa' LIKE CONVERT('%a' USING binary);
 # 8bit wildcmp
@@ -259,6 +261,12 @@ select 1 where 'b%a' like '#%a' escape '#';
 select 1 where 'b_a' like '#_a' escape '#';
 # GB18030 wildcmp
 SET NAMES gb18030;
+select 1 where 'b%a' like '%%a' escape '%';
+select 1 where 'b_a' like '__a' escape '_';
+select 1 where 'b%a' like '#%a' escape '#';
+select 1 where 'b_a' like '#_a' escape '#';
+# GB18030_2022 wildcmp
+SET NAMES gb18030_2022;
 select 1 where 'b%a' like '%%a' escape '%';
 select 1 where 'b_a' like '__a' escape '_';
 select 1 where 'b%a' like '#%a' escape '#';

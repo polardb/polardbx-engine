@@ -20490,3 +20490,449 @@ CHARSET_INFO my_charset_gb18030_bin = {
     &my_charset_gb18030_handler,
     &my_collation_mb_bin_handler,
     PAD_SPACE};
+
+
+/*
+  GB18030_2022 diff GB18030_2005
+
+  U+9FB4  GB+FE59       U+E81E	GB+82359037
+  U+9FB5  GB+FE61       U+E826	GB+82359038
+  U+9FB6  GB+FE66       U+E82B	GB+82359039
+  U+9FB7  GB+FE67       U+E82C	GB+82359130
+  U+9FB8  GB+FE6D       U+E832	GB+82359131
+  U+9FB9  GB+FE7E       U+E843	GB+82359132
+  U+9FBA  GB+FE90       U+E854	GB+82359133
+  U+9FBB  GB+FEA0       U+E864	GB+82359134
+
+  U+FE10	GB+A6D9       U+E78D	GB+84318236
+  U+FE12	GB+A6DA       U+E78F	GB+84318237
+  U+FE11	GB+A6DB       U+E78E	GB+84318238
+  U+FE13	GB+A6DC       U+E790	GB+84318239
+  U+FE14	GB+A6DD       U+E791	GB+84318330
+  U+FE15	GB+A6DE       U+E792	GB+84318331
+  U+FE16	GB+A6DF       U+E793	GB+84318332
+  U+FE17	GB+A6EC       U+E794	GB+84318333
+  U+FE18	GB+A6ED       U+E795	GB+84318334
+  U+FE19  GB+A6F3       U+E796	GB+84318335
+*/
+static uint16 tab_gb18030_2022_4_uni_part1[] = {
+    // [GB+82358F33 , GB+82359036]
+    0x9FA6, 0x9FA7, 0x9FA8, 0x9FA9,
+    0x9FAA,0x9FAB, 0x9FAC, 0x9FAD,
+    0x9FAE, 0x9FAF, 0x9FB0, 0x9FB1,
+    0x9FB2, 0x9FB3,
+    // [GB+82359037, GB+82359134 ]
+    0xE81E, 0xE826, 0xE82B, 0xE82C,
+    0xE832, 0xE843, 0xE854, 0xE864
+  };
+
+static uint16 tab_gb18030_2022_4_uni_part2[] = {
+    // [GB+84318236, GB+84318335]
+    0xE78D, 0xE78F, 0xE78E, 0xE790,
+    0xE791, 0xE792, 0xE793, 0xE794,
+    0xE795, 0xE796,
+    // [GB+84318336, GB+84318537]
+    0xFE1A, 0xFE1B, 0xFE1C, 0xFE1D,
+    0xFE1E, 0xFE1F, 0xFE20, 0xFE21,
+    0xFE22, 0xFE23, 0xFE24, 0xFE25,
+    0xFE26, 0xFE27, 0xFE28, 0xFE29,
+    0xFE2A, 0xFE2B, 0xFE2C, 0xFE2D,
+    0xFE2E, 0xFE2F
+};
+
+static uint16 tab_uni_gb18030_2022_p1_part1[] = {
+    // [U+9FA6 U+9FB3]   unicode-0x5543  [GB+82358F33,GB+82359036]
+    0x4A63, 0x4A64, 0x4A65, 0x4A66,
+    0x4A67, 0x4A68, 0x4A69, 0x4A6A,
+    0x4A6B, 0x4A6C, 0x4A6D, 0x4A6E,
+    0x4A6F, 0x4A70,
+    // [U+9FB4, 9FBB]
+    0xFE59, 0xFE61, 0xFE66, 0xFE67,
+    0xFE6D, 0xFE7E, 0xFE90, 0xFEA0
+};
+
+static uint16 tab_uni_gb18030_2022_p2_new[] = {
+    // [U+FE10, U+FE19]
+    0xA6D9, 0xA6DB, 0xA6DA, 0xA6DC,
+    0xA6DD, 0xA6DE, 0xA6DF, 0xA6EC,
+    0xA6ED, 0xA6F3
+};
+
+#define ARRAY_SIZE(x) (sizeof(x)/(sizeof(x[0])))
+
+static uint16 tab_gb18030_2022_2_uni[ARRAY_SIZE(tab_gb18030_2_uni)] = {0};
+static uint16 tab_gb18030_2022_4_uni[
+  ARRAY_SIZE(tab_gb18030_4_uni) 
+  + ARRAY_SIZE(tab_gb18030_2022_4_uni_part1) 
+  + ARRAY_SIZE(tab_gb18030_2022_4_uni_part2)] = {0};
+
+static uint16 tab_uni_gb18030_2022_p1[
+  ARRAY_SIZE(tab_uni_gb18030_p1) 
+  + ARRAY_SIZE(tab_uni_gb18030_2022_p1_part1)] = {0};
+
+static uint16 tab_uni_gb18030_2022_p2[ARRAY_SIZE(tab_uni_gb18030_p2)] = {0};
+
+int init_gb18030_2022() {
+  memcpy(tab_gb18030_2022_2_uni, tab_gb18030_2_uni, sizeof(tab_gb18030_2_uni));
+
+#define SET_2022_UNI(s1, s2, uni) \
+  tab_gb18030_2022_2_uni[(s1 - MIN_MB_ODD_BYTE) * 192 + (s2 - MIN_MB_EVEN_BYTE_2)] = uni;
+
+  SET_2022_UNI(0xFE, 0x59, 0x9FB4);
+  SET_2022_UNI(0xFE, 0x61, 0x9FB5);
+  SET_2022_UNI(0xFE, 0x66, 0x9FB6);
+  SET_2022_UNI(0xFE, 0x67, 0x9FB7);
+  SET_2022_UNI(0xFE, 0x6D, 0x9FB8);
+  SET_2022_UNI(0xFE, 0x7E, 0x9FB9);
+  SET_2022_UNI(0xFE, 0x90, 0x9FBA);
+  SET_2022_UNI(0xFE, 0xA0, 0x9FBB);
+  SET_2022_UNI(0xA6, 0xD9, 0xFE10);
+  SET_2022_UNI(0xA6, 0xDA, 0xFE12);
+  SET_2022_UNI(0xA6, 0xDB, 0xFE11);
+  SET_2022_UNI(0xA6, 0xDC, 0xFE13);
+  SET_2022_UNI(0xA6, 0xDD, 0xFE14);
+  SET_2022_UNI(0xA6, 0xDE, 0xFE15);
+  SET_2022_UNI(0xA6, 0xDF, 0xFE16);
+  SET_2022_UNI(0xA6, 0xEC, 0xFE17);
+  SET_2022_UNI(0xA6, 0xED, 0xFE18);
+  SET_2022_UNI(0xA6, 0xF3, 0xFE19);
+
+  /* GB18030_2022  4 unicode */
+  const uint idx1 = 0x4A63 - 6637 - 2110;
+  const uint idx2 = 0x94BE - 6637 - 2110 - 14426 - 4295;
+
+  memcpy(tab_gb18030_2022_4_uni, tab_gb18030_4_uni, idx1 * sizeof(uint16));
+  memcpy(tab_gb18030_2022_4_uni + idx1, tab_gb18030_2022_4_uni_part1,
+         sizeof(tab_gb18030_2022_4_uni_part1));
+
+  memcpy(tab_gb18030_2022_4_uni + idx1 + ARRAY_SIZE(tab_gb18030_2022_4_uni_part1),
+         tab_gb18030_4_uni + idx1, (idx2 - idx1) * sizeof(uint16));
+
+  memcpy(tab_gb18030_2022_4_uni + ARRAY_SIZE(tab_gb18030_2022_4_uni_part1) + idx2,
+         tab_gb18030_2022_4_uni_part2, sizeof(tab_gb18030_2022_4_uni_part2));
+
+  memcpy(tab_gb18030_2022_4_uni + ARRAY_SIZE(tab_gb18030_2022_4_uni_part1) + idx2 + ARRAY_SIZE(tab_gb18030_2022_4_uni_part2),
+         tab_gb18030_4_uni + idx2,
+         sizeof(tab_gb18030_4_uni) - idx2 * sizeof(uint16));
+
+  // Uincode part1
+  memcpy(tab_uni_gb18030_2022_p1, tab_uni_gb18030_p1,
+         sizeof(tab_uni_gb18030_p1));
+
+  memcpy(tab_uni_gb18030_2022_p1 + ARRAY_SIZE(tab_uni_gb18030_p1),
+         tab_uni_gb18030_2022_p1_part1, sizeof(tab_uni_gb18030_2022_p1_part1));
+
+  // Uincode part2
+  memcpy(tab_uni_gb18030_2022_p2, tab_uni_gb18030_p2,
+         sizeof(tab_uni_gb18030_p2));
+
+#define SET_UNI_2022_P2(idx, s) \
+  tab_uni_gb18030_2022_p2[idx - 0xE000] = gb18030_4_code_to_diff(gb18030_chs_to_code(s, 4)) - UNI2_TO_GB4_DIFF;
+
+  SET_UNI_2022_P2(0xE81E, (const uchar *)("\x82\x35\x90\x37"));
+  SET_UNI_2022_P2(0xE826, (const uchar *)("\x82\x35\x90\x38"));
+  SET_UNI_2022_P2(0xE82B, (const uchar *)("\x82\x35\x90\x39"));
+  SET_UNI_2022_P2(0xE82C, (const uchar *)("\x82\x35\x91\x30"));
+  SET_UNI_2022_P2(0xE832, (const uchar *)("\x82\x35\x91\x31"));
+  SET_UNI_2022_P2(0xE843, (const uchar *)("\x82\x35\x91\x32"));
+  SET_UNI_2022_P2(0xE854, (const uchar *)("\x82\x35\x91\x33"));
+  SET_UNI_2022_P2(0xE864, (const uchar *)("\x82\x35\x91\x34"));
+  SET_UNI_2022_P2(0xE78D, (const uchar *)("\x84\x31\x82\x36"));
+  SET_UNI_2022_P2(0xE78F, (const uchar *)("\x84\x31\x82\x37"));
+  SET_UNI_2022_P2(0xE78E, (const uchar *)("\x84\x31\x82\x38"));
+  SET_UNI_2022_P2(0xE790, (const uchar *)("\x84\x31\x82\x39"));
+  SET_UNI_2022_P2(0xE791, (const uchar *)("\x84\x31\x83\x30"));
+  SET_UNI_2022_P2(0xE792, (const uchar *)("\x84\x31\x83\x31"));
+  SET_UNI_2022_P2(0xE793, (const uchar *)("\x84\x31\x83\x32"));
+  SET_UNI_2022_P2(0xE794, (const uchar *)("\x84\x31\x83\x33"));
+  SET_UNI_2022_P2(0xE795, (const uchar *)("\x84\x31\x83\x34"));
+  SET_UNI_2022_P2(0xE796, (const uchar *)("\x84\x31\x83\x35"));
+
+  /* [U+FE10,U+FE19]  (0xFE10 - 0xE000 - 4295) = 3401 */
+  memcpy(tab_uni_gb18030_2022_p2 + 3401,
+         tab_uni_gb18030_2022_p2_new,
+         sizeof(tab_uni_gb18030_2022_p2_new));
+
+  return 0;
+}
+
+/**
+  Convert the Unicode code to its gb18030_2022 code in bytes
+
+  @param[in]  cs charset
+  @param[in]  wc Unicode code
+  @param[out] s  start of gb18030 code output
+  @param[out] e  end of gb18030 code output
+  @retval        1) the length of gb18030 code(1/2/4) if convertible,
+                 2) MY_CS_TOOSMALL..MY_CS_TOOSMALL4 if the output
+                    space is too small
+                 3) MY_CS_ILUNI if we can't encode unicode to gb18030
+*/
+static int my_wc_mb_gb18030_2022_chs(const CHARSET_INFO *cs [[maybe_unused]],
+                                     my_wc_t wc, uchar *s, uchar *e) {
+  uint idx = 0;
+  uint len;
+  uint16 cp = 0;
+  uint err;
+
+  if (s >= e) return MY_CS_TOOSMALL;
+
+  if (wc < 0x80) {
+    /* [0x00, 0x7F] */
+    s[0] = (uchar)wc;
+    return 1;
+  }
+
+  len = 2;
+  if (wc < 0x9FBC) {
+    // [0x80, 0x9FBC)
+    cp = tab_uni_gb18030_2022_p1[wc - 0x80];
+    if ((uint)((cp >> 8) & 0xFF) < MIN_MB_ODD_BYTE) {
+      idx = cp;
+      len = 4;
+    }
+  } else if (wc <= 0xD7FF) {
+    // [0x9FA6, 0xD7FF]
+    idx = wc - 0x5543;
+    len = 4;
+  } else if (wc < 0xE000) {
+    // [0xD800, 0xE000)
+    return MY_CS_ILUNI;
+  } else if (wc < 0xE865) {
+    // [0xE000, 0xE865)
+    cp = tab_uni_gb18030_2022_p2[wc - 0xE000];
+    if ((uint)((cp >> 8) & 0xFF) < MIN_MB_ODD_BYTE) {
+      idx = cp + UNI2_TO_GB4_DIFF;
+      len = 4;
+    }
+  } else if (wc <= 0xF92B) {
+    // [0xE865, 0xF92B]
+    idx = wc - 0x6557;
+    len = 4;
+  } else if (wc <= 0XFFFF) {
+    // (0xF92B, 0xFFFF]
+    cp = tab_uni_gb18030_2022_p2[wc - 0xE000 - 4295];
+    if ((uint)((cp >> 8) & 0xFF) < MIN_MB_ODD_BYTE) {
+      idx = cp + UNI2_TO_GB4_DIFF;
+      len = 4;
+    }
+  } else if (wc <= 0x10FFFF) {
+    // [0x10000, 0x10FFFF]
+    idx = wc + 0x1E248;
+    len = 4;
+  } else {
+    return MY_CS_ILUNI;
+  }
+
+  switch (len) {
+    case 2:
+      if (s + 2 > e) return MY_CS_TOOSMALL2;
+
+      s[0] = (uchar)((cp >> 8) & 0xFF);
+      s[1] = (uchar)(cp & 0xFF);
+
+      return len;
+    case 4:
+      if (s + 4 > e) return MY_CS_TOOSMALL4;
+
+      err = diff_to_gb18030_4(s, 4, idx);
+      assert(err != 0);
+
+      return err != 0 ? len : MY_CS_ILUNI;
+  }
+
+  assert(0);
+  return MY_CS_ILUNI;
+}
+
+/**
+  Convert a gb18030_2022 code in bytes to unicode code
+
+  @param[in]  cs  charset
+  @param[out] pwc unicode code
+  @param[in]  s   start of gb18030 code
+  @param[in]  e   end of gb18030 code
+  @retval         1) the length of converted gb18030 code if convertible
+                  2) MY_CS_TOOSMALL..MY_CS_TOOSMALL4 if
+                     the gb18030 code is too short
+                  3) MY_CS_ILSEQ if gb18030 code is
+                     wrong by sequence
+*/
+static int my_mb_wc_gb18030_2022(const CHARSET_INFO *cs [[maybe_unused]],
+                                 my_wc_t *pwc, const uchar *s, const uchar *e) {
+  uint idx = 0;
+  uint cp = 0;
+
+  if (s >= e) return MY_CS_TOOSMALL;
+
+  if (is_mb_1(s[0])) {
+    // [0x00, 0x7F]
+    *pwc = s[0];
+    return 1;
+  } else if (!is_mb_odd(s[0]))
+    return MY_CS_ILSEQ;
+
+  if (s + 2 > e) return MY_CS_TOOSMALL2;
+
+  if (is_mb_even_2(s[1])) {
+    idx = (s[0] - MIN_MB_ODD_BYTE) * 192 + (s[1] - MIN_MB_EVEN_BYTE_2);
+    *pwc = tab_gb18030_2022_2_uni[idx];
+
+    return (*pwc == 0) ? MY_CS_ILSEQ : 2;
+  } else if (is_mb_even_4(s[1])) {
+    if (s + 4 > e) return MY_CS_TOOSMALL4;
+
+    if (!(is_mb_odd(s[2]) && is_mb_even_4(s[3]))) return MY_CS_ILSEQ;
+
+    idx = gb18030_4_chs_to_diff(s);
+
+    if (idx < 0x334) 
+      // [GB+81308130, GB+8130D330)
+      cp = tab_gb18030_2022_4_uni[idx];
+    else if (idx <= 0x1D20)
+      // [GB+8130D330, GB+8135F436]
+      cp = idx + 0x11E;
+    else if (idx < 0x2403)
+      // (GB+8135F436, GB+8137A839)
+      cp = tab_gb18030_2022_4_uni[idx - 6637];
+    else if (idx <= 0x2C40)
+      // [GB+8137A839, GB+8138FD38]
+      cp = idx + 0x240;
+    else if (idx < 0x4A79)
+      // (GB+8138FD38, GB+82359134]
+      cp = tab_gb18030_2022_4_uni[idx - 6637 - 2110];
+    else if (idx <= 0x82BC)
+      // [GB+82358F33, GB+8336C738]
+      cp = idx + 0x5543;
+    else if (idx < 0x830E)
+      // (GB+8336C738, GB+8336D030)
+      cp = tab_gb18030_2022_4_uni[idx - 6637 - 2110 - 14404];
+    else if (idx <= 0x93D4)
+      // [GB+8336D030, GB+84308534]
+      cp = idx + 0x6557;
+    else if (idx < 0x94BE)
+      // (GB+84308534, GB+84309C38)
+      cp = tab_gb18030_2022_4_uni[idx - 6637 - 2110 - 14404 - 4295];
+    else if (idx <= 0x98A3)
+      // [GB+84309C38, GB+84318236)
+      cp = idx + 0x656C;
+    else if (idx <= 0x99fb)
+      // [GB+84318236, GB+8431A439]
+      cp = tab_gb18030_2022_4_uni[idx - 6637 - 2110 - 14404 - 4295 - 998];
+    else if (idx >= 0x2E248 && idx <= 0x12E247)
+      // [GB+90308130, GB+E3329A35]
+      cp = idx - 0x1E248;
+    else if ((idx > 0x99fb && idx < 0x2E248) ||
+             (idx > 0x12E247 && idx <= 0x18398F))
+      // (GB+8431A439, GB+90308130) and (GB+E3329A35, GB+FE39FE39)
+      cp = 0x003F;
+    else
+      assert(0);
+
+    *pwc = cp;
+    return 4;
+  } else
+    return MY_CS_ILSEQ;
+}
+
+static MY_CHARSET_HANDLER my_charset_gb18030_2022_handler = {
+    nullptr,
+    my_ismbchar_gb18030,
+    my_mbcharlen_gb18030,
+    my_numchars_mb,
+    my_charpos_mb3,
+    my_well_formed_len_gb18030,
+    my_lengthsp_8bit,
+    my_numcells_mb,
+    my_mb_wc_gb18030_2022,
+    my_wc_mb_gb18030_2022_chs,
+    my_mb_ctype_mb,
+    my_caseup_str_mb,
+    my_casedn_str_mb,
+    my_caseup_gb18030,
+    my_casedn_gb18030,
+    my_snprintf_8bit,
+    my_long10_to_str_8bit,
+    my_longlong10_to_str_8bit,
+    my_fill_8bit,
+    my_strntol_8bit,
+    my_strntoul_8bit,
+    my_strntoll_8bit,
+    my_strntoull_8bit,
+    my_strntod_8bit,
+    my_strtoll10_8bit,
+    my_strntoull10rnd_8bit,
+    my_scan_8bit};
+
+
+CHARSET_INFO my_charset_gb18030_2022_chinese_ci = {
+    251,
+    0,
+    0,                                               /* number        */
+    MY_CS_COMPILED | MY_CS_PRIMARY | MY_CS_STRNXFRM, /* state         */
+    "gb18030_2022",                                  /* cs name       */
+    "gb18030_2022_chinese_ci",                       /* m_coll_name   */
+    "China National Standard GB18030_2022",          /* comment       */
+    nullptr,                                         /* tailoring     */
+    nullptr,                                         /* coll_param    */
+    ctype_gb18030,                                   /* ctype         */
+    to_lower_gb18030,                                /* lower         */
+    to_upper_gb18030,                                /* UPPER         */
+    sort_order_gb18030,                              /* sort          */
+    nullptr,                                         /* uca           */
+    nullptr,                                         /* tab_to_uni    */
+    nullptr,                                         /* tab_from_uni  */
+    &my_caseinfo_gb18030,                            /* caseinfo      */
+    nullptr,                                         /* state_map     */
+    nullptr,                                         /* ident_map     */
+    2,                                               /* strxfrm_multiply */
+    2,                                               /* caseup_multiply  */
+    2,                                               /* casedn_multiply  */
+    1,                                               /* mbminlen      */
+    4,                                               /* mbmaxlen      */
+    2,                                               /* mbmaxlenlen   */
+    0,                                               /* min_sort_char */
+    0xFE39FE39,                                      /* max_sort_char */
+    ' ',                                             /* pad char      */
+    true, /* escape_with_backslash_is_dangerous */
+    1,    /* levels_for_compare */
+    &my_charset_gb18030_2022_handler,
+    &my_collation_ci_handler,
+    PAD_SPACE
+};
+
+CHARSET_INFO my_charset_gb18030_2022_bin = {
+    252,
+    0,
+    0,                                 /* number        */
+    MY_CS_COMPILED | MY_CS_BINSORT,    /* state         */
+    "gb18030_2022",                    /* cs name       */
+    "gb18030_2022_bin",                /* m_coll_name   */
+    "China National Standard GB18030_2022", /* comment       */
+    nullptr,                           /* tailoring     */
+    nullptr,                           /* coll_param    */
+    ctype_gb18030,                     /* ctype         */
+    to_lower_gb18030,                  /* lower         */
+    to_upper_gb18030,                  /* UPPER         */
+    nullptr,                           /* sort order    */
+    nullptr,                           /* uca           */
+    nullptr,                           /* tab_to_uni    */
+    nullptr,                           /* tab_from_uni  */
+    &my_caseinfo_gb18030,              /* caseinfo      */
+    nullptr,                           /* state_map     */
+    nullptr,                           /* ident_map     */
+    1,                                 /* strxfrm_multiply */
+    2,                                 /* caseup_multiply  */
+    2,                                 /* casedn_multiply  */
+    1,                                 /* mbminlen      */
+    4,                                 /* mbmaxlen      */
+    2,                                 /* mbmaxlenlen   */
+    0,                                 /* min_sort_char */
+    0xFEFEFEFE,                        /* max_sort_char */
+    ' ',                               /* pad char      */
+    true,                              /* escape_with_backslash_is_dangerous */
+    1,                                 /* levels_for_compare */
+    &my_charset_gb18030_2022_handler,
+    &my_collation_mb_bin_handler,
+    PAD_SPACE
+};

@@ -166,6 +166,10 @@ SET @@session.character_set_filesystem = gb18030;
 SELECT @@session.character_set_filesystem;
 @@session.character_set_filesystem
 gb18030
+SET @@session.character_set_filesystem = gb18030_2022;
+SELECT @@session.character_set_filesystem;
+@@session.character_set_filesystem
+gb18030_2022
 SET @@session.character_set_filesystem = latin5;
 SELECT @@session.character_set_filesystem;
 @@session.character_set_filesystem
@@ -331,6 +335,10 @@ SET @@global.character_set_filesystem = gb18030;
 SELECT @@global.character_set_filesystem;
 @@global.character_set_filesystem
 gb18030
+SET @@global.character_set_filesystem = gb18030_2022;
+SELECT @@global.character_set_filesystem;
+@@global.character_set_filesystem
+gb18030_2022
 SET @@global.character_set_filesystem = latin5;
 SELECT @@global.character_set_filesystem;
 @@global.character_set_filesystem
@@ -458,7 +466,7 @@ ERROR 42000: Unknown character set: '100'
 SET @total_charset = (SELECT count(*) FROM INFORMATION_SCHEMA.CHARACTER_SETS);
 SELECT @total_charset;
 @total_charset
-41
+42
 '#--------------------FN_DYNVARS_008_10-------------------------#'
 SET @@character_set_filesystem = abc;
 ERROR 42000: Unknown character set: 'abc'

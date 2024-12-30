@@ -45,6 +45,8 @@ eval SET $charset_variable = gbk;
 eval SELECT $charset_variable;
 eval SET $charset_variable = gb18030;
 eval SELECT $charset_variable;
+eval SET $charset_variable = gb18030_2022;
+eval SELECT $charset_variable;
 eval SET $charset_variable = latin5;
 eval SELECT $charset_variable;
 eval SET $charset_variable = armscii8;

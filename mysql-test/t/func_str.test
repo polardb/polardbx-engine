@@ -2237,6 +2237,11 @@ SELECT (SELECT 1
         FROM t
         WHERE CONVERT(1 USING gb18030) <> GROUP_CONCAT(x'a3')
         );
+--error ER_CANNOT_CONVERT_STRING
+SELECT (SELECT 1
+        FROM t
+        WHERE CONVERT(1 USING gb18030_2022) <> GROUP_CONCAT(x'a3')
+        );
 DROP TABLE t;
 
 --echo # Bug#32694458: Assertion `thd->is_error()' failed|sql/sql_select.cc

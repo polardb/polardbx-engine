@@ -67,6 +67,8 @@ static const char *charset_list[] = {
 
     "gb18030_chinese_ci", "gb18030_bin",
 
+    "gb18030_2022_chinese_ci", "gb18030_2022_bin",
+
     "latin1_swedish_ci",  "latin1_bin",
 
     "sjis_japanese_ci",   "sjis_bin",

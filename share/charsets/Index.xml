@@ -421,6 +421,19 @@ To make maintaining easier please:
   </collation>
 </charset>
 
+<charset name="gb18030_2022">
+  <family>East Asian</family>
+  <description>China National Standard GB18030_2022</description>
+  <collation name="gb18030_2022_chinese_ci" id="251" order="Chinese">
+    <flag>primary</flag>
+    <flag>compiled</flag>
+  </collation>
+  <collation name="gb18030_2022_bin" id="252" order="Binary">
+    <flag>binary</flag>
+    <flag>compiled</flag>
+  </collation>
+</charset>
+
 <charset name="cp1257">
   <family>Baltic</family>
   <description>Windows Baltic</description>

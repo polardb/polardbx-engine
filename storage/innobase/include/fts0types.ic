@@ -100,6 +100,7 @@ static inline bool fts_is_charset_cjk(const CHARSET_INFO *cs) {
       strcmp(cs->m_coll_name, "gbk_chinese_ci") == 0 ||
       strcmp(cs->m_coll_name, "big5_chinese_ci") == 0 ||
       strcmp(cs->m_coll_name, "gb18030_chinese_ci") == 0 ||
+      strcmp(cs->m_coll_name, "gb18030_2022_chinese_ci") == 0 ||
       strcmp(cs->m_coll_name, "ujis_japanese_ci") == 0 ||
       strcmp(cs->m_coll_name, "sjis_japanese_ci") == 0 ||
       strcmp(cs->m_coll_name, "cp932_japanese_ci") == 0 ||

@@ -36,6 +36,34 @@ Warnings:
 Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
 SET NAMES latin1;
 DROP TABLE t1;
+CREATE TABLE t1(a VARCHAR(255) CHARACTER SET gb18030_2022, FULLTEXT(a)) ENGINE = InnoDB;
+INSERT INTO t1 VALUES(0xF043616161),(0xBEF361616197C22061616161);
+SELECT CONVERT(a USING utf8) FROM t1;
+CONVERT(a USING utf8)
+?aaa
+?aaa? aaaa
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SELECT CONVERT(_gb18030 0x97C22061616161 USING utf8);
+CONVERT(_gb18030 0x97C22061616161 USING utf8)
+? aaaa
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SELECT HEX(a), CONVERT(a USING utf8) FROM t1 WHERE MATCH(a) AGAINST(0x97C220616161 IN BOOLEAN MODE);
+HEX(a)	CONVERT(a USING utf8)
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SELECT HEX(a), CONVERT(a USING utf8) FROM t1 WHERE MATCH(a) AGAINST(0x97C22061616161 IN BOOLEAN MODE);
+HEX(a)	CONVERT(a USING utf8)
+BEF361616197C22061616161	?aaa? aaaa
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SELECT HEX(a), CONVERT(a USING utf8) FROM t1 WHERE MATCH(a) AGAINST(0x97C2206161616161 IN BOOLEAN MODE);
+HEX(a)	CONVERT(a USING utf8)
+Warnings:
+Warning	3719	'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.
+SET NAMES latin1;
+DROP TABLE t1;
 CREATE TABLE t1 (a TEXT, FULLTEXT(a)) ENGINE=InnoDB DEFAULT CHARSET=gb18030 COLLATE=gb18030_bin;
 CREATE TABLE t2 (a TEXT, FULLTEXT(a)) ENGINE=InnoDB DEFAULT CHARSET=gb18030 COLLATE=gb18030_chinese_ci;
 CREATE TABLE t3 (a TEXT, FULLTEXT(a)) ENGINE=InnoDB DEFAULT CHARSET=gb18030 COLLATE=gb18030_unicode_520_ci;
@@ -89,3 +117,14 @@ C3A1C6806465	áƀde
 C3A1C680E38386E382B9E383886465	áƀテストde
 SET NAMES latin1;
 DROP TABLE t1;
+CREATE TABLE t1 (a TEXT, FULLTEXT(a)) ENGINE=InnoDB DEFAULT CHARSET=gb18030_2022 COLLATE=gb18030_2022_bin;
+CREATE TABLE t2 (a TEXT, FULLTEXT(a)) ENGINE=InnoDB DEFAULT CHARSET=gb18030_2022 COLLATE=gb18030_2022_chinese_ci;
+SELECT * FROM t1 WHERE MATCH(a) AGAINST(0xff00ff);
+a
+SELECT * FROM t1 WHERE MATCH(a) AGAINST(0xfe00feff8320218400010203);
+a
+SELECT * FROM t2 WHERE MATCH(a) AGAINST(0xff00ff);
+a
+SELECT * FROM t2 WHERE MATCH(a) AGAINST(0xfe00feff8320218400010203);
+a
+DROP TABLE t1, t2;

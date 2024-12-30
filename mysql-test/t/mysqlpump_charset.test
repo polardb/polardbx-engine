@@ -42,6 +42,12 @@ let $cset= gb18030;
 let $coll= gb18030_bin;
 --source include/check_charset.inc
 
+# gb18030_2022
+
+let $cset= gb18030_2022;
+let $coll= gb18030_2022_bin;
+--source include/check_charset.inc
+
 let $cset= cp932;
 let $coll= cp932_bin;
 --source include/check_charset.inc
@@ -110,6 +116,11 @@ let $coll= euckr_korean_ci;
 # gb18030
 let $cset= gb18030;
 let $coll= gb18030_bin;
+--source include/check_charset.inc
+
+# gb18030_2022
+let $cset= gb18030_2022;
+let $coll= gb18030_2022_bin;
 --source include/check_charset.inc
 
 # ujis

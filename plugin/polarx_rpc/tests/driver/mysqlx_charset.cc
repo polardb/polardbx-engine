@@ -276,7 +276,10 @@ const Charset::Charset_entry Charset::m_charsets_info[] = {
     {247, "utf8mb4", "utf8mb4_vietnamese_ci"},
     {248, "gb18030", "gb18030_chinese_ci"},
     {249, "gb18030", "gb18030_bin"},
-    {250, "gb18030", "gb18030_unicode_520_ci"}};
+    {250, "gb18030", "gb18030_unicode_520_ci"},
+    {251, "gb18030_2022", "gb18030_2022_chinese_ci"},
+    {252, "gb18030_2022", "gb18030_2022_bin"}
+  };
 
 std::string Charset::charset_name_from_id(uint32_t id) {
   return field_from_id(id, &Charset_entry::name);

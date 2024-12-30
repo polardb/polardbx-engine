@@ -266,9 +266,15 @@ extern CHARSET_INFO my_charset_utf8mb4_mn_cyrl_0900_as_cs;
 extern CHARSET_INFO my_charset_utf8mb4_0900_bin;
 
 extern CHARSET_INFO my_charset_gb18030_unicode_520_ci;
+extern CHARSET_INFO my_charset_gb18030_2022_chinese_ci;
+extern CHARSET_INFO my_charset_gb18030_2022_bin;
+extern int init_gb18030_2022();
+
 
 bool init_compiled_charsets(myf flags [[maybe_unused]]) {
   CHARSET_INFO *cs;
+
+  init_gb18030_2022();
 
   add_compiled_collation(&my_charset_bin);
 
@@ -525,6 +531,9 @@ bool init_compiled_charsets(myf flags [[maybe_unused]]) {
   add_compiled_collation(&my_charset_utf32_sinhala_uca_ci);
   add_compiled_collation(&my_charset_utf32_unicode_520_ci);
   add_compiled_collation(&my_charset_utf32_vietnamese_ci);
+
+  add_compiled_collation(&my_charset_gb18030_2022_chinese_ci);
+  add_compiled_collation(&my_charset_gb18030_2022_bin);
 
   /* Copy compiled charsets */
   for (cs = compiled_charsets; cs->m_coll_name; cs++)

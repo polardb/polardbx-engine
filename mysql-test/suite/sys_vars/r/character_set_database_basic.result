@@ -220,6 +220,12 @@ Warning	1681	Updating 'character_set_database' is deprecated. It will be made re
 SELECT @@session.character_set_database;
 @@session.character_set_database
 gb18030
+SET @@session.character_set_database = gb18030_2022;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
+SELECT @@session.character_set_database;
+@@session.character_set_database
+gb18030_2022
 SET @@session.character_set_database = latin5;
 Warnings:
 Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
@@ -455,6 +461,12 @@ Warning	1681	Updating 'character_set_database' is deprecated. It will be made re
 SELECT @@global.character_set_database;
 @@global.character_set_database
 gb18030
+SET @@global.character_set_database = gb18030_2022;
+Warnings:
+Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
+SELECT @@global.character_set_database;
+@@global.character_set_database
+gb18030_2022
 SET @@global.character_set_database = latin5;
 Warnings:
 Warning	1681	Updating 'character_set_database' is deprecated. It will be made read-only in a future release.
@@ -659,7 +671,7 @@ ERROR 42000: Unknown character set: '100'
 SET @total_charset = (SELECT count(*) FROM INFORMATION_SCHEMA.CHARACTER_SETS);
 SELECT @total_charset;
 @total_charset
-41
+42
 '#--------------------FN_DYNVARS_012_10-------------------------#'
 SET @@character_set_database = "grek";
 ERROR 42000: Unknown character set: 'grek'

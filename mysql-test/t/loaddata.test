@@ -727,6 +727,12 @@ LOAD DATA INFILE '../../std_data/loaddata7.dat' INTO TABLE t1 CHARACTER SET gb18
 SELECT HEX(a) FROM t1;
 DROP TABLE t1;
 
+# Test multibyte character whose second byte is 0x5C
+CREATE TABLE t1(a VARCHAR(20)) CHARSET gb18030_2022;
+LOAD DATA INFILE '../../std_data/loaddata7.dat' INTO TABLE t1 CHARACTER SET gb18030_2022;
+SELECT HEX(a) FROM t1;
+DROP TABLE t1;
+
 
 --echo #
 --echo # Regression test added in WL#8063

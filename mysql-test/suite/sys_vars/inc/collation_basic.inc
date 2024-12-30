@@ -106,6 +106,12 @@ eval SET $collation_variable = gb18030_chinese_ci;
 eval SELECT $collation_variable;
 eval SET $collation_variable = gb18030_bin;
 eval SELECT $collation_variable;
+
+eval SET $collation_variable = gb18030_2022_chinese_ci;
+eval SELECT $collation_variable;
+eval SET $collation_variable = gb18030_2022_bin;
+eval SELECT $collation_variable;
+
 eval SET $collation_variable = latin5_turkish_ci;
 eval SELECT $collation_variable;
 eval SET $collation_variable = latin5_bin;
