@@ -35,7 +35,7 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       largeBatchRatio_(5),
       pipeliningTimeout_(3),
       electionTimeout_(electionTimeout),
-      heartbeatTimeout_(electionTimeout / 5),
+      heartbeatInterval_(electionTimeout / 5),
       purgeLogTimeout_(purgeLogTimeout),
       currentTerm_(1),
       commitIndex_(0),
@@ -3392,7 +3392,7 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   srv_ = std::make_shared<Service>(this);
   if (cs) srv_->cs = cs;
 
-  srv_->init(ioThreadCnt, workThreadCnt, heartbeatTimeout_, memory_usage_count,
+  srv_->init(ioThreadCnt, workThreadCnt, heartbeatInterval_, memory_usage_count,
              heartbeatThreadCnt, threadHook);
 
   std::string curConfig = (*pConfig)[index - 1];
@@ -3504,7 +3504,7 @@ int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
   srv_ = std::shared_ptr<Service>(new Service(this));
   if (cs) srv_->cs = cs;
 
-  srv_->init(ioThreadCnt, workThreadCnt, heartbeatTimeout_, memory_usage_count,
+  srv_->init(ioThreadCnt, workThreadCnt, heartbeatInterval_, memory_usage_count,
              heartbeatThreadCnt, threadHook);
   electionTimer_ = std::make_shared<ThreadTimer>(
       srv_->getThreadTimerService(), srv_, electionTimeout_, ThreadTimer::Stage,
@@ -3575,14 +3575,14 @@ void Paxos::heartbeatCallback(std::weak_ptr<RemoteServer> wserver) {
 }
 
 uint64_t Paxos::getLeaderTransferInterval_() {
-  return (electionTimeout_ / 5) / 4;
+  return heartbeatInterval_ / 4;
 }
 
 uint64_t Paxos::getNextEpochCheckStatemachine_(uint64_t epoch) {
   if (option.enableAutoLeaderTransfer_)
     return epoch +
-           std::max((uint64_t)5, (option.autoLeaderTransferCheckSeconds_ *
-                                  1000 / electionTimeout_));
+           std::max((uint64_t)(electionTimeout_/heartbeatInterval_),
+                    (option.autoLeaderTransferCheckSeconds_ * 1000 / electionTimeout_));
   else
     return UINT64_MAX;
 }
@@ -3717,7 +3717,7 @@ void Paxos::epochTimerCallback() {
       if (waitMilliseconds4OldTrxFinish > 0) {
         log_->setLimitNewTrx();
       } else {
-        waitMilliseconds4OldTrxFinish = heartbeatTimeout_ / 2;
+        waitMilliseconds4OldTrxFinish = heartbeatInterval_ / 2;
       }
 
       new ThreadTimer(srv_->getThreadTimerService(), srv_, waitMilliseconds4OldTrxFinish,
@@ -4046,18 +4046,22 @@ int Paxos::setClusterId(uint64_t ci) {
   return ret;
 }
 
-void Paxos::setLearnerConnTimeout(uint64_t t) {
-  if (t < (heartbeatTimeout_ / 4)) t = heartbeatTimeout_ / 4;
-  easy_warn_log("Server %d : Learner connection timeout set to %llu.",
-                localServer_->serverId, t);
-  localServer_->learnerConnTimeout = t;
+void Paxos::setSendTimeout(uint64_t t) {
+  if (t == 0) t = heartbeatInterval_;
+  if (srv_) srv_->setSendTimeout(t);
 }
 
-void Paxos::setSendPacketTimeout(uint64_t t) {
-  if (t < heartbeatTimeout_) t = heartbeatTimeout_;
-  easy_warn_log("Server %d : Send packet timeout set to %llu.",
-                localServer_->serverId, t);
-  srv_->setSendPacketTimeout(t);
+void Paxos::setConnectTimeout(uint64_t t) {
+  if (t == 0) t = heartbeatInterval_ / 4;
+  if (srv_) srv_->setConnectTimeout(t);
+}
+
+void Paxos::setHeartbeatInterval(uint64_t t) {
+  heartbeatInterval_ = (t == 0 ? electionTimeout_ / 5 : t);
+  if (srv_) {
+    setSendTimeout(getSendTimeout());
+    setConnectTimeout(getConnectTimeout());
+  }
 }
 
 void Paxos::forceFixMatchIndex(uint64_t targetId, uint64_t newIndex) {

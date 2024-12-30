@@ -132,8 +132,6 @@ class LocalServer : public Server {
   std::atomic<uint64_t> lastSyncedIndex;
   /* for logType node, try more times for electionWeightAction */
   bool logType;
-  /* timeout for long rtt learner (default 0) */
-  uint64_t learnerConnTimeout;
   uint64_t cidx;
 
 }; /* end of class LocalServer */
@@ -244,9 +242,6 @@ class RemoteServer : public Server {
     We disable pipelining whenever large entry is send.
   */
   std::atomic<uint64_t> lastEntrySize;
-
- protected:
-  uint64_t getConnTimeout();
 
  private:
   void sendMessageLow(PaxosMsg *msg);

@@ -52,7 +52,7 @@ extern easy_atomic_t easy_pool_alloc_byte;
  **/
 class EasyNet : public Net {
  public:
-  EasyNet(uint64_t num = 2, const uint64_t sessionTimeout = 300,
+  EasyNet(uint64_t num = 2, const uint64_t sendTimeout = 300,
           bool memory_usage_count = false);
   ~EasyNet() override {}
 
@@ -87,7 +87,10 @@ class EasyNet : public Net {
   void delConnDataById(uint64_t id);
   NetServerRef getConnDataAndSetFail(easy_connection_t *c, bool isFail);
   uint64_t getConnCnt() { return connStatus_.size(); }
-  void setSessionTimeout(uint64_t t) { sessionTimeout_ = t; }
+  void setSendTimeout(uint64_t t) { sendTimeout_ = t; }
+  void setConnectTimeout(uint64_t t) { connectTimeout_ = t; }
+  uint64_t getSendTimeout() { return sendTimeout_; }
+  uint64_t getConnectTimeout() { return connectTimeout_; }
 
   static void tryFreeMsg(NetPacket *np);
 
@@ -113,7 +116,8 @@ class EasyNet : public Net {
 
   uint64_t reciveCnt_;
   bool isShutdown_;
-  uint64_t sessionTimeout_;
+  uint64_t sendTimeout_;
+  uint64_t connectTimeout_;
 
  private:
   EasyNet(const EasyNet &other);                   // copy constructor

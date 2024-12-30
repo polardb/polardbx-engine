@@ -44,9 +44,10 @@ static void *easy_count_realloc(void *ptr, size_t size) {
   return NULL;
 }
 
-EasyNet::EasyNet(uint64_t num, const uint64_t sessionTimeout,
+EasyNet::EasyNet(uint64_t num, const uint64_t sendTimeout,
                  bool memory_usage_count)
-    : reciveCnt_(0), isShutdown_(false), sessionTimeout_(sessionTimeout) {
+    : reciveCnt_(0), isShutdown_(false), sendTimeout_(sendTimeout),
+      connectTimeout_(sendTimeout / 4) {
   if (unlikely(memory_usage_count)) {
     // set allocator for memory usage count
     easy_pool_set_allocator(easy_count_realloc);
@@ -158,12 +159,7 @@ int EasyNet::sendPacket(easy_addr_t addr, const char *buf, uint64_t len,
     return -1;
   }
   auto server = std::dynamic_pointer_cast<RemoteServer>(getConnData(addr));
-  if (!server || !server->isLearner || !server->paxos ||
-      server->paxos->getLocalServer()->learnerConnTimeout == 0)
-    easy_session_set_timeout(s, sessionTimeout_);  // ms
-  else
-    easy_session_set_timeout(
-        s, server->paxos->getLocalServer()->learnerConnTimeout * 4);
+  easy_session_set_timeout(s, sendTimeout_);
 
   np->data = &np->buffer[0];
   np->len = len;

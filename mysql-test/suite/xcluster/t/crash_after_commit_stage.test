@@ -191,6 +191,7 @@ while ($iter <= 2)
 	--source include/wait_until_disconnected.inc
 	--enable_reconnect
 	--exec echo "restart" > $mysqltest_vardir/tmp/mysqld.1.expect
+	--sleep 10
 	--source include/wait_until_connected_again.inc
 	--source include/wait_leader_apply_catchup.inc
 	--disable_reconnect

@@ -32,7 +32,6 @@ LocalServer::LocalServer(uint64_t serverIdParm)
     : Server(serverIdParm),
       lastSyncedIndex(1),
       logType(false),
-      learnerConnTimeout(0),
       cidx(1000) {}
 
 void LocalServer::beginLeadership(void *) {
@@ -235,13 +234,6 @@ void RemoteServer::stop(void *) {
   }
 }
 
-uint64_t RemoteServer::getConnTimeout() {
-  if (!isLearner || !paxos || paxos->getLocalServer()->learnerConnTimeout == 0)
-    return paxos ? paxos->getHeartbeatTimeout() / 4 : 1000;
-  else
-    return paxos->getLocalServer()->learnerConnTimeout;
-}
-
 void RemoteServer::connect(void *ptr) {
   if (addr.port == 0) {
     uint64_t cidx;
@@ -253,7 +245,7 @@ void RemoteServer::connect(void *ptr) {
       cidx = serverId;
     easy_info_log("Connect server %d, cidx %llu", serverId, cidx);
     addr =
-        srv->createConnection(strAddr, getSharedThis(), getConnTimeout(), cidx);
+        srv->createConnection(strAddr, getSharedThis(), srv->getConnectTimeout(), cidx);
   }
 }
 
@@ -318,7 +310,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
   if (isStop.load()) return;
   /* Skip send msg this time, connect action will done before next send msg. */
   if (addr.port == 0) {
-    addr = srv->createConnection(strAddr, getSharedThis(), getConnTimeout(),
+    addr = srv->createConnection(strAddr, getSharedThis(), srv->getConnectTimeout(),
                                  serverId);
     return;
   }

@@ -74,7 +74,7 @@ class Service {
 
   // todo delete confusing default value of this function parameters
   virtual int init(uint64_t ioThreadCnt = 4, uint64_t workThreadCnt = 4,
-                   uint64_t ConnectTimeout = 300,
+                   uint64_t sendTimeout = 300,
                    bool memory_usage_count = false,
                    uint64_t heartbeatThreadCnt = 0,
                    ThreadHook *threadHook = nullptr);
@@ -82,7 +82,11 @@ class Service {
   virtual void closeThreadPool();
   virtual int shutdown();
   virtual int stop();
-  virtual void setSendPacketTimeout(uint64_t t);
+  virtual void setSendTimeout(uint64_t t);
+  virtual void setConnectTimeout(uint64_t t);
+  virtual uint64_t getSendTimeout() { return net_->getSendTimeout(); }
+  virtual uint64_t getConnectTimeout() { return net_->getConnectTimeout(); }
+
   virtual int sendPacket(easy_addr_t addr, const std::string &buf,
                          uint64_t id = 0);
   virtual int resendPacket(easy_addr_t addr, void *ptr, uint64_t id = 0);

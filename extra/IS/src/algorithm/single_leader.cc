@@ -23,7 +23,7 @@ namespace alisql {
 
 SingleLeader::SingleLeader(uint64_t clusterId)
     : commitIndex_(0),
-      heartbeatTimeout_(1000),
+      heartbeatInterval_(1000),
       clusterId_(clusterId),
       mockLastIndex_(0),
       mockLastTerm_(0) {}
@@ -39,7 +39,7 @@ void SingleLeader::init(int port, std::string learnerAddr,
   log_ = std::make_shared<MemPaxosLog>(lastLogIndex, 0, cacheSize);
   log_->setAppendTimeout(0); /* required, making log->append a blocking api */
   srv_ = std::shared_ptr<Service>(new Service(this));
-  srv_->init(ioThreadCnt, workThreadCnt, heartbeatTimeout_);
+  srv_->init(ioThreadCnt, workThreadCnt, heartbeatInterval_);
   srv_->start(port);
 
   learnerServer_ = std::make_shared<LearnerServer>(100);
@@ -48,7 +48,6 @@ void SingleLeader::init(int port, std::string learnerAddr,
   learnerServer_->srv = srv_;
   learnerServer_->appliedIndex = 0;
   learnerServer_->addr.port = 0;
-  learnerServer_->connectTimeout = heartbeatTimeout_ / 4;
   learnerServer_->singleLeader = this;
   learnerServer_->connect(NULL);
 }

@@ -434,6 +434,9 @@ int ConsensusLogManager::init_service() {
     alisql_server = std::make_shared<alisql::AliSQLServer>(0);
     consensus_ptr =
         new alisql::Paxos(opt_consensus_election_timeout, consensus_log);
+    consensus_ptr->setHeartbeatInterval(opt_consensus_heartbeat_interval);
+    consensus_ptr->setSendTimeout(opt_consensus_send_timeout);
+    consensus_ptr->setConnectTimeout(opt_consensus_connect_timeout);
     consensus_ptr->setStateChangeCb(stateChangeCb);
     consensus_ptr->setMaxPacketSize(opt_consensus_max_packet_size);
     consensus_ptr->setPipeliningTimeout(opt_consensus_pipelining_timeout);

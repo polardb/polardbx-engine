@@ -1207,13 +1207,13 @@ TEST(consensus, timeout_set) {
     le.set_optype(1);
     paxos1->replicateLog(le);
   }
-  paxos1->setSendPacketTimeout(10000);
+  paxos1->setSendTimeout(10000);
   for (int i = 0; i < 10; ++i) {
     le.Clear();
     le.set_optype(1);
     paxos1->replicateLog(le);
   }
-  paxos1->setLearnerConnTimeout(1000);
+  paxos1->setConnectTimeout(1000);
   for (int i = 0; i < 10; ++i) {
     le.Clear();
     le.set_optype(1);

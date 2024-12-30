@@ -442,8 +442,9 @@ class Paxos : public Consensus {
     electionTimer_->setRandWeight(ls->electionWeight);
   }
   enum State getState() { return state_.load(); }
-  const uint64_t &getElectionTimeout() { return electionTimeout_; }
-  const uint64_t &getHeartbeatTimeout() { return heartbeatTimeout_; }
+  uint64_t getElectionTimeout() const { return electionTimeout_; }
+  uint64_t getHeartbeatInterval() const { return heartbeatInterval_; }
+  void setHeartbeatInterval(uint64_t value);
   uint64_t getCommitIndex() {
     return (state_.load() == LEADER && consensusAsync_.load())
                ? localServer_->lastSyncedIndex.load()
@@ -504,8 +505,10 @@ class Paxos : public Consensus {
   bool getReplicateWithCacheLog() { return replicateWithCacheLog_.load(); }
   void setConfigureChangeTimeout(uint64_t t);
   void setAsLogType(bool val) { localServer_->logType = val; }
-  void setLearnerConnTimeout(uint64_t t);
-  void setSendPacketTimeout(uint64_t t);
+  void setSendTimeout(uint64_t t);
+  void setConnectTimeout(uint64_t t);
+  uint64_t getSendTimeout() { return srv_->getSendTimeout(); }
+  uint64_t getConnectTimeout() { return srv_->getConnectTimeout(); }
   int log_checksum_test(const LogEntry &le);  // return 0 for success
   void setEnableDynamicEasyIndex(bool flag) { enableDynamicEasyIndex_ = flag; }
   bool getEnableDynamicEasyIndex() { return enableDynamicEasyIndex_; }
@@ -661,7 +664,7 @@ class Paxos : public Consensus {
   uint64_t pipeliningTimeout_;
   /* timeout unit is ms. */
   const uint64_t electionTimeout_;
-  const uint64_t heartbeatTimeout_;
+  uint64_t heartbeatInterval_;
   const uint64_t purgeLogTimeout_;
   std::atomic<uint64_t> currentTerm_;
   std::atomic<uint64_t> commitIndex_;

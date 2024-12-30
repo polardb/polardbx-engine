@@ -50,7 +50,6 @@ class LearnerServer : public RemoteServer {
    */
 
   SingleLeader *singleLeader;
-  uint64_t connectTimeout;
 };
 }  // namespace alisql
 

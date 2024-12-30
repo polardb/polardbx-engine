@@ -75,11 +75,12 @@ ulonglong opt_consensus_large_event_size_limit;
 ulonglong opt_consensus_large_event_count_limit;
 ulonglong opt_consensus_large_event_split_size;
 uint opt_consensus_send_timeout;
-uint opt_consensus_learner_timeout;
+uint opt_consensus_connect_timeout;
 bool opt_consensus_learner_pipelining = 0;
 uint opt_consensus_configure_change_timeout = 60 * 1000;
 uint opt_consensus_election_timeout;
 uint opt_consensus_vote_backoff_timeout;
+uint opt_consensus_heartbeat_interval;
 uint opt_consensus_io_thread_cnt;
 uint opt_consensus_worker_thread_cnt;
 uint opt_consensus_heartbeat_thread_cnt;
@@ -482,27 +483,32 @@ static Sys_var_ulonglong Sys_consensus_large_event_split_size(
 
 static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type) {
   if (consensus_ptr)
-    consensus_ptr->setSendPacketTimeout(opt_consensus_send_timeout);
+    consensus_ptr->setSendTimeout(opt_consensus_send_timeout);
   return false;
 }
 
 static Sys_var_uint Sys_consensus_send_timeout(
-    "consensus_send_timeout", "Consensus send packet timeout",
+    "consensus_send_timeout",
+    "Consensus send packet timeout, zero means use @@consensus_heartbeat_interval",
     GLOBAL_VAR(opt_consensus_send_timeout), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_send_timeout));
 
-static bool fix_consensus_learner_timeout(sys_var *, THD *, enum_var_type) {
+static bool fix_consensus_connect_timeout(sys_var *, THD *, enum_var_type) {
   if (consensus_ptr)
-    consensus_ptr->setLearnerConnTimeout(opt_consensus_learner_timeout);
+    consensus_ptr->setConnectTimeout(opt_consensus_connect_timeout);
   return false;
 }
 
-static Sys_var_uint Sys_consensus_learner_timeout(
-    "consensus_learner_timeout", "Consensus learner connection timeout",
-    GLOBAL_VAR(opt_consensus_learner_timeout), CMD_LINE(REQUIRED_ARG),
+static Sys_var_uint Sys_consensus_connect_timeout(
+    "consensus_connect_timeout",
+    "Consensus connect timeout, zero means use @@consensus_heartbeat_interval/4",
+    GLOBAL_VAR(opt_consensus_connect_timeout), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, 200000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_learner_timeout));
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_connect_timeout));
+
+static Sys_var_deprecated_alias Sys_consensus_learner_timeout("consensus_learner_timeout",
+                                                      Sys_consensus_connect_timeout);
 
 static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type) {
   if (consensus_ptr)
@@ -551,6 +557,21 @@ static Sys_var_uint Sys_consensus_vote_backoff_timeout(
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 1000000), DEFAULT(1000),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_vote_backoff_timeout));
+
+static bool fix_consensus_heartbeat_interval(sys_var *, THD *,
+                                                   enum_var_type) {
+  if (consensus_ptr)
+    consensus_ptr->setHeartbeatInterval(opt_consensus_heartbeat_interval);
+  return false;
+}
+
+static Sys_var_uint Sys_consensus_heartbeat_interval(
+    "consensus_heartbeat_interval",
+    "Consensus heartbeat max interval, zero means use @@consensus_election_timeout/5",
+    GLOBAL_VAR(opt_consensus_heartbeat_interval),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 600000), DEFAULT(1000),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_heartbeat_interval));
 
 static Sys_var_uint Sys_consensus_io_thread_count(
     "consensus_io_thread_cnt", "Number of consensus io thread",

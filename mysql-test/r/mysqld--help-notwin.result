@@ -345,6 +345,9 @@ The following options may be given as the first argument:
  Checksum when consensus receive log. Disabled by default.
  --consensus-configure-change-timeout=# 
  Consensus configure change timeout (ms). Default 1 min
+ --consensus-connect-timeout=# 
+ Consensus connect timeout, zero means use
+ @@consensus_heartbeat_interval/4
  --consensus-disable-commit-before-change-leader 
  disable commit before change leader
  (Defaults to on; use --skip-consensus-disable-commit-before-change-leader to disable.)
@@ -373,6 +376,8 @@ The following options may be given as the first argument:
  for innodb_force_recovery
  --consensus-force-sync-epoch-diff[=#] 
  consensus forceSync epoch diff
+ --consensus-heartbeat-interval=# 
+ Consensus heartbeat max interval
  --consensus-heartbeat-thread-cnt[=#] 
  Number of consensus heartbeat thread
  --consensus-index-buf-enabled 
@@ -408,7 +413,8 @@ The following options may be given as the first argument:
  --consensus-learner-pipelining 
  enable pipelining send msg to learner
  --consensus-learner-timeout=# 
- Consensus learner connection timeout
+ This option is deprecated. Use consensus_connect_timeout
+ instead.
  --consensus-log-cache-size[=#] 
  Max fifo cached logs size
  --consensus-log-level[=name] 
@@ -461,7 +467,8 @@ The following options may be given as the first argument:
  insert Consensus_empty event into binblog after reset
  master
  --consensus-send-timeout=# 
- Consensus send packet timeout
+ Consensus send packet timeout, zero means use
+ @@consensus_heartbeat_interval
  --consensus-stop-apply-index[=#] 
  member stop apply index
  --consensus-sync-follower-meta-interva[=#] 
@@ -2218,6 +2225,7 @@ consensus-check-commit-index-interval 1000
 consensus-check-large-event TRUE
 consensus-checksum FALSE
 consensus-configure-change-timeout 60000
+consensus-connect-timeout 0
 consensus-disable-commit-before-change-leader TRUE
 consensus-disable-election FALSE
 consensus-disable-empty-xa FALSE
@@ -2229,6 +2237,7 @@ consensus-force-leader-transfer FALSE
 consensus-force-promote FALSE
 consensus-force-recovery FALSE
 consensus-force-sync-epoch-diff 0
+consensus-heartbeat-interval 1000
 consensus-heartbeat-thread-cnt 0
 consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
@@ -2245,7 +2254,7 @@ consensus-learner-heartbeat TRUE
 consensus-learner-pipelining FALSE
 consensus-learner-timeout 0
 consensus-log-cache-size 67108864
-consensus-log-level LOG_ERROR
+consensus-log-level LOG_WARN
 consensus-max-delay-index 50000
 consensus-max-log-size 20971520
 consensus-max-packet-size 131072

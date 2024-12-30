@@ -77,7 +77,7 @@ class SingleLeader : public Consensus {
   std::shared_ptr<MemPaxosLog> log_;
   std::atomic<uint64_t> currentTerm_;
   std::atomic<uint64_t> commitIndex_;
-  const uint64_t heartbeatTimeout_;
+  const uint64_t heartbeatInterval_;
   std::atomic<uint64_t> clusterId_;
   mutable std::mutex lock_;
   uint64_t mockLastIndex_;

@@ -151,7 +151,7 @@ void StableConfiguration::installConfig(
       ptrR->paxos = paxos;
       ptrR->heartbeatTimer = std::unique_ptr<ThreadTimer>(
           new ThreadTimer(paxos->getService()->getThreadTimerService(),
-                          paxos->getService(), paxos->getHeartbeatTimeout(),
+                          paxos->getService(), paxos->getHeartbeatInterval(),
                           ThreadTimer::Repeatable, Paxos::heartbeatCallback,
                           std::move(std::weak_ptr<RemoteServer>(ptrR))));
     } else {
@@ -511,7 +511,7 @@ void StableConfiguration::addLearners(const std::vector<std::string> &strConfig,
      * here. */
     ptrR->heartbeatTimer = std::unique_ptr<ThreadTimer>(
         new ThreadTimer(paxos->getService()->getThreadTimerService(),
-                        paxos->getService(), paxos->getHeartbeatTimeout(),
+                        paxos->getService(), paxos->getHeartbeatInterval(),
                         ThreadTimer::Repeatable, Paxos::heartbeatCallback,
                         std::move(std::weak_ptr<RemoteServer>(ptrR))));
     if ((paxos->getState() == Paxos::LEADER && ptrR->learnerSource == 0) ||
