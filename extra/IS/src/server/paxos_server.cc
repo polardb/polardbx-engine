@@ -105,7 +105,7 @@ uint64_t LocalServer::writeLogDoneInternal(uint64_t logIndex, bool forceSend) {
 
   if (forceSend) /* for large trx, send directly after sync partial */
   {
-    easy_warn_log("Server %d : writeLogDoneInternal logIndex:%ld, lastSyncedIndex:%llu\n",
+    easy_info_log("Server %d : writeLogDoneInternal logIndex:%ld, lastSyncedIndex:%llu\n",
                   serverId, logIndex, lastSyncedIndex.load());
     paxos->appendLog(false);
   }
@@ -453,7 +453,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
       bool isTimeout = timeout != 0 && diffMS(lastSendTP) > timeout;
       if (!isTimeout &&
           !paxos->getLog()->getLeftSize(nextIndex, maxPacketSize)) {
-        easy_warn_log(
+        easy_info_log(
             "Try to send msg to server %ld, now we are waiting for response, "
             "ignore.\n",
             serverId);
@@ -467,10 +467,10 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
         return;
       }
       if (isTimeout)
-        easy_warn_log("Force to send msg to server %ld, because timeout.\n",
+        easy_info_log("Force to send msg to server %ld, because timeout.\n",
                       serverId);
       else
-        easy_warn_log(
+        easy_info_log(
             "Force to send msg to server %ld, because the left log size is too "
             "large.\n",
             serverId);
@@ -513,7 +513,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
     else
       lli = paxos->getLastLogIndex();
   }
-  easy_warn_log(
+  easy_info_log(
       "Server %d : Send msg msgId(%llu) to server %ld, term:%ld, commitIndex:%llu, "
       "startLogIndex:%ld, entries_size:%d, log_size:%llu lli:%ld\n",
       paxos ? paxos->getLocalServer()->serverId : 0, msg->msgid(), serverId,
@@ -527,7 +527,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
     if (isLearner && !paxos->option.enableLearnerHeartbeat_)
       heartbeatTimer->stop();
   } else if (msg->msgtype() == Paxos::AppendLog && !force) {
-    easy_warn_log(
+    easy_info_log(
         "Server %d : Skip send msg msgId(%llu) to server %ld because the "
         "entries_size is 0, and not force\n",
         paxos ? paxos->getLocalServer()->serverId : 0, msg->msgid(), serverId);

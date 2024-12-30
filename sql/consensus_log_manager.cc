@@ -1414,7 +1414,7 @@ void ConsensusLogManager::wait_old_trx_finish()
          && innodb_hton->ext.has_started_mysql_trx()) {
     my_sleep(1000);//1ms
   }
-  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_trx_finish"
+  xp::system(ER_XP_COMMIT) << "leaderTransfer wait_old_trx_finish"
                          << ", wait_time_ms " << min_wait_time_ms + wait_time_ms
                          << ", has_started_mysql_trx " << innodb_hton->ext.has_started_mysql_trx();
 }
@@ -1427,7 +1427,7 @@ void ConsensusLogManager::wait_old_xa_finish()
         && xa_finishing_count.load() > 0) {
     my_sleep(1000);//1ms
   }
-  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_xa_finish"
+  xp::system(ER_XP_COMMIT) << "leaderTransfer wait_old_xa_finish"
                          << ", wait_time_ms " << wait_time_ms
                          << ", xa_finishing_count " << xa_finishing_count.load();
 }
@@ -1441,7 +1441,7 @@ uint64 ConsensusLogManager::wait_old_bgc_finish()
         && consensus_ptr->getCommitIndex() < final_sync_index) {
     my_sleep(1000);//1ms
   }
-  xp::warn(ER_XP_COMMIT) << "leaderTransfer wait_old_bgc_finish"
+  xp::system(ER_XP_COMMIT) << "leaderTransfer wait_old_bgc_finish"
                          << ", wait_time_ms " << wait_time_ms
                          << ", commitIndex " << consensus_ptr->getCommitIndex()
                          << ", final_sync_index " << final_sync_index;

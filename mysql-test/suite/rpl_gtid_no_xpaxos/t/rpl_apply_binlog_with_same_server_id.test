@@ -38,8 +38,8 @@ call mtr.add_suppression("using --replicate-same-server-id in conjunction with -
 # 4) Rename the already executed and saved binary logs to relay logs and copy them to the data dir.
 --copy_file $MYSQL_TEST_DIR/std_data/replicated-bin.000001 $master_datadir/replicate-relay-bin-test.000001
 --copy_file $MYSQL_TEST_DIR/std_data/replicated-bin.000002 $master_datadir/replicate-relay-bin-test.000002
---exec echo "./replicated-relay-bin-test.000001" > $master_datadir/replicate-relay-bin-test.index
---exec echo "./replicated-relay-bin-test.000002" >> $master_datadir/replicate-relay-bin-test.index
+--exec echo "./replicate-relay-bin-test.000001" > $master_datadir/replicate-relay-bin-test.index
+--exec echo "./replicate-relay-bin-test.000002" >> $master_datadir/replicate-relay-bin-test.index
 
 # 5) Restart the server.
 --let $restart_parameters="restart: --replicate-same-server-id=1 --server_id=1 --relay-log=replicate-relay-bin"

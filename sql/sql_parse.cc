@@ -2681,7 +2681,9 @@ bool shutdown(THD *thd, enum mysql_enum_shutdown_level level) {
   my_ok(thd);
 
   LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO,
-         thd->security_context()->user().str, server_version,
+         thd->security_context()->user().str, 
+         thd->security_context()->host_or_ip().str,
+         server_version,
          MYSQL_COMPILATION_COMMENT_SERVER);
 
   DBUG_PRINT("quit", ("Got shutdown command for level %u", level));
@@ -3805,10 +3807,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
       if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
           !opt_cluster_log_type_instance) {
         res = stop_slave_cmd(thd);
-        LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
-               thd->m_main_security_ctx.user().str,
-               thd->m_main_security_ctx.host_or_ip().str, thd->query().str,
-               res);
       } else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
       break;

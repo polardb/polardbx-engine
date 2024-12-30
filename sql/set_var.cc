@@ -343,16 +343,25 @@ bool sys_var::update(THD *thd, set_var *var) {
 
   enum_var_type type = var->type;
   if (type == OPT_GLOBAL || type == OPT_PERSIST || scope() == GLOBAL) {
+    bool ret= 0;
     /*
       Yes, both locks need to be taken before an update, just as
       both are taken to get a value. If we'll take only 'guard' here,
       then value_ptr() for strings won't be safe in SHOW VARIABLES anymore,
       to make it safe we'll need value_ptr_unlock().
     */
-    AutoWLock lock1(&PLock_global_system_variables);
-    AutoWLock lock2(guard);
-    return global_update(thd, var) ||
-           (on_update && on_update(this, thd, OPT_GLOBAL));
+    {
+      AutoWLock lock1(&PLock_global_system_variables);
+      AutoWLock lock2(guard);
+      ret = global_update(thd, var) ||
+          (on_update && on_update(this, thd, OPT_GLOBAL));
+    }
+    if (!ret)
+      LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
+             thd->m_main_security_ctx.user().str,
+             thd->m_main_security_ctx.host_or_ip().str, thd->query().str);
+    return ret;
+
   } else {
     /* Block reads from other threads. */
     mysql_mutex_lock(&thd->LOCK_thd_sysvar);

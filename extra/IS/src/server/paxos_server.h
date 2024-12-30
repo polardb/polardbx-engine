@@ -275,7 +275,7 @@ class SendMsgTask {
     return false;
   }
   void printMergeInfo(uint64_t mergedNum) {
-    easy_warn_log("SendMsgTask: %llu tasks merged for server %llu", mergedNum,
+    easy_info_log("SendMsgTask: %llu tasks merged for server %llu", mergedNum,
                   server->serverId);
   }
 };

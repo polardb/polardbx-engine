@@ -1477,7 +1477,7 @@ int Paxos::requestVote(bool force) {
     config_->forEach(&Server::beginRequestVote, NULL);
     forceRequestMode_ = force;
     changeState_(CANDIDATE);
-    easy_warn_log(
+    easy_info_log(
         "Server %d : Epoch task currentEpoch(%llu) during requestVote\n",
         localServer_->serverId, currentEpoch_.load());
     currentEpoch_.fetch_add(1);
@@ -1890,7 +1890,7 @@ int Paxos::appendLogToServerByPtr(std::shared_ptr<RemoteServer> server,
   /* TODO is force necessary ! */
   if (force) {
     if (server->waitForReply) {
-      easy_warn_log(
+      easy_info_log(
           "Server %d : server %d do not response in the last heartbeat period, "
           "force to send heartbeat msg.\n",
           localServer_->serverId, server->serverId);
@@ -2029,7 +2029,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   }
 
 
-  easy_warn_log(
+  easy_info_log(
       "Server %d : msgId(%llu) onAppendLog start, receive logs from "
       "leader(%d), msg.term(%d), msg.commitindex(%llu), msg.prevlogindex(%llu), entries_size(%llu), lli(%llu)\n",
       localServer_->serverId, msg->msgid(), msg->leaderid(), msg->term(),
@@ -2125,7 +2125,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
 
   if (!msg->has_prevlogterm()) {
     rsp->set_ignorecheck(true);
-    easy_warn_log(
+    easy_info_log(
         "Server %d : msgId(%llu) receive logs without prevlogterm. from server "
         "%ld, localTerm(%ld),msg.term(%d) lli:%ld\n",
         localServer_->serverId, msg->msgid(), msg->leaderid(),
@@ -2152,7 +2152,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
       logRecvCache_.setCommitIndex(msg->commitindex());
       rsp->set_issuccess(true);
       rsp->set_lastlogindex(log_->getLastLogIndex());
-      easy_warn_log(
+      easy_info_log(
           "Server %d : receive uncontinue log local lastLogIndex(%ld, "
           "term:%ld); msgId(%llu) msg prevlogindex(%ld, term:%ld) has %llu "
           "entries firstIndex(%llu) lastIndex(%llu); put it in cache.\n",
@@ -2164,7 +2164,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
        * This is possible. It happened when the new leader send the first
        * appendlog msg. We return a hint to let leader know our last log index.
        */
-      easy_warn_log(
+      easy_info_log(
           "Server %d : msgId(%llu) receive log's prevlogindex(%ld, term:%ld) "
           "is bigger than lastLogIndex(%ld, term:%ld) reject.\n",
           localServer_->serverId, msg->msgid(), msg->prevlogindex(),
@@ -2230,7 +2230,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
 
     // assert(msg->entries_size() <= 1);
     if (msg->entries_size() > 0) {
-      easy_warn_log(
+      easy_info_log(
           "Server %d : msgId(%llu) receive log has %ld entries, plt:%ld, "
           "pli:%ld, commitIndex:%ld, lli:%ld, pli2:%ld\n",
           localServer_->serverId, msg->msgid(), msg->entries_size(),
@@ -2272,7 +2272,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
           if (beginTerm == (msg->entries().end() - 1)->term() &&
               beginTerm == currentTerm_ &&
               prevLogEntry.term() == currentTerm_) {
-            easy_warn_log(
+            easy_info_log(
                 "Server %d : ignore %ld entries, plt:%ld, pli:%ld, "
                 "commitIndex:%ld lliInMsg:%llu lli:%llu\n",
                 localServer_->serverId, msg->entries_size(), msg->prevlogterm(),
@@ -2293,7 +2293,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
           ++index;
           const LogEntry &entry = *it;
 
-          easy_warn_log(
+          easy_info_log(
               "Server %d : parse entries index:%ld, entry.term:%ld, "
               "entry.index:%ld, lli:%ld\n",
               localServer_->serverId, index, entry.term(), entry.index(),
@@ -2307,7 +2307,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
                 (en.term() == entry.term() || en.optype() == kMock)) {
               /* The duplicate log entry, that has already received. */
               dupcnt++;
-              easy_warn_log(
+              easy_info_log(
                   "Server %d : duplicate log entry, ignore, entry.term:%ld, "
                   "entry.index:%ld, optype(%ld)\n",
                   localServer_->serverId, entry.term(), entry.index(), en.optype());
@@ -2335,7 +2335,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
         int msgEntrieSize = msg->entries_size();
         msg->mutable_entries()->DeleteSubrange(0, dupcnt);
         assert(msg->entries_size() == (msgEntrieSize - dupcnt));
-        easy_warn_log(
+        easy_info_log(
             "Server %d : Duplicate entrys count %d, remaining entries count %d",
             localServer_->serverId, dupcnt, msg->entries_size());
         if (msg->entries_size() > 0) {
@@ -2379,7 +2379,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
           if (entry.optype() == kConfigureChange) {
             prepareConfigureChangeEntry_(entry, msg, true);
           }
-        easy_warn_log(
+        easy_info_log(
             "Server %d : Get log from cache, beginIndex(%llu) endIndex(%llu) "
             "term(%llu)\n",
             localServer_->serverId, node->beginIndex, node->endIndex,
@@ -2401,7 +2401,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
         applyConfigureChangeNoLock_(ccMgr_.preparedIndex);
         if (ccMgr_.needNotify != 1) ccMgr_.clear();
       }
-      easy_warn_log("Server %d : Follower commitIndex change from %ld to %ld\n",
+      easy_info_log("Server %d : Follower commitIndex change from %ld to %ld\n",
                     localServer_->serverId, commitIndex_.load(), msg->commitindex());
       commitIndex_ = msg->commitindex();
       assert(commitIndex_ <= log_->getLastLogIndex());
@@ -2419,10 +2419,10 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   }
 
   if (tryFillFollowerMeta_(rsp->mutable_cientries()))
-    easy_warn_log("Server %d : msgId(%llu) tryFillFollowerMeta\n",
+    easy_info_log("Server %d : msgId(%llu) tryFillFollowerMeta\n",
                   localServer_->serverId);
 
-  easy_warn_log("Server %d : msgId(%llu) onAppendLog end, is_success %d, current commitIndex_ %llu\n",
+  easy_info_log("Server %d : msgId(%llu) onAppendLog end, is_success %d, current commitIndex_ %llu\n",
                 localServer_->serverId, msg->msgid(), rsp->issuccess(), commitIndex_.load());
   return 0;
 }
@@ -2556,7 +2556,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
           if (server->matchIndex > commitIndex_) tryUpdateCommitIndex_();
         }
 
-        easy_warn_log(
+        easy_info_log(
             "Server %d : msgId(%llu) AppendLog to server %d success, "
             "matchIndex(old:%llu,new:%llu) and nextIndex(old:%llu,new:%llu) "
             "have changed\n",
@@ -2568,7 +2568,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         // match index is set to 0, now we set it right, so when no log is
         // replicated, match index will still be right
         server->matchIndex = msg->lastlogindex();
-        easy_warn_log(
+        easy_info_log(
             "Server %d : msgId(%llu) AppendLog to server %d success, this is a "
             "heartbeat responce, set match index from 0 to %llu. "
             "nextIndex(%llu) msg(lli:%llu term:%llu)\n",
@@ -2580,7 +2580,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
          * We receive a heartbeat responce, before we commit any logEntry in
          * this term. There must be some bug, or misorder msg.
          */
-        easy_warn_log(
+        easy_info_log(
             "Server %d : msgId(%llu) AppendLog to server %d success, skip "
             "because this is a heartbeat responce. nextIndex(%llu) "
             "msg(lli:%llu term:%llu)\n",
@@ -2613,7 +2613,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
                       localServer_->serverId);
       }
     } else if (msg->has_ignorecheck() && msg->ignorecheck()) {
-      easy_warn_log(
+      easy_info_log(
           "Server %d : msgId(%llu) AppendLog to server %d without check\n",
           localServer_->serverId, msg->msgid(), msg->serverid());
       if (server->isLearner) appendLogToServer(std::move(wserver), false);
@@ -3182,7 +3182,7 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
         server->matchIndex != 0 && mode == NormalMode && lastIndex != 0) {
       server->nextIndex = lastIndex + 1;
       msg->set_nocache(false);
-      easy_warn_log(
+      easy_info_log(
           "Server %d : update server %d 's nextIndex(old:%llu,new:%llu)\n",
           localServer_->serverId, server->serverId, nextIndex,
           server->nextIndex.load());
@@ -3242,7 +3242,7 @@ int Paxos::tryUpdateCommitIndex_() {
 
     /* commit dependency case */
     if (optype == kCommitDep) {
-      easy_warn_log(
+      easy_info_log(
           "Server %d : index %ld is kCommitDep, check lastNonCommitDepIndex "
           "%llu.\n",
           localServer_->serverId, newCommitIndex,
@@ -3267,7 +3267,7 @@ int Paxos::tryUpdateCommitIndex_() {
     log_->forceUpdateAppliedIndex(newCommitIndex);
   }
 
-  easy_warn_log("Server %d : Leader commitIndex change from %ld to %ld\n",
+  easy_info_log("Server %d : Leader commitIndex change from %ld to %ld\n",
                 localServer_->serverId, commitIndex_.load(), newCommitIndex);
   commitIndex_ = newCommitIndex;
 
@@ -3569,7 +3569,7 @@ void Paxos::heartbeatCallback(std::weak_ptr<RemoteServer> wserver) {
 
   Paxos *paxos = server->paxos;
 
-  easy_warn_log("Server %d : send heartbeat msg to server %ld\n",
+  easy_info_log("Server %d : send heartbeat msg to server %ld\n",
                 paxos->getLocalServer()->serverId, server->serverId);
   paxos->appendLogToServer(wserver, true, true);
 }
@@ -3665,7 +3665,7 @@ void Paxos::epochTimerCallback() {
   uint64_t forceMinEpoch = config_->forceMin(&Server::getLastAckEpoch);
   uint64_t quorumEpoch = config_->quorumMin(&Server::getLastAckEpoch);
 
-  easy_warn_log(
+  easy_info_log(
       "Server %d : Epoch task currentEpoch(%llu) quorumEpoch(%llu) "
       "forceMinEpoch(%llu)\n",
       localServer_->serverId, currentEpoch_.load(), quorumEpoch, forceMinEpoch);
@@ -3758,7 +3758,7 @@ void Paxos::doPurgeLog(purgeLogArgType *arg) {
     purgeIndex = arg->index < arg->paxos->getCommitIndex()
                      ? arg->index
                      : arg->paxos->getCommitIndex();
-  easy_warn_log("Server %d : doPurgeLog purge index %ld\n",
+  easy_info_log("Server %d : doPurgeLog purge index %ld\n",
                 arg->paxos->localServer_->serverId, purgeIndex);
   arg->paxos->getLog()->truncateForward(purgeIndex);
 }
@@ -3814,7 +3814,7 @@ int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
     return 0;
   }
   minMatchIndex_ = collectMinMatchIndex(cis, local, forceIndex);
-  easy_warn_log(
+  easy_info_log(
       "Server %d : Prepare to purge log to %s, update minMatchIndex %ld\n",
       localServer_->serverId, local ? "local" : "cluster", minMatchIndex_);
   /* leader */

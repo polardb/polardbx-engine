@@ -842,9 +842,10 @@ bool start_slave_cmd(THD *thd) {
 err:
   channel_map.unlock();
 
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
-         thd->m_main_security_ctx.user().str,
-         thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
+  if (!res)
+    LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
+          thd->m_main_security_ctx.user().str,
+          thd->m_main_security_ctx.host_or_ip().str, thd->query().str);
   return res;
 }
 
@@ -9328,6 +9329,9 @@ int stop_slave(THD *thd, Master_info *mi, bool net_report, bool for_one_channel,
   } else if (net_report && for_one_channel)
     my_ok(thd);
 
+  LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
+         thd->m_main_security_ctx.user().str,
+         thd->m_main_security_ctx.host_or_ip().str, thd->query().str);
   return 0;
 }
 
@@ -9540,6 +9544,10 @@ int reset_slave(THD *thd, Master_info *mi, bool reset_all) {
   }
 
 err:
+  if (!error)
+    LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
+           thd->m_main_security_ctx.user().str,
+           thd->m_main_security_ctx.host_or_ip().str, thd->query().str);
   return error;
 }
 

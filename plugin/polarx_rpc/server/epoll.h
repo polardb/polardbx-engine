@@ -349,17 +349,17 @@ class CmtEpoll final {
 
         std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
         if (plugin_info.plugin_info != nullptr) {
-          if (0 == iret)
-            my_plugin_log_message(
-                &plugin_info.plugin_info, MY_WARNING_LEVEL,
-                "MtEpoll bind worker thread(tid:%lu) %u:%u(%u,%u) to CPU %d.",
-                tid, group_id_, thread_id, base_thread, epoll_wait, affinity);
-          else
+          if (0 != iret)
             my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                                   "MtEpoll bind worker thread(tid:%lu) "
                                   "%u:%u(%u,%u) to CPU %d failed. %d",
                                   tid, group_id_, thread_id, base_thread,
                                   epoll_wait, affinity, iret);
+          // else
+          //   my_plugin_log_message(
+          //       &plugin_info.plugin_info, MY_INFORMATION_LEVEL,
+          //       "MtEpoll bind worker thread(tid:%lu) %u:%u(%u,%u) to CPU %d.",
+          //       tid, group_id_, thread_id, base_thread, epoll_wait, affinity);
         }
       }
     } else {
@@ -369,19 +369,19 @@ class CmtEpoll final {
 
       std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
       if (plugin_info.plugin_info != nullptr) {
-        if (0 == iret)
-          my_plugin_log_message(
-              &plugin_info.plugin_info, MY_WARNING_LEVEL,
-              "MtEpoll bind%s worker thread(tid:%lu) %u:%u(%u,%u) to CPUs %s.",
-              base_thread ? "" : " dynamic", tid, group_id_, thread_id,
-              base_thread, epoll_wait, cores_str_.c_str());
-        else
+        if (0 != iret)
           my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                                 "MtEpoll bind%s worker thread(tid:%lu) "
                                 "%u:%u(%u,%u) to CPUs %s failed. %d",
                                 base_thread ? "" : " dynamic", tid, group_id_,
                                 thread_id, base_thread, epoll_wait,
                                 cores_str_.c_str(), iret);
+        // else
+        //   my_plugin_log_message(
+        //       &plugin_info.plugin_info, MY_INFORMATION_LEVEL,
+        //       "MtEpoll bind%s worker thread(tid:%lu) %u:%u(%u,%u) to CPUs %s.",
+        //       base_thread ? "" : " dynamic", tid, group_id_, thread_id,
+        //       base_thread, epoll_wait, cores_str_.c_str());
       }
     }
   }

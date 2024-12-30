@@ -810,7 +810,7 @@ const char *internal_tmp_consensus_log_level_names[] = {
 static Sys_var_enum Sys_consensus_log_level(
     "consensus_log_level", "consensus log level",
     GLOBAL_VAR(opt_consensus_log_level), CMD_LINE(OPT_ARG),
-    internal_tmp_consensus_log_level_names, DEFAULT(0), NO_MUTEX_GUARD,
+    internal_tmp_consensus_log_level_names, DEFAULT(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_log_level));
 
 static Sys_var_ulonglong Sys_consensus_check_commit_index_interval(

@@ -297,14 +297,16 @@ void easy_connection_destroy(easy_connection_t *c)
     // autoreconn
     if (c->auto_reconn && eio->stoped == 0) {
         c->status = EASY_CONN_AUTO_CONN;
-        double                  t = c->reconn_time / 1000.0 * (1 << c->reconn_fail);
+        const int tmp_offset = (0 <= c->reconn_fail && c->reconn_fail <= 16) ? c->reconn_fail : 16;
+        double                  t = c->reconn_time / 1000.0 * (1 << tmp_offset);
 
         if (t > 30) t = 30;
-
-        if (c->reconn_fail < 16) c->reconn_fail ++;
-
+        c->reconn_fail++;
         t = ((c->client && c->client->timeout) ? c->client->timeout : EASY_CLIENT_DEFAULT_TIMEOUT) / 1000.0;
-        easy_warn_log("%s reconn_time: %f, reconn_fail: %d\n", easy_connection_str(c), t, c->reconn_fail);
+        if (c->reconn_fail % 10 == 0)
+            easy_warn_log("%s reconn_time: %f, reconn_fail: %d\n", easy_connection_str(c), t, c->reconn_fail);
+        else
+            easy_info_log("%s reconn_time: %f, reconn_fail: %d\n", easy_connection_str(c), t, c->reconn_fail);
         ev_timer_set(&c->timeout_watcher, 0.0, t);
         ev_timer_again(c->loop, &c->timeout_watcher);
         return;

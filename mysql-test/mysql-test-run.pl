@@ -282,6 +282,7 @@ our @DEFAULT_SUITES = qw(
   perfschema
   query_rewrite_plugins
   rpl_gtid
+  rpl_gtid_no_xpaxos
   secondary_engine
   service_status_var_registration
   service_sys_var_registration

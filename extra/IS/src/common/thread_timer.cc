@@ -214,7 +214,7 @@ void ThreadTimer::timerCallbackInternal(struct ev_loop *loop, ev_timer *w,
     double t;
     if (tt->getAndSetStage() == 0) {
       t = tt->getStageExtraTime();
-      easy_warn_log("ThreadTimer change stage from 0 to 1, time:%lf, "
+      easy_system_log("ThreadTimer change stage from 0 to 1, time:%lf, "
                     "maxBackoffTime(%lf), extraTime:%lf",
                     tt->getTime(), tt->getBackoffTimeout(), tt->getStageExtraTime());
     } else {

@@ -1205,6 +1205,11 @@ end:
   */
   if (!ret)
     (void)RUN_HOOK(binlog_transmit, after_reset_master, (thd, 0 /* flags */));
+
+  if (!ret)
+    LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
+           thd->m_main_security_ctx.user().str,
+           thd->m_main_security_ctx.host_or_ip().str, thd->query().str);
   return ret;
 }
 

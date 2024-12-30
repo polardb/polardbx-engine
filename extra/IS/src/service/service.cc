@@ -238,7 +238,7 @@ int Service::process(easy_request_t *r, void *args) {
   }
 
   if (updateRunning && ++Service::running >= Service::workThreadCnt)
-    easy_warn_log("Almost out of workers total:%ld, running:%ld\n",
+    easy_info_log("Almost out of workers total:%ld, running:%ld\n",
                   Service::workThreadCnt, Service::running.load());
 
   /* Deal with send fail or Async Event */

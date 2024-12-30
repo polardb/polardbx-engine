@@ -155,7 +155,8 @@ class CtcpConnection final : public CepollCallback {
 
   inline void tcp_info(int err, const char *what = nullptr,
                        const char *extra = nullptr) {
-    tcp_log(MY_INFORMATION_LEVEL, err, what, extra);
+    // do nothing
+    // tcp_log(MY_INFORMATION_LEVEL, err, what, extra);
   }
 
   inline void tcp_warn(int err, const char *what = nullptr,

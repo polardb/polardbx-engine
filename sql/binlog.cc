@@ -6252,7 +6252,7 @@ int MYSQL_BIN_LOG::purge_logs(const char *to_log, bool included,
   // truncate consensus log file index
   file_name = std::string(log_info.log_file_name);
   consensus_log_manager.get_log_file_index()->truncate_before(file_name);
-  xp::info(ER_XP_0) << "binlog will be purged before " << log_info.log_file_name;
+  xp::system(ER_XP_0) << "binlog will be purged before " << log_info.log_file_name;
 
   DBUG_EXECUTE_IF("crash_purge_before_update_index_after_truncate",
                   DBUG_SUICIDE(););

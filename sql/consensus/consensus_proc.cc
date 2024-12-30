@@ -95,7 +95,7 @@ bool Sql_cmd_consensus_proc_force_single_mode::pc_execute(THD *thd) {
   int res = 0;
   if (!consensus_ptr) return false;
   res = consensus_ptr->forceSingleLeader();
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -120,7 +120,7 @@ bool Sql_cmd_consensus_proc_force_learner_node::pc_execute(THD *thd) {
   int res = 0;
   if (!consensus_ptr) return false;
   res = consensus_ptr->forceSingleLearner();
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -402,7 +402,7 @@ bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
     res = consensus_ptr->leaderTransfer(node_id);
   }
 
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
 
@@ -804,7 +804,7 @@ bool Sql_cmd_consensus_proc_local_purge_log::pc_execute(THD *thd) {
           m_list->front());
 
   res = consensus_ptr->forcePurgeLog(true /* local */, index);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -837,7 +837,7 @@ bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
           m_list->front());
 
   res = consensus_log_manager.purge_log(index);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)

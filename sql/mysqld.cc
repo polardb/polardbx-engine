@@ -3773,9 +3773,11 @@ extern "C" void *signal_hand(void *arg [[maybe_unused]]) {
 #ifndef __APPLE__  // Mac OS doesn't have sigwaitinfo.
         if (sig_info.si_pid != getpid())
           LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO, "<via user signal>",
+                 "",
                  server_version, MYSQL_COMPILATION_COMMENT_SERVER);
 #else
         LogErr(SYSTEM_LEVEL, ER_SERVER_SHUTDOWN_INFO, "<via user signal>",
+               "",
                server_version, MYSQL_COMPILATION_COMMENT_SERVER);
 #endif  // __APPLE__
         // Switch to the file log message processing.
@@ -10708,7 +10710,7 @@ bool mysqld_get_one_option(int optid,
     }
   }
 
-  xp::info(ER_XP_0) << "mysqld option: "
+  xp::system(ER_XP_0) << "mysqld option: "
       << "name:" << opt->name << ", value:" << (argument ? argument : "");
 
   switch (optid) {
