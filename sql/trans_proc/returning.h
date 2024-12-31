@@ -36,14 +36,11 @@ class Sql_cmd_trans_proc_returning : public Sql_cmd_trans_proc {
  public:
   /* Used for returning. */
   explicit Sql_cmd_trans_proc_returning(THD *thd, mem_root_deque<Item *> *list,
-                                        const Proc *proc)
-      : Sql_cmd_trans_proc(thd, list, proc) {}
-  /* Used for returning_all. */
-  explicit Sql_cmd_trans_proc_returning(THD *thd, mem_root_deque<Item *> *list,
                                         const Proc *proc,
-                                        const Fixed_item &fixed_item)
+                                        bool is_returning_all)
       : Sql_cmd_trans_proc(thd, list, proc),
-        m_fixed_item(fixed_item) {}
+      m_is_returning_all(is_returning_all) {}
+
   /**
     Implementation of Proc execution body.
 
@@ -67,7 +64,7 @@ class Sql_cmd_trans_proc_returning : public Sql_cmd_trans_proc {
   virtual void send_result(THD *thd, bool error) override;
 
  private:
-  Fixed_item m_fixed_item;
+  bool m_is_returning_all;
 };
 
 class Trans_proc_returning : public Trans_proc_base {
