@@ -240,6 +240,11 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
   return cmmt;
 }
 
+/** Load min active trx id which is cached within trx struct. */
+trx_id_t trx_load_min_active_tid(const trx_t *trx) {
+  return trx->min_active_tid.load();
+}
+
 /** Commit txn memory structure after txn slot mini-transaction commit.
  *
  * @param[in/out]		trx
@@ -264,11 +269,20 @@ void txn_commit_in_memory(trx_t *trx, bool serialised) {
  *
  * @param[in/out]	txn rec
  * @param[in]		increment ref count
+ * @param[in]		optional trx which is used to get local min active tid
  *
  * @retval	txn rw object.
  * */
-txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count) {
+txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count,
+                          const trx_t *optional_trx) {
   txn_rw_t txn_rw;
+  trx_id_t rec_tid = txn_rec->trx_id;
+  ut_ad(rec_tid > 0);
+
+  /** if record tid is less than min active id*/
+  if (optional_trx && rec_tid < trx_load_min_active_tid(optional_trx)) {
+    return txn_rw;
+  }
 
   /** lookup txn slot. */
   bool active = txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD, CCR_SCN);
@@ -301,7 +315,7 @@ txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count) {
   ut_ad(txn_rw.is_active());
 
   txn_rec_t txn_rec = {txn_rw.trx->id, SCN_NULL, txn_rw.undo_ptr, GCN_NULL};
-  return txn_rw_is_active(&txn_rec, do_ref_count);
+  return txn_rw_is_active(&txn_rec, do_ref_count, nullptr);
 }
 
 /** Get active transaction according to trx id and slot.
@@ -318,7 +332,7 @@ txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count) {
   }
 
   txn_rec_t txn_rec = {txn_id.trx_id, SCN_NULL, txn_id.undo_ptr, GCN_NULL};
-  return txn_rw_is_active(&txn_rec, do_ref_count);
+  return txn_rw_is_active(&txn_rec, do_ref_count, nullptr);
 }
 
 /**

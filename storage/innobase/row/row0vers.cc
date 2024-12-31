@@ -270,7 +270,7 @@ static bool row_vers_find_matching(
     delete-marked, because we never start a transaction by
     inserting a delete-marked record. */
     ut_ad(prev_version || !rec_get_deleted_flag(version, comp) ||
-          !lizard::txn_rw_is_active(&clust_txn_rec, false).trx);
+          !lizard::txn_rw_is_active(&clust_txn_rec, false, nullptr).trx);
 
     /* Free version and clust_offsets. */
     mem_heap_free(old_heap);
@@ -506,7 +506,7 @@ static inline txn_rw_t row_vers_impl_x_locked_low(
                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
 
   lizard::row_get_txn_rec(clust_rec, clust_index, clust_offsets, &txn_rec);
-  txn_rw_t txn_rw = lizard::txn_rw_is_active(&txn_rec, true);
+  txn_rw_t txn_rw = lizard::txn_rw_is_active(&txn_rec, true, nullptr);
 
   if (txn_rw.trx == nullptr) {
     /* The transaction that modified or inserted clust_rec is no
@@ -1422,7 +1422,7 @@ void row_vers_build_for_semi_consistent_read(
     if (rec == version) {
       rec_trx_id = version_trx_id;
     }
-    txn_rw = lizard::txn_rw_is_active(&version_txn_rec, false);
+    txn_rw = lizard::txn_rw_is_active(&version_txn_rec, false, nullptr);
     if (!txn_rw.trx) {
     committed_version_trx:
       /* We found a version that belongs to a

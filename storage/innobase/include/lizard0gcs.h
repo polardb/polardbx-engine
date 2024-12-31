@@ -78,9 +78,6 @@ typedef byte gcs_sysf_t;
 /** The page number of GCS system header in lizard tablespace */
 #define GCS_DATA_PAGE_NO 3
 
-/** Initial value of min_active_trx_id */
-#define GCS_DATA_MTX_ID_NULL 0
-
 #ifdef UNIV_PFS_MUTEX
 /* GCS scn list mutex PFS key */
 extern mysql_pfs_key_t scn_list_mutex_key;
@@ -178,10 +175,7 @@ struct gcs_t {
   GCN gcn;
 
   /** The min active trx id */
-  std::atomic<trx_id_t> min_active_trx_id;
-
-  /** min_active_trx has been inited */
-  bool mtx_inited;
+  std::atomic<trx_id_t> min_active_tid;
 
   /** Length of txn undo log segment free list */
   std::atomic<uint64_t> txn_undo_log_free_list_len;
@@ -207,7 +201,12 @@ struct gcs_t {
   /** Serialize gcn persist */
   ib_mutex_t m_gcn_persist_mutex;
 
-  /** New trx commit. */
+  /** Commit by generating all commit number.
+   *
+   * @param[in/out]	trx
+   * @param[in/out]	mtr
+   *
+   * @retval	commit mark */
   commit_mark_t new_commit(trx_t *trx, mtr_t *mtr);
   /** Prepare also generate commit number if has proposal, it only
    *  produce gcn, and left scn until real commit.
@@ -266,13 +265,13 @@ extern bool gcs_persist_gcn();
   Modify the min active trx id
 
   @param[in]      the add/removed trx */
-extern void gcs_mod_min_active_trx_id(trx_t *trx);
+extern void gcs_mod_min_active_tid(trx_t *trx);
 
 /**
   Get the min active trx id
 
   @retval         the min active id in trx_sys. */
-extern trx_id_t gcs_load_min_active_trx_id();
+extern trx_id_t gcs_load_min_active_tid();
 
 /**
   In MySQL 8.0:

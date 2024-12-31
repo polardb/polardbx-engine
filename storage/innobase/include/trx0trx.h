@@ -1202,6 +1202,9 @@ struct trx_t {
 
   /** Lizard-3.0: true if the finished state is rollback */
   bool is_rollback;
+
+  /** Cache a min active trx id locally. */
+  std::atomic<trx_id_t> min_active_tid{0};
 };
 
 #ifndef UNIV_HOTBACKUP

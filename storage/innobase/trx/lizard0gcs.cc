@@ -95,11 +95,9 @@ void gcs_init() {
   mutex_create(LATCH_ID_GCN_ORDER, &gcs->m_gcn_order_mutex);
   mutex_create(LATCH_ID_GCN_PERSIST, &gcs->m_gcn_persist_mutex);
 
-  gcs->min_active_trx_id.store(GCS_DATA_MTX_ID_NULL);
+  gcs->min_active_tid.store(0);
 
   gcs->m_persisted_gcn.store(0);
-
-  gcs->mtx_inited = true;
 
   return;
 }
@@ -159,6 +157,12 @@ proposal_mark_t gcs_t::new_prepare(trx_t *trx, mtr_t *mtr) {
   return {gtuple.gcn, gtuple.csr};
 }
 
+/** Commit by generating all commit number.
+ *
+ * @param[in/out]	trx
+ * @param[in/out]	mtr
+ *
+ * @retval	commit mark */
 commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
   commit_mark_t cmmt;
 
@@ -318,8 +322,6 @@ void gcs_close() {
 
     gcs->csnapshot_mgr.~CSnapshot_mgr();
 
-    gcs->mtx_inited = false;
-
     mutex_free(&gcs->m_scn_list_mutex);
     mutex_free(&gcs->m_gcn_order_mutex);
     mutex_free(&gcs->m_gcn_persist_mutex);
@@ -430,11 +432,11 @@ gcn_t gcs_load_gcn() {
   Modify the min active trx id
 
   @param[in]      the removed trx */
-void gcs_mod_min_active_trx_id(trx_t *trx) {
+void gcs_mod_min_active_tid(trx_t *trx) {
   trx_t *min_active_trx = NULL;
 
   ut_ad(trx != NULL);
-  ut_ad(gcs->mtx_inited);
+  ut_ad(gcs != nullptr);
   /* Must hold the trx sys mutex */
   ut_ad(trx_sys_mutex_own() || srv_is_being_started);
 
@@ -445,31 +447,32 @@ void gcs_mod_min_active_trx_id(trx_t *trx) {
      for temporary table update. */
   ut_ad((trx->read_only ||
          (trx->rsegs.m_redo.rseg == NULL && trx->rsegs.m_txn.rseg == NULL)) ||
-        gcs->min_active_trx_id.load() <= trx->id);
+        gcs->min_active_tid.load() <= trx->id);
 
 #ifdef UNIV_DEBUG
   /** Only myself modify mtx id, so delay to hold mtx mutex */
-  trx_id_t old_min_active_id = gcs->min_active_trx_id.load();
+  trx_id_t old_min_active_tid = gcs->min_active_tid.load();
 #endif
 
   min_active_trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
 
-  trx_id_t min_id = min_active_trx == nullptr
-                        ? trx_sys->next_trx_id_or_no.load()
-                        : min_active_trx->id;
+  trx_id_t min_tid = min_active_trx == nullptr
+                         ? trx_sys->next_trx_id_or_no.load()
+                         : min_active_trx->id;
 
-  gcs->min_active_trx_id.store(min_id);
+  gcs->min_active_tid.store(min_tid);
+  trx->min_active_tid.store(min_tid);
 
-  ut_ad(old_min_active_id <= gcs->min_active_trx_id.load());
+  ut_ad(old_min_active_tid <= gcs->min_active_tid.load());
 }
 
 /**
   Get the min active trx id
 
   @retval         the min active id in trx_sys. */
-trx_id_t gcs_load_min_active_trx_id() {
+trx_id_t gcs_load_min_active_tid() {
   trx_id_t ret;
-  ret = gcs->min_active_trx_id.load();
+  ret = gcs->min_active_tid.load();
   return ret;
 }
 

@@ -30,7 +30,7 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 
 #include "hash0hash.h"
 
-#include "lizard0iv.h"
+#include "lizard0tcn0types.h"
 #include "lizard0mon.h"
 #include "lizard0scn.h"
 #include "lizard0scn0types.h"
@@ -106,54 +106,9 @@ typedef struct tcn_t {
 
 static_assert(sizeof(tcn_t) == 24, "tcn_t sizeof must be 24 bytes.");
 
-/** Transaction commit information */
-typedef struct tcn_node_t {
- public:
-  /** List node */
-  UT_LIST_NODE_T(tcn_node_t) list;
-  /** Hash node */
-  hash_node_t hash;
-  /** TCN Cache Content */
-  tcn_t tcn;
+using Cache_tcn = Cache_interface<trx_id_t, tcn_t>;
 
-  explicit tcn_node_t() : tcn() {
-    hash = nullptr;
-    list.prev = nullptr;
-    list.next = nullptr;
-  }
-
-  trx_id_t key() const { return tcn.trx_id; }
-  hash_node_t &hash_node() { return hash; }
-
-  void assign(const tcn_t &_tcn) {
-    tcn = _tcn;
-  }
-
-  void copy_to(tcn_t &tcn_) const {
-    tcn_ = tcn;
-  }
-} tcn_node_t;
-
-#define LRU_TCN_SIZE 20
-#define ARRAY_TCN_SIZE 50
-#define SESSION_TCN_SIZE 2000
-#define GLOBAL_TCN_SIZE (1024 * 1024 * 4)
-
-using Cache_tcn = Cache_interface<tcn_node_t, trx_id_t, tcn_t>;
-
-using Lru_tcn = Lru_list<tcn_node_t, trx_id_t, tcn_t, LRU_TCN_SIZE>;
-
-using Array_tcn = Random_array<tcn_node_t, trx_id_t, tcn_t>;
-
-using Session_tcn = Lru_list<tcn_node_t, trx_id_t, tcn_t, SESSION_TCN_SIZE>;
-
-using Global_tcn = Atomic_random_array<tcn_node_t, trx_id_t, tcn_t>;
-
-template bool iv_hash_insert(iv_hash_t<tcn_node_t, LRU_TCN_SIZE> *hash,
-                             tcn_node_t *elem);
-
-template bool iv_hash_insert(iv_hash_t<tcn_node_t, SESSION_TCN_SIZE> *hash,
-                             tcn_node_t *elem);
+using Global_tcn = Atomic_linear_array<trx_id_t, tcn_t>;
 
 /** Search from tcn cache and overwrite the txn rec include
  * [UBA flag, scn, gcn]

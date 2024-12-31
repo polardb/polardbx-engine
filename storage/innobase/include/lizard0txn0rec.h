@@ -156,6 +156,8 @@ typedef txn_lookup_t::Status txn_status_t;
 
 namespace lizard {
 
+class Vision;
+
 #if defined UNIV_DEBUG
 /** Confirm txn rec validation
  * @param[in]	txn rec
@@ -242,6 +244,22 @@ extern bool txn_rec_get_master_by_lookup(txn_rec_t *txn_rec,
 */
 extern bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
                                        mtr_t *txn_mtr);
+/** Optimistic vision see only through trx id, and try to cleanout if hit tcn
+ *  cache.
+ *
+ *  @param[in/out]	txn rec
+ *  @param[in]		used in cleanout
+ *  @param[in]		user record
+ *  @param[in]		index
+ *  @param[in]		rec_get_offsets(rec, index)
+ *  @param[in]		vision
+ *
+ *  @retval	true	see
+ *  @retval	false	not sure
+ */
+extern bool txn_rec_try_see(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                            const rec_t *rec, const dict_index_t *index,
+                            const ulint *offsets, Vision *vision);
 
 }  // namespace lizard
 

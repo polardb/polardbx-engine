@@ -1077,7 +1077,8 @@ set on the record, sets one for it.
 @param[in]  index     index of record
 @param[in]  offsets   rec_get_offsets(rec, index) */
 void lock_rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *rec,
-                                   dict_index_t *index, const ulint *offsets);
+                                   dict_index_t *index, const ulint *offsets,
+                                   const trx_t *optional_trx);
 
 /** Removes a record lock request, waiting or granted, from the queue. */
 void lock_rec_discard(lock_t *in_lock); /*!< in: record lock object: all

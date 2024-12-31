@@ -114,12 +114,12 @@ void gp_sys_destroy() {
      blocked to commit by reference, since we will build the blocking
      relationship.
 */
-std::pair<trx_t *, trx_state_t> trx_rw_is_prepared(trx_id_t trx_id) {
+std::pair<trx_t *, trx_state_t> trx_rw_is_prepared(trx_id_t trx_id,
+                                                   const trx_t *optional_trx) {
   trx_t *trx = nullptr;
   trx_state_t state = TRX_STATE_NOT_STARTED;
 
-  auto &shard = trx_sys->get_shard_by_trx_id(trx_id);
-  if (trx_id < shard.active_rw_trxs.peek().min_id()) {
+  if (optional_trx && trx_id < trx_load_min_active_tid(optional_trx)) {
     return std::make_pair(nullptr, TRX_STATE_COMMITTED_IN_MEMORY);
   }
 
@@ -490,10 +490,15 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
 
   ut_ad(vision->is_asof_gcn());
 
-retry:
   txn_rec_t txn_rec;
-  lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
+  row_get_txn_rec(rec, index, offsets, &txn_rec);
 
+  /** Try to see optimistically. */
+  if (txn_rec_try_see(&txn_rec, pcur, rec, index, offsets, vision)) {
+    return true;
+  }
+
+retry:
   txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
                              vision->visible_by());
 
@@ -512,7 +517,8 @@ retry:
     ut_ad(txn_rec.gcn == GCN_NULL);
 
     /** Find the prepared trx to wait, others should judge visible directly */
-    std::pair<trx_t *, trx_state_t> result = trx_rw_is_prepared(txn_rec.trx_id);
+    std::pair<trx_t *, trx_state_t> result =
+        trx_rw_is_prepared(txn_rec.trx_id, trx);
 
     switch (result.second) {
         /** 2.1. Still active, judge it for whether itself or not */

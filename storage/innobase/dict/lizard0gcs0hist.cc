@@ -232,7 +232,7 @@ scn_transform_result_t try_scn_transform_by_utc(const ulint utc) {
 static commit_snap_t make_commit_snapshot() {
   commit_snap_t snap;
   /** Step 1: Get least active tid. */
-  snap.up_limit_tid = gcs_load_min_active_trx_id();
+  snap.up_limit_tid = gcs_load_min_active_tid();
   /** Step 2: Get utc. */
   snap.utc_sec = ut_time_system_us() / 1000000;
 

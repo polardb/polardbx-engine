@@ -670,4 +670,66 @@ bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
   return txn_lookup.undo_missing(flashback_area);
 }
 
+/**
+  Clean out the record when hit tcn cache.
+  Attempt to collect the cursor, and it will be cleaned out when the query
+  finishes.
+
+  @param[in/out]  txn_rec	  txn record
+  @param[in]      pcur      btr_pcur
+  @param[in]      rec       record
+  @param[in]      index     index
+  @param[in]      offsets   rec_get_offsets(rec)
+*/
+static void txn_rec_cleanout_when_hit(txn_rec_t *txn_rec, btr_pcur_t *pcur,
+                                      const rec_t *rec,
+                                      const dict_index_t *index,
+                                      const ulint *offsets) {
+  bool cache_hit = false;
+  txn_status_t txn_status;
+
+  ut_ad(txn_rec->is_active());
+
+  /** Search tcn cache */
+  cache_hit = trx_search_tcn(txn_rec, &txn_status);
+  if (cache_hit) {
+    ut_ad(txn_rec->is_whole_committed());
+    /** Collect record to cleanout later. */
+    scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+    return;
+  }
+  return;
+}
+
+/** Optimistic vision see only through trx id, and try to cleanout if hit tcn
+ *  cache.
+ *
+ *  @param[in/out]	txn rec
+ *  @param[in]		used in cleanout
+ *  @param[in]		user record
+ *  @param[in]		index
+ *  @param[in]		rec_get_offsets(rec, index)
+ *  @param[in]		vision
+ *
+ *  @retval	true	see
+ *  @retval	false	not sure
+ */
+bool txn_rec_try_see(txn_rec_t *txn_rec, btr_pcur_t *pcur, const rec_t *rec,
+                     const dict_index_t *index, const ulint *offsets,
+                     Vision *vision) {
+  bool see = false;
+  trx_id_t trx_id;
+
+  trx_id = txn_rec->trx_id;
+  ut_ad(trx_id > 0 && trx_id < TRX_ID_MAX);
+
+  see = vision->sees(trx_id);
+
+  if (see && txn_rec->is_active()) {
+    txn_rec_cleanout_when_hit(txn_rec, pcur, rec, index, offsets);
+  }
+
+  return see;
+}
+
 }  // namespace lizard

@@ -289,7 +289,6 @@ SET(INNOBASE_SOURCES
   trx/lizard0txn.cc
   trx/lizard0txn0rec.cc
   trx/lizard0undo0types.cc
-  ut/lizard0iv.cc
   dict/lizard0dict0mem.cc
   data/lizard0data0data.cc
   mtr/lizard0mtr0log.cc

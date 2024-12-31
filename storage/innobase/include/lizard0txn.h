@@ -352,10 +352,12 @@ void txn_commit_in_memory(trx_t *trx, bool serialised);
  *
  * @param[in/out]	txn rec
  * @param[in]		increment ref count
+ * @param[in]		optional trx which is used to get local min active tid
  *
  * @retval	txn rw object.
  * */
-txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count);
+txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count,
+                          const trx_t *optional_trx);
 
 /** Get active transaction according to txn rw.
  *
@@ -412,6 +414,9 @@ bool trx_is_txn_rseg_assigned(const trx_t *trx);
   Whether the txn undo log has modified.
 */
 bool trx_is_txn_rseg_updated(const trx_t *trx);
+
+/** Load min active trx id which is cached within trx struct. */
+extern trx_id_t trx_load_min_active_tid(const trx_t *trx);
 
 /**
   Get a TXN rseg by XID.

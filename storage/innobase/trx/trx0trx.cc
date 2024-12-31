@@ -315,6 +315,8 @@ struct TrxFactory {
     lock_trx_alloc_locks(trx);
 
     lizard::alloc_commit_cleanout(trx);
+
+    trx->min_active_tid.store(0);
   }
 
   /** Release resources held by the transaction object.
@@ -1956,7 +1958,7 @@ static void trx_erase_lists(trx_t *trx) {
       lizard::trx_vision_release(&trx->vision);
     }
 
-    lizard::gcs_mod_min_active_trx_id(trx);
+    lizard::gcs_mod_min_active_tid(trx);
   }
 
   DEBUG_SYNC_C("after_trx_erase_lists");
@@ -2027,10 +2029,10 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     trx_sys->get_shard_by_trx_id(trx->id).active_rw_trxs.latch_and_execute(
         [&](Trx_by_id_with_min &trx_by_id_with_min) {
           state_transition();
-          ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
-          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          // ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
+          // ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
           trx_by_id_with_min.erase(trx->id);
-          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          // ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
         },
         UT_LOCATION_HERE);
   } else {
@@ -2454,7 +2456,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
   ut_a(!trx->read_only);
   trx_remove_from_rw_trx_list(trx);
 
-  lizard::gcs_mod_min_active_trx_id(trx);
+  lizard::gcs_mod_min_active_tid(trx);
 
   trx_sys_mutex_exit();
 

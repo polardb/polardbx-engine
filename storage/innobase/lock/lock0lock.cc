@@ -265,6 +265,11 @@ bool lock_clust_rec_cons_read_sees(
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
+  /** Try to see optimistically. */
+  if (lizard::txn_rec_try_see(&txn_rec, pcur, rec, index, offsets, vision)) {
+    return true;
+  }
+
   lizard::txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
                                      vision->visible_by());
 
@@ -1002,36 +1007,38 @@ The difficulties to keep in mind here:
 */
 static bool can_older_trx_be_still_active(trx_id_t max_old_active_id) {
   /** Lizard: We have maintained min active id globally. */
-  return lizard::gcs_load_min_active_trx_id() <= max_old_active_id;
+  return lizard::gcs_load_min_active_tid() <= max_old_active_id;
 
-  if (mutex_enter_nowait(&trx_sys->mutex) != 0) {
-    ut_ad(!trx_sys_mutex_own());
-    /* The mutex is currently locked by somebody else. Instead of wasting time
-    on spinning and waiting to acquire it, we loop over the shards and check if
-    any of them contains a value in the range (-infinity,max_old_active_id].
-    NOTE: Do not be tempted to "cache" the minimum, until you also enforce that
-    transactions are inserted to shards in a monotone order!
-    Current implementation heavily depends on the property that even if we put
-    a trx with smaller id to any structure later, it could not have modified a
-    row the caller saw earlier. */
-    static_assert(TRX_SHARDS_N < 1000, "The loop should be short");
-    for (auto &shard : trx_sys->shards) {
-      if (shard.active_rw_trxs.peek().min_id() <= max_old_active_id) {
-        return true;
-      }
-    }
-    return false;
-  }
-  ut_ad(trx_sys_mutex_own());
-  const trx_t *trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
-  if (trx == nullptr) {
-    trx_sys_mutex_exit();
-    return false;
-  }
-  assert_trx_in_rw_list(trx);
-  const trx_id_t min_active_now_id = trx->id;
-  trx_sys_mutex_exit();
-  return min_active_now_id <= max_old_active_id;
+  //  if (mutex_enter_nowait(&trx_sys->mutex) != 0) {
+  //    ut_ad(!trx_sys_mutex_own());
+
+  /* The mutex is currently locked by somebody else. Instead of wasting time
+  on spinning and waiting to acquire it, we loop over the shards and check if
+  any of them contains a value in the range (-infinity,max_old_active_id].
+  NOTE: Do not be tempted to "cache" the minimum, until you also enforce that
+  transactions are inserted to shards in a monotone order!
+  Current implementation heavily depends on the property that even if we put
+  a trx with smaller id to any structure later, it could not have modified a
+  row the caller saw earlier. */
+
+  //    static_assert(TRX_SHARDS_N < 1000, "The loop should be short");
+  //    for (auto &shard : trx_sys->shards) {
+  //      if (shard.active_rw_trxs.peek().min_id() <= max_old_active_id) {
+  //        return true;
+  //      }
+  //    }
+  //    return false;
+  //  }
+  //  ut_ad(trx_sys_mutex_own());
+  //  const trx_t *trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
+  //  if (trx == nullptr) {
+  //    trx_sys_mutex_exit();
+  //    return false;
+  //  }
+  //  assert_trx_in_rw_list(trx);
+  //  const trx_id_t min_active_now_id = trx->id;
+  //  trx_sys_mutex_exit();
+  //  return min_active_now_id <= max_old_active_id;
 }
 
 /** Checks if some transaction has an implicit x-lock on a record in a secondary
@@ -5551,7 +5558,8 @@ static void lock_rec_convert_impl_to_expl_for_trx(
 }
 
 void lock_rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *rec,
-                                   dict_index_t *index, const ulint *offsets) {
+                                   dict_index_t *index, const ulint *offsets,
+                                   const trx_t *optional_trx) {
   txn_rw_t txn_rw;
 
   ut_ad(!locksys::owns_exclusive_global_latch());
@@ -5566,7 +5574,7 @@ void lock_rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *rec,
 
     lizard::lock_clust_rec_some_has_impl(rec, index, offsets, &txn_rec);
 
-    txn_rw = lizard::txn_rw_is_active(&txn_rec, true);
+    txn_rw = lizard::txn_rw_is_active(&txn_rec, true, optional_trx);
   } else {
     ut_ad(!dict_index_is_online_ddl(index));
 
@@ -5628,7 +5636,7 @@ dberr_t lock_clust_rec_modify_check_and_lock(
   /* If a transaction has no explicit x-lock set on the record, set one
   for it */
 
-  lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+  lock_rec_convert_impl_to_expl(block, rec, index, offsets, thr_get_trx(thr));
 
   {
     locksys::Shard_latch_guard guard{UT_LOCATION_HERE, block->get_page_id()};
@@ -5733,7 +5741,7 @@ dberr_t lock_sec_rec_read_check_and_lock(
   heap_no = page_rec_get_heap_no(rec);
 
   if (!page_rec_is_supremum(rec)) {
-    lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+    lock_rec_convert_impl_to_expl(block, rec, index, offsets, thr_get_trx(thr));
   }
   {
     locksys::Shard_latch_guard guard{UT_LOCATION_HERE, block->get_page_id()};
@@ -5783,7 +5791,7 @@ dberr_t lock_clust_rec_read_check_and_lock(
   heap_no = page_rec_get_heap_no(rec);
 
   if (heap_no != PAGE_HEAP_NO_SUPREMUM) {
-    lock_rec_convert_impl_to_expl(block, rec, index, offsets);
+    lock_rec_convert_impl_to_expl(block, rec, index, offsets, thr_get_trx(thr));
   }
 
   DEBUG_SYNC_C("after_lock_clust_rec_read_check_and_lock_impl_to_expl");
