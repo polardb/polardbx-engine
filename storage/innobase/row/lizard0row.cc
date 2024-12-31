@@ -525,6 +525,10 @@ void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
   txn_rec->undo_ptr = trx_read_undo_ptr(rec + offset);
   offset += DATA_UNDO_PTR_LEN;
   txn_rec->gcn = trx_read_gcn(rec + offset);
+
+  /** Confirm validation of txn rec. */
+  ut_ad(lizard::txn_rec_validate(txn_rec, index));
+  return;
 }
 
 /**

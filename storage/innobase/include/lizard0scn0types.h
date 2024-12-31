@@ -127,8 +127,8 @@ constexpr gcn_t GCN_TEMP_TAB_REC = 3;
 /** GCN special for index */
 constexpr gcn_t GCN_DICT_REC = 4;
 
-/** SCN special for index upgraded from old version. */
-constexpr scn_t GCN_INDEX_UPGRADE = 5;
+/** GCN special for index upgraded from old version. */
+constexpr gcn_t GCN_INDEX_UPGRADE = 5;
 
 /** The gcn for innodb dynamic metadata */
 constexpr gcn_t GCN_DYNAMIC_METADATA = GCN_MAX;

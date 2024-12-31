@@ -156,6 +156,16 @@ typedef txn_lookup_t::Status txn_status_t;
 
 namespace lizard {
 
+#if defined UNIV_DEBUG
+/** Confirm txn rec validation
+ * @param[in]	txn rec
+ * @param[in]	dict index
+ *
+ * @retval	true	valid */
+extern bool txn_rec_validate(const txn_rec_t *txn_rec,
+                             const dict_index_t *index);
+#endif
+
 /**
   Determine the real trx state.
   Return whether the trx corresponding to the record is active.

@@ -39,38 +39,40 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo.h"
 #include "row0row.h"
 
-/**
- * Determine whether a lookup of the txn is needed based on the different
- * categories of commit number combinations (CCR). If the current txn_rec
- * satisfies the CCR, no further lookup is required. Otherwise, a lookup is
- * needed to fill the txn_rec.
- */
-bool txn_rec_t::need_lookup(ccr_t vision_ccr) {
-  if (lizard::txn_sys_t::instance()->is_special(undo_ptr)) {
-    ut_ad(!undo_ptr_is_active(undo_ptr));
-    return false;
-  }
+namespace lizard {
 
-  if (is_active()) {
-    return true;
-  }
+#if defined UNIV_DEBUG
+/** Confirm txn rec validation
+ * @param[in]	txn rec
+ * @param[in]	dict index
+ *
+ * @retval	true	valid */
+bool txn_rec_validate(const txn_rec_t *txn_rec, const dict_index_t *index) {
+  if (txn_rec->is_null()) return true;
 
-  ut_ad(!undo_ptr_is_active(undo_ptr));
-  switch (vision_ccr) {
-    case CCR_SCN:
-      return (scn == SCN_NULL);
-    case CCR_GCN:
-      return (gcn == GCN_NULL);
-    case CCR_ALL:
-      return (scn == SCN_NULL || gcn == GCN_NULL);
-    case CCR_NONE: /* unreachable */
-    default:
-      ut_ad(0);
-      return false;
+  /** UBA is valid */
+  undo_addr_t undo_addr;
+  undo_decode_undo_ptr(txn_rec->undo_ptr, &undo_addr);
+  ut_a(undo_addr_validate(&undo_addr, index));
+
+  /** Commit number is valid */
+  ut_a(txn_rec->is_committed() || txn_rec->is_active());
+
+  return true;
+}
+#endif
+
+/** Confirm value and print undo address if not true.*/
+template <typename Type>
+static void ut_print(const undo_addr_t &undo_addr, ut::Location loc,
+                     Type value) {
+  if (!value) {
+    lizard_error(ER_LIZARD)
+        << undo_addr.print() << " at file=" << basename(loc.filename)
+        << ", line=" << loc.line;
+    ut_a(0);
   }
 }
-
-namespace lizard {
 
 /**
   Try to read the real scn of given records. Address directly to the
@@ -120,13 +122,13 @@ static bool _txn_slot_read_func(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
       trx_undo_page_get_s_latched_with_hint(page_id, univ_page_size, hint, mtr);
 
   /** transaction tablespace didn't allowed to be truncated */
-  ut_a(undo_page);
+  ut_print(undo_addr, UT_LOCATION_HERE, undo_page);
 
   /** ----------------------------------------------------------*/
   /** Phase 2: Judge the fil page */
   fil_type = fil_page_get_type(undo_page);
   /** The type of undo log segment must be FIL_PAGE_UNDO_LOG */
-  ut_a(fil_type == FIL_PAGE_UNDO_LOG);
+  ut_print(undo_addr, UT_LOCATION_HERE, fil_type == FIL_PAGE_UNDO_LOG);
 
   /** ----------------------------------------------------------*/
   /** Phase 3: judge whether it's undo log header or undo log data */
@@ -143,7 +145,7 @@ static bool _txn_slot_read_func(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
   /** Phase 4: judge whether it's txn undo */
   undo_page_type = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_TYPE);
 
-  ut_a(undo_page_type == TRX_UNDO_TXN);
+  ut_print(undo_addr, UT_LOCATION_HERE, undo_page_type == TRX_UNDO_TXN);
 
   /** ----------------------------------------------------------*/
   /** Phase 5: check the undo segment state */
@@ -151,11 +153,13 @@ static bool _txn_slot_read_func(txn_rec_t *txn_rec, txn_lookup_t *txn_lookup,
   real_trx_state = mach_read_from_2(seg_hdr + TRX_UNDO_STATE);
 
   /** real_trx_state should only be the following states */
-  ut_a(real_trx_state == TRX_UNDO_ACTIVE || real_trx_state == TRX_UNDO_CACHED ||
-       real_trx_state == TRX_UNDO_PREPARED_80028 ||
-       real_trx_state == TRX_UNDO_PREPARED ||
-       real_trx_state == TRX_UNDO_PREPARED_IN_TC ||
-       real_trx_state == TRX_UNDO_TO_PURGE);
+  ut_print(undo_addr, UT_LOCATION_HERE,
+           real_trx_state == TRX_UNDO_ACTIVE ||
+               real_trx_state == TRX_UNDO_CACHED ||
+               real_trx_state == TRX_UNDO_PREPARED_80028 ||
+               real_trx_state == TRX_UNDO_PREPARED ||
+               real_trx_state == TRX_UNDO_PREPARED_IN_TC ||
+               real_trx_state == TRX_UNDO_TO_PURGE);
 
   /** ----------------------------------------------------------*/
   /** Phase 6: The offset (minus TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE)
@@ -282,11 +286,6 @@ undo_corrupted:
   if (!have_mtr) mtr_commit(mtr);
   return false;
 }
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-/*
- */
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
 /**
   Try to lookup the real scn of given records.

@@ -118,6 +118,12 @@ struct slot_addr_t {
     return space_id == space_id_arg && page_no == page_no_arg &&
            offset == offset_arg;
   }
+  const std::string print() const {
+    std::stringstream ss;
+    ss << "Txn Slot Address:[space_id=" << space_id << ",page_no=" << page_no
+       << ",offset=" << offset << "]";
+    return ss.str();
+  }
 };
 
 typedef struct slot_addr_t slot_addr_t;
@@ -214,6 +220,14 @@ struct undo_addr_t {
         state(false),
         csr(CSR_AUTOMATIC),
         is_slave(false) {}
+
+  const std::string print() const {
+    std::stringstream ss;
+    ss << "Undo Block Address:[space_id=" << space_id << ",page_no=" << page_no
+       << ",offset=" << offset << ",state=" << state << ",csr=" << csr
+       << ",slave=" << is_slave << "]";
+    return ss.str();
+  }
 };
 
 typedef struct undo_addr_t undo_addr_t;

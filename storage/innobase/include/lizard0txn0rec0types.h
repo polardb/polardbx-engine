@@ -108,6 +108,11 @@ struct txn_rec_t {
     gcn = GCN_NULL;
   }
 
+  bool is_null() const {
+    return trx_id == 0 && scn == SCN_NULL && undo_ptr == UNDO_PTR_NULL &&
+           gcn == GCN_NULL;
+  }
+
   slot_ptr_t slot() const { return undo_ptr_get_slot(undo_ptr); }
   csr_t csr() const { return undo_ptr_get_csr(undo_ptr); }
   bool is_slave() const { return undo_ptr_is_slave(undo_ptr); }
@@ -119,7 +124,25 @@ struct txn_rec_t {
    * satisfies the CCR, no further lookup is required. Otherwise, a lookup is
    * needed to fill the txn_rec.
    */
-  bool need_lookup(ccr_t vision_ccr);
+  bool need_lookup(ccr_t vision_ccr) {
+    if (is_active()) {
+      return true;
+    }
+
+    ut_ad(!undo_ptr_is_active(undo_ptr));
+    switch (vision_ccr) {
+      case CCR_SCN:
+        return (scn == SCN_NULL);
+      case CCR_GCN:
+        return (gcn == GCN_NULL);
+      case CCR_ALL:
+        return (scn == SCN_NULL || gcn == GCN_NULL);
+      case CCR_NONE: /* unreachable */
+      default:
+        ut_ad(0);
+        return false;
+    }
+  }
 };
 
 #endif
