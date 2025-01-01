@@ -162,7 +162,7 @@ Proc *Trans_proc_backfill_returning::instance() {
   Evoke the sql_cmd object for backfill() proc.
 */
 Sql_cmd *Trans_proc_backfill_returning::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this);
+  return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this, false);
 }
 
 } /* namespace im */
