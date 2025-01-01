@@ -21,7 +21,6 @@
 // #include "my_global.h"
 #include "binlog.h"
 #include "handler.h"
-#include "hash.h"
 #include "xa.h"
 #include "xa_specification.h"
 

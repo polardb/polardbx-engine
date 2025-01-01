@@ -36,13 +36,14 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 
 %if "%{?dist}" == ".alios7"
-BuildRequires: cmake >= 3.8.2, make, autoconf, libstdc++-static, alios7u-2_32-gcc-10-repo
-BuildRequires: gcc >= 10.2.1, gcc-c++ >= 10.2.1, libstdc++-devel >= 10.2.1, binutils >= 2.35
-BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
-BuildRequires: libev-devel, libcurl-devel, libaio-devel, libarchive, ncurses-devel
-BuildRequires: bison, libudev-devel, python-sphinx, procps-ng-devel, rsync
+BuildRequires: alios7u-2_32-gcc-10-repo, python-sphinx
 %endif
 
+BuildRequires: cmake, make, autoconf, libstdc++-static
+BuildRequires: gcc >= 10.2.1, gcc-c++ >= 10.2.1, libstdc++-devel >= 10.2.1, binutils
+BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
+BuildRequires: libev-devel, libcurl-devel, libaio-devel, libarchive, ncurses-devel
+BuildRequires: bison, libudev-devel, procps-ng-devel, rsync
 
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
@@ -77,7 +78,9 @@ echo "__host_vendor" %{?__host_vendor}
 echo "_build_cpu" %{?_build_cpu}
 echo "_build_os" %{?_build_os}
 echo "_build_vendor" %{?_build_vendor}
-cat /etc/redhat-release
+if [-f /etc/redhat-release]; then
+    cat /etc/redhat-release
+fi
 
 
 %build
@@ -88,8 +91,8 @@ cd $OLDPWD/../
     CXX=g++
     CMAKE_BIN=cmake
 %else
-    CC=/opt/rh/devtoolset-10/root/usr/bin/gcc
-    CXX=/opt/rh/devtoolset-10/root/usr/bin/g++
+    CC=/opt/rh/gcc-toolset-10/root/usr/bin/gcc
+    CXX=/opt/rh/gcc-toolset-10/root/usr/bin/g++
     CMAKE_BIN=cmake3
 %endif
 
@@ -103,9 +106,6 @@ cd $OLDPWD/../
 export CC CXX CFLAGS CXXFLAGS CMAKE_BIN
 
 cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
-
-sed -i '486 i export MALLOC_ARENA_MAX=2' scripts/mysqld_safe.sh
-grep "export" scripts/mysqld_safe.sh
 
 $CMAKE_BIN .                            \
 %ifarch aarch64
@@ -121,16 +121,16 @@ $CMAKE_BIN .                            \
   -DWITH_SSL=system                 \
   -DENABLE_EXPERIMENT_SYSVARS=1      \
   -DWITH_JEMALLOC=no                 \
-  -DWITH_ZLIB=system                \
-  -DWITH_ZSTD=system                \
-  -DWITH_LZ4=system                 \
-  -DWITH_LZMA=system                \
-  -DWITH_ICU=system                 \
-  -DWITH_FIDO=system                \
-  -DWITH_EDITLINE=system            \
-  -DWITH_LIBEVENT=system            \
-  -DWITH_RAPIDJSON=system           \
-  -DWITH_RE2=system                 \
+  -DWITH_ZLIB=bundled                \
+  -DWITH_ZSTD=bundled                \
+  -DWITH_LZ4=bundled                 \
+  -DWITH_LZMA=bundled                \
+  -DWITH_ICU=bundled                 \
+  -DWITH_FIDO=bundled                \
+  -DWITH_EDITLINE=bundled            \
+  -DWITH_LIBEVENT=bundled            \
+  -DWITH_RAPIDJSON=bundled           \
+  -DWITH_RE2=bundled                 \
   -DWITH_ROUTER=OFF                  \
   -DWITH_MYISAM_STORAGE_ENGINE=1     \
   -DWITH_INNOBASE_STORAGE_ENGINE=1   \
@@ -163,6 +163,10 @@ cd $OLDPWD/../
 MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
 make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL VERBOSE=1  install
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
+
+tmp_dir=/u01/polardbx_engine_%{release_date}_current
+echo ${tmp_dir}
+strip ${RPM_BUILD_ROOT}${tmp_dir}/bin/mysqld
 
 %clean
 rm -rf $RPM_BUILD_ROOT
