@@ -1,0 +1,131 @@
+--source include/have_binlog_format_row.inc
+ 
+call mtr.add_suppression("Unsafe statement written to the binary log");
+ 
+--disable_warnings
+drop table if exists t1,t2;
+--enable_warnings
+ 
+create table t1(id int, col1 varchar(100))engine =innodb;
+create table t2(id int, col1 varchar(100))engine =innodb;
+insert into t1 values(1, 'xp1');
+insert into t2 select * from t1;
+ 
+#
+#test insert didn't returning any column
+#
+call dbms_trans.backfill("*", "insert into t2 values (10, 'xp10')");
+call dbms_trans.backfill("col1", "insert into t2 values (100, 'xp100')");
+call dbms_trans.backfill("col1, id", "insert into t2 values (1000, 'xp1000')");
+ 
+#
+# test error
+#
+# 1. unsupport command (select)
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "select * from t1");
+ 
+# 2. syntax error
+--error 1064
+call dbms_trans.backfill("*", "uppppdate t1 seet");
+ 
+# 3. unsupport command (update delete .etc)
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "update t1 set col1='xp3' where id = 1");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "delete from t1 where id = 1");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "update t1, t2 set t1.col1=t2.col1 where t1.id = t2.id");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "delete t2 from t1, t2 where t1.id != t2.id");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "update t1, t2, t2 t3 set t2.col1='xp10' where t1.id = t2.id and t1.id = t3.id");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "delete t2 from t1, t2, t2 t3 where t1.id = t2.id and t1.id = t3.id");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "update t1, t2 set t1.col1='xp10', t2.col1='xp10' where t1.id = t2.id");
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "delete t1, t2 from t1, t2 where t1.id = t2.id");
+ 
+ 
+#
+#test insert
+#
+create table t3(id int primary key auto_increment,  col1 int default 1, col2
+                timestamp default '2024-01-01 00:00:01');
+begin;
+call dbms_trans.backfill("*", "insert into t3(id)  values(NULL)");
+call dbms_trans.backfill("*", "insert into t3(id)  values(NULL), (NULL)");
+call dbms_trans.backfill("", "insert into t3(id)  values(NULL)");
+commit;
+select * from t3;
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "insert into t3 select * from t3");
+ 
+#
+#test insert ignore
+#
+call dbms_trans.backfill("*", "insert ignore into t3(id, col1) values (1, 2),(5, 2)");
+call dbms_trans.backfill("id", "insert ignore into t3(id) values(NULL), (NULL),(5)");
+call dbms_trans.backfill("col1", "insert ignore into t3(id, col1) values (6, 3),(5, 4),(7, 7)");
+call dbms_trans.backfill("col1, col2, id", "insert ignore into t3 values (10, 10, '2024-01-01 01:26:01'),(7, 6, '2024-01-01 01:26:01'),(11, 11, '2024-01-01 01:26:01')");
+call dbms_trans.backfill("*", "insert ignore into t3(id, col1) values (21, 2),(21, 3)");
+ 
+select * from t3;
+ 
+ 
+#
+#test explain
+#
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "explain select * from t1");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "explain insert into t3(id)  values(NULL)");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "explain update t1 set col1='xp3' where id = 1");
+ 
+#
+#test view
+#
+CREATE TABLE table_a (id int, value int);
+CREATE TABLE table_b (id int, ta_id int, value int);
+ 
+INSERT INTO table_a VALUES (1, 10);
+INSERT INTO table_a VALUES (2, 20);
+INSERT INTO table_a VALUES (3, 30);
+ 
+INSERT INTO table_b VALUES (1, 1, 100);
+INSERT INTO table_b VALUES (2, 1, 200);
+INSERT INTO table_b VALUES (3, 2, 300);
+INSERT INTO table_b VALUES (4, 2, 400);
+ 
+CREATE VIEW v AS
+    SELECT      a.id a_id, b.id b_id, b.ta_id, a.value v1, b.value v2
+        FROM    table_a a
+            INNER JOIN  table_b b ON (b.ta_id = a.id);
+ 
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "INSERT INTO v (a_id, v1) VALUES (3, 30)");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "INSERT INTO v (b_id, ta_id, v2) VALUES (5, 3, 500)");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "INSERT INTO v select * from v");
+--error ER_NOT_SUPPORT_RETURNING_CLAUSE
+call dbms_trans.backfill("*", "INSERT INTO table_a select a_id, v1 from v");
+select * from table_a;
+ 
+drop table table_a;
+drop table table_b;
+drop view v;
+ 
+drop table t1;
+drop table t2;
+drop table t3;

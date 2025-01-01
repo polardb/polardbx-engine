@@ -67,6 +67,10 @@ class Lex_returning {
 
   bool is_returning_call() const { return m_is_returning_call; }
 
+  bool is_backfill_returning() { return m_is_backfill_returning; }
+
+  void set_backfill_returning(bool value) { m_is_backfill_returning = value; }
+
   bool is_full_image() const { return !m_fixed_item.is_null(); }
 
   void set_fixed_item(const Fixed_item &item) { m_fixed_item = item; }
@@ -87,6 +91,8 @@ class Lex_returning {
   bool m_has_items;
   /* Whether it's from dbms_trans.returning() */
   bool m_is_returning_call;
+  /* Whether it's from dbms_trans.backfill() */
+  bool m_is_backfill_returning;
   /* Used for quety of '*' */
   uint m_with_wild;
   /* Return field items */
@@ -102,6 +108,10 @@ class Update_returning_statement {
 
   bool is_returning() const {
     return m_lex_returning != nullptr && m_lex_returning->is_returning_call();
+  }
+
+  bool is_backfill_returning() {
+    return m_lex_returning != nullptr && m_lex_returning->is_backfill_returning();
   }
 
   bool is_full_image() const {

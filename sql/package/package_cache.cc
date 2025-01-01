@@ -167,6 +167,9 @@ void package_context_init() {
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
 
+  /* dbms_trans.backfill() */
+  register_package<Proc, Trans_proc_backfill_returning>(TRANS_PROC_SCHEMA);
+
   /* dbms_trans.returning_all() */
   register_package<Proc, Trans_proc_returning_all>(TRANS_PROC_SCHEMA);
 

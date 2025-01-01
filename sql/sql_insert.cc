@@ -112,6 +112,7 @@
 #include "thr_lock.h"
 
 #include "sql/sql_implicit_common.h"
+#include "sql/sql_update.h"
 
 namespace dd {
 class Table;
@@ -526,6 +527,10 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
   returning_stmt.setup(thd, const_cast<Query_block *>(query_block));
   if (thd->is_error()) return true;
 
+  if (returning_stmt.is_backfill_returning()) {
+    info.backfill_returning = 1;
+  }
+
   // Current error state inside and after the insert loop
   bool has_error = false;
 
@@ -660,10 +665,18 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       }
 
       /* Send data if it is returning clause */
-      if ((info.prev_errno == 0 || !thd->lex->is_ignore()) &&
-          returning_stmt.send_data(thd)) {
-        has_error = true;
-        break;
+      if (returning_stmt.is_backfill_returning()) {
+        if ((info.prev_errno == 0 && info.backfill_dup == 1 && thd->lex->is_ignore()) && 
+            returning_stmt.send_data(thd)) {
+          has_error = true;
+          break;
+        }
+      } else {
+        if ((info.prev_errno == 0 || !thd->lex->is_ignore()) &&
+            returning_stmt.send_data(thd)) {
+          has_error = true;
+          break;
+        }
       }
 
       thd->get_stmt_da()->inc_current_row_for_condition();
@@ -1853,6 +1866,8 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
   DBUG_TRACE;
 
   info->prev_errno = 0;
+  info->backfill_dup = 0;
+  bool is_backfill_returning = (info->backfill_returning == 1);
 
   /* Here we are using separate MEM_ROOT as this memory should be freed once we
      exit write_record() function. This is marked as not instumented as it is
@@ -1865,7 +1880,7 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
 
   const enum_duplicates duplicate_handling = info->get_duplicate_handling();
 
-  if (duplicate_handling == DUP_REPLACE || duplicate_handling == DUP_UPDATE) {
+  if (duplicate_handling == DUP_REPLACE || duplicate_handling == DUP_UPDATE || is_backfill_returning) {
     assert(duplicate_handling != DUP_UPDATE || update != nullptr);
     while ((error = table->file->ha_write_row(table->record[0]))) {
       uint key_nr;
@@ -1971,7 +1986,13 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
         error = HA_ERR_FOUND_DUPP_KEY; /* Database can't find key */
         goto err;
       }
-      if (duplicate_handling == DUP_UPDATE) {
+      if (is_backfill_returning && duplicate_handling != DUP_UPDATE && duplicate_handling != DUP_REPLACE)
+      {
+        if (!records_are_comparable(table) || compare_records_for_backfill(table)) {
+          info->backfill_dup = 1;
+        }
+        goto ok_or_after_trg_err;
+      } else if (duplicate_handling == DUP_UPDATE) {
         int res = 0;
         /*
           We don't check for other UNIQUE keys - the first row

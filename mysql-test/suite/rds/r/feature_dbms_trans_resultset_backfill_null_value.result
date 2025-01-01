@@ -1,0 +1,43 @@
+call mtr.add_suppression("Unsafe statement written to the binary log");
+drop table if exists t1;
+create table t1(id int primary key, col1 int, col2 int, col3 int default 123) engine =innodb;
+call dbms_trans.backfill("*", "insert ignore into t1 values (10, null, null, null)");
+id	col1	col2	col3
+call dbms_trans.backfill("col1", "insert ignore into t1 values (100, null, null, null)");
+col1
+call dbms_trans.backfill("col1, id", "insert ignore into t1 values (1000, null, null, null)");
+col1	id
+call dbms_trans.backfill("*", "insert ignore into t1 values (10, null, null, null)");
+id	col1	col2	col3
+call dbms_trans.backfill("col1", "insert ignore into t1 values (100, null, null, null)");
+col1
+call dbms_trans.backfill("col1, id", "insert ignore into t1 values (1000, null, null, null)");
+col1	id
+call dbms_trans.backfill("*", "insert ignore into t1 values (10, 1, null, null)");
+id	col1	col2	col3
+10	1	NULL	NULL
+call dbms_trans.backfill("col1", "insert ignore into t1 values (100, 2, null, null)");
+col1
+2
+call dbms_trans.backfill("col1, id", "insert ignore into t1 values (1000, 3, null, null)");
+col1	id
+3	1000
+call dbms_trans.backfill("*", "insert ignore into t1 values (10, null, 1, null)");
+id	col1	col2	col3
+10	NULL	1	NULL
+call dbms_trans.backfill("col1", "insert ignore into t1 values (100, null, 2, null)");
+col1
+NULL
+call dbms_trans.backfill("col1, id", "insert ignore into t1 values (1000, null, 3, null)");
+col1	id
+NULL	1000
+call dbms_trans.backfill("*", "insert ignore into t1 values (10, null, null, 1)");
+id	col1	col2	col3
+10	NULL	NULL	1
+call dbms_trans.backfill("col1", "insert ignore into t1 values (100, null, null, 2)");
+col1
+NULL
+call dbms_trans.backfill("col1, id", "insert ignore into t1 values (1000, null, null, 3)");
+col1	id
+NULL	1000
+drop table t1;

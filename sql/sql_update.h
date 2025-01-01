@@ -49,6 +49,7 @@ class Table_ref;
 
 bool records_are_comparable(const TABLE *table);
 bool compare_records(const TABLE *table);
+bool compare_records_for_backfill(const TABLE *table);
 bool should_switch_to_multi_table_if_subqueries(const THD *thd,
                                                 const Query_block *select,
                                                 const Table_ref *table_list);

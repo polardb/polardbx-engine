@@ -299,6 +299,55 @@ bool compare_records(const TABLE *table) {
   return false;
 }
 
+bool compare_records_for_backfill(const TABLE *table) {
+  assert(records_are_comparable(table));
+
+  if ((table->file->ha_table_flags() & HA_PARTIAL_COLUMN_READ) != 0) {
+    /*
+      Storage engine may not have read all columns of the record.  Fields
+      (including NULL bits) not in the write_set may not have been read and
+      can therefore not be compared.
+    */
+    for (Field **ptr = table->field; *ptr != nullptr; ptr++) {
+      Field *field = *ptr;
+      if (bitmap_is_set(table->write_set, field->field_index())) {
+        if (field->is_nullable()) {
+          uchar null_byte_index = field->null_offset();
+
+          if (((table->record[0][null_byte_index]) & field->null_bit) !=
+              ((table->record[1][null_byte_index]) & field->null_bit)) {
+            return true;
+          } else if (((table->record[0][null_byte_index]) & field->null_bit)) {
+            continue;
+          }
+        }
+        if (field->cmp_binary_offset(table->s->rec_buff_length)) return true;
+      }
+    }
+    return false;
+  }
+
+  /*
+     The storage engine has read all columns, so it's safe to compare all bits
+     including those not in the write_set. This is cheaper than the
+     field-by-field comparison done above.
+  */
+  if (table->s->blob_fields + table->s->varchar_fields == 0)
+    // Fixed-size record: do bitwise comparison of the records
+    return cmp_record(table, record[1]);
+  /* Compare null bits */
+  if (memcmp(table->null_flags, table->null_flags + table->s->rec_buff_length,
+             table->s->null_bytes))
+    return true;  // Diff in NULL value
+  /* Compare updated fields */
+  for (Field **ptr = table->field; *ptr; ptr++) {
+    if (bitmap_is_set(table->write_set, (*ptr)->field_index()) &&
+        (*ptr)->cmp_binary_offset(table->s->rec_buff_length))
+      return true;
+  }
+  return false;
+}
+
 /**
   Check that all fields are base table columns.
   Replace columns from views with base table columns.
