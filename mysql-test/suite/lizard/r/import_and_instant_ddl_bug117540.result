@@ -1,0 +1,18 @@
+create table t1 (id int primary key, c1 int, c2 int, c3 int, unique key(c1));
+insert into t1 values (1, 1, 10, 100);
+insert into t1 values (3, 3, 30, 300);
+alter table t1 drop column c2;
+flush table t1 for export;
+unlock tables;
+drop table t1;
+create table t1 (id int primary key, c1 int, c3 int, unique key(c1));
+alter table t1 discard tablespace;
+alter table t1 import tablespace;
+begin;
+delete from t1 where id = 1;
+insert into t1 values (4, 3, 300);
+ERROR 23000: Duplicate entry '3' for key 't1.c1'
+insert into t1 values (4, 4, 400);
+rollback;
+commit;
+drop table t1;

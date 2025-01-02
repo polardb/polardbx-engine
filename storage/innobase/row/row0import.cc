@@ -1767,6 +1767,24 @@ dberr_t row_import::add_instant_dropped_columns(dict_table_t *target_table) {
   }
   ut::delete_arr(mapping);
 
+  {
+    /** bug117540: Adjust col object of secondary index to point at the
+    new-created col objects. */
+    dict_index_t *sec_index = index->next();
+    while (sec_index) {
+      for (size_t i = 0; i < sec_index->n_fields; i++) {
+#ifdef UNIV_DEBUG
+        dict_col_t *old_col = sec_index->get_field(i)->col;
+        dict_col_t *new_col = target_table->get_col(old_col->ind);
+        ut_a(!memcmp(old_col, new_col, sizeof(dict_col_t)));
+#endif
+        uint ind = sec_index->get_field(i)->col->ind;
+        sec_index->get_field(i)->col = target_table->get_col(ind);
+      }
+      sec_index = sec_index->next();
+    }
+  }
+
   /* Set initial/current/total_col_count for table */
   target_table->initial_col_count = m_initial_column_count;
   target_table->current_col_count = m_current_column_count;
@@ -1979,6 +1997,16 @@ dberr_t row_import::adjust_instant_metadata_in_taregt_table(
   first_index.create_fields_array();
   first_index.create_nullables(m_table->current_row_version);
 
+  {
+    dict_index_t *sec_index = first_index.next();
+    while (sec_index != nullptr) {
+      ut_ad(sec_index->row_versions == false);
+      sec_index->rec_cache.offsets = nullptr;
+      sec_index->rec_cache.nullable_cols = 0;
+      sec_index = sec_index->next();
+    }
+  }
+
   /* FIXME: Force to discard the table, in case of any rollback later. */
   //    m_table->discard_after_ddl = true;
 
@@ -2113,6 +2141,16 @@ dberr_t row_import::set_instant_info(THD *thd,
   first_index.set_instant_nullable(m_n_instant_nullable);
   /* FIXME: Force to discard the table, in case of any rollback later. */
   //    m_table->discard_after_ddl = true;
+
+  {
+    dict_index_t *sec_index = first_index.next();
+    while (sec_index != nullptr) {
+      ut_ad(sec_index->row_versions == false);
+      sec_index->rec_cache.offsets = nullptr;
+      sec_index->rec_cache.nullable_cols = 0;
+      sec_index = sec_index->next();
+    }
+  }
 
   return (DB_SUCCESS);
 }

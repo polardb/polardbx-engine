@@ -1,0 +1,43 @@
+
+connect (help_con,localhost,root,,);
+
+connection default;
+
+LET $MYSQLD_DATADIR = `SELECT @@datadir`;
+
+create table t1 (id int primary key, c1 int, c2 int, c3 int, unique key(c1));
+insert into t1 values (1, 1, 10, 100);
+insert into t1 values (3, 3, 30, 300);
+alter table t1 drop column c2;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLTEST_VARDIR/tmp/t1.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLTEST_VARDIR/tmp/t1.cfg
+unlock tables;
+
+drop table t1;
+
+create table t1 (id int primary key, c1 int, c3 int, unique key(c1));
+
+alter table t1 discard tablespace;
+--move_file $MYSQLTEST_VARDIR/tmp/t1.ibd $MYSQLD_DATADIR/test/t1.ibd
+--move_file $MYSQLTEST_VARDIR/tmp/t1.cfg $MYSQLD_DATADIR/test/t1.cfg
+alter table t1 import tablespace;
+
+connection help_con;
+begin;
+delete from t1 where id = 1;
+
+connection default;
+# Will fail if not fix the bug.
+--error ER_DUP_ENTRY
+insert into t1 values (4, 3, 300);
+
+insert into t1 values (4, 4, 400);
+rollback;
+
+connection help_con;
+commit;
+
+connection default;
+drop table t1;

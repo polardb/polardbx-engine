@@ -1,0 +1,269 @@
+
+LET $MYSQLD_DATADIR = `SELECT @@datadir`;
+
+--echo #############################
+--echo # Column Operations
+--echo #############################
+create table t1 (c1 int, c2 int, c3 int, unique key(c1), key (c2));
+insert into t1 (c1, c2, c3) values (1, 10, 10);
+insert into t1 (c1, c2, c3) values (3, 30, 30);
+
+
+--echo #
+--echo # Add column
+--echo #
+alter table t1 add column c4 int after c2, ALGORITHM=INSTANT;
+insert into t1 (c1, c2, c4, c3) values (5, 50, 50, 50);
+
+create table t2 (c1 int, c2 int, c4 int, c3 int, unique key(c1), key (c2));
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c2 from t2 force index (c2);
+insert into t2 (c1, c2, c4, c3) values (7, 70, 70, 70);
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c2 = c2 + 1;
+update t2 set c2 = c2 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c2 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #
+--echo # Drop column
+--echo #
+alter table t1 drop column c3, ALGORITHM=INSTANT;
+insert into t1 (c1, c2, c4) values (7, 70, 70);
+
+alter table t1 drop column c4, ALGORITHM=INSTANT;
+insert into t1 (c1, c2) values (9, 90);
+
+create table t2 (c1 int, c2 int, unique key(c1), key (c2));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c2 from t2 force index (c2);
+insert into t2 (c1, c2) values (11, 110);
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c2 = c2 + 1;
+update t2 set c2 = c2 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c2 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #
+--echo # Rename column
+--echo #
+alter table t1 change c2 c5 int, ALGORITHM=INSTANT;
+insert into t1 (c1, c5) values (11, 110);
+
+create table t2 (c1 int, c5 int, unique key(c1), key c2 (c5));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+insert into t2 (c1, c5) values (13, 130);
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c5 = c5 + 1;
+update t2 set c5 = c5 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #
+--echo # Setting a column default value
+--echo #
+alter table t1 ALTER COLUMN c5 SET DEFAULT 80, ALGORITHM=INSTANT;
+insert into t1 (c1, c5) values (15, 150);
+insert into t1 (c1) values (17);
+
+create table t2 (c1 int, c5 int default 80, unique key(c1), key c2 (c5));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+insert into t2 (c1, c5) values (19, 190);
+insert into t2 (c1) values (21);
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c5 = c5 + 1;
+update t2 set c5 = c5 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #
+--echo # Dropping a column default value
+--echo #
+ALTER TABLE t1 ALTER COLUMN c1 DROP DEFAULT, ALGORITHM=INSTANT;
+insert into t1 (c1, c5) values (23, 230);
+
+create table t2 (c1 int, c5 int, unique key(c1), key c2 (c5));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+insert into t2 (c1, c5) values (25, 250);
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c5 = c5 + 1;
+update t2 set c5 = c5 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #
+--echo # Modifying the definition of an ENUM or SET column
+--echo #
+alter table t1 add column c6 enum ('a', 'b', 'c'), ALGORITHM=INSTANT;
+insert into t1 (c1, c5, c6) values (27, 270, 'a');
+
+ALTER TABLE t1 MODIFY COLUMN c6 ENUM('a', 'b', 'c', 'd'), ALGORITHM=INSTANT;
+insert into t1 (c1, c5, c6) values (29, 290, 'd');
+
+create table t2 (c1 int, c5 int, c6 ENUM('a', 'b', 'c', 'd'), unique key(c1), key c2 (c5));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+insert into t2 (c1, c5, c6) values (31, 310, 'd');
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c5 = c5 + 1;
+update t2 set c5 = c5 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo #############################
+--echo # Generated Column Operations
+--echo #############################
+
+--echo #
+--echo # Adding a VIRTUAL column
+--echo #
+ALTER TABLE t1 ADD COLUMN (c7 INT GENERATED ALWAYS AS (c1 + 1) VIRTUAL), ALGORITHM=INSTANT;
+insert into t1 (c1, c5, c6) values (33, 330, 'a');
+
+create table t2 (c1 int, c5 int, c6 ENUM('a', 'b', 'c', 'd'), c7 INT GENERATED ALWAYS AS (c1 + 1) VIRTUAL, unique key(c1), key c2 (c5));
+
+alter table t2 discard tablespace;
+
+flush table t1 for export;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLD_DATADIR/test/t2.cfg
+unlock tables;
+
+alter table t2 import tablespace;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+insert into t2 (c1, c5, c6) values (35, 350, 'd');
+
+update t2 set c1 = c1 + 1;
+update t2 set c1 = c1 + 1;
+
+update t2 set c5 = c5 + 1;
+update t2 set c5 = c5 + 1;
+
+select * from t2;
+select c1 from t2 force index (c1);
+select c5 from t2 force index (c2);
+delete from t2;
+
+drop table t2;
+
+--echo # cleanup
+drop table t1;
