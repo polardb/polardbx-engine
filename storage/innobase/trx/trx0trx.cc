@@ -1953,11 +1953,6 @@ static void trx_erase_lists(trx_t *trx) {
     // if (trx->read_view != nullptr) {
     //   trx_sys->mvcc->view_close(trx->read_view, true);
     // }
-
-    if (trx->vision.is_active()) {
-      lizard::trx_vision_release(&trx->vision);
-    }
-
     lizard::gcs_mod_min_active_tid(trx);
   }
 
@@ -2160,14 +2155,13 @@ written */
       // if (trx->read_view != nullptr) {
       //   trx_sys->mvcc->view_close(trx->read_view, false);
       // }
-
-      if (trx->vision.is_active()) {
-        lizard::trx_vision_release(&trx->vision);
-      }
-
     } else {
       ut_ad(trx->id > 0);
       MONITOR_INC(MONITOR_TRX_RW_COMMIT);
+    }
+
+    if (trx->vision.is_active()) {
+      lizard::trx_vision_release(&trx->vision);
     }
   }
 
