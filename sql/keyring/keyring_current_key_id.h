@@ -54,7 +54,7 @@ class Proc_current_key_id : public Keyring_proc_base {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   const std::string str() const override {
     return std::string("current_key_id");

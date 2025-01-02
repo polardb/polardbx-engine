@@ -169,7 +169,7 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "thr_lock.h"
 #include "violite.h"
 
-#include "sql/package/package_interface.h"  // find_native_proc_and_evoke
+#include "sql/package/package_interface.h"  // find_native_proc_and_invoke
 
 #include "sql/item_sequence_func.h"              // Item_func_nextval, Item_func_currval
 #include "sql/sql_sequence.h"                    // Sql_cmd_create_sequence
@@ -4072,7 +4072,7 @@ sp_suid:
 call_stmt:
           CALL_SYM sp_name opt_paren_expr_list
           {
-            $$ = im::find_native_proc_and_evoke(YYTHD, $2, $3);
+            $$ = im::find_native_proc_and_invoke(YYTHD, $2, $3);
             if ($$ == NULL)
               $$ = NEW_PTN PT_call($2, $3);
           }

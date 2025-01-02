@@ -33,7 +33,7 @@ Proc *Trans_proc_implicit_savepoint::instance() {
   return proc;
 }
 
-Sql_cmd *Trans_proc_implicit_savepoint::evoke_cmd(
+Sql_cmd *Trans_proc_implicit_savepoint::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root)
       Sql_cmd_trans_proc_implicit_savepoint(thd, list, this);

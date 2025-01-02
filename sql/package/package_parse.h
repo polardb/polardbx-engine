@@ -35,7 +35,7 @@ class Proc;
   1) Proc
     PT_package_proc is the uniform parser interface for all native proc objects.
 
-    Proc will PT_revoke() the PT_package_proc instance.
+    Proc will PT_invoke() the PT_package_proc instance.
 
   2) ...
 */

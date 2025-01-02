@@ -124,10 +124,10 @@ class Recycle_proc_show : public Recycle_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for show_tables() proc.
+    Invoke the sql_cmd object for show_tables() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Recycle_proc_show() override {}
 
@@ -197,10 +197,10 @@ class Recycle_proc_purge : public Recycle_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for purge_table() proc.
+    Invoke the sql_cmd object for purge_table() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Recycle_proc_purge() override {}
 
@@ -297,10 +297,10 @@ class Recycle_proc_restore : public Recycle_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for restore_table() proc.
+    Invoke the sql_cmd object for restore_table() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Recycle_proc_restore() override {}
 

@@ -44,7 +44,7 @@ Proc *Proc_index_stat_flush_gpp::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_index_stat_flush_gpp::evoke_cmd(
+Sql_cmd *Proc_index_stat_flush_gpp::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_index_stat_flush_gpp(thd, list, this);
 }

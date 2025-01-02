@@ -74,50 +74,50 @@ Proc *Outline_proc_preview::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for add_optimizer_outline() proc.
+  Invoke the sql_cmd object for add_optimizer_outline() proc.
 */
-Sql_cmd *Outline_optimizer_proc_add::evoke_cmd(
+Sql_cmd *Outline_optimizer_proc_add::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Evoke the sql_cmd object for add_index_outline() proc.
+  Invoke the sql_cmd object for add_index_outline() proc.
 */
-Sql_cmd *Outline_index_proc_add::evoke_cmd(THD *thd,
-                                           mem_root_deque<Item *> *list) const {
+Sql_cmd *Outline_index_proc_add::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Evoke the sql_cmd object for del_outline() proc.
+  Invoke the sql_cmd object for del_outline() proc.
 */
-Sql_cmd *Outline_proc_del::evoke_cmd(THD *thd,
-                                     mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
-}
-
-/**
-  Evoke the sql_cmd object for flush_outline() proc.
-*/
-Sql_cmd *Outline_proc_flush::evoke_cmd(THD *thd,
-                                       mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
-}
-
-/**
-  Evoke the sql_cmd object for show_outline() proc.
-*/
-Sql_cmd *Outline_proc_show::evoke_cmd(THD *thd,
+Sql_cmd *Outline_proc_del::invoke_cmd(THD *thd,
                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Evoke the sql_cmd object for preview_outline() proc.
+  Invoke the sql_cmd object for flush_outline() proc.
 */
-Sql_cmd *Outline_proc_preview::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Outline_proc_flush::invoke_cmd(THD *thd,
+                                        mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+/**
+  Invoke the sql_cmd object for show_outline() proc.
+*/
+Sql_cmd *Outline_proc_show::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+/**
+  Invoke the sql_cmd object for preview_outline() proc.
+*/
+Sql_cmd *Outline_proc_preview::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 /**

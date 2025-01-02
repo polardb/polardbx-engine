@@ -144,10 +144,10 @@ class Outline_optimizer_proc_add : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for add_optimizer_outline() proc.
+    Invoke the sql_cmd object for add_optimizer_outline() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_optimizer_proc_add() override {}
 
@@ -238,10 +238,10 @@ class Outline_index_proc_add : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for add_index_outline() proc.
+    Invoke the sql_cmd object for add_index_outline() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_index_proc_add() override {}
 
@@ -305,10 +305,10 @@ class Outline_proc_del : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for del_outline() proc.
+    Invoke the sql_cmd object for del_outline() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_proc_del() override {}
 
@@ -355,10 +355,10 @@ class Outline_proc_flush : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for flush_outline proc.
+    Invoke the sql_cmd object for flush_outline proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_proc_flush() override {}
 
@@ -435,10 +435,10 @@ class Outline_proc_show : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for show_outline proc.
+    Invoke the sql_cmd object for show_outline proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_proc_show() override {}
 
@@ -549,10 +549,10 @@ class Outline_proc_preview : public Outline_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for preview_outline() proc.
+    Invoke the sql_cmd object for preview_outline() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Outline_proc_preview() override {}
 

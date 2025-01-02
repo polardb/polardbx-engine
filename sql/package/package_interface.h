@@ -46,7 +46,7 @@ extern void package_context_init();
 bool exist_native_proc(const char *db, const char *name);
 
 /**
-  Find the native proc and evoke the parse tree root
+  Find the native proc and invoke the parse tree root
 
   @param[in]    THD               Thread context
   @param[in]    sp_name           Proc name
@@ -54,8 +54,8 @@ bool exist_native_proc(const char *db, const char *name);
 
   @retval       parse_tree_root   Parser structure
 */
-extern Parse_tree_root *find_native_proc_and_evoke(THD *thd, sp_name *sp_name,
-                                                   PT_item_list *pt_expr_list);
+extern Parse_tree_root *find_native_proc_and_invoke(THD *thd, sp_name *sp_name,
+                                                    PT_item_list *pt_expr_list);
 
 } /* namespace im */
 #endif

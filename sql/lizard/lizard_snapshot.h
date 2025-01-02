@@ -99,13 +99,13 @@ class Snapshot_hint {
   bool itemize(Parse_context *pc, Table_ref *owner);
 
   /**
-    Evoke table snapshot vision.
+    Invoke table snapshot vision.
     My_error if failure.
 
     @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
     @retval 0 Success
    */
-  virtual int evoke_vision(TABLE *table, THD *thd);
+  virtual int invoke_vision(TABLE *table, THD *thd);
 
   /** Calculate number from hint item. */
   virtual bool val_int(uint64_t *value) = 0;
@@ -220,13 +220,13 @@ class Snapshot_simulate_gcn_hint : public Snapshot_hint {
   }
 
   /**
-    Evoke table snapshot vision.
+    Invoke table snapshot vision.
     My_error if failure.
 
     @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
     @retval 0 Success
    */
-  virtual int evoke_vision(TABLE *table, THD *thd) override;
+  virtual int invoke_vision(TABLE *table, THD *thd) override;
 
  private:
   MyVisionGCN m_owned_vision;

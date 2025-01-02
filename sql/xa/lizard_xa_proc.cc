@@ -66,8 +66,8 @@ Proc *Xa_proc_find_by_xid::instance() {
   return proc;
 }
 
-Sql_cmd *Xa_proc_find_by_xid::evoke_cmd(THD *thd,
-                                        mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_find_by_xid::invoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -290,7 +290,7 @@ class Nested_xa_prepare_lex {
   LEX *m_saved_lex;
 };
 
-Sql_cmd *Xa_proc_prepare_with_trx_slot::evoke_cmd(
+Sql_cmd *Xa_proc_prepare_with_trx_slot::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -377,8 +377,8 @@ Proc *Xa_proc_send_heartbeat::instance() {
   return proc;
 }
 
-Sql_cmd *Xa_proc_send_heartbeat::evoke_cmd(THD *thd,
-                                           mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_send_heartbeat::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -417,7 +417,7 @@ Proc *Xa_proc_advance_gcn_no_flush::instance() {
   return proc;
 }
 
-Sql_cmd *Xa_proc_advance_gcn_no_flush::evoke_cmd(
+Sql_cmd *Xa_proc_advance_gcn_no_flush::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -430,8 +430,8 @@ Proc *Xa_proc_ac_prepare::instance() {
   return proc;
 }
 
-Sql_cmd *Xa_proc_ac_prepare::evoke_cmd(THD *thd,
-                                       mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_ac_prepare::invoke_cmd(THD *thd,
+                                        mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -552,8 +552,8 @@ Proc *Xa_proc_ac_commit::instance() {
   return proc;
 }
 
-Sql_cmd *Xa_proc_ac_commit::evoke_cmd(THD *thd,
-                                      mem_root_deque<Item *> *list) const {
+Sql_cmd *Xa_proc_ac_commit::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

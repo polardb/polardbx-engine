@@ -189,7 +189,7 @@ int handler_open_table(THD *thd, const char *db_name, const char *table_name,
       lizard::simulate_snapshot_clause(thd, &tables);
       /// set vision manually
       auto hint = tables.snapshot_hint;
-      if (hint != nullptr) hint->evoke_vision(tables.table, thd);
+      if (hint != nullptr) hint->invoke_vision(tables.table, thd);
 #endif
       // In any other case this function fails,
       // new_exec_table will be released by unique_ptr

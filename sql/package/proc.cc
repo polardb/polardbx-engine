@@ -39,8 +39,8 @@ namespace im {
 
   @retval       Parse_tree_root
 */
-Parse_tree_root *Proc::PT_evoke(THD *thd, PT_item_list *pt_expr_list,
-                                const Proc *proc) const {
+Parse_tree_root *Proc::PT_invoke(THD *thd, PT_item_list *pt_expr_list,
+                                 const Proc *proc) const {
   return new (thd->mem_root) PT_proc_type(pt_expr_list, proc);
 }
 

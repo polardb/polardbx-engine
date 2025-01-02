@@ -48,8 +48,8 @@ class Trans_proc_implicit_savepoint : public Trans_proc_base {
   /* Singleton instance of this class */
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("rollback_to_implicit_savepoint");

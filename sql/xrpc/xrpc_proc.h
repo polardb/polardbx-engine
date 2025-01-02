@@ -63,9 +63,9 @@ class Proc_perf_hist : public Xrpc_proc_base {
   static Proc *instance();
 
 #ifdef MYSQL8PLUS
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
 #else
-  Sql_cmd *evoke_cmd(THD *thd, List<Item> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, List<Item> *list) const final;
 #endif
 
   const std::string str() const final { return {"perf_hist"}; }
@@ -101,9 +101,9 @@ class Proc_cmd : public Xrpc_proc_base {
   static Proc *instance();
 
 #ifdef MYSQL8PLUS
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
 #else
-  Sql_cmd *evoke_cmd(THD *thd, List<Item> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, List<Item> *list) const final;
 #endif
 
   const std::string str() const final { return {"cmd"}; }

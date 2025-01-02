@@ -44,8 +44,8 @@ Proc *Proc_get_timestamp::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_get_timestamp::evoke_cmd(THD *thd,
-                                       mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_get_timestamp::invoke_cmd(THD *thd,
+                                        mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Cmd_get_timestamp(thd, list, this);
 }
 

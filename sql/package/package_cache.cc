@@ -111,7 +111,7 @@ bool exist_native_proc(const char *db, const char *name) {
 }
 
 /**
-  Find the native proc and evoke the parse tree root
+  Find the native proc and invoke the parse tree root
 
   @param[in]    THD               Thread context
   @param[in]    sp_name           Proc name
@@ -119,12 +119,12 @@ bool exist_native_proc(const char *db, const char *name) {
 
   @retval       parse_tree_root   Parser structure
 */
-Parse_tree_root *find_native_proc_and_evoke(THD *thd, sp_name *sp_name,
-                                            PT_item_list *pt_expr_list) {
+Parse_tree_root *find_native_proc_and_invoke(THD *thd, sp_name *sp_name,
+                                             PT_item_list *pt_expr_list) {
   const Proc *proc = find_package_element<Proc>(
       std::string(sp_name->m_db.str), std::string(sp_name->m_name.str));
 
-  return proc ? proc->PT_evoke(thd, pt_expr_list, proc) : nullptr;
+  return proc ? proc->PT_invoke(thd, pt_expr_list, proc) : nullptr;
 }
 
 /**

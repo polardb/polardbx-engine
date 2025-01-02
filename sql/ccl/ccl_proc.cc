@@ -42,9 +42,10 @@ Proc *Ccl_proc_add::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for add_ccl_rule() proc.
+  Invoke the sql_cmd object for add_ccl_rule() proc.
 */
-Sql_cmd *Ccl_proc_add::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_add::invoke_cmd(THD *thd,
+                                  mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -63,18 +64,18 @@ Proc *Ccl_proc_flush_queue::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for flush_ccl_rule() proc.
+  Invoke the sql_cmd object for flush_ccl_rule() proc.
 */
-Sql_cmd *Ccl_proc_flush::evoke_cmd(THD *thd,
-                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_flush::invoke_cmd(THD *thd,
+                                    mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Evoke the sql_cmd object for flush_ccl_queue() proc.
+  Invoke the sql_cmd object for flush_ccl_queue() proc.
 */
-Sql_cmd *Ccl_proc_flush_queue::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_flush_queue::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -86,9 +87,10 @@ Proc *Ccl_proc_del::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for del_ccl_rule() proc.
+  Invoke the sql_cmd object for del_ccl_rule() proc.
 */
-Sql_cmd *Ccl_proc_del::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_del::invoke_cmd(THD *thd,
+                                  mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -99,10 +101,10 @@ Proc *Ccl_proc_show::instance() {
   return proc;
 }
 /**
-  Evoke the sql_cmd object for show_ccl_rule() proc.
+  Invoke the sql_cmd object for show_ccl_rule() proc.
 */
-Sql_cmd *Ccl_proc_show::evoke_cmd(THD *thd,
-                                  mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_show::invoke_cmd(THD *thd,
+                                   mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -113,10 +115,10 @@ Proc *Ccl_proc_show_queue::instance() {
   return proc;
 }
 /**
-  Evoke the sql_cmd object for show_ccl_rule() proc.
+  Invoke the sql_cmd object for show_ccl_rule() proc.
 */
-Sql_cmd *Ccl_proc_show_queue::evoke_cmd(THD *thd,
-                                        mem_root_deque<Item *> *list) const {
+Sql_cmd *Ccl_proc_show_queue::invoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

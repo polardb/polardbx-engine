@@ -56,10 +56,10 @@ Proc *Proc_reset_db::instance() {
 }
 
 #ifdef MYSQL8PLUS
-Sql_cmd *Proc_reset_db::evoke_cmd(THD *thd,
-                                  mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_reset_db::invoke_cmd(THD *thd,
+                                   mem_root_deque<Item *> *list) const {
 #else
-Sql_cmd *Proc_reset_db::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Proc_reset_db::invoke_cmd(THD *thd, List<Item> *list) const {
 #endif
   return new (thd->mem_root) Cmd_reset_db(thd, list, this);
 }
@@ -90,10 +90,10 @@ Proc *Proc_get_token::instance() {
 }
 
 #ifdef MYSQL8PLUS
-Sql_cmd *Proc_get_token::evoke_cmd(THD *thd,
-                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_get_token::invoke_cmd(THD *thd,
+                                    mem_root_deque<Item *> *list) const {
 #else
-Sql_cmd *Proc_get_token::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Proc_get_token::invoke_cmd(THD *thd, List<Item> *list) const {
 #endif
   return new (thd->mem_root) Cmd_get_token(thd, list, this);
 }
@@ -119,10 +119,10 @@ Proc *Proc_switch_user::instance() {
 }
 
 #ifdef MYSQL8PLUS
-Sql_cmd *Proc_switch_user::evoke_cmd(THD *thd,
-                                     mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_switch_user::invoke_cmd(THD *thd,
+                                      mem_root_deque<Item *> *list) const {
 #else
-Sql_cmd *Proc_switch_user::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Proc_switch_user::invoke_cmd(THD *thd, List<Item> *list) const {
 #endif
   return new (thd->mem_root) Cmd_switch_user(thd, list, this);
 }

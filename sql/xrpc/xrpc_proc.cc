@@ -49,10 +49,10 @@ Proc *Proc_perf_hist::instance() {
 }
 
 #ifdef MYSQL8PLUS
-Sql_cmd *Proc_perf_hist::evoke_cmd(THD *thd,
-                                   mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_perf_hist::invoke_cmd(THD *thd,
+                                    mem_root_deque<Item *> *list) const {
 #else
-Sql_cmd *Proc_perf_hist::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Proc_perf_hist::invoke_cmd(THD *thd, List<Item> *list) const {
 #endif
   return new (thd->mem_root) Cmd_perf_hist(thd, list, this);
 }
@@ -257,9 +257,9 @@ Proc *Proc_cmd::instance() {
 }
 
 #ifdef MYSQL8PLUS
-Sql_cmd *Proc_cmd::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_cmd::invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
 #else
-Sql_cmd *Proc_cmd::evoke_cmd(THD *thd, List<Item> *list) const {
+Sql_cmd *Proc_cmd::invoke_cmd(THD *thd, List<Item> *list) const {
 #endif
   return new (thd->mem_root) Cmd_cmd(thd, list, this);
 }

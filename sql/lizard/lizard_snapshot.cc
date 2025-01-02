@@ -271,13 +271,13 @@ bool Snapshot_time_hint::val_int(uint64_t *value) {
 }
 
 /**
-  Evoke the table vision.
+  Invoke the table vision.
   My_error if failure.
 
   @retval	true	Failure
   @retval	false	Success
  */
-int Snapshot_hint::evoke_vision(TABLE *table, THD *thd) {
+int Snapshot_hint::invoke_vision(TABLE *table, THD *thd) {
   uint64_t value;
   bool error;
   if ((error = val_int(&value))) {
@@ -353,13 +353,13 @@ bool Snapshot_gcn_hint::val_int(uint64_t *value) {
 }
 
 /**
-  Evoke table snapshot vision.
+  Invoke table snapshot vision.
   My_error if failure.
 
   @retval HA_ERR_SNAPSHOT_OUT_OF_RANGE, HA_ERR_AS_OF_INTERNAL on error.
   @retval 0 Success
  */
-int Snapshot_simulate_gcn_hint::evoke_vision(TABLE *table, THD *thd) {
+int Snapshot_simulate_gcn_hint::invoke_vision(TABLE *table, THD *thd) {
   Snapshot_gcn_vision *vision = dynamic_cast<Snapshot_gcn_vision *>(
       table->table_snapshot.choose_once(type()));
   vision->init(&m_owned_vision);
@@ -491,7 +491,7 @@ bool evaluate_snapshot(THD *thd, const LEX *lex) {
 
     Snapshot_hint *hint = table->pos_in_table_list->snapshot_hint;
     if (hint && !table->table_snapshot.is_activated()) {
-      error = hint->evoke_vision(table, thd);
+      error = hint->invoke_vision(table, thd);
       if (error) {
         table->file->print_error(error, 0);
         return true;

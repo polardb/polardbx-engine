@@ -58,18 +58,18 @@ Proc *Recycle_proc_purge::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for show_tables() proc.
+  Invoke the sql_cmd object for show_tables() proc.
 */
-Sql_cmd *Recycle_proc_show::evoke_cmd(THD *thd,
-                                      mem_root_deque<Item *> *list) const {
+Sql_cmd *Recycle_proc_show::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
 /**
-  Evoke the sql_cmd object for purge_table() proc.
+  Invoke the sql_cmd object for purge_table() proc.
 */
-Sql_cmd *Recycle_proc_purge::evoke_cmd(THD *thd,
-                                       mem_root_deque<Item *> *list) const {
+Sql_cmd *Recycle_proc_purge::invoke_cmd(THD *thd,
+                                        mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 /**
@@ -224,10 +224,10 @@ Proc *Recycle_proc_restore::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for restore_table() proc.
+  Invoke the sql_cmd object for restore_table() proc.
 */
-Sql_cmd *Recycle_proc_restore::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Recycle_proc_restore::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

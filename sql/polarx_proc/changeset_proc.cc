@@ -40,8 +40,8 @@ Proc *Changeset_proc_start::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_start::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_start::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -99,8 +99,8 @@ Proc *Changeset_proc_fetch::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_fetch::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_fetch::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -302,8 +302,8 @@ Proc *Changeset_proc_finish::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_finish::evoke_cmd(THD *thd,
-                                          mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_finish::invoke_cmd(THD *thd,
+                                           mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -344,8 +344,8 @@ Proc *Changeset_proc_stop::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_stop::evoke_cmd(THD *thd,
-                                        mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_stop::invoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -384,8 +384,8 @@ Proc *Changeset_proc_stats::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_stats::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_stats::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -430,8 +430,8 @@ Proc *Changeset_proc_times::instance() {
   return proc;
 }
 
-Sql_cmd *Changeset_proc_times::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Changeset_proc_times::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

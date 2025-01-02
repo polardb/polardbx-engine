@@ -37,7 +37,7 @@ Proc *Show_native_procedure_proc::instance() {
   return proc;
 }
 
-Sql_cmd *Show_native_procedure_proc::evoke_cmd(
+Sql_cmd *Show_native_procedure_proc::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -166,11 +166,11 @@ void Sql_cmd_show_native_procedure::send_result(THD *thd, bool error) {
             ->second;
 
     /**
-      Evoke the sql_cmd object to get sql_command_code,
+      Invoke the sql_cmd object to get sql_command_code,
       notice that we use nullptr to mock mem_root_deque<Item *> *list, so the
-      evoked sql_cmd cann't be called here.
+      invoked sql_cmd cann't be called here.
     */
-    sqlcmdit = procit->evoke_cmd(thd, nullptr);
+    sqlcmdit = procit->invoke_cmd(thd, nullptr);
     sql_command_code_str =
         sql_command_enum_to_string(sqlcmdit->sql_command_code());
 

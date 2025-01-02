@@ -145,10 +145,10 @@ class Ccl_proc_add : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for add_ccl_rule() proc.
+    Invoke the sql_cmd object for add_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_add() override {}
 
@@ -195,10 +195,10 @@ class Ccl_proc_flush : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for add_ccl_rule() proc.
+    Invoke the sql_cmd object for add_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_flush() override {}
 
@@ -264,10 +264,10 @@ class Ccl_proc_del : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for del_ccl_rule() proc.
+    Invoke the sql_cmd object for del_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_del() override {}
 
@@ -347,10 +347,10 @@ class Ccl_proc_show : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for show_ccl_rule() proc.
+    Invoke the sql_cmd object for show_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_show() override {}
 
@@ -396,10 +396,10 @@ class Ccl_proc_flush_queue : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for add_ccl_rule() proc.
+    Invoke the sql_cmd object for add_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_flush_queue() override {}
 
@@ -468,10 +468,10 @@ class Ccl_proc_show_queue : public Ccl_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for show_ccl_rule() proc.
+    Invoke the sql_cmd object for show_ccl_rule() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Ccl_proc_show_queue() override {}
 

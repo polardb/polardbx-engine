@@ -140,8 +140,8 @@ class Proc : public PSI_memory_base {
 
     @retval       Parse_tree_root
   */
-  Parse_tree_root *PT_evoke(THD *thd, PT_item_list *pt_expr_list,
-                            const Proc *proc) const;
+  Parse_tree_root *PT_invoke(THD *thd, PT_item_list *pt_expr_list,
+                             const Proc *proc) const;
 
   /**
     Interface of generating proc execution logic.
@@ -151,7 +151,7 @@ class Proc : public PSI_memory_base {
 
     @retval       Sql cmd
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const = 0;
+  virtual Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const = 0;
 
   Result_type get_result_type() const { return m_result_type; }
 

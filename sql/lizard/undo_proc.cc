@@ -41,8 +41,8 @@ Proc *Proc_trunc_status::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_trunc_status::evoke_cmd(THD *thd,
-                                     mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_trunc_status::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_trunc_status(thd, list, this);
 }
 
@@ -114,8 +114,8 @@ Proc *Proc_purge_status::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_purge_status::evoke_cmd(THD *thd,
-                                     mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_purge_status::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_purge_status(thd, list, this);
 }
 

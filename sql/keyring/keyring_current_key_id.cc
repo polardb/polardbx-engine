@@ -32,8 +32,8 @@ Proc *Proc_current_key_id::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_current_key_id::evoke_cmd(THD *thd,
-                                        mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_current_key_id::invoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Cmd_current_key_id(thd, list, this);
 }
 

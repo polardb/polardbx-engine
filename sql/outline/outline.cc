@@ -77,12 +77,12 @@ void Outline::build_index_hint() {
 }
 
 /**
-  Evoke index hint instance, and add into list.
+  Invoke index hint instance, and add into list.
 
   @param[in]        mem_root    memory allocator
   @param[in/out]    list        container
 */
-void Outline::evoke_index_hint(MEM_ROOT *mem_root, List<Index_hint> *list) {
+void Outline::invoke_index_hint(MEM_ROOT *mem_root, List<Index_hint> *list) {
   DBUG_ENTER("Outline::revoke_index_hint");
   assert(m_type != Outline_type::OPTIMIZER);
 
@@ -98,13 +98,13 @@ void Outline::evoke_index_hint(MEM_ROOT *mem_root, List<Index_hint> *list) {
   DBUG_VOID_RETURN;
 }
 /**
-  Evoke optimizer hint instance, and add into list.
+  Invoke optimizer hint instance, and add into list.
 
   @param[in]        mem_root    memory allocator
   @param[in/out]    list        container
 */
-void Outline::evoke_optimizer_hint(MEM_ROOT *mem_root,
-                                   List<Lex_optimizer_hint> *list) {
+void Outline::invoke_optimizer_hint(MEM_ROOT *mem_root,
+                                    List<Lex_optimizer_hint> *list) {
   DBUG_ENTER("Outline::revoke_optimizer_hint");
   assert(m_type == Outline_type::OPTIMIZER);
 
@@ -350,7 +350,7 @@ bool System_outline::add_outline(size_t pos, const Outline *outline) {
 void prepare_hints(THD *thd, Table_ref *table, Outline *outline) {
   if (!table->index_hints)
     table->index_hints = new (thd->mem_root) List<Index_hint>();
-  outline->evoke_index_hint(thd->mem_root, table->index_hints);
+  outline->invoke_index_hint(thd->mem_root, table->index_hints);
 }
 
 void prepare_hints(THD *thd, Query_block *select_lex, Outline *outline) {
@@ -358,8 +358,8 @@ void prepare_hints(THD *thd, Query_block *select_lex, Outline *outline) {
     select_lex->outline_optimizer_list =
         new (thd->mem_root) List<Lex_optimizer_hint>();
 
-  outline->evoke_optimizer_hint(thd->mem_root,
-                                select_lex->outline_optimizer_list);
+  outline->invoke_optimizer_hint(thd->mem_root,
+                                 select_lex->outline_optimizer_list);
 }
 
 /**

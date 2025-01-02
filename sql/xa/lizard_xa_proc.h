@@ -182,10 +182,10 @@ class Xa_proc_find_by_xid : public Xa_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for find_by_xid() proc.
+    Invoke the sql_cmd object for find_by_xid() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Xa_proc_find_by_xid() override {}
 
@@ -275,8 +275,8 @@ class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
   /* Singleton instance for prepare_with_trx_slot */
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Xa_proc_prepare_with_trx_slot() override {}
 
@@ -324,10 +324,10 @@ class Xa_proc_send_heartbeat : public Xa_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for send_heartbeat() proc.
+    Invoke the sql_cmd object for send_heartbeat() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Xa_proc_send_heartbeat() override {}
 
@@ -389,10 +389,10 @@ class Xa_proc_advance_gcn_no_flush : public Xa_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for advance_gcn_no_flush() proc.
+    Invoke the sql_cmd object for advance_gcn_no_flush() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Xa_proc_advance_gcn_no_flush() override {}
 
@@ -502,8 +502,8 @@ class Xa_proc_ac_prepare : public Xa_proc_base {
   /* Singleton instance */
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   virtual ~Xa_proc_ac_prepare() {}
 
@@ -592,8 +592,8 @@ class Xa_proc_ac_commit : public Xa_proc_base {
   /* Singleton instance */
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   virtual ~Xa_proc_ac_commit() {}
 

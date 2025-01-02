@@ -31,8 +31,8 @@ Proc *Proc_generate_key::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_generate_key::evoke_cmd(THD *thd,
-                                      mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_generate_key::invoke_cmd(THD *thd,
+                                       mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Cmd_generate_key(thd, list, this);
 }
 

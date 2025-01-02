@@ -102,7 +102,7 @@ class Changeset_proc_start : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("changeset_start");
@@ -142,7 +142,7 @@ class Changeset_proc_fetch : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   const std::string str() const override {
     return std::string("changeset_fetch");
@@ -185,7 +185,7 @@ class Changeset_proc_finish : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("changeset_finish");
@@ -225,7 +225,7 @@ class Changeset_proc_stop : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("changeset_stop");
@@ -271,7 +271,7 @@ class Changeset_proc_stats : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("changeset_stats");
@@ -308,7 +308,7 @@ class Changeset_proc_times : public Changeset_proc {
 
   static Proc *instance();
 
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("changeset_times");

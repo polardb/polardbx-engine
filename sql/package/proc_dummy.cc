@@ -47,7 +47,7 @@ Proc *Proc_dummy::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_dummy::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_dummy::invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
@@ -70,7 +70,8 @@ Proc *Proc_dummy_2::instance() {
   return proc;
 }
 
-Sql_cmd *Proc_dummy_2::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Proc_dummy_2::invoke_cmd(THD *thd,
+                                  mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

@@ -102,19 +102,20 @@ class Outline {
   void inc_hit() { m_stats.hit++; }
   void inc_overflow() { m_stats.overflow++; }
   /**
-    Evoke index hint instance, and add into list.
+    Invoke index hint instance, and add into list.
 
     @param[in]        mem_root    memory allocator
     @param[in/out]    list        container
   */
-  void evoke_index_hint(MEM_ROOT *mem_root, List<Index_hint> *list);
+  void invoke_index_hint(MEM_ROOT *mem_root, List<Index_hint> *list);
   /**
-    Evoke optimizer hint instance, and add into list.
+    Invoke optimizer hint instance, and add into list.
 
     @param[in]        mem_root    memory allocator
     @param[in/out]    list        container
   */
-  void evoke_optimizer_hint(MEM_ROOT *mem_root, List<Lex_optimizer_hint> *list);
+  void invoke_optimizer_hint(MEM_ROOT *mem_root,
+                             List<Lex_optimizer_hint> *list);
 
  private:
   /**

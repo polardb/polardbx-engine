@@ -106,10 +106,10 @@ class Trans_proc_returning : public Trans_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for returning() proc.
+    Invoke the sql_cmd object for returning() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   ~Trans_proc_returning() override {}
 
@@ -168,10 +168,10 @@ class Trans_proc_returning_all : public Trans_proc_base {
   static Proc *instance();
 
   /**
-    Evoke the sql_cmd object for returning() proc.
+    Invoke the sql_cmd object for returning() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
   virtual ~Trans_proc_returning_all() {}
   /* Proc name */
   virtual const std::string str() const override {
@@ -210,10 +210,10 @@ class Trans_proc_backfill_returning : public Trans_proc_base {
   /* Singleton instance for returning */
   static Proc *instance();
   /**
-    Evoke the sql_cmd object for returning() proc.
+    Invoke the sql_cmd object for returning() proc.
   */
-  virtual Sql_cmd *evoke_cmd(THD *thd, 
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
   virtual ~Trans_proc_backfill_returning() {}
   /* Proc name */
   virtual const std::string str() const override {

@@ -52,10 +52,10 @@ Proc *Trans_proc_returning::instance() {
 }
 
 /**
-  Evoke the sql_cmd object for returning() proc.
+  Invoke the sql_cmd object for returning() proc.
 */
-Sql_cmd *Trans_proc_returning::evoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
+Sql_cmd *Trans_proc_returning::invoke_cmd(THD *thd,
+                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this, false);
 }
 
@@ -147,9 +147,10 @@ Proc *Trans_proc_returning_all::instance() {
   return proc;
 }
 /**
-  Evoke the sql_cmd object for returning() proc.
+  Invoke the sql_cmd object for returning() proc.
 */
-Sql_cmd *Trans_proc_returning_all::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Trans_proc_returning_all::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this, true);
 }
 
@@ -159,9 +160,10 @@ Proc *Trans_proc_backfill_returning::instance() {
   return proc;
 }
 /**
-  Evoke the sql_cmd object for backfill() proc.
+  Invoke the sql_cmd object for backfill() proc.
 */
-Sql_cmd *Trans_proc_backfill_returning::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Trans_proc_backfill_returning::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_trans_proc_returning(thd, list, this, false);
 }
 

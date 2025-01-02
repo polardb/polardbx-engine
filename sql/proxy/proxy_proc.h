@@ -59,9 +59,9 @@ class Proc_reset_db : public proxy_proc_base {
   static Proc *instance();
 
 #ifdef MYSQL8PLUS
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
 #else
-  Sql_cmd *evoke_cmd(THD *thd, List<Item> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, List<Item> *list) const final;
 #endif
 
   const std::string str() const final { return {"reset_db"}; }
@@ -90,9 +90,9 @@ class Proc_get_token : public proxy_proc_base {
   static Proc *instance();
 
 #ifdef MYSQL8PLUS
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
 #else
-  Sql_cmd *evoke_cmd(THD *thd, List<Item> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, List<Item> *list) const final;
 #endif
 
   const std::string str() const final { return {"get_token"}; }
@@ -126,9 +126,9 @@ class Proc_switch_user : public proxy_proc_base {
   static Proc *instance();
 
 #ifdef MYSQL8PLUS
-  Sql_cmd *evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
 #else
-  Sql_cmd *evoke_cmd(THD *thd, List<Item> *list) const final;
+  Sql_cmd *invoke_cmd(THD *thd, List<Item> *list) const final;
 #endif
 
   const std::string str() const final { return {"switch_user"}; }

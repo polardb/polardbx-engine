@@ -96,8 +96,8 @@ class Proc_trunc_status : public Proc {
 
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("trunc_status");
@@ -164,8 +164,8 @@ class Proc_purge_status : public Proc {
 
   static Proc *instance();
 
-  virtual Sql_cmd *evoke_cmd(THD *thd,
-                             mem_root_deque<Item *> *list) const override;
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
     return std::string("purge_status");

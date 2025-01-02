@@ -40,7 +40,8 @@ Proc *Jemalloc_profile_proc::instance() {
   return proc;
 }
 
-Sql_cmd *Jemalloc_profile_proc::evoke_cmd(THD *thd, mem_root_deque<Item *> *list) const {
+Sql_cmd *Jemalloc_profile_proc::invoke_cmd(THD *thd,
+                                           mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 

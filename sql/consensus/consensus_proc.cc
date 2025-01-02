@@ -59,7 +59,7 @@ Proc *Consensus_proc_refresh_learner_meta::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_refresh_learner_meta::evoke_cmd(
+Sql_cmd *Consensus_proc_refresh_learner_meta::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -86,7 +86,7 @@ Proc *Consensus_proc_force_single_mode::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_single_mode::evoke_cmd(
+Sql_cmd *Consensus_proc_force_single_mode::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -111,7 +111,7 @@ Proc *Consensus_proc_force_learner_node::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_learner_node::evoke_cmd(
+Sql_cmd *Consensus_proc_force_learner_node::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -135,7 +135,7 @@ Proc *Consensus_proc_show_global::instance() {
   static Proc *proc = new Consensus_proc_show_global(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_global::evoke_cmd(
+Sql_cmd *Consensus_proc_show_global::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -190,7 +190,7 @@ Proc *Consensus_proc_show_local::instance() {
   static Proc *proc = new Consensus_proc_show_local(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_local::evoke_cmd(
+Sql_cmd *Consensus_proc_show_local::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -245,7 +245,7 @@ Proc *Consensus_proc_show_logs::instance() {
   static Proc *proc = new Consensus_proc_show_logs(key_memory_package);
   return proc;
 }
-Sql_cmd *Consensus_proc_show_logs::evoke_cmd(
+Sql_cmd *Consensus_proc_show_logs::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -376,7 +376,7 @@ Proc *Consensus_proc_change_leader::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_change_leader::evoke_cmd(
+Sql_cmd *Consensus_proc_change_leader::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -419,7 +419,7 @@ Proc *Consensus_proc_add_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_add_learner::evoke_cmd(
+Sql_cmd *Consensus_proc_add_learner::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -467,7 +467,7 @@ Proc *Consensus_proc_add_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_add_follower::evoke_cmd(
+Sql_cmd *Consensus_proc_add_follower::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -510,7 +510,7 @@ Proc *Consensus_proc_drop_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_drop_learner::evoke_cmd(
+Sql_cmd *Consensus_proc_drop_learner::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -545,7 +545,7 @@ Proc *Consensus_proc_upgrade_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_upgrade_learner::evoke_cmd(
+Sql_cmd *Consensus_proc_upgrade_learner::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -576,7 +576,7 @@ Proc *Consensus_proc_downgrade_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_downgrade_follower::evoke_cmd(
+Sql_cmd *Consensus_proc_downgrade_follower::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -608,7 +608,7 @@ Proc *Consensus_proc_configure_follower::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_configure_follower::evoke_cmd(
+Sql_cmd *Consensus_proc_configure_follower::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -648,7 +648,7 @@ Proc *Consensus_proc_configure_learner::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_configure_learner::evoke_cmd(
+Sql_cmd *Consensus_proc_configure_learner::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -688,7 +688,7 @@ Proc *Consensus_proc_fix_cluster_id::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_fix_cluster_id::evoke_cmd(
+Sql_cmd *Consensus_proc_fix_cluster_id::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -721,7 +721,7 @@ Proc *Consensus_proc_fix_matchindex::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_fix_matchindex::evoke_cmd(
+Sql_cmd *Consensus_proc_fix_matchindex::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -755,7 +755,7 @@ Proc *Consensus_proc_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_purge_log::evoke_cmd(
+Sql_cmd *Consensus_proc_purge_log::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -788,7 +788,7 @@ Proc *Consensus_proc_local_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_local_purge_log::evoke_cmd(
+Sql_cmd *Consensus_proc_local_purge_log::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -821,7 +821,7 @@ Proc *Consensus_proc_force_purge_log::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_purge_log::evoke_cmd(
+Sql_cmd *Consensus_proc_force_purge_log::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -855,7 +855,7 @@ Proc *Consensus_proc_force_purge_cache::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_force_purge_cache::evoke_cmd(
+Sql_cmd *Consensus_proc_force_purge_cache::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
@@ -890,7 +890,7 @@ Proc *Consensus_proc_drop_prefetch_channel::instance() {
   return proc;
 }
 
-Sql_cmd *Consensus_proc_drop_prefetch_channel::evoke_cmd(
+Sql_cmd *Consensus_proc_drop_prefetch_channel::invoke_cmd(
     THD *thd, mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
