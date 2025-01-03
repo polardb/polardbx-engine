@@ -2412,7 +2412,16 @@ dberr_t PageConverter::adjust_cluster_record(
     are only written in conjunction with other changes to the
     record. */
 
-    row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx, 0);
+    /** Revision: Use special roll ptr for import so that the roll ptr can never
+    be used. In other words, we do not regard import as a DDL, but a normal data
+    insertion. */
+    // row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx, 0);
+    row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx,
+                           lizard::ROLL_PTR_IMPORT);
+
+    DBUG_EXECUTE_IF("simulate_old_ver_import_roll_ptr", {
+      row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx, 0);
+    });
 
     if (!index->table->is_temporary()) {
       assert_txn_desc_allocated(m_trx);

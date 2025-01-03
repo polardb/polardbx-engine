@@ -2584,6 +2584,12 @@ bool trx_undo_prev_version_build(
     return true;
   }
 
+  /** 0 is an invalid value. For the table that was imported, the roll ptr can
+  be 0. */
+  if (trx_undo_roll_ptr_is_invalid(roll_ptr)) {
+    return true;
+  }
+
   /** Lizard begin */
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
   assert_undo_ptr_allocated(txn_rec.undo_ptr);
