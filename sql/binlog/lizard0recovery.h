@@ -47,10 +47,8 @@ constexpr uint32_t XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED = 80032;
 /** Binlog XA specification recovery */
 class XA_spec_recovery {
  public:
-  XA_spec_recovery()
-      : m_mem_root(key_memory_binlog_recover_exec,
-                   static_cast<size_t>(my_getpagesize())),
-        m_spec_list(&m_mem_root) {}
+  XA_spec_recovery(MEM_ROOT *mem_root)
+      : m_mem_root(mem_root), m_spec_list(m_mem_root) {}
 
   void add(const my_xid xid, const Binlog_xa_specification &spec);
   void add(const XID &xid, const Binlog_xa_specification &spec);
@@ -60,7 +58,7 @@ class XA_spec_recovery {
   void clear() { m_spec_list.clear(); }
 
  private:
-  MEM_ROOT m_mem_root;
+  MEM_ROOT *m_mem_root;
   XA_spec_list m_spec_list;
 };
 

@@ -40,7 +40,7 @@ binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader &binlog_file_reader)
       m_internal_xids{m_set_alloc},
       m_external_xids{m_map_alloc},
       m_xa_spec(),
-      m_xa_spec_recovery(new XA_spec_recovery()),
+      m_xa_spec_recovery(&m_mem_root),
       m_server_version(0) {}
 
 my_off_t binlog::Binlog_recovery::get_valid_pos() const {
@@ -118,7 +118,7 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
       LogErr(WARNING_LEVEL, ER_XA_SPEC_VERSION_NOT_MATCH, m_server_version,
              XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED);
     } else {
-      spec_list = m_xa_spec_recovery->xa_spec_list();
+      spec_list = m_xa_spec_recovery.xa_spec_list();
     }
 
     this->m_no_engine_recovery =

@@ -339,7 +339,7 @@ class Binlog_recovery {
 
  protected:
   Binlog_xa_specification m_xa_spec;
-  std::unique_ptr<XA_spec_recovery> m_xa_spec_recovery;
+  XA_spec_recovery m_xa_spec_recovery;
 
   uint32_t m_server_version;
 };

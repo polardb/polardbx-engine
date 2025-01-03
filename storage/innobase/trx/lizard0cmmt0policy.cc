@@ -82,6 +82,11 @@ void Single_shard_policy::reset() {
   return new Single_shard_policy(*this);
 }
 
+[[nodiscard]] Commit_policy *Single_shard_policy::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) Single_shard_policy(*this);
+}
+
 /*-----------------------------------------------------------------------------*/
 /** XA_commit_policy */
 /*-----------------------------------------------------------------------------*/
@@ -122,6 +127,10 @@ void XA_commit_policy::reset() {
 
 [[nodiscard]] Commit_policy *XA_commit_policy::clone() const {
   return new XA_commit_policy(*this);
+}
+
+[[nodiscard]] Commit_policy *XA_commit_policy::clone(MEM_ROOT *mem_root) const {
+  return new (mem_root) XA_commit_policy(*this);
 }
 
 /*-----------------------------------------------------------------------------*/
@@ -176,6 +185,11 @@ void AC_prepare_policy::reset() {
 
 [[nodiscard]] Commit_policy *AC_prepare_policy::clone() const {
   return new AC_prepare_policy(*this);
+}
+
+[[nodiscard]] Commit_policy *AC_prepare_policy::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) AC_prepare_policy(*this);
 }
 
 /*-----------------------------------------------------------------------------*/
@@ -268,8 +282,13 @@ void AC_commit_policy::reset() {
   m_commit_gcn.reset();
   m_decided = false;
 }
+
 [[nodiscard]] Commit_policy *AC_commit_policy::clone() const {
   return new AC_commit_policy(*this);
+}
+
+[[nodiscard]] Commit_policy *AC_commit_policy::clone(MEM_ROOT *mem_root) const {
+  return new (mem_root) AC_commit_policy(*this);
 }
 
 /*-----------------------------------------------------------------------------*/
@@ -313,6 +332,11 @@ void Binlog_ac_prepare_policy::reset() {
   return new Binlog_ac_prepare_policy(*this);
 }
 
+[[nodiscard]] Commit_policy *Binlog_ac_prepare_policy::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) Binlog_ac_prepare_policy(*this);
+}
+
 /*-----------------------------------------------------------------------------*/
 /** Binlog_commit_policy */
 /*-----------------------------------------------------------------------------*/
@@ -345,6 +369,11 @@ void Binlog_commit_policy::reset() {
 
 [[nodiscard]] Commit_policy *Binlog_commit_policy::clone() const {
   return new Binlog_commit_policy(*this);
+}
+
+[[nodiscard]] Commit_policy *Binlog_commit_policy::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) Binlog_commit_policy(*this);
 }
 
 /*-----------------------------------------------------------------------------*/

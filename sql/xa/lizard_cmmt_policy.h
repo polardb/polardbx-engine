@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <memory>
 
+#include "my_alloc.h"
 #include "sql/lizard/lizard_service.h"
 
 class THD;
@@ -49,7 +50,7 @@ namespace lizard {
 class Commit_policy {
  public:
   Commit_policy() : m_decided(false) {}
-  Commit_policy(const Commit_policy &other) { m_decided = other.m_decided; }
+  Commit_policy(const Commit_policy &other) : m_decided(other.m_decided) {}
 
   Commit_policy &operator=(const Commit_policy &other) {
     if (this != &other) {
@@ -57,6 +58,7 @@ class Commit_policy {
     }
     return *this;
   }
+  virtual ~Commit_policy() {}
 
   virtual void decide(THD *) = 0;
 
@@ -66,11 +68,10 @@ class Commit_policy {
 
   virtual void reset() = 0;
 
-  virtual ~Commit_policy() {}
+  [[nodiscard]] virtual Commit_policy *clone() const = 0;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const = 0;
 
   bool has_decided() const { return m_decided; }
-
-  [[nodiscard]] virtual Commit_policy *clone() const = 0;
 
  protected:
   bool m_decided;
@@ -100,6 +101,7 @@ class Single_shard_policy : public Commit_policy {
   virtual void reset() override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
 
   ~Single_shard_policy() override {}
 
@@ -133,7 +135,7 @@ class XA_commit_policy : public Commit_policy {
   virtual void reset() override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
-
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
   ~XA_commit_policy() override {}
 
  private:
@@ -150,6 +152,7 @@ class AC_prepare_policy : public Commit_policy {
         m_pre_commit_gcn(other.m_pre_commit_gcn),
         m_branch(other.m_branch),
         m_proposal_gcn(other.m_proposal_gcn) {}
+
   AC_prepare_policy &operator=(const AC_prepare_policy &other) {
     if (this != &other) {
       Commit_policy::operator=(other);
@@ -171,6 +174,8 @@ class AC_prepare_policy : public Commit_policy {
   virtual void build_gcn_event(binary_log::Gcn_event *) const override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
+
   const gcn_tuple_t clone_pmmt() const { return m_proposal_gcn; }
 
   ~AC_prepare_policy() override {}
@@ -192,6 +197,7 @@ class AC_commit_policy : public Commit_policy {
         m_hlc_gcn(other.m_hlc_gcn),
         m_master_addr(other.m_master_addr),
         m_commit_gcn(other.m_commit_gcn) {}
+
   AC_commit_policy &operator=(const AC_commit_policy &other) {
     if (this != &other) {
       Commit_policy::operator=(other);
@@ -213,6 +219,7 @@ class AC_commit_policy : public Commit_policy {
   virtual void reset() override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
 
   ~AC_commit_policy() override {}
 
@@ -235,6 +242,7 @@ class Binlog_ac_prepare_policy : public Commit_policy {
       : Commit_policy(other),
         m_proposal_gcn(other.m_proposal_gcn),
         m_branch(other.m_branch) {}
+
   Binlog_ac_prepare_policy &operator=(const Binlog_ac_prepare_policy &other) {
     if (this != &other) {
       Commit_policy::operator=(other);
@@ -255,6 +263,7 @@ class Binlog_ac_prepare_policy : public Commit_policy {
   virtual void reset() override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
 
   ~Binlog_ac_prepare_policy() override {}
 
@@ -291,6 +300,7 @@ class Binlog_commit_policy : public Commit_policy {
   virtual void reset() override;
 
   [[nodiscard]] virtual Commit_policy *clone() const override;
+  [[nodiscard]] virtual Commit_policy *clone(MEM_ROOT *mem_root) const override;
 
   ~Binlog_commit_policy() override {}
 

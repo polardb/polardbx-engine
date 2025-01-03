@@ -45,13 +45,13 @@ namespace binlog {
 /** Add binlog xa spec into spec list */
 void XA_spec_recovery::add(const my_xid xid,
                            const Binlog_xa_specification &spec) {
-  XA_specification *xa_spec = new (&m_mem_root) Binlog_xa_specification(spec);
+  XA_specification *xa_spec = spec.clone(m_mem_root);
   m_spec_list.add(xid, xa_spec);
 }
 
 void XA_spec_recovery::add(const XID &xid,
                            const Binlog_xa_specification &spec) {
-  XA_specification *xa_spec = new (&m_mem_root) Binlog_xa_specification(spec);
+  XA_specification *xa_spec = spec.clone(m_mem_root);
   m_spec_list.add(xid, xa_spec);
 }
 
@@ -96,13 +96,13 @@ void binlog::Binlog_recovery::process_gcn_event(const Gcn_log_event &ev) {
     return;
   }
 
-  ev.copy_to_xa_spec(&m_xa_spec);
+  ev.copy_to_xa_spec(&m_xa_spec, &m_mem_root);
 }
 
 /** Gather internal commit xid and spec.*/
 void binlog::Binlog_recovery::gather_internal_xa_spec(
     const my_xid xid, const Binlog_xa_specification &spec) {
-  XA_spec_list *spec_list = m_xa_spec_recovery->xa_spec_list();
+  XA_spec_list *spec_list = m_xa_spec_recovery.xa_spec_list();
 
   /** Lookup first, XID didn't allowed to appear twice. */
   auto found = spec_list->commit_map()->find(xid);
@@ -112,18 +112,18 @@ void binlog::Binlog_recovery::gather_internal_xa_spec(
     return;
   }
   assert(spec.is_legal_source());
-  m_xa_spec_recovery->add(xid, spec);
+  m_xa_spec_recovery.add(xid, spec);
 }
 
 /** Gather internal commit xid and spec.*/
 void binlog::Binlog_recovery::gather_external_xa_spec(
     const XID &xid, const Binlog_xa_specification &spec) {
-  XA_spec_list *spec_list = m_xa_spec_recovery->xa_spec_list();
+  XA_spec_list *spec_list = m_xa_spec_recovery.xa_spec_list();
 
   auto found = spec_list->state_map()->find(xid);
   if (found != spec_list->state_map()->end()) {
     // TODO confirm it's xa prepare already.
   }
   assert(spec.is_legal_source());
-  m_xa_spec_recovery->add(xid, spec);
+  m_xa_spec_recovery.add(xid, spec);
 }

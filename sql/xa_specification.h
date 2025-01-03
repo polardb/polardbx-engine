@@ -56,6 +56,7 @@ class XA_specification {
       delete m_cpolicy;
       m_allocated = false;
     }
+    m_cpolicy = nullptr;
   }
 
   /** TODO: print all information. */
@@ -68,28 +69,8 @@ class XA_specification {
     }
     m_cpolicy = nullptr;
   }
-  XA_specification(const XA_specification &other) {
-    if (other.m_cpolicy != nullptr) {
-      m_cpolicy = other.m_cpolicy->clone();
-      m_allocated = true;
-    } else {
-      m_cpolicy = nullptr;
-      m_allocated = false;
-    }
-  }
 
-  XA_specification &operator=(const XA_specification &other) {
-    if (this != &other) {
-      assert(other.m_cpolicy != nullptr && m_cpolicy == nullptr);
-      if (other.m_cpolicy != nullptr) {
-        m_cpolicy = other.m_cpolicy->clone();
-        m_allocated = true;
-      } else {
-        clear();
-      }
-    }
-    return *this;
-  }
+  XA_specification &operator=(const XA_specification &other) = delete;
 
   /** If has gcn, then it must have one valid commit_policy. */
   bool has_gcn() const {
@@ -109,15 +90,6 @@ class XA_specification {
    */
   void set_when_recovery(const lizard::Commit_policy *cpolicy) {
     /**
-     * When binlog is enabled and the non-atomic DDL is executed, GCN Log
-     * Event and Gtid (if enabled) are still generated. However, the GCN Log
-     * Event is meaningless for this case, and the XA spec is too.
-     *
-     * So, If this case really happens, we just skip it cause that the
-     * meaningful XA spec has always been collected.
-     */
-    clear();
-    /**
      * There has only two cases when recovering:
      * 1. Binlog_ac_prepare_policy
      * 2. Binlog_commit_policy
@@ -127,9 +99,9 @@ class XA_specification {
                nullptr ||
            dynamic_cast<const lizard::Binlog_ac_prepare_policy *>(cpolicy) !=
                nullptr);
+    assert(!m_allocated);
 
-    m_allocated = true;
-    m_cpolicy = cpolicy->clone();
+    m_cpolicy = cpolicy;
   }
 
   /**
@@ -149,15 +121,38 @@ class XA_specification {
     return new XA_specification(*this);
   }
 
+  [[nodiscard]] virtual XA_specification *clone(MEM_ROOT *mem_root) const {
+    return new (mem_root) XA_specification(*this, mem_root);
+  }
+
+ protected:
+  XA_specification(const XA_specification &other)
+      : m_cpolicy(nullptr), m_allocated(false) {
+    if (other.m_cpolicy != nullptr) {
+      m_cpolicy = other.m_cpolicy->clone();
+      m_allocated = true;
+    }
+  }
+  XA_specification(const XA_specification &other, MEM_ROOT *mem_root)
+      : m_cpolicy(nullptr), m_allocated(false) {
+    if (other.m_cpolicy != nullptr) {
+      m_cpolicy = other.m_cpolicy->clone(mem_root);
+    }
+  }
+
  private:
   /**
-   * There are two cases for Xa_specification:
+   * There are three cases for XA_specification:
    * 1. When processing GCN Log event in recovery(i.e. process_gcn_event), we
    * will call @function:set_when_recovery to set Binlog_xa_specifiaction.
-   * In this case, We have to allocate the commit policy and manage it by
-   * ourselves.
+   * In this case, we don't need to manage the commit policy, cause that it
+   * was managed by mem_root.
    *
-   * 2. When exectuting xa commit/rollback in detached mode, we will call
+   * 2. After processing GCN Log event in recovery, XA_specification will be
+   * collected to XA_spec_list. For this case, it will be allocated with
+   * specified mem_root. We don't need to manage the commit policy.
+   *
+   * 3. When exectuting xa commit/rollback in detached mode, we will call
    * @function:set_when_commit to set XA_specification cause that we can not get
    * the commit_policy in innodb. Notice that this could also happen in
    * replaying the binlog in replica.

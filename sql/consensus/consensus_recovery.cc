@@ -221,7 +221,7 @@ binlog::Binlog_recovery &Consensus_binlog_recovery::recover() {
       LogErr(WARNING_LEVEL, ER_XA_SPEC_VERSION_NOT_MATCH, m_server_version,
              binlog::XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED);
     } else {
-      spec_list = m_xa_spec_recovery->xa_spec_list();
+      spec_list = m_xa_spec_recovery.xa_spec_list();
     }
 
     this->m_no_engine_recovery =
@@ -267,7 +267,7 @@ void Consensus_binlog_recovery::process_internal_xid(ulong unmasked_server_id, m
       m_internal_xids.clear();
       m_external_xids.clear();
       m_recover_term = m_current_term;
-      m_xa_spec_recovery->clear();
+      m_xa_spec_recovery.clear();
     }
     if (!m_internal_xids.insert(xid).second) {
       this->m_is_malformed = true;
@@ -289,7 +289,7 @@ void Consensus_binlog_recovery::process_external_xid(ulong unmasked_server_id,
       m_internal_xids.clear();
       m_external_xids.clear();
       m_recover_term = m_current_term;
-      m_xa_spec_recovery->clear();
+      m_xa_spec_recovery.clear();
     }
     auto found = this->m_external_xids.find(xid);
     xp::info(ER_XP_RECOVERY) << "Consensus_binlog_recovery::process_external_xid  "

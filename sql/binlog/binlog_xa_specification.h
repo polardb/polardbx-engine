@@ -42,9 +42,6 @@ namespace binlog {
 
 /** XA specification when TC_LOG = Binary Log */
 class Binlog_xa_specification : public XA_specification {
- private:
-  typedef XA_specification super;
-
  public:
   enum class Source {
     /** Not sure*/
@@ -61,6 +58,23 @@ class Binlog_xa_specification : public XA_specification {
     XA_ROLLBACK
   };
 
+ private:
+  typedef XA_specification super;
+  Binlog_xa_specification(const Binlog_xa_specification &other)
+      : XA_specification(other) {
+    m_gtid = other.m_gtid;
+    m_source = other.m_source;
+    m_sid.copy_from(other.m_sid);
+  }
+
+  Binlog_xa_specification(const Binlog_xa_specification &other,
+                          MEM_ROOT *mem_root)
+      : XA_specification(other, mem_root) {
+    m_gtid = other.m_gtid;
+    m_source = other.m_source;
+    m_sid.copy_from(other.m_sid);
+  }
+
  public:
   Binlog_xa_specification()
       : XA_specification(), m_source(Source::NONE), m_gtid(), m_sid() {
@@ -69,23 +83,8 @@ class Binlog_xa_specification : public XA_specification {
 
   ~Binlog_xa_specification() override {}
 
-  Binlog_xa_specification(const Binlog_xa_specification &other)
-      : XA_specification(other) {
-    m_gtid = other.m_gtid;
-    m_source = other.m_source;
-    m_sid.copy_from(other.m_sid);
-  }
-
-  Binlog_xa_specification &operator=(const Binlog_xa_specification &other) {
-    if (this != &other) {
-      XA_specification::operator=(other);
-
-      this->m_gtid = other.m_gtid;
-      this->m_source = other.m_source;
-      m_sid.copy_from(other.m_sid);
-    }
-    return *this;
-  }
+  Binlog_xa_specification &operator=(const Binlog_xa_specification &other) =
+      delete;
 
   bool is_legal_source() const { return m_source != Source::NONE; }
 
@@ -109,6 +108,10 @@ class Binlog_xa_specification : public XA_specification {
 
   [[nodiscard]] XA_specification *clone() const override {
     return new Binlog_xa_specification(*this);
+  }
+
+  [[nodiscard]] XA_specification *clone(MEM_ROOT *mem_root) const override {
+    return new (mem_root) Binlog_xa_specification(*this, mem_root);
   }
 
  public:
