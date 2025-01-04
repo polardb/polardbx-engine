@@ -185,9 +185,7 @@ class Vision {
   void xa_refresh(trx_t *trx);
 
   bool is_asof_gcn() const {
-    return m_snapshot_vision &&
-           (m_snapshot_vision->type() == Snapshot_type::AS_OF_AUTOMATIC_GCN ||
-            m_snapshot_vision->type() == Snapshot_type::AS_OF_ASSIGNED_GCN);
+    return m_snapshot_vision && m_snapshot_vision->is_gcn();
   }
 
   bool is_asof() const { return m_snapshot_vision != nullptr; }

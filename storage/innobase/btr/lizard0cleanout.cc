@@ -67,6 +67,9 @@ bool opt_cleanout_disable = false;
 /** Whether disable the gpp cleanout when read */
 bool opt_gpp_cleanout_disable = false;
 
+/** Whether disable the ddl cleanout when ddl */
+bool opt_ddl_cleanout_disable = false;
+
 // /** Commit cleanout profiles */
 ulint srv_commit_cleanout_max_rows = Commit_cleanout::STATIC_CURSORS;
 /*----------------------------------------------------------------*/
@@ -212,6 +215,20 @@ mtr_end:
   return cleaned;
 }
 
+bool CCursor::is_on_same_page(btr_pcur_t *pcur) const {
+  ut_ad(m_old_stored);
+  ut_ad(m_old_rec != nullptr);
+
+  auto block = pcur->get_block();
+  auto btr_cur = pcur->get_btr_cur();
+  if (block != m_block || btr_cur->index != m_index) return false;
+
+  auto modify_clock = block->get_modify_clock(
+      IF_DEBUG(fsp_is_system_temporary(block->page.id.space())));
+
+  return modify_clock == m_modify_clock;
+}
+
 ulint SCursor ::cleanout() {
   ulint cleaned = 0;
   mem_heap_t *heap = nullptr;
@@ -223,9 +240,7 @@ ulint SCursor ::cleanout() {
   mtr_t mtr;
   mtr.start();
 
-  
   if (!opt_cleanout_write_redo) mtr.set_log_mode(MTR_LOG_NO_REDO);
-  
 
   if (!restore_position(&mtr, UT_LOCATION_HERE)) goto mtr_end;
 
@@ -259,8 +274,71 @@ mtr_end:
   return cleaned;
 }
 
+cleanout_ctx_t::cleanout_ctx_t(btr_pcur_t *pcur)
+    : m_pcur(pcur), m_cleanout(nullptr) {
+  if (m_pcur) m_cleanout = m_pcur->m_cleanout;
+}
+
+ulint DDL_cleanout::do_cleanout() {
+  mem_heap_t *heap = nullptr;
+  buf_block_t *block = nullptr;
+  dict_index_t *index = nullptr;
+  ulint cleaned = 0;
+
+  if (!m_cursor.stored()) return cleaned;
+
+  mtr_t mtr;
+  mtr.start();
+  if (!opt_cleanout_write_redo) mtr.set_log_mode(MTR_LOG_NO_REDO);
+
+  if (!m_cursor.restore_position(&mtr, UT_LOCATION_HERE)) goto mtr_end;
+
+  block = m_cursor.get_block();
+  index = m_cursor.get_index();
+
+  for (uint i = 0; i < m_rec_nums; i++) {
+    rec_t *old_rec = m_old_recs[i];
+    txn_rec_t txn_rec = m_txn_recs[i];
+
+    ulint offsets_[REC_OFFS_NORMAL_SIZE];
+    ulint *offsets = offsets_;
+    rec_offs_init(offsets_);
+
+    offsets = rec_get_offsets(old_rec, index, offsets,
+                              index->n_uniq + 2 + DATA_N_LIZARD_COLS,
+                              UT_LOCATION_HERE, &heap);
+
+    txn_rec_t old_txn_rec;
+    row_get_txn_rec(old_rec, index, offsets, &old_txn_rec);
+
+    if (old_txn_rec.trx_id == txn_rec.trx_id) {
+      ut_ad(txn_rec.slot() == old_txn_rec.slot());
+
+      /** If trx state is active ,try to cleanout */
+      if (old_txn_rec.is_active()) {
+        /** Modify the scn and undo ptr */
+        row_upd_rec_lizard_fields_in_cleanout(
+            old_rec, buf_block_get_page_zip(block), index, offsets, &txn_rec);
+
+        /** Write the redo log */
+        btr_cur_upd_lizard_fields_clust_rec_log(old_rec, index, &txn_rec, &mtr);
+
+        cleaned++;
+      }
+    }
+
+    if (heap) mem_heap_empty(heap);
+  }
+
+mtr_end:
+  mtr.commit();
+  if (heap) mem_heap_free(heap);
+
+  return cleaned;
+}
+
 /**
-  Collect cursor which need to cleanout
+  Collect cursor which need to cleanout when scan
 
   @param[in]        trx_id
   @param[in]        txn_rec         txn description and state
@@ -268,14 +346,11 @@ mtr_end:
   @param[in]        index           cluster index
   @parma[in]        offsets         rec_get_offsets(rec, index)
   @param[in/out]    pcur            cursor
-
 */
-void scan_cleanout_collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
-                           const rec_t *rec, const dict_index_t *index,
-                           const ulint *offsets, btr_pcur_t *pcur) {
-  if (!pcur || pcur->m_cleanout == nullptr) return;
-
-  assert_row_lizard_valid(rec, index, offsets);
+void Scan_cleanout::collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                            const rec_t *rec, const dict_index_t *index,
+                            const ulint *offsets, btr_pcur_t *pcur) {
+  if (opt_cleanout_disable) return;
 
   ut_ad(index->is_clustered());
   ut_ad(index == pcur->get_btr_cur()->index);
@@ -283,7 +358,20 @@ void scan_cleanout_collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
   ut_ad(page_get_page_no(pcur->get_page()) ==
         page_get_page_no(page_align(rec)));
 
-  pcur->m_cleanout->acquire_for_lizard(pcur, txn_rec);
+  acquire_for_lizard(pcur, txn_rec);
+}
+
+/** Collect record */
+void DDL_cleanout::collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                           const rec_t *rec, const dict_index_t *index,
+                           const ulint *offsets, btr_pcur_t *pcur) {
+  assert_row_lizard_valid(rec, index, offsets);
+  ut_ad(index->is_clustered());
+
+  store(rec, txn_rec, pcur);
+
+  ut_ad(page_get_page_no(page_align(m_cursor.get_old_rec())) ==
+        page_get_page_no(page_align(rec)));
 }
 
 /**
@@ -296,7 +384,6 @@ void scan_cleanout_collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
 */
 void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor, rec_t *rec,
                              ulint flags) {
-
   /** Skip the collection if the transaction does not require undo logging or if
    * system fields should be retained. */
   if ((flags & BTR_KEEP_SYS_FLAG) || (flags & BTR_NO_UNDO_LOG_FLAG)) {

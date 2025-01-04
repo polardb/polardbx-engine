@@ -1,0 +1,37 @@
+SET autocommit = 0;
+set global innodb_commit_cleanout_max_rows=0;
+CREATE TABLE large_table (
+id INT AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(50),
+age INT,
+city VARCHAR(50),
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (25000),
+PARTITION p1 VALUES LESS THAN (50000),
+PARTITION p2 VALUES LESS THAN (75000),
+PARTITION p3 VALUES LESS THAN (100000),
+PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+set global innodb_commit_cleanout_max_rows=0;
+CREATE PROCEDURE insert_data()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 100000 DO
+INSERT INTO large_table (name, age, city) 
+VALUES (
+CONCAT('Name', i),
+FLOOR(18 + (i * 62)),
+ELT(FLOOR(1 + i * 5), 'New York', 'London', 'Paris', 'Tokyo', 'Sydney')
+);
+SET i = i + 1;
+END WHILE;
+END |
+CALL insert_data();
+ALTER TABLE large_table ADD INDEX idx_name (name);
+include/assert.inc [ddl_cleanout should make sense.]
+SET autocommit = 1;
+set global innodb_commit_cleanout_max_rows=3;
+DROP PROCEDURE insert_data;
+DROP TABLE large_table;

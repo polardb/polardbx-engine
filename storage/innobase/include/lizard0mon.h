@@ -103,9 +103,11 @@ struct lizard_var_t {
 
   ulint scan_cleanout_clust_clean;
   ulint scan_cleanout_sec_clean;
+  ulint ddl_cleanout_clust_clean;
 
   ulint cleanout_clust_collect;
   ulint cleanout_sec_collect;
+  ulint ddl_clust_collect;
 
   ulint cleanout_cursor_restore_failed;
 
@@ -296,10 +298,11 @@ struct lizard_stats_t {
 
   ulint_ctr_1_t scan_cleanout_clust_clean;
   ulint_ctr_1_t scan_cleanout_sec_clean;
-
+  ulint_ctr_1_t ddl_cleanout_clust_clean;
 
   ulint_ctr_1_t cleanout_clust_collect;
   ulint_ctr_1_t cleanout_sec_collect;
+  ulint_ctr_1_t ddl_clust_collect;
 
   ulint_ctr_1_t cleanout_cursor_restore_failed;
 

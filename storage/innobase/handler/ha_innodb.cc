@@ -23661,6 +23661,11 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to disable gpp cleanout when read (off by default)", NULL, NULL,
     false);
 
+static MYSQL_SYSVAR_BOOL(
+    ddl_cleanout_disable, lizard::opt_ddl_cleanout_disable, PLUGIN_VAR_OPCMDARG,
+    "Whether to disable ddl cleanout when  (off by default)", NULL, NULL,
+    false);
+
 static MYSQL_SYSVAR_ULONG(commit_cleanout_max_rows,
                           lizard::srv_commit_cleanout_max_rows,
                           PLUGIN_VAR_OPCMDARG, "max cleanout rows at commit",
@@ -24082,6 +24087,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(cleanout_safe_mode),
     MYSQL_SYSVAR(cleanout_disable),
     MYSQL_SYSVAR(gpp_cleanout_disable),
+    MYSQL_SYSVAR(ddl_cleanout_disable),
     MYSQL_SYSVAR(cleanout_max_scans_on_page),
     MYSQL_SYSVAR(cleanout_max_cleans_on_page),
     MYSQL_SYSVAR(commit_cleanout_max_rows),

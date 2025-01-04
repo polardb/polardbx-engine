@@ -65,7 +65,10 @@ extern bool opt_cleanout_disable;
 /** Whether disable the gpp cleanout when read */
 extern bool opt_gpp_cleanout_disable;
 
-  /* Commit cleanout max num. */
+/** Whether disable the ddl cleanout when read */
+extern bool opt_ddl_cleanout_disable;
+
+/* Commit cleanout max num. */
 extern ulint srv_commit_cleanout_max_rows;
 
 /*----------------------------------------------------------------*/
@@ -104,6 +107,7 @@ class Cursor {
     m_modify_clock = 0;
     m_block_when_stored.clear();
   }
+  bool stored() const { return m_old_stored; }
 
   virtual ~Cursor() { reset(); }
 
@@ -173,7 +177,14 @@ class CCursor : public Cursor {
     Cursor::reset();
   }
 
+  bool is_on_same_page(btr_pcur_t *pcur) const;
+
   ~CCursor() { reset(); }
+
+  buf_block_t *get_block() const { return m_block; }
+  dict_index_t *get_index() const { return m_index; }
+
+  rec_t* get_old_rec() const { return m_old_rec; }
 
  private:
   txn_rec_t m_txn_rec;
@@ -251,6 +262,30 @@ class Cleanout {
 
   /** Execute cleanout work. */
   virtual void execute() = 0;
+
+  /** Collect record */
+  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                       const rec_t *rec, const dict_index_t *index,
+                       const ulint *offsets, btr_pcur_t *pcur) = 0;
+};
+
+/** Cleanout runtime context for pcursor. */
+struct cleanout_ctx_t {
+ public:
+  explicit cleanout_ctx_t(btr_pcur_t *pcur);
+
+  explicit cleanout_ctx_t(btr_pcur_t *pcur, Cleanout *cleanout)
+      : m_pcur(pcur), m_cleanout(cleanout) {}
+
+  bool is_active() const { return m_cleanout != nullptr && m_pcur != nullptr; }
+
+  Cleanout *cleanout() { return m_cleanout; }
+
+  btr_pcur_t *pcur() { return m_pcur; }
+
+ public:
+  btr_pcur_t *m_pcur;
+  Cleanout *m_cleanout;
 };
 
 /*------------------------------------------------------------------------*/
@@ -272,6 +307,10 @@ class Scan_cleanout : public Cleanout {
         m_sec_num(0) {}
 
   virtual ~Scan_cleanout() { clear(); }
+
+  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                       const rec_t *rec, const dict_index_t *index,
+                       const ulint *offsets, btr_pcur_t *pcur) override;
 
   virtual void execute() override {
     ulint cleaned = 0;
@@ -322,9 +361,6 @@ class Scan_cleanout : public Cleanout {
    * @retval		cursor or nullptr if disable or unavailable slot */
   CCursor *acquire_for_lizard(btr_pcur_t *pcur, const txn_rec_t &txn_rec) {
     CCursor *cur = nullptr;
-    if (opt_cleanout_disable) {
-      return nullptr;
-    }
     if ((cur = acquire_clust()) != nullptr) {
       cur->store(pcur, txn_rec);
       lizard_stats.cleanout_clust_collect.inc();
@@ -393,6 +429,14 @@ class Commit_cleanout : public Cleanout {
 
   void set_commit(const txn_rec_t &txn_rec) { m_txn_rec = txn_rec; }
 
+
+  /** Collect record */
+  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                       const rec_t *rec, const dict_index_t *index,
+                       const ulint *offsets, btr_pcur_t *pcur) override {
+    ut_a(0);
+  }
+
   virtual void execute() override {
     if (m_static_num == 0 && m_dynamic_num == 0) {
       ut_ad(m_dynamic_cursors.size() == 0);
@@ -458,20 +502,67 @@ class Commit_cleanout : public Cleanout {
   txn_rec_t m_txn_rec;
 };
 
-/**
-  Collect the page which need to cleanout
+class DDL_cleanout : public Cleanout {
+ private:
+  /** How many cursors can be saved to cleanout ddl. */
+  constexpr static size_t MAX_CURSORS = 1024;
 
-  @param[in]        trx_id
-  @param[in]        txn rec         trx description and state
-  @param[in]        rec             current rec
-  @param[in]        index           cluster index
-  @parma[in]        offsets         rec_get_offsets(rec, index)
-  @param[in/out]    pcur            cursor
-*/
-extern void scan_cleanout_collect(const trx_id_t trx_id,
-                                  const txn_rec_t &txn_rec, const rec_t *rec,
-                                  const dict_index_t *index,
-                                  const ulint *offsets, btr_pcur_t *pcur);
+ public:
+  explicit DDL_cleanout()
+      : Cleanout(), m_cursor(), m_old_recs(), m_txn_recs(), m_rec_nums{0} {}
+
+  virtual ~DDL_cleanout() override { clear(); }
+
+  virtual void clear() override {
+    m_rec_nums = 0;
+    m_cursor.reset();
+  }
+
+  virtual void execute() override {
+    ulint cleaned = do_cleanout();
+
+    clear();
+    lizard::lizard_stats.ddl_cleanout_clust_clean.add(cleaned);
+  }
+
+  /** Collect record */
+  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
+                       const rec_t *rec, const dict_index_t *index,
+                       const ulint *offsets, btr_pcur_t *pcur) override;
+
+ private:
+  ulint do_cleanout();
+
+  void store(const rec_t *rec, const txn_rec_t &txn_rec, btr_pcur_t *pcur) {
+    /** Store the first record of new page. */
+    if (!m_cursor.stored()) {
+      ut_ad(m_rec_nums == 0);
+      m_cursor.store_position(pcur);
+    }
+
+    /** If the record is on the different page, return. */
+    if (!m_cursor.is_on_same_page(pcur)) {
+      clear();
+      return;
+    }
+
+    if (m_rec_nums >= MAX_CURSORS) return;
+
+    m_old_recs[m_rec_nums] = const_cast<rec_t *>(rec);
+    m_txn_recs[m_rec_nums] = txn_rec;
+    m_rec_nums++;
+  }
+
+ private:
+  /** If the cursor can restore, it means that the offsets of other records
+   * haven't change. */
+  CCursor m_cursor;
+
+  rec_t* m_old_recs[MAX_CURSORS];
+  txn_rec_t m_txn_recs[MAX_CURSORS];
+
+  ulint m_rec_nums;
+};
 
 /**
   Collect rows updated in current transaction.

@@ -1,0 +1,31 @@
+SET autocommit = 0;
+set global innodb_commit_cleanout_max_rows=0;
+set global innodb_lizard_stat_enabled=true;
+CREATE TABLE large_table4 (
+id INT  PRIMARY KEY,
+name VARCHAR(50),
+age INT,
+city VARCHAR(50)
+);
+CREATE PROCEDURE insert_data1()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 12000 DO
+INSERT INTO large_table4(id, name, age, city) 
+VALUES (
+i,
+CONCAT('Name', i),
+FLOOR(18 + (i * 62)),
+'New York'
+        );
+SET i = i + 1;
+END WHILE;
+END |
+CALL insert_data1();
+ALTER TABLE large_table4 ADD INDEX idx_name (name);
+include/assert.inc [ddl_cleanout should make sense.]
+set global innodb_commit_cleanout_max_rows=3;
+set global innodb_lizard_stat_enabled=false;
+SET autocommit = 1;
+DROP PROCEDURE insert_data1;
+DROP TABLE large_table4;

@@ -434,10 +434,11 @@ dberr_t row_drop_database_for_mysql(const char *name, trx_t *trx, ulint *found);
 @param[in]  max_threads         Maximum number of threads to use.
 @param[out] n_rows              Number of rows seen.
 @param[out] n_del_mark          Number of rows read with delete marked.
+@param[in]  prebuilt            Prebuilt struct in MySQL handle.
 @return DB_SUCCESS or error code. */
 dberr_t row_mysql_parallel_select_count_star(
-    trx_t *trx, std::vector<dict_index_t *> &indexes, size_t max_threads,
-    ulint *n_rows, ulonglong *n_del_mark = nullptr);
+    std::vector<dict_index_t *> &indexes, size_t max_threads,
+    ulint *n_rows, row_prebuilt_t *prebuilt , ulonglong *n_del_mark = nullptr);
 
 /** Scans an index for either COUNT(*) or CHECK TABLE.
 If CHECK TABLE; Checks that the index contains entries in an ascending order,

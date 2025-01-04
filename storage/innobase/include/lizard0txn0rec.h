@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "buf0buf.h"
 
+#include "lizard0cleanout.h"
 #include "lizard0txn0rec0types.h"
 
 /** Transaction slot or tcn cache lookup result structure. */
@@ -189,16 +190,17 @@ extern bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint,
   If cleaning is not needed, lookup and fill the txn_rec if necessary.
 
   @param[in/out]  txn_rec	  txn record
-  @param[in]      pcur      btr_pcur
   @param[in]      rec       record
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
   @param[in]      ccr       category of commit number combination.
+  @param[in]	  cctx      cleanout context
 */
-extern void txn_rec_execute_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                       const rec_t *rec,
+extern void txn_rec_execute_when_query(txn_rec_t *txn_rec, const rec_t *rec,
                                        const dict_index_t *index,
-                                       const ulint *offsets, ccr_t ccr);
+                                       const ulint *offsets, ccr_t ccr,
+                                       cleanout_ctx_t &cctx);
+
 /**
   Clean out the record during modification.
   If cleaning is needed, attempt to look up the txn_rec and perform the
@@ -248,18 +250,18 @@ extern bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
  *  cache.
  *
  *  @param[in/out]	txn rec
- *  @param[in]		used in cleanout
  *  @param[in]		user record
  *  @param[in]		index
  *  @param[in]		rec_get_offsets(rec, index)
  *  @param[in]		vision
+ *  @param[in/out]	cleanout context 
  *
  *  @retval	true	see
  *  @retval	false	not sure
  */
-extern bool txn_rec_try_see(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                            const rec_t *rec, const dict_index_t *index,
-                            const ulint *offsets, Vision *vision);
+extern bool txn_rec_try_see(txn_rec_t *txn_rec, const rec_t *rec,
+                            const dict_index_t *index, const ulint *offsets,
+                            const Vision *vision, cleanout_ctx_t &cctx);
 
 }  // namespace lizard
 

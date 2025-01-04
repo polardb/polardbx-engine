@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "trx0trx.h"
+#include "btr0pcur.h"
 
 class THD;
 
@@ -493,14 +494,15 @@ bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
   txn_rec_t txn_rec;
   row_get_txn_rec(rec, index, offsets, &txn_rec);
 
+  cleanout_ctx_t cctx(pcur);
   /** Try to see optimistically. */
-  if (txn_rec_try_see(&txn_rec, pcur, rec, index, offsets, vision)) {
+  if (txn_rec_try_see(&txn_rec, rec, index, offsets, vision, cctx)) {
     return true;
   }
 
 retry:
-  txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
-                             vision->visible_by());
+  txn_rec_execute_when_query(&txn_rec, rec, index, offsets,
+                             vision->visible_by(), cctx);
 
   /** 1. Already committed; */
   if (txn_rec.is_committed()) {

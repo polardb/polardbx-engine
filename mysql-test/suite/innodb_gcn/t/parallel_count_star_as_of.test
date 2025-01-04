@@ -1,0 +1,40 @@
+CREATE TABLE t1 (
+	c1 INT AUTO_INCREMENT PRIMARY KEY,
+	c2 INT,
+	c3 INT,
+	c4 INT,
+	INDEX k2(c2)
+) Engine=InnoDB;
+let $1=10;
+while ($1 > 0) {
+  INSERT INTO t1(c2,c3,c4) VALUES (1, 1, 1);
+  dec $1;
+}
+
+CREATE TABLE t2 LIKE t1;
+--enable_info
+INSERT INTO t2 (SELECT * FROM t1);
+--disable_info
+
+CREATE TABLE t3 (
+	c1 INT AUTO_INCREMENT PRIMARY KEY,
+	c2 INT,
+	c3 INT,
+	c4 INT,
+	INDEX k2(c2)
+) Engine=InnoDB PARTITION BY HASH(c1) PARTITIONS 4;
+--enable_info
+INSERT INTO t3 (SELECT * FROM t1);
+
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+BEGIN;
+UPDATE t1 SET c2 = c2 * 7 WHERE c1 = 3;
+DELETE FROM t1 WHERE c1 = 8;
+DELETE FROM t3 WHERE c1 = 8;
+INSERT INTO t1(c2,c3,c4) VALUES (1000, 1, 1);
+INSERT INTO t3(c2,c3,c4) VALUES (1000, 1, 1);
+
+--source suite/innodb/include/innodb_wl6742_selects.inc
+
+drop table t1, t2, t3;

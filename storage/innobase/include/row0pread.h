@@ -176,14 +176,16 @@ class Parallel_reader {
                               belongs to a partitioned table. */
     Config(const Scan_range &scan_range, dict_index_t *index,
            size_t read_level = 0,
-           size_t partition_id = std::numeric_limits<size_t>::max())
+           size_t partition_id = std::numeric_limits<size_t>::max(),
+           bool is_ddl_parallel_scan = false)
         : m_scan_range(scan_range),
           m_index(index),
           m_is_compact(dict_table_is_comp(index->table)),
           m_page_size(dict_tf_to_fsp_flags(index->table->flags)),
           m_read_level(read_level),
           m_partition_id(partition_id),
-          m_ptr_n_rows_read_del_mark(nullptr) {}
+          m_ptr_n_rows_read_del_mark(nullptr),
+          m_is_ddl_parallel_scan(is_ddl_parallel_scan) {}
 
     /** Copy constructor.
     @param[in] config           Instance to copy from. */
@@ -212,6 +214,9 @@ class Parallel_reader {
 
     /** For GALAXY ENGINE count the n_rows_read_del_mark */
     Counter::Shards<Parallel_reader::MAX_THREADS> *m_ptr_n_rows_read_del_mark;
+    
+    /** True only if this is a DDL add secondary index. */
+    bool m_is_ddl_parallel_scan {false};
   };
 
   /** Thread related context information. */
@@ -609,8 +614,9 @@ class Parallel_reader::Scan_ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(const rec_t *&rec, ulint *&offsets,
-                                      mem_heap_t *&heap, mtr_t *mtr);
+  [[nodiscard]] bool check_visibility(
+      const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr,
+      lizard::Cleanout *cleanout = nullptr, btr_pcur_t *pcur = nullptr);
 
   /** Create an execution context for a range and add it to
   the Parallel_reader's run queue.
@@ -687,10 +693,23 @@ class Parallel_reader::Ctx {
   @param[in]    scan_ctx        Scan context.
   @param[in]    range           Range that the thread has to read. */
   Ctx(size_t id, Scan_ctx *scan_ctx, const Scan_ctx::Range &range)
-      : m_id(id), m_range(range), m_scan_ctx(scan_ctx) {}
+      : m_id(id),
+        m_range(range),
+        m_scan_ctx(scan_ctx),
+        m_ddl_cleanout(nullptr) {
+    if (!lizard::opt_ddl_cleanout_disable &&
+        m_scan_ctx->m_config.m_is_ddl_parallel_scan) {
+      m_ddl_cleanout = ut::new_<lizard::DDL_cleanout>();
+    }
+  }
 
   /** Destructor. */
-  ~Ctx() = default;
+  ~Ctx() {
+    if (m_ddl_cleanout != nullptr) {
+      ut::delete_(m_ddl_cleanout);
+      m_ddl_cleanout = nullptr;
+    }
+  }
 
  public:
   /** @return the context ID. */
@@ -793,6 +812,7 @@ class Parallel_reader::Ctx {
   /** Start of a new range to scan. */
   bool m_start{};
 
+  lizard::DDL_cleanout* m_ddl_cleanout;
   friend class Parallel_reader;
 };
 

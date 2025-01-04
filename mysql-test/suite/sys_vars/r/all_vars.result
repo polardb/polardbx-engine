@@ -266,6 +266,8 @@ innodb_data_file_purge_max_size
 innodb_data_file_purge_max_size
 innodb_dbug_gpp_no
 innodb_dbug_gpp_no
+innodb_ddl_cleanout_disable
+innodb_ddl_cleanout_disable
 innodb_dedicated_server
 innodb_dedicated_server
 innodb_encrypt_algorithm
@@ -522,8 +524,6 @@ print_malloc_stats
 pseudo_slave_mode
 query_via_flashback_area
 query_via_flashback_area
-rds_active_memory_profiling
-rds_active_memory_profiling
 rds_audit_flush_thread_enabled
 rds_audit_flush_thread_enabled
 rds_audit_log_buffer_size

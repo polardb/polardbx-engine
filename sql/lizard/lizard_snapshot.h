@@ -279,6 +279,8 @@ class Snapshot_vision {
 
   virtual trx_id_t up_limit_tid() const = 0;
 
+  virtual bool is_gcn() const = 0;
+
   /*------------------------------------------------------------------------------*/
   /* Virtual function */
   /*------------------------------------------------------------------------------*/
@@ -340,6 +342,8 @@ class Snapshot_time_vision : public Snapshot_vision {
 
   virtual trx_id_t up_limit_tid() const override { return 0; }
 
+  virtual bool is_gcn() const override { return false; }
+
  private:
   uint64_t m_second;
 };
@@ -400,6 +404,8 @@ class Snapshot_scn_vision : public Snapshot_vision {
   virtual bool modification_visible(void *) const override;
 
   virtual trx_id_t up_limit_tid() const override { return m_up_limit_tid; }
+
+  virtual bool is_gcn() const override { return false; }
 
  private:
   scn_t m_scn;
@@ -478,6 +484,8 @@ class Snapshot_gcn_vision : public Snapshot_vision {
     Inherit status from MyVisionGCN before activate.
   */
   virtual void init(const MyVisionGCN *) { assert(0); }
+
+  virtual bool is_gcn() const override { return true; }
 
  protected:
   gcn_t m_gcn;
@@ -613,6 +621,8 @@ class Snapshot_noop_vision : public Snapshot_vision {
   }
 
   virtual trx_id_t up_limit_tid() const override { return 0; }
+
+  virtual bool is_gcn() const override { return false; }
 };
 
 /** Table snapshot worked on TABLE object.
@@ -682,8 +692,9 @@ class Table_snapshot {
     vision->reset();
     return vision;
   }
-
   bool is_vision() const { return m_vision->is_vision(); }
+
+  bool is_gcn() const { return m_vision->is_gcn(); }
 
  private:
   int exchange_timestamp_vision_to_scn_vision(Snapshot_vision **vision,

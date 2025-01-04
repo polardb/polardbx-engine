@@ -265,13 +265,15 @@ bool lock_clust_rec_cons_read_sees(
   txn_rec_t txn_rec;
   lizard::row_get_txn_rec(rec, index, offsets, &txn_rec);
 
+  lizard::cleanout_ctx_t cctx(pcur);
+
   /** Try to see optimistically. */
-  if (lizard::txn_rec_try_see(&txn_rec, pcur, rec, index, offsets, vision)) {
+  if (lizard::txn_rec_try_see(&txn_rec, rec, index, offsets, vision, cctx)) {
     return true;
   }
 
-  lizard::txn_rec_execute_when_query(&txn_rec, pcur, rec, index, offsets,
-                                     vision->visible_by());
+  lizard::txn_rec_execute_when_query(&txn_rec, rec, index, offsets,
+                                     vision->visible_by(), cctx);
 
   return (vision->modifications_visible(&txn_rec, index->table->name));
 }

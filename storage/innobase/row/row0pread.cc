@@ -216,8 +216,12 @@ class PCursor {
   @param[in,out] pcur           Persistent cursor in use.
   @param[in] mtr                Mini-transaction used by the persistent cursor.
   @param[in] read_level         Read level where the block should be present. */
-  PCursor(btr_pcur_t *pcur, mtr_t *mtr, size_t read_level)
-      : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
+  PCursor(btr_pcur_t *pcur, mtr_t *mtr, size_t read_level,
+          lizard::DDL_cleanout *ddl_cleanout)
+      : m_mtr(mtr),
+        m_pcur(pcur),
+        m_read_level(read_level),
+        m_ddl_cleanout(ddl_cleanout) {}
 
   /**
     Restore position of cursor created from Scan_ctx::Range object.
@@ -271,7 +275,10 @@ class PCursor {
   /** @return Level where the cursor is intended. */
   size_t read_level() const noexcept { return m_read_level; }
 
- private:
+
+  [[nodiscard]] btr_pcur_t* get_pcur() const noexcept { return m_pcur; }
+
+  private :
   /** Mini-transaction. */
   mtr_t *m_mtr{};
 
@@ -281,6 +288,8 @@ class PCursor {
   /** Level where the cursor is positioned or need to be positioned in case of
   restore. */
   size_t m_read_level{};
+
+  lizard::DDL_cleanout *m_ddl_cleanout;
 };
 
 buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(
@@ -361,8 +370,15 @@ dberr_t PCursor::move_to_user_rec() noexcept {
 
   buf_block_dbg_add_level(block, SYNC_TREE_NODE);
 
+  /** Release the previous page S lock. */
   btr_leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
+  
+  if (m_ddl_cleanout != nullptr) {
+    /** Cleanout the previous page. */
+    m_ddl_cleanout->execute();
+  }
 
+  /** Here block is next page, pcur moves to next page. */
   page_cur_set_before_first(block, cur);
 
   /* Skip the infimum record. */
@@ -434,7 +450,9 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
 bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
                                                  ulint *&offsets,
                                                  mem_heap_t *&heap,
-                                                 mtr_t *mtr) {
+                                                 mtr_t *mtr, 
+                                                 lizard::Cleanout *cleanout, 
+                                                 btr_pcur_t *pcur) {
   const auto table_name = m_config.m_index->table->name;
 
   // ut_ad(!m_trx || m_trx->read_view == nullptr ||
@@ -457,25 +475,27 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
       txn_rec_t txn_rec;
       lizard::row_get_txn_rec(rec, m_config.m_index, offsets, &txn_rec);
 
-      {
-        if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-          lizard::txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD,
-                                     vision->visible_by());
+      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
+        lizard::cleanout_ctx_t cctx(pcur, cleanout);
+        if (lizard::txn_rec_try_see(&txn_rec, rec, m_config.m_index, offsets,
+                                    vision, cctx)) {
+          goto sees;
         }
-      }
+        lizard::txn_rec_execute_when_query(&txn_rec, rec, m_config.m_index,
+                                           offsets, vision->visible_by(), cctx);
 
-      if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-          !vision->modifications_visible(&txn_rec, table_name)) {
-        rec_t *old_vers;
+        if (!vision->modifications_visible(&txn_rec, table_name)) {
+          rec_t *old_vers;
 
-        row_vers_build_for_consistent_read(rec, mtr, m_config.m_index, &offsets,
-                                           vision, &heap, heap, &old_vers,
-                                           nullptr, nullptr);
+          row_vers_build_for_consistent_read(rec, mtr, m_config.m_index,
+                                             &offsets, vision, &heap, heap,
+                                             &old_vers, nullptr, nullptr);
 
-        rec = old_vers;
+          rec = old_vers;
 
-        if (rec == nullptr) {
-          return (false);
+          if (rec == nullptr) {
+            return (false);
+          }
         }
       }
     } else {
@@ -603,7 +623,7 @@ dberr_t Parallel_reader::Ctx::traverse() {
 
   auto &from = m_range.first;
 
-  PCursor pcursor(from->m_pcur, &mtr, m_scan_ctx->m_config.m_read_level);
+  PCursor pcursor(from->m_pcur, &mtr, m_scan_ctx->m_config.m_read_level, m_ddl_cleanout);
   pcursor.restore_position_for_range();
 
   dberr_t err{DB_SUCCESS};
@@ -730,7 +750,8 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     bool skip{};
 
     if (page_is_leaf(cur->block->frame)) {
-      skip = !m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
+      skip = !m_scan_ctx->check_visibility(rec, offsets, heap, mtr,
+                                           m_ddl_cleanout, pcursor->get_pcur());
     }
 
     if (!skip) {

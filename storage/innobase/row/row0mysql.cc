@@ -4405,10 +4405,11 @@ funct_exit:
 @param[in]  n_threads           Number of threads to use.
 @param[out] n_rows              Number of rows seen.
 @param[out] n_del_mark          Number of rows read with delete marked.
+@param[in]  prebuilt            Prebuilt struct.
 @return DB_SUCCESS or error code. */
 dberr_t row_mysql_parallel_select_count_star(
-    trx_t *trx, std::vector<dict_index_t *> &indexes, size_t n_threads,
-    ulint *n_rows, ulonglong *n_del_mark) {
+    std::vector<dict_index_t *> &indexes, size_t n_threads,
+    ulint *n_rows, row_prebuilt_t *prebuilt, ulonglong *n_del_mark) {
   ut_a(n_threads > 1);
   ut_a(!indexes.empty());
   using Shards = Counter::Shards<Parallel_reader::MAX_THREADS>;
@@ -4425,12 +4426,19 @@ dberr_t row_mysql_parallel_select_count_star(
 
   dberr_t err{DB_SUCCESS};
 
+  if ((err = lizard::row_prebuilt_bind_flashback_query(prebuilt)) !=
+          DB_SUCCESS) {
+      return err;
+  }
+  lizard::AsofVisonWrapper asof_wrapper;
+  asof_wrapper.trx_store_snapshot_vision(prebuilt);
+
   for (auto index : indexes) {
     Parallel_reader::Config config(FULL_SCAN, index);
 
     config.m_ptr_n_rows_read_del_mark = &n_rows_read_del_mark;
 
-    err = reader.add_scan(trx, config, [&](const Parallel_reader::Ctx *ctx) {
+    err = reader.add_scan(prebuilt->trx, config, [&](const Parallel_reader::Ctx *ctx) {
       Counter::inc(n_recs, ctx->thread_id());
       return DB_SUCCESS;
     });
@@ -4662,8 +4670,9 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
       prebuilt->select_lock_type == LOCK_NONE && index->is_clustered() &&
       (check_keys || prebuilt->trx->mysql_n_tables_locked == 0) &&
       !prebuilt->ins_sel_stmt) {
+
     if (!check_keys && prebuilt->m_mysql_table &&
-        prebuilt->m_mysql_table->table_snapshot.is_vision()) {
+        prebuilt->m_mysql_table->table_snapshot.is_gcn()) {
       goto skip_parallel_read;
     }
 
@@ -4687,8 +4696,8 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
         ulonglong *n_del_mark = &(prebuilt->rds_rows_read_del_mark);
 
         if (!check_keys) {
-          return (row_mysql_parallel_select_count_star(trx, indexes, n_threads,
-                                                       n_rows, n_del_mark));
+          return (row_mysql_parallel_select_count_star(indexes, n_threads,
+                                                       n_rows, prebuilt, n_del_mark));
         }
 
         return (
@@ -4696,8 +4705,8 @@ dberr_t row_scan_index_for_mysql(row_prebuilt_t *prebuilt, dict_index_t *index,
       }
 
       if (!check_keys) {
-        return row_mysql_parallel_select_count_star(trx, indexes, n_threads,
-                                                    n_rows);
+        return row_mysql_parallel_select_count_star(indexes, n_threads,
+                                                    n_rows, prebuilt);
       }
 
       return parallel_check_table(trx, index, n_threads, n_rows);

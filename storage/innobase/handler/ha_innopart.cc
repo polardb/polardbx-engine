@@ -3220,6 +3220,8 @@ int ha_innopart::records(ha_rows *num_rows) {
   auto trx = thd_to_trx(ha_thd());
   size_t n_threads = thd_parallel_read_threads(m_prebuilt->trx->mysql_thd);
 
+  ut_a(m_prebuilt->trx == trx);
+
   n_threads = Parallel_reader::available_threads(n_threads, false);
 
   if (n_threads > 0 && trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
@@ -3227,7 +3229,18 @@ int ha_innopart::records(ha_rows *num_rows) {
       trx->mysql_n_tables_locked == 0 && !m_prebuilt->ins_sel_stmt &&
       n_threads > 1 &&
       (!m_prebuilt->m_mysql_table ||
-       !m_prebuilt->m_mysql_table->table_snapshot.is_vision())) {
+       !m_prebuilt->m_mysql_table->table_snapshot.is_gcn())) {
+
+    const lizard::Snapshot_vision *sv =
+        lizard::row_prebuilt_get_snapshot_vision(m_prebuilt);
+    m_prebuilt->index_usable =
+        m_prebuilt->table->first_index()->is_usable(m_prebuilt->trx, sv);
+
+    if (!m_prebuilt->index_usable) {
+      *num_rows = HA_POS_ERROR;
+      return sv ? HA_ERR_AS_OF_TABLE_DEF_CHANGED : HA_ERR_TABLE_DEF_CHANGED;
+    }
+
     trx_start_if_not_started_xa(trx, false, UT_LOCATION_HERE);
     trx_assign_read_view(trx);
 
@@ -3254,7 +3267,7 @@ int ha_innopart::records(ha_rows *num_rows) {
     ulint n_rows{};
 
     auto err =
-        row_mysql_parallel_select_count_star(trx, indexes, n_threads, &n_rows);
+        row_mysql_parallel_select_count_star(indexes, n_threads, &n_rows, m_prebuilt, nullptr);
 
     if (thd_killed(m_user_thd) || err == DB_INTERRUPTED) {
       *num_rows = HA_POS_ERROR;

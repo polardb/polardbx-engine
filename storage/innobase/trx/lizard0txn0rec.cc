@@ -437,28 +437,31 @@ bool txn_rec_real_state(txn_rec_t *txn_rec, Cache_hint hint, ccr_t ccr) {
   finishes.
 
   @param[in/out]  txn_rec	  txn record
-  @param[in]      pcur      btr_pcur
   @param[in]      rec       record
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
+  @param[in]      pcur      btr_pcur
+  @param[in/out]	cleanout collector
 */
-static void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                        const rec_t *rec,
+static void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, const rec_t *rec,
                                         const dict_index_t *index,
-                                        const ulint *offsets) {
+                                        const ulint *offsets,
+                                        cleanout_ctx_t &cctx) {
   bool active = false;
   bool cache_hit = false;
   txn_lookup_t txn_lookup;
   txn_status_t txn_status;
 
   ut_ad(txn_rec->is_active());
+  ut_ad(cctx.is_active());
 
   /** Search tcn cache */
   cache_hit = trx_search_tcn(txn_rec, &txn_status);
   if (cache_hit) {
     ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later. */
-    scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+    cctx.cleanout()->collect(txn_rec->trx_id, *txn_rec, rec, index, offsets,
+                             cctx.pcur());
     return;
   }
 
@@ -470,7 +473,8 @@ static void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   if (!active) {
     ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later.*/
-    scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+    cctx.cleanout()->collect(txn_rec->trx_id, *txn_rec, rec, index, offsets,
+                             cctx.pcur());
     /** Cache txn info into tcn. */
     trx_cache_tcn(*txn_rec, txn_status);
   }
@@ -483,17 +487,17 @@ static void txn_rec_cleanout_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
   If cleaning is not needed, lookup and fill the txn_rec if necessary.
 
   @param[in/out]  txn_rec	  txn record
-  @param[in]      pcur      btr_pcur
   @param[in]      rec       record
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
   @param[in]      ccr       category of commit number combination.
+  @param[in]	  cctx      cleanout context
 */
-void txn_rec_execute_when_query(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                const rec_t *rec, const dict_index_t *index,
-                                const ulint *offsets, ccr_t ccr) {
-  if (txn_rec->is_active()) {
-    txn_rec_cleanout_when_query(txn_rec, pcur, rec, index, offsets);
+void txn_rec_execute_when_query(txn_rec_t *txn_rec, const rec_t *rec,
+                                const dict_index_t *index, const ulint *offsets,
+                                ccr_t ccr, cleanout_ctx_t &cctx) {
+  if (txn_rec->is_active() && cctx.is_active()) {
+    txn_rec_cleanout_when_query(txn_rec, rec, index, offsets, cctx);
   } else {
     txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD, ccr);
   }
@@ -676,26 +680,29 @@ bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
   finishes.
 
   @param[in/out]  txn_rec	  txn record
-  @param[in]      pcur      btr_pcur
   @param[in]      rec       record
   @param[in]      index     index
   @param[in]      offsets   rec_get_offsets(rec)
+  @param[in]      pcur      btr_pcur
+  @param[in/out]	cleanout collector
 */
-static void txn_rec_cleanout_when_hit(txn_rec_t *txn_rec, btr_pcur_t *pcur,
-                                      const rec_t *rec,
+static void txn_rec_cleanout_when_hit(txn_rec_t *txn_rec, const rec_t *rec,
                                       const dict_index_t *index,
-                                      const ulint *offsets) {
+                                      const ulint *offsets,
+                                      cleanout_ctx_t &cctx) {
   bool cache_hit = false;
   txn_status_t txn_status;
 
   ut_ad(txn_rec->is_active());
+  ut_ad(cctx.is_active());
 
   /** Search tcn cache */
   cache_hit = trx_search_tcn(txn_rec, &txn_status);
   if (cache_hit) {
     ut_ad(txn_rec->is_whole_committed());
     /** Collect record to cleanout later. */
-    scan_cleanout_collect(txn_rec->trx_id, *txn_rec, rec, index, offsets, pcur);
+    cctx.cleanout()->collect(txn_rec->trx_id, *txn_rec, rec, index, offsets,
+                             cctx.pcur());
     return;
   }
   return;
@@ -705,18 +712,18 @@ static void txn_rec_cleanout_when_hit(txn_rec_t *txn_rec, btr_pcur_t *pcur,
  *  cache.
  *
  *  @param[in/out]	txn rec
- *  @param[in]		used in cleanout
  *  @param[in]		user record
  *  @param[in]		index
  *  @param[in]		rec_get_offsets(rec, index)
  *  @param[in]		vision
+ *  @param[in/out]	cleanout context
  *
  *  @retval	true	see
  *  @retval	false	not sure
  */
-bool txn_rec_try_see(txn_rec_t *txn_rec, btr_pcur_t *pcur, const rec_t *rec,
+bool txn_rec_try_see(txn_rec_t *txn_rec, const rec_t *rec,
                      const dict_index_t *index, const ulint *offsets,
-                     Vision *vision) {
+                     const Vision *vision, cleanout_ctx_t &cctx) {
   bool see = false;
   trx_id_t trx_id;
 
@@ -725,8 +732,8 @@ bool txn_rec_try_see(txn_rec_t *txn_rec, btr_pcur_t *pcur, const rec_t *rec,
 
   see = vision->sees(trx_id);
 
-  if (see && txn_rec->is_active()) {
-    txn_rec_cleanout_when_hit(txn_rec, pcur, rec, index, offsets);
+  if (see && txn_rec->is_active() && cctx.is_active()) {
+    txn_rec_cleanout_when_hit(txn_rec, rec, index, offsets, cctx);
   }
 
   return see;

@@ -187,6 +187,18 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
 
   using Thread_ctx = Parallel_reader::Thread_ctx;
 
+  Parallel_reader::Config config(FULL_SCAN, index());
+  config.m_is_ddl_parallel_scan = true;
+
+  /** It's possible to create multiple indexes in a single scan. If one of these
+   * indexes can skip file sorting, it may lead to the release of page locks,
+   * resulting in ddl cleanout collected records not being on the same page.  */
+
+  for (auto builder : builders) {
+    if (builder->is_skip_file_sort()) {
+      config.m_is_ddl_parallel_scan = false;
+    }
+  }
   auto batch_inserter = [&](Thread_ctx *thread_ctx) {
     size_t i{};
     bool latches_released{};
@@ -321,7 +333,6 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
     return DB_ERROR;
   });
 
-  Parallel_reader::Config config(FULL_SCAN, index());
 
   /* Called for each row during the scan. */
   auto err = reader.add_scan(
