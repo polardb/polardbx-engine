@@ -2020,7 +2020,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     }
   }
 
-  if (state_ == LEARNER && msg->myserverid() == getMyServerId()) {
+  if (msg->myserverid() == getMyServerId()) {
     easy_error_log(
         "Server %d : reject AppendLog because this server has same mysql server_id(%llu)"
         ", server(id:%llu, addr:%s).\n",
