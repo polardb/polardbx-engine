@@ -4474,6 +4474,7 @@ class handler {
     index conditions.
   */
   key_range *end_range;
+  ha_rows range_read_rows = 0;
   /**
     Flag which tells if #end_range contains a virtual generated column.
     The content is invalid when #end_range is @c nullptr.

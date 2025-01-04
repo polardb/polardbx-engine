@@ -7779,5 +7779,12 @@ static Sys_var_bool Sys_enable_changeset(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(handle_enable_changeset));
 
+static Sys_var_bool Sys_pushdown_range_limit(
+    "pushdown_range_limit",
+    "Push down limit to range scan.",
+    HINT_UPDATEABLE SESSION_VAR(pushdown_range_limit),
+    CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
 #include "sys_vars_consensus.cc"
 #include "sys_vars_ext.cc"

@@ -272,6 +272,7 @@ QUICK_RANGE::QUICK_RANGE()
       min_length(0),
       max_length(0),
       flag(NO_MIN_RANGE | NO_MAX_RANGE),
+      limit(HA_POS_ERROR),
       rkey_func_flag(HA_READ_INVALID),
       min_keypart_map(0),
       max_keypart_map(0) {}
@@ -286,6 +287,7 @@ QUICK_RANGE::QUICK_RANGE(MEM_ROOT *mem_root, const uchar *min_key_arg,
       min_length((uint16)min_length_arg),
       max_length((uint16)max_length_arg),
       flag((uint16)flag_arg),
+      limit(HA_POS_ERROR),
       rkey_func_flag(rkey_func_flag_arg),
       min_keypart_map(min_keypart_map_arg),
       max_keypart_map(max_keypart_map_arg) {
@@ -1705,6 +1707,10 @@ void append_range_to_string(const QUICK_RANGE *range,
     append_range(out, &first_key_part[keypart_idx], min_key, max_key, flag);
     min_key += first_key_part[keypart_idx].store_length;
     max_key += first_key_part[keypart_idx].store_length;
+  }
+  if (range->limit != HA_POS_ERROR) {
+    out->append(" pushed_limit ");
+    out->append_ulonglong(range->limit);
   }
 }
 

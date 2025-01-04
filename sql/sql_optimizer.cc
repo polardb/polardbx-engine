@@ -151,6 +151,11 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
                                     ha_rows select_limit, const bool no_changes,
                                     const Key_map *map, int *best_idx);
 
+static void try_pushdown_range_limit(TABLE *const table, u_int sk_n,
+                                     AccessPath *const save_range_scan,
+                                     ORDER_with_src &order,
+                                     ha_rows select_limit);
+
 static Item_func_match *test_if_ft_index_order(ORDER *order);
 
 static uint32 get_key_length_tmp_table(Item *item);
@@ -2735,6 +2740,14 @@ fix_ICP:
     // Keep current (ordered) tab->range_scan()
     if (save_range_scan != tab->range_scan()) destroy(save_range_scan);
   } else {
+    if (!can_skip_sorting && !no_changes && ref_key >= 0
+        && thd->variables.pushdown_range_limit
+        && tab->type() == JT_RANGE
+        && select_limit != HA_POS_ERROR) {
+      try_pushdown_range_limit(table, (uint) ref_key, save_range_scan,
+        order, select_limit);
+    }
+
     // Restore original save_range_scan
     if (tab->range_scan() != save_range_scan) {
       destroy(tab->range_scan());
@@ -2768,6 +2781,129 @@ fix_ICP:
   }
   *order_idx = best_key < 0 ? ref_key : best_key;
   return can_skip_sorting;
+}
+
+/**
+  Push down limit to each range, when the rows are locally ordered
+  according to the ORDER BY arguments and range conditions.
+
+  @param table            Table to scan
+  @param sk_n             Secondary index number in use
+  @param save_range_scan  Table range access path
+  @param order            Linked list of ORDER BY arguments
+  @param select_limit     LIMIT value
+
+*/
+static void try_pushdown_range_limit(TABLE *const table, u_int sk_n,
+                                     AccessPath *const save_range_scan,
+                                     ORDER_with_src &order,
+                                     ha_rows select_limit) {
+  if (table->part_info) {
+    // disable on partition tables
+    return;
+  }
+
+  const auto &param = save_range_scan->index_range_scan();
+  QUICK_RANGE ** ranges = param.ranges;
+  unsigned num_ranges = param.num_ranges;
+  bool support_pk_suffix = (table->file->ha_table_flags() & HA_PRIMARY_KEY_IN_READ_INDEX) &&
+          table->s->primary_key != MAX_KEY && table->s->primary_key != sk_n;
+  for (unsigned range_idx = 0; range_idx < num_ranges; ++range_idx) {
+    // only eq range which matches order by condition, can push down limit
+    bool can_push_limit = false;
+    QUICK_RANGE *cur_range = ranges[range_idx];
+    bool has_extended_pk_suffix = false;
+    if ((cur_range->flag & EQ_RANGE)
+      || (cur_range->flag & NEAR_MIN)
+      || (cur_range->flag & NEAR_MAX) ) {
+      KEY_PART_INFO *key_part = table->key_info[sk_n].key_part;
+      KEY_PART_INFO *key_part_end = key_part + table->key_info[sk_n].user_defined_key_parts;
+      key_part_map keypart_map = cur_range->min_keypart_map;
+      if (cur_range->flag & NEAR_MIN) {
+        keypart_map = cur_range->max_keypart_map;
+      }
+
+      ORDER *order_col = order.order;
+      // it is possible to contain order by columns at the end of index conditions
+      bool cond_matching_orderby = false;
+      while (keypart_map & 1 && key_part < key_part_end) {
+        if (order_col != nullptr) {
+          Item *order_real_item = (*order_col->item)->real_item();
+          if (order_real_item->type() != Item::FIELD_ITEM) {
+            goto range_limit_match_ends;
+          }
+          const Field *order_col_field = down_cast<const Item_field *>(order_real_item)->field;
+          if (key_part->field == order_col_field) {
+            cond_matching_orderby = true;
+            order_col = order_col->next;
+          } else {
+            if (cond_matching_orderby) {
+              goto range_limit_match_ends;
+            }
+          }
+        } else {
+          if (cond_matching_orderby) {
+            // there is no order column left, but still got remaining conditions
+            goto range_limit_match_ends;
+          }
+        }
+        // skip eq range conditions
+        key_part++;
+        keypart_map >>= 1;
+      }
+      // now key_part should match order by
+      for (; order_col; order_col = order_col->next) {
+        if (key_part == key_part_end) {
+          /*
+            We are at the end of the key. Check if the engine has the primary
+            key as a suffix to the secondary keys (which is likely)
+            and continue to check the primary key as a suffix.
+          */
+          if (!has_extended_pk_suffix && support_pk_suffix) {
+            // follows test_if_order_by_key
+            uint pk_key_parts = table->key_info[table->s->primary_key].user_defined_key_parts;
+            if (pk_key_parts == 0) {
+              goto range_limit_match_ends;
+            }
+            key_part = table->key_info[table->s->primary_key].key_part;
+            key_part_end = key_part + pk_key_parts;
+            has_extended_pk_suffix = true;
+          } else {
+            // no key for order by
+            goto range_limit_match_ends;
+          }
+        }
+        Item *order_real_item = (*order_col->item)->real_item();
+        if (order_real_item->type() != Item::FIELD_ITEM) {
+            goto range_limit_match_ends;
+        }
+        // do not need to skip constant condition
+        const Field *order_col_field = down_cast<const Item_field *>(order_real_item)->field;
+        if (key_part->field != order_col_field) {
+          goto range_limit_match_ends;
+        }
+        if (!order_col_field->part_of_sortkey.is_set(sk_n)) {
+          goto range_limit_match_ends;
+        }
+        if (order_col->direction != ORDER_NOT_RELEVANT) {
+          const enum_order keypart_order =(key_part->key_part_flag & HA_REVERSE_SORT) ?
+            ORDER_DESC : ORDER_ASC;
+          if (order_col->direction != keypart_order) {
+            // didn't consider backwards scan here
+            goto range_limit_match_ends;
+          }
+        }
+        key_part++;
+      }
+      can_push_limit = true;
+    }
+    range_limit_match_ends:
+    if (can_push_limit) {
+      cur_range->limit = select_limit;
+      DBUG_PRINT("range_limit", ("push limit(%llu) to range(%p) on (%s)",
+        select_limit, cur_range->min_key, (table->key_info + param.index)->name));
+    }
+  }
 }
 
 /**

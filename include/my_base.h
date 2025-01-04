@@ -1160,6 +1160,7 @@ struct key_range {
   uint length;
   key_part_map keypart_map;
   enum ha_rkey_function flag;
+  my_off_t m_limit = MY_FILEPOS_ERROR;
 };
 
 struct KEY_MULTI_RANGE {

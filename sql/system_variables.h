@@ -541,6 +541,8 @@ struct System_variables {
 
   bool opt_index_format_gpp_enabled;
 
+  bool pushdown_range_limit;
+
 #ifdef HAVE_GCOV
   bool flush_gcov_enabled;
 #endif

@@ -7335,7 +7335,7 @@ int handler::read_range_first(const key_range *start_key,
 
   eq_range = eq_range_arg;
   set_end_range(end_key, RANGE_SCAN_ASC);
-
+  range_read_rows = 0;
   range_key_part = table->key_info[active_index].key_part;
 
   if (!start_key)  // Read first record
@@ -7353,6 +7353,9 @@ int handler::read_range_first(const key_range *start_key,
     */
     unlock_row();
     result = HA_ERR_END_OF_FILE;
+  }
+  if (!result) {
+    range_read_rows++;
   }
   return result;
 }
@@ -7408,6 +7411,13 @@ int handler::read_range_next() {
   DBUG_TRACE;
 
   int result;
+  if (end_range != nullptr && end_range->m_limit != HA_POS_ERROR) {
+    if (range_read_rows > end_range->m_limit) {
+      DBUG_PRINT("range_limit",
+        ("range(%p) limit reaches, read_rows(%llu)", end_range->key, range_read_rows));
+      return HA_ERR_END_OF_FILE;
+    }
+  }
   if (eq_range) {
     /* We trust that index_next_same always gives a row in range */
     result =
@@ -7424,6 +7434,9 @@ int handler::read_range_next() {
       unlock_row();
       result = HA_ERR_END_OF_FILE;
     }
+  }
+  if (!result) {
+    range_read_rows++;
   }
   return result;
 }

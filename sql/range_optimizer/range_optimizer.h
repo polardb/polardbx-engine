@@ -74,6 +74,11 @@ class QUICK_RANGE {
   uint16 flag;
 
   /**
+   * pushed limit in range scan
+   */
+  ha_rows limit;
+
+  /**
     Stores one of the HA_READ_MBR_XXX items in enum ha_rkey_function, only
     effective when flag has a GEOM_FLAG bit.
   */
