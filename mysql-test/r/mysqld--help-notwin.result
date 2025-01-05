@@ -376,7 +376,7 @@ The following options may be given as the first argument:
  for innodb_force_recovery
  --consensus-force-sync-epoch-diff[=#] 
  consensus forceSync epoch diff
- --consensus-heartbeat-interval[=#] 
+ --consensus-heartbeat-interval=# 
  Consensus heartbeat max interval, zero means use
  @@consensus_election_timeout/5
  --consensus-heartbeat-thread-cnt[=#] 
@@ -2267,7 +2267,7 @@ consensus-min-delay-index 5000
 consensus-msg-compress-option (No default value)
 consensus-mts-force-apply-index 0
 consensus-new-follower-threshold 10000
-consensus-new-leader-max-apply-delay-seconds 3600
+consensus-new-leader-max-apply-delay-seconds 30
 consensus-old-compact-mode TRUE
 consensus-optimistic-heartbeat FALSE
 consensus-pipelining-timeout 1
@@ -2275,7 +2275,7 @@ consensus-prefetch-cache-size 67108864
 consensus-prefetch-fast-fetch FALSE
 consensus-prefetch-wakeup-ratio 2
 consensus-prefetch-window-size 10
-consensus-replicate-with-cache-log FALSE
+consensus-replicate-with-cache-log TRUE
 consensus-reset-mts-info FALSE
 consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
@@ -2283,9 +2283,9 @@ consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
 consensus-vote-backoff-timeout 1000
 consensus-wait-milliseconds-before-change-leader 120
-consensus-wait-unfinished-bgc-timeout 500
-consensus-wait-unfinished-trx-timeout 880
-consensus-wait-unfinished-xa-timeout 500
+consensus-wait-unfinished-bgc-timeout 3000
+consensus-wait-unfinished-trx-timeout 5000
+consensus-wait-unfinished-xa-timeout 3000
 consensus-weak-read-refresh-timeout -1
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE

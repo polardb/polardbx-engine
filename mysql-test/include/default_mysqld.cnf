@@ -75,6 +75,7 @@ binlog_order_commits=ON
 enforce_gtid_consistency=FALSE
 gtid_mode=OFF
 xa_detach_on_prepare=ON
+consensus_log_level=LOG_ERROR
 
 [mysqld.1]
 report-port=                @mysqld.1.port

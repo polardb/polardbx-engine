@@ -1744,6 +1744,10 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
     return 0;
 
   server->setLastAckEpoch(currentEpoch_);
+  server->applyDelaySeconds = msg->applydelayseconds();
+  server->applyThreadRunning = msg->applythreadrunning();
+  server->disableElection = msg->disableelection();
+  server->logInstance = msg->loginstance();
 
   if (msg->term() > currentTerm_) {
     easy_system_log(
@@ -3076,7 +3080,7 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
     return size; /* size is 0 */
   }
   if (prevLogIndex > lastLogIndex) {
-    easy_warn_log(
+    easy_info_log(
         "Server %d : server %d 's prevLogIndex %ld larger than lastLogIndex "
         "%ld. Just ignore.\n",
         localServer_->serverId, server->serverId, prevLogIndex, lastLogIndex);
@@ -3177,13 +3181,13 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
 
       if (size + entrySize >= maxSystemPacketSize_) {
         if (size != 0) {
-          easy_warn_log(
+          easy_info_log(
               "Server %d : truncate the sending msg, because it may exceed "
               "system max packet size (current size:%llu, add size:%llu)",
               localServer_->serverId, size, entrySize);
           break;
         } else {
-          easy_warn_log(
+          easy_info_log(
               "Server %d : force send a msg, it may exceed system max packet "
               "size (current size:%llu, add size:%llu)",
               localServer_->serverId, size, entrySize);

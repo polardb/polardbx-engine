@@ -432,7 +432,7 @@ static Sys_var_ulonglong Sys_consensus_new_leader_max_apply_delay_seconds(
     "consensus_new_leader_max_apply_delay_seconds",
     "Max apply delay seconds to allow a follower becomes a leader",
     GLOBAL_VAR(opt_consensus_new_leader_max_apply_delay_seconds), CMD_LINE(OPT_ARG),
-    VALID_RANGE(0, ULLONG_MAX), DEFAULT(3600), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(30), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_new_leader_max_apply_delay_seconds));
 
@@ -1045,21 +1045,21 @@ static Sys_var_ulonglong Sys_consensus_wait_unfinished_trx_timeout(
     "consensus_wait_unfinished_trx_timeout",
     "the max waiting time for unfinished trx before change leader",
     GLOBAL_VAR(opt_consensus_wait_unfinished_trx_timeout),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(880), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(5000), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_wait_unfinished_xa_timeout(
     "consensus_wait_unfinished_xa_timeout",
     "the max waiting time for unfinished xa before change leader",
     GLOBAL_VAR(opt_consensus_wait_unfinished_xa_timeout),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(500), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(3000), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulonglong Sys_consensus_wait_unfinished_bgc_timeout(
     "consensus_wait_unfinished_bgc_timeout",
     "the max waiting time for unfinished bgc before change leader",
     GLOBAL_VAR(opt_consensus_wait_unfinished_bgc_timeout),
-    CMD_LINE(OPT_ARG), VALID_RANGE(0, 60000), DEFAULT(500), BLOCK_SIZE(1),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 60000), DEFAULT(3000), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_bool Sys_consensus_disable_commit_before_change_leader(
