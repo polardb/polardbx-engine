@@ -1,0 +1,5 @@
+# Use default setting for mysqld processes
+!include include/default_mysqld.cnf
+
+[mysqld.1]
+default_collation_for_utf8mb4=utf8mb4_0900_ai_ci

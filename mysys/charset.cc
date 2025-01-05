@@ -414,6 +414,7 @@ char *get_charsets_dir(char *buf) {
 
 CHARSET_INFO *all_charsets[MY_ALL_CHARSETS_SIZE] = {nullptr};
 CHARSET_INFO *default_charset_info = &my_charset_latin1;
+CHARSET_INFO *default_collation_for_utf8mb4_var = &my_charset_utf8mb4_0900_ai_ci;
 
 void add_compiled_collation(CHARSET_INFO *cs) {
   assert(cs->number < array_elements(all_charsets));
