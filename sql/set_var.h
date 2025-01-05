@@ -1111,6 +1111,8 @@ bool sql_mode_string_representation(THD *thd, sql_mode_t sql_mode,
 bool sql_mode_quoted_string_representation(THD *thd, sql_mode_t sql_mode,
                                            LEX_STRING *ls);
 void update_parser_max_mem_size();
+uint64_t is_ping_not_matched(const uint64_t ping_mode, uint64_t *last_cluster_change_version);
+const char *get_ping_mode_name(const uint64_t ping_mode);
 
 extern sys_var *Sys_autocommit_ptr;
 extern sys_var *Sys_gtid_next_ptr;

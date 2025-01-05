@@ -166,6 +166,7 @@ void StableConfiguration::installConfig(
     }
   }
   assert(i == strConfig.size());
+  cluster_change_version++;
 }
 
 std::string StableConfiguration::memberToString(ServerRef server) {
@@ -395,6 +396,7 @@ int StableConfiguration::addMember(const std::string &strAddr, Paxos *paxos) {
           "Server %d : StableConfiguration::addMember: success current "
           "servers(%s)\n",
           paxos->getLocalServer()->serverId, logBuf.c_str());
+      cluster_change_version++;
       return 0;
     }
   easy_warn_log(
@@ -423,6 +425,7 @@ int StableConfiguration::delMember(const std::string &strAddr, Paxos *paxos) {
         paxos->getLog()->setMetaData(
             Paxos::keyMemberConfigure,
             membersToString(paxos->getLocalServer()->strAddr));
+      cluster_change_version++;
       break;
     }
   }
@@ -567,6 +570,7 @@ void StableConfiguration::delAllRemoteServer(const std::string &localStrAddr,
     paxos->getLog()->setMetaData(
         Paxos::keyMemberConfigure,
         membersToString(paxos->getLocalServer()->strAddr));
+  cluster_change_version++;
 
   if (servers.size() > 0) {
     while (servers[servers.size() - 1] == nullptr)

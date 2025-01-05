@@ -56,6 +56,7 @@ class Configuration {
   virtual uint64_t getServerNum() const = 0;
   virtual uint64_t getServerNumLockFree() const = 0;
   virtual uint64_t getLearnerNum() const = 0;
+  virtual uint64_t getClusterChangeVersion() const = 0;
   virtual bool needWeightElection(uint64_t localWeight) = 0;
   virtual uint64_t getMaxWeightServerId(uint64_t baseEpoch,
                                         ServerRef localServer) = 0;
@@ -130,6 +131,8 @@ class StableConfiguration : public Configuration {
   uint64_t getServerNum() const override;
   uint64_t getServerNumLockFree() const override { return serversNum.load(); }
   uint64_t getLearnerNum() const override;
+  uint64_t getClusterChangeVersion() const override
+  { return cluster_change_version.load(); }
   bool needWeightElection(uint64_t localWeight) override;
   uint64_t getMaxWeightServerId(uint64_t baseEpoch,
                                 ServerRef localServer) override;
@@ -172,6 +175,7 @@ class StableConfiguration : public Configuration {
 
   std::atomic<uint64_t> serversNum;
   std::vector<ServerRef> servers;
+  std::atomic<uint64_t> cluster_change_version;
   /*  TODO We may use map instead of vector here for learners */
   std::vector<ServerRef> learners;
 

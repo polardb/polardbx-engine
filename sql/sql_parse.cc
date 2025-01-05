@@ -2480,10 +2480,19 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
       thd->get_stmt_da()->disable_status();
       break;
     }
-    case COM_PING:
+    case COM_PING: {
+      const uint64_t ping_check_result = is_ping_not_matched(
+        thd->variables.ping_mode, &thd->status_var.last_cluster_change_version);
       thd->status_var.com_other++;
-      my_ok(thd);  // Tell client we are alive
+      if (!ping_check_result) {
+        my_ok(thd);  // Tell client we are alive
+      } else {
+        my_error(ER_PING_CHECK_FAILED, MYF(0), 
+                 thd->variables.ping_mode,
+                 get_ping_mode_name(ping_check_result));
+      }
       break;
+    }
     case COM_PROCESS_INFO:
       bool global_access;
       LEX_CSTRING db_saved;

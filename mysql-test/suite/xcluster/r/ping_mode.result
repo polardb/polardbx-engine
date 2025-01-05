@@ -1,0 +1,311 @@
+############ check leader 
+select @@ping_mode;
+@@ping_mode
+
+### check basic 
+set @@ping_mode=IS_READABLE;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_READABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_readable';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_READABLE,IS_LEADER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER,IS_PAXOS_APPLING';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER,IS_PAXOS_APPLING
+set @@ping_mode=0;
+select @@ping_mode;
+@@ping_mode
+
+set @@ping_mode=1;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode=1;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode=3;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+set @@ping_mode=7;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE
+set @@ping_mode=15;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER
+set @@ping_mode=31;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+set @@ping_mode=63;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER
+set @@ping_mode=64;
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=243;
+ERROR 42000: Variable 'ping_mode' can't be set to the value of '243'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=HAHA;
+ERROR 42000: Variable 'ping_mode' can't be set to the value of 'HAHA'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode='IS_READABLE,HAHA';
+ERROR 42000: Variable 'ping_mode' can't be set to the value of 'HAHA'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode='  IS_READABLE,  IS_LEADER  ';
+ERROR 42000: Variable 'ping_mode' can't be set to the value of '  IS_READABLE'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=IS_READABLE;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER
+call dbms_proxy.ping();
+ERROR HY000: PING check(63) failed with IS_IN_LEADER_TRANSFER.
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_PAXOS_APPLING';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_PAXOS_APPLING
+call dbms_proxy.ping();
+ERROR HY000: PING check(95) failed with IS_PAXOS_APPLING.
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+call dbms_proxy.ping();
+call dbms_consensus.downgrade_follower("127.0.0.1:PAXOS_PORT_2");
+select server_id, role from information_schema.alisql_cluster_global order by server_id;
+server_id	role
+1	Leader
+3	Follower
+100	Learner
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+call dbms_proxy.ping();
+ERROR HY000: PING check(31) failed with NO_CLUSTER_CHANGED.
+call dbms_proxy.ping();
+call dbms_consensus.upgrade_learner("127.0.0.1:PAXOS_PORT_2");
+select server_id, role from information_schema.alisql_cluster_global order by server_id;
+server_id	role
+1	Leader
+2	Follower
+3	Follower
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+call dbms_proxy.ping();
+ERROR HY000: PING check(31) failed with NO_CLUSTER_CHANGED.
+call dbms_proxy.ping();
+############ check follower 
+select @@ping_mode;
+@@ping_mode
+
+### check basic 
+set @@ping_mode=IS_READABLE;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_READABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_readable';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode='IS_READABLE,IS_LEADER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER
+set @@ping_mode='IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER,IS_PAXOS_APPLING';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER,IS_PAXOS_APPLING
+set @@ping_mode=0;
+select @@ping_mode;
+@@ping_mode
+
+set @@ping_mode=1;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode=1;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+set @@ping_mode=3;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+set @@ping_mode=7;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE
+set @@ping_mode=15;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER
+set @@ping_mode=31;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED
+set @@ping_mode=63;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER,IS_WRITEABLE,NOT_IN_LEADER_TRANSFER,NO_CLUSTER_CHANGED,IS_IN_LEADER_TRANSFER
+set @@ping_mode=64;
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=243;
+ERROR 42000: Variable 'ping_mode' can't be set to the value of '243'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=HAHA;
+ERROR 42000: Variable 'ping_mode' can't be set to the value of 'HAHA'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode='IS_READABLE,HAHA';
+ERROR 42000: Variable 'ping_mode' can't be set to the value of 'HAHA'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode='  IS_READABLE,  IS_LEADER  ';
+ERROR 42000: Variable 'ping_mode' can't be set to the value of '  IS_READABLE'
+select @@ping_mode;
+@@ping_mode
+IS_PAXOS_APPLING
+set @@ping_mode=IS_READABLE;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_LEADER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_LEADER
+call dbms_proxy.ping();
+ERROR HY000: PING check(3) failed with IS_LEADER.
+set @@ping_mode='IS_READABLE,IS_WRITEABLE';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_WRITEABLE
+call dbms_proxy.ping();
+ERROR HY000: PING check(5) failed with IS_WRITEABLE.
+set @@ping_mode='IS_READABLE,NOT_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,NOT_IN_LEADER_TRANSFER
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,NO_CLUSTER_CHANGED';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,NO_CLUSTER_CHANGED
+call dbms_proxy.ping();
+set @@ping_mode='IS_READABLE,IS_IN_LEADER_TRANSFER';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_IN_LEADER_TRANSFER
+call dbms_proxy.ping();
+ERROR HY000: PING check(33) failed with IS_IN_LEADER_TRANSFER.
+set @@ping_mode='IS_READABLE,IS_PAXOS_APPLING';
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_PAXOS_APPLING
+call dbms_proxy.ping();
+stop xpaxos_replication;
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_PAXOS_APPLING
+call dbms_proxy.ping();
+ERROR HY000: PING check(65) failed with IS_PAXOS_APPLING.
+start xpaxos_replication;
+Warnings:
+Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
+select @@ping_mode;
+@@ping_mode
+IS_READABLE,IS_PAXOS_APPLING
+call dbms_proxy.ping();

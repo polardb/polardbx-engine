@@ -69,6 +69,29 @@ bool Cmd_reset_db::pc_execute(THD *thd) {
   return mysql_change_db(thd, null_db, true);
 }
 
+
+Proc *Proc_ping::instance() {
+  static auto *proc = new Proc_ping(key_memory_package);
+  return proc;
+}
+
+Sql_cmd *Proc_ping::invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Cmd_ping(thd, list, this);
+}
+
+bool Cmd_ping::pc_execute(THD *thd) {
+  uint64_t check_result = is_ping_not_matched(
+    thd->variables.ping_mode, &thd->status_var.last_cluster_change_version);
+  if (!check_result)
+    return false;
+
+  my_error(ER_PING_CHECK_FAILED, MYF(0), 
+            thd->variables.ping_mode,
+            get_ping_mode_name(check_result));
+  return true;
+}
+
 std::once_flag g_token_once;
 std::string g_token;
 

@@ -376,7 +376,7 @@ The following options may be given as the first argument:
  for innodb_force_recovery
  --consensus-force-sync-epoch-diff[=#] 
  consensus forceSync epoch diff
- --consensus-heartbeat-interval=# 
+ --consensus-heartbeat-interval[=#] 
  Consensus heartbeat max interval, zero means use
  @@consensus_election_timeout/5
  --consensus-heartbeat-thread-cnt[=#] 
@@ -511,6 +511,9 @@ The following options may be given as the first argument:
  --default-authentication-plugin=name 
  The default authentication plugin used by the server to
  hash the password.
+ --default-collation-for-utf8mb4=name 
+ Controls default collation for utf8mb4 while replicating
+ implicit utf8mb4 collations.
  --default-password-lifetime=# 
  The number of days after which the password will expire.
  --default-storage-engine=name 
@@ -1363,6 +1366,8 @@ The following options may be given as the first argument:
  even if present.
  (Defaults to on; use --skip-persisted-globals-load to disable.)
  --pid-file=name     Pid file used by safe_mysqld
+ --ping-mode=name    Syntax: ping_mode='mode[,mode[,mode...]]'. See the manual
+ for the complete list of valid ping check modes
  --plugin-dir=name   Directory for plugins
  --plugin-load=name  Optional semicolon-separated list of plugins to load,
  where each plugin is identified as name=library, where
@@ -1496,6 +1501,8 @@ The following options may be given as the first argument:
  both client and server support it; otherwise it picks
  zstd if both support it; otherwise it picks uncompressed
  if both support it; otherwise it fails.
+ --pushdown-range-limit 
+ Push down limit to range scan.
  --query-alloc-block-size=# 
  Allocation block size for query parsing and execution
  --query-prealloc-size=# 
@@ -2275,7 +2282,7 @@ consensus-prefetch-cache-size 67108864
 consensus-prefetch-fast-fetch FALSE
 consensus-prefetch-wakeup-ratio 2
 consensus-prefetch-window-size 10
-consensus-replicate-with-cache-log TRUE
+consensus-replicate-with-cache-log FALSE
 consensus-reset-mts-info FALSE
 consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
@@ -2294,6 +2301,7 @@ create-admin-listener-thread FALSE
 cte-max-recursion-depth 1000
 daemonize FALSE
 default-authentication-plugin caching_sha2_password
+default-collation-for-utf8mb4 (No default value)
 default-password-lifetime 0
 default-storage-engine InnoDB
 default-table-encryption FALSE
@@ -2552,6 +2560,7 @@ performance-schema-users-size -1
 persist-only-admin-x509-subject 
 persist-sensitive-variables-in-plaintext TRUE
 persisted-globals-load TRUE
+ping-mode 
 polarx-rpc ON
 polarx-rpc-auto-cpu-affinity TRUE
 polarx-rpc-enable-epoll-in-tasker TRUE
@@ -2601,6 +2610,7 @@ print-identified-with-as-hex FALSE
 print-malloc-stats FALSE
 profiling-history-size 15
 protocol-compression-algorithms zlib,zstd,uncompressed
+pushdown-range-limit FALSE
 query-alloc-block-size 8192
 query-prealloc-size 8192
 query-via-flashback-area FALSE

@@ -31,6 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/events.h"
 #include "sql/log.h"
 #include "sql/sys_vars.h"
+#include<bits/stdc++.h>
 
 #ifdef RDS_HAVE_JEMALLOC
 #include "sql/sql_jemalloc.h"
@@ -1081,3 +1082,91 @@ static Sys_var_bool Sys_enable_consensus(
     "enable consensus for xcluster node",
     READ_ONLY GLOBAL_VAR(opt_enable_consensus), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+
+static const char *ping_mode_names[] = {"IS_READABLE",
+                                        "IS_LEADER",
+                                        "IS_WRITEABLE",
+                                        "NOT_IN_LEADER_TRANSFER",
+                                        "NO_CLUSTER_CHANGED",
+                                        "IS_IN_LEADER_TRANSFER",
+                                        "IS_PAXOS_APPLING",
+                                        nullptr};
+
+static Sys_var_set Sys_ping_mode(
+    "ping_mode",
+    "Syntax: ping_mode='mode[,mode[,mode...]]'. See the manual for the "
+    "complete list of valid ping check modes",
+    SESSION_VAR(ping_mode), CMD_LINE(REQUIRED_ARG),
+    ping_mode_names, DEFAULT(0),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+extern const char *get_ping_mode_name(const uint64_t ping_mode)
+{
+  if (!ping_mode) return "";
+  const uint64_t mode_bit = __builtin_ctzll(ping_mode);
+  return ping_mode_names[mode_bit];
+}
+
+extern uint64_t is_ping_not_matched(const uint64_t ping_mode,
+  uint64_t *last_cluster_change_version) {
+  if (ping_mode == 0)
+    return 0;
+
+  if (ping_mode & PING_MODE_IS_READABLE) {
+    if (!mysqld_server_started)
+      return PING_MODE_IS_READABLE;
+  }
+
+  if (ping_mode & PING_MODE_IS_LEADER) {
+    if (!(consensus_ptr
+          && consensus_ptr->getState() == alisql::Paxos::StateType::LEADER))
+      return PING_MODE_IS_LEADER;
+  }
+
+  if (ping_mode & PING_MODE_IS_WRITEABLE) {
+    if (!(!consensus_ptr
+          || (consensus_ptr->getState() == alisql::Paxos::StateType::LEADER
+              && consensus_log_manager.get_status() == BINLOG_WORKING)))
+      return PING_MODE_IS_WRITEABLE;
+  }
+
+  if (ping_mode & PING_MODE_NOT_IN_LEADER_TRANSFER) {
+    if (!(consensus_ptr
+          && !consensus_log_manager.is_in_leader_transfer()))
+      return PING_MODE_NOT_IN_LEADER_TRANSFER;
+  }
+
+  if (ping_mode & PING_MODE_NO_CLUSTER_CHANGED) {
+    if (!(consensus_ptr
+          && last_cluster_change_version
+          && *last_cluster_change_version != 0
+          && *last_cluster_change_version == consensus_ptr->getClusterChangeVersion())) {
+      if (consensus_ptr && last_cluster_change_version) {
+        if (*last_cluster_change_version == 0) {
+          //init check treate as succ
+          *last_cluster_change_version = consensus_ptr->getClusterChangeVersion();
+        } else {
+          *last_cluster_change_version = consensus_ptr->getClusterChangeVersion();
+          return PING_MODE_NO_CLUSTER_CHANGED;
+        }
+      } else {
+        return PING_MODE_NO_CLUSTER_CHANGED;
+      }
+    }
+  }
+
+  if (ping_mode & PING_MODE_IS_IN_LEADER_TRANSFER) {
+    if (!(consensus_ptr
+          && consensus_log_manager.is_in_leader_transfer()))
+      return PING_MODE_IS_IN_LEADER_TRANSFER;
+  }
+
+  if (ping_mode & PING_MODE_IS_PAXOS_APPLING) {
+    if (!(consensus_ptr
+          && consensus_ptr->getApplyThreadRunning()))
+      return PING_MODE_IS_PAXOS_APPLING;
+  }
+
+  return 0;
+}

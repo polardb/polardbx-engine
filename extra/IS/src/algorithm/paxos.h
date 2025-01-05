@@ -538,6 +538,10 @@ class Paxos : public Consensus {
   uint64_t getClusterSize() {
     return config_->getServerNum() + config_->getLearnerNum();
   }
+  uint64_t getClusterChangeVersion() const {
+    return config_->getClusterChangeVersion();
+  }
+
   std::string getHost() { return host_; }
   uint getPort() { return port_; }
 

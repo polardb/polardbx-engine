@@ -10197,6 +10197,9 @@ ER_XA_GROUP_CLOSE_ERROR
 ER_EMPTY_XA_NOT_ALLOWED
   eng "Empty XA transactions not allowed from @@consensus_disable_empty_xa."
 
+ER_PING_CHECK_FAILED
+  eng "PING check(%llu) failed with %s."
+
 #
 #  End of RDS error message.
 #

@@ -434,6 +434,8 @@ performance_point_lock_rwlock_enabled
 performance_point_lock_rwlock_enabled
 physical_backfill_opt
 physical_backfill_opt
+ping_mode
+ping_mode
 polardbx_engine_version
 polardbx_engine_version
 polardbx_product_version
@@ -525,8 +527,12 @@ polarx_udf_function_list
 print_malloc_stats
 print_malloc_stats
 pseudo_slave_mode
+pushdown_range_limit
+pushdown_range_limit
 query_via_flashback_area
 query_via_flashback_area
+rds_active_memory_profiling
+rds_active_memory_profiling
 rds_audit_flush_thread_enabled
 rds_audit_flush_thread_enabled
 rds_audit_log_buffer_size

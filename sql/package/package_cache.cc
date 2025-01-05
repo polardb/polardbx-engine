@@ -263,6 +263,7 @@ void package_context_init() {
   register_package<Proc, Proc_get_token>(im::PROXY_PROC_SCHEMA);
   /** proxy.switch_user() */
   register_package<Proc, Proc_switch_user>(im::PROXY_PROC_SCHEMA);
+  register_package<Proc, Proc_ping>(im::PROXY_PROC_SCHEMA);
 
   /* procedures: polarx.changeset_* */
   register_package<Proc, Changeset_proc_start>(POLARX_PROC_SCHEMA);

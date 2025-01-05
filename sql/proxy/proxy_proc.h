@@ -67,6 +67,19 @@ class Proc_reset_db : public proxy_proc_base {
   const std::string str() const final { return {"reset_db"}; }
 };
 
+class Proc_ping : public proxy_proc_base {
+ public:
+  explicit Proc_ping(PSI_memory_key key) : proxy_proc_base(key) {
+    m_result_type = Result_type::RESULT_OK;
+  }
+
+  static Proc *instance();
+
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const final;
+
+  const std::string str() const final { return {"ping"}; }
+};
+
 class Cmd_reset_db : public Sql_cmd_trans_proc {
  public:
 #ifdef MYSQL8PLUS
@@ -74,6 +87,15 @@ class Cmd_reset_db : public Sql_cmd_trans_proc {
 #else
   Cmd_reset_db(THD *thd, List<Item> *list, const Proc *proc)
 #endif
+      : Sql_cmd_trans_proc(thd, list, proc) {
+  }
+
+  bool pc_execute(THD *thd) final;
+};
+
+class Cmd_ping : public Sql_cmd_trans_proc {
+ public:
+  Cmd_ping(THD *thd, mem_root_deque<Item *> *list, const Proc *proc)
       : Sql_cmd_trans_proc(thd, list, proc) {
   }
 
