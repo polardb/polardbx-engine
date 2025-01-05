@@ -38,8 +38,7 @@ void LearnerServer::stop(void *) {
 
 void LearnerServer::connect(void *) {
   if (addr.port == 0)
-    addr = srv->createConnection(strAddr, getSharedThis(), srv->getConnectTimeout(),
-                                 serverId);
+    addr = srv->createConnection(strAddr, getSharedThis(), serverId);
 }
 
 void LearnerServer::disconnect(void *) {
@@ -72,8 +71,7 @@ void LearnerServer::sendMsg(void *ptr) {
 
   msg->set_msgid(msgId.fetch_add(1));
   if (addr.port == 0) {
-    addr = srv->createConnection(strAddr, getSharedThis(), srv->getConnectTimeout(),
-                                 serverId);
+    addr = srv->createConnection(strAddr, getSharedThis(), serverId);
     return;
   }
   if (netError.load()) return;

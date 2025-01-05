@@ -168,7 +168,7 @@ class RemoteServer : public Server {
   void beginLeadership(void *) override;
   void stepDown(void *) override;
   void stop(void *) override;
-  void sendMsg(void *) override;
+  void sendMsg(void *ptr) override { sendMsgFunc(false, false, ptr); }
   void connect(void *) override;
   void disconnect(void *) override;
   void fillInfo(void *) override;

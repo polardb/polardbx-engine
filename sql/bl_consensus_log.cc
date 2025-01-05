@@ -120,6 +120,10 @@ uint64_t BLConsensusLog::getSafeLastLogIndex() {
   return (this->consensusLogManager_->get_final_sync_index());
 }
 
+uint64_t BLConsensusLog::getSafeLastLogIndexNoLock() {
+  return (this->consensusLogManager_->get_final_sync_index_no_lock());
+}
+
 uint64_t BLConsensusLog::getWaitMilliseconds4OldTrxFinish() {
   return this->consensusLogManager_->get_wait_milliseconds_for_old_trx_finish();
 }

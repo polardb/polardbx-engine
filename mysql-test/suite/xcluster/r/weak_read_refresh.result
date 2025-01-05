@@ -1,0 +1,86 @@
+set global consensus_weak_read_refresh_timeout=-1;
+set global consensus_optimistic_heartbeat=0;
+create database if not exists d1;
+drop table if exists d1.t0;
+Warnings:
+Note	1051	Unknown table 'd1.t0'
+create table d1.t0(c1 int , c2 varchar(100));
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=-1;
+set global consensus_optimistic_heartbeat=1;
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=0;
+set global consensus_optimistic_heartbeat=1;
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=1;
+set global consensus_optimistic_heartbeat=1;
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=0;
+set global consensus_optimistic_heartbeat=0;
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=1;
+set global consensus_optimistic_heartbeat=0;
+set global consensus_force_promote=1;
+set global consensus_force_promote=1;
+insert into d1.t0 values(1, "1");
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+LAST_LOG_INDEX - COMMIT_INDEX
+0
+set global consensus_weak_read_refresh_timeout=DEFAULT;
+set global consensus_optimistic_heartbeat=DEFAULT;
+drop database d1;

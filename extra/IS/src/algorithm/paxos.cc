@@ -36,6 +36,9 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       pipeliningTimeout_(3),
       electionTimeout_(electionTimeout),
       heartbeatInterval_(electionTimeout / 5),
+      sendTimeout_(heartbeatInterval_),
+      connectTimeout_(heartbeatInterval_/4),
+      weakReadRefreshTimeout_(heartbeatInterval_/10),
       purgeLogTimeout_(purgeLogTimeout),
       currentTerm_(1),
       commitIndex_(0),
@@ -49,9 +52,7 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       leaderForceSyncStatus_(true),
       consensusAsync_(false),
       replicateWithCacheLog_(false),
-      optimisticHeartbeat_(false)
-      //,changeStateWorkers_(0)
-      ,
+      optimisticHeartbeat_(false),
       autoPurge_(false),
       useAppliedIndex_(true),
       minMatchIndex_(0),
@@ -77,6 +78,19 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
 Paxos::~Paxos() {
   if (!shutdown_.load()) shutdown();
 }
+
+void Paxos::AsyncThread::close() {
+  if (tid_ > 0) {
+    {
+      std::unique_lock<std::mutex> lock(lock_);
+      pendings_.fetch_add(1);
+      cond_.notify_one();
+    }
+    pthread_join(tid_, NULL);
+    tid_ = 0;
+  }
+}
+
 
 void Paxos::shutdown() {
   /* We should stop all ThreadTimer before close ThreadTimerService in
@@ -106,6 +120,8 @@ void Paxos::shutdown() {
     config_->forEach(&Server::stop, NULL);
     config_->forEachLearners(&Server::stop, NULL);
   }
+  appendLogDelay_.close();
+
   srv_->shutdown();
   /* When Service::shutdown return, there is not backend worker left, so we can
    * release config_ now. */
@@ -1781,8 +1797,6 @@ int Paxos::appendLog(const bool needLock) {
     return -1;
   }
 
-  LogEntry entry;
-
   PaxosMsg msg;
   msg.set_term(currentTerm_);
   msg.set_msgtype(AppendLog);
@@ -1795,7 +1809,6 @@ int Paxos::appendLog(const bool needLock) {
    * Some fields of msg are filled by appendLogFillForEach,
    * called by RemoteServer::sendMsg.
    */
-
   config_->forEach(&Server::sendMsg, (void *)&msg);
 
   if (needLock) lock_.unlock();
@@ -1916,12 +1929,33 @@ bool Paxos::onHeartbeatOptimistically_(PaxosMsg *msg, PaxosMsg *rsp) {
   // traditional way(with mutex)
   if (state != FOLLOWER || msg->term() != currentTerm) return false;
 
-  easy_error_log(
+  easy_info_log(
       "msgId(%llu) received from leader(%d), term(%d), it is heartbeat and "
       "deal it optimistically!\n",
       msg->msgid(), msg->leaderid(), msg->term());
 
   electionTimer_->restart();
+
+  /* Update commitIndex. */
+  if (msg->commitindex() > commitIndex_ && !debugSkipUpdateCommitIndex) {
+    if (ccMgr_.prepared && ccMgr_.preparedIndex <= msg->commitindex() &&
+        ccMgr_.preparedIndex > commitIndex_) {
+      // srv_->sendAsyncEvent(&Paxos::applyConfigureChange_, this,
+      // ccMgr_.preparedIndex);
+      applyConfigureChangeNoLock_(ccMgr_.preparedIndex);
+      if (ccMgr_.needNotify != 1) ccMgr_.clear();
+    }
+    easy_info_log("Server %d : Follower commitIndex change from %ld to %ld\n",
+                  localServer_->serverId, commitIndex_.load(), msg->commitindex());
+    commitIndex_ = msg->commitindex();
+    assert(commitIndex_ <= log_->getLastLogIndex());
+
+    /* already hold the lock_ by the caller. */
+    cond_.notify_all();
+
+    /* X-Paxos support learner get log from follower. */
+    appendLogToLearner();
+  }
 
   rsp->set_msgtype(AppendLogResponce);
   rsp->set_msgid(msg->msgid());
@@ -2412,9 +2446,9 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
       /* X-Paxos support learner get log from follower. */
       appendLogToLearner();
       /*
-         if (srv_->cs)
-         srv_->cs->set(entry.ikey(), entry.value());
-         */
+        if (srv_->cs)
+        srv_->cs->set(entry.ikey(), entry.value());
+      */
     }
   }
 
@@ -3203,12 +3237,7 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
 int Paxos::tryUpdateCommitIndex() {
   std::lock_guard<std::mutex> lg(lock_);
 
-  int ret = tryUpdateCommitIndex_();
-
-  // if (ret == 0)
-  // appendLog(false);
-
-  return ret;
+  return tryUpdateCommitIndex_();
 }
 
 int Paxos::tryUpdateCommitIndex_() {
@@ -3274,8 +3303,40 @@ int Paxos::tryUpdateCommitIndex_() {
   /* already hold the lock_ by the caller. */
   cond_.notify_all();
 
+  //only realtime heartbeat pend, and there is no pending logs, we send realtime heartbeat
+  if (commitIndex_ == log_->getSafeLastLogIndexNoLock()) {
+    if (weakReadRefreshTimeout_ > 0) {
+      appendLogDelay_.pendings_.fetch_add(1, std::memory_order_seq_cst);
+    } else if (weakReadRefreshTimeout_ == 0) {
+      appendLog(false);
+    }
+  }
+
   appendLogToLearner();
   return 0;
+}
+
+static void *asyncAppendLogDelaytHandler(void *args) {
+  Paxos *paxos = (Paxos *)args;
+  while(!paxos->isShutdown()) {
+    {
+      std::unique_lock<std::mutex> lock(paxos->appendLogDelay_.lock_);
+      while (!paxos->isShutdown() && paxos->getWeakReadRefreshTimeout() <= 0) {
+        paxos->appendLogDelay_.cond_.wait(lock);
+      }
+    }
+    while (!paxos->isShutdown() && paxos->getWeakReadRefreshTimeout() > 0) {
+      paxos->msleep(paxos->getWeakReadRefreshTimeout());
+
+      if (!paxos->isShutdown()
+          && paxos->appendLogDelay_.pendings_.load(std::memory_order_acquire) > 0
+          && paxos->getCommitIndex() == paxos->getLog()->getSafeLastLogIndexNoLock()) {
+        paxos->appendLogDelay_.pendings_.store(0, std::memory_order_release);
+        paxos->appendLog(true);
+      }
+    }
+  }
+  return nullptr;
 }
 
 /* TODO should read from config file or cmd line */
@@ -3392,8 +3453,8 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   srv_ = std::make_shared<Service>(this);
   if (cs) srv_->cs = cs;
 
-  srv_->init(ioThreadCnt, workThreadCnt, heartbeatInterval_, memory_usage_count,
-             heartbeatThreadCnt, threadHook);
+  srv_->init(ioThreadCnt, workThreadCnt, sendTimeout_, connectTimeout_,
+             memory_usage_count, heartbeatThreadCnt, threadHook);
 
   std::string curConfig = (*pConfig)[index - 1];
   /* Host format: [ipv6]:port, ipv4:port, we find the last ':' */
@@ -3432,6 +3493,9 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
     log_->setMetaData(Paxos::keyMemberConfigure,
                       config_->membersToString(localServer_->strAddr));
   }
+
+  pthread_create(&appendLogDelay_.tid_, NULL, asyncAppendLogDelaytHandler, (void *)this);
+  pthread_setname_np(appendLogDelay_.tid_, "appendlog_delay");
 
   return 0;
 }
@@ -3504,8 +3568,8 @@ int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
   srv_ = std::shared_ptr<Service>(new Service(this));
   if (cs) srv_->cs = cs;
 
-  srv_->init(ioThreadCnt, workThreadCnt, heartbeatInterval_, memory_usage_count,
-             heartbeatThreadCnt, threadHook);
+  srv_->init(ioThreadCnt, workThreadCnt, sendTimeout_, connectTimeout_, 
+             memory_usage_count, heartbeatThreadCnt, threadHook);
   electionTimer_ = std::make_shared<ThreadTimer>(
       srv_->getThreadTimerService(), srv_, electionTimeout_, ThreadTimer::Stage,
       &Paxos::startElectionCallback, this);
@@ -3546,6 +3610,9 @@ int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
     log_->setMetaData(Paxos::keyLearnerConfigure, config_->learnersToString());
     log_->setMetaData(Paxos::keyMemberConfigure, config_->membersToString());
   }
+
+  pthread_create(&appendLogDelay_.tid_, NULL, asyncAppendLogDelaytHandler, (void *)this);
+  pthread_setname_np(appendLogDelay_.tid_, "appendlog_delay");
   return 0;
 }
 
@@ -4047,20 +4114,29 @@ int Paxos::setClusterId(uint64_t ci) {
 }
 
 void Paxos::setSendTimeout(uint64_t t) {
-  if (t == 0) t = heartbeatInterval_;
-  if (srv_) srv_->setSendTimeout(t);
+  assert(heartbeatInterval_ > 0);
+  sendTimeout_ = (t == 0 ? heartbeatInterval_ : t);
+  if (srv_) srv_->setSendTimeout(sendTimeout_);
 }
 
 void Paxos::setConnectTimeout(uint64_t t) {
-  if (t == 0) t = heartbeatInterval_ / 4;
-  if (srv_) srv_->setConnectTimeout(t);
+  assert(heartbeatInterval_ > 0);
+  connectTimeout_ = (t == 0 ? heartbeatInterval_ / 4 : t);
+  if (srv_) srv_->setConnectTimeout(connectTimeout_);
 }
 
 void Paxos::setHeartbeatInterval(uint64_t t) {
+  assert(electionTimeout_ > 0);
   heartbeatInterval_ = (t == 0 ? electionTimeout_ / 5 : t);
-  if (srv_) {
-    setSendTimeout(getSendTimeout());
-    setConnectTimeout(getConnectTimeout());
+}
+
+void Paxos::setWeakReadRefreshTimeout(int64_t value)
+{
+  const int64_t old_value = weakReadRefreshTimeout_;
+  weakReadRefreshTimeout_ = value;
+  if (old_value <= 0 && value > 0) {
+    std::unique_lock<std::mutex> lock(appendLogDelay_.lock_);
+    appendLogDelay_.cond_.notify_one();
   }
 }
 

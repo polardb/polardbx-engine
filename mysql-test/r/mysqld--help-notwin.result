@@ -376,8 +376,9 @@ The following options may be given as the first argument:
  for innodb_force_recovery
  --consensus-force-sync-epoch-diff[=#] 
  consensus forceSync epoch diff
- --consensus-heartbeat-interval=# 
- Consensus heartbeat max interval
+ --consensus-heartbeat-interval[=#] 
+ Consensus heartbeat max interval, zero means use
+ @@consensus_election_timeout/5
  --consensus-heartbeat-thread-cnt[=#] 
  Number of consensus heartbeat thread
  --consensus-index-buf-enabled 
@@ -488,6 +489,9 @@ The following options may be given as the first argument:
  --consensus-wait-unfinished-xa-timeout[=#] 
  the max waiting time for unfinished xa before change
  leader
+ --consensus-weak-read-refresh-timeout[=#] 
+ Consensus weak read(follower read) refresh timeout(ms),
+ -1 means disabled, 0 means realtime
  --consensus-worker-thread-cnt[=#] 
  Number of consensus worker thread
  --consensuslog-revise 
@@ -2237,7 +2241,7 @@ consensus-force-leader-transfer FALSE
 consensus-force-promote FALSE
 consensus-force-recovery FALSE
 consensus-force-sync-epoch-diff 0
-consensus-heartbeat-interval 1000
+consensus-heartbeat-interval 0
 consensus-heartbeat-thread-cnt 0
 consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
@@ -2282,6 +2286,7 @@ consensus-wait-milliseconds-before-change-leader 120
 consensus-wait-unfinished-bgc-timeout 500
 consensus-wait-unfinished-trx-timeout 880
 consensus-wait-unfinished-xa-timeout 500
+consensus-weak-read-refresh-timeout -1
 consensus-worker-thread-cnt 3
 consensuslog-revise TRUE
 console FALSE

@@ -45,9 +45,10 @@ static void *easy_count_realloc(void *ptr, size_t size) {
 }
 
 EasyNet::EasyNet(uint64_t num, const uint64_t sendTimeout,
+                 const uint64_t connectTimeout,
                  bool memory_usage_count)
     : reciveCnt_(0), isShutdown_(false), sendTimeout_(sendTimeout),
-      connectTimeout_(sendTimeout / 4) {
+      connectTimeout_(connectTimeout) {
   if (unlikely(memory_usage_count)) {
     // set allocator for memory usage count
     easy_pool_set_allocator(easy_count_realloc);
@@ -112,7 +113,7 @@ int EasyNet::stop() {
 }
 
 easy_addr_t EasyNet::createConnection(const std::string &addr,
-                                      NetServerRef server, uint64_t timeout,
+                                      NetServerRef server,
                                       uint64_t index) {
   easy_addr_t iaddr;
 
@@ -126,7 +127,7 @@ easy_addr_t EasyNet::createConnection(const std::string &addr,
 
   if (server != nullptr) setConnData(iaddr, server);
 
-  if (easy_connection_connect(eio_, iaddr, &clientHandler_, timeout, NULL,
+  if (easy_connection_connect(eio_, iaddr, &clientHandler_, connectTimeout_, NULL,
                               EASY_CONNECT_AUTOCONN) != EASY_OK)
     // if (easy_connection_connect(eio_, iaddr, &clientHandler_, timeout, NULL,
     // 0) != EASY_OK)

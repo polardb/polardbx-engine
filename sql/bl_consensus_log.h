@@ -74,6 +74,7 @@ class BLConsensusLog : public alisql::PaxosLog {
   uint64_t getLastLogIndex() override;
   uint64_t getLastCachedLogIndex() override;
   uint64_t getSafeLastLogIndex() override;
+  uint64_t getSafeLastLogIndexNoLock() override;
   uint64_t getWaitMilliseconds4OldTrxFinish() override;
   void forceUpdateAppliedIndex(const uint64_t index) override;
   void waitOldTrxFinish() override;

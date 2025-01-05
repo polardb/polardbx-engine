@@ -52,6 +52,8 @@ extern uint opt_consensus_configure_change_timeout;
 extern uint opt_consensus_election_timeout;
 extern uint opt_consensus_vote_backoff_timeout;
 extern uint opt_consensus_heartbeat_interval;
+extern long opt_consensus_weak_read_refresh_timeout;
+extern uint opt_consensus_last_apply_index;
 extern uint opt_consensus_io_thread_cnt;
 extern uint opt_consensus_worker_thread_cnt;
 extern uint opt_consensus_heartbeat_thread_cnt;

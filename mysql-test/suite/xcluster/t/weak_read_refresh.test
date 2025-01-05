@@ -1,0 +1,240 @@
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=-1;
+set global consensus_optimistic_heartbeat=0;
+--disconnect leader
+--sleep 5
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+create database if not exists d1;
+drop table if exists d1.t0;
+create table d1.t0(c1 int , c2 varchar(100));
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+
+--sleep 6
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=-1;
+set global consensus_optimistic_heartbeat=1;
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+
+--sleep 6
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=0;
+set global consensus_optimistic_heartbeat=1;
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+
+
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=1;
+set global consensus_optimistic_heartbeat=1;
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=0;
+set global consensus_optimistic_heartbeat=0;
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_weak_read_refresh_timeout=1;
+set global consensus_optimistic_heartbeat=0;
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect f1
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+insert into d1.t0 values(1, "1");
+--disconnect leader
+
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+--connection f2
+select LAST_LOG_INDEX - COMMIT_INDEX from information_schema.ALISQL_CLUSTER_LOCAL;
+--disconnect f1
+--disconnect f2
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+--source include/wait_follower_catchup.inc
+set global consensus_weak_read_refresh_timeout=DEFAULT;
+set global consensus_optimistic_heartbeat=DEFAULT;
+drop database d1;
+
+
+

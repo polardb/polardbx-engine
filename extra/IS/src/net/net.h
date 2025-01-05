@@ -45,7 +45,7 @@ class Net {
 
   /* TODO here we should use a general handler. */
   virtual easy_addr_t createConnection(const std::string &addr,
-                                       NetServerRef server, uint64_t timeout,
+                                       NetServerRef server,
                                        uint64_t index) = 0;
   virtual void disableConnection(easy_addr_t addr) = 0;
   virtual int sendPacket(easy_addr_t addr, const char *buf, uint64_t len,

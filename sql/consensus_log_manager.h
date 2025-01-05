@@ -187,6 +187,7 @@ class ConsensusLogManager {
   void set_cache_index(uint64 cache_index_arg);
   uint64 get_sync_index(bool serious = false);
   uint64 get_final_sync_index();
+  uint64 get_final_sync_index_no_lock();
   uint64 get_wait_milliseconds_for_old_trx_finish();
   void wait_old_trx_finish();
   void wait_old_xa_finish();

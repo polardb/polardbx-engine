@@ -130,6 +130,7 @@ bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
 ulong opt_configured_event_scheduler = Events::EVENTS_OFF;
 bool opt_consensus_reset_mts_info = false;
+long opt_consensus_weak_read_refresh_timeout = 100;
 
 std::atomic<int64> xa_finishing_count = (0);
 
@@ -560,8 +561,15 @@ static Sys_var_uint Sys_consensus_vote_backoff_timeout(
 
 static bool fix_consensus_heartbeat_interval(sys_var *, THD *,
                                                    enum_var_type) {
-  if (consensus_ptr)
+  if (consensus_ptr) {
     consensus_ptr->setHeartbeatInterval(opt_consensus_heartbeat_interval);
+
+    if (opt_consensus_connect_timeout == 0)
+      consensus_ptr->setConnectTimeout(opt_consensus_connect_timeout);
+    if (opt_consensus_send_timeout == 0)
+      consensus_ptr->setSendTimeout(opt_consensus_send_timeout);
+  }
+
   return false;
 }
 
@@ -569,9 +577,36 @@ static Sys_var_uint Sys_consensus_heartbeat_interval(
     "consensus_heartbeat_interval",
     "Consensus heartbeat max interval, zero means use @@consensus_election_timeout/5",
     GLOBAL_VAR(opt_consensus_heartbeat_interval),
-    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 600000), DEFAULT(1000),
+    CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(0),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_heartbeat_interval));
+
+static bool fix_consensus_weak_read_refresh_timeout(sys_var *, THD *, enum_var_type) {
+  if (consensus_ptr)
+    consensus_ptr->setWeakReadRefreshTimeout(opt_consensus_weak_read_refresh_timeout);
+  return false;
+}
+
+static Sys_var_long Sys_consensus_weak_read_refresh_timeout(
+    "consensus_weak_read_refresh_timeout", 
+    "Consensus weak read(follower read) refresh timeout(ms), -1 means disabled, 0 means realtime",
+    GLOBAL_VAR(opt_consensus_weak_read_refresh_timeout),
+    CMD_LINE(OPT_ARG), VALID_RANGE(-1, 600000), DEFAULT(-1),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_weak_read_refresh_timeout));
+
+
+
+static ulonglong read_consensus_last_apply_index(THD *) {
+  return consensus_ptr ? consensus_ptr->getAppliedIndex() : 0;
+}
+
+static Sys_var_session_special Sys_consensus_last_apply_index(
+    "consensus_last_apply_index",
+    "last apply index of current consensus node",
+    READ_ONLY sys_var::ONLY_SESSION, NO_CMD_LINE, VALID_RANGE(0, ULLONG_MAX),
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr), ON_READ(read_consensus_last_apply_index));
 
 static Sys_var_uint Sys_consensus_io_thread_count(
     "consensus_io_thread_cnt", "Number of consensus io thread",
@@ -767,6 +802,7 @@ static bool fix_enable_appliedindex_checker(sys_var *, THD *, enum_var_type) {
   return false;
 }
 
+//TODO::unused, delete latter
 static Sys_var_bool Sys_enable_appliedindex_checker(
     "enable_appliedindex_checker",
     "enable applied index checker during ordered_commit",

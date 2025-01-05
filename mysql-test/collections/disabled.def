@@ -553,3 +553,5 @@ rpl_gtid_no_xpaxos.rpl_log_info_repository_persistence_gtid_only         : WL#00
 rpl_gtid_no_xpaxos.rpl_gtid_commit_order_manager_seq_nr_wrap_around      : WL#002 bad case
 rpl_gtid_no_xpaxos.rpl_async_conn_auto_failover_highest_weight           : WL#002 asynchronous_connection_failover_delete_source
 rpl_gtid_no_xpaxos.rpl_gtid_while_super_read_only                        : WL#002 encryption
+rpl_gtid_no_xpaxos.rpl_mts_spco_commands_nobinlog                        : WL#002 disable binlog
+rpl_gtid_no_xpaxos.rpl_gtids_table_disable_binlog_on_slave               : WL#002 disable binlog

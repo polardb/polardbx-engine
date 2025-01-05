@@ -103,6 +103,7 @@ class PaxosLog {
   // should not be called if paxos mutex is held, there is deadlock risk in
   // AliSQLServer
   virtual uint64_t getSafeLastLogIndex() { return getLastLogIndex(); }
+  virtual uint64_t getSafeLastLogIndexNoLock() { return getLastLogIndex(); }
   virtual uint64_t getWaitMilliseconds4OldTrxFinish() { return 0; }
   virtual void forceUpdateAppliedIndex(const uint64_t) { }
   virtual void waitOldTrxFinish() { }

@@ -80,11 +80,12 @@ std::atomic<uint64_t> Service::running(0);
 uint64_t Service::workThreadCnt = 0;
 
 int Service::init(uint64_t ioThreadCnt, uint64_t workThreadCntArg,
-                  uint64_t sendTimeout, bool memory_usage_count,
+                  uint64_t sendTimeout, uint64_t connectTimeout,
+                  bool memory_usage_count,
                   uint64_t heartbeatThreadCnt, ThreadHook *threadHook) {
   /* TODO here we should use factory. */
 
-  net_ = std::make_shared<EasyNet>(ioThreadCnt, sendTimeout,
+  net_ = std::make_shared<EasyNet>(ioThreadCnt, sendTimeout, connectTimeout,
                                    memory_usage_count);
 
   pool_eio_ = easy_eio_create(nullptr, 1);

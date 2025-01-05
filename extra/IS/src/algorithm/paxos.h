@@ -293,6 +293,14 @@ class Paxos : public Consensus {
     Paxos *paxos;
   } commitDepArgType;
 
+  typedef struct AsyncThread {
+    std::mutex lock_;
+    std::condition_variable cond_;
+    pthread_t tid_{0};
+    std::atomic<uint64_t> pendings_{0};
+    void close();
+  } AsyncThread;
+
   /* FOLLOWER */
   int onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) override;
   int onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) override;
@@ -436,6 +444,7 @@ class Paxos : public Consensus {
   std::shared_ptr<Service> getService() { return srv_; }
   std::shared_ptr<Configuration> &getConfig() { return config_; }
   std::shared_ptr<PaxosLog> getLog() { return log_; }
+  uint64_t getLocalServerId() { return localServer_->serverId; }
   std::shared_ptr<LocalServer> getLocalServer() { return localServer_; }
   void setLocalServer(std::shared_ptr<LocalServer> ls) {
     localServer_ = ls;
@@ -445,6 +454,8 @@ class Paxos : public Consensus {
   uint64_t getElectionTimeout() const { return electionTimeout_; }
   uint64_t getHeartbeatInterval() const { return heartbeatInterval_; }
   void setHeartbeatInterval(uint64_t value);
+  int64_t getWeakReadRefreshTimeout() const { return weakReadRefreshTimeout_; }
+  void setWeakReadRefreshTimeout(int64_t value);
   uint64_t getCommitIndex() {
     return (state_.load() == LEADER && consensusAsync_.load())
                ? localServer_->lastSyncedIndex.load()
@@ -507,8 +518,6 @@ class Paxos : public Consensus {
   void setAsLogType(bool val) { localServer_->logType = val; }
   void setSendTimeout(uint64_t t);
   void setConnectTimeout(uint64_t t);
-  uint64_t getSendTimeout() { return srv_->getSendTimeout(); }
-  uint64_t getConnectTimeout() { return srv_->getConnectTimeout(); }
   int log_checksum_test(const LogEntry &le);  // return 0 for success
   void setEnableDynamicEasyIndex(bool flag) { enableDynamicEasyIndex_ = flag; }
   bool getEnableDynamicEasyIndex() { return enableDynamicEasyIndex_; }
@@ -665,6 +674,9 @@ class Paxos : public Consensus {
   /* timeout unit is ms. */
   const uint64_t electionTimeout_;
   uint64_t heartbeatInterval_;
+  uint64_t sendTimeout_;
+  uint64_t connectTimeout_;
+  int64_t weakReadRefreshTimeout_;
   const uint64_t purgeLogTimeout_;
   std::atomic<uint64_t> currentTerm_;
   std::atomic<uint64_t> commitIndex_;
@@ -744,6 +756,9 @@ class Paxos : public Consensus {
   uint port_;        /* paxos listen port */
 
   ThreadHook *threadHook = nullptr;
+
+public:
+  AsyncThread appendLogDelay_;
 
  private:
   Paxos(const Paxos &other);                   // copy constructor

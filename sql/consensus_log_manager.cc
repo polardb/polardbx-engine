@@ -464,6 +464,7 @@ int ConsensusLogManager::init_service() {
     consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
     consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
     consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
+    consensus_ptr->setWeakReadRefreshTimeout(opt_consensus_weak_read_refresh_timeout);
     consensus_ptr->setEnableAutoResetMatchIndex(
         opt_consensus_auto_reset_match_index);
     consensus_ptr->setEnableAutoLeaderTransfer(
@@ -1395,8 +1396,13 @@ uint64 ConsensusLogManager::get_sync_index(bool serious) {
 
 uint64 ConsensusLogManager::get_final_sync_index() {
   mysql_mutex_lock(get_sequence_stage1_lock());
-  uint64_t final_sync_index = current_index ? current_index - 1 : 0;
+  const uint64_t final_sync_index = current_index ? current_index - 1 : 0;
   mysql_mutex_unlock(get_sequence_stage1_lock());
+  return final_sync_index;
+}
+
+uint64 ConsensusLogManager::get_final_sync_index_no_lock() {
+  const uint64_t final_sync_index = (current_index.load() - 1);
   return final_sync_index;
 }
 
