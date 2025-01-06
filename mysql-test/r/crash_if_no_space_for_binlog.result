@@ -1,0 +1,6 @@
+create table t(id int);
+# Adding debug point 'simulate_no_free_space_error' to @@GLOBAL.debug
+insert into t values(2);
+ERROR HY000: Binary logging not possible. Message: An error occurred during flush stage of the commit. 'binlog_error_action' is set to 'ABORT_SERVER'. Server is being stopped.
+# restart
+drop table t;

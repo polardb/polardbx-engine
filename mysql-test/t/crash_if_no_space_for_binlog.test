@@ -1,0 +1,24 @@
+# Added variable `opt_enable_binlog_wait_if_full` to control server behavior when binary log disk is full
+# This variable takes effect during binary log write operations (transaction commits)
+# When set to false (default):
+#   - Server crashes immediately if binary log disk is full
+#   - This triggers HA failover to maintain high availability
+# When set to true:
+#   - Server blocks and waits for disk space to become available
+#   - Operations resume once space is freed
+--source include/have_debug.inc
+
+
+create table t(id int);
+--let $debug_point=simulate_no_free_space_error
+--source include/add_debug_point.inc
+
+--source include/expect_crash.inc
+--error ER_BINLOG_LOGGING_IMPOSSIBLE
+insert into t values(2);
+
+--source include/start_mysqld.inc
+
+drop table t;
+
+

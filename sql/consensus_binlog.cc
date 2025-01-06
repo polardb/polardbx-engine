@@ -46,6 +46,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mysql/psi/mysql_file.h"
 #include "replica_read_manager.h"
+#include "sql/sys_vars_ext.h"
 #include "storage/innobase/include/ut0dbg.h"
 
 static void correct_binlog_event_log_pos(char *buf, size_t buf_len,
@@ -317,7 +318,10 @@ bool MYSQL_BIN_LOG::open_for_normandy(
   my_off_t file_off = 0;
 
   write_error = 0;
-  myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
+  myf flags = MY_WME | MY_NABP;
+  if (opt_enable_binlog_wait_if_full) {
+    flags = flags | MY_WAIT_IF_FULL;
+  }
   // xpaxos threads have no THD and can't report the WAITING_FULL state
   // TODO: add THD to xpaxos threads
   if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;

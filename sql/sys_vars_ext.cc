@@ -78,6 +78,7 @@ static char *polardbx_product_version_ptr = NULL;
 int32 opt_rpc_port = DEFAULT_RPC_PORT;
 bool opt_enable_polarx_rpc = true;
 ulonglong opt_changeset_threads;
+bool opt_enable_binlog_wait_if_full = false;
 
 ulonglong opt_import_tablespace_iterator_interval_ms =
     DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
@@ -693,6 +694,11 @@ static Sys_var_bool Sys_opt_transaction_group(
     SESSION_VAR(innodb_transaction_group), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_enable_binlog_wait_if_full(
+    "enable_binlog_wait_if_full",
+    "Whether to wait for binlog to be flushed when the disk is full",
+    GLOBAL_VAR(opt_enable_binlog_wait_if_full), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 #ifdef HAVE_GCOV
 static bool check_flush_gcov_enabled(sys_var *self, THD *thd, enum_var_type type) {

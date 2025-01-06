@@ -4003,7 +4003,10 @@ bool MYSQL_BIN_LOG::open(PSI_file_key log_file_key, const char *log_name,
   bool ret = false;
 
   write_error = false;
-  myf flags = MY_WME | MY_NABP | MY_WAIT_IF_FULL;
+  myf flags = MY_WME | MY_NABP;
+  if (opt_enable_binlog_wait_if_full) {
+    flags = flags | MY_WAIT_IF_FULL;
+  }
   if (is_relay_log && !is_xpaxos_log) flags = flags | MY_REPORT_WAITING_IF_FULL;
 
   if (!(name = my_strdup(key_memory_MYSQL_LOG_name, log_name, MYF(MY_WME)))) {

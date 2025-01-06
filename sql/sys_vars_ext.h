@@ -51,6 +51,7 @@ extern ulonglong opt_changeset_threads;
 
 static constexpr ulonglong DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL = 0;
 extern ulonglong opt_import_tablespace_iterator_interval_ms;
+extern bool opt_enable_binlog_wait_if_full;
 
 extern void customize_server_version();
 
