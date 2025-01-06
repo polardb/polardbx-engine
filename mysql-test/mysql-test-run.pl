@@ -2766,6 +2766,12 @@ sub executable_setup () {
     my_find_bin($bindir,
                 [ "runtime_output_directory", "bin" ],
                 "my_openssl", NOT_REQUIRED);
+  # For polardbx-engine custom OpenSSL builds, look for extra/openssl/apps/openssl
+  if (!$exe_openssl) {
+    $exe_openssl = my_find_bin($bindir,
+                               [ "extra/openssl/apps" ],
+                               "openssl", NOT_REQUIRED);
+  }
   # For system OpenSSL builds, use openssl found in PATH:
   if (!$exe_openssl) {
     if (IS_MAC) {

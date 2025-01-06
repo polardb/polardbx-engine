@@ -248,12 +248,13 @@ ENDMACRO(FIND_ALTERNATIVE_SYSTEM_SSL)
 
 MACRO (MYSQL_USE_BUNDLED_OPENSSL)
   SET(SOURCE_DIR "${CMAKE_SOURCE_DIR}/extra/openssl")
-  #SET(BINARY_DIR "${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/extra/openssl")
   SET(BINARY_DIR ${SOURCE_DIR})
   SET(SSL_INCLUDE_DIRS ${SOURCE_DIR}/include)
   SET(SSL_DEFINES "-DHAVE_OPENSSL")
+  
+  # Set OpenSSL configuration options - don't add any options that might cause API compatibility issues
   SET(OPENSSL_CONFIGURE_OPTS -fPIC no-shared)
-  IF (CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT APPLE)
+  IF(CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT APPLE)
     LIST(APPEND OPENSSL_CONFIGURE_OPTS -d)
   ENDIF()
 
@@ -262,23 +263,76 @@ MACRO (MYSQL_USE_BUNDLED_OPENSSL)
   ELSE() # Xcode/Ninja generators
     SET(MAKE_COMMAND make)
   ENDIF()
-
+  
+  # Step 1: Configure OpenSSL
+  MESSAGE(STATUS "Configuring OpenSSL...")
+  EXECUTE_PROCESS(
+    COMMAND ./config ${OPENSSL_CONFIGURE_OPTS}
+    WORKING_DIRECTORY ${SOURCE_DIR}
+    RESULT_VARIABLE OPENSSL_CONFIG_RESULT
+  )
+  
+  IF(NOT OPENSSL_CONFIG_RESULT EQUAL 0)
+    MESSAGE(FATAL_ERROR "Unable to configure OpenSSL")
+  ENDIF()
+  
+  # Step 2: Generate basic configuration header file
+  EXECUTE_PROCESS(
+    COMMAND ${MAKE_COMMAND} include/openssl/opensslconf.h
+    WORKING_DIRECTORY ${SOURCE_DIR}
+    RESULT_VARIABLE OPENSSL_GEN_HEADER_RESULT
+  )
+  
+  IF(NOT OPENSSL_GEN_HEADER_RESULT EQUAL 0)
+    MESSAGE(FATAL_ERROR "Unable to generate OpenSSL configuration header file")
+  ENDIF()
+  
+  # Step 3: Compile OpenSSL during CMake configuration phase (using appropriate concurrency)
+  # Get CPU core count to set reasonable concurrency
+  INCLUDE(ProcessorCount)
+  ProcessorCount(CPU_CORES)
+  IF(NOT CPU_CORES EQUAL 0)
+    # Use CPU core count for concurrency, but not more than 64
+    SET(MAKE_JOBS ${CPU_CORES})
+    IF(CPU_CORES GREATER 64)
+      SET(MAKE_JOBS 64)
+    ENDIF()
+    MESSAGE(STATUS "Compiling OpenSSL during CMake configuration phase (using ${MAKE_JOBS} concurrent threads)...")
+  ELSE()
+    # If core count can't be detected, use 4 concurrent threads as default
+    SET(MAKE_JOBS 4)
+    MESSAGE(STATUS "Unable to detect CPU core count, compiling OpenSSL during CMake configuration phase (using ${MAKE_JOBS} concurrent threads)...")
+  ENDIF()
+  
+  EXECUTE_PROCESS(
+    COMMAND ${MAKE_COMMAND} -j${MAKE_JOBS}
+    WORKING_DIRECTORY ${SOURCE_DIR}
+    RESULT_VARIABLE OPENSSL_BUILD_RESULT
+  )
+  
+  IF(NOT OPENSSL_BUILD_RESULT EQUAL 0)
+    MESSAGE(FATAL_ERROR "Failed to compile OpenSSL during CMake configuration phase")
+  ENDIF()
+  
+  # Step 4: Verify library files have been generated
+  IF(NOT EXISTS "${BINARY_DIR}/libssl.a" OR NOT EXISTS "${BINARY_DIR}/libcrypto.a")
+    MESSAGE(FATAL_ERROR "OpenSSL library files were not properly generated")
+  ENDIF()
+  
+  # Keep dummy ExternalProject_Add target to maintain build system compatibility
+  # but don't actually do anything, as we've already compiled OpenSSL in the configuration phase
   ExternalProject_Add(openssl
     PREFIX extra/openssl
     SOURCE_DIR ${SOURCE_DIR}
     BINARY_DIR ${BINARY_DIR}
     STAMP_DIR  ${BINARY_DIR}
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND  ${MAKE_COMMAND}
-    INSTALL_COMMAND ""
+    CONFIGURE_COMMAND ""  # Don't execute configuration - already completed
+    BUILD_COMMAND ""      # Don't execute build - already completed
+    INSTALL_COMMAND ""    # Don't execute installation
   )
-
-  EXECUTE_PROCESS(COMMAND ./config ${OPENSSL_CONFIGURE_OPTS}
-    WORKING_DIRECTORY ${SOURCE_DIR}
-  )
-  EXECUTE_PROCESS(COMMAND ${MAKE_COMMAND} include/openssl/opensslconf.h
-    WORKING_DIRECTORY ${SOURCE_DIR}
-  )
+  
+  # Include OpenSSL header directories - use SYSTEM keyword to avoid warnings
+  INCLUDE_DIRECTORIES(BEFORE SYSTEM ${SSL_INCLUDE_DIRS})
 
   SET(MY_OPENSSL_LIBSSL "${BINARY_DIR}/libssl.a")
   SET(MY_OPENSSL_LIBCRYPTO "${BINARY_DIR}/libcrypto.a")
@@ -289,7 +343,6 @@ MACRO (MYSQL_USE_BUNDLED_OPENSSL)
   ADD_LIBRARY(crypto STATIC IMPORTED)
   SET_TARGET_PROPERTIES(crypto PROPERTIES IMPORTED_LOCATION "${MY_OPENSSL_LIBCRYPTO}")
   ADD_DEPENDENCIES(crypto openssl)
-  INCLUDE_DIRECTORIES(BEFORE SYSTEM ${SSL_INCLUDE_DIRS})
 
   SET(SSL_LIBRARIES ssl crypto -pthread)
   IF(CMAKE_SYSTEM_NAME MATCHES "SunOS")
@@ -299,7 +352,7 @@ MACRO (MYSQL_USE_BUNDLED_OPENSSL)
     SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBDL} ${CMAKE_THREAD_LIBS_INIT})
   ENDIF()
   ADD_DEFINITIONS(-DHAVE_TLSv13)
-  MESSAGE(STATUS "The openssl command does support TLSv1.3")
+  MESSAGE(STATUS "The OpenSSL command supports TLSv1.3")
 ENDMACRO()
 
 # MYSQL_CHECK_SSL
