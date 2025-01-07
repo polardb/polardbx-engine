@@ -37,6 +37,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %if "%{?dist}" == ".alios7"
 BuildRequires: alios7u-2_32-gcc-10-repo, python-sphinx
+BuildRequires: perl-IPC-Cmd
 %endif
 
 BuildRequires: cmake, make, autoconf, libstdc++-static
