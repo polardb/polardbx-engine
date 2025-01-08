@@ -6,8 +6,6 @@
 --source include/have_log_component.inc
 --source include/not_valgrind.inc
 
-let GREP_START=`SELECT DATE_FORMAT(CONVERT_TZ(SYSDATE(6),'SYSTEM','UTC'),'%Y%m%d%H%i%s%f');`;
-
 SET @old_log_error_verbosity = @@global.log_error_verbosity;
 SET @@global.log_error_verbosity=3;
 
@@ -17,6 +15,8 @@ if($log_error_ == "stderr")
   let $log_error_ = $MYSQLTEST_VARDIR/log/mysqld.1.err;
 }
 FLUSH LOGS;
+
+let GREP_START=`SELECT DATE_FORMAT(CONVERT_TZ(SYSDATE(6),'SYSTEM','UTC'),'%Y%m%d%H%i%s%f');`;
 
 # Send parse-trace to error log; first one with a current timestamp
 # to compare against our GREP_START defined above.
@@ -646,12 +646,12 @@ UNINSTALL COMPONENT "file://component_log_filter_dragnet";
 
 
 --echo # cleanup
+SET @@global.log_error_verbosity=DEFAULT;
 SET @@session.debug="-d,parser_stmt_to_error_log";
 SET @@session.debug="-d,log_error_normalize";
 
 FLUSH ERROR LOGS;
 
-SET @@global.log_error_verbosity=DEFAULT;
 
 
 --echo
