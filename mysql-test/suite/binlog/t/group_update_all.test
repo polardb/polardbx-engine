@@ -1,0 +1,916 @@
+--source include/have_binlog_format_row.inc
+--source include/have_debug_sync.inc
+
+#restart server to clean status
+let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
+--exec echo "wait" > $restart_file
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+-- exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+-- enable_reconnect
+-- source include/wait_until_connected_again.inc
+
+set global transaction_isolation = 'READ-COMMITTED';
+set session transaction_isolation = 'READ-COMMITTED';
+connect(con10,localhost,root,,);
+connect(con11,localhost,root,,);
+connect(con1,localhost,root,,);
+connect(con2,localhost,root,,);
+connect(con3,localhost,root,,);
+connect(con4,localhost,root,,);
+connect(con5,localhost,root,,);
+connect(con6,localhost,root,,);
+
+##### test for configuration setting
+--echo ###test for configuration setting
+
+connection default;
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot=1;
+show variables like "hotspot";
+
+##### test for normal function
+--echo ###test for normal function
+
+connection default;
+set debug_sync='now SIGNAL nogo';
+set global innodb_thread_concurrency= 32;
+set global hotspot=0;
+set global hotspot_lock_type=1;
+set global hotspot_for_autocommit=1;
+set global hotspot_update_max_wait_time=2*1000*1000;
+flush logs;
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+update t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+show global variables like '%thread_concurrency';
+
+set global hotspot=1;
+
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where id = 1;
+connection con2;
+--sleep 0.5
+--send update            t1 set a=a-1 where id = 1;
+
+connection con3;
+--send update t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con4;
+--send update       t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con5;
+--send update            t1 set a=a-1 where id = 2;
+
+connection con3;
+--reap
+connection con4;
+--reap
+connection con5;
+--reap
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+
+connection default;
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where id = 1;
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+
+connection default;
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where id = 1;
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000002 |egrep '^###|^BEGIN|^COMMIT'
+drop table t1;
+
+
+##### test for uk
+--echo ##### test for uk
+connection default;
+set debug_sync='now SIGNAL nogo';
+set global hotspot_fast_insert_dup=1;
+create table t1(id int primary key, a int, u1 int not null, u2 varchar(10) not null, unique key uk(u1, u2)) engine = innodb;
+
+insert into t1 select 1,1000,1,'aa1';
+insert into t1 select 2,1000,2,'aa2';
+insert into t1 select 3,1000,3,'aa3';
+insert into t1 select 4,1000,4,'aa4';
+
+set debug_sync='update_unlock_before WAIT_FOR go';
+--send update t1 set a=a-1 where u1=1 and u2='aa1';
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where u1=1 and u2='aa1';
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where u1=1 and u2='aa1';
+
+connection con3;
+--send update t1 set a=a-1 where u1=2 and u2='aa2';
+--sleep 0.5
+connection con4;
+--send update       t1 set a=a-1 where u1=2 and u2='aa2';
+--sleep 0.5
+connection con5;
+--send update            t1 set a=a-1 where u1=2 and u2='aa2';
+
+connection con3;
+--reap
+connection con4;
+--reap
+connection con5;
+--reap
+
+connection con6;
+# --error ER_DUP_ENTRY
+# Revision: NOT SUPPORT hotspot_fast_insert_dup again
+set innodb_lock_wait_timeout=1;
+--error ER_LOCK_WAIT_TIMEOUT
+insert into t1 select 5,1000,1,'aa1';
+show global status like 'Group_update_insert_dup';
+set innodb_lock_wait_timeout=1;
+begin;
+--error ER_LOCK_WAIT_TIMEOUT
+insert into t1 select 5,1000,1,'aa1';
+rollback;
+show global status like 'Group_update_insert_dup';
+set debug_sync='now SIGNAL go';
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+
+connection default;
+--send update t1 set a=a-1 where u1=1 and u2='aa1';
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where u1=1 and u2='aa1';
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where u1=1 and u2='aa1';
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000003 |egrep '^###|^BEGIN|^COMMIT'
+drop table t1;
+
+
+##### test for new lock and kill
+--echo ##### test for new lock and kill
+connection default;
+set debug_sync='now SIGNAL nogo';
+# new lock
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+set debug_sync='update_unlock_after WAIT_FOR go';
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update       t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where id = 1;
+
+connection con3;
+--sleep 2
+# the new group.
+--send update                t1 set a=a-1 where id = 1;
+
+connection con5;
+--sleep 3
+--replace_column 1 # 6 #
+show processlist;
+--send delete from t1 where id = 1;
+
+connection con4;
+--sleep 2
+--replace_column 1 # 6 #
+show processlist;
+select count(*) from performance_schema.data_lock_waits;
+select count(*) from performance_schema.data_locks;
+set debug_sync='now signal go';
+
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+connection con3;
+--reap
+connection con5;
+--reap
+
+# new lock X with normal lock
+connection con1;
+set debug_sync='now SIGNAL nogo';
+insert into t1 select 1,1000;
+begin;
+select * from t1 where id=1 for update;
+
+--sleep 1
+connection con2;
+--send update t1 set a=a-1 where id = 1;
+
+--sleep 1
+
+connection con1;
+--replace_column 1 # 6 #
+show processlist;
+# --replace_regex /.*------- TRX HAS BEEN WAITING/------- TRX HAS BEEN WAITING/ /gap hotspot type waiting.*/gap hotspot type waiting/ /space id [0-9]* page/space id # page/ /trx id [0-9]*/trx id #/ /WAITING [0-9]* SEC/WAITING # SEC/
+# show engine innodb status;
+select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
+commit;
+
+# new one
+connection con2;
+--reap
+--sleep 1
+set debug_sync='update_unlock_after WAIT_FOR go';
+--send update t1 set a=a-1 where id = 1;
+
+--sleep 1
+connection con3;
+--send select * from t1 /* 1 */ where id=1 for update;
+
+
+connection con1;
+--sleep 3
+--replace_column 1 # 6 #
+show processlist;
+# --replace_regex /.*------- TRX HAS BEEN WAITING/------- TRX HAS BEEN WAITING/ /gap waiting.*/gap waiting/ /space id [0-9]* page/space id # page/ /trx id [0-9]*/trx id #/ /WAITING [0-9]* SEC/WAITING # SEC/
+# show engine innodb status;
+select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
+set debug_sync='now signal go';
+
+connection con2;
+--reap
+connection con3;
+--reap
+
+
+# kill
+connection con4;
+set debug_sync='now signal nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+--send update t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con10;
+--send update       t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con2;
+--send update            t1 set a=a-1 where id = 2;
+
+connection con5;
+--sleep 3
+select ID into @id from information_schema.PROCESSLIST where INFO like 'update       t1 set a%';
+kill @id;
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+set debug_sync='now signal go';
+connection con4;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con10;
+--error 2013
+--reap
+connection con2;
+--error ER_ERROR_DURING_COMMIT
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000004 |egrep '^###|^BEGIN|^COMMIT'
+drop table t1;
+
+
+##### error by no change
+--echo ##### error by no change
+connection default;
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+--send update t1 set a=a-1 where id = 1;
+--sleep 1
+connection con1;
+--send update /* 1 */ t1 set a=a-1 where id = 1;
+connection con2;
+--send update /* 2 */ t1 set a=a where id = 1;
+
+connection default;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con1;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con2;
+--error ER_ERROR_DURING_COMMIT
+--reap
+
+# the new group.
+connection con1;
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+update /* 3 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+update /* 5 */ t1 set a=a where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+connection con1;
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+send update /* 6 */ t1 set a=a where id = 1;
+
+--sleep 1
+connection con2;
+send update /* 7 */ t1 set a=a-1 where id = 1;
+
+--sleep 1
+connection con1;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con2;
+--error ER_ERROR_DURING_COMMIT
+--reap
+
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000005 |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+
+##### error by no change with 2 groups
+--echo ##### error by no change with 2 groups
+connection default;
+set debug_sync='now SIGNAL nogo';
+set global hotspot_lock_type=0;
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+connection default;
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update /* 1 */ t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+set debug_sync='error_done_before WAIT_FOR go';
+--send update /* 2 */ t1 set a=a where id = 1;
+
+--sleep 2
+# the new group.
+connection con3;
+--send update /* 3 */ t1 set a=a-1 where id = 1;
+
+connection con4;
+set debug_sync='now SIGNAL go';
+
+connection default;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con1;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con2;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con3;
+--reap
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+
+show global status like 'Group_update%';
+
+
+## use hotspot_lock_type we should deal with the dependcy between two groups
+set global hotspot_lock_type=1;
+--sleep 1
+connection default;
+--send update /* 5 */ t1 set a=a-1 where id = 1;
+
+--sleep 1
+
+connection con1;
+--send update /* 6 */ t1 set a=a-1 where id = 1;
+connection con2;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='error_done_before WAIT_FOR go';
+--send update /* 7 */ t1 set a=a where id = 1;
+
+
+--sleep 2
+# the new group.
+connection con3;
+--send update /* 8 */ t1 set a=a-1 where id = 1;
+
+connection con4;
+set debug_sync='now SIGNAL go';
+
+connection default;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con1;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con2;
+--error ER_ERROR_DURING_COMMIT
+--reap
+connection con3;
+--error ER_ERROR_DURING_COMMIT
+--reap
+update /* 9 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+show global status like 'Group_update%';
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000006 |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+##### error by overflow
+--echo ##### error by overflow
+connection default;
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update /* 1 */ t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+set sql_mode='strict_all_tables';
+--send update /* 2 */ t1 set a=100000000000 where id = 1;
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--error ER_WARN_DATA_OUT_OF_RANGE
+--reap
+
+# the new group.
+connection con1;
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+update /* 3 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+show global status like 'Group_update%';
+set sql_mode='strict_all_tables';
+--error ER_WARN_DATA_OUT_OF_RANGE
+update /* 2 */ t1 set a=100000000000 where id = 1;
+select * from t1 where id = 1;
+
+# the new group.
+connection con1;
+--sleep 0.5
+send update /* 6 */ t1 set a=a-1 where id = 1;
+
+--sleep 0.5
+connection con2;
+send update /* 7 */ t1 set a=a-1 where id = 1;
+
+--sleep 1
+connection con1;
+--reap
+show global status like 'Group_update%';
+connection con2;
+--reap
+show global status like 'Group_update%';
+
+### for cover
+# leader faster than follower
+connection default;
+--send update t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con1;
+--send update /* 1 */ t1 set a=a-1 where id = 1;
+--sleep 0.5
+connection con2;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='update_unlock_before WAIT_FOR go';
+--send update /* 2 */ t1 set a=a-1 where id = 1;
+
+--sleep 2
+connection con3;
+--replace_column 1 # 6 #
+show processlist;
+set debug_sync='now SIGNAL go';
+
+connection default;
+--reap
+connection con1;
+--reap
+connection con2;
+--reap
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+
+show global status like 'Group_update%';
+
+# signal another group.
+connection default;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+--send update t1 set a=a-1 where id = 1;
+
+--sleep 2.5
+#new group
+connection con3;
+--send update /* 3 */ t1 set a=a-1 where id = 1;
+
+connection con4;
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+set debug_sync='now SIGNAL go';
+
+connection default;
+--reap
+connection con3;
+--reap
+
+show global status like 'Group_update%';
+
+
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000007 |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+
+##### test for follower be killed while leader start commit
+--echo ##### test for follower be killed while leader start commit
+connection default;
+set debug_sync='now SIGNAL nogo';
+# new lock
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+
+# kill
+connection con4;
+set debug_sync='now signal nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+#set debug_sync='before_leader_done WAIT_FOR go1';
+set debug_sync='leader_enter_commit_done WAIT_FOR go1';
+--send update t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con11;
+--send update       t1 set a=a-1 where id = 2;
+--sleep 0.5
+connection con2;
+set debug_sync='follower_wait_all_done_after_wait WAIT_FOR go1';
+--send update            t1 set a=a-1 where id = 2;
+
+connection con5;
+--sleep 0.5
+--replace_column 1 # 6 #
+show processlist;
+set debug_sync='now signal go';
+--sleep 1
+--replace_column 1 # 6 #
+show processlist;
+--sleep 2
+select ID into @id from information_schema.PROCESSLIST where INFO like 'update       t1 set a%';
+kill @id;
+--replace_column 1 # 6 #
+show processlist;
+--sleep 0.5
+set debug_sync='now signal go1';
+# Revision: Do not know why must signal twice
+--sleep 1
+set debug_sync='now signal go1';
+
+
+connection con4;
+--reap
+connection con11;
+--error 2013
+--reap
+connection con2;
+--reap
+
+connection default;
+show global status like 'Group_update%';
+select * from t1;
+--replace_column 1 # 6 #
+show processlist;
+
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000008 |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+
+##### test for part key and null case
+--echo ##### test for part key and null case
+create table t1(id1 int not null, id2 int not null, u1 int, u2 int,  a int, primary key(id1, id2), unique key (u1, u2)) engine = innodb;
+insert into t1 select 1,1,1,NULL,1;
+insert into t1 select 1,2,1,NULL,1;
+insert into t1 select 2,3,2,1,1;
+insert into t1 select 2,4,2,2,1;
+
+
+show global status like 'Group_update_leader_count';
+update t1 set a=a+1 where id1 = 1;
+select * from t1 where id1 = 1;
+show global status like 'Group_update_leader_count';
+update t1 set a=a+1 where id1 = 1 and id2 = 2;
+select * from t1 where id1 = 1 and id2 = 2;
+show global status like 'Group_update_leader_count';
+
+# test variables hotspot_for_autocommit
+set global hotspot_for_autocommit=0;
+update t1 set a=a+1 where id1 = 1 and id2 = 2;
+select * from t1 where id1 = 1 and id2 = 2;
+
+show global status like 'Group_update_leader_count';
+update t1 set a=a+1 where u1 = 1 and u2 is null;
+select * from t1 where u1 = 1 and u2 is null;
+show global status like 'Group_update_leader_count';
+update t1 set a=a+1 where u1 = 2 and u2 = 1;
+select * from t1 where u1 = 2 and u2 = 1;
+show global status like 'Group_update_leader_count';
+show global status like 'Group_update%';
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000009 |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+##### test for table with trigger (not use group update)
+--echo ##### test for table with trigger
+set global hotspot_for_autocommit=1;
+create table t1(id int primary key, a int) engine = innodb;
+create table t2(id int primary key, a int) engine = innodb;
+
+create trigger t1_trigger before update on t1 for each row update t2 set a = new.a;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t2 select 1,1000;
+insert into t2 select 2,1000;
+insert into t2 select 3,1000;
+
+show global status like 'Group_update%';
+
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+
+#value of the counters should not change
+show global status like 'Group_update%';
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000006 |egrep '^###|^BEGIN|^COMMIT'
+
+drop table t1;
+drop table t2;
+
+##### test for partitioned table (not use group update)
+--echo ##### test for partitioned table
+create table t1(id int primary key, a int) engine = innodb partition by hash(id) partitions 3;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+
+show global status like 'Group_update%';
+
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+
+#value of the counters should not change
+show global status like 'Group_update%';
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000006 |egrep '^###|^BEGIN|^COMMIT'
+
+drop table t1;
+
+##### test for session level bin logging (not use group update if it's disabled)
+--echo ##### test for disabled session level bin logging
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+
+#disable bin log, group update should not be used
+show variables like 'sql_log_bin';
+set sql_log_bin = OFF;
+
+show global status like 'Group_update%';
+
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+
+#value of the counters should not change
+show global status like 'Group_update%';
+
+#enable bin log, group update should be used
+set sql_log_bin = ON;
+
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+
+#value of the counters should change
+show global status like 'Group_update%';
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose $MYSQLD_DATADIR/binlog.000006 |egrep '^###|^BEGIN|^COMMIT'
+
+drop table t1;
+
+set global innodb_thread_concurrency= 0;
+set global innodb_thread_sleep_delay= 10000;
+set global hotspot_update_max_wait_time=100;
+set global hotspot_fast_insert_dup=0;
+set global hotspot_for_autocommit=0;
+set global hotspot_lock_type=0;
+set global hotspot=0;
+set global polardb_ic_reduce_hint_enable=1;
+set global transaction_isolation= 'REPEATABLE-READ';

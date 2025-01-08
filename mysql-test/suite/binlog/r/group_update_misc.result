@@ -1,0 +1,10 @@
+###test for configuration setting when server binlog is OFF
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot = OFF;
+show variables like "hotspot";
+Variable_name	Value
+hotspot	OFF
+set sql_log_bin = 0;
+set global hotspot = ON;
+ERROR HY000: Variable 'hotspot' cannot be enabled because 'bin logging' is enabled/disabled
+set global polardb_ic_reduce_hint_enable=1;

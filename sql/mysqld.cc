@@ -791,6 +791,7 @@ MySQL clients support the protocol:
 #include "sql/derror.h"
 #include "sql/event_data_objects.h"  // init_scheduler_psi_keys
 #include "sql/events.h"              // Events
+#include "sql/group_update.h"        // GroupUpdate
 #include "sql/handler.h"
 #include "sql/hostname_cache.h"  // hostname_cache_init
 #include "sql/init.h"            // unireg_init
@@ -1411,6 +1412,21 @@ bool thread_cache_size_specified = false;
 bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
+
+/* RDS Variables */
+bool ic_reduce_hint_enable = 0;
+
+std::atomic<ulonglong> group_update_leader_count{0};
+std::atomic<ulonglong> group_update_follower_count{0};
+std::atomic<ulonglong> group_update_free_count{0};
+std::atomic<ulonglong> group_update_reuse_count{0};
+std::atomic<ulonglong> group_update_insert_dup{0};
+std::atomic<ulonglong> group_update_fail_count{0};
+std::atomic<ulonglong> group_update_assert_count{0};
+std::atomic<ulonglong> group_update_total_count{0};
+std::atomic<ulonglong> group_update_ignore_count{0};
+std::atomic<ulonglong> group_update_group_same_count{0};
+/* RDS Variables End */
 
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_mem_counter = 0;
@@ -8105,6 +8121,8 @@ int mysqld_main(int argc, char **argv)
 
   if (init_server_components()) unireg_abort(MYSQLD_ABORT_EXIT);
 
+  GroupUpdatePool::init_instance();
+
   if (!server_id_supplied)
     LogErr(INFORMATION_LEVEL, ER_WARN_NO_SERVERID_SPECIFIED);
 
@@ -10047,6 +10065,24 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Global_connection_memory", (char *)&show_global_mem_counter, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
+    {"Group_update_fail_count", (char *)&group_update_fail_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"Group_update_follower_count", (char *)&group_update_follower_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"Group_update_free_count", (char *)&group_update_free_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"Group_update_leader_count", (char *)&group_update_leader_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"Group_update_ignore_count", (char *)&group_update_ignore_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"Group_update_insert_dup", (char *)&group_update_insert_dup, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"Group_update_reuse_count", (char *)&group_update_reuse_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"Group_update_total_count", (char *)&group_update_total_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"Group_update_group_same_count", (char *)&group_update_group_same_count,
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {"Handler_commit", (char *)offsetof(System_status_var, ha_commit_count),
      SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
     {"Handler_delete", (char *)offsetof(System_status_var, ha_delete_count),
@@ -12556,6 +12592,7 @@ PSI_stage_info stage_flushing_relay_log_and_source_info_repository= { 0, "Flushi
 PSI_stage_info stage_flushing_relay_log_info_file= { 0, "Flushing relay-log info file.", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_freeing_items= { 0, "freeing items", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_fulltext_initialization= { 0, "FULLTEXT initialization", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_hotspot_wait_for_commit= { 0, "hotspot wait for commit", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_init= { 0, "init", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_killing_replica= { 0, "Killing replica", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_logging_slow_query= { 0, "logging slow query", 0, PSI_DOCUMENT_ME};
@@ -12598,6 +12635,7 @@ PSI_stage_info stage_sql_thd_waiting_until_delay= { 0, "Waiting until SOURCE_DEL
 PSI_stage_info stage_system_lock= { 0, "System lock", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_update= { 0, "update", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_updating= { 0, "updating", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_updating_hotspot_collecting= { 0, "updating hotspot collecting", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_updating_main_table= { 0, "updating main table", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_updating_reference_tables= { 0, "updating reference tables", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_user_sleep= { 0, "User sleep", 0, PSI_DOCUMENT_ME};
@@ -12660,6 +12698,7 @@ PSI_stage_info *all_server_stages[] = {
     &stage_flushing_relay_log_info_file,
     &stage_freeing_items,
     &stage_fulltext_initialization,
+    &stage_hotspot_wait_for_commit,
     &stage_init,
     &stage_killing_replica,
     &stage_logging_slow_query,
@@ -12702,6 +12741,7 @@ PSI_stage_info *all_server_stages[] = {
     &stage_system_lock,
     &stage_update,
     &stage_updating,
+    &stage_updating_hotspot_collecting,
     &stage_updating_main_table,
     &stage_updating_reference_tables,
     &stage_user_sleep,

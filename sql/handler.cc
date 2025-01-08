@@ -8043,6 +8043,60 @@ int handler::ha_write_row(uchar *buf) {
   return 0;
 }
 
+int handler::ha_update_row_for_gu_follower(const uchar *old_data,
+                                           const uchar *new_data) {
+  int error;
+  assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);
+  Log_func *log_func = Update_rows_log_event::binlog_row_logging_function;
+
+  DBUG_TRACE;
+
+  assert(new_data == table->record[0]);
+  assert(old_data == table->record[1]);
+
+  mark_trx_read_write();
+
+  if (unlikely((error = binlog_log_row(table, old_data, new_data, log_func))))
+    return error;
+
+  return 0;
+}
+
+int handler::ha_update_row_for_gu_leader(const uchar *old_data, uchar *new_data,
+                                         const uchar *binlog_new_data) {
+  int error = 0;
+  assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);
+  Log_func *log_func = Update_rows_log_event::binlog_row_logging_function;
+
+  /*
+    Some storage engines require that the new record is in record[0]
+    (and the old record is in record[1]).
+   */
+  assert(binlog_new_data == table->record[0]);
+  assert(old_data == table->record[1]);
+
+  mark_trx_read_write();
+
+  MYSQL_TABLE_IO_WAIT(PSI_TABLE_UPDATE_ROW, active_index, error,
+                      { error = update_row(old_data, new_data); })
+
+  // no change in a total group, skip logging GROUP_UPDATE_ROWS_EVENT
+  if (error == HA_ERR_RECORD_IS_THE_SAME) {
+    if (unlikely((error = binlog_log_row(table, old_data, binlog_new_data,
+                                         log_func)))) {
+      return error;
+    }
+    ++group_update_group_same_count;
+    return error;
+  }
+
+  if (unlikely(error)) return error;
+  if (unlikely(
+          (error = binlog_log_row(table, old_data, binlog_new_data, log_func))))
+    return error;
+  return 0;
+}
+
 int handler::ha_update_row(const uchar *old_data, uchar *new_data) {
   int error;
   assert(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);

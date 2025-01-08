@@ -1,0 +1,20 @@
+#
+# Miscellaneous tests for group update
+#
+connection default;
+
+##### test for configuration setting when server binlog is OFF
+--echo ###test for configuration setting when server binlog is OFF
+
+#turn off this variable if it's already ON
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot = OFF;
+
+#these two variables should be OFF now
+show variables like "hotspot";
+
+#enable 'hotspot' shoulf fail when bin logging is disabled
+set sql_log_bin = 0;
+--error ER_VARIABLE_CHANGE_FAIL
+set global hotspot = ON;
+set global polardb_ic_reduce_hint_enable=1;

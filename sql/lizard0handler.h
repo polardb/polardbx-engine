@@ -125,8 +125,9 @@ typedef bool (*snapshot_gcn_too_old_t)(gcn_t gcn, bool flashback_area);
 typedef void (*set_gcn_if_bigger_t)(gcn_t gcn);
 
 typedef bool (*start_trx_for_xa_t)(handlerton *hton, THD *thd, bool rw);
-typedef bool (*assign_slot_for_xa_t)(THD *thd, slot_ptr_t *slot_ptr,
-                                     trx_id_t *trx_id);
+typedef bool (*start_trx_for_gu_t)(handlerton *hton, THD *thd);
+typedef bool (*assign_trans_slot_t)(THD *thd, slot_ptr_t *slot_ptr,
+                                    trx_id_t *trx_id);
 
 typedef bool (*search_trx_by_xid_t)(const XID *xid, MyXAInfo *info);
 
@@ -161,7 +162,8 @@ struct handlerton_ext {
   snapshot_gcn_too_old_t snapshot_automatic_gcn_too_old;
   set_gcn_if_bigger_t set_gcn_if_bigger;
   start_trx_for_xa_t start_trx_for_xa;
-  assign_slot_for_xa_t assign_slot_for_xa;
+  start_trx_for_gu_t start_trx_for_gu;
+  assign_trans_slot_t assign_trans_slot;
   search_trx_by_xid_t search_detach_prepare_trx_by_xid;
   search_trx_by_xid_t search_rollback_background_trx_by_xid;
   search_trx_by_xid_t search_history_trx_by_xid;

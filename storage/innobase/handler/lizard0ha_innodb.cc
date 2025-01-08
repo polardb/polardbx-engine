@@ -41,6 +41,7 @@
 
 #include "libbinlogevents/include/gcn_event.h"
 #include "sql/lizard/lizard_service.h"
+#include "sql/sql_class.h"
 
 extern trx_t *thd_to_trx_if_have(THD *thd);
 
@@ -93,8 +94,21 @@ static bool innobase_start_trx_for_xa(handlerton *hton, THD *thd, bool rw) {
   return false;
 }
 
-bool innobase_assign_slot_for_xa(THD *thd, slot_ptr_t *slot_ptr_arg,
-                                 trx_id_t *trx_id_arg) {
+static bool innobase_start_trx_for_gu(handlerton *hton, THD *thd) {
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
+
+  innobase_register_trx(hton, thd, trx);
+
+  return false;
+}
+
+bool innobase_assign_trans_slot(THD *thd, slot_ptr_t *slot_ptr_arg,
+                                trx_id_t *trx_id_arg) {
   slot_ptr_t *slot_ptr = static_cast<slot_ptr_t *>(slot_ptr_arg);
   trx_id_t *trx_id = static_cast<trx_id_t *>(trx_id_arg);
   trx_t *trx = check_trx_exists(thd);
@@ -105,6 +119,7 @@ bool innobase_assign_slot_for_xa(THD *thd, slot_ptr_t *slot_ptr_arg,
   /** The trx must have been started as rw mode. */
   if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) || trx->id == 0 ||
       trx->read_only) {
+    ut_ad(thd->gu_ctx.is_not_gu());
     return true;
   }
 
@@ -328,7 +343,8 @@ void innobase_init_ext(handlerton *hton) {
       innobase_snapshot_automatic_gcn_too_old;
   hton->ext.set_gcn_if_bigger = innobase_set_gcn_if_bigger;
   hton->ext.start_trx_for_xa = innobase_start_trx_for_xa;
-  hton->ext.assign_slot_for_xa = innobase_assign_slot_for_xa;
+  hton->ext.start_trx_for_gu = innobase_start_trx_for_gu;
+  hton->ext.assign_trans_slot = innobase_assign_trans_slot;
   hton->ext.search_detach_prepare_trx_by_xid =
       innobase_search_detach_prepare_trx_by_xid;
   hton->ext.search_rollback_background_trx_by_xid =

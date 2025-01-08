@@ -363,6 +363,21 @@ extern uint32 gtid_executed_compression_period;
 extern bool binlog_gtid_simple_recovery;
 extern ulong binlog_error_action;
 extern ulong locked_account_connection_count;
+/* RDS Variables */
+extern bool ic_reduce_hint_enable;
+
+extern std::atomic<ulonglong> group_update_leader_count;
+extern std::atomic<ulonglong> group_update_follower_count;
+extern std::atomic<ulonglong> group_update_free_count;
+extern std::atomic<ulonglong> group_update_reuse_count;
+extern std::atomic<ulonglong> group_update_fail_count;
+extern std::atomic<ulonglong> group_update_assert_count;
+extern std::atomic<ulonglong> group_update_total_count;
+extern std::atomic<ulonglong> group_update_insert_dup;
+extern std::atomic<ulonglong> group_update_ignore_count;
+extern std::atomic<ulonglong> group_update_group_same_count;
+/* END: Variables for RDS */
+
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
   IGNORE_ERROR = 0,
@@ -617,6 +632,7 @@ extern PSI_stage_info stage_flushing_relay_log_and_source_info_repository;
 extern PSI_stage_info stage_flushing_relay_log_info_file;
 extern PSI_stage_info stage_freeing_items;
 extern PSI_stage_info stage_fulltext_initialization;
+extern PSI_stage_info stage_hotspot_wait_for_commit;
 extern PSI_stage_info stage_init;
 extern PSI_stage_info stage_killing_replica;
 extern PSI_stage_info stage_logging_slow_query;
@@ -664,6 +680,7 @@ extern PSI_stage_info stage_statistics;
 extern PSI_stage_info stage_system_lock;
 extern PSI_stage_info stage_update;
 extern PSI_stage_info stage_updating;
+extern PSI_stage_info stage_updating_hotspot_collecting;
 extern PSI_stage_info stage_updating_main_table;
 extern PSI_stage_info stage_updating_reference_tables;
 extern PSI_stage_info stage_user_sleep;

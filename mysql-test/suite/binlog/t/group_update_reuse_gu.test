@@ -1,0 +1,111 @@
+--source include/have_binlog_format_row.inc
+--source include/have_debug_sync.inc
+
+#restart server to clean status
+let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
+--exec echo "wait" > $restart_file
+--shutdown_server 10
+--source include/wait_until_disconnected.inc
+-- exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+-- enable_reconnect
+-- source include/wait_until_connected_again.inc
+
+set global transaction_isolation='READ-COMMITTED';
+set session transaction_isolation='READ-COMMITTED';
+connect(con10,localhost,root,,);
+connect(con11,localhost,root,,);
+connect(con1,localhost,root,,);
+connect(con2,localhost,root,,);
+connect(con3,localhost,root,,);
+connect(con4,localhost,root,,);
+connect(con5,localhost,root,,);
+connect(con6,localhost,root,,);
+
+##### test for normal function
+--echo ###test for normal function
+
+connection default;
+set debug_sync='now SIGNAL nogo';
+set global innodb_thread_concurrency= 32;
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot=0;
+set global hotspot_lock_type=1;
+set global hotspot_for_autocommit=1;
+set global hotspot_update_max_wait_time=2*1000*1000;
+flush logs;
+create table t1(id int primary key, a int) engine = innodb;
+
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+update t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+show global variables like '%thread_concurrency';
+
+set global hotspot=1;
+
+
+##### error by no change
+--echo ##### error by no change
+connection default;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='after_leader_done_before_release_gu WAIT_FOR go2_reset_status';
+drop table t1;
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+
+--send update t1 set a=a-1 where id = 1;
+--sleep 3
+
+connection con1;
+show global status like 'Group_update%';
+set debug_sync='leader_done_after_clean_status SIGNAL go2_reset_status WAIT_FOR go';
+--send update t1 set a=a-1 where id = 1;
+
+connection default;
+--reap
+show global status like 'Group_update%';
+--replace_column 1 # 6 #
+show processlist;
+
+connection con2;
+show global status like 'Group_update%';
+--send update t1 set a=a-1 where id = 1;
+
+connection default;
+--sleep 1
+set debug_sync='now SIGNAL go';
+
+connection con1;
+--reap
+
+connection con2;
+--reap
+show global status like 'Group_update%';
+
+flush logs;
+let $MYSQLD_DATADIR=`select @@datadir`;
+--exec $MYSQL_BINLOG --verbose `(ls $MYSQLD_DATADIR/binlog.* | sort -V | tail -n 2 | head -n 1)` |egrep '^###|^BEGIN|^COMMIT'
+
+select * from t1;
+drop table t1;
+
+
+
+
+set global innodb_thread_concurrency= 0;
+set global innodb_thread_sleep_delay= 10000;
+set global hotspot_update_max_wait_time=100;
+set global hotspot_fast_insert_dup=0;
+set global hotspot_for_autocommit=0;
+set global hotspot_lock_type=0;
+set global hotspot=0;
+set global polardb_ic_reduce_hint_enable=1;
+set global transaction_isolation='REPEATABLE-READ';

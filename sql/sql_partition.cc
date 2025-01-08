@@ -75,6 +75,7 @@
 #include "sql/derror.h"      // ER_THD
 #include "sql/enum_query_type.h"
 #include "sql/field.h"
+#include "sql/group_update_ctx.h"  // GroupUpdateCtx
 #include "sql/handler.h"
 #include "sql/item.h"       // enum_monotoncity_info
 #include "sql/item_func.h"  // Item_func
@@ -315,13 +316,16 @@ int get_parts_for_update(const uchar *old_data,
                          const uchar *new_data [[maybe_unused]],
                          const uchar *rec0, partition_info *part_info,
                          uint32 *old_part_id, uint32 *new_part_id,
-                         longlong *new_func_value) {
+                         longlong *new_func_value, GroupUpdateCtx *gu_ctx) {
   Field **part_field_array = part_info->full_part_field_array;
   int error;
   longlong old_func_value;
   DBUG_TRACE;
 
-  assert(new_data == rec0);  // table->record[0]
+  if (gu_ctx == nullptr || gu_ctx->is_not_gu()) {
+    assert(new_data == rec0);  // table->record[0]
+  }
+
   set_field_ptr(part_field_array, old_data, rec0);
   error = part_info->get_partition_id(part_info, old_part_id, &old_func_value);
   set_field_ptr(part_field_array, rec0, old_data);

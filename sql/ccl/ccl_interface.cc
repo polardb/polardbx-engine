@@ -20,6 +20,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include "sql/mysqld.h"
 #include "sql/ccl/ccl_interface.h"
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_common.h"
@@ -79,7 +80,8 @@ void do_ccl_comply_queue_or_rule(THD *thd, LEX *lex, Table_ref *table_list) {
 
   if (!handler) return;
 
-  if (lex->opt_hints_global && lex->opt_hints_global->ccl_queue_hint)
+  if (ic_reduce_hint_enable && lex->opt_hints_global &&
+      lex->opt_hints_global->ccl_queue_hint)
     handler->comply_queue(thd, lex, lex->opt_hints_global->ccl_queue_hint);
   else
     handler->comply_rule(lex->sql_command, table_list, thd->query());

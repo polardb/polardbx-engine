@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql_plugin_var.h"
 
 #include "ha_innodb.h"
+#include "clone0clone.h"
 
 #include "lizard0cleanout.h"
 #include "lizard0cleanout0safe.h"
@@ -839,11 +840,12 @@ bool txn_undo_hdr_read_by_xid(const XID *xid, const page_t *undo_page,
 
 /** Allocate txn undo and return transaction slot address.
  *
- * @param[in]	trx
- * @param[out]	Slot address
+ * @param[in]   trx
+ * @param[out]  Slot address
+ * @param[out]  trx_id
  *
- * @retval	DB_SUCCESS
- * @retval	DB_ERROR
+ * @retval  DB_SUCCESS
+ * @retval  DB_ERROR
  **/
 dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr,
                             trx_id_t *trx_id) {
@@ -866,9 +868,18 @@ dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr,
     be always persisted by SE. If in the future, this function is not only used
     for External XA transaction, the gtid_persistor.set_persist_gtid might be
     called to set the SE_GTID_PERSIST flag. */
-    ut_ad(trx->mysql_thd && trx->mysql_thd->get_transaction() &&
-          !trx->mysql_thd->get_transaction()->xid_state()->has_state(
-              XID_STATE::XA_NOTR));
+    /**
+      Revision:
+      For group update (hotspot), the follower might update nothing but only
+      generate binlog. It means that the GTID might be also assigned but the
+      SE hasn't persist the GTID. We fit it so that the GTID is also persisted
+      by SE.
+    */
+    ut_ad(trx->mysql_thd &&
+          ((trx->mysql_thd->get_transaction() &&
+            !trx->mysql_thd->get_transaction()->xid_state()->has_state(
+                XID_STATE::XA_NOTR)) ||
+           trx->mysql_thd->gu_ctx.is_follower()));
 
     mutex_enter(&trx->undo_mutex);
     err = trx_always_assign_txn_undo(trx);

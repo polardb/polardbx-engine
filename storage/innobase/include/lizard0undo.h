@@ -506,11 +506,12 @@ dberr_t trx_always_assign_txn_undo(trx_t *trx);
 
 /** Allocate txn undo and return transaction slot address.
  *
- * @param[in]	trx
- * @param[out]	Slot address
- * @param[out]	trx id
+ * @param[in]   trx
+ * @param[out]  Slot address
+ * @param[out]  trx_id
  *
- * @retval	innodb error code.
+ * @retval  DB_SUCCESS
+ * @retval  DB_ERROR
  **/
 dberr_t trx_assign_txn_undo(trx_t *trx, slot_ptr_t *slot_ptr, trx_id_t *trx_id);
 /**

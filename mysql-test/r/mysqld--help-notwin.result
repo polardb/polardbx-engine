@@ -717,6 +717,15 @@ The following options may be given as the first argument:
  Maximum amount of memory available for generating
  histograms
  --host-cache-size=# How many host names should be cached to avoid resolving.
+ --hotspot           Switch on the hotspot function.
+ --hotspot-fast-insert-dup 
+ Return insert dup error directly by judging if group
+ update item exist.
+ --hotspot-for-autocommit 
+ Update with autocommit can also use hotspot function.
+ --hotspot-lock-type Use new type innodb row lock to boost the performance.
+ --hotspot-update-max-wait-time[=#] 
+ The max wait time for master in group update (us).
  --implicit-primary-key 
  This option is deprecated. Use
  enable_implicit_primary_key instead.
@@ -1380,6 +1389,9 @@ The following options may be given as the first argument:
  in plugin_dir. This option adds to the list specified by
  --plugin-load in an incremental way. Multiple
  --plugin-load-add are supported.
+ --polardb-ic-reduce-hint-enable 
+ enable the ic_reduce strategy when using hint
+ (Defaults to on; use --skip-polardb-ic-reduce-hint-enable to disable.)
  --polarx-rpc[=name] Enable or disable polarx_rpc plugin. Possible values are
  ON, OFF, FORCE (don't start if the plugin fails to load).
  --polarx-rpc-auto-cpu-affinity 
@@ -1564,6 +1576,10 @@ The following options may be given as the first argument:
  --rds-audit-log-version=name 
  The version of audit log, currently support MYSQL_V1 and
  MYSQL_V3.
+ --rds-ic-reduce-hint-enable 
+ This option is deprecated. Use
+ polardb_ic_reduce_hint_enable instead.
+ (Defaults to on; use --skip-rds-ic-reduce-hint-enable to disable.)
  --rds-kill-connections=# 
  Max conenction count for rds kill user
  --rds-kill-user-list=name 
@@ -2355,6 +2371,11 @@ gtid-mode ON
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279
+hotspot FALSE
+hotspot-fast-insert-dup FALSE
+hotspot-for-autocommit FALSE
+hotspot-lock-type FALSE
+hotspot-update-max-wait-time 100
 implicit-primary-key FALSE
 import-tablespace-iterator-interval 10
 import-tablespace-iterator-interval-ms 10
@@ -2561,6 +2582,7 @@ persist-only-admin-x509-subject
 persist-sensitive-variables-in-plaintext TRUE
 persisted-globals-load TRUE
 ping-mode 
+polardb-ic-reduce-hint-enable TRUE
 polarx-rpc ON
 polarx-rpc-auto-cpu-affinity TRUE
 polarx-rpc-enable-epoll-in-tasker TRUE
@@ -2630,6 +2652,7 @@ rds-audit-log-skip FALSE
 rds-audit-log-statement-policy ALL
 rds-audit-log-strategy ASYNCHRONOUS
 rds-audit-log-version MYSQL_V1
+rds-ic-reduce-hint-enable TRUE
 rds-kill-connections 0
 rds-kill-user-list (No default value)
 rds-version 32

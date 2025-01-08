@@ -563,9 +563,12 @@ int Partition_helper::ph_update_row(const uchar *old_data, uchar *new_data) {
   // Need to read partition-related columns, to locate the row's partition:
   assert(
       bitmap_is_subset(&m_part_info->full_part_field_set, m_table->read_set));
+
+  GroupUpdateCtx *gu_ctx =
+      m_table->in_use ? &(m_table->in_use->gu_ctx) : nullptr;
   if ((error = get_parts_for_update(old_data, new_data, m_table->record[0],
                                     m_part_info, &old_part_id, &new_part_id,
-                                    &func_value))) {
+                                    &func_value, gu_ctx))) {
     return error;
   }
   if (!bitmap_is_set(&(m_part_info->lock_partitions), new_part_id)) {

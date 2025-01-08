@@ -1,0 +1,2008 @@
+set global transaction_isolation = 'READ-COMMITTED';
+set session transaction_isolation = 'READ-COMMITTED';
+###test for configuration setting
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot=1;
+show variables like "hotspot";
+Variable_name	Value
+hotspot	ON
+###test for normal function
+set debug_sync='now SIGNAL nogo';
+set global innodb_thread_concurrency= 32;
+set global hotspot=0;
+set global hotspot_lock_type=1;
+set global hotspot_for_autocommit=1;
+set global hotspot_update_max_wait_time=2*1000*1000;
+flush logs;
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	999
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1000
+show global variables like '%thread_concurrency';
+Variable_name	Value
+innodb_thread_concurrency	32
+set global hotspot=1;
+update t1 set a=a-1 where id = 1;;
+update       t1 set a=a-1 where id = 1;;
+update            t1 set a=a-1 where id = 1;;
+update t1 set a=a-1 where id = 2;;
+update       t1 set a=a-1 where id = 2;;
+update            t1 set a=a-1 where id = 2;;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	4
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	2
+Group_update_reuse_count	0
+Group_update_total_count	2
+select * from t1;
+id	a
+1	997
+2	997
+3	1000
+4	1000
+update t1 set a=a-1 where id = 1;;
+update       t1 set a=a-1 where id = 1;;
+update            t1 set a=a-1 where id = 1;;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	6
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	3
+Group_update_reuse_count	1
+Group_update_total_count	2
+select * from t1;
+id	a
+1	994
+2	997
+3	1000
+4	1000
+update t1 set a=a-1 where id = 1;;
+update       t1 set a=a-1 where id = 1;;
+update            t1 set a=a-1 where id = 1;;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	8
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	4
+Group_update_reuse_count	2
+Group_update_total_count	2
+select * from t1;
+id	a
+1	991
+2	997
+3	1000
+4	1000
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=1000
+### SET
+###   @1=2
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=999
+### SET
+###   @1=2
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=998
+### SET
+###   @1=2
+###   @2=997
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=997
+### SET
+###   @1=1
+###   @2=996
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=996
+### SET
+###   @1=1
+###   @2=995
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=995
+### SET
+###   @1=1
+###   @2=994
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=994
+### SET
+###   @1=1
+###   @2=993
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=993
+### SET
+###   @1=1
+###   @2=992
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=992
+### SET
+###   @1=1
+###   @2=991
+COMMIT/*!*/;
+drop table t1;
+##### test for uk
+set debug_sync='now SIGNAL nogo';
+set global hotspot_fast_insert_dup=1;
+create table t1(id int primary key, a int, u1 int not null, u2 varchar(10) not null, unique key uk(u1, u2)) engine = innodb;
+insert into t1 select 1,1000,1,'aa1';
+insert into t1 select 2,1000,2,'aa2';
+insert into t1 select 3,1000,3,'aa3';
+insert into t1 select 4,1000,4,'aa4';
+set debug_sync='update_unlock_before WAIT_FOR go';
+update t1 set a=a-1 where u1=1 and u2='aa1';;
+update       t1 set a=a-1 where u1=1 and u2='aa1';;
+update            t1 set a=a-1 where u1=1 and u2='aa1';;
+update t1 set a=a-1 where u1=2 and u2='aa2';;
+update       t1 set a=a-1 where u1=2 and u2='aa2';;
+update            t1 set a=a-1 where u1=2 and u2='aa2';;
+set innodb_lock_wait_timeout=1;
+insert into t1 select 5,1000,1,'aa1';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+show global status like 'Group_update_insert_dup';
+Variable_name	Value
+Group_update_insert_dup	0
+set innodb_lock_wait_timeout=1;
+begin;
+insert into t1 select 5,1000,1,'aa1';
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+rollback;
+show global status like 'Group_update_insert_dup';
+Variable_name	Value
+Group_update_insert_dup	0
+set debug_sync='now SIGNAL go';
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	12
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	6
+Group_update_reuse_count	4
+Group_update_total_count	2
+select * from t1;
+id	a	u1	u2
+1	997	1	aa1
+2	997	2	aa2
+3	1000	3	aa3
+4	1000	4	aa4
+update t1 set a=a-1 where u1=1 and u2='aa1';;
+update       t1 set a=a-1 where u1=1 and u2='aa1';;
+update            t1 set a=a-1 where u1=1 and u2='aa1';;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	14
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	7
+Group_update_reuse_count	5
+Group_update_total_count	2
+select * from t1;
+id	a	u1	u2
+1	994	1	aa1
+2	997	2	aa2
+3	1000	3	aa3
+4	1000	4	aa4
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+###   @3=2
+###   @4='aa2'
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+###   @3=3
+###   @4='aa3'
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+###   @3=4
+###   @4='aa4'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=1000
+###   @3=2
+###   @4='aa2'
+### SET
+###   @1=2
+###   @2=999
+###   @3=2
+###   @4='aa2'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=999
+###   @3=2
+###   @4='aa2'
+### SET
+###   @1=2
+###   @2=998
+###   @3=2
+###   @4='aa2'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=998
+###   @3=2
+###   @4='aa2'
+### SET
+###   @1=2
+###   @2=997
+###   @3=2
+###   @4='aa2'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=999
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=998
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=997
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=997
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=996
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=996
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=995
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=995
+###   @3=1
+###   @4='aa1'
+### SET
+###   @1=1
+###   @2=994
+###   @3=1
+###   @4='aa1'
+COMMIT/*!*/;
+drop table t1;
+##### test for new lock and kill
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+set debug_sync='update_unlock_after WAIT_FOR go';
+update t1 set a=a-1 where id = 1;;
+update       t1 set a=a-1 where id = 1;;
+update            t1 set a=a-1 where id = 1;;
+update                t1 set a=a-1 where id = 1;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	updating	update                t1 set a=a-1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+delete from t1 where id = 1;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	updating	update                t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Query	#	updating	delete from t1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+select count(*) from performance_schema.data_lock_waits;
+count(*)
+3
+select count(*) from performance_schema.data_locks;
+count(*)
+6
+set debug_sync='now signal go';
+set debug_sync='now SIGNAL nogo';
+insert into t1 select 1,1000;
+begin;
+select * from t1 where id=1 for update;
+id	a
+1	1000
+update t1 set a=a-1 where id = 1;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Query	#	updating	update t1 set a=a-1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
+LOCK_TYPE	LOCK_MODE	LOCK_STATUS
+TABLE	IX	GRANTED
+RECORD	X,REC_NOT_GAP	WAITING
+TABLE	IX	GRANTED
+RECORD	X,REC_NOT_GAP	GRANTED
+commit;
+set debug_sync='update_unlock_after WAIT_FOR go';
+update t1 set a=a-1 where id = 1;;
+select * from t1 /* 1 */ where id=1 for update;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	statistics	select * from t1 /* 1 */ where id=1 for update
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
+LOCK_TYPE	LOCK_MODE	LOCK_STATUS
+TABLE	IX	GRANTED
+RECORD	X,REC_NOT_GAP	WAITING
+TABLE	IX	GRANTED
+RECORD	X,REC_NOT_GAP	GRANTED
+set debug_sync='now signal go';
+id	a
+1	998
+set debug_sync='now signal nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+update t1 set a=a-1 where id = 2;;
+update       t1 set a=a-1 where id = 2;;
+update            t1 set a=a-1 where id = 2;;
+select ID into @id from information_schema.PROCESSLIST where INFO like 'update       t1 set a%';
+kill @id;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+set debug_sync='now signal go';
+ERROR HY000: Got error 112 - '' during COMMIT
+ERROR HY000: Lost connection to MySQL server during query
+ERROR HY000: Got error 113 - '' during COMMIT
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	3
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	11
+Group_update_reuse_count	9
+Group_update_total_count	2
+select * from t1;
+id	a
+1	998
+2	1000
+3	1000
+4	1000
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=997
+### SET
+###   @1=1
+###   @2=996
+COMMIT/*!*/;
+BEGIN
+### DELETE FROM `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=996
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+drop table t1;
+##### error by no change
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;;
+update /* 1 */ t1 set a=a-1 where id = 1;;
+update /* 2 */ t1 set a=a where id = 1;;
+ERROR HY000: Got error 111 - '' during COMMIT
+ERROR HY000: Got error 113 - '' during COMMIT
+ERROR HY000: Got error 114 - '' during COMMIT
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	6
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	11
+Group_update_reuse_count	10
+Group_update_total_count	2
+update /* 3 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	999
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	6
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	12
+Group_update_reuse_count	11
+Group_update_total_count	2
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	998
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	6
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	13
+Group_update_reuse_count	12
+Group_update_total_count	2
+update /* 5 */ t1 set a=a where id = 1;
+select * from t1 where id = 1;
+id	a
+1	998
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	6
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	13
+Group_update_reuse_count	13
+Group_update_total_count	2
+update /* 6 */ t1 set a=a where id = 1;
+update /* 7 */ t1 set a=a-1 where id = 1;
+ERROR HY000: Got error 114 - '' during COMMIT
+ERROR HY000: Got error 113 - '' during COMMIT
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	8
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	13
+Group_update_reuse_count	14
+Group_update_total_count	2
+select * from t1;
+id	a
+1	998
+2	1000
+3	1000
+4	1000
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+select * from t1;
+id	a
+1	998
+2	1000
+3	1000
+4	1000
+drop table t1;
+##### error by no change with 2 groups
+set debug_sync='now SIGNAL nogo';
+set global hotspot_lock_type=0;
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;;
+update /* 1 */ t1 set a=a-1 where id = 1;;
+set debug_sync='error_done_before WAIT_FOR go';
+update /* 2 */ t1 set a=a where id = 1;;
+update /* 3 */ t1 set a=a-1 where id = 1;;
+set debug_sync='now SIGNAL go';
+ERROR HY000: Got error 112 - '' during COMMIT
+ERROR HY000: Got error 113 - '' during COMMIT
+ERROR HY000: Got error 114 - '' during COMMIT
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	998
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	11
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	15
+Group_update_reuse_count	16
+Group_update_total_count	2
+set global hotspot_lock_type=1;
+update /* 5 */ t1 set a=a-1 where id = 1;;
+update /* 6 */ t1 set a=a-1 where id = 1;;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='error_done_before WAIT_FOR go';
+update /* 7 */ t1 set a=a where id = 1;;
+update /* 8 */ t1 set a=a-1 where id = 1;;
+set debug_sync='now SIGNAL go';
+ERROR HY000: Got error 112 - '' during COMMIT
+ERROR HY000: Got error 113 - '' during COMMIT
+ERROR HY000: Got error 114 - '' during COMMIT
+ERROR HY000: Got error 111 - '' during COMMIT
+update /* 9 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	997
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	16
+Group_update_reuse_count	18
+Group_update_total_count	2
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	16
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	16
+Group_update_reuse_count	18
+Group_update_total_count	2
+select * from t1;
+id	a
+1	997
+2	1000
+3	1000
+4	1000
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+select * from t1;
+id	a
+1	997
+2	1000
+3	1000
+4	1000
+drop table t1;
+##### error by overflow
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;;
+update /* 1 */ t1 set a=a-1 where id = 1;;
+set sql_mode='strict_all_tables';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+update /* 2 */ t1 set a=100000000000 where id = 1;;
+ERROR 22003: Out of range value for column 'a' at row 1
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	17
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	17
+Group_update_reuse_count	19
+Group_update_total_count	2
+update /* 3 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	997
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	17
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	18
+Group_update_reuse_count	20
+Group_update_total_count	2
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	996
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	17
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	19
+Group_update_reuse_count	21
+Group_update_total_count	2
+set sql_mode='strict_all_tables';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+update /* 2 */ t1 set a=100000000000 where id = 1;
+ERROR 22003: Out of range value for column 'a' at row 1
+select * from t1 where id = 1;
+id	a
+1	996
+update /* 6 */ t1 set a=a-1 where id = 1;
+update /* 7 */ t1 set a=a-1 where id = 1;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	18
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	20
+Group_update_reuse_count	23
+Group_update_total_count	2
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	18
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	20
+Group_update_reuse_count	23
+Group_update_total_count	2
+update t1 set a=a-1 where id = 1;;
+update /* 1 */ t1 set a=a-1 where id = 1;;
+set debug_sync='now SIGNAL nogo';
+set debug_sync='update_unlock_before WAIT_FOR go';
+update /* 2 */ t1 set a=a-1 where id = 1;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	hotspot wait for commit	update t1 set a=a-1 where id = 1
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update /* 1 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	debug sync point: update_unlock_before	update /* 2 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+set debug_sync='now SIGNAL go';
+update /* 4 */ t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	990
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	20
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	22
+Group_update_reuse_count	25
+Group_update_total_count	2
+set debug_sync='now SIGNAL nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+update t1 set a=a-1 where id = 1;;
+update /* 3 */ t1 set a=a-1 where id = 1;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	updating	update /* 3 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+set debug_sync='now SIGNAL go';
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	20
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	24
+Group_update_reuse_count	26
+Group_update_total_count	2
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	20
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	24
+Group_update_reuse_count	26
+Group_update_total_count	2
+select * from t1;
+id	a
+1	988
+2	1000
+3	1000
+4	1000
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=997
+### SET
+###   @1=1
+###   @2=996
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=996
+### SET
+###   @1=1
+###   @2=995
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=995
+### SET
+###   @1=1
+###   @2=994
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=994
+### SET
+###   @1=1
+###   @2=993
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=993
+### SET
+###   @1=1
+###   @2=992
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=992
+### SET
+###   @1=1
+###   @2=991
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=991
+### SET
+###   @1=1
+###   @2=990
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=990
+### SET
+###   @1=1
+###   @2=989
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=989
+### SET
+###   @1=1
+###   @2=988
+COMMIT/*!*/;
+select * from t1;
+id	a
+1	988
+2	1000
+3	1000
+4	1000
+drop table t1;
+##### test for follower be killed while leader start commit
+set debug_sync='now SIGNAL nogo';
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+set debug_sync='now signal nogo';
+set debug_sync='update_unlock_after WAIT_FOR go';
+set debug_sync='leader_enter_commit_done WAIT_FOR go1';
+update t1 set a=a-1 where id = 2;;
+update       t1 set a=a-1 where id = 2;;
+set debug_sync='follower_wait_all_done_after_wait WAIT_FOR go1';
+update            t1 set a=a-1 where id = 2;;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	updating hotspot collecting	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+set debug_sync='now signal go';
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	debug sync point: leader_enter_commit_done	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+select ID into @id from information_schema.PROCESSLIST where INFO like 'update       t1 set a%';
+kill @id;
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Sleep	#		NULL
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Killed	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	debug sync point: leader_enter_commit_done	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+set debug_sync='now signal go1';
+set debug_sync='now signal go1';
+ERROR HY000: Lost connection to MySQL server during query
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	25
+Group_update_reuse_count	27
+Group_update_total_count	2
+select * from t1;
+id	a
+1	1000
+2	997
+3	1000
+4	1000
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	init	show processlist
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=1000
+### SET
+###   @1=2
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=999
+### SET
+###   @1=2
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=998
+### SET
+###   @1=2
+###   @2=997
+COMMIT/*!*/;
+select * from t1;
+id	a
+1	1000
+2	997
+3	1000
+4	1000
+drop table t1;
+##### test for part key and null case
+create table t1(id1 int not null, id2 int not null, u1 int, u2 int,  a int, primary key(id1, id2), unique key (u1, u2)) engine = innodb;
+insert into t1 select 1,1,1,NULL,1;
+insert into t1 select 1,2,1,NULL,1;
+insert into t1 select 2,3,2,1,1;
+insert into t1 select 2,4,2,2,1;
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	25
+update t1 set a=a+1 where id1 = 1;
+select * from t1 where id1 = 1;
+id1	id2	u1	u2	a
+1	1	1	NULL	2
+1	2	1	NULL	2
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	25
+update t1 set a=a+1 where id1 = 1 and id2 = 2;
+select * from t1 where id1 = 1 and id2 = 2;
+id1	id2	u1	u2	a
+1	2	1	NULL	3
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	26
+set global hotspot_for_autocommit=0;
+update t1 set a=a+1 where id1 = 1 and id2 = 2;
+select * from t1 where id1 = 1 and id2 = 2;
+id1	id2	u1	u2	a
+1	2	1	NULL	4
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	26
+update t1 set a=a+1 where u1 = 1 and u2 is null;
+select * from t1 where u1 = 1 and u2 is null;
+id1	id2	u1	u2	a
+1	1	1	NULL	3
+1	2	1	NULL	5
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	26
+update t1 set a=a+1 where u1 = 2 and u2 = 1;
+select * from t1 where u1 = 2 and u2 = 1;
+id1	id2	u1	u2	a
+2	3	2	1	2
+show global status like 'Group_update_leader_count';
+Variable_name	Value
+Group_update_leader_count	26
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	26
+Group_update_reuse_count	28
+Group_update_total_count	2
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1
+###   @3=1
+###   @4=NULL
+###   @5=1
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=1
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=3
+###   @3=2
+###   @4=1
+###   @5=1
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=4
+###   @3=2
+###   @4=2
+###   @5=1
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1
+###   @3=1
+###   @4=NULL
+###   @5=1
+### SET
+###   @1=1
+###   @2=1
+###   @3=1
+###   @4=NULL
+###   @5=2
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=1
+### SET
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=2
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=2
+### SET
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=3
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=3
+### SET
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=4
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1
+###   @3=1
+###   @4=NULL
+###   @5=2
+### SET
+###   @1=1
+###   @2=1
+###   @3=1
+###   @4=NULL
+###   @5=3
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=4
+### SET
+###   @1=1
+###   @2=2
+###   @3=1
+###   @4=NULL
+###   @5=5
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=2
+###   @2=3
+###   @3=2
+###   @4=1
+###   @5=1
+### SET
+###   @1=2
+###   @2=3
+###   @3=2
+###   @4=1
+###   @5=2
+COMMIT/*!*/;
+select * from t1;
+id1	id2	u1	u2	a
+1	1	1	NULL	3
+1	2	1	NULL	5
+2	3	2	1	2
+2	4	2	2	1
+drop table t1;
+##### test for table with trigger
+set global hotspot_for_autocommit=1;
+create table t1(id int primary key, a int) engine = innodb;
+create table t2(id int primary key, a int) engine = innodb;
+create trigger t1_trigger before update on t1 for each row update t2 set a = new.a;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t2 select 1,1000;
+insert into t2 select 2,1000;
+insert into t2 select 3,1000;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	26
+Group_update_reuse_count	28
+Group_update_total_count	2
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1001
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+id	a
+2	1002
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+id	a
+3	1003
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	26
+Group_update_reuse_count	28
+Group_update_total_count	2
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+drop table t1;
+drop table t2;
+##### test for partitioned table
+create table t1(id int primary key, a int) engine = innodb partition by hash(id) partitions 3;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	26
+Group_update_reuse_count	28
+Group_update_total_count	2
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1001
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+id	a
+2	1002
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+id	a
+3	1003
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	29
+Group_update_reuse_count	31
+Group_update_total_count	2
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+drop table t1;
+##### test for disabled session level bin logging
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+show variables like 'sql_log_bin';
+Variable_name	Value
+sql_log_bin	ON
+set sql_log_bin = OFF;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	29
+Group_update_reuse_count	31
+Group_update_total_count	2
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1001
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+id	a
+2	1002
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+id	a
+3	1003
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	29
+Group_update_reuse_count	31
+Group_update_total_count	2
+set sql_log_bin = ON;
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1002
+update t1 set a=a+2 where id = 2;
+select * from t1 where id = 2;
+id	a
+2	1004
+update t1 set a=a+3 where id = 3;
+select * from t1 where id = 3;
+id	a
+3	1006
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	15
+Group_update_follower_count	22
+Group_update_free_count	2
+Group_update_group_same_count	0
+Group_update_ignore_count	1
+Group_update_insert_dup	0
+Group_update_leader_count	32
+Group_update_reuse_count	34
+Group_update_total_count	2
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+drop table t1;
+set global innodb_thread_concurrency= 0;
+set global innodb_thread_sleep_delay= 10000;
+set global hotspot_update_max_wait_time=100;
+set global hotspot_fast_insert_dup=0;
+set global hotspot_for_autocommit=0;
+set global hotspot_lock_type=0;
+set global hotspot=0;
+set global polardb_ic_reduce_hint_enable=1;
+set global transaction_isolation= 'REPEATABLE-READ';

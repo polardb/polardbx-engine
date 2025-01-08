@@ -1,0 +1,208 @@
+set global transaction_isolation='READ-COMMITTED';
+set session transaction_isolation='READ-COMMITTED';
+###test for normal function
+set debug_sync='now SIGNAL nogo';
+set global innodb_thread_concurrency= 32;
+set global polardb_ic_reduce_hint_enable=0;
+set global hotspot=0;
+set global hotspot_lock_type=1;
+set global hotspot_for_autocommit=1;
+set global hotspot_update_max_wait_time=2*1000*1000;
+flush logs;
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	999
+update t1 set a=a+1 where id = 1;
+select * from t1 where id = 1;
+id	a
+1	1000
+show global variables like '%thread_concurrency';
+Variable_name	Value
+innodb_thread_concurrency	32
+set global hotspot=1;
+##### error by no change
+set debug_sync='now SIGNAL nogo';
+set debug_sync='after_leader_done_before_release_gu WAIT_FOR go2_reset_status';
+drop table t1;
+create table t1(id int primary key, a int) engine = innodb;
+insert into t1 select 1,1000;
+insert into t1 select 2,1000;
+insert into t1 select 3,1000;
+insert into t1 select 4,1000;
+update t1 set a=a-1 where id = 1;;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	0
+Group_update_free_count	0
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	0
+Group_update_reuse_count	0
+Group_update_total_count	1
+set debug_sync='leader_done_after_clean_status SIGNAL go2_reset_status WAIT_FOR go';
+update t1 set a=a-1 where id = 1;;
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	0
+Group_update_free_count	0
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	1
+Group_update_reuse_count	0
+Group_update_total_count	1
+show processlist;
+Id	User	Host	db	Command	Time	State	Info
+#	root	localhost	test	Query	#	init	show processlist
+#	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Query	#	debug sync point: leader_done_after_clean_status	update t1 set a=a-1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	0
+Group_update_free_count	0
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	1
+Group_update_reuse_count	0
+Group_update_total_count	1
+update t1 set a=a-1 where id = 1;;
+set debug_sync='now SIGNAL go';
+show global status like 'Group_update%';
+Variable_name	Value
+Group_update_fail_count	0
+Group_update_follower_count	0
+Group_update_free_count	1
+Group_update_group_same_count	0
+Group_update_ignore_count	0
+Group_update_insert_dup	0
+Group_update_leader_count	3
+Group_update_reuse_count	0
+Group_update_total_count	1
+flush logs;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=1
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=2
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=3
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### INSERT INTO `test`.`t1`
+### SET
+###   @1=4
+###   @2=1000
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=1000
+### SET
+###   @1=1
+###   @2=999
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=999
+### SET
+###   @1=1
+###   @2=998
+COMMIT/*!*/;
+BEGIN
+### UPDATE `test`.`t1`
+### WHERE
+###   @1=1
+###   @2=998
+### SET
+###   @1=1
+###   @2=997
+COMMIT/*!*/;
+select * from t1;
+id	a
+1	997
+2	1000
+3	1000
+4	1000
+drop table t1;
+set global innodb_thread_concurrency= 0;
+set global innodb_thread_sleep_delay= 10000;
+set global hotspot_update_max_wait_time=100;
+set global hotspot_fast_insert_dup=0;
+set global hotspot_for_autocommit=0;
+set global hotspot_lock_type=0;
+set global hotspot=0;
+set global polardb_ic_reduce_hint_enable=1;
+set global transaction_isolation='REPEATABLE-READ';

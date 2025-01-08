@@ -10200,6 +10200,9 @@ ER_EMPTY_XA_NOT_ALLOWED
 ER_PING_CHECK_FAILED
   eng "PING check(%llu) failed with %s."
 
+ER_VARIABLE_CHANGE_FAIL
+  eng "Variable '%-.64s' cannot be enabled because '%-.64s' is enabled/disabled"
+
 #
 #  End of RDS error message.
 #

@@ -588,6 +588,25 @@ void Commit_stage_manager::clear_preempt_status(THD *head) {
   }
   mysql_mutex_unlock(&head->LOCK_tx_commit_pending_mutex);
 }
+
+void Commit_stage_manager::dbug_preempt(THD *thd) {
+  // mysql_mutex_lock(&m_lock_done);
+  // /*
+  //   Leader can be awaiting all-clear to preempt follower's execution.
+  //   With setting the status the follower ensures it won't execute anything
+  //   including thread-specific code.
+  // */
+  // thd->get_transaction()->m_flags.ready_preempt = 1;
+  // if (leader_await_preempt_status)
+  //   mysql_cond_signal(&m_cond_preempt);  // no cover line.
+  // mysql_mutex_unlock(&m_lock_done);
+
+  mysql_mutex_lock(&thd->LOCK_tx_commit_pending_mutex);
+  thd->get_transaction()->m_flags.ready_preempt = 1;
+  mysql_cond_signal(&thd->COND_bgc_preempt_cond_var);
+  mysql_mutex_unlock(&thd->LOCK_tx_commit_pending_mutex);
+}
+
 #endif
 
 Commit_stage_manager &Commit_stage_manager::get_instance() {

@@ -103,7 +103,7 @@ bool apply_trx_for_xa(THD *thd, const XID *xid, slot_ptr_t *slot_ptr,
   }
 
   /** 2. alloc transaction slot in ttse, will also write xid into TXN. */
-  if (ttse->ext.assign_slot_for_xa(thd, slot_ptr, trx_id)) {
+  if (ttse->ext.assign_trans_slot(thd, slot_ptr, trx_id)) {
     my_error(ER_XA_PROC_BLANK_XA_TRX, MYF(0));
     return true;
   }

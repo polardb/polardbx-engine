@@ -125,6 +125,8 @@
 #include "sql/xa/lizard_cmmt_policy.h"
 #include "sql/lizard_sql_class.h"
 
+#include "sql/group_update_ctx.h"  // GroupUpdateCtx
+
 namespace im {
 namespace recycle_bin {
 class Recycle_state;
@@ -182,6 +184,7 @@ struct MYSQL_LOCK;
 struct PPI_thread;
 struct PPI_transaction;
 struct PPI_stat;
+class GroupUpdate;
 
 class Sequence_last_value;
 typedef collation_unordered_map<std::string, Sequence_last_value *>
@@ -1393,6 +1396,8 @@ class THD : public MDL_context_owner,
     @see generate_authentication_string
   */
   bool m_disable_password_validation;
+
+  GroupUpdateCtx gu_ctx;
 
   std::unique_ptr<Protocol_text> protocol_text;      // Normal protocol
   std::unique_ptr<Protocol_binary> protocol_binary;  // Binary protocol
@@ -3925,6 +3930,7 @@ class THD : public MDL_context_owner,
     auto xid_state = trx->xid_state();
     /* XA transactions are always persisted by Innodb. */
     return (!xid_state->has_state(XID_STATE::XA_NOTR) ||
+            gu_ctx.is_follower() ||
             m_se_gtid_flags[SE_GTID_PERSIST]);
   }
 

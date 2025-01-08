@@ -128,6 +128,7 @@
 #include "sql/lizard/lizard_snapshot.h"
 
 #include "sql/ccl/ccl_table.h"
+#include "sql/group_update.h"  // GroupUpdatePool
 #include "sql/common/reload.h"
 #include "sql/sql_implicit_common.h"
 
@@ -622,6 +623,16 @@ void free_table_share(TABLE_SHARE *share) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("table: %s.%s", share->db.str, share->table_name.str));
   assert(share->ref_count() == 0);
+
+  /* Free GroupUpdateMgr here. */
+  if (share->mgr) {
+    ulong gu_count = GroupUpdatePool::get_instance()->free_mgr(share);
+    if (0 != gu_count)
+      sql_print_error(
+          "There are still some gu(GroupUpdate) left while we are "
+          "free table_share, table_name:%s, num of gu:%ld.",
+          share->table_name.str, gu_count);
+  }
 
   if (share->m_flush_tickets.is_empty()) {
     /*

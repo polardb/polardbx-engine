@@ -51,6 +51,8 @@ typedef key_range key_range;
 template <class T>
 class List;
 
+class GroupUpdateCtx;
+
 /* Flags for partition handlers */
 /*
   Removed HA_CAN_PARTITION (1 << 0) since if handlerton::partition_flags
@@ -92,7 +94,8 @@ typedef struct {
 int get_parts_for_update(const uchar *old_data, const uchar *new_data,
                          const uchar *rec0, partition_info *part_info,
                          uint32 *old_part_id, uint32 *new_part_id,
-                         longlong *func_value);
+                         longlong *func_value,
+                         GroupUpdateCtx *gu_ctx = nullptr);
 int get_part_for_delete(const uchar *buf, const uchar *rec0,
                         partition_info *part_info, uint32 *part_id);
 void prune_partition_set(const TABLE *table, part_id_range *part_spec);

@@ -94,6 +94,7 @@
 #include "sql/derror.h"      // ER_THD
 #include "sql/discrete_interval.h"
 #include "sql/field.h"
+#include "sql/group_update.h"  // GroupUpdate
 #include "sql/handler.h"
 #include "sql/item_func.h"  // user_var_entry
 #include "sql/key.h"
@@ -8739,7 +8740,9 @@ void MYSQL_BIN_LOG::init_thd_variables(THD *thd, bool all, bool skip_commit) {
   */
   thd->tx_commit_pending = true;
   thd->commit_error = THD::CE_NONE;
-  thd->next_to_commit = nullptr;
+  if (thd->gu_ctx.is_not_gu()) {
+    thd->next_to_commit = nullptr;
+  }
   thd->durability_property = HA_IGNORE_DURABILITY;
   thd->get_transaction()->m_flags.real_commit = all;
   thd->get_transaction()->m_flags.xid_written = false;
@@ -9169,6 +9172,7 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
   ::finish_transaction_in_engines(thd, all, false);
 
   if (save_gtid_for_non_trans) {
+    ut_ad(thd->gu_ctx.is_not_gu());
     gtid_state->save_by_write_table(thd);
   }
 
@@ -9211,6 +9215,8 @@ int MYSQL_BIN_LOG::finish_commit(THD *thd) {
     const char act[] = "now SIGNAL signal_leaving_finish_commit";
     assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
   };);
+
+  gu_finish_commit(thd);
 
   assert(thd->commit_error || !thd->get_transaction()->m_flags.run_hooks);
   assert(!thd_get_cache_mngr(thd)->dbug_any_finalized());
@@ -9333,6 +9339,24 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   DBUG_PRINT("enter", ("commit_pending: %s, commit_error: %d, thread_id: %u",
                        YESNO(thd->tx_commit_pending), thd->commit_error,
                        thd->thread_id()));
+
+  /* Stage: group update */
+  if (thd->gu_ctx.is_follower()) {
+#ifndef NDEBUG
+    Commit_stage_manager::get_instance().dbug_preempt(thd);
+#endif
+    if (thd->gu_ctx.get_gu()->follower_wait_all_done(thd)) {
+      thd->commit_error = THD::CE_COMMIT_ERROR;
+      return (thd->commit_error);
+    }
+    return (finish_commit(thd));
+  } else if (thd->gu_ctx.is_leader()) {
+    if (thd->gu_ctx.get_gu()->leader_enter_commit(thd)) {
+      thd->commit_error = THD::CE_COMMIT_ERROR;
+      return (thd->commit_error);
+    }
+    DEBUG_SYNC(thd, "leader_enter_commit_done");
+  }
 
   DEBUG_SYNC(thd, "bgc_before_flush_stage");
 

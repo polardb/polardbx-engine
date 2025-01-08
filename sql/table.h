@@ -694,6 +694,7 @@ typedef struct Table_share_foreign_key_parent_info {
   dd::Foreign_key::enum_rule update_rule, delete_rule;
 } TABLE_SHARE_FOREIGN_KEY_PARENT_INFO;
 
+class GroupUpdateMgr;
 /**
   Definition of name for generated keys, owned by TABLE_SHARE
 */
@@ -1032,6 +1033,9 @@ struct TABLE_SHARE {
     deleted along with it.
   */
   dd::Table *tmp_table_def{nullptr};
+
+  /** Used for group update, protected by GroupUpdatePool::mgr_lock_ */
+  GroupUpdateMgr *mgr{nullptr};
 
   /// For materialized derived tables; @see add_derived_key().
   Query_block *owner_of_possible_tmp_keys{nullptr};

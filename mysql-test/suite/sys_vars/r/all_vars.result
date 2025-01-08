@@ -221,6 +221,16 @@ have_xa_async_commit
 have_xa_async_commit
 have_xa_prepare_with_trx_slot
 have_xa_prepare_with_trx_slot
+hotspot
+hotspot
+hotspot_fast_insert_dup
+hotspot_fast_insert_dup
+hotspot_for_autocommit
+hotspot_for_autocommit
+hotspot_lock_type
+hotspot_lock_type
+hotspot_update_max_wait_time
+hotspot_update_max_wait_time
 implicit_primary_key
 implicit_primary_key
 import_tablespace_iterator_interval
@@ -436,6 +446,8 @@ physical_backfill_opt
 physical_backfill_opt
 ping_mode
 ping_mode
+polardb_ic_reduce_hint_enable
+polardb_ic_reduce_hint_enable
 polardbx_engine_version
 polardbx_engine_version
 polardbx_product_version
@@ -561,6 +573,8 @@ rds_audit_log_strategy
 rds_audit_log_strategy
 rds_audit_log_version
 rds_audit_log_version
+rds_ic_reduce_hint_enable
+rds_ic_reduce_hint_enable
 rds_kill_connections
 rds_kill_connections
 rds_kill_user_list

@@ -190,6 +190,7 @@
 #include "consensus_log_manager.h"
 #include "ppi/ppi_statement.h"
 #include "sql/ccl/ccl.h"
+#include "sql/group_update.h"
 #include "sql/consensus_admin.h"
 #include "sql/outline/outline_digest.h"
 #include "sql/outline/outline_interface.h"
@@ -5195,10 +5196,30 @@ finish:
     DEBUG_SYNC(thd, "execute_command_after_close_tables");
 #endif
 
-  if (!thd->in_sub_stmt && lex->opt_hints_global &&
-      lex->opt_hints_global->inventory_hint) {
-    im::process_inventory_transactional_hint(
-        thd, lex->opt_hints_global->inventory_hint);
+  if (!thd->in_sub_stmt) {
+    if (lex->opt_hints_global && lex->opt_hints_global->inventory_hint) {
+      im::process_inventory_transactional_hint(
+          thd, lex->opt_hints_global->inventory_hint);
+    }
+
+    if (thd->gu_ctx.need_release_gu()) {
+      thd->gu_ctx.set_need_release_gu(false);
+      ++group_update_ignore_count;
+      GroupUpdatePool::get_instance()->try_release_gu(
+          thd->gu_ctx.get_gu(), thd->gu_ctx.reuse_version);
+    }
+    /*
+      This case means that some error occured for the leader after update.
+      Normally the leader's gu_ctx will be reseted in the finish_commit.
+    */
+    if (thd->gu_ctx.is_gu()) {
+      GroupUpdate *gu;
+
+      DEBUG_SYNC_C("error_done_before");
+      if ((gu = thd->gu_ctx.get_gu()->error_done(thd)) != nullptr)
+        GroupUpdatePool::get_instance()->try_release_gu(
+            gu, thd->gu_ctx.reuse_version);
+    }
   }
 
   if (!thd->in_sub_stmt && thd->transaction_rollback_request) {
@@ -5466,6 +5487,9 @@ void THD::reset_for_next_command() {
 #ifndef NDEBUG
   thd->set_tmp_table_seq_id(1);
 #endif
+
+  /* For some case, the query fail without reset the gu_ctx. for defense.*/
+  if (thd->gu_ctx.is_gu()) thd->gu_ctx.reset();
 }
 
 /*

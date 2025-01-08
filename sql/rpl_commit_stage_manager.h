@@ -289,6 +289,8 @@ class Commit_stage_manager {
      @param head  THD* of a follower thread
   */
   void clear_preempt_status(THD *head);
+
+  void dbug_preempt(THD *thd);
 #endif
 
   /**

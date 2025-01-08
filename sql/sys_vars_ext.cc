@@ -64,6 +64,7 @@
 #include "sql/sql_jemalloc.h"
 #endif
 
+#include "sql/group_update.h"
 #include "sql/lizard/lizard_hb_freezer.h"
 
 /* Global scope variables */
@@ -717,3 +718,83 @@ static Sys_var_bool Sys_flush_gcov_enabled("flush_gcov_enabled",
                                            ON_CHECK(0),
                                            ON_UPDATE(check_flush_gcov_enabled));
 #endif
+
+static bool check_ic_reduce_hint_enable(sys_var *self, THD *, set_var *var) {
+  if ((bool)var->save_result.ulonglong_value == true) {
+    if (opt_hotspot) {
+      /* Fail if variable 'hotspot' is enabled */
+      my_error(ER_VARIABLE_CHANGE_FAIL, MYF(0), self->name.str, "hotspot");
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static Sys_var_bool Sys_polardb_ic_reduce_hint_enable(
+    "polardb_ic_reduce_hint_enable",
+    "enable the ic_reduce strategy when using hint",
+    GLOBAL_VAR(ic_reduce_hint_enable), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_ic_reduce_hint_enable),
+    ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_rds_ic_reduce_hint_enable(
+    "rds_ic_reduce_hint_enable", Sys_polardb_ic_reduce_hint_enable);
+
+/**
+   This function checks if the hotspot option can be changed,
+   what is possible if:
+   - bin log is enabled;
+
+   @param[IN] self   A pointer to the sys_var, i.e. Sys_log_binlog.
+   @param[IN] var    A pointer to the set_var created by the parser.
+
+   @return @c FALSE if the change is allowed, otherwise @c TRUE.
+*/
+static bool check_hotspot_opt(sys_var *self, THD *thd, set_var *var) {
+  /* Check the mutual exclusive settings when hotspot is about to be enabled. */
+  if ((bool)var->save_result.ulonglong_value == true) {
+    if (!(thd->variables.option_bits & OPTION_BIN_LOG) || !opt_bin_log) {
+      my_error(ER_VARIABLE_CHANGE_FAIL, MYF(0), self->name.str, "bin logging");
+      return true;
+    } else if (ic_reduce_hint_enable) {
+      my_error(ER_VARIABLE_CHANGE_FAIL, MYF(0), self->name.str,
+               "rds_ic_reduce_hint_enable");
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static Sys_var_bool Sys_hotspot("hotspot", "Switch on the hotspot function.",
+                                GLOBAL_VAR(opt_hotspot), CMD_LINE(OPT_ARG),
+                                DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+                                ON_CHECK(check_hotspot_opt),
+                                ON_UPDATE(nullptr));
+
+static Sys_var_ulonglong Sys_hotspot_update_max_wait_time(
+    "hotspot_update_max_wait_time",
+    "The max wait time for master in group update (us).",
+    GLOBAL_VAR(hotspot_update_max_wait_time), CMD_LINE(OPT_ARG),
+    VALID_RANGE(1, ULLONG_MAX), DEFAULT(100), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_hotspot_lock_type(
+    "hotspot_lock_type",
+    "Use new type innodb row lock to boost the performance.",
+    GLOBAL_VAR(hotspot_lock_type), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_hotspot_fast_insert_dup(
+    "hotspot_fast_insert_dup",
+    "Return insert dup error directly by judging if group update item exist.",
+    GLOBAL_VAR(hotspot_fast_insert_dup), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_hotspot_for_autocommit(
+    "hotspot_for_autocommit",
+    "Update with autocommit can also use hotspot function.",
+    GLOBAL_VAR(hotspot_for_autocommit), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
+

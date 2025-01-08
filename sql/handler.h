@@ -4768,6 +4768,10 @@ class handler {
     @return error status (zero on success, HA_ERR_* error code on error)
   */
   int ha_update_row(const uchar *old_data, uchar *new_data);
+  int ha_update_row_for_gu_leader(const uchar *old_data, uchar *new_data,
+                                  const uchar *binlog_new_data);
+  int ha_update_row_for_gu_follower(const uchar *old_data,
+                                    const uchar *new_data);
   int ha_delete_row(const uchar *buf);
   void ha_release_auto_increment();
 
