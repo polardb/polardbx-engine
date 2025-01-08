@@ -4820,7 +4820,10 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
           if ((error = rli->mts_finalize_recovery())) {
             (void)Rpl_info_factory::reset_workers(rli);
           }
-          mts_force_consensus_apply_index(rli, rli->get_consensus_apply_index());
+          uint64 last_real_index = consensus_log_manager.get_next_trx_index(
+              rli->get_consensus_apply_index(), false) - 1;
+          mts_force_consensus_apply_index(rli, last_real_index);
+          consensus_log_manager.set_real_apply_index(last_real_index);
         }
         rli->mts_recovery_group_seen_begin = false;
         if (!error)

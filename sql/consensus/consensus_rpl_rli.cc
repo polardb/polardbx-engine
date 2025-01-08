@@ -113,13 +113,8 @@ void XPaxos_relay_log_info::set_xpaxos_relay_log_info() {
 }
 
 void XPaxos_relay_log_info::update_xpaxos_applied_index() {
-  ulonglong rli_appliedindex = 0;
   set_consensus_apply_index(gaq->lwm.consensus_index);
-  rli_appliedindex = get_consensus_apply_index();
-  rli_appliedindex = opt_appliedindex_force_delay >= rli_appliedindex
-                         ? 0
-                         : rli_appliedindex - opt_appliedindex_force_delay;
-  mts_force_consensus_apply_index(this, rli_appliedindex);
+  mts_force_consensus_apply_index(this, get_consensus_apply_index());
 }
 
 /**
