@@ -8858,12 +8858,6 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
     return 0;
   }
 
-  /*
-    We flush prepared records of transactions to the log of storage
-    engine (for example, InnoDB redo log) in a group right before
-    flushing them to binary log.
-  */
-  ha_flush_logs(true);
   DBUG_EXECUTE_IF("crash_after_flush_engine_log", DBUG_SUICIDE(););
   CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_write_binlog");
   assign_automatic_gtids_to_flush_group(first_seen);
