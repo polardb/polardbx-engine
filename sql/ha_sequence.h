@@ -681,6 +681,11 @@ class ha_sequence : public handler {
   */
   bool fill_sequence_fields_from_thd(THD *thd, TABLE *table);
 
+  virtual void change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) override {
+    handler::change_table_ptr(table_arg, share);
+    if (m_file) m_file->change_table_ptr(table_arg, share);
+  }
+
  private:
   handler *m_file;
   plugin_ref m_engine;
