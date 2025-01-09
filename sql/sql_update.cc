@@ -1340,11 +1340,15 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
               ? found_rows
               : updated_rows);
     }
-    else
-      my_ok(thd, thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-                     ? found_rows
-                     : updated_rows,
-            id, buff);
+    else {
+      bool has_err = set_my_ok(thd,
+          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+              ? found_rows
+              : updated_rows,
+          id, buff);
+      if (has_err) error = 1;
+    }
+      
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -3134,12 +3138,11 @@ bool Query_result_update::send_eof(THD *thd) {
   snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
            (long)updated_rows,
            (long)thd->get_stmt_da()->current_statement_cond_count());
-  ::my_ok(thd,
+  return ::set_my_ok(thd,
           thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
               ? found_rows
               : updated_rows,
           id, buff);
-  return false;
 }
 
 bool Sql_cmd_update::accept(THD *thd, Select_lex_visitor *visitor) {

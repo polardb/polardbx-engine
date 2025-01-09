@@ -795,13 +795,15 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
           (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
                ? info.stats.touched
                : info.stats.updated));
-    } else
-      my_ok(thd,
-            info.stats.copied + info.stats.deleted +
-                (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-                     ? info.stats.touched
-                     : info.stats.updated),
-            id);
+    } else {
+      has_error = set_my_ok(thd,
+          info.stats.copied + info.stats.deleted +
+              (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+                   ? info.stats.touched
+                   : info.stats.updated),
+          id);
+      if (has_error) return true;
+    }
   } else {
     char buff[160];
     ha_rows updated =
@@ -821,8 +823,10 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
     if (returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
       thd->set_row_count_func(info.stats.copied + info.stats.deleted + updated);
-    } else
-      my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
+    } else {
+      has_error= set_my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
+      if (has_error) return true;
+    }
   }
 
   /*
@@ -2632,7 +2636,7 @@ bool Query_result_insert::send_eof(THD *thd) {
                   ? thd->first_successful_insert_id_in_prev_stmt
                   : (info.stats.copied ? autoinc_value_of_last_inserted_row
                                        : 0));
-  my_ok(thd, row_count, id, buff);
+  if (set_my_ok(thd, row_count, id, buff)) return true;
 
   /*
     If we have inserted into a VIEW, and the base table has

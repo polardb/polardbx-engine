@@ -178,7 +178,7 @@ bool Query_result_to_file::send_eof(THD *thd) {
   if (mysql_file_close(file, MYF(MY_WME)) || thd->is_error()) error = true;
 
   if (!error) {
-    ::my_ok(thd, row_count);
+    error = ::set_my_ok(thd, row_count);
   }
   file = -1;
   return error;
@@ -769,6 +769,6 @@ bool Query_dumpvar::send_eof(THD *thd) {
   */
   if (thd->is_error()) return true;
 
-  ::my_ok(thd, row_count);
+  if(::set_my_ok(thd, row_count)) return true;
   return false;
 }

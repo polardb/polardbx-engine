@@ -1028,7 +1028,7 @@ Information in the data-dictionary needs to be updated. */
 /* lizard errors end */
 
 /** Copy of last error number */
-#define HA_ERR_LAST 222
+#define HA_ERR_LAST 223
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

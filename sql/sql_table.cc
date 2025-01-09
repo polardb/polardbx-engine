@@ -18305,7 +18305,7 @@ end_temporary:
   snprintf(alter_ctx.tmp_name, sizeof(alter_ctx.tmp_name),
            ER_THD(thd, ER_INSERT_INFO), (long)(copied + deleted), (long)deleted,
            (long)thd->get_stmt_da()->current_statement_cond_count());
-  my_ok(thd, copied + deleted, 0L, alter_ctx.tmp_name);
+  if (set_my_ok(thd, copied + deleted, 0L, alter_ctx.tmp_name)) return true;
   return false;
 
 err_new_table_cleanup:

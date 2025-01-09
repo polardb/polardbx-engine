@@ -243,7 +243,7 @@ bool Sql_cmd_call::execute_inner(THD *thd) {
     return true;  // Substatement should already have sent error
   }
 
-  my_ok(thd, max(thd->get_row_count_func(), 0LL));
+  if (set_my_ok(thd, max(thd->get_row_count_func(), 0LL))) return true;
 
   return false;
 }

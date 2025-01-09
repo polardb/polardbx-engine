@@ -83,6 +83,7 @@ void trans_reset_one_shot_chistics(THD *thd) {
 
   /* Reset commit and snapshot gcn when transition end. */
   thd->reset_trans_policy();
+  thd->m_trx_affected_rows = 0;
 }
 
 /**

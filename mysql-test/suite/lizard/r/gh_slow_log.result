@@ -1,0 +1,36 @@
+set global max_trx_affected_rows = 10;
+set global slow_query_user_pattern = 'root';
+create table test1(a int);
+begin;
+insert into test1 values(1);
+insert into test1 select * from test1 limit 1;
+insert into test1 select * from test1 limit 2;
+insert into test1 select * from test1 limit 3;
+insert into test1 select * from test1 limit 4;
+ERROR HY000: Transaction is too big, please split it into smaller transactions.
+commit;
+select count(*) from test1;
+count(*)
+7
+set global max_trx_affected_rows = 0;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+insert into test1 select * from test1;
+set session max_execution_time=100;
+select count(*)from test1;
+ERROR 70100: Query execution was interrupted
+drop table test1;
+set global slow_query_user_pattern = '';
+set session max_execution_time=0;

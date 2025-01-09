@@ -738,7 +738,9 @@ bool Sql_cmd_create_server::execute(THD *thd) {
     trans_commit_stmt(thd);
   close_mysql_tables(thd);
 
-  if (error == 0 && !thd->killed) my_ok(thd, 1);
+  if (error == 0 && !thd->killed){ 
+    if (set_my_ok(thd, 1)) return true;
+  }
   return error != 0 || thd->killed;
 }
 
@@ -815,7 +817,9 @@ bool Sql_cmd_alter_server::execute(THD *thd) {
                  "Server connection in use");
   }
 
-  if (error == 0 && !thd->killed) my_ok(thd, 1);
+  if (error == 0 && !thd->killed) {
+    if (set_my_ok(thd, 1)) return true;
+  }
   return error != 0 || thd->killed;
 }
 
@@ -873,7 +877,9 @@ bool Sql_cmd_drop_server::execute(THD *thd) {
                  "Server connection in use");
   }
 
-  if (error == 0 && !thd->killed) my_ok(thd, 1);
+  if (error == 0 && !thd->killed) {
+    if (set_my_ok(thd, 1)) return true;
+  }
   return error != 0 || thd->killed;
 }
 

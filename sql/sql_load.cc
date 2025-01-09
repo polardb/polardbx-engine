@@ -681,7 +681,7 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
   }
 
   /* ok to client sent only after binlog write and engine commit */
-  my_ok(thd, info.stats.copied + info.stats.deleted, 0L, name);
+  if (set_my_ok(thd, info.stats.copied + info.stats.deleted, 0L, name)) error = true;
 err:
   assert(table->file->has_transactions() ||
          !(info.stats.copied || info.stats.deleted) ||

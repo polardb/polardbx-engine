@@ -1412,6 +1412,8 @@ bool thread_cache_size_specified = false;
 bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
+ulonglong sqb_max_trx_affected_rows=0;
+char *sqb_user_pattern = nullptr;
 
 /* RDS Variables */
 bool ic_reduce_hint_enable = 0;

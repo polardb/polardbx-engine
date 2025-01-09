@@ -105,8 +105,7 @@ class Query_result_delete final : public Query_result_interceptor {
     return false;
   }
   bool send_eof(THD *thd) override {
-    my_ok(thd, thd->get_row_count_func());
-    return false;
+    return set_my_ok(thd, thd->get_row_count_func());
   }
 };
 
@@ -696,8 +695,9 @@ cleanup:
     if (!delete_all_rows && returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
       thd->set_row_count_func(deleted_rows);
-    } else
-      my_ok(thd, deleted_rows);
+    } else {
+      return set_my_ok(thd, deleted_rows);
+    }
     DBUG_PRINT("info", ("%ld records deleted", (long)deleted_rows));
   }
   return error > 0;

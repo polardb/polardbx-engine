@@ -1181,6 +1181,14 @@ static bool fix_binlog_stmt_cache_size(sys_var *, THD *thd, enum_var_type) {
   return false;
 }
 
+static Sys_var_charptr Sys_slow_query_user_pattern(
+    "slow_query_user_pattern",
+    "match user pattern "
+    "match user pattern",
+    GLOBAL_VAR(sqb_user_pattern), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_UPDATE(nullptr));
+
 static Sys_var_ulong Sys_binlog_cache_size(
     "binlog_cache_size",
     "The size of the transactional cache for "
@@ -5065,6 +5073,14 @@ static Sys_var_ulong Sys_max_execution_time(
     "milliseconds",
     HINT_UPDATEABLE SESSION_VAR(max_execution_time), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, ULONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_max_trx_affected_rows(
+    "max_trx_affected_rows",
+    "A transaction that affects more than the specified number of rows will "
+    "report error.",
+    GLOBAL_VAR(sqb_max_trx_affected_rows), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(0),
+    BLOCK_SIZE(1));
 
 static bool update_fips_mode(sys_var *, THD *, enum_var_type) {
   char ssl_err_string[OPENSSL_ERROR_LENGTH] = {'\0'};

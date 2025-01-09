@@ -378,6 +378,9 @@ extern std::atomic<ulonglong> group_update_ignore_count;
 extern std::atomic<ulonglong> group_update_group_same_count;
 /* END: Variables for RDS */
 
+extern ulonglong sqb_max_trx_affected_rows;
+extern char *sqb_user_pattern;
+
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
   IGNORE_ERROR = 0,

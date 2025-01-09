@@ -4902,6 +4902,12 @@ class THD : public MDL_context_owner,
 
   bool xpaxos_replication_channel;
 
+  /** Used for slow query blocker to judge if need to block. */
+  bool sqb_should_block;
+
+  /** Total affected rows in the transaction. */
+  longlong m_trx_affected_rows;
+
 #ifndef NDEBUG
   /** Replaced m_cond_preempt. Protected by LOCK_tx_commit_pending_mutex. */
   mysql_cond_t COND_bgc_preempt_cond_var;
@@ -4987,9 +4993,13 @@ inline bool secondary_engine_lock_tables_mode(const THD &cthd) {
           cthd.locked_tables_mode == LTM_PRELOCKED_UNDER_LOCK_TABLES);
 }
 
+bool is_large_trx(THD *thd, ulonglong affected_rows, TABLE *const table);
+
 /** A short cut for thd->get_stmt_da()->set_ok_status(). */
 void my_ok(THD *thd, ulonglong affected_rows = 0, ulonglong id = 0,
-           const char *message = nullptr);
+               const char *message = nullptr);
+
+bool set_my_ok(THD *thd, ulonglong affected_rows, ulonglong id = 0, const char *message = nullptr);
 
 /** A short cut for thd->get_stmt_da()->set_eof_status(). */
 void my_eof(THD *thd);

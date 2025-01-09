@@ -29,6 +29,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <algorithm>
+#include <regex>
 #include <utility>
 
 #include "field_types.h"
@@ -745,7 +746,9 @@ THD::THD(bool enable_plugins)
       owned_vision_gcn(),
       cpolicy_ctx(),
       lex_returning(new im::Lex_returning(false, mem_root)),
-      xpaxos_replication_channel(false) {
+      xpaxos_replication_channel(false),
+      sqb_should_block(false),
+      m_trx_affected_rows(0) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
@@ -3390,6 +3393,24 @@ void Transactional_ddl_context::post_ddl() {
   m_hton = nullptr;
   m_db = "";
   m_tablename = "";
+}
+
+bool set_my_ok(THD *thd, ulonglong affected_rows, ulonglong id,
+               const char *message) {
+  /** When trx_max_affected_rows unset, it will not be blocked */
+  if (sqb_max_trx_affected_rows == 0) {
+    my_ok(thd, affected_rows, id, message);
+    return false;
+  }
+
+  ulonglong trx_affected_rows = thd->m_trx_affected_rows + affected_rows;
+  if (thd->sqb_should_block && trx_affected_rows > sqb_max_trx_affected_rows) {
+    my_error(ER_TRANSACTION_TOO_BIG, MYF(0), "");
+    return true;
+  }
+  thd->m_trx_affected_rows = trx_affected_rows;
+  my_ok(thd, affected_rows, id, message);
+  return false;
 }
 
 void my_ok(THD *thd, ulonglong affected_rows, ulonglong id,
