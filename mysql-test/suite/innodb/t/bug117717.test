@@ -1,0 +1,47 @@
+create database src;
+create database dst;
+
+create table src.t1 (
+  `name` varchar(128),
+  KEY `name1` (`name`(8))
+);
+alter table src.t1 add index name2 (name(15));
+alter table src.t1 drop index name2;
+# col in src.t1 has max_prefix = 60, while col in dst.t1 has max_prefix = 32
+create table dst.t1 like src.t1;
+alter table dst.t1 discard tablespace;
+flush tables src.t1 for export;
+
+--let $MYSQLD_DATADIR=`select @@datadir`
+--copy_file $MYSQLD_DATADIR/src/t1.ibd $MYSQLD_DATADIR/dst/t1.ibd
+--copy_file $MYSQLD_DATADIR/src/t1.cfg $MYSQLD_DATADIR/dst/t1.cfg
+
+unlock tables;
+# should not --error ER_TABLE_SCHEMA_MISMATCH
+alter table dst.t1 import tablespace;
+drop table dst.t1;
+drop table src.t1;
+
+create table src.t1 (
+  `name` varchar(128),
+  KEY `name1` (`name`(8))
+);
+alter table src.t1 add index name2 (name);
+alter table src.t1 drop index name2;
+# col in src.t1 has max_prefix = 0, while col in dst.t1 has max_prefix = 32
+create table dst.t1 like src.t1;
+alter table dst.t1 discard tablespace;
+flush tables src.t1 for export;
+
+--let $MYSQLD_DATADIR=`select @@datadir`
+--copy_file $MYSQLD_DATADIR/src/t1.ibd $MYSQLD_DATADIR/dst/t1.ibd
+--copy_file $MYSQLD_DATADIR/src/t1.cfg $MYSQLD_DATADIR/dst/t1.cfg
+
+unlock tables;
+# should not --error ER_TABLE_SCHEMA_MISMATCH
+alter table dst.t1 import tablespace;
+
+
+--echo # Cleanup
+drop database src;
+drop database dst;

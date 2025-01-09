@@ -1365,9 +1365,17 @@ dberr_t row_import::match_table_columns(THD *thd) UNIV_NOTHROW {
       }
 
       if (cfg_col->max_prefix != col->max_prefix) {
-        ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
-                "Column %s max prefix mismatch.", col_name);
-        err = DB_ERROR;
+        /** Bug #117717: When dropping an index with maximum prefix length,
+           dict_col_t::max_prefix is not updated. This value is persisted in the
+           .cfg file during export, causing schema mismatch during import.
+           Since max_prefix may be different from the actual situation,
+           the difference between cfg and target table is harmless.
+        */
+        lizard_info(ER_LIZARD)
+            << "Column " << col_name << " max prefix mismatch. "
+            << "max_prefix in cfg is " << cfg_col->max_prefix << ", while "
+            << "col of destination table is " << col->max_prefix;
+        // err = DB_ERROR;
       }
     }
   }
