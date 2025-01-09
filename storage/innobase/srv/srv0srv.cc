@@ -288,6 +288,9 @@ ulong srv_log_write_events = INNODB_LOG_EVENTS_DEFAULT;
 /** Number of events used for notifications about redo flush. */
 ulong srv_log_flush_events = INNODB_LOG_EVENTS_DEFAULT;
 
+/** Time in microseconds the log writer sleeps. */
+ulong srv_log_writer_sleep_time = 1;
+
 /** Number of slots in a small buffer, which is used to allow concurrent
 writes to log buffer. The slots are addressed by LSN values modulo number
 of the slots. */

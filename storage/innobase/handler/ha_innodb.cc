@@ -23045,6 +23045,12 @@ static MYSQL_SYSVAR_ULONG(
     nullptr, nullptr, INNODB_LOG_WAIT_FOR_FLUSH_SPIN_HWM_DEFAULT, 0, ULONG_MAX,
     0);
 
+static MYSQL_SYSVAR_ULONG(
+    log_writer_sleep_time, srv_log_writer_sleep_time, PLUGIN_VAR_RQCMDARG,
+    "Time in microseconds the log writer sleeps when other threads are "
+    "waiting for the log writer mutex.",
+    NULL, NULL, 1, 0, ULONG_MAX, 0);
+
 #ifdef ENABLE_EXPERIMENT_SYSVARS
 
 static MYSQL_SYSVAR_ULONG(
@@ -23934,6 +23940,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(log_spin_cpu_abs_lwm),
     MYSQL_SYSVAR(log_spin_cpu_pct_hwm),
     MYSQL_SYSVAR(log_wait_for_flush_spin_hwm),
+    MYSQL_SYSVAR(log_writer_sleep_time),
 #ifdef ENABLE_EXPERIMENT_SYSVARS
     MYSQL_SYSVAR(log_write_events),
     MYSQL_SYSVAR(log_flush_events),
@@ -24118,7 +24125,7 @@ static SYS_VAR *innobase_system_variables[] = {
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(dbug_gpp_no),
 #endif /* UNIV_DEBUG */
-MYSQL_SYSVAR(encrypt_algorithm),
+    MYSQL_SYSVAR(encrypt_algorithm),
     nullptr};
 
 mysql_declare_plugin(innobase){

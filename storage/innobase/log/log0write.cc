@@ -2294,9 +2294,19 @@ void log_writer(log_t *log_ptr) {
       if (step % 1024 == 0) {
         write_to_file_requests_monitor.update();
 
+        bool has_waiters = log.writer_mutex.get_waiters();
         log_writer_mutex_exit(log);
 
-        std::this_thread::sleep_for(std::chrono::seconds(0));
+        if (has_waiters) {
+          if (srv_log_writer_sleep_time != 0) {
+            std::this_thread::sleep_for(
+                std::chrono::microseconds(srv_log_writer_sleep_time));
+          } else {
+            std::this_thread::yield();
+          }
+        } else {
+          std::this_thread::sleep_for(std::chrono::seconds(0));
+        }
 
         log_writer_mutex_enter(log);
       }

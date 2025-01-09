@@ -137,6 +137,8 @@ struct OSTrackMutex {
   /** @return the const version of the policy */
   const MutexPolicy &policy() const UNIV_NOTHROW { return (m_policy); }
 
+  bool get_waiters() UNIV_NOTHROW { return false; }
+
  private:
 #ifdef UNIV_DEBUG
   /** true if the mutex has not be initialized */
@@ -291,6 +293,10 @@ struct TTASFutexMutex {
 
   /** @return const version of the policy */
   const MutexPolicy &policy() const UNIV_NOTHROW { return (m_policy); }
+
+  bool get_waiters() UNIV_NOTHROW {
+    return state() == mutex_state_t::LOCKED_WITH_WAITERS;
+  }
 
  private:
   /** @return the lock state. */
@@ -462,6 +468,10 @@ struct TTASEventMutex {
 
   /** @return const version of the policy */
   const MutexPolicy &policy() const UNIV_NOTHROW { return (m_policy); }
+
+  bool get_waiters() UNIV_NOTHROW {
+    return m_waiters.load(std::memory_order_relaxed);
+  }
 
  private:
   /** Wait in the sync array.
@@ -719,6 +729,8 @@ struct PolicyMutex {
     ut_ad(m_ptr == nullptr);
     m_ptr = PSI_MUTEX_CALL(init_mutex)(key.m_value, this);
   }
+
+  bool get_waiters() UNIV_NOTHROW { return m_impl.get_waiters(); }
 
  private:
   /** Performance schema monitoring.

@@ -479,6 +479,9 @@ extern ulong srv_log_write_events;
 /** Number of events used for notifications about redo flush. */
 extern ulong srv_log_flush_events;
 
+/** Time in microseconds the log writer sleeps. */
+extern ulong srv_log_writer_sleep_time;
+
 /** Number of slots in a small buffer, which is used to allow concurrent
 writes to log buffer. The slots are addressed by LSN values modulo number
 of the slots. */
