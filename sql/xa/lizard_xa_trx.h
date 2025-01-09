@@ -77,7 +77,8 @@ extern void ac_proposal_gcn(THD *thd);
   @param[in]    xid     XID
   @param[out]   info    XA info
 */
-extern void search_trx_info(xid_t *xid, MyXAInfo *info);
+extern void search_trx_info(xid_t *xid, MyXAInfo *info,
+                            const slot_ptr_t slot_ptr_hint);
 }  // namespace xa
 
 /** init server_start_time_for_txn, so the TXN can be kept for a while after

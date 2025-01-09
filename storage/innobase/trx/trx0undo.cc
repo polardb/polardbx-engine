@@ -1451,7 +1451,7 @@ static trx_undo_t *trx_undo_mem_init(
     trx_undo_read_xid(undo_header, &xid);
   }
 
-  lizard::trx_undo_hdr_read_slot(undo_header, &slot_addr, mtr);
+  slot_addr = lizard::trx_undo_hdr_read_slot(undo_header, mtr);
 
   undo = trx_undo_mem_create(rseg, id, type, trx_id, &xid, page_no, offset,
                              slot_addr);

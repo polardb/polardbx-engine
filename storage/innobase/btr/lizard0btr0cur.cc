@@ -97,13 +97,14 @@ bool btr_cur_guess_clust_by_gpp(dict_index_t *clust_idx,
   }
 
   /** Phase 2: fetch the page according to gpp_no. */
-  /** Fetch the page in Page_fetch::GPP_FETCH mode because the page may
+  /** Fetch the page in Page_fetch::IGNORE_MISSING mode because the page may
    * have already been freed or out of tablespace. */
   cur_savepoint = mtr_set_savepoint(mtr);
-  if ((block = buf_page_get_gen(
-           page_id_t{dict_index_get_space(clust_idx), gpp_no},
-           dict_table_page_size(clust_idx->table), RW_NO_LATCH, nullptr,
-           Page_fetch::GPP_FETCH, UT_LOCATION_HERE, mtr)) == nullptr) {
+  if ((block =
+           buf_page_get_gen(page_id_t{dict_index_get_space(clust_idx), gpp_no},
+                            dict_table_page_size(clust_idx->table), RW_NO_LATCH,
+                            nullptr, Page_fetch::IGNORE_MISSING_NOWAIT,
+                            UT_LOCATION_HERE, mtr)) == nullptr) {
     goto func_exit;
   }
   savepoints[n_savepoint++] = cur_savepoint;

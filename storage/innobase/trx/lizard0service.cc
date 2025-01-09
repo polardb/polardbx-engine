@@ -52,7 +52,7 @@ void MyXAInfo::init_by_txn_undo(const trx_id_t tid,
       txn_undo->pmmt.copy_to_gcn(gcn);
       is_proposal = true;
     }
-    undo_encode_slot_addr(txn_undo->slot_addr, &slot_ptr);
+    slot_ptr = txn_undo->slot_addr.encode();
     slot = {tid, slot_ptr};
     branch = txn_undo->branch;
     maddr = txn_undo->maddr;

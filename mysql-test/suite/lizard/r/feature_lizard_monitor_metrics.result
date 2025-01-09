@@ -101,3 +101,5 @@ Lizard_index_lock_guess_clust_hit	#
 Lizard_index_lock_guess_clust_miss	#
 Lizard_flashback_area_query_cnt	#
 Lizard_row_prev_vers_build_cnt	#
+Lizard_txn_read_guess_cnt	#
+Lizard_txn_read_guess_failed	#

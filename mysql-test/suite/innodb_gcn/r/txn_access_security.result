@@ -1,0 +1,57 @@
+# restart
+set global innodb_txn_retention = 9000;
+create table t1 (id int);
+insert into t1 values (1);
+create table t2 (id int);
+insert into t2 values (1);
+create table t3 (id int);
+insert into t3 values (1);
+create table t4 (id int);
+insert into t4 values (1);
+CREATE PROCEDURE generate_txn1(IN repeat_times INT)
+BEGIN
+WHILE repeat_times > 0 DO
+update t1 set id = id + 1;
+SET repeat_times = repeat_times - 1;
+END WHILE;
+END$$
+CREATE PROCEDURE generate_txn2(IN repeat_times INT)
+BEGIN
+WHILE repeat_times > 0 DO
+update t2 set id = id + 1;
+SET repeat_times = repeat_times - 1;
+END WHILE;
+END$$
+CREATE PROCEDURE generate_txn3(IN repeat_times INT)
+BEGIN
+WHILE repeat_times > 0 DO
+update t3 set id = id + 1;
+SET repeat_times = repeat_times - 1;
+END WHILE;
+END$$
+CREATE PROCEDURE generate_txn4(IN repeat_times INT)
+BEGIN
+WHILE repeat_times > 0 DO
+update t4 set id = id + 1;
+SET repeat_times = repeat_times - 1;
+END WHILE;
+END$$
+###################
+# generate TXN ...
+###################
+###################
+# Try guessing TXN ...
+###################
+include/assert.inc [Lizard_txn_read_guess_cnt must at least 40000]
+###################
+# Cleanup
+###################
+set global innodb_txn_retention = default;
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+drop procedure generate_txn1;
+drop procedure generate_txn2;
+drop procedure generate_txn3;
+drop procedure generate_txn4;

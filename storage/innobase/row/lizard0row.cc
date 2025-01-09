@@ -704,7 +704,7 @@ bool row_lizard_valid(const rec_t *rec, const dict_index_t *index,
   if (comp && rec_get_status(rec) == REC_STATUS_ORDINARY) {
     row_get_txn_rec(rec, index, offsets, &txn_rec);
 
-    undo_decode_undo_ptr(txn_rec.undo_ptr, &undo_addr);
+    undo_addr.decode(txn_rec.undo_ptr);
 
     /** UBA is valid */
     undo_addr_validation(&undo_addr, index);
@@ -736,7 +736,7 @@ bool row_lizard_has_cleanout(const rec_t *rec, const dict_index_t *index,
   */
   if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
     row_get_txn_rec(rec, index, offsets, &txn_rec);
-    undo_decode_undo_ptr(txn_rec.undo_ptr, &undo_addr);
+    undo_addr.decode(txn_rec.undo_ptr);
     /** UBA is valid */
     undo_addr_validation(&undo_addr, index);
     /** commit */

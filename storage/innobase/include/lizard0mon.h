@@ -246,6 +246,9 @@ struct lizard_var_t {
 
   /** Number of previous version built. */
   ulint row_prev_vers_build_cnt;
+
+  ulint txn_read_guess_cnt;
+  ulint txn_read_guess_failed;
 };
 
 struct lizard_stats_t {
@@ -373,6 +376,9 @@ struct lizard_stats_t {
   ulint_ctr_1_t flashback_area_query_cnt;
 
   ulint_ctr_1_t row_prev_vers_build_cnt;
+
+  ulint_ctr_1_t txn_read_guess_cnt;
+  ulint_ctr_1_t txn_read_guess_failed;
 };
 
 namespace lizard {

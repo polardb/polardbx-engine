@@ -56,6 +56,7 @@ dbms_xa	ac_commit	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONG
 dbms_xa	ac_prepare	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG, LONGLONG, LONGLONG
 dbms_xa	advance_gcn_no_flush	ADMIN_PROC	LONGLONG
 dbms_xa	find_by_xid	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG
+dbms_xa	find_by_xid_with_hint	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG
 dbms_xa	prepare_with_trx_slot	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_xa	send_heartbeat	ADMIN_PROC	NULL
 mysql	dummy	ADMIN_PROC	NULL

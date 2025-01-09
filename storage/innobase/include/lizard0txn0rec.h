@@ -48,7 +48,7 @@ struct txn_lookup_t {
     TXN_UNDO_LOG_COMMITED and TXN_UNDO_LOG_PURGED) in TXN header. And also, that's
     mean these TXN headers are existing.
 
-    By contrast, Status::REUSE / Status::UNDO_CORRUPTED mean that the TXN
+    By contrast, Status::REUSE / Status::UNDO_INVALID mean that the TXN
     headers are non-existing.
 
     * State::ACTIVE: A txn header is initialized as Status::ACTIVE when the
@@ -69,8 +69,8 @@ struct txn_lookup_t {
     transactions. These TXN headers are reinited as Status::ACTIVE, but for
     those UBAs who also pointed at them, are supposed to be Status::REUSE.
 
-    * Status::UNDO_CORRUPTED: In fact, Status::REUSE also lost their TXN
-    headers, but Status::UNDO_CORRUPTED is a abnormal state for some special
+    * Status::UNDO_INVALID: In fact, Status::REUSE also lost their TXN
+    headers, but Status::UNDO_INVALID is a abnormal state for some special
     cases, for example, page corrupt or TXN file unexpectedly removed.
 
     So the life cycle of TXN hedaer:
@@ -86,7 +86,7 @@ struct txn_lookup_t {
     PURGED,
     ERASED,
     REUSE,
-    UNDO_CORRUPTED,
+    UNDO_INVALID,
   };
 
  public:
@@ -128,7 +128,7 @@ struct txn_lookup_t {
 
   /** Judge uba have been missing. */
   bool txn_missing() {
-    if (real_status == Status::REUSE || real_status == Status::UNDO_CORRUPTED)
+    if (real_status == Status::REUSE || real_status == Status::UNDO_INVALID)
       return true;
 
     return false;
@@ -146,8 +146,8 @@ struct txn_lookup_t {
       * real_image == txn_slot.prev_image
 
     If the txn is unexpectedly lost:
-      * real_state: [Status::UNDO_CORRUPTED]
-      * real_image == {SCN_UNDO_CORRUPTED, US_UNDO_CORRUPTED}
+      * real_state: [Status::UNDO_INVALID]
+      * real_image == {SCN_UNDO_INVALID, US_UNDO_INVALID}
   */
   commit_mark_t real_image;
   Status real_status;
@@ -158,6 +158,34 @@ typedef txn_lookup_t::Status txn_status_t;
 namespace lizard {
 
 class Vision;
+
+class Txn_slot_reuse_checker {
+ public:
+  virtual bool operator()(const trx_ulogf_t *log_hdr) const = 0;
+  virtual ~Txn_slot_reuse_checker() = default;
+};
+
+class Txn_slot_reuse_by_tid_checker : public Txn_slot_reuse_checker {
+ public:
+
+  Txn_slot_reuse_by_tid_checker(const trx_id_t trx_id) : m_trx_id(trx_id) {}
+
+  virtual bool operator()(const trx_ulogf_t *log_hdr) const override;
+
+ private:
+  const trx_id_t m_trx_id;
+};
+
+class Txn_slot_reuse_by_xid_checker : public Txn_slot_reuse_checker {
+ public:
+
+  Txn_slot_reuse_by_xid_checker(const XID *xid) : m_xid(xid) {}
+
+  virtual bool operator()(const trx_ulogf_t *log_hdr) const override;
+
+ private:
+  const XID *m_xid;
+};
 
 #if defined UNIV_DEBUG
 /** Confirm txn rec validation
@@ -262,6 +290,20 @@ extern bool txn_rec_is_missing_history(txn_rec_t *txn_rec, bool flashback_area,
 extern bool txn_rec_try_see(txn_rec_t *txn_rec, const rec_t *rec,
                             const dict_index_t *index, const ulint *offsets,
                             const Vision *vision, cleanout_ctx_t &cctx);
+
+/**
+  Try to read TXN by only TXN slot address. The TXN slot might not be found.
+
+  @param[in]      slot_ptr      TXN Slot address
+  @param[in]      hint          Cache hint
+  @param[in]      reuse_checker Check if the TXN slot is reused.
+  @param[out]     txn_lookup    txn lookup result, nullptr if don't care
+
+  @return   true if the expected TXN is found.
+*/
+extern bool txn_slot_read_guess(const slot_ptr_t slot_ptr, Cache_hint hint,
+                                const Txn_slot_reuse_checker &reuse_checker,
+                                txn_lookup_t *txn_lookup);
 
 }  // namespace lizard
 

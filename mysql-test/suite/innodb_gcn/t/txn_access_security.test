@@ -1,0 +1,159 @@
+--source include/have_debug.inc
+
+# restart server so that the status can be reset.
+--source include/restart_mysqld.inc
+
+set global innodb_txn_retention = 9000;
+
+create table t1 (id int);
+insert into t1 values (1);
+
+create table t2 (id int);
+insert into t2 values (1);
+
+create table t3 (id int);
+insert into t3 values (1);
+
+create table t4 (id int);
+insert into t4 values (1);
+
+# Every TXN undo tablespace get 6000 transactions.
+# A Page contains at most 60 TXN slots.
+# So at least 100 txn undo pages.
+DELIMITER $$;
+
+CREATE PROCEDURE generate_txn1(IN repeat_times INT)
+BEGIN
+
+  WHILE repeat_times > 0 DO
+    update t1 set id = id + 1;
+    SET repeat_times = repeat_times - 1;
+  END WHILE;
+END$$
+
+CREATE PROCEDURE generate_txn2(IN repeat_times INT)
+BEGIN
+
+  WHILE repeat_times > 0 DO
+    update t2 set id = id + 1;
+    SET repeat_times = repeat_times - 1;
+  END WHILE;
+END$$
+
+CREATE PROCEDURE generate_txn3(IN repeat_times INT)
+BEGIN
+
+  WHILE repeat_times > 0 DO
+    update t3 set id = id + 1;
+    SET repeat_times = repeat_times - 1;
+  END WHILE;
+END$$
+
+CREATE PROCEDURE generate_txn4(IN repeat_times INT)
+BEGIN
+
+  WHILE repeat_times > 0 DO
+    update t4 set id = id + 1;
+    SET repeat_times = repeat_times - 1;
+  END WHILE;
+END$$
+
+DELIMITER ;$$
+
+connect(con1, localhost, root,,);
+connect(con2, localhost, root,,);
+connect(con3, localhost, root,,);
+connect(con4, localhost, root,,);
+
+--echo ###################
+--echo # generate TXN ...
+--echo ###################
+--disable_query_log
+--disable_result_log
+
+connection con1;
+--send call generate_txn1(6000);
+
+connection con2;
+--send call generate_txn2(6000);
+
+connection con3;
+--send call generate_txn3(6000);
+
+connection con4;
+--send call generate_txn4(6000);
+
+connection con1;
+--reap
+
+connection con2;
+--reap
+
+connection con3;
+--reap
+
+connection con4;
+--reap
+
+--echo ###################
+--echo # Try guessing TXN ...
+--echo ###################
+connection default;
+set debug="+d,force_do_slot_read";
+let $rseg_id = 1;
+while($rseg_id <= 4)
+{
+  let $page_no = 0;
+  while($page_no < 200)
+  {
+    let $guess_times = 50;
+    while ($guess_times)
+    {
+      --let $offset= query_get_value(SELECT FLOOR(RAND() * 16385) AS random, random, 1)
+      --eval set @rseg_id_ = $rseg_id
+      --eval set @page_no_ = $page_no
+      --eval set @offset_ = $offset
+
+      --let $undo_ptr= query_get_value(select ((cast(@rseg_id_ as unsigned) << 48) | (cast(@page_no_ as unsigned) << 16) | @offset_) as undo_ptr, undo_ptr, 1)
+      --eval call dbms_xa.find_by_xid_with_hint('txn_access_security', '', 1, $undo_ptr)
+
+      dec $guess_times;
+    }
+
+    inc $page_no;
+  }
+
+  inc $rseg_id;
+}
+
+--enable_result_log
+--enable_query_log
+
+connection default;
+
+--let $assert_cond= VARIABLE_VALUE >= 40000 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_cnt"
+--let $assert_text= Lizard_txn_read_guess_cnt must at least 40000
+--source include/assert.inc
+
+--echo ###################
+--echo # Cleanup
+--echo ###################
+disconnect con1;
+disconnect con2;
+disconnect con3;
+disconnect con4;
+
+connection default;
+set global innodb_txn_retention = default;
+
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+
+drop procedure generate_txn1;
+drop procedure generate_txn2;
+drop procedure generate_txn3;
+drop procedure generate_txn4;
+
+

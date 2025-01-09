@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0undo.h"
 #include "lizard0erase.h"
+#include "lizard0undo0types.h"
 #include "lizard0undo0retent.h"
 
 /** A sentinel undo record used as a return value when we have a whole
@@ -211,7 +212,7 @@ static inline void trx_erase_remove_log_hdr_sp(trx_rsegf_t *rseg_hdr,
 @param[in,out]  mtr             Mini-transaction
 @return undo log record, the page latched, NULL if none */
 static trx_undo_rec_t *trx_erase_undo_get_first_rec(
-    trx_id_t *modifier_trx_id, bool *del_marks, slot_addr_t *txn_addr,
+    trx_id_t *modifier_trx_id, bool *del_marks, slot_addr_t *slot_addr,
     bool *is_2pp_log, space_id_t space, const page_size_t &page_size,
     page_no_t hdr_page_no, ulint hdr_offset, mtr_t *mtr) {
   page_t *undo_page;
@@ -231,7 +232,7 @@ static trx_undo_rec_t *trx_erase_undo_get_first_rec(
 
   *is_2pp_log = trx_undo_log_is_2pp(undo_header, mtr);
 
-  trx_undo_hdr_read_slot(undo_header, txn_addr, mtr);
+  *slot_addr = trx_undo_hdr_read_slot(undo_header, mtr);
 
   rec = trx_undo_page_get_first_rec(undo_page, hdr_page_no, hdr_offset);
 

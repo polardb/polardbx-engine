@@ -180,7 +180,8 @@ extern bool trx_search_rollback_background_by_xid(const XID *xid,
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info);
+extern bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info,
+                                      const slot_ptr_t slot_ptr_hint);
 
 }  // namespace lizard
 

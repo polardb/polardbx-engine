@@ -59,7 +59,7 @@ visibility. */
 constexpr scn_t SCN_MAX = std::numeric_limits<scn_t>::max() - 1;
 
 /** SCN special for undo corrupted */
-constexpr scn_t SCN_UNDO_CORRUPTED = 1;
+constexpr scn_t SCN_UNDO_INVALID = 1;
 
 /** SCN special for undo lost */
 constexpr scn_t SCN_UNDO_LOST = 2;
@@ -86,7 +86,7 @@ constexpr scn_t SCN_LOG_DDL = SCN_MAX;
 /**------------------------------------------------------------------------*/
 
 /** utc for undo corrupted:  {2020/1/1 00:00:01} */
-constexpr utc_t US_UNDO_CORRUPTED = 1577808000 * 1000000ULL + 1;
+constexpr utc_t US_UNDO_INVALID = 1577808000 * 1000000ULL + 1;
 
 /** Initialized utc in txn header */
 constexpr utc_t US_UNDO_LOST = 1577808000 * 1000000ULL + 2;
@@ -116,7 +116,7 @@ constexpr utc_t US_INDEX_UPGRADE = US_MAX;
 constexpr gcn_t GCN_MAX = std::numeric_limits<gcn_t>::max() - 1;
 
 /** Initialized prev gcn in txn header */
-constexpr gcn_t GCN_UNDO_CORRUPTED = 1;
+constexpr gcn_t GCN_UNDO_INVALID = 1;
 
 /** GCN special for undo lost */
 constexpr gcn_t GCN_UNDO_LOST = 2;
@@ -194,8 +194,8 @@ const commit_mark_t CMMT_NULL(SCN_NULL, US_NULL, GCN_NULL, CSR_AUTOMATIC);
 const commit_mark_t CMMT_LOST(SCN_UNDO_LOST, US_UNDO_LOST, GCN_UNDO_LOST,
                               CSR_AUTOMATIC);
 
-const commit_mark_t CMMT_CORRUPTED(SCN_UNDO_CORRUPTED, US_UNDO_CORRUPTED,
-                                   GCN_UNDO_CORRUPTED, CSR_AUTOMATIC);
+const commit_mark_t CMMT_INVALID(SCN_UNDO_INVALID, US_UNDO_INVALID,
+                                 GCN_UNDO_INVALID, CSR_AUTOMATIC);
 
 /** Commit order status of a rollback segment {SCN, UTC, GCN}, and also of
 purge_sys, erase sys, free sys whose undo header iters are come from
@@ -252,7 +252,7 @@ struct proposal_mark_t {
   csr_t csr;
 };
 
-const proposal_mark_t PMMT_CORRUPTED(GCN_UNDO_CORRUPTED, CSR_AUTOMATIC);
+const proposal_mark_t PMMT_INVALID(GCN_UNDO_INVALID, CSR_AUTOMATIC);
 
 inline bool operator==(const proposal_mark_t &lhs, const proposal_mark_t &rhs) {
   return lhs.gcn == rhs.gcn && lhs.csr == rhs.csr;

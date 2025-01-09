@@ -224,7 +224,8 @@ static bool search_detach_prepare_trx(std::shared_ptr<Transaction_ctx> &trx_ctx,
   @param[in]    xid     XID
   @param[out]   info    XA info
 */
-void search_trx_info(xid_t *xid, MyXAInfo *info) {
+void search_trx_info(xid_t *xid, MyXAInfo *info,
+                     const slot_ptr_t slot_ptr_hint) {
   handlerton_ext &ibh_ext = innodb_hton->ext;
 
   auto [exists, trx_ctx] = find_detached_trn_and_get_its_state(xid);
@@ -250,7 +251,7 @@ void search_trx_info(xid_t *xid, MyXAInfo *info) {
   }
 
   /** XA transaction in history, must committed or rollbacked. */
-  if (ibh_ext.search_history_trx_by_xid(xid, info)) {
+  if (ibh_ext.search_history_trx_by_xid(xid, info, slot_ptr_hint)) {
     return;
   }
 

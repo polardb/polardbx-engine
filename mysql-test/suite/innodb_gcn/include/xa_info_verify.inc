@@ -3,6 +3,8 @@
 
 # ==== Usage ====
 # --let $my_xid='1','',1
+# --let $has_slot_hint=1
+# --let $slot_hint=2402850385
 # --let $expect_status= COMMIT
 # --let $expect_gcn= 62490
 # --let $expect_csr= AUTOMATIC_GCN
@@ -28,7 +30,13 @@
 # $my_xid
 #   XID.
 
---source suite/innodb_gcn/include/load_xa_trx_info.inc
+if ($has_slot_hint) {
+  --source suite/innodb_gcn/include/load_xa_trx_info_with_hint.inc
+}
+
+if (!$has_slot_hint) {
+  --source suite/innodb_gcn/include/load_xa_trx_info.inc
+}
 
 if ($expect_status) {
   --let $assert_text=expect_status == actual_status

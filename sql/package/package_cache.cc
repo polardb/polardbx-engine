@@ -149,6 +149,9 @@ void package_context_init() {
   /* dbms_xa.find_by_xid("$gtrid", "$bqual", "$formatID") */
   register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
 
+  /* dbms_xa.find_by_xid("$gtrid", "$bqual", "$formatID", "$uba_hint") */
+  register_package<Proc, Xa_proc_find_by_xid_with_hint>(XA_PROC_SCHEMA);
+
   /* dbms_xa.prepare_with_trx_slot */
   register_package<Proc, Xa_proc_prepare_with_trx_slot>(XA_PROC_SCHEMA);
 

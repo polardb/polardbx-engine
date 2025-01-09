@@ -131,6 +131,9 @@ typedef bool (*assign_trans_slot_t)(THD *thd, slot_ptr_t *slot_ptr,
 
 typedef bool (*search_trx_by_xid_t)(const XID *xid, MyXAInfo *info);
 
+typedef bool (*search_trx_by_xid_with_hint_t)(const XID *xid, MyXAInfo *info,
+                                              const slot_ptr_t slot_ptr_hint);
+
 typedef int (*convert_timestamp_to_scn_t)(THD *thd, utc_t utc,
                                           scn_t *scn);
 
@@ -166,7 +169,7 @@ struct handlerton_ext {
   assign_trans_slot_t assign_trans_slot;
   search_trx_by_xid_t search_detach_prepare_trx_by_xid;
   search_trx_by_xid_t search_rollback_background_trx_by_xid;
-  search_trx_by_xid_t search_history_trx_by_xid;
+  search_trx_by_xid_with_hint_t search_history_trx_by_xid;
   convert_timestamp_to_scn_t convert_timestamp_to_scn;
   search_up_limit_tid_t<lizard::Snapshot_scn_vision>
       search_up_limit_tid_for_scn;

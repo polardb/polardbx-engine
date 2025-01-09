@@ -85,8 +85,8 @@ enum class Page_fetch {
   POSSIBLY_FREED,
 
   /** Like Page_fetch::POSSIBLY_FREED, but do not mind if the page id is out of
-     tablespace. */
-  GPP_FETCH,
+     tablespace. And also nowait if the page is in IO Fix state. */
+  IGNORE_MISSING_NOWAIT,
 };
 /** @} */
 
@@ -379,12 +379,12 @@ done.
 @param[in] hint Cache_hint::MAKE_YOUNG or Cache_hint::KEEP_OLD
 @param[in] file File name from where it was called.
 @param[in] line Line from where it was called.
-@param[in] gpp_fetch (only used in debug mode)
+@param[in] guess (guess page, only used in debug mode)
 @param[in,out] mtr Mini-transaction covering the fetch
 @return true if success */
 bool buf_page_get_known_nowait(ulint rw_latch, buf_block_t *block,
                                Cache_hint hint, const char *file, ulint line,
-                               bool gpp_fetch [[maybe_unused]], mtr_t *mtr);
+                               bool guess [[maybe_unused]], mtr_t *mtr);
 
 /** Given a tablespace id and page number tries to get that page. If the
 page is not in the buffer pool it is not loaded and NULL is returned.

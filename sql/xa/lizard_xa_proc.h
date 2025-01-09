@@ -95,8 +95,9 @@ class Sql_cmd_xa_proc_trans_base : public Sql_cmd_admin_proc {
 class Sql_cmd_xa_proc_find_by_xid : public Sql_cmd_xa_proc_base {
  public:
   explicit Sql_cmd_xa_proc_find_by_xid(THD *thd, mem_root_deque<Item *> *list,
-                                       const Proc *proc)
-      : Sql_cmd_xa_proc_base(thd, list, proc) {}
+                                       const Proc *proc, bool has_tslot_hint)
+      : Sql_cmd_xa_proc_base(thd, list, proc),
+        m_has_tslot_hint(has_tslot_hint) {}
 
   /**
     Implementation of Proc execution body.
@@ -110,6 +111,9 @@ class Sql_cmd_xa_proc_find_by_xid : public Sql_cmd_xa_proc_base {
 
   /* Override default send_result */
   virtual void send_result(THD *thd, bool error) override;
+
+ private:
+  bool m_has_tslot_hint;
 };
 
 class Xa_proc_find_by_xid : public Xa_proc_base {
@@ -193,6 +197,95 @@ class Xa_proc_find_by_xid : public Xa_proc_base {
   virtual const std::string str() const override {
     return std::string("find_by_xid");
   }
+};
+
+class Xa_proc_find_by_xid_with_hint : public Xa_proc_base {
+ private:
+  using Sql_cmd_type = Sql_cmd_xa_proc_find_by_xid;
+
+  enum enum_parameter {
+    XA_PARAM_GTRID = 0,
+    XA_PARAM_BQUAL,
+    XA_PARAM_FORMATID,
+    XA_PARAM_COLUMN_UBA,
+    XA_PARAM_LAST
+  };
+
+  enum_field_types get_field_type(enum_parameter param) {
+    switch (param) {
+      case XA_PARAM_GTRID:
+      case XA_PARAM_BQUAL:
+        return MYSQL_TYPE_VARCHAR;
+      case XA_PARAM_FORMATID:
+      case XA_PARAM_COLUMN_UBA:
+        return MYSQL_TYPE_LONGLONG;
+      case XA_PARAM_LAST:
+        assert(0);
+    }
+    return MYSQL_TYPE_LONGLONG;
+  }
+
+  enum enum_column {
+    COLUMN_STATUS = 0,
+    COLUMN_GCN = 1,
+    COLUMN_CSR = 2,
+    COLUMN_TRX_ID = 3,
+    COLUMN_UBA = 4,
+    COLUMN_N_BRANCH = 5,
+    COLUMN_N_LOCAL_BRANCH = 6,
+    COLUMN_MASTER_TRX_ID = 7,
+    COLUMN_MASTER_UBA = 8,
+    COLUMN_SERVER_UUID = 9,
+    COLUMN_LAST = 10
+  };
+
+ public:
+  explicit Xa_proc_find_by_xid_with_hint(PSI_memory_key key)
+      : Xa_proc_base(key) {
+    /* 1. Init parameters */
+    for (size_t i = XA_PARAM_GTRID; i < XA_PARAM_LAST; i++) {
+      m_parameters.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+
+    /* 2. Result set protocol packet */
+    m_result_type = Result_type::RESULT_SET;
+
+    Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("STATUS"), 16},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("GCN"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("CSR"), 16},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("TRX_ID"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("UBA"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("N_BRANCH"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("N_LOCAL_BRANCH"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MASTER_TRX_ID"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MASTER_UBA"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("SERVER_UUID"), 512},
+    };
+
+    for (size_t i = 0; i < COLUMN_LAST; i++) {
+      m_columns.assign_at(i, elements[i]);
+    }
+  }
+
+  /* Singleton instance for find_by_xid_with_hint */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for find_by_xid_with_hint() proc.
+  */
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
+
+  ~Xa_proc_find_by_xid_with_hint() override {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("find_by_xid_with_hint");
+  }
+
+  friend class Sql_cmd_xa_proc_find_by_xid;
 };
 
 /**
@@ -284,6 +377,8 @@ class Xa_proc_prepare_with_trx_slot : public Xa_proc_base {
   virtual const std::string str() const override {
     return std::string("prepare_with_trx_slot");
   }
+
+  friend class Sql_cmd_xa_proc_prepare_with_trx_slot;
 };
 
 /**

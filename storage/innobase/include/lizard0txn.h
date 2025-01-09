@@ -80,7 +80,8 @@ struct txn_desc_t {
 
 
   /** assemble cmmt and undo ptr */
-  void assemble(const commit_mark_t &mark, const slot_addr_t &slot_addr);
+  void assemble(const commit_mark_t &mark, const slot_addr_t &slot_addr,
+                bool is_slave_arg);
 
   /** assemble undo ptr */
   void assemble_undo_ptr(const slot_addr_t &slot_addr);
@@ -196,32 +197,32 @@ struct txn_sys_t {
 
     commit_mark_t cmmt = {SCN_TEMP_TAB_REC, US_TEMP_TAB_REC, GCN_TEMP_TAB_REC,
                           CSR_AUTOMATIC};
-    txn_desc_temp.assemble(cmmt, slot_addr);
+    txn_desc_temp.assemble(cmmt, slot_addr, false);
 
     /** Dynamic metadata table txn description */
     slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
                  SLOT_OFFSET_DYNAMIC_METADATA};
     cmmt = {SCN_DYNAMIC_METADATA, US_DYNAMIC_METADATA, GCN_DYNAMIC_METADATA,
             CSR_AUTOMATIC};
-    txn_desc_dm.assemble(cmmt, slot_addr);
+    txn_desc_dm.assemble(cmmt, slot_addr, false);
 
     /** Log ddl table txn description */
     slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_LOG_DDL};
 
     cmmt = {SCN_LOG_DDL, US_LOG_DDL, GCN_LOG_DDL, CSR_AUTOMATIC};
-    txn_desc_ld.assemble(cmmt, slot_addr);
+    txn_desc_ld.assemble(cmmt, slot_addr, false);
 
     /** dd index txn for dd table. */
     slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_DICT_REC};
     cmmt = {SCN_DICT_REC, US_DICT_REC, GCN_DICT_REC, CSR_AUTOMATIC};
-    txn_desc_dd.assemble(cmmt, slot_addr);
+    txn_desc_dd.assemble(cmmt, slot_addr, false);
 
     /** dd index txn for dd table upgrade */
     slot_addr = {SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE,
                  SLOT_OFFSET_INDEX_UPGRADE};
     cmmt = {SCN_INDEX_UPGRADE, US_INDEX_UPGRADE, GCN_INDEX_UPGRADE,
             CSR_AUTOMATIC};
-    txn_desc_dd_upgrade.assemble(cmmt, slot_addr);
+    txn_desc_dd_upgrade.assemble(cmmt, slot_addr, false);
   }
 
  public:
@@ -242,7 +243,7 @@ struct txn_sys_t {
   /** Whether undo address is for dm */
   bool is_dynamic_metadata(const undo_addr_t &undo_addr) {
     undo_ptr_t undo_ptr;
-    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    undo_ptr = undo_addr.encode();
     if (undo_ptr == txn_desc_dm.undo_ptr) return true;
 
     return false;
@@ -251,7 +252,7 @@ struct txn_sys_t {
   /** Whether undo address is for temporary */
   bool is_temporary(const undo_addr_t &undo_addr) {
     undo_ptr_t undo_ptr;
-    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    undo_ptr = undo_addr.encode();
     if (undo_ptr == txn_desc_temp.undo_ptr) return true;
 
     return false;
@@ -260,7 +261,7 @@ struct txn_sys_t {
   /** Whether undo address is for log ddl */
   bool is_log_ddl(const undo_addr_t &undo_addr) {
     undo_ptr_t undo_ptr;
-    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    undo_ptr = undo_addr.encode();
     if (undo_ptr == txn_desc_ld.undo_ptr) return true;
 
     return false;
@@ -269,7 +270,7 @@ struct txn_sys_t {
   /** Whether undo address is for dd index of dd table. */
   bool is_dd_index_of_dd(const undo_addr_t &undo_addr) {
     undo_ptr_t undo_ptr;
-    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    undo_ptr = undo_addr.encode();
     if (undo_ptr == txn_desc_dd.undo_ptr) return true;
 
     return false;
@@ -278,7 +279,7 @@ struct txn_sys_t {
   /** Whether undo address is for dd index of dd table. */
   bool is_dd_index_of_dd_upgrade(const undo_addr_t &undo_addr) {
     undo_ptr_t undo_ptr;
-    undo_encode_undo_addr(undo_addr, &undo_ptr);
+    undo_ptr = undo_addr.encode();
     if (undo_ptr == txn_desc_dd_upgrade.undo_ptr) return true;
 
     return false;
@@ -291,8 +292,7 @@ struct txn_sys_t {
   }
 
   bool is_special(const undo_ptr_t &undo_ptr) {
-    undo_addr_t undo_addr;
-    undo_decode_undo_ptr(undo_ptr, &undo_addr);
+    undo_addr_t undo_addr(undo_ptr);
 
     return is_special(undo_addr);
   }

@@ -3691,15 +3691,15 @@ dberr_t Buf_fetch_other::get(buf_block_t *&block) noexcept {
         continue;
       }
 
-      if (m_mode == Page_fetch::GPP_FETCH) {
+      if (m_mode == Page_fetch::IGNORE_MISSING_NOWAIT) {
         ut_d(enum buf_page_state page_state = buf_block_get_state(block));
         ut_ad(page_state != BUF_BLOCK_ZIP_PAGE &&
               page_state != BUF_BLOCK_ZIP_DIRTY);
-        /* Similar to is_optimistic(), GPP_FETCH will immediately return if
+        /* Similar to is_optimistic(), IGNORE_MISSING will immediately return if
          * block is in bp but io_fix_status is BUF_IO_READ, in consequence of
-         * avoiding GPP_FETCH tries to fetch page which is out of space
-         * concurrently. However, different from is_optimistic(), GPP_FETCH need
-         * to avoid increasing buf_fix_count, because function
+         * avoiding IGNORE_MISSING tries to fetch page which is out of space
+         * concurrently. However, different from is_optimistic(), IGNORE_MISSING
+         * need to avoid increasing buf_fix_count, because function
          * buf_read_page_handle_error() requires buf_fix_count is 0. */
 
         /* This unlocked read of IO fix is safe as we have the hash lock and gpp
@@ -3745,9 +3745,9 @@ dberr_t Buf_fetch_other::get(buf_block_t *&block) noexcept {
     /* Page not in buf_pool: needs to be read from file */
     read_page();
 
-    /* In GPP_FETCH mode, failure of read_page() means that GPP no is out of
-     * space. In this case, we return immediately without retries. */
-    if (m_mode == Page_fetch::GPP_FETCH && m_retries > 0) {
+    /* In IGNORE_MISSING mode, failure of read_page() means that GPP no is out
+     * of space. In this case, we return immediately without retries. */
+    if (m_mode == Page_fetch::IGNORE_MISSING_NOWAIT && m_retries > 0) {
       return DB_NOT_FOUND;
     }
   }
@@ -4053,7 +4053,7 @@ void Buf_fetch<T>::read_page() {
 
   if (sync) {
     ulint type = 0;
-    if (m_mode == Page_fetch::GPP_FETCH) {
+    if (m_mode == Page_fetch::IGNORE_MISSING_NOWAIT) {
       type |= IORequest::IGNORE_MISSING;
     }
     success = buf_read_page(m_page_id, m_page_size, type);
@@ -4336,7 +4336,7 @@ buf_block_t *Buf_fetch<T>::single_page() {
 #endif /* UNIV_DEBUG */
 
   ut_ad(m_mode == Page_fetch::POSSIBLY_FREED ||
-        m_mode == Page_fetch::GPP_FETCH || !block->page.file_page_was_freed);
+        m_mode == Page_fetch::IGNORE_MISSING_NOWAIT || !block->page.file_page_was_freed);
 
   /* Check if this is the first access to the page */
   const auto access_time = buf_page_is_accessed(&block->page);
@@ -4416,7 +4416,7 @@ buf_block_t *buf_page_get_gen(const page_id_t &page_id,
 
   switch (mode) {
     case Page_fetch::NO_LATCH:
-    case Page_fetch::GPP_FETCH:
+    case Page_fetch::IGNORE_MISSING_NOWAIT:
       ut_ad(rw_latch == RW_NO_LATCH);
       break;
     case Page_fetch::NORMAL:
@@ -4571,7 +4571,7 @@ bool buf_page_optimistic_get(ulint rw_latch, buf_block_t *block,
 
 bool buf_page_get_known_nowait(ulint rw_latch, buf_block_t *block,
                                Cache_hint hint, const char *file, ulint line,
-                               bool gpp_fetch [[maybe_unused]], mtr_t *mtr) {
+                               bool guess [[maybe_unused]], mtr_t *mtr) {
   ut_ad(mtr->is_active());
   ut_ad((rw_latch == RW_S_LATCH) || (rw_latch == RW_X_LATCH));
 
@@ -4639,7 +4639,7 @@ bool buf_page_get_known_nowait(ulint rw_latch, buf_block_t *block,
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
 
 #ifdef UNIV_DEBUG
-  if (hint != Cache_hint::KEEP_OLD && !gpp_fetch) {
+  if (hint != Cache_hint::KEEP_OLD && !guess) {
     /* If hint == BUF_KEEP_OLD, we are executing an I/O
     completion routine.  Avoid a bogus assertion failure
     when ibuf_merge_or_delete_for_page() is processing a

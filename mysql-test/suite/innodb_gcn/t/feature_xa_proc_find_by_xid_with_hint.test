@@ -1,0 +1,136 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+set global innodb_undo_retention = 9000;
+set global xa_detach_on_prepare = on;
+set session xa_detach_on_prepare = on;
+
+--echo ###############################
+--echo # LOAD DATA
+--echo ###############################
+create table t1 (id int primary key, balance int);
+
+insert into t1 values (1, 1000);
+insert into t1 values (2, 1000);
+
+connect(con1, localhost, root,,);
+
+--echo ###############################
+--echo # case 1
+--echo ###############################
+connection default;
+--let $commit_gcn = `select @base_seq + 100`
+
+connection con1;
+xa start 'fbx_t1';
+update t1 set balance = balance - 10 where id = 1;
+update t1 set balance = balance + 10 where id = 2;
+xa end 'fbx_t1';
+--echo set innodb_commit_seq = #commit_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+--let $my_xid= 'fbx_t1', '', 1
+--let $xa_conn=con1
+--source suite/innodb_gcn/include/xa_proc_prepare_with_trx_slot.inc
+--let $m_uba= $xa_prepare_uba
+xa commit 'fbx_t1';
+
+--let $expect_gcn= $commit_gcn
+--let $expect_status= COMMIT
+--let $my_xid= 'fbx_t1','',1
+--let $has_slot_hit= 1
+--let $slot_hint=$m_uba
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+--disconnect con1
+--connection default
+
+# restart server so that the status can be reset.
+--source include/restart_mysqld.inc
+
+set global innodb_undo_retention = 9000;
+
+--echo ###############################
+--echo # case 2
+--echo ###############################
+connect(con1, localhost, root,,);
+connection con1;
+
+--disable_query_log
+--disable_result_log
+let $have_debug = `SELECT VERSION() LIKE '%debug%'`;
+if ($have_debug)
+{
+  set debug = "+d,expect_txn_read_guess_success";
+}
+--enable_query_log
+--enable_result_log
+
+let $i = 0;
+while($i < 240)
+{
+  inc $i;
+
+  --eval xa begin 'fbx_t1', '$i'
+  update t1 set balance = balance + 1;
+  --eval xa end 'fbx_t1', '$i'
+
+  --let $my_xid= 'fbx_t1', '$i', 1
+  --let $xa_conn=con1
+  --source suite/innodb_gcn/include/xa_proc_prepare_with_trx_slot.inc
+  --let $m_uba= $xa_prepare_uba
+  --eval xa commit 'fbx_t1', '$i'
+
+  --echo call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+  --disable_query_log
+  --output $MYSQLTEST_VARDIR/tmp/find_by_xid.log
+  --eval call dbms_xa.find_by_xid($my_xid)
+  --enable_query_log
+
+  --echo call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+  --disable_query_log
+  --output $MYSQLTEST_VARDIR/tmp/find_by_xid_with_hint.log
+  --eval call dbms_xa.find_by_xid_with_hint($my_xid, $m_uba)
+  --enable_query_log
+
+  --diff_files $MYSQLTEST_VARDIR/tmp/find_by_xid.log $MYSQLTEST_VARDIR/tmp/find_by_xid_with_hint.log
+
+  --remove_file $MYSQLTEST_VARDIR/tmp/find_by_xid.log
+  --remove_file $MYSQLTEST_VARDIR/tmp/find_by_xid_with_hint.log
+}
+
+--let $assert_cond= VARIABLE_VALUE >= 240 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_cnt"
+--let $assert_text= Lizard_txn_read_guess_cnt must at least 240
+--source include/assert.inc
+
+--let $assert_cond= VARIABLE_VALUE = 0 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_failed"
+--let $assert_text= Lizard_txn_read_guess_failed must be 0
+--source include/assert.inc
+
+--disable_query_log
+--disable_result_log
+let $have_debug = `SELECT VERSION() LIKE '%debug%'`;
+if ($have_debug)
+{
+  set debug = "-d,expect_txn_read_guess_success";
+}
+--enable_query_log
+--enable_result_log
+
+--echo ###############################
+--echo # case 3
+--echo ###############################
+select VARIABLE_VALUE from performance_schema.global_variables where VARIABLE_NAME = "have_xa_find_by_xid_with_hint";
+
+--echo ###############################
+--echo # cleanup
+--echo ###############################
+
+connection default;
+
+set global innodb_undo_retention = default;
+set global xa_detach_on_prepare = ON;
+set session xa_detach_on_prepare = ON;
+
+drop table t1;
+

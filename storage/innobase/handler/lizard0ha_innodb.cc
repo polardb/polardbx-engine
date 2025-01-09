@@ -143,8 +143,9 @@ static bool innobase_search_rollback_background_trx_by_xid(const XID *xid,
   return lizard::trx_search_rollback_background_by_xid(xid, info);
 }
 
-static bool innobase_search_history_trx_by_xid(const XID *xid, MyXAInfo *info) {
-  return lizard::trx_search_history_by_xid(xid, info);
+static bool innobase_search_history_trx_by_xid(const XID *xid, MyXAInfo *info,
+                                               const slot_ptr_t slot_ptr_hint) {
+  return lizard::trx_search_history_by_xid(xid, info, slot_ptr_hint);
 }
 
 template <typename T>

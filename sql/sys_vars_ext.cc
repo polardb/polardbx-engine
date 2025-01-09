@@ -87,6 +87,7 @@ ulonglong opt_import_tablespace_iterator_interval_ms =
 namespace lizard {
 SHOW_COMP_OPTION have_xa_prepare_with_trx_slot;
 SHOW_COMP_OPTION have_xa_async_commit;
+SHOW_COMP_OPTION have_xa_find_by_xid_with_hint;
 }  // namespace lizard
 
 /**
@@ -687,6 +688,11 @@ static Sys_var_have Sys_have_xa_async_commit(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr),
     DEPRECATED_VAR(""));
 
+static Sys_var_have Sys_have_xa_find_by_xid_with_hint(
+    "have_xa_find_by_xid_with_hint", "have_xa_find_by_xid_with_hint",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_find_by_xid_with_hint),
+    NO_CMD_LINE, NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr), DEPRECATED_VAR(""));
 
 static Sys_var_bool Sys_opt_transaction_group(
     "innodb_transaction_group",

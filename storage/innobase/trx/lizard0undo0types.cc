@@ -50,74 +50,34 @@ bool slot_addr_t::is_redo() const {
 }
 
 /**
-  Encode UBA into undo_ptr that need to copy into record
-  @param[in]      undo addr
-  @param[out]     undo ptr
+  Decode the slot_ptr into slot address
+  @param[in]      slot ptr
 */
-void undo_encode_undo_addr(const undo_addr_t &undo_addr, undo_ptr_t *undo_ptr) {
-  ulint rseg_id = undo::id2num(undo_addr.space_id);
-
-  *undo_ptr = (undo_ptr_t)(undo_addr.state) << UBA_POS_STATE |
-              (undo_ptr_t)(undo_addr.csr) << UBA_POS_CSR |
-              (undo_ptr_t)(undo_addr.is_slave) << UBA_POS_IS_SLAVE |
-              (undo_ptr_t)rseg_id << UBA_POS_SPACE_ID |
-              (undo_ptr_t)(undo_addr.page_no) << UBA_POS_PAGE_NO |
-              undo_addr.offset;
-}
-
-/**
-  Encode addr into slot_ptr that need to write undo header.
-  @param[in]      slot addr
-  @param[out]     slot ptr
-*/
-void undo_encode_slot_addr(const slot_addr_t &slot_addr, slot_ptr_t *slot_ptr) {
-  ulint rseg_id = undo::id2num(slot_addr.space_id);
-  /** Must be a valid txn undo slot address or no_redo special address. */
-  lizard_ut_ad(slot_addr_validate(slot_addr));
-
-  *slot_ptr = (slot_ptr_t)rseg_id << SLOT_POS_SPACE_ID |
-              (slot_ptr_t)(slot_addr.page_no) << SLOT_POS_PAGE_NO |
-              slot_addr.offset;
-}
-bool undo_slot_addr_equal(const slot_addr_t &slot_addr,
-                          const undo_ptr_t undo_ptr) {
-  undo_addr_t undo_addr;
-  undo_decode_undo_ptr(undo_ptr, &undo_addr);
-  if (undo_addr.offset == slot_addr.offset &&
-      undo_addr.page_no == slot_addr.page_no &&
-      undo_addr.space_id == slot_addr.space_id)
-    return true;
-
-  return false;
-}
-
-/**
-  Decode the undo_ptr into UBA
-  @param[in]      undo ptr
-  @param[out]     undo addr
-*/
-void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
+void slot_addr_t::decode(slot_ptr_t slot_ptr) {
   ulint rseg_id;
-  undo_ptr_t undo_ptr = uba;
-  ut_ad(undo_addr);
 
-  undo_addr->offset = (ulint)undo_ptr & 0xFFFF;
-  undo_ptr >>= UBA_WIDTH_OFFSET;
-  undo_addr->page_no = (ulint)undo_ptr & 0xFFFFFFFF;
-  undo_ptr >>= UBA_WIDTH_PAGE_NO;
-  rseg_id = (ulint)undo_ptr & 0x7F;
-  undo_ptr >>= UBA_WIDTH_SPACE_ID;
+  slot_ptr_decode(slot_ptr, &offset, &page_no, &rseg_id);
 
   /* Confirm the reserved bits */
-  ut_ad(((ulint)undo_ptr & 0x3f) == 0);
-  undo_ptr >>= UBA_WIDTH_UNUSED;
-  undo_addr->is_slave = static_cast<bool>(undo_ptr & 0x1);
+  ut_ad(((ulint)slot_ptr & UBA_MASK_UNUSED) == 0);
 
-  undo_ptr >>= UBA_WIDTH_IS_SLAVE;
-  undo_addr->csr = static_cast<csr_t>(undo_ptr & 0x1);
+  if (rseg_id == SLOT_SPACE_NUM_FAKE) {
+    space_id = SLOT_SPACE_ID_FAKE;
+  } else if (rseg_id > FSP_IMPLICIT_TXN_TABLESPACES) {
+    space_id = SPACE_UNKNOWN;
+  } else {
+    space_id = trx_rseg_id_to_space_id(rseg_id, false);
+  }
+}
 
-  undo_ptr >>= UBA_WIDTH_CSR;
-  undo_addr->state = (bool)undo_ptr;
+void undo_addr_t::decode(undo_ptr_t undo_ptr) {
+  slot_addr_t::decode((slot_ptr_t)undo_ptr);
+
+  is_slave = static_cast<bool>(undo_ptr & UBA_MASK_IS_SLAVE);
+
+  csr = static_cast<csr_t>(undo_ptr & UBA_MASK_CSR);
+
+  state = static_cast<bool>(undo_ptr & UBA_MASK_STATE);
 
   /**
     It should not be trx_sys tablespace for normal table except
@@ -128,38 +88,32 @@ void undo_decode_undo_ptr(const undo_ptr_t uba, undo_addr_t *undo_addr) {
     We give a fixed UBA in undo log header if didn't allocate txn undo
     for temporary table.
   */
-  if (rseg_id == 0) {
-    lizard_ut_ad(undo_addr->offset >= SLOT_OFFSET_LIMIT);
+  if (space_id == SLOT_SPACE_ID_FAKE) {
+    lizard_ut_ad(offset >= SLOT_OFFSET_LIMIT);
   }
-  /** It's always redo txn undo log */
-  undo_addr->space_id = trx_rseg_id_to_space_id(rseg_id, false);
 }
 
-/**
-  Decode the slot_ptr into slot address
-  @param[in]      slot ptr
-  @param[out]     slot addr
-*/
-void undo_decode_slot_ptr(slot_ptr_t ptr_arg, slot_addr_t *slot_addr) {
+slot_ptr_t slot_addr_t::encode() const {
   ulint rseg_id;
-  slot_ptr_t slot_ptr = ptr_arg;
-  ut_ad(slot_addr);
 
-  slot_addr->offset = (ulint)slot_ptr & 0xFFFF;
-  slot_ptr >>= SLOT_WIDTH_OFFSET;
-  slot_addr->page_no = (ulint)slot_ptr & 0xFFFFFFFF;
-  slot_ptr >>= SLOT_WIDTH_PAGE_NO;
-  rseg_id = (ulint)slot_ptr & 0x7F;
-  slot_ptr >>= SLOT_WIDTH_SPACE_ID;
+  ut_ad(!is_null());
+  lizard_ut_ad(slot_addr_validate(*this));
 
-  /* Confirm the reserved bits */
-  ut_ad(((ulint)slot_ptr & 0x3f) == 0);
-
-  if (!slot_addr->is_null() && rseg_id == 0) {
-    lizard_ut_ad(slot_addr->is_no_redo());
+  if (space_id == SLOT_SPACE_ID_FAKE) {
+    rseg_id = SLOT_SPACE_NUM_FAKE;
+  } else {
+    rseg_id = undo::id2num(space_id);
   }
-  /** It's redo txn slot or no_redo special txn slot */
-  slot_addr->space_id = trx_rseg_id_to_space_id(rseg_id, false);
+
+  return (slot_ptr_t)(rseg_id) << UBA_POS_SPACE_ID |
+         (slot_ptr_t)(page_no) << UBA_POS_PAGE_NO | offset;
+}
+
+undo_ptr_t undo_addr_t::encode() const {
+  return (undo_ptr_t)(state) << UBA_POS_STATE |
+         (undo_ptr_t)(csr) << UBA_POS_CSR |
+         (undo_ptr_t)(is_slave) << UBA_POS_IS_SLAVE |
+         (undo_ptr_t)slot_addr_t::encode();
 }
 
 xes_tags_t undo_decode_xes_tags(ulint tags) {
@@ -203,9 +157,40 @@ bool txn_slot_t::ac_commit_allocated() const {
   return xes_storage & XES_ALLOCATED_AC_COMMIT;
 }
 
+/**
+  Check the slot address if is actually points at the real disk storage.
+*/
+bool slot_addr_disk_mapped(const slot_addr_t &slot_addr) {
+  /* Space ID */
+  if (!lizard::fsp_is_txn_tablespace_by_id(slot_addr.space_id)) {
+    return false;
+  }
 
+  /* Offset */
+  if (slot_addr.offset < TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE) {
+    return false;
+  }
+
+  if ((slot_addr.offset - (TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE)) %
+      TXN_UNDO_LOG_EXT_HDR_SIZE) {
+    return false;
+  }
+
+  return true;
+}
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
+
+bool slot_addr_validate(const slot_addr_t &slot_addr) {
+  /** no_redo insert/update undo */
+  if (slot_addr.space_id == SLOT_SPACE_ID_FAKE) {
+    return true;
+  } else if (slot_addr.is_null()) {
+    return true;
+  } else {
+    return slot_addr_disk_mapped(slot_addr);
+  }
+}
 
 /** Check the UBA validation */
 bool undo_addr_validate(const undo_addr_t *undo_addr,
@@ -227,23 +212,7 @@ bool undo_addr_validate(const undo_addr_t *undo_addr,
 
   /** If not special, must be normal txn undo address. */
   if (!lizard::txn_sys_t::instance()->is_special(*undo_addr)) {
-    ut_a(lizard::fsp_is_txn_tablespace_by_id(undo_addr->space_id));
-    ut_a(undo_addr->page_no > 0);
-    /** TODO: offset must be align to TXN_UNDO_EXT */
-    ut_a(undo_addr->offset >= (TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE));
-  }
-  return true;
-}
-
-bool slot_addr_validate(const slot_addr_t &slot_addr) {
-  /** no_redo insert/update undo */
-  if (slot_addr.is_no_redo() || slot_addr.is_null()) {
-    return true;
-  } else {
-    ut_a(lizard::fsp_is_txn_tablespace_by_id(slot_addr.space_id));
-    ut_a(slot_addr.page_no > 0);
-    /** TODO: offset must be align to TXN_UNDO_EXT */
-    ut_a(slot_addr.offset >= (TRX_UNDO_SEG_HDR + TRX_UNDO_SEG_HDR_SIZE));
+    ut_a(slot_addr_validate(*undo_addr));
   }
   return true;
 }

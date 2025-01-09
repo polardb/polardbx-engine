@@ -40,7 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** assemble undo ptr */
 void txn_desc_t::assemble(const commit_mark_t &mark,
-                          const slot_addr_t &slot_addr) {
+                          const slot_addr_t &slot_addr, bool is_slave_arg) {
   bool state = (mark.scn != SCN_NULL);
   if (state) {
     assert_commit_mark_allocated(mark);
@@ -48,20 +48,18 @@ void txn_desc_t::assemble(const commit_mark_t &mark,
     assert_commit_mark_initial(mark);
   }
   cmmt = mark;
-  undo_addr_t undo_addr(slot_addr, state, mark.csr);
-  undo_encode_undo_addr(undo_addr, &this->undo_ptr);
+  undo_addr_t undo_addr(slot_addr, state, mark.csr, is_slave_arg);
+  this->undo_ptr = undo_addr.encode();
 }
 
 /** assemble undo ptr */
 void txn_desc_t::assemble_undo_ptr(const slot_addr_t &slot_addr) {
-  bool state = (cmmt.scn != SCN_NULL);
-  if (state) {
-    assert_commit_mark_allocated(cmmt);
-  } else {
-    assert_commit_mark_initial(cmmt);
-  }
-  undo_addr_t undo_addr(slot_addr, state, cmmt.csr);
-  undo_encode_undo_addr(undo_addr, &this->undo_ptr);
+  /** Only used to generate raw undo ptr for now */
+  assert_commit_mark_initial(cmmt);
+  assert(cmmt.csr == CSR_AUTOMATIC);
+
+  undo_addr_t undo_addr(slot_addr);
+  this->undo_ptr = undo_addr.encode();
 }
 
 void txn_desc_t::resurrect_xa(const proposal_mark_t &txn_pmmt,

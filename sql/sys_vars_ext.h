@@ -60,6 +60,7 @@ extern void print_build_info();
 namespace lizard {
 extern SHOW_COMP_OPTION have_xa_prepare_with_trx_slot;
 extern SHOW_COMP_OPTION have_xa_async_commit;
+extern SHOW_COMP_OPTION have_xa_find_by_xid_with_hint;
 }  // namespace lizard
 
 #endif /* SYS_VARS_EXT_INCLUDED */

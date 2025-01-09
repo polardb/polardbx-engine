@@ -10649,7 +10649,7 @@ static int mysql_init_variables() {
 
   lizard::have_xa_prepare_with_trx_slot = SHOW_OPTION_YES;
   lizard::have_xa_async_commit = SHOW_OPTION_YES;
-
+  lizard::have_xa_find_by_xid_with_hint = SHOW_OPTION_YES;
   return 0;
 }
 

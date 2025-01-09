@@ -60,17 +60,6 @@ static inline bool trx_slot_check_retention() {
   return ttse->ext.trx_slot_check_retention();
 }
 
-/* Singleton instance for find_by_xid */
-Proc *Xa_proc_find_by_xid::instance() {
-  static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
-  return proc;
-}
-
-Sql_cmd *Xa_proc_find_by_xid::invoke_cmd(THD *thd,
-                                         mem_root_deque<Item *> *list) const {
-  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
-}
-
 /**
   Parse the XID from the parameter list
 
@@ -79,7 +68,8 @@ Sql_cmd *Xa_proc_find_by_xid::invoke_cmd(THD *thd,
 
   @retval     true if parsing error.
 */
-bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
+static bool get_xid(const mem_root_deque<Item *> *list, const size_t item_idx,
+                    XID *xid) {
   char buff[256];
   char gtrid[MAXGTRIDSIZE];
   char bqual[MAXBQUALSIZE];
@@ -91,7 +81,7 @@ bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
   String *res;
 
   /* gtrid */
-  res = (*list)[0]->val_str(&str);
+  res = (*list)[item_idx]->val_str(&str);
   gtrid_length = res->length();
   if (gtrid_length > MAXGTRIDSIZE) {
     return true;
@@ -99,7 +89,7 @@ bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
   memcpy(gtrid, res->ptr(), gtrid_length);
 
   /* bqual */
-  res = (*list)[1]->val_str(&str);
+  res = (*list)[item_idx + 1]->val_str(&str);
   bqual_length = res->length();
   if (bqual_length > MAXBQUALSIZE) {
     return true;
@@ -107,12 +97,33 @@ bool get_xid(const mem_root_deque<Item *> *list, XID *xid) {
   memcpy(bqual, res->ptr(), bqual_length);
 
   /* formatID */
-  formatID = (*list)[2]->val_int();
+  formatID = (*list)[item_idx + 2]->val_int();
 
   /** Set XID. */
   xid->set(formatID, gtrid, gtrid_length, bqual, bqual_length);
 
   return false;
+}
+
+static bool get_slot_ptr(const mem_root_deque<Item *> *list,
+                         const size_t item_idx, slot_ptr_t *slot_ptr) {
+  /* Slot Address */
+  assert(list->size() > item_idx);
+  *slot_ptr = (*list)[item_idx]->val_int();
+  return false;
+}
+
+/**************************************/
+/* find_by_xid Related */
+/**************************************/
+Proc *Xa_proc_find_by_xid::instance() {
+  static Proc *proc = new Xa_proc_find_by_xid(key_memory_xa_proc);
+  return proc;
+}
+
+Sql_cmd *Xa_proc_find_by_xid::invoke_cmd(THD *thd,
+                                         mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this, false);
 }
 
 bool Sql_cmd_xa_proc_find_by_xid::pc_execute(THD *) {
@@ -133,6 +144,7 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
   auto thd_xs = thd->get_transaction()->xid_state();
   MyXAInfo info(XA_status::NOTSTART_OR_FORGET);
   size_t uuid_len = 0;
+  slot_ptr_t slot_ptr_hint = 0;
 
   protocol = thd->get_protocol();
 
@@ -141,9 +153,14 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  if (get_xid(m_list, &xid)) {
+  if (get_xid(m_list, Xa_proc_find_by_xid_with_hint::XA_PARAM_GTRID, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_VOID_RETURN;
+  }
+
+  if (m_has_tslot_hint) {
+    get_slot_ptr(m_list, Xa_proc_find_by_xid_with_hint::XA_PARAM_COLUMN_UBA,
+                 &slot_ptr_hint);
   }
 
   /** Cannot be doing XA transaction. */
@@ -154,7 +171,7 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
     DBUG_VOID_RETURN;
   }
 
-  lizard::xa::search_trx_info(&xid, &info);
+  lizard::xa::search_trx_info(&xid, &info, slot_ptr_hint);
 
   if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
 
@@ -253,11 +270,28 @@ void Sql_cmd_xa_proc_find_by_xid::send_result(THD *thd, bool error) {
   DBUG_VOID_RETURN;
 }
 
+
+/**************************************/
+/* find_by_xid_with_hint Related */
+/**************************************/
+Proc *Xa_proc_find_by_xid_with_hint::instance() {
+  static Proc *proc = new Xa_proc_find_by_xid_with_hint(key_memory_xa_proc);
+  return proc;
+}
+
+Sql_cmd *Xa_proc_find_by_xid_with_hint::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this, true);
+}
+
 Proc *Xa_proc_prepare_with_trx_slot::instance() {
   static Proc *proc = new Xa_proc_prepare_with_trx_slot(key_memory_xa_proc);
   return proc;
 }
 
+/**************************************/
+/* prepare_with_trx_slot Related */
+/**************************************/
 class Nested_xa_prepare_lex {
  public:
   Nested_xa_prepare_lex(THD *thd, XID *xid)
@@ -308,7 +342,7 @@ bool Sql_cmd_xa_proc_prepare_with_trx_slot::pc_execute(THD *thd) {
   }
 
   /** 1. parsed XID from parameters list. */
-  if (get_xid(m_list, &xid)) {
+  if (get_xid(m_list, Xa_proc_prepare_with_trx_slot::XA_PARAM_GTRID, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_RETURN(true);
   }
@@ -453,7 +487,7 @@ bool Sql_cmd_xa_proc_ac_prepare::pc_execute(THD *thd) {
 
   /** 1. parsed XID, n_branch, n_local_branch, pre commit gcn from parameters
   list. */
-  if (get_xid(m_list, &xid)) {
+  if (get_xid(m_list, Xa_proc_ac_prepare::XA_PARAM_GTRID, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_RETURN(true);
   }
@@ -644,7 +678,7 @@ bool Sql_cmd_xa_proc_ac_commit::pc_execute(THD *thd) {
   }
 
   /** 1. parsed XID, master branch info, commit_gcn from parameters list. */
-  if (get_xid(m_list, &xid)) {
+  if (get_xid(m_list, Xa_proc_ac_commit::XA_PARAM_GTRID, &xid)) {
     my_error(ER_XA_PROC_WRONG_XID, MYF(0), MAXGTRIDSIZE, MAXBQUALSIZE);
     DBUG_RETURN(true);
   }

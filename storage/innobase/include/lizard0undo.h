@@ -250,6 +250,11 @@ bool undo_proposal_mark_validate(const trx_undo_t *undo);
 
 bool trx_undo_hdr_slot_validate(const trx_ulogf_t *log_hdr, mtr_t *mtr);
 
+bool trx_undo_hdr_txn_validate(const page_t *undo_page,
+                               const trx_ulogf_t *log_hdr, mtr_t *mtr);
+
+bool txn_slot_validate(const txn_slot_t &txn_slot);
+
 /** Check if an update undo log has been marked as purged.
 @param[in]  rseg txn rseg
 @param[in]  page_size
@@ -298,15 +303,16 @@ extern void trx_undo_hdr_init_cmmt(trx_ulogf_t *log_hdr, mtr_t *mtr);
 */
 extern void trx_undo_hdr_write_cmmt(trx_ulogf_t *log_hdr,
                                     commit_mark_t &cmmt_scn, mtr_t *mtr);
+
 /**
-  Read Slot address.
+  Read slot address.
 
   @param[in]      log_hdr       undo log header
-  @param[out]     slot addr	decode from slot ptr.
   @param[in]      mtr           current mtr context
+  @return         decoded slot_addr_t
 */
-slot_ptr_t trx_undo_hdr_read_slot(const trx_ulogf_t *log_hdr,
-                                  slot_addr_t *slot_addr, mtr_t *mtr);
+slot_addr_t trx_undo_hdr_read_slot(const trx_ulogf_t *log_hdr, mtr_t *mtr);
+
 /**
   Write the slot address into undo log header
   @param[in]      undo log header
@@ -581,6 +587,11 @@ inline void txn_undo_set_state(trx_ulogf_t *log_hdr, ulint state, mtr_t *mtr) {
   /* It must be TXN undo log, or be initializing */
   ut_a(state == TXN_UNDO_LOG_ACTIVE || (flag & TRX_UNDO_FLAG_TXN) != 0);
 
+  /** If adding new state, take care of the switch(state) like
+  trx_search_history_by_xid. */
+  ut_a(state == TXN_UNDO_LOG_ACTIVE || state == TXN_UNDO_LOG_COMMITED ||
+       state == TXN_UNDO_LOG_PURGED || state == TXN_UNDO_LOG_ERASED);
+
   if (state == TXN_UNDO_LOG_COMMITED)
     ut_a(old_state == TXN_UNDO_LOG_ACTIVE);
   else if (state == TXN_UNDO_LOG_PURGED)
@@ -663,6 +674,31 @@ inline page_t *trx_undo_page_get_s_latched_with_hint(
       page_id, page_size,
       hint == Cache_hint::MAKE_YOUNG ? Page_fetch::NORMAL : Page_fetch::SCAN,
       mtr);
+}
+
+inline page_t *trx_undo_page_get_s_latched_with_hint_guess(
+    const page_id_t &page_id, const page_size_t &page_size, Cache_hint hint,
+    mtr_t *mtr) {
+  ulint savepoint = 0;
+  buf_block_t *block = nullptr;
+
+  savepoint = mtr_set_savepoint(mtr);
+
+  if ((block = buf_page_get_gen(page_id, page_size, RW_NO_LATCH, nullptr,
+                                Page_fetch::IGNORE_MISSING_NOWAIT,
+                                UT_LOCATION_HERE, mtr)) == nullptr) {
+    return nullptr;
+  }
+
+  if (!buf_page_get_known_nowait(RW_S_LATCH, block, hint, __FILE__, __LINE__,
+                                 true, mtr)) {
+    mtr_release_block_at_savepoint(mtr, savepoint, block);
+    return nullptr;
+  }
+
+  buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
+
+  return (buf_block_get_frame(block));
 }
 
 /** Gets an undo log page with cache hint and x-latches it.
@@ -868,11 +904,9 @@ void trx_undo_header_add_space_for_xid(page_t *undo_page, trx_ulogf_t *log_hdr,
     ut_a(lizard::trx_undo_hdr_slot_validate(undo_hdr, mtr)); \
   } while (0)
 
-#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)                \
-  do {                                                                       \
-    txn_slot_t txn_slot;                                                     \
-    lizard::trx_undo_hdr_read_txn_slot(undo_page, undo_hdr, mtr, &txn_slot); \
-    ut_a(txn_slot.magic_n == TXN_MAGIC_N);                                   \
+#define trx_undo_hdr_txn_validation(undo_page, undo_hdr, mtr)          \
+  do {                                                                 \
+    ut_a(lizard::trx_undo_hdr_txn_validate(undo_page, undo_hdr, mtr)); \
   } while (0)
 
 #define undo_commit_mark_validation(undo)          \

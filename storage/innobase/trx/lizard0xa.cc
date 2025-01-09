@@ -537,6 +537,29 @@ bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
   return false;
 }
 
+static bool txn_find_slot_quick(const XID *xid, const slot_ptr_t slot_ptr_hint,
+                                txn_slot_t *txn_slot) {
+  txn_lookup_t txn_lookup;
+  Txn_slot_reuse_by_xid_checker xid_checker(xid);
+
+  bool found = txn_slot_read_guess(slot_ptr_hint, Cache_hint::KEEP_OLD,
+                                   xid_checker, &txn_lookup);
+  if (found) {
+    *txn_slot = txn_lookup.txn_slot;
+  }
+  return found;
+}
+
+static bool txn_find_slot_slow(const XID *xid, txn_slot_t *txn_slot) {
+  trx_rseg_t *rseg;
+
+  rseg = txn_rseg_assign_by_xid(xid);
+
+  ut_ad(rseg);
+
+  return txn_rseg_find_txn_slot_by_xid(rseg, xid, txn_slot);
+}
+
 /**
   Find transactions in the finalized state by XID.
 
@@ -545,16 +568,16 @@ bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
 
   @retval     true if the corresponding transaction is found, false otherwise.
 */
-bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info) {
-  trx_rseg_t *rseg;
+bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info,
+                               const slot_ptr_t slot_ptr_hint) {
   txn_slot_t txn_slot;
   bool found;
 
-  rseg = txn_rseg_assign_by_xid(xid);
+  found = txn_find_slot_quick(xid, slot_ptr_hint, &txn_slot);
 
-  ut_ad(rseg);
-
-  found = txn_rseg_find_txn_slot_by_xid(rseg, xid, &txn_slot);
+  if (!found) {
+    found = txn_find_slot_slow(xid, &txn_slot);
+  }
 
   if (!found) {
     return false;
@@ -563,6 +586,7 @@ bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info) {
   switch (txn_slot.state) {
     case TXN_UNDO_LOG_COMMITED:
     case TXN_UNDO_LOG_PURGED:
+    case TXN_UNDO_LOG_ERASED:
       if (!txn_slot.tags_allocated()) {
         /** Found old format, not support. */
         *info = MY_XA_INFO_NOT_SUPPORT;

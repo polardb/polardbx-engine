@@ -1,0 +1,1735 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+set global innodb_undo_retention = 9000;
+set global xa_detach_on_prepare = on;
+set session xa_detach_on_prepare = on;
+###############################
+# LOAD DATA
+###############################
+create table t1 (id int primary key, balance int);
+insert into t1 values (1, 1000);
+insert into t1 values (2, 1000);
+###############################
+# case 1
+###############################
+xa start 'fbx_t1';
+update t1 set balance = balance - 10 where id = 1;
+update t1 set balance = balance + 10 where id = 2;
+xa end 'fbx_t1';
+set innodb_commit_seq = #commit_gcn
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1';
+include/assert.inc [expect_status == actual_status]
+connection con1;
+connection con1;
+include/assert.inc [expect_gcn == actual_gcn]
+connection con1;
+connection con1;
+disconnect con1;
+connection default;
+# restart
+set global innodb_undo_retention = 9000;
+###############################
+# case 2
+###############################
+connect con1, localhost, root,,;
+connection con1;
+xa begin 'fbx_t1', '1';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '1';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '1';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '2';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '2';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '2';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '3';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '3';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '3';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '4';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '4';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '4';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '5';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '5';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '5';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '6';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '6';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '6';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '7';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '7';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '7';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '8';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '8';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '8';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '9';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '9';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '9';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '10';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '10';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '10';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '11';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '11';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '11';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '12';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '12';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '12';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '13';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '13';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '13';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '14';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '14';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '14';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '15';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '15';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '15';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '16';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '16';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '16';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '17';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '17';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '17';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '18';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '18';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '18';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '19';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '19';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '19';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '20';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '20';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '20';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '21';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '21';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '21';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '22';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '22';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '22';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '23';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '23';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '23';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '24';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '24';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '24';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '25';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '25';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '25';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '26';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '26';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '26';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '27';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '27';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '27';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '28';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '28';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '28';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '29';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '29';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '29';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '30';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '30';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '30';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '31';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '31';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '31';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '32';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '32';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '32';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '33';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '33';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '33';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '34';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '34';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '34';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '35';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '35';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '35';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '36';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '36';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '36';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '37';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '37';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '37';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '38';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '38';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '38';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '39';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '39';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '39';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '40';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '40';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '40';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '41';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '41';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '41';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '42';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '42';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '42';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '43';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '43';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '43';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '44';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '44';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '44';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '45';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '45';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '45';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '46';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '46';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '46';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '47';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '47';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '47';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '48';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '48';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '48';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '49';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '49';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '49';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '50';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '50';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '50';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '51';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '51';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '51';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '52';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '52';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '52';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '53';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '53';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '53';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '54';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '54';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '54';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '55';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '55';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '55';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '56';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '56';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '56';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '57';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '57';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '57';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '58';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '58';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '58';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '59';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '59';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '59';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '60';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '60';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '60';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '61';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '61';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '61';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '62';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '62';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '62';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '63';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '63';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '63';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '64';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '64';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '64';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '65';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '65';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '65';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '66';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '66';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '66';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '67';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '67';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '67';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '68';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '68';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '68';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '69';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '69';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '69';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '70';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '70';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '70';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '71';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '71';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '71';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '72';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '72';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '72';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '73';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '73';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '73';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '74';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '74';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '74';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '75';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '75';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '75';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '76';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '76';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '76';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '77';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '77';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '77';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '78';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '78';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '78';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '79';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '79';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '79';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '80';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '80';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '80';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '81';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '81';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '81';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '82';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '82';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '82';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '83';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '83';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '83';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '84';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '84';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '84';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '85';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '85';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '85';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '86';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '86';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '86';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '87';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '87';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '87';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '88';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '88';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '88';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '89';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '89';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '89';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '90';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '90';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '90';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '91';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '91';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '91';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '92';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '92';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '92';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '93';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '93';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '93';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '94';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '94';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '94';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '95';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '95';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '95';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '96';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '96';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '96';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '97';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '97';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '97';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '98';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '98';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '98';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '99';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '99';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '99';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '100';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '100';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '100';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '101';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '101';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '101';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '102';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '102';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '102';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '103';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '103';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '103';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '104';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '104';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '104';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '105';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '105';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '105';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '106';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '106';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '106';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '107';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '107';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '107';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '108';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '108';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '108';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '109';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '109';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '109';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '110';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '110';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '110';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '111';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '111';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '111';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '112';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '112';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '112';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '113';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '113';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '113';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '114';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '114';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '114';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '115';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '115';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '115';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '116';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '116';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '116';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '117';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '117';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '117';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '118';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '118';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '118';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '119';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '119';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '119';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '120';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '120';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '120';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '121';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '121';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '121';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '122';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '122';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '122';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '123';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '123';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '123';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '124';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '124';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '124';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '125';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '125';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '125';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '126';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '126';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '126';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '127';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '127';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '127';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '128';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '128';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '128';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '129';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '129';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '129';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '130';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '130';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '130';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '131';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '131';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '131';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '132';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '132';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '132';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '133';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '133';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '133';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '134';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '134';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '134';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '135';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '135';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '135';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '136';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '136';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '136';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '137';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '137';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '137';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '138';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '138';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '138';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '139';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '139';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '139';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '140';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '140';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '140';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '141';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '141';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '141';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '142';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '142';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '142';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '143';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '143';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '143';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '144';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '144';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '144';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '145';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '145';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '145';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '146';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '146';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '146';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '147';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '147';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '147';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '148';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '148';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '148';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '149';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '149';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '149';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '150';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '150';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '150';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '151';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '151';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '151';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '152';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '152';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '152';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '153';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '153';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '153';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '154';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '154';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '154';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '155';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '155';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '155';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '156';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '156';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '156';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '157';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '157';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '157';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '158';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '158';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '158';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '159';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '159';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '159';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '160';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '160';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '160';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '161';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '161';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '161';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '162';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '162';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '162';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '163';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '163';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '163';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '164';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '164';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '164';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '165';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '165';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '165';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '166';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '166';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '166';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '167';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '167';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '167';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '168';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '168';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '168';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '169';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '169';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '169';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '170';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '170';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '170';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '171';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '171';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '171';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '172';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '172';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '172';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '173';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '173';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '173';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '174';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '174';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '174';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '175';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '175';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '175';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '176';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '176';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '176';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '177';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '177';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '177';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '178';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '178';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '178';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '179';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '179';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '179';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '180';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '180';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '180';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '181';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '181';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '181';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '182';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '182';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '182';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '183';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '183';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '183';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '184';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '184';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '184';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '185';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '185';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '185';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '186';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '186';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '186';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '187';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '187';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '187';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '188';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '188';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '188';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '189';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '189';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '189';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '190';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '190';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '190';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '191';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '191';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '191';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '192';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '192';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '192';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '193';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '193';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '193';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '194';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '194';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '194';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '195';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '195';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '195';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '196';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '196';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '196';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '197';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '197';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '197';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '198';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '198';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '198';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '199';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '199';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '199';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '200';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '200';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '200';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '201';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '201';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '201';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '202';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '202';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '202';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '203';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '203';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '203';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '204';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '204';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '204';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '205';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '205';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '205';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '206';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '206';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '206';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '207';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '207';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '207';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '208';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '208';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '208';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '209';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '209';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '209';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '210';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '210';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '210';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '211';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '211';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '211';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '212';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '212';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '212';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '213';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '213';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '213';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '214';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '214';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '214';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '215';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '215';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '215';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '216';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '216';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '216';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '217';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '217';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '217';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '218';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '218';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '218';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '219';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '219';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '219';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '220';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '220';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '220';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '221';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '221';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '221';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '222';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '222';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '222';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '223';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '223';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '223';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '224';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '224';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '224';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '225';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '225';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '225';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '226';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '226';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '226';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '227';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '227';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '227';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '228';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '228';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '228';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '229';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '229';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '229';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '230';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '230';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '230';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '231';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '231';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '231';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '232';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '232';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '232';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '233';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '233';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '233';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '234';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '234';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '234';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '235';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '235';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '235';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '236';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '236';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '236';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '237';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '237';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '237';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '238';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '238';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '238';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '239';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '239';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '239';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+xa begin 'fbx_t1', '240';
+update t1 set balance = balance + 1;
+xa end 'fbx_t1', '240';
+call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+xa commit 'fbx_t1', '240';
+call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
+call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
+include/assert.inc [Lizard_txn_read_guess_cnt must at least 240]
+connection con1;
+connection con1;
+include/assert.inc [Lizard_txn_read_guess_failed must be 0]
+connection con1;
+connection con1;
+###############################
+# case 3
+###############################
+select VARIABLE_VALUE from performance_schema.global_variables where VARIABLE_NAME = "have_xa_find_by_xid_with_hint";
+VARIABLE_VALUE
+YES
+###############################
+# cleanup
+###############################
+connection default;
+set global innodb_undo_retention = default;
+set global xa_detach_on_prepare = ON;
+set session xa_detach_on_prepare = ON;
+drop table t1;

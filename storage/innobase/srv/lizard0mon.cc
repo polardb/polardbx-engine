@@ -149,6 +149,9 @@ static void export_lizard_status(void) {
   lizard_vars.innodb_buffer_pool_txn_w_disk =
       lizard_stats.txn_undo_page_write_miss;
 
+  lizard_vars.txn_read_guess_cnt = lizard_stats.txn_read_guess_cnt;
+  lizard_vars.txn_read_guess_failed = lizard_stats.txn_read_guess_failed;
+
   // txn loopup entry
   for (size_t i = 0; i < lizard::TXN_ENTRY_COUNT; i++) {
     lizard_vars.innodb_buffer_pool_txn_lookup[i] = lizard_stats.txn_lookup[i];
@@ -243,6 +246,9 @@ static void export_lizard_status(void) {
   lizard_vars.flashback_area_query_cnt = lizard_stats.flashback_area_query_cnt;
 
   lizard_vars.row_prev_vers_build_cnt = lizard_stats.row_prev_vers_build_cnt;
+
+  lizard_vars.txn_read_guess_cnt = lizard_stats.txn_read_guess_cnt;
+  lizard_vars.txn_read_guess_failed = lizard_stats.txn_read_guess_failed;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -302,23 +308,25 @@ static SHOW_VAR lizard_status_variables[] = {
     {"cleanout_page_collect", (char *)&lizard_vars.cleanout_page_collect,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
-    {"scan_cleanout_clust_cleaned", (char *)&lizard_vars.scan_cleanout_clust_clean,
+    {"scan_cleanout_clust_cleaned",
+     (char *)&lizard_vars.scan_cleanout_clust_clean, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"scan_cleanout_sec_cleaned", (char *)&lizard_vars.scan_cleanout_sec_clean,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
-     {"scan_cleanout_sec_cleaned", (char *)&lizard_vars.scan_cleanout_sec_clean,
+    {"ddl_cleanout_clust_cleaned",
+     (char *)&lizard_vars.ddl_cleanout_clust_clean, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"scan_cleanout_clust_collects",
+     (char *)&lizard_vars.cleanout_clust_collect, SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"scan_cleanout_sec_collects", (char *)&lizard_vars.cleanout_sec_collect,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
-     {"ddl_cleanout_clust_cleaned", (char *)&lizard_vars.ddl_cleanout_clust_clean,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-
-    {"scan_cleanout_clust_collects", (char *)&lizard_vars.cleanout_clust_collect,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-     
-     {"scan_cleanout_sec_collects", (char *)&lizard_vars.cleanout_sec_collect,
-     SHOW_LONG, SHOW_SCOPE_GLOBAL},
-    
     {"ddl_cleanout_clust_collects", (char *)&lizard_vars.ddl_clust_collect,
-    SHOW_LONG, SHOW_SCOPE_GLOBAL},
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"cleanout_cursor_restore_failed",
      (char *)&lizard_vars.cleanout_cursor_restore_failed, SHOW_LONG,
@@ -573,6 +581,12 @@ static SHOW_VAR lizard_status_variables[] = {
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"row_prev_vers_build_cnt", (char *)&lizard_vars.row_prev_vers_build_cnt,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"txn_read_guess_cnt", (char *)&lizard_vars.txn_read_guess_cnt, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"txn_read_guess_failed", (char *)&lizard_vars.txn_read_guess_failed,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
