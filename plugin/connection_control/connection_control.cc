@@ -415,11 +415,79 @@ static MYSQL_SYSVAR_LONGLONG(
     connection_control::DEFAULT_MAX_DELAY, connection_control::MIN_DELAY,
     connection_control::MAX_DELAY, 1);
 
+/**
+  check() function for connection_control_refuse_connection_period
+
+  Check whether new value is within valid bounds or not.
+
+  @param thd        Not used.
+  @param var        Not used.
+  @param save       Not used.
+  @param value      New value for the option.
+
+  @returns whether new value is within valid bounds or not.
+    @retval 0 Value is ok
+    @retval 1 Value isnot within valid bounds
+*/
+static int check_refuse_connection_period(MYSQL_THD thd [[maybe_unused]],
+                                          SYS_VAR *var [[maybe_unused]],
+                                          void *save [[maybe_unused]],
+                                          struct st_mysql_value *value) {
+  longlong new_value;
+  if (value->val_int(value, &new_value)) return 1; /* NULL value */
+
+  if (new_value >= connection_control::MIN_REFUSE_PERIOD &&
+      new_value <= connection_control::MAX_REFUSE_PERIOD) {
+    *(reinterpret_cast<longlong *>(save)) = new_value;
+    return 0;
+  }
+  return 1;
+}
+
+/**
+  update() function for connection_control_refuse_connection_period
+
+  Updates g_connection_event_coordinator with new value.
+  Also notifies observers about the update.
+
+  @param thd        Not used.
+  @param var        Not used.
+  @param var_ptr    Variable information
+  @param save       New value for
+  connection_control_refuse_connection_period
+*/
+static void update_refuse_connection_period(MYSQL_THD thd [[maybe_unused]],
+                                            SYS_VAR *var [[maybe_unused]],
+                                            void *var_ptr [[maybe_unused]],
+                                            const void *save) {
+  /*
+    This won't result in overflow because we have already checked that this is
+    within valid bounds.
+  */
+  longlong new_value = *(reinterpret_cast<const longlong *>(save));
+  g_variables.refuse_connection_period = (int64)new_value;
+
+  Connection_control_error_handler error_handler;
+  g_connection_event_coordinator->notify_sys_var(
+      &error_handler, OPT_REFUSE_CONNECTION_PERIOD, &new_value);
+  return;
+}
+/** Declaration of connection_control_refuse_connection_period */
+static MYSQL_SYSVAR_LONGLONG(
+    refuse_connection_period, g_variables.refuse_connection_period,
+    PLUGIN_VAR_RQCMDARG,
+    "refuse connections for the period when trigger "
+    "failed connection threshold. Default is 0, i.e not refused.",
+    check_refuse_connection_period, update_refuse_connection_period,
+    connection_control::DEFAULT_REFUSE_PERIOD,
+    connection_control::MIN_REFUSE_PERIOD,
+    connection_control::MAX_REFUSE_PERIOD, 1);
+
 /** Array of system variables. Used in plugin declaration. */
 SYS_VAR *connection_control_system_variables[OPT_LAST + 1] = {
     MYSQL_SYSVAR(failed_connections_threshold),
     MYSQL_SYSVAR(min_connection_delay), MYSQL_SYSVAR(max_connection_delay),
-    nullptr};
+    MYSQL_SYSVAR(refuse_connection_period), nullptr};
 
 /**
   Function to display value for status variable :
@@ -443,10 +511,32 @@ static int show_delay_generated(MYSQL_THD thd [[maybe_unused]], SHOW_VAR *var,
   return 0;
 }
 
+/**
+ * Function to display value for status variable :
+ * Connection_control_refuse_generated
+ *
+ * @param thd MYSQL_THD handle. Unused.
+ * @param var Status variable structure
+ * @param buff Value buffer.
+ * @return Always returns success.
+ */
+static int show_refuse_generated(MYSQL_THD thd [[maybe_unused]], SHOW_VAR *var,
+                                 char *buff) {
+  var->type = SHOW_LONGLONG;
+  var->value = buff;
+  longlong *value = reinterpret_cast<longlong *>(buff);
+  int64 current_val =
+      g_statistics.stats_array[STAT_CONNECTION_REFUSE_TRIGGERED].load();
+  *value = static_cast<longlong>(current_val);
+  return 0;
+}
+
 /** Array of status variables. Used in plugin declaration. */
 SHOW_VAR
 connection_control_status_variables[STAT_LAST + 1] = {
     {"Connection_control_delay_generated", (char *)&show_delay_generated,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Connection_control_refuse_generated", (char *)&show_refuse_generated,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, enum_mysql_show_type(0), enum_mysql_show_scope(0)}};
 

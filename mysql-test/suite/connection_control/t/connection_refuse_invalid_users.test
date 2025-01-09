@@ -6,7 +6,7 @@
 --source include/count_sessions.inc
 
 
---echo # Connection delay tests for valid user accounts
+--echo # Connection refuse tests for valid user accounts
 
 --echo
 --echo # ----------------------------------------------------------------------
@@ -18,11 +18,11 @@
 
 --echo # Save original values of connection_control variables
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
-SET @saved_max_delay = @@global.connection_control_max_connection_delay;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
 
 -- echo # Set small values for connection_control variables
 SET @@global.connection_control_failed_connections_threshold = 3;
-SET @@global.connection_control_max_connection_delay = 1000;
+SET @@global.connection_control_refuse_connection_period = 10000;
 
 # We don't need to use client side authentication plugin for this test.
 let $USE_AUTH_PLUGIN= 0;
@@ -31,103 +31,118 @@ let $USE_AUTH_PLUGIN= 0;
 --echo # ----------------------------------------------------------------------
 --echo
 
---echo # Following attempts will not experience any delay in server respose
+--echo # Following attempts will not experience any refuse in server respose
 
 let $USER=u1;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u3;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u1;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u3;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u1;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u3;
 let $PASSWORD=hoho;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $DELAY_STATS=0;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
 
 --echo
---echo # Following attempts will experience delay in server respose
+--echo # Following attempts will be refused to authenticate within the period
 
 let $USER=u1;
 let $PASSWORD=hoho;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=1;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=1;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=hoho;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=2;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=2;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u3;
 let $PASSWORD=hoho;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=3;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=3;
+--source ../inc/check_connection_refuse.inc
 
 --sorted_result
 SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
 
 let $USER=u3;
 let $PASSWORD=abcd;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=4;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=4;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=abcd;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=5;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=5;
+--source ../inc/check_connection_refuse.inc
 
 let $USER=u1;
 let $PASSWORD=abcd;
+let $REFUSE=1;
 let $SUCCESS=0;
-let $DELAY_STATS=6;
---source ../inc/check_connection_delay.inc
+let $REFUSE_STATS=6;
+--source ../inc/check_connection_refuse.inc
 
 --sorted_result
 SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
@@ -142,7 +157,7 @@ connection default;
 
 --echo # Restore original values of conenction_control variables
 SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
-SET @@global.connection_control_max_connection_delay = @saved_max_delay;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
 
 
 --echo # Uninstall connection_control plugin

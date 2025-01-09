@@ -36,7 +36,7 @@ SET GLOBAL DEBUG='-d,vio_peer_addr_fake_hostname1';
 -- echo # Try various queries
 
 --sorted_result
-SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
   WHERE USERHOST LIKE '\'u1\'@\'host_%';
   
 -- echo # Cleanup.

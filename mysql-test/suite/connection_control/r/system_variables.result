@@ -283,6 +283,86 @@ SELECT @@global.connection_control_max_connection_delay;
 @@global.connection_control_max_connection_delay
 2147483647
 #-----------------------------------------------------------------------
+# Case 4 : connection_control_refuse_connection_period
+SET @saved_value= @@global.connection_control_refuse_connection_period;
+SELECT @saved_value;
+@saved_value
+0
+# 4.1 : Setting connection_control_refuse_connection_period to valid
+#       value
+SET @@global.connection_control_refuse_connection_period = 20000;
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+20000
+SET @@global.connection_control_refuse_connection_period = 2000;
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+2000
+SET @@global.connection_control_refuse_connection_period = 2147483647;
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+2147483647
+SET @@global.connection_control_refuse_connection_period = DEFAULT;
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+# 4.2 : Setting connection_control_refuse_connection_period to
+#       invalid value
+SET @@global.connection_control_refuse_connection_period = NULL;
+ERROR 42000: Incorrect argument type to variable 'connection_control_refuse_connection_period'
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = `SELECT * FROM mysql.user`;
+ERROR 42000: Incorrect argument type to variable 'connection_control_refuse_connection_period'
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = -20;
+ERROR 42000: Variable 'connection_control_refuse_connection_period' can't be set to the value of '-20'
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = 9223372036854775808;
+ERROR 42000: Variable 'connection_control_refuse_connection_period' can't be set to the value of '9223372036854775808'
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = -9223372036854775808;
+ERROR 42000: Variable 'connection_control_refuse_connection_period' can't be set to the value of '-9223372036854775808'
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+# Switch to conn_no_privs
+# 4.3 : Use no_privs@localhost to set
+#       connection_control_refuse_connection_period to valid value
+SET @@global.connection_control_refuse_connection_period = 2147483647;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = DEFAULT;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+# 4.4 : Use no_privs@localhost to set
+#       connection_control_refuse_connection_period to invalid value
+SET @@global.connection_control_refuse_connection_period = NULL;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = 9223372036854775808;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+SET @@global.connection_control_refuse_connection_period = @saved_value;
+SELECT @@global.connection_control_refuse_connection_period;
+@@global.connection_control_refuse_connection_period
+0
+#-----------------------------------------------------------------------
 # Cleanup
 DROP USER no_privs@localhost;
 # Uninstall connection_control plugin

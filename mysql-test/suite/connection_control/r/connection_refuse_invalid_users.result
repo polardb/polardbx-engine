@@ -1,0 +1,102 @@
+# Connection refuse tests for valid user accounts
+
+# ----------------------------------------------------------------------
+
+# Setup
+# Install connection_control plugin
+INSTALL PLUGIN connection_control SONAME 'CONNECTION_CONTROL_LIB';
+INSTALL PLUGIN connection_control_failed_login_attempts SONAME 'CONNECTION_CONTROL_LIB';
+# Save original values of connection_control variables
+SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
+# Set small values for connection_control variables
+SET @@global.connection_control_failed_connections_threshold = 3;
+SET @@global.connection_control_refuse_connection_period = 10000;
+
+# ----------------------------------------------------------------------
+
+# Following attempts will not experience any refuse in server respose
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 0
+Variable_name	Value
+Connection_control_refuse_generated	0
+
+# Following attempts will be refused to authenticate within the period
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 1
+Variable_name	Value
+Connection_control_refuse_generated	1
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 2
+Variable_name	Value
+Connection_control_refuse_generated	2
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 3
+Variable_name	Value
+Connection_control_refuse_generated	3
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+USERHOST	FAILED_ATTEMPTS
+'u1'@'localhost'	3
+'u2'@'localhost'	3
+'u3'@'localhost'	3
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 4
+Variable_name	Value
+Connection_control_refuse_generated	4
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 5
+Variable_name	Value
+Connection_control_refuse_generated	5
+# Refuse to authenticate the password
+Connection_control_refuse_generated should be 6
+Variable_name	Value
+Connection_control_refuse_generated	6
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+USERHOST	FAILED_ATTEMPTS
+'u1'@'localhost'	3
+'u2'@'localhost'	3
+'u3'@'localhost'	3
+
+# ----------------------------------------------------------------------
+
+# Cleanup
+# Restore original values of conenction_control variables
+SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
+# Uninstall connection_control plugin
+UNINSTALL PLUGIN connection_control;
+UNINSTALL PLUGIN connection_control_failed_login_attempts;
+
+# ----------------------------------------------------------------------

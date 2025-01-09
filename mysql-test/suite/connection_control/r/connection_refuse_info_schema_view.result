@@ -1,4 +1,4 @@
-# Connection delay tests for valid user accounts
+# Connection refuse tests for valid user accounts
 
 # ----------------------------------------------------------------------
 
@@ -22,8 +22,11 @@ CREATE USER u2@localhost IDENTIFIED BY 'abcd';
 CREATE USER u3@localhost IDENTIFIED BY 'abcd';
 # Save original values of connection_control variables
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
-# Avoid triggering delay
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
+# Avoid triggering refuse
 SET @@global.connection_control_failed_connections_threshold = 100;
+SET @@global.connection_control_refuse_connection_period = 100000;
+# Use Connection Refuse 
 
 # ----------------------------------------------------------------------
 
@@ -100,7 +103,7 @@ USERHOST	FAILED_ATTEMPTS
 'u2'@'localhost'	4
 CREATE USER viewer@localhost IDENTIFIED BY 'abcd';
 GRANT CONNECTION_ADMIN ON *.* TO viewer@localhost;
-# After successful login, corresponding entry should disappear
+# After successful login,  corresponding entry should disappear
 # from the view
 SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
 USERHOST	FAILED_ATTEMPTS
@@ -142,6 +145,7 @@ USERHOST	FAILED_ATTEMPTS
 # Cleanup
 # Restore original values of conenction_control variables
 SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
 # Remove user accounts created for the test
 DROP USER u1@localhost;
 DROP USER u2@localhost;

@@ -43,6 +43,11 @@ extern int64 DEFAULT_MIN_DELAY;
 extern int64 MIN_DELAY;
 extern int64 MAX_DELAY;
 
+extern int64 DEFAULT_REFUSE_PERIOD;
+extern int64 DISABLE_REFUSE_PERIOD;
+extern int64 MIN_REFUSE_PERIOD;
+extern int64 MAX_REFUSE_PERIOD;
+
 /** Functions being used by connection_control.cc */
 
 class Connection_event_coordinator_services;

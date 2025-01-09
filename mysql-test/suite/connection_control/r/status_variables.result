@@ -13,6 +13,7 @@ CREATE USER u3@localhost IDENTIFIED BY 'abcd';
 # Save original values of connection_control variables
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
 SET @saved_max_delay= @@global.connection_control_max_connection_delay;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
 # Set small threshold
 SET @@global.connection_control_failed_connections_threshold = 1;
 # Set small max delay
@@ -79,6 +80,78 @@ ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
 SHOW STATUS LIKE 'Connection_control_delay_generated';
 Variable_name	Value
 Connection_control_delay_generated	3
+
+# ----------------------------------------------------------------------
+
+# Clear the exsiting record before we test the refuse period
+# Set a small refuse period, i.e 15 seconds
+SET @@global.connection_control_refuse_connection_period = 15000;
+connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+connect(localhost,u3,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
+connect(localhost,u2,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
+# Check  Connection_control_refuse_generated - Should be 0
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+Variable_name	Value
+Connection_control_refuse_generated	0
+connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u2,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u3,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u2,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u3,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+# Check Connection_control_refuse_generated - Should be 6
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+Variable_name	Value
+Connection_control_refuse_generated	6
+connect(localhost,u2,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u3,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+# Check Connection_control_refuse_generated - Should be 9
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+Variable_name	Value
+Connection_control_refuse_generated	9
+# Successful connection but refuse would still be generated 
+connect(localhost,u1,abcd,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u2,abcd,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u3,abcd,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+# Check Connection_control_refuse_generated - Should be 12
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+Variable_name	Value
+Connection_control_refuse_generated	12
+# Wait until the refuse period is over
+# Setting failed connection threshold should reset refuse statistics
+SET @@global.connection_control_failed_connections_threshold = 1;
+connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
+connect(localhost,u3,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
+connect(localhost,u2,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
+connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u3,haha,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+connect(localhost,u2,efgh,test,MASTER_PORT,MASTER_SOCKET);
+ERROR HY000: The authentication of user is denied for entering the wrong password multiple times with the period.
+# Check Connection_control_refuse_generated - Should be 3
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+Variable_name	Value
+Connection_control_refuse_generated	3
 
 # ----------------------------------------------------------------------
 

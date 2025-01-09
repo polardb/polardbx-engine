@@ -1,0 +1,105 @@
+
+# Make sure that connection_control plugin can be loaded
+--source ../inc/have_connection_control_plugin.inc
+
+# Save the initial number of concurrent sessions
+--source include/count_sessions.inc
+
+--echo # Connection refuse tests for valid user accounts
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Setup
+--echo # Install connection_control plugin
+--source ../inc/install_connection_control_plugin.inc
+
+--echo # Create anonymous user
+CREATE USER ''@'localhost';
+
+--echo # Save original values of connection_control variables
+SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
+
+-- echo # Set small values for connection_control variables
+SET @@global.connection_control_failed_connections_threshold = 3;
+SET @@global.connection_control_refuse_connection_period = 10000;
+
+# We don't need to use client side authentication plugin for this test.
+let $USE_AUTH_PLUGIN= 0;
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Following attempts will not experience any refuse in server respose
+
+let $USER=u1;
+let $PASSWORD=hoho;
+let $REFUSE=0;
+let $SUCCESS=0;
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u2;
+let $PASSWORD=hoho;
+let $REFUSE=0;
+let $SUCCESS=0;
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u3;
+let $PASSWORD=hoho;
+let $REFUSE=0;
+let $SUCCESS=0;
+let $REFUSE_STATS=0;
+--source ../inc/check_connection_refuse.inc
+
+--echo
+--echo # Following attempts will be refused to authenticate
+
+let $USER=u1;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=1;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u2;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=2;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u3;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=3;
+--source ../inc/check_connection_refuse.inc
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Cleanup
+
+connection default;
+
+--echo # Restore original values of conenction_control variables
+SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
+
+--echo # Drop anonymous user
+DROP USER ''@'localhost';
+
+--echo # Uninstall connection_control plugin
+--source ../inc/uninstall_connection_control_plugin.inc
+
+# Wait till all disconnects are completed.
+--source include/wait_until_count_sessions.inc
+
+--echo
+--echo # ----------------------------------------------------------------------

@@ -46,7 +46,11 @@ class Connection_event_record : public Connection_control_alloc {
     Constructor for Connection_event_record. Always initializes failed login
     count to 1.
   */
-  Connection_event_record(const Sql_string &s) : m_count(1) {
+  Connection_event_record(const Sql_string &s)
+      : m_count(1),
+        m_begin_time(std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count()) {
     memset((void *)m_userhost, 0, sizeof(m_userhost));
     memcpy((void *)m_userhost, s.c_str(), s.length());
     m_length = s.length();
@@ -65,6 +69,12 @@ class Connection_event_record : public Connection_control_alloc {
   /** Reset failed login count for given user entry */
   void reset_count() { m_count.store(0); }
 
+  /**
+    Get begin time for give user entry
+    @returns begin time
+  */
+  int64 get_begin_time() const { return m_begin_time.load(); }
+
   /** Get user information */
   uchar *get_userhost() const { return const_cast<uchar *>(m_userhost); }
 
@@ -81,6 +91,20 @@ class Connection_event_record : public Connection_control_alloc {
   size_t m_length;
   /* connection event count */
   std::atomic<int64> m_count;
+  /** connection event begin time (ms) */
+  std::atomic<int64> m_begin_time;
+};
+
+class Connection_delay_event_record_value {
+ public:
+  Connection_delay_event_record_value()
+      : m_count(DISABLE_THRESHOLD),
+        m_begin_time(std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count()) {}
+
+  int64 m_count;
+  int64 m_begin_time;
 };
 
 /**
@@ -120,7 +144,7 @@ class Connection_delay_action : public Connection_event_observer,
                                 public Connection_control_alloc {
  public:
   Connection_delay_action(int64 threshold, int64 min_delay, int64 max_delay,
-                          opt_connection_control *sys_vars,
+                          int64 refuse_period, opt_connection_control *sys_vars,
                           size_t sys_vars_size,
                           stats_connection_control *status_vars,
                           size_t status_vars_size, mysql_rwlock_t *lock);
@@ -180,6 +204,17 @@ class Connection_delay_action : public Connection_event_observer,
   /** Get min value */
   int64 get_min_delay() { return m_min_delay.load(); }
 
+  /**
+    Set refuse period value
+    @param refuse_period [in]        New refuse period value
+  */
+  void set_refuse_period(int64 refuse_period) {
+    m_refuse_period.store(refuse_period);
+  }
+
+  /** Get refuse period value */
+  int64 get_refuse_period() { return m_refuse_period.load(); }
+
   void fill_IS_table(THD *thd, Table_ref *tables, Item *cond);
 
   /** Overridden functions */
@@ -228,6 +263,8 @@ class Connection_delay_action : public Connection_event_observer,
   std::atomic<int64> m_min_delay;
   /** Upper cap on delay to be generated */
   std::atomic<int64> m_max_delay;
+  /** Period of time to refuse connections */
+  std::atomic<int64> m_refuse_period;
   /** System variables */
   std::vector<opt_connection_control> m_sys_vars;
   /** Status variables */

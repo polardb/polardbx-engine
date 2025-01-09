@@ -10203,6 +10203,8 @@ ER_PING_CHECK_FAILED
 ER_VARIABLE_CHANGE_FAIL
   eng "Variable '%-.64s' cannot be enabled because '%-.64s' is enabled/disabled"
 
+ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+  eng "The authentication of user is denied for entering the wrong password multiple times with the period."
 #
 #  End of RDS error message.
 #

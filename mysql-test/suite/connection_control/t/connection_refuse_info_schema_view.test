@@ -5,7 +5,7 @@
 # Save the initial number of concurrent sessions
 --source include/count_sessions.inc
 
---echo # Connection delay tests for valid user accounts
+--echo # Connection refuse tests for valid user accounts
 
 --echo
 --echo # ----------------------------------------------------------------------
@@ -29,9 +29,14 @@ CREATE USER u3@localhost IDENTIFIED BY 'abcd';
 
 --echo # Save original values of connection_control variables
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
 
--- echo # Avoid triggering delay
+-- echo # Avoid triggering refuse
 SET @@global.connection_control_failed_connections_threshold = 100;
+SET @@global.connection_control_refuse_connection_period = 100000;
+
+-- echo # Use Connection Refuse 
+
 
 # We don't need to use client side authentication plugin for this test.
 let $USE_AUTH_PLUGIN= 0;
@@ -139,7 +144,7 @@ connection default;
 CREATE USER viewer@localhost IDENTIFIED BY 'abcd';
 GRANT CONNECTION_ADMIN ON *.* TO viewer@localhost;
 connect(con_viewer, localhost, viewer,abcd,,,,SSL);
---echo # After successful login, corresponding entry should disappear
+--echo # After successful login,  corresponding entry should disappear
 --echo # from the view
 --sorted_result
 SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
@@ -193,6 +198,7 @@ connection default;
 
 --echo # Restore original values of conenction_control variables
 SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
 
 --echo # Remove user accounts created for the test
 DROP USER u1@localhost;

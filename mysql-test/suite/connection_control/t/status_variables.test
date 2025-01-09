@@ -22,6 +22,7 @@ CREATE USER u3@localhost IDENTIFIED BY 'abcd';
 --echo # Save original values of connection_control variables
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
 SET @saved_max_delay= @@global.connection_control_max_connection_delay;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
 
 -- echo # Set small threshold
 SET @@global.connection_control_failed_connections_threshold = 1;
@@ -121,6 +122,114 @@ connect(fail_con_u2, localhost, u2,efgh,,,,);
 
 --echo # Check Connection_control_delay_generated - Should be 3
 SHOW STATUS LIKE 'Connection_control_delay_generated';
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Clear the exsiting record before we test the refuse period
+connect(con_u1, localhost, u1,abcd,,,,);
+connect(con_u2, localhost, u2,abcd,,,,);
+connect(con_u3, localhost, u3,abcd,,,,);
+connection default;
+--disconnect con_u1
+--disconnect con_u2
+--disconnect con_u3
+
+-- echo # Set a small refuse period, i.e 15 seconds
+SET @@global.connection_control_refuse_connection_period = 15000;
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,efgh,,,,);
+
+--echo # Check  Connection_control_refuse_generated - Should be 0
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u2, localhost, u2,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u2, localhost, u2,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+--echo # Check Connection_control_refuse_generated - Should be 6
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u2, localhost, u2,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+--echo # Check Connection_control_refuse_generated - Should be 9
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+
+--echo # Successful connection but refuse would still be generated 
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(con_u2, localhost, u1,abcd,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(con_u1, localhost, u2,abcd,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(con_u3, localhost, u3,abcd,,,,);
+
+--echo # Check Connection_control_refuse_generated - Should be 12
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
+
+--echo # Wait until the refuse period is over
+sleep 15;
+
+--echo # Setting failed connection threshold should reset refuse statistics
+SET @@global.connection_control_failed_connections_threshold = 1;
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u3, localhost, u3,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
+connect(fail_con_u2, localhost, u2,efgh,,,,);
+
+--echo # Check Connection_control_refuse_generated - Should be 3
+SHOW STATUS LIKE 'Connection_control_refuse_generated';
 
 --echo
 --echo # ----------------------------------------------------------------------

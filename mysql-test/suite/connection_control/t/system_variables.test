@@ -267,6 +267,81 @@ SET @@global.connection_control_max_connection_delay = @saved_value;
 SELECT @@global.connection_control_max_connection_delay;
 
 --echo #-----------------------------------------------------------------------
+
+--echo # Case 4 : connection_control_refuse_connection_period
+
+SET @saved_value= @@global.connection_control_refuse_connection_period;
+SELECT @saved_value;
+
+--echo # 4.1 : Setting connection_control_refuse_connection_period to valid
+--echo #       value
+
+SET @@global.connection_control_refuse_connection_period = 20000;
+SELECT @@global.connection_control_refuse_connection_period;
+
+SET @@global.connection_control_refuse_connection_period = 2000;
+SELECT @@global.connection_control_refuse_connection_period;
+
+SET @@global.connection_control_refuse_connection_period = 2147483647;
+SELECT @@global.connection_control_refuse_connection_period;
+
+SET @@global.connection_control_refuse_connection_period = DEFAULT;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--echo # 4.2 : Setting connection_control_refuse_connection_period to
+--echo #       invalid value
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET @@global.connection_control_refuse_connection_period = NULL;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET @@global.connection_control_refuse_connection_period = `SELECT * FROM mysql.user`;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET @@global.connection_control_refuse_connection_period = -20;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET @@global.connection_control_refuse_connection_period = 9223372036854775808;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_WRONG_VALUE_FOR_VAR
+SET @@global.connection_control_refuse_connection_period = -9223372036854775808;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--echo # Switch to conn_no_privs
+connection conn_no_privs;
+--echo # 4.3 : Use no_privs@localhost to set
+--echo #       connection_control_refuse_connection_period to valid value
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@global.connection_control_refuse_connection_period = 2147483647;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@global.connection_control_refuse_connection_period = DEFAULT;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--echo # 4.4 : Use no_privs@localhost to set
+--echo #       connection_control_refuse_connection_period to invalid value
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@global.connection_control_refuse_connection_period = NULL;
+SELECT @@global.connection_control_refuse_connection_period;
+
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+SET @@global.connection_control_refuse_connection_period = 9223372036854775808;
+SELECT @@global.connection_control_refuse_connection_period;
+
+connection default;
+
+SET @@global.connection_control_refuse_connection_period = @saved_value;
+SELECT @@global.connection_control_refuse_connection_period;
+
+
+--echo #-----------------------------------------------------------------------
 --echo # Cleanup
 disconnect conn_no_privs;
 DROP USER no_privs@localhost;

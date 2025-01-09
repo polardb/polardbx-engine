@@ -66,7 +66,7 @@ Connection_control_delay_generated	2
 Connection_control_delay_generated should be 3
 Variable_name	Value
 Connection_control_delay_generated	3
-SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
 USERHOST	FAILED_ATTEMPTS
 'u1'@'localhost'	4
 'u2'@'localhost'	4
@@ -83,7 +83,7 @@ Connection_control_delay_generated	5
 Connection_control_delay_generated should be 6
 Variable_name	Value
 Connection_control_delay_generated	6
-SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
 USERHOST	FAILED_ATTEMPTS
 'u1'@'localhost'	5
 'u2'@'localhost'	5
