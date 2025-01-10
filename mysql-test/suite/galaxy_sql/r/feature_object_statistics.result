@@ -32,7 +32,8 @@ db_1	t1	303	202	404	200	1	1	0
 db_1	t3	100	100	200	100	0	0	0
 select * from information_schema.index_statistics where table_schema='db_1' order by table_schema, table_name, index_name;
 TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	ROWS_READ	SCAN_USED
-db_1	t1	PRIMARY	303	5
+db_1	t1	col2	200	1
+db_1	t1	PRIMARY	103	4
 db_1	t3	col2	100	1
 select count(*) from performance_schema.memory_summary_global_by_event_name where event_name = 'memory/sql/object_statistics';
 count(*)

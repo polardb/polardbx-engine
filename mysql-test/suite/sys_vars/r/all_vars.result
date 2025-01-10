@@ -189,6 +189,8 @@ disabled_storage_engines
 disabled_storage_engines
 enable_appliedindex_checker
 enable_appliedindex_checker
+enable_binlog_wait_if_full
+enable_binlog_wait_if_full
 enable_changeset
 enable_changeset
 enable_consensus
@@ -219,6 +221,8 @@ group_replication_consistency
 group_replication_consistency
 have_xa_async_commit
 have_xa_async_commit
+have_xa_find_by_xid_with_hint
+have_xa_find_by_xid_with_hint
 have_xa_prepare_with_trx_slot
 have_xa_prepare_with_trx_slot
 hotspot
@@ -406,6 +410,8 @@ master_verify_checksum
 master_verify_checksum
 max_length_for_sort_data
 max_length_for_sort_data
+max_trx_affected_rows
+max_trx_affected_rows
 new_rpc
 new_rpc
 only_report_warning_when_skip_sequence
@@ -698,6 +704,8 @@ slave_transaction_retries
 slave_transaction_retries
 slave_type_conversions
 slave_type_conversions
+slow_query_user_pattern
+slow_query_user_pattern
 sql_require_primary_key
 sql_require_primary_key
 sql_slave_skip_counter

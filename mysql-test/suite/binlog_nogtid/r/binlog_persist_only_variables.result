@@ -47,7 +47,7 @@ INSERT INTO aliases(name) VALUES
 ('slave_parallel_workers'), ('slave_pending_jobs_size_max'),
 ('pseudo_slave_mode'), ('skip_slave_start');
 
-include/assert.inc [Expect 118 variables in the table.]
+include/assert.inc [Expect 119 variables in the table.]
 
 # Test SET PERSIST_ONLY
 SET PERSIST_ONLY binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -80,6 +80,7 @@ SET PERSIST_ONLY binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transa
 SET PERSIST_ONLY consensus_replicate_with_cache_log = @@GLOBAL.consensus_replicate_with_cache_log;
 SET PERSIST_ONLY consensus_safe_for_reset_master = @@GLOBAL.consensus_safe_for_reset_master;
 SET PERSIST_ONLY disable_binlog_savepoint = @@GLOBAL.disable_binlog_savepoint;
+SET PERSIST_ONLY enable_binlog_wait_if_full = @@GLOBAL.enable_binlog_wait_if_full;
 SET PERSIST_ONLY enforce_gtid_consistency = @@GLOBAL.enforce_gtid_consistency;
 SET PERSIST_ONLY group_replication_consistency = @@GLOBAL.group_replication_consistency;
 SET PERSIST_ONLY gtid_executed = @@GLOBAL.gtid_executed;
@@ -266,16 +267,16 @@ SET PERSIST_ONLY sync_relay_log = @@GLOBAL.sync_relay_log;
 SET PERSIST_ONLY sync_relay_log_info = @@GLOBAL.sync_relay_log_info;
 SET PERSIST_ONLY sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 105 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 106 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 105 persisted variables in persisted_variables table.]
-include/assert.inc [Expect 105 persisted variables shown as PERSISTED in variables_info table.]
-include/assert.inc [Expect 105 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 106 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 106 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 106 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST. Verify persisted variable settings
@@ -307,6 +308,7 @@ RESET PERSIST binlog_transaction_dependency_tracking;
 RESET PERSIST consensus_replicate_with_cache_log;
 RESET PERSIST consensus_safe_for_reset_master;
 RESET PERSIST disable_binlog_savepoint;
+RESET PERSIST enable_binlog_wait_if_full;
 RESET PERSIST enforce_gtid_consistency;
 RESET PERSIST group_replication_consistency;
 RESET PERSIST gtid_executed;

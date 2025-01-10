@@ -576,6 +576,9 @@ The following options may be given as the first argument:
  name and library is the plugin library in plugin_dir.
  --enable-appliedindex-checker 
  enable applied index checker during ordered_commit
+ --enable-binlog-wait-if-full 
+ Whether to wait for binlog to be flushed when the disk is
+ full
  --enable-changeset  Whether open the polarx changeset proc
  (Defaults to on; use --skip-enable-changeset to disable.)
  --enable-consensus  enable consensus for xcluster node
@@ -997,6 +1000,9 @@ The following options may be given as the first argument:
  bytes of each value are used; the rest are ignored)
  --max-sp-recursion-depth[=#] 
  Maximum stored procedure recursion depth
+ --max-trx-affected-rows=# 
+ A transaction that affects more than the specified number
+ of rows will report error.
  --max-user-connections=# 
  The maximum number of active connections for a single
  user (0 = no limit)
@@ -1992,6 +1998,8 @@ The following options may be given as the first argument:
  Log slow queries to given log file. Defaults logging to
  hostname-slow.log. Must be enabled to activate other slow
  log options
+ --slow-query-user-pattern[=name] 
+ match user pattern match user pattern
  --socket=name       Socket file to use for connection
  --sort-buffer-size=# 
  Each thread that needs to do a sort allocates a buffer of
@@ -2335,6 +2343,7 @@ disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
 div-precision-increment 4
 enable-appliedindex-checker FALSE
+enable-binlog-wait-if-full FALSE
 enable-changeset TRUE
 enable-consensus TRUE
 enable-implicit-primary-key FALSE
@@ -2463,6 +2472,7 @@ max-relay-log-size 0
 max-seeks-for-key 18446744073709551615
 max-sort-length 1024
 max-sp-recursion-depth 0
+max-trx-affected-rows 0
 max-user-connections 0
 max-write-lock-count 18446744073709551615
 memlock FALSE
@@ -2752,6 +2762,7 @@ slave-transaction-retries 10
 slave-type-conversions 
 slow-launch-time 2
 slow-query-log FALSE
+slow-query-user-pattern 
 sort-buffer-size 262144
 source-verify-checksum FALSE
 sporadic-binlog-dump-fail FALSE
