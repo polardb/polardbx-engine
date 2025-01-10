@@ -348,22 +348,23 @@ static bool invalid_on_consensus_limited(enum_sql_command cmd,
   /* update(2018.01.22): disallow change master */
   /* update(2018.04.10): allow follower install/uninstall/show plugins */
   /* update(2018.11.21): allow follower check table */
-  return (cmd > SQLCOM_SELECT && cmd <= SQLCOM_DROP_INDEX) ||
-         (cmd == SQLCOM_LOAD) || (cmd == SQLCOM_GRANT) ||
-         (cmd == SQLCOM_CHANGE_MASTER) ||
-         (cmd == SQLCOM_RENAME_TABLE) ||
-         (cmd >= SQLCOM_CREATE_DB && cmd < SQLCOM_CHECK) ||
-         (cmd >= SQLCOM_ASSIGN_TO_KEYCACHE && cmd < SQLCOM_FLUSH) ||
-         (cmd >= SQLCOM_DELETE_MULTI && cmd <= SQLCOM_UPDATE_MULTI) ||
-         (cmd >= SQLCOM_CREATE_USER && cmd <= SQLCOM_REVOKE_ALL) ||
-         (cmd >= SQLCOM_CREATE_PROCEDURE && cmd <= SQLCOM_SHOW_STATUS_FUNC) ||
-         (cmd >= SQLCOM_CREATE_VIEW && cmd <= SQLCOM_DROP_TRIGGER) ||
-         (cmd >= SQLCOM_XA_START && cmd <= SQLCOM_XA_ROLLBACK) ||
-         (cmd == SQLCOM_ALTER_TABLESPACE) ||
-         (cmd == SQLCOM_BINLOG_BASE64_EVENT) ||
-         (cmd >= SQLCOM_CREATE_SERVER && cmd <= SQLCOM_DROP_EVENT) ||
-         (cmd >= SQLCOM_GET_DIAGNOSTICS && cmd <= SQLCOM_SHOW_CREATE_USER) ||
-         (cmd == SQLCOM_ALTER_INSTANCE);
+  /* update(2025.03.20): disable start/stop slave on follower */
+  return (cmd > SQLCOM_SELECT && cmd <= SQLCOM_DROP_INDEX) || /* 0-10 */
+         (cmd == SQLCOM_LOAD) || /* 30 */
+         (cmd == SQLCOM_GRANT) || /* 34 */
+         (cmd >= SQLCOM_CREATE_DB && cmd <= SQLCOM_OPTIMIZE) || /* 36-45 */
+         (cmd >= SQLCOM_ASSIGN_TO_KEYCACHE && cmd <= SQLCOM_PRELOAD_KEYS) || /* 47-48 */
+         (cmd >= SQLCOM_SLAVE_START && cmd <= SQLCOM_SLAVE_STOP) || /* 57-58 */
+         (cmd >= SQLCOM_CHANGE_MASTER && cmd <= SQLCOM_RENAME_TABLE) || /* 62-64 */
+         (cmd >= SQLCOM_DELETE_MULTI && cmd <= SQLCOM_UPDATE_MULTI) || /* 74-75 */
+         (cmd >= SQLCOM_CREATE_USER && cmd <= SQLCOM_REVOKE_ALL) || /* 84-87 */
+         (cmd >= SQLCOM_CREATE_PROCEDURE && cmd <= SQLCOM_SHOW_STATUS_FUNC) || /* 89-98 */
+         (cmd >= SQLCOM_CREATE_VIEW && cmd <= SQLCOM_DROP_TRIGGER) || /* 102-110 */
+         (cmd == SQLCOM_ALTER_TABLESPACE) || /* 114 */
+         (cmd == SQLCOM_BINLOG_BASE64_EVENT) || /* 117 */
+         (cmd >= SQLCOM_CREATE_SERVER && cmd <= SQLCOM_DROP_EVENT) || /* 119-124 */
+         (cmd >= SQLCOM_GET_DIAGNOSTICS && cmd <= SQLCOM_SHOW_CREATE_USER) || /* 133-136 */
+         (cmd == SQLCOM_ALTER_INSTANCE); /* 138 */
 }
 
 static bool invalid_on_logger_limited(enum_sql_command cmd) {

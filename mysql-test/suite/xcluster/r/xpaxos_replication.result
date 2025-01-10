@@ -21,9 +21,9 @@ No
 No
 start xpaxos_replication;
 STOP REPLICA for channel '';
-ERROR HY000: Slave channel '' does not exist.
+ERROR HY000: The consensus follower is not allowed to to do current operation.
 stop slave for channel '';
-ERROR HY000: Slave channel '' does not exist.
+ERROR HY000: The consensus follower is not allowed to to do current operation.
 "after start"
 Yes
 Yes
