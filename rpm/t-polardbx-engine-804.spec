@@ -36,6 +36,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 
 %if "%{?dist}" == ".alios7"
+BuildRequires: perl-IPC-Cmd
 BuildRequires: cmake >= 3.8.2, make, autoconf, libstdc++-static, alios7u-2_32-gcc-10-repo
 BuildRequires: gcc >= 10.2.1, gcc-c++ >= 10.2.1, libstdc++-devel >= 10.2.1, binutils >= 2.35
 BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel

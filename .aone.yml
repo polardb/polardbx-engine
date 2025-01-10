@@ -40,8 +40,8 @@ t-polardbx-engine-804:
         x86_64: 1
         aarch64: 1
       el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20250313134418
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20250313134418
   
 t-polardbx-engine-pt-80:
   pkgpara:
