@@ -757,6 +757,7 @@ THD::THD(bool enable_plugins)
   m_catalog.str = "std";
   m_catalog.length = 3;
   password = 0;
+  conn_comment = nullptr;
   query_start_usec_used = false;
   check_for_truncated_fields = CHECK_FIELD_IGNORE;
   killed = NOT_KILLED;
@@ -1538,6 +1539,8 @@ THD::~THD() {
   destroy_hash(seq_thd_hash);
   seq_thd_hash = nullptr;
   delete recycle_state;
+  if (conn_comment != nullptr) my_free(conn_comment);
+  conn_comment = nullptr;
 }
 
 /**

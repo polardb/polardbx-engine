@@ -32,6 +32,7 @@
 #include "sql/package/package_common.h"
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
+#include "sql/package/proc_conn.h"
 #include "sql/recycle_bin/recycle_proc.h"
 #include "sql/sp_head.h"
 #include "sql/trans_proc/implicit_savepoint.h"
@@ -287,6 +288,11 @@ void package_context_init() {
 
   /* dbms_stat.flush_gpp() */
   register_package<Proc, Proc_index_stat_flush_gpp>(PROC_STAT_SCHEMA);
+
+  /* dbms_conn.comment_connection(...) */
+  register_package<Proc, Conn_proc_comment>(PROC_CONN_SCHEMA);
+  /* dbms_conn.show_connection(...) */
+  register_package<Proc, Conn_proc_show>(PROC_CONN_SCHEMA);
 }
 
 } /* namespace im */

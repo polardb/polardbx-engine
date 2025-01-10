@@ -2820,6 +2820,9 @@ class THD : public MDL_context_owner,
 
   uchar password;
 
+  /** The comment of jdbc connection. */
+  char* conn_comment = nullptr;
+
  private:
   /**
     Set to true if execution of the current compound statement

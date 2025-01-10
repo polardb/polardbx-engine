@@ -659,6 +659,7 @@ SET(SQL_SHARED_SOURCES
   trans_proc/returning.cc
   trans_proc/returning_parse.cc
   package/proc_gpp.cc
+  package/proc_conn.cc
   trans_proc/implicit_savepoint.cc
   ccl/ccl_cache.cc
   ccl/ccl.cc
