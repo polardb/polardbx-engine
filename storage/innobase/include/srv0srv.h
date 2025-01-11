@@ -609,6 +609,8 @@ extern bool srv_validate_tablespace_paths;
 extern bool srv_use_fdatasync;
 /** Scan depth for LRU flush batch i.e.: number of blocks scanned*/
 extern ulong srv_LRU_scan_depth;
+/** Scan depth for LRU when try to get free page. */
+extern ulong srv_LRU_get_free_scan_depth;
 /** Whether or not to flush neighbors of a block */
 extern ulong srv_flush_neighbors;
 /** Previously requested size. Accesses protected by memory barriers. */

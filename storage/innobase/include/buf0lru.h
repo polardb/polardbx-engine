@@ -43,6 +43,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 // Forward declaration
 struct trx_t;
 
+/** We scan these many blocks when looking for a clean page to evict
+during LRU eviction. */
+constexpr ulint BUF_LRU_SEARCH_SCAN_THRESHOLD = 100;
+
 /** Returns true if less than 25 % of the buffer pool is available. This can be
  used in heuristics to prevent huge transactions eating up the whole buffer
  pool for their locks.

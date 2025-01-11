@@ -213,6 +213,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "srv0file.h"
 
+#include "buf0lru.h"  // srv_LRU_get_free_scan_depth
+
 #include "lizard0cleanout.h"
 #include "lizard0cleanout0safe.h"
 #include "lizard0dict.h"
@@ -22844,6 +22846,12 @@ static MYSQL_SYSVAR_ULONG(lru_scan_depth, srv_LRU_scan_depth,
                           "How deep to scan LRU to keep it clean", nullptr,
                           nullptr, 1024, 100, ~0UL, 0);
 
+static MYSQL_SYSVAR_ULONG(lru_get_free_scan_depth, srv_LRU_get_free_scan_depth,
+                          PLUGIN_VAR_RQCMDARG,
+                          "How deep to scan LRU when trying to get free page",
+                          nullptr, nullptr, BUF_LRU_SEARCH_SCAN_THRESHOLD, 100,
+                          ~0UL, 0);
+
 static MYSQL_SYSVAR_ULONG(flush_neighbors, srv_flush_neighbors,
                           PLUGIN_VAR_OPCMDARG,
                           "Set to 0 (don't flush neighbors from buffer pool),"
@@ -23882,6 +23890,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(buffer_pool_load_abort),
     MYSQL_SYSVAR(buffer_pool_load_at_startup),
     MYSQL_SYSVAR(lru_scan_depth),
+    MYSQL_SYSVAR(lru_get_free_scan_depth),
     MYSQL_SYSVAR(flush_neighbors),
     MYSQL_SYSVAR(checksum_algorithm),
     MYSQL_SYSVAR(log_checksums),
