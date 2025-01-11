@@ -260,7 +260,6 @@ extern int (*is_killed_hook)(const void *opaque_thd);
 /* charsets */
 #define MY_ALL_CHARSETS_SIZE 2048
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *default_charset_info;
-extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *default_collation_for_utf8mb4_var;
 extern MYSQL_PLUGIN_IMPORT CHARSET_INFO *all_charsets[MY_ALL_CHARSETS_SIZE];
 extern CHARSET_INFO compiled_charsets[];
 

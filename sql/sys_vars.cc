@@ -7262,7 +7262,7 @@ static bool check_default_collation_for_utf8mb4(sys_var *self, THD *thd,
   }
 
   if (!var->value)
-    var->save_result.ptr = reinterpret_cast<void *>(default_collation_for_utf8mb4_var);
+    var->save_result.ptr = reinterpret_cast<void *>(self->get_default());
 
   auto cs = static_cast<const CHARSET_INFO *>(var->save_result.ptr);
   if (cs == &my_charset_utf8mb4_0900_ai_ci ||
@@ -7278,7 +7278,7 @@ static Sys_var_struct<CHARSET_INFO, Get_name> Sys_default_collation_for_utf8mb4(
     "Controls default collation for utf8mb4 while replicating implicit "
     "utf8mb4 collations.",
     SESSION_VAR(default_collation_for_utf8mb4), NO_CMD_LINE,
-    DEFAULT(&default_collation_for_utf8mb4_var), NO_MUTEX_GUARD, IN_BINLOG,
+    DEFAULT(&my_charset_utf8mb4_0900_ai_ci), NO_MUTEX_GUARD, IN_BINLOG,
     ON_CHECK(check_default_collation_for_utf8mb4),
     ON_UPDATE(update_deprecated));
 

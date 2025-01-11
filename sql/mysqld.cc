@@ -1198,7 +1198,6 @@ char *my_admin_bind_addr_str;
 uint mysqld_admin_port;
 bool listen_admin_interface_in_separate_thread;
 static const char *default_collation_name;
-static const char *default_collation_for_utf8mb4_name = nullptr;
 const char *default_storage_engine;
 const char *default_tmp_storage_engine;
 ulonglong temptable_max_ram;
@@ -5259,31 +5258,11 @@ int init_common_variables() {
                                  "--collation-server");
     default_charset_info = default_collation;
   }
-
-  if (default_collation_for_utf8mb4_name) {
-    CHARSET_INFO *default_collation;
-    default_collation = get_charset_by_name(default_collation_for_utf8mb4_name, MYF(0));
-    if (!default_collation) {
-      LogErr(ERROR_LEVEL, ER_FAILED_TO_FIND_COLLATION_NAME,
-             default_collation_name);
-      return 1;
-    }
-
-    if (default_collation != &my_charset_utf8mb4_0900_ai_ci &&
-        default_collation != &my_charset_utf8mb4_general_ci) {
-      my_error(ER_INVALID_DEFAULT_UTF8MB4_COLLATION, MYF(0), default_collation->m_coll_name);
-      LogErr(ERROR_LEVEL, ER_INVALID_DEFAULT_UTF8MB4_COLLATION,
-             default_collation->m_coll_name);
-      return 1;
-    }
-    default_collation_for_utf8mb4_var = default_collation;
-  }
-
   /* Set collactions that depends on the default collation */
   global_system_variables.collation_server = default_charset_info;
   global_system_variables.collation_database = default_charset_info;
   global_system_variables.default_collation_for_utf8mb4 =
-      default_collation_for_utf8mb4_var;
+      &my_charset_utf8mb4_0900_ai_ci;
 
   if (is_supported_parser_charset(default_charset_info)) {
     global_system_variables.collation_connection = default_charset_info;
@@ -9283,10 +9262,6 @@ struct my_option my_long_options[] = {
      nullptr},
     {"core-file", OPT_WANT_CORE, "Write core on errors.", nullptr, nullptr,
      nullptr, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"default-collation-for-utf8mb4", 0,
-     "Controls default collation for utf8mb4 while replicating implicit utf8mb4 collations.",
-     &default_collation_for_utf8mb4_name, &default_collation_for_utf8mb4_name, nullptr, GET_STR,
-     REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     /* default-storage-engine should have "MyISAM" as def_value. Instead
        of initializing it here it is done in init_common_variables() due
        to a compiler bug in Sun Studio compiler. */

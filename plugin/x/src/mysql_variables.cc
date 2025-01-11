@@ -36,7 +36,7 @@ bool get_initialize() { return opt_initialize; }
 const char *get_my_localhost() { return my_localhost; }
 
 const CHARSET_INFO *get_default_charset() {
-  return default_collation_for_utf8mb4_var;
+  return &my_charset_utf8mb4_0900_ai_ci;
 }
 
 }  // namespace mysqld
