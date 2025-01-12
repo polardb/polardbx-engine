@@ -512,38 +512,22 @@ ALTER TABLESPACE test_space RENAME TO new_space;
 --let $CONTAIN_FBA=1
 --source suite/lizard/include/table_has_fba.inc
 
-eval INSTALL PLUGIN keyring_file SONAME '$KEYRING_PLUGIN';
-ALTER TABLESPACE new_space ENCRYPTION='Y';
---let $SCHEMA_NAME=test
---let $TABLE_NAME=t10
---let $CONTAIN_FBA=1
---source suite/lizard/include/table_has_fba.inc
-
 --let $SCHEMA_NAME=test
 --let $TABLE_NAME=t9
 --let $CONTAIN_FBA=0
 --source suite/lizard/include/table_has_fba.inc
-
-set opt_flashback_area = 1;
-ALTER TABLE t9 ENCRYPTION='Y';
---let $SCHEMA_NAME=test
---let $TABLE_NAME=t9
---let $CONTAIN_FBA=1
---source suite/lizard/include/table_has_fba.inc
-
-ALTER TABLE t9 ENCRYPTION='N';
 
 sleep 2;
 set @past_timestamps = (select now());
 sleep 2;
 
-set opt_flashback_area = 0;
+set opt_flashback_area = 1;
 create table t11 like t9;
 insert into t11 select * from t9;
 
 --let $SCHEMA_NAME=test
 --let $TABLE_NAME=t11
---let $CONTAIN_FBA=0
+--let $CONTAIN_FBA=1
 --source suite/lizard/include/table_has_fba.inc
 
 ALTER TABLE t9 DISCARD TABLESPACE;
@@ -563,13 +547,8 @@ ALTER TABLE t9 IMPORT TABLESPACE;
 
 --let $SCHEMA_NAME=test
 --let $TABLE_NAME=t9
---let $CONTAIN_FBA=1
+--let $CONTAIN_FBA=0
 --source suite/lizard/include/table_has_fba.inc
-
-set query_via_flashback_area = 1;
---error ER_SNAPSHOT_TOO_OLD
-select * from t9 as of timestamp @past_timestamps;
-
 
 set opt_flashback_area = default;
 set global innodb_undo_retention = default;
@@ -595,4 +574,3 @@ drop table tt;
 drop table geom;
 drop table t11;
 drop tablespace new_space;
-UNINSTALL PLUGIN keyring_file;

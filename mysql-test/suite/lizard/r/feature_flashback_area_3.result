@@ -251,7 +251,7 @@ ALTER TABLE t1 IMPORT PARTITION p1 TABLESPACE;
 include/assert.inc [The options for test.t1. should match the expected FBA=1 condition]
 set query_via_flashback_area = 1;
 select * from t1 as of timestamp @past_timestamps;
-ERROR HY000: Snapshot too old
+c1	c2
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 Variable_name	Value
 Lizard_flashback_area_query_cnt	32

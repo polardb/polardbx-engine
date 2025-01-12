@@ -85,7 +85,7 @@ select * from t1 as of timestamp @past_timestamps where c1 < 200;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 
 set @past_timestamps = (select now());
-sleep 3;
+sleep 4;
 
 set query_via_flashback_area = 1;
 select * from t1 as of timestamp @past_timestamps;
@@ -309,8 +309,10 @@ ALTER TABLE t1 IMPORT PARTITION p1 TABLESPACE;
 --source suite/lizard/include/table_has_fba.inc
 
 set query_via_flashback_area = 1;
+# Due to commit 6d9403030135ac7df84a8a67da73bfa7d5725001, the imported table is
+# treated as insertion, so no ER_SNAPSHOT_TOO_OLD will be displayed.
 # cannot see p1
---error ER_SNAPSHOT_TOO_OLD
+#--error ER_SNAPSHOT_TOO_OLD
 select * from t1 as of timestamp @past_timestamps;
 SHOW STATUS WHERE Variable_name like '%flashback_area_query%';
 

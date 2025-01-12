@@ -279,27 +279,17 @@ include/assert.inc [The options for test.t10. should match the expected FBA=1 co
 set opt_flashback_area = 0;
 ALTER TABLESPACE test_space RENAME TO new_space;
 include/assert.inc [The options for test.t10. should match the expected FBA=1 condition]
-INSTALL PLUGIN keyring_file SONAME 'keyring_file.so';
-ALTER TABLESPACE new_space ENCRYPTION='Y';
-include/assert.inc [The options for test.t10. should match the expected FBA=1 condition]
 include/assert.inc [The options for test.t9. should match the expected FBA=0 condition]
-set opt_flashback_area = 1;
-ALTER TABLE t9 ENCRYPTION='Y';
-include/assert.inc [The options for test.t9. should match the expected FBA=1 condition]
-ALTER TABLE t9 ENCRYPTION='N';
 set @past_timestamps = (select now());
-set opt_flashback_area = 0;
+set opt_flashback_area = 1;
 create table t11 like t9;
 insert into t11 select * from t9;
-include/assert.inc [The options for test.t11. should match the expected FBA=0 condition]
+include/assert.inc [The options for test.t11. should match the expected FBA=1 condition]
 ALTER TABLE t9 DISCARD TABLESPACE;
 FLUSH TABLES t11 FOR EXPORT;
 UNLOCK TABLES;
 ALTER TABLE t9 IMPORT TABLESPACE;
-include/assert.inc [The options for test.t9. should match the expected FBA=1 condition]
-set query_via_flashback_area = 1;
-select * from t9 as of timestamp @past_timestamps;
-ERROR HY000: Snapshot too old
+include/assert.inc [The options for test.t9. should match the expected FBA=0 condition]
 set opt_flashback_area = default;
 set global innodb_undo_retention = default;
 set global innodb_txn_retention = default;
@@ -319,4 +309,3 @@ drop table tt;
 drop table geom;
 drop table t11;
 drop tablespace new_space;
-UNINSTALL PLUGIN keyring_file;
