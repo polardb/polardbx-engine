@@ -20,17 +20,10 @@ set(CONSENSUS_SRC
   service/service.cc
   )
 
-if (WITH_TESTS)
-  list(APPEND CONSENSUS_SRC log/rd_paxos_log.cc)
-endif ()
-
 # build aliconsensus
 add_library(aliconsensus STATIC ${CONSENSUS_SRC})
 add_library(aliconsensus_no_easy STATIC ${CONSENSUS_SRC})
 list(APPEND ALICONSENSUS_LIBS libprotobuf-lite snappy z bz2 lz4 rt)
-if (WITH_TESTS)
-  list(APPEND ALICONSENSUS_LIBS ${ROCKSDB_OUTPUT} rocksdb)
-endif ()
 target_link_libraries(aliconsensus PRIVATE ${ALICONSENSUS_LIBS})
 target_link_libraries(aliconsensus_no_easy PRIVATE ${ALICONSENSUS_LIBS})
 target_link_libraries(aliconsensus_no_easy PRIVATE mysqlclient)

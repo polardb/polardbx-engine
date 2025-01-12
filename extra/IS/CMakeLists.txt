@@ -2,10 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 
 project(consensus VERSION 1.0.0)
 
-option(WITH_TESTS "build test" OFF)
-
 include(cmake/protobuf.cmake)
-include(cmake/rocksdb.cmake)
 include(cmake/easy.cmake)
 include(cmake/mysql.cmake)
 
@@ -38,13 +35,7 @@ endif()
 
 # prepare environment
 set(DEPENDENCY_PATH ${CMAKE_CURRENT_SOURCE_DIR}/dependency)
-if (WITH_TESTS)
-  IMPORT_ROCKSDB()
-endif ()
 IMPORT_EASY()
 IMPORT_MYSQL()
 
 add_subdirectory(src)
-if (WITH_TESTS)
-  add_subdirectory(unittest)
-endif ()

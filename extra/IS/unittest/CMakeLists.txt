@@ -36,7 +36,6 @@ set(UT_LIBS
   gtest
   gtest_main
   mysqlclient
-  rocksdb
   aliconsensus_no_easy
   myeasy_internal
   )
