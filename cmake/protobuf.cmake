@@ -29,7 +29,7 @@
 #  Other values will be ignored, and we fall back to "bundled"
 #
 
-# Bundled version is currently 3.19.4
+# Bundled version is currently 24.4
 # Lowest checked system version is 3.5.0 on Oracle Linux 8.
 # Older versions may generate code which breaks the -Werror build.
 SET(MIN_PROTOBUF_VERSION_REQUIRED "3.5.0")
@@ -77,7 +77,7 @@ MACRO(COULD_NOT_FIND_PROTOBUF)
     )
 ENDMACRO()
 
-SET(BUNDLED_PROTO_SRCDIR ${CMAKE_SOURCE_DIR}/extra/protobuf/protobuf-3.19.4/src)
+SET(BUNDLED_PROTO_SRCDIR ${CMAKE_SOURCE_DIR}/extra/protobuf/protobuf-24.4/src)
 
 MACRO(MYSQL_USE_BUNDLED_PROTOBUF)
   SET(WITH_PROTOBUF "bundled" CACHE STRING

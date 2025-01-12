@@ -20,10 +20,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-# The files in protobuf-3.19.4/ are almost unmodified versions of google
-# source files taken from protobuf-cpp-3.19.4.tar.gz archive.
+# The files in protobuf-24.4/ are almost unmodified versions of google
+# source files taken from protobuf-cpp-24.4.tar.gz archive.
 
-# libprotobuf-lite.so.3.19.4: cannot allocate memory in static TLS block
+# libprotobuf-lite.so.24.4: cannot allocate memory in static TLS block
 IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   STRING(REPLACE
     "-ftls-model=initial-exec" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -99,4 +99,4 @@ ENDIF()
 SET(protobuf_MSVC_STATIC_RUNTIME OFF CACHE INTERNAL "")
 SET(protobuf_WITH_ZLIB ON CACHE INTERNAL "")
 SET(ZLIB_LIBRARIES ${ZLIB_LIBRARY})
-ADD_SUBDIRECTORY(protobuf-3.19.4/cmake)
+ADD_SUBDIRECTORY(protobuf-24.4/cmake)
