@@ -157,7 +157,7 @@ class Cserver final {
     } else {
       std::lock_guard<std::mutex> plugin_lck(plugin_info.mutex);
       if (plugin_info.plugin_info != nullptr)
-        my_plugin_log_message(&plugin_info.plugin_info, MY_ERROR_LEVEL,
+        my_plugin_log_message(&plugin_info.plugin_info, MY_WARNING_LEVEL,
                               "PolarX RPC disabled.");
     }
   }

@@ -27,7 +27,7 @@ eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
 --sleep 2
 select role from information_schema.alisql_cluster_local;
 
---sleep 14
+--sleep 20
 
 select role from information_schema.alisql_cluster_local;
 

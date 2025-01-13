@@ -78,9 +78,9 @@ let $DATADIR = $old_datadir/data;
 --source include/wait_until_disconnected.inc
 
 --echo # restart 1
-let NEW_CMD = $MYSQLD --datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term </dev/null>>$MYSQLTEST_VARDIR/tmp/force-change-meta.log 2>&1;
---error 0
---exec $NEW_CMD
+--exec echo "restart:--datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term  --log_error=$MYSQLTEST_VARDIR/tmp/force-change-meta.log " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--enable_reconnect
+--sleep 10
 
 
 --echo # restart 2

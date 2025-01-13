@@ -28,7 +28,7 @@ xa commit 'x1';
 xa start 'x1'; 
 delete from  d1.t0 where c1=3;
 xa end 'x1';
---error 7576
+--error ER_EMPTY_XA_NOT_ALLOWED
 xa prepare 'x1';
 xa recover;
 --error 1399
@@ -41,7 +41,7 @@ xa commit 'x1';
 xa start 'x1'; 
 select * from d1.t0;
 xa end 'x1';
---error 7576
+--error ER_EMPTY_XA_NOT_ALLOWED
 xa prepare 'x1';
 xa recover;
 --error 1399
@@ -53,7 +53,7 @@ xa commit 'x1';
 --connection con1
 xa start 'x1'; 
 xa end 'x1';
---error 7576
+--error ER_EMPTY_XA_NOT_ALLOWED
 xa prepare 'x1';
 xa recover;
 xa rollback 'x1';

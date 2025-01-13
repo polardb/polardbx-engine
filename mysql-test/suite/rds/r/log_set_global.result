@@ -5,30 +5,14 @@ Note	####	Storing MySQL user name or password information in the master info rep
 [connection master]
 set global binlog_cache_size=1024*1024;
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 set global binlog_cache_size=1024*512;
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 set global binlog_cache_size=1024*1024;
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 set global binlog_cache_size=default;
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
@@ -37,30 +21,16 @@ stop slave;
 Warnings:
 Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
 [Diagnose] user:root host:localhost sql:stop slave.
-[Diagnose] user:root host:localhost sql:stop slave.
 start slave;
 Warnings:
 Warning	1287	'START SLAVE' is deprecated and will be removed in a future release. Please use START REPLICA instead
 [Diagnose] user:root host:localhost sql:start slave.
-[Diagnose] user:root host:localhost sql:start slave.
 set global binlog_cache_size=1024*1024;
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 set global binlog_cache_size=1024*512;
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 set global binlog_cache_size=1024*1024;
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
@@ -69,12 +39,6 @@ set global binlog_cache_size=default;
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
-[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
 reset master;
-[Diagnose] user:root host:localhost sql:reset master.
-[Diagnose] user:root host:localhost sql:reset master.
 [Diagnose] user:root host:localhost sql:reset master.
 include/rpl_end.inc

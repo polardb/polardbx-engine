@@ -1,11 +1,12 @@
 
 --source include/master-slave.inc
  
-#connection slave
 connection slave;
  
-set global binlog_cache_size=1024*1024;
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
+--exec echo '' > $MYSQLD_DATADIR/../../log/mysqld.2.err
+
+set global binlog_cache_size=1024*1024;
 --exec grep 'set global binlog_cache_size' $MYSQLD_DATADIR/../../log/mysqld.2.err | sed 's/^\(.*\)\(\[.*\)/\2/'
  
 set global binlog_cache_size=1024*512;
@@ -26,9 +27,11 @@ start slave;
 #connection master
 connection master;
 let @binlog_cache_size = @@global.binlog_cache_size;
- 
-set global binlog_cache_size=1024*1024;
+
 let $MYSQLD_DATADIR= `SELECT @@datadir`;
+--exec echo '' > $MYSQLD_DATADIR/../../log/mysqld.1.err
+
+set global binlog_cache_size=1024*1024;
 --exec grep 'set global binlog_cache_size' $MYSQLD_DATADIR/../../log/mysqld.1.err | sed 's/^\(.*\)\(\[.*\)/\2/'
  
 set global binlog_cache_size=1024*512;

@@ -359,7 +359,7 @@ static bool invalid_on_consensus_limited(enum_sql_command cmd,
          (cmd >= SQLCOM_DELETE_MULTI && cmd <= SQLCOM_UPDATE_MULTI) || /* 74-75 */
          (cmd >= SQLCOM_CREATE_USER && cmd <= SQLCOM_REVOKE_ALL) || /* 84-87 */
          (cmd >= SQLCOM_CREATE_PROCEDURE && cmd <= SQLCOM_SHOW_STATUS_FUNC) || /* 89-98 */
-         (cmd >= SQLCOM_CREATE_VIEW && cmd <= SQLCOM_DROP_TRIGGER) || /* 102-110 */
+         (cmd >= SQLCOM_CREATE_VIEW && cmd <= SQLCOM_XA_ROLLBACK) || /* 102-110 */
          (cmd == SQLCOM_ALTER_TABLESPACE) || /* 114 */
          (cmd == SQLCOM_BINLOG_BASE64_EVENT) || /* 117 */
          (cmd >= SQLCOM_CREATE_SERVER && cmd <= SQLCOM_DROP_EVENT) || /* 119-124 */
