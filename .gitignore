@@ -549,3 +549,6 @@ extra/jemalloc/jemalloc-update
 extra/jemalloc/jemalloc-*info.txt
 router/tests/data/
 *.gcov
+.idea
+cmake-build-debug*/
+cmake-build*/
