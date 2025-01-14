@@ -470,6 +470,11 @@ The following options may be given as the first argument:
  --consensus-send-timeout=# 
  Consensus send packet timeout, zero means use
  @@consensus_heartbeat_interval
+ --consensus-server-ip[=name] 
+ client connect ipv4 or ipv6 string for current node,
+ ipv4/ipv6
+ --consensus-server-port[=#] 
+ client connect port for current node
  --consensus-stop-apply-index[=#] 
  member stop apply index
  --consensus-sync-follower-meta-interva[=#] 
@@ -2307,6 +2312,8 @@ consensus-replicate-with-cache-log FALSE
 consensus-reset-mts-info FALSE
 consensus-safe-for-reset-master FALSE
 consensus-send-timeout 0
+consensus-server-ip (No default value)
+consensus-server-port 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
 consensus-vote-backoff-timeout 1000

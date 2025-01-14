@@ -127,6 +127,7 @@ constexpr PaxosMsg::PaxosMsg(
   , cientries_()
   , addr_(&::PROTOBUF_NAMESPACE_ID::internal::fixed_address_empty_string)
   , extra_(&::PROTOBUF_NAMESPACE_ID::internal::fixed_address_empty_string)
+  , serverip_(&::PROTOBUF_NAMESPACE_ID::internal::fixed_address_empty_string)
   , compressedentries_(nullptr)
   , configid_(uint64_t{0u})
   , clusterid_(uint64_t{0u})
@@ -155,6 +156,7 @@ constexpr PaxosMsg::PaxosMsg(
 
   , myserverid_(uint64_t{0u})
   , applydelayseconds_(uint64_t{0u})
+  , serverport_(uint64_t{0u})
   , applythreadrunning_(false)
   , disableelection_(false)
   , loginstance_(false){}
@@ -2642,104 +2644,110 @@ class PaxosMsg::_Internal {
  public:
   using HasBits = decltype(std::declval<PaxosMsg>()._has_bits_);
   static void set_has_configid(HasBits* has_bits) {
-    (*has_bits)[0] |= 8u;
-  }
-  static void set_has_clusterid(HasBits* has_bits) {
     (*has_bits)[0] |= 16u;
   }
-  static void set_has_serverid(HasBits* has_bits) {
+  static void set_has_clusterid(HasBits* has_bits) {
     (*has_bits)[0] |= 32u;
   }
-  static void set_has_msgtype(HasBits* has_bits) {
-    (*has_bits)[0] |= 4096u;
-  }
-  static void set_has_term(HasBits* has_bits) {
+  static void set_has_serverid(HasBits* has_bits) {
     (*has_bits)[0] |= 64u;
   }
-  static void set_has_msgid(HasBits* has_bits) {
-    (*has_bits)[0] |= 128u;
-  }
-  static void set_has_leaderid(HasBits* has_bits) {
-    (*has_bits)[0] |= 256u;
-  }
-  static void set_has_prevlogindex(HasBits* has_bits) {
-    (*has_bits)[0] |= 512u;
-  }
-  static void set_has_prevlogterm(HasBits* has_bits) {
-    (*has_bits)[0] |= 1024u;
-  }
-  static void set_has_commitindex(HasBits* has_bits) {
-    (*has_bits)[0] |= 2048u;
-  }
-  static void set_has_nocache(HasBits* has_bits) {
+  static void set_has_msgtype(HasBits* has_bits) {
     (*has_bits)[0] |= 8192u;
   }
-  static void set_has_issuccess(HasBits* has_bits) {
+  static void set_has_term(HasBits* has_bits) {
+    (*has_bits)[0] |= 128u;
+  }
+  static void set_has_msgid(HasBits* has_bits) {
+    (*has_bits)[0] |= 256u;
+  }
+  static void set_has_leaderid(HasBits* has_bits) {
+    (*has_bits)[0] |= 512u;
+  }
+  static void set_has_prevlogindex(HasBits* has_bits) {
+    (*has_bits)[0] |= 1024u;
+  }
+  static void set_has_prevlogterm(HasBits* has_bits) {
+    (*has_bits)[0] |= 2048u;
+  }
+  static void set_has_commitindex(HasBits* has_bits) {
+    (*has_bits)[0] |= 4096u;
+  }
+  static void set_has_nocache(HasBits* has_bits) {
     (*has_bits)[0] |= 16384u;
   }
-  static void set_has_candidateid(HasBits* has_bits) {
-    (*has_bits)[0] |= 131072u;
+  static void set_has_issuccess(HasBits* has_bits) {
+    (*has_bits)[0] |= 32768u;
   }
-  static void set_has_lastlogindex(HasBits* has_bits) {
+  static void set_has_candidateid(HasBits* has_bits) {
     (*has_bits)[0] |= 262144u;
   }
-  static void set_has_lastlogterm(HasBits* has_bits) {
+  static void set_has_lastlogindex(HasBits* has_bits) {
     (*has_bits)[0] |= 524288u;
   }
-  static void set_has_force(HasBits* has_bits) {
+  static void set_has_lastlogterm(HasBits* has_bits) {
     (*has_bits)[0] |= 1048576u;
+  }
+  static void set_has_force(HasBits* has_bits) {
+    (*has_bits)[0] |= 2097152u;
   }
   static void set_has_addr(HasBits* has_bits) {
     (*has_bits)[0] |= 1u;
   }
   static void set_has_votegranted(HasBits* has_bits) {
-    (*has_bits)[0] |= 32768u;
-  }
-  static void set_has_ignorecheck(HasBits* has_bits) {
     (*has_bits)[0] |= 65536u;
   }
-  static void set_has_lctype(HasBits* has_bits) {
-    (*has_bits)[0] |= 2097152u;
+  static void set_has_ignorecheck(HasBits* has_bits) {
+    (*has_bits)[0] |= 131072u;
   }
-  static void set_has_minmatchindex(HasBits* has_bits) {
+  static void set_has_lctype(HasBits* has_bits) {
     (*has_bits)[0] |= 4194304u;
   }
-  static void set_has_appliedindex(HasBits* has_bits) {
+  static void set_has_minmatchindex(HasBits* has_bits) {
     (*has_bits)[0] |= 8388608u;
   }
-  static void set_has_newclusterid(HasBits* has_bits) {
+  static void set_has_appliedindex(HasBits* has_bits) {
     (*has_bits)[0] |= 16777216u;
   }
-  static void set_has_role(HasBits* has_bits) {
+  static void set_has_newclusterid(HasBits* has_bits) {
     (*has_bits)[0] |= 33554432u;
+  }
+  static void set_has_role(HasBits* has_bits) {
+    (*has_bits)[0] |= 67108864u;
   }
   static const ::alisql::CompressedLogEntries& compressedentries(const PaxosMsg* msg);
   static void set_has_compressedentries(HasBits* has_bits) {
-    (*has_bits)[0] |= 4u;
+    (*has_bits)[0] |= 8u;
   }
   static void set_has_extra(HasBits* has_bits) {
     (*has_bits)[0] |= 2u;
   }
   static void set_has_msgerror(HasBits* has_bits) {
-    (*has_bits)[0] |= 67108864u;
-  }
-  static void set_has_myserverid(HasBits* has_bits) {
     (*has_bits)[0] |= 134217728u;
   }
-  static void set_has_applydelayseconds(HasBits* has_bits) {
+  static void set_has_myserverid(HasBits* has_bits) {
     (*has_bits)[0] |= 268435456u;
   }
-  static void set_has_applythreadrunning(HasBits* has_bits) {
+  static void set_has_applydelayseconds(HasBits* has_bits) {
     (*has_bits)[0] |= 536870912u;
   }
-  static void set_has_disableelection(HasBits* has_bits) {
-    (*has_bits)[0] |= 1073741824u;
-  }
-  static void set_has_loginstance(HasBits* has_bits) {
+  static void set_has_applythreadrunning(HasBits* has_bits) {
     (*has_bits)[0] |= 2147483648u;
   }
+  static void set_has_disableelection(HasBits* has_bits) {
+    (*has_bits)[1] |= 1u;
+  }
+  static void set_has_loginstance(HasBits* has_bits) {
+    (*has_bits)[1] |= 2u;
+  }
+  static void set_has_serverip(HasBits* has_bits) {
+    (*has_bits)[0] |= 4u;
+  }
+  static void set_has_serverport(HasBits* has_bits) {
+    (*has_bits)[0] |= 1073741824u;
+  }
   static bool MissingRequiredFields(const HasBits& has_bits) {
-    return ((has_bits[0] & 0x000010f0) ^ 0x000010f0) != 0;
+    return ((has_bits[0] & 0x000021e0) ^ 0x000021e0) != 0;
   }
 };
 
@@ -2780,6 +2788,14 @@ PaxosMsg::PaxosMsg(const PaxosMsg& from)
     extra_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_extra(), 
       GetArenaForAllocation());
   }
+  serverip_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    serverip_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (from._internal_has_serverip()) {
+    serverip_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_serverip(), 
+      GetArenaForAllocation());
+  }
   if (from._internal_has_compressedentries()) {
     compressedentries_ = new ::alisql::CompressedLogEntries(*from.compressedentries_);
   } else {
@@ -2800,6 +2816,10 @@ extra_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlread
 #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
   extra_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+serverip_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  serverip_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&compressedentries_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&loginstance_) -
@@ -2817,6 +2837,7 @@ inline void PaxosMsg::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
   addr_.DestroyNoArena(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   extra_.DestroyNoArena(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  serverip_.DestroyNoArena(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
   if (this != internal_default_instance()) delete compressedentries_;
 }
 
@@ -2839,7 +2860,7 @@ void PaxosMsg::Clear() {
   entries_.Clear();
   cientries_.Clear();
   cached_has_bits = _has_bits_[0];
-  if (cached_has_bits & 0x00000007u) {
+  if (cached_has_bits & 0x0000000fu) {
     if (cached_has_bits & 0x00000001u) {
       addr_.ClearNonDefaultToEmpty();
     }
@@ -2847,29 +2868,38 @@ void PaxosMsg::Clear() {
       extra_.ClearNonDefaultToEmpty();
     }
     if (cached_has_bits & 0x00000004u) {
+      serverip_.ClearNonDefaultToEmpty();
+    }
+    if (cached_has_bits & 0x00000008u) {
       GOOGLE_DCHECK(compressedentries_ != nullptr);
       compressedentries_->Clear();
     }
   }
-  if (cached_has_bits & 0x000000f8u) {
+  if (cached_has_bits & 0x000000f0u) {
     ::memset(&configid_, 0, static_cast<size_t>(
-        reinterpret_cast<char*>(&msgid_) -
-        reinterpret_cast<char*>(&configid_)) + sizeof(msgid_));
+        reinterpret_cast<char*>(&term_) -
+        reinterpret_cast<char*>(&configid_)) + sizeof(term_));
   }
   if (cached_has_bits & 0x0000ff00u) {
-    ::memset(&leaderid_, 0, static_cast<size_t>(
-        reinterpret_cast<char*>(&votegranted_) -
-        reinterpret_cast<char*>(&leaderid_)) + sizeof(votegranted_));
+    ::memset(&msgid_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&issuccess_) -
+        reinterpret_cast<char*>(&msgid_)) + sizeof(issuccess_));
   }
   if (cached_has_bits & 0x00ff0000u) {
-    ::memset(&ignorecheck_, 0, static_cast<size_t>(
-        reinterpret_cast<char*>(&appliedindex_) -
-        reinterpret_cast<char*>(&ignorecheck_)) + sizeof(appliedindex_));
+    ::memset(&votegranted_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&minmatchindex_) -
+        reinterpret_cast<char*>(&votegranted_)) + sizeof(minmatchindex_));
   }
   if (cached_has_bits & 0xff000000u) {
-    ::memset(&newclusterid_, 0, static_cast<size_t>(
+    ::memset(&appliedindex_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&applythreadrunning_) -
+        reinterpret_cast<char*>(&appliedindex_)) + sizeof(applythreadrunning_));
+  }
+  cached_has_bits = _has_bits_[1];
+  if (cached_has_bits & 0x00000003u) {
+    ::memset(&disableelection_, 0, static_cast<size_t>(
         reinterpret_cast<char*>(&loginstance_) -
-        reinterpret_cast<char*>(&newclusterid_)) + sizeof(loginstance_));
+        reinterpret_cast<char*>(&disableelection_)) + sizeof(loginstance_));
   }
   _has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
@@ -2877,7 +2907,6 @@ void PaxosMsg::Clear() {
 
 const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
 #define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
-  _Internal::HasBits has_bits{};
   while (!ctx->Done(&ptr)) {
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
@@ -2885,7 +2914,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 configId = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _Internal::set_has_configid(&has_bits);
+          _Internal::set_has_configid(&_has_bits_);
           configid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2894,7 +2923,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // required uint64 clusterId = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _Internal::set_has_clusterid(&has_bits);
+          _Internal::set_has_clusterid(&_has_bits_);
           clusterid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2903,7 +2932,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // required uint64 serverId = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
-          _Internal::set_has_serverid(&has_bits);
+          _Internal::set_has_serverid(&_has_bits_);
           serverid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2912,7 +2941,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // required int32 msgType = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
-          _Internal::set_has_msgtype(&has_bits);
+          _Internal::set_has_msgtype(&_has_bits_);
           msgtype_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
         } else
@@ -2921,7 +2950,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // required uint64 term = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
-          _Internal::set_has_term(&has_bits);
+          _Internal::set_has_term(&_has_bits_);
           term_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2930,7 +2959,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // required uint64 msgId = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
-          _Internal::set_has_msgid(&has_bits);
+          _Internal::set_has_msgid(&_has_bits_);
           msgid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2939,7 +2968,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 leaderId = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
-          _Internal::set_has_leaderid(&has_bits);
+          _Internal::set_has_leaderid(&_has_bits_);
           leaderid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2948,7 +2977,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 prevLogIndex = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
-          _Internal::set_has_prevlogindex(&has_bits);
+          _Internal::set_has_prevlogindex(&_has_bits_);
           prevlogindex_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2957,7 +2986,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 prevLogTerm = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 72)) {
-          _Internal::set_has_prevlogterm(&has_bits);
+          _Internal::set_has_prevlogterm(&_has_bits_);
           prevlogterm_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2979,7 +3008,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 commitIndex = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
-          _Internal::set_has_commitindex(&has_bits);
+          _Internal::set_has_commitindex(&_has_bits_);
           commitindex_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2988,7 +3017,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool nocache = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
-          _Internal::set_has_nocache(&has_bits);
+          _Internal::set_has_nocache(&_has_bits_);
           nocache_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -2997,7 +3026,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool isSuccess = 13;
       case 13:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 104)) {
-          _Internal::set_has_issuccess(&has_bits);
+          _Internal::set_has_issuccess(&_has_bits_);
           issuccess_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3006,7 +3035,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 candidateId = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 112)) {
-          _Internal::set_has_candidateid(&has_bits);
+          _Internal::set_has_candidateid(&_has_bits_);
           candidateid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3015,7 +3044,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 lastLogIndex = 15;
       case 15:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 120)) {
-          _Internal::set_has_lastlogindex(&has_bits);
+          _Internal::set_has_lastlogindex(&_has_bits_);
           lastlogindex_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3024,7 +3053,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 lastLogTerm = 16;
       case 16:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 128)) {
-          _Internal::set_has_lastlogterm(&has_bits);
+          _Internal::set_has_lastlogterm(&_has_bits_);
           lastlogterm_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3033,7 +3062,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 force = 17;
       case 17:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 136)) {
-          _Internal::set_has_force(&has_bits);
+          _Internal::set_has_force(&_has_bits_);
           force_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3051,7 +3080,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool voteGranted = 19;
       case 19:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 152)) {
-          _Internal::set_has_votegranted(&has_bits);
+          _Internal::set_has_votegranted(&_has_bits_);
           votegranted_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3060,7 +3089,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool ignoreCheck = 20;
       case 20:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 160)) {
-          _Internal::set_has_ignorecheck(&has_bits);
+          _Internal::set_has_ignorecheck(&_has_bits_);
           ignorecheck_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3069,7 +3098,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 lcType = 21;
       case 21:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 168)) {
-          _Internal::set_has_lctype(&has_bits);
+          _Internal::set_has_lctype(&_has_bits_);
           lctype_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3078,7 +3107,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 minMatchIndex = 22;
       case 22:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 176)) {
-          _Internal::set_has_minmatchindex(&has_bits);
+          _Internal::set_has_minmatchindex(&_has_bits_);
           minmatchindex_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3087,7 +3116,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 appliedIndex = 23;
       case 23:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 184)) {
-          _Internal::set_has_appliedindex(&has_bits);
+          _Internal::set_has_appliedindex(&_has_bits_);
           appliedindex_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3096,7 +3125,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 newClusterId = 24;
       case 24:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 192)) {
-          _Internal::set_has_newclusterid(&has_bits);
+          _Internal::set_has_newclusterid(&_has_bits_);
           newclusterid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3118,7 +3147,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint32 role = 26;
       case 26:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 208)) {
-          _Internal::set_has_role(&has_bits);
+          _Internal::set_has_role(&_has_bits_);
           role_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
         } else
@@ -3157,7 +3186,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 myServerId = 31;
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
-          _Internal::set_has_myserverid(&has_bits);
+          _Internal::set_has_myserverid(&_has_bits_);
           myserverid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3166,7 +3195,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional uint64 applyDelaySeconds = 32;
       case 32:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 0)) {
-          _Internal::set_has_applydelayseconds(&has_bits);
+          _Internal::set_has_applydelayseconds(&_has_bits_);
           applydelayseconds_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3175,7 +3204,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool applyThreadRunning = 33;
       case 33:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
-          _Internal::set_has_applythreadrunning(&has_bits);
+          _Internal::set_has_applythreadrunning(&_has_bits_);
           applythreadrunning_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3184,7 +3213,7 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool disableElection = 34;
       case 34:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
-          _Internal::set_has_disableelection(&has_bits);
+          _Internal::set_has_disableelection(&_has_bits_);
           disableelection_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
@@ -3193,8 +3222,26 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
       // optional bool logInstance = 35;
       case 35:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
-          _Internal::set_has_loginstance(&has_bits);
+          _Internal::set_has_loginstance(&_has_bits_);
           loginstance_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional bytes serverIp = 36;
+      case 36:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_serverip();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional uint64 serverPort = 37;
+      case 37:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _Internal::set_has_serverport(&_has_bits_);
+          serverport_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -3215,7 +3262,6 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     CHK_(ptr != nullptr);
   }  // while
 message_done:
-  _has_bits_.Or(has_bits);
   return ptr;
 failure:
   ptr = nullptr;
@@ -3231,55 +3277,55 @@ uint8_t* PaxosMsg::_InternalSerialize(
 
   cached_has_bits = _has_bits_[0];
   // optional uint64 configId = 1;
-  if (cached_has_bits & 0x00000008u) {
+  if (cached_has_bits & 0x00000010u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(1, this->_internal_configid(), target);
   }
 
   // required uint64 clusterId = 2;
-  if (cached_has_bits & 0x00000010u) {
+  if (cached_has_bits & 0x00000020u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(2, this->_internal_clusterid(), target);
   }
 
   // required uint64 serverId = 3;
-  if (cached_has_bits & 0x00000020u) {
+  if (cached_has_bits & 0x00000040u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(3, this->_internal_serverid(), target);
   }
 
   // required int32 msgType = 4;
-  if (cached_has_bits & 0x00001000u) {
+  if (cached_has_bits & 0x00002000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(4, this->_internal_msgtype(), target);
   }
 
   // required uint64 term = 5;
-  if (cached_has_bits & 0x00000040u) {
+  if (cached_has_bits & 0x00000080u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(5, this->_internal_term(), target);
   }
 
   // required uint64 msgId = 6;
-  if (cached_has_bits & 0x00000080u) {
+  if (cached_has_bits & 0x00000100u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(6, this->_internal_msgid(), target);
   }
 
   // optional uint64 leaderId = 7;
-  if (cached_has_bits & 0x00000100u) {
+  if (cached_has_bits & 0x00000200u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(7, this->_internal_leaderid(), target);
   }
 
   // optional uint64 prevLogIndex = 8;
-  if (cached_has_bits & 0x00000200u) {
+  if (cached_has_bits & 0x00000400u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(8, this->_internal_prevlogindex(), target);
   }
 
   // optional uint64 prevLogTerm = 9;
-  if (cached_has_bits & 0x00000400u) {
+  if (cached_has_bits & 0x00000800u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(9, this->_internal_prevlogterm(), target);
   }
@@ -3293,43 +3339,43 @@ uint8_t* PaxosMsg::_InternalSerialize(
   }
 
   // optional uint64 commitIndex = 11;
-  if (cached_has_bits & 0x00000800u) {
+  if (cached_has_bits & 0x00001000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(11, this->_internal_commitindex(), target);
   }
 
   // optional bool nocache = 12;
-  if (cached_has_bits & 0x00002000u) {
+  if (cached_has_bits & 0x00004000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(12, this->_internal_nocache(), target);
   }
 
   // optional bool isSuccess = 13;
-  if (cached_has_bits & 0x00004000u) {
+  if (cached_has_bits & 0x00008000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(13, this->_internal_issuccess(), target);
   }
 
   // optional uint64 candidateId = 14;
-  if (cached_has_bits & 0x00020000u) {
+  if (cached_has_bits & 0x00040000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(14, this->_internal_candidateid(), target);
   }
 
   // optional uint64 lastLogIndex = 15;
-  if (cached_has_bits & 0x00040000u) {
+  if (cached_has_bits & 0x00080000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(15, this->_internal_lastlogindex(), target);
   }
 
   // optional uint64 lastLogTerm = 16;
-  if (cached_has_bits & 0x00080000u) {
+  if (cached_has_bits & 0x00100000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(16, this->_internal_lastlogterm(), target);
   }
 
   // optional uint64 force = 17;
-  if (cached_has_bits & 0x00100000u) {
+  if (cached_has_bits & 0x00200000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(17, this->_internal_force(), target);
   }
@@ -3341,37 +3387,37 @@ uint8_t* PaxosMsg::_InternalSerialize(
   }
 
   // optional bool voteGranted = 19;
-  if (cached_has_bits & 0x00008000u) {
+  if (cached_has_bits & 0x00010000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(19, this->_internal_votegranted(), target);
   }
 
   // optional bool ignoreCheck = 20;
-  if (cached_has_bits & 0x00010000u) {
+  if (cached_has_bits & 0x00020000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(20, this->_internal_ignorecheck(), target);
   }
 
   // optional uint64 lcType = 21;
-  if (cached_has_bits & 0x00200000u) {
+  if (cached_has_bits & 0x00400000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(21, this->_internal_lctype(), target);
   }
 
   // optional uint64 minMatchIndex = 22;
-  if (cached_has_bits & 0x00400000u) {
+  if (cached_has_bits & 0x00800000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(22, this->_internal_minmatchindex(), target);
   }
 
   // optional uint64 appliedIndex = 23;
-  if (cached_has_bits & 0x00800000u) {
+  if (cached_has_bits & 0x01000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(23, this->_internal_appliedindex(), target);
   }
 
   // optional uint64 newClusterId = 24;
-  if (cached_has_bits & 0x01000000u) {
+  if (cached_has_bits & 0x02000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(24, this->_internal_newclusterid(), target);
   }
@@ -3385,13 +3431,13 @@ uint8_t* PaxosMsg::_InternalSerialize(
   }
 
   // optional uint32 role = 26;
-  if (cached_has_bits & 0x02000000u) {
+  if (cached_has_bits & 0x04000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(26, this->_internal_role(), target);
   }
 
   // optional .alisql.CompressedLogEntries compressedEntries = 27;
-  if (cached_has_bits & 0x00000004u) {
+  if (cached_has_bits & 0x00000008u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(
@@ -3405,40 +3451,54 @@ uint8_t* PaxosMsg::_InternalSerialize(
   }
 
   // optional .alisql.PaxosMsg.MsgErrorType msgError = 30;
-  if (cached_has_bits & 0x04000000u) {
+  if (cached_has_bits & 0x08000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       30, this->_internal_msgerror(), target);
   }
 
   // optional uint64 myServerId = 31;
-  if (cached_has_bits & 0x08000000u) {
+  if (cached_has_bits & 0x10000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(31, this->_internal_myserverid(), target);
   }
 
   // optional uint64 applyDelaySeconds = 32;
-  if (cached_has_bits & 0x10000000u) {
+  if (cached_has_bits & 0x20000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(32, this->_internal_applydelayseconds(), target);
   }
 
   // optional bool applyThreadRunning = 33;
-  if (cached_has_bits & 0x20000000u) {
+  if (cached_has_bits & 0x80000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(33, this->_internal_applythreadrunning(), target);
   }
 
+  cached_has_bits = _has_bits_[1];
   // optional bool disableElection = 34;
-  if (cached_has_bits & 0x40000000u) {
+  if (cached_has_bits & 0x00000001u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(34, this->_internal_disableelection(), target);
   }
 
   // optional bool logInstance = 35;
-  if (cached_has_bits & 0x80000000u) {
+  if (cached_has_bits & 0x00000002u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(35, this->_internal_loginstance(), target);
+  }
+
+  cached_has_bits = _has_bits_[0];
+  // optional bytes serverIp = 36;
+  if (cached_has_bits & 0x00000004u) {
+    target = stream->WriteBytesMaybeAliased(
+        36, this->_internal_serverip(), target);
+  }
+
+  // optional uint64 serverPort = 37;
+  if (cached_has_bits & 0x40000000u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(37, this->_internal_serverport(), target);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -3484,7 +3544,7 @@ size_t PaxosMsg::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:alisql.PaxosMsg)
   size_t total_size = 0;
 
-  if (((_has_bits_[0] & 0x000010f0) ^ 0x000010f0) == 0) {  // All required fields are present.
+  if (((_has_bits_[0] & 0x000021e0) ^ 0x000021e0) == 0) {  // All required fields are present.
     // required uint64 clusterId = 2;
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_clusterid());
 
@@ -3522,7 +3582,7 @@ size_t PaxosMsg::ByteSizeLong() const {
   }
 
   cached_has_bits = _has_bits_[0];
-  if (cached_has_bits & 0x0000000fu) {
+  if (cached_has_bits & 0x0000001fu) {
     // optional bytes addr = 18;
     if (cached_has_bits & 0x00000001u) {
       total_size += 2 +
@@ -3537,157 +3597,174 @@ size_t PaxosMsg::ByteSizeLong() const {
           this->_internal_extra());
     }
 
-    // optional .alisql.CompressedLogEntries compressedEntries = 27;
+    // optional bytes serverIp = 36;
     if (cached_has_bits & 0x00000004u) {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+          this->_internal_serverip());
+    }
+
+    // optional .alisql.CompressedLogEntries compressedEntries = 27;
+    if (cached_has_bits & 0x00000008u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *compressedentries_);
     }
 
     // optional uint64 configId = 1;
-    if (cached_has_bits & 0x00000008u) {
+    if (cached_has_bits & 0x00000010u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_configid());
     }
 
   }
-  if (cached_has_bits & 0x00000f00u) {
+  if (cached_has_bits & 0x00001e00u) {
     // optional uint64 leaderId = 7;
-    if (cached_has_bits & 0x00000100u) {
+    if (cached_has_bits & 0x00000200u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_leaderid());
     }
 
     // optional uint64 prevLogIndex = 8;
-    if (cached_has_bits & 0x00000200u) {
+    if (cached_has_bits & 0x00000400u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_prevlogindex());
     }
 
     // optional uint64 prevLogTerm = 9;
-    if (cached_has_bits & 0x00000400u) {
+    if (cached_has_bits & 0x00000800u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_prevlogterm());
     }
 
     // optional uint64 commitIndex = 11;
-    if (cached_has_bits & 0x00000800u) {
+    if (cached_has_bits & 0x00001000u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_commitindex());
     }
 
   }
-  if (cached_has_bits & 0x0000e000u) {
+  if (cached_has_bits & 0x0000c000u) {
     // optional bool nocache = 12;
-    if (cached_has_bits & 0x00002000u) {
-      total_size += 1 + 1;
-    }
-
-    // optional bool isSuccess = 13;
     if (cached_has_bits & 0x00004000u) {
       total_size += 1 + 1;
     }
 
-    // optional bool voteGranted = 19;
+    // optional bool isSuccess = 13;
     if (cached_has_bits & 0x00008000u) {
-      total_size += 2 + 1;
+      total_size += 1 + 1;
     }
 
   }
   if (cached_has_bits & 0x00ff0000u) {
-    // optional bool ignoreCheck = 20;
+    // optional bool voteGranted = 19;
     if (cached_has_bits & 0x00010000u) {
       total_size += 2 + 1;
     }
 
-    // optional uint64 candidateId = 14;
+    // optional bool ignoreCheck = 20;
     if (cached_has_bits & 0x00020000u) {
+      total_size += 2 + 1;
+    }
+
+    // optional uint64 candidateId = 14;
+    if (cached_has_bits & 0x00040000u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_candidateid());
     }
 
     // optional uint64 lastLogIndex = 15;
-    if (cached_has_bits & 0x00040000u) {
+    if (cached_has_bits & 0x00080000u) {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_lastlogindex());
     }
 
     // optional uint64 lastLogTerm = 16;
-    if (cached_has_bits & 0x00080000u) {
+    if (cached_has_bits & 0x00100000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_lastlogterm());
     }
 
     // optional uint64 force = 17;
-    if (cached_has_bits & 0x00100000u) {
+    if (cached_has_bits & 0x00200000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_force());
     }
 
     // optional uint64 lcType = 21;
-    if (cached_has_bits & 0x00200000u) {
+    if (cached_has_bits & 0x00400000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_lctype());
     }
 
     // optional uint64 minMatchIndex = 22;
-    if (cached_has_bits & 0x00400000u) {
+    if (cached_has_bits & 0x00800000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_minmatchindex());
     }
 
+  }
+  if (cached_has_bits & 0xff000000u) {
     // optional uint64 appliedIndex = 23;
-    if (cached_has_bits & 0x00800000u) {
+    if (cached_has_bits & 0x01000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_appliedindex());
     }
 
-  }
-  if (cached_has_bits & 0xff000000u) {
     // optional uint64 newClusterId = 24;
-    if (cached_has_bits & 0x01000000u) {
+    if (cached_has_bits & 0x02000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_newclusterid());
     }
 
     // optional uint32 role = 26;
-    if (cached_has_bits & 0x02000000u) {
+    if (cached_has_bits & 0x04000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
           this->_internal_role());
     }
 
     // optional .alisql.PaxosMsg.MsgErrorType msgError = 30;
-    if (cached_has_bits & 0x04000000u) {
+    if (cached_has_bits & 0x08000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_msgerror());
     }
 
     // optional uint64 myServerId = 31;
-    if (cached_has_bits & 0x08000000u) {
+    if (cached_has_bits & 0x10000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_myserverid());
     }
 
     // optional uint64 applyDelaySeconds = 32;
-    if (cached_has_bits & 0x10000000u) {
+    if (cached_has_bits & 0x20000000u) {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
           this->_internal_applydelayseconds());
     }
 
+    // optional uint64 serverPort = 37;
+    if (cached_has_bits & 0x40000000u) {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+          this->_internal_serverport());
+    }
+
     // optional bool applyThreadRunning = 33;
-    if (cached_has_bits & 0x20000000u) {
+    if (cached_has_bits & 0x80000000u) {
       total_size += 2 + 1;
     }
 
+  }
+  cached_has_bits = _has_bits_[1];
+  if (cached_has_bits & 0x00000003u) {
     // optional bool disableElection = 34;
-    if (cached_has_bits & 0x40000000u) {
+    if (cached_has_bits & 0x00000001u) {
       total_size += 2 + 1;
     }
 
     // optional bool logInstance = 35;
-    if (cached_has_bits & 0x80000000u) {
+    if (cached_has_bits & 0x00000002u) {
       total_size += 2 + 1;
     }
 
@@ -3723,105 +3800,115 @@ void PaxosMsg::MergeFrom(const PaxosMsg& from) {
       _internal_set_extra(from._internal_extra());
     }
     if (cached_has_bits & 0x00000004u) {
-      _internal_mutable_compressedentries()->::alisql::CompressedLogEntries::MergeFrom(from._internal_compressedentries());
+      _internal_set_serverip(from._internal_serverip());
     }
     if (cached_has_bits & 0x00000008u) {
-      configid_ = from.configid_;
+      _internal_mutable_compressedentries()->::alisql::CompressedLogEntries::MergeFrom(from._internal_compressedentries());
     }
     if (cached_has_bits & 0x00000010u) {
-      clusterid_ = from.clusterid_;
+      configid_ = from.configid_;
     }
     if (cached_has_bits & 0x00000020u) {
-      serverid_ = from.serverid_;
+      clusterid_ = from.clusterid_;
     }
     if (cached_has_bits & 0x00000040u) {
-      term_ = from.term_;
+      serverid_ = from.serverid_;
     }
     if (cached_has_bits & 0x00000080u) {
-      msgid_ = from.msgid_;
+      term_ = from.term_;
     }
     _has_bits_[0] |= cached_has_bits;
   }
   if (cached_has_bits & 0x0000ff00u) {
     if (cached_has_bits & 0x00000100u) {
-      leaderid_ = from.leaderid_;
+      msgid_ = from.msgid_;
     }
     if (cached_has_bits & 0x00000200u) {
-      prevlogindex_ = from.prevlogindex_;
+      leaderid_ = from.leaderid_;
     }
     if (cached_has_bits & 0x00000400u) {
-      prevlogterm_ = from.prevlogterm_;
+      prevlogindex_ = from.prevlogindex_;
     }
     if (cached_has_bits & 0x00000800u) {
-      commitindex_ = from.commitindex_;
+      prevlogterm_ = from.prevlogterm_;
     }
     if (cached_has_bits & 0x00001000u) {
-      msgtype_ = from.msgtype_;
+      commitindex_ = from.commitindex_;
     }
     if (cached_has_bits & 0x00002000u) {
-      nocache_ = from.nocache_;
+      msgtype_ = from.msgtype_;
     }
     if (cached_has_bits & 0x00004000u) {
-      issuccess_ = from.issuccess_;
+      nocache_ = from.nocache_;
     }
     if (cached_has_bits & 0x00008000u) {
-      votegranted_ = from.votegranted_;
+      issuccess_ = from.issuccess_;
     }
     _has_bits_[0] |= cached_has_bits;
   }
   if (cached_has_bits & 0x00ff0000u) {
     if (cached_has_bits & 0x00010000u) {
-      ignorecheck_ = from.ignorecheck_;
+      votegranted_ = from.votegranted_;
     }
     if (cached_has_bits & 0x00020000u) {
-      candidateid_ = from.candidateid_;
+      ignorecheck_ = from.ignorecheck_;
     }
     if (cached_has_bits & 0x00040000u) {
-      lastlogindex_ = from.lastlogindex_;
+      candidateid_ = from.candidateid_;
     }
     if (cached_has_bits & 0x00080000u) {
-      lastlogterm_ = from.lastlogterm_;
+      lastlogindex_ = from.lastlogindex_;
     }
     if (cached_has_bits & 0x00100000u) {
-      force_ = from.force_;
+      lastlogterm_ = from.lastlogterm_;
     }
     if (cached_has_bits & 0x00200000u) {
-      lctype_ = from.lctype_;
+      force_ = from.force_;
     }
     if (cached_has_bits & 0x00400000u) {
-      minmatchindex_ = from.minmatchindex_;
+      lctype_ = from.lctype_;
     }
     if (cached_has_bits & 0x00800000u) {
-      appliedindex_ = from.appliedindex_;
+      minmatchindex_ = from.minmatchindex_;
     }
     _has_bits_[0] |= cached_has_bits;
   }
   if (cached_has_bits & 0xff000000u) {
     if (cached_has_bits & 0x01000000u) {
-      newclusterid_ = from.newclusterid_;
+      appliedindex_ = from.appliedindex_;
     }
     if (cached_has_bits & 0x02000000u) {
-      role_ = from.role_;
+      newclusterid_ = from.newclusterid_;
     }
     if (cached_has_bits & 0x04000000u) {
-      msgerror_ = from.msgerror_;
+      role_ = from.role_;
     }
     if (cached_has_bits & 0x08000000u) {
-      myserverid_ = from.myserverid_;
+      msgerror_ = from.msgerror_;
     }
     if (cached_has_bits & 0x10000000u) {
-      applydelayseconds_ = from.applydelayseconds_;
+      myserverid_ = from.myserverid_;
     }
     if (cached_has_bits & 0x20000000u) {
-      applythreadrunning_ = from.applythreadrunning_;
+      applydelayseconds_ = from.applydelayseconds_;
     }
     if (cached_has_bits & 0x40000000u) {
-      disableelection_ = from.disableelection_;
+      serverport_ = from.serverport_;
     }
     if (cached_has_bits & 0x80000000u) {
-      loginstance_ = from.loginstance_;
+      applythreadrunning_ = from.applythreadrunning_;
     }
     _has_bits_[0] |= cached_has_bits;
+  }
+  cached_has_bits = from._has_bits_[1];
+  if (cached_has_bits & 0x00000003u) {
+    if (cached_has_bits & 0x00000001u) {
+      disableelection_ = from.disableelection_;
+    }
+    if (cached_has_bits & 0x00000002u) {
+      loginstance_ = from.loginstance_;
+    }
+    _has_bits_[1] |= cached_has_bits;
   }
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
@@ -3851,6 +3938,7 @@ void PaxosMsg::InternalSwap(PaxosMsg* other) {
   auto* rhs_arena = other->GetArenaForAllocation();
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_has_bits_[0], other->_has_bits_[0]);
+  swap(_has_bits_[1], other->_has_bits_[1]);
   entries_.InternalSwap(&other->entries_);
   cientries_.InternalSwap(&other->cientries_);
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
@@ -3862,6 +3950,11 @@ void PaxosMsg::InternalSwap(PaxosMsg* other) {
       &::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(),
       &extra_, lhs_arena,
       &other->extra_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(),
+      &serverip_, lhs_arena,
+      &other->serverip_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(PaxosMsg, loginstance_)

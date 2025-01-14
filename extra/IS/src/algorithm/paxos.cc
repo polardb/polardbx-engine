@@ -176,6 +176,8 @@ void Paxos::changeState_(enum State newState) {
   if (newState == LEADER) {
     leaderId_.store(localServer_->serverId);
     leaderAddr_ = localServer_->strAddr;
+    leaderIp_ = serverIp_;
+    leaderPort_ = serverPort_;
     option.extraStore->setRemote(option.extraStore->getLocal());
   }
 
@@ -554,7 +556,7 @@ int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
         "Server %d : leaderTransfer to server(%ld), skip because "
         "applyDelaySeconds delay too much %llu > %llu",
         localServer_->serverId, targetId,
-        server->applyDelaySeconds.load(),
+        server->applyDelaySeconds,
         maxDelaySeconds4NewLeader_);
     return PaxosErrorCode::PE_DELAY;
   }
@@ -1488,7 +1490,9 @@ int Paxos::requestVote(bool force) {
     log_->setTerm(currentTerm_);
     log_->setMetaData(keyCurrentTerm, currentTerm_);
     leaderId_.store(0);
-    leaderAddr_ = std::string("");
+    leaderAddr_ = "";
+    leaderIp_ = "";
+    leaderPort_ = 0;
     option.extraStore->setRemote("");
     config_->forEach(&Server::beginRequestVote, NULL);
     forceRequestMode_ = force;
@@ -1744,10 +1748,6 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
     return 0;
 
   server->setLastAckEpoch(currentEpoch_);
-  server->applyDelaySeconds = msg->applydelayseconds();
-  server->applyThreadRunning = msg->applythreadrunning();
-  server->disableElection = msg->disableelection();
-  server->logInstance = msg->loginstance();
 
   if (msg->term() > currentTerm_) {
     easy_system_log(
@@ -1973,8 +1973,6 @@ bool Paxos::onHeartbeatOptimistically_(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_applydelayseconds(applyDelaySeconds_.load());
   rsp->set_applythreadrunning(applyThreadRunning_.load());
   rsp->set_disableelection(debugDisableElection);
-  rsp->set_loginstance(logInstance_);
-
   return true;
 }
 
@@ -2013,7 +2011,6 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     rsp->set_applydelayseconds(applyDelaySeconds_.load());
     rsp->set_applythreadrunning(applyThreadRunning_.load());
     rsp->set_disableelection(debugDisableElection);
-    rsp->set_loginstance(logInstance_);
     rsp->set_ignorecheck(true);
     rsp->set_term(currentTerm_);
     rsp->set_appliedindex(0);
@@ -2089,7 +2086,6 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_applydelayseconds(applyDelaySeconds_.load());
   rsp->set_applythreadrunning(applyThreadRunning_.load());
   rsp->set_disableelection(debugDisableElection);
-  rsp->set_loginstance(logInstance_);
 
   /* in some case we should step down */
   if (msg->term() > currentTerm_) {
@@ -2135,29 +2131,37 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   }
   rsp->set_term(currentTerm_);
 
-  if (leaderId_ == 0) {
-    leaderId_.store(msg->leaderid());
-    leaderAddr_ = "";
-    option.extraStore->setRemote("");
-    rsp->set_force(1);
-  } else if (leaderId_ != msg->leaderid()) {
+  if (leaderId_ == 0
+      || leaderId_ != msg->leaderid()) {
     /* TODO is this possible? */
-    easy_warn_log(
-        "Server %d : receive logs from different leader. old(%d),new(%d), "
-        "term(%ld),msg.term(%d) \n",
-        localServer_->serverId, leaderId_.load(), msg->leaderid(),
-        currentTerm_.load(), msg->term());
+    if (leaderId_ != 0 && leaderId_ != msg->leaderid())
+      easy_warn_log(
+          "Server %d : receive logs from different leader. old(%d),new(%d), "
+          "term(%ld),msg.term(%d) \n",
+          localServer_->serverId, leaderId_.load(), msg->leaderid(),
+          currentTerm_.load(), msg->term());
     leaderId_.store(msg->leaderid());
     leaderAddr_ = "";
+    leaderIp_ = "";
+    leaderPort_ = 0;
     option.extraStore->setRemote("");
     rsp->set_force(1);
   }
 
   if (msg->has_addr()) {
     leaderAddr_ = msg->addr();
+    leaderIp_ = msg->serverip();
+    leaderPort_ = msg->serverport();
     if (msg->has_extra()) option.extraStore->setRemote(msg->extra());
   }
+
   if (leaderAddr_ == "") rsp->set_force(1);
+
+  if (rsp->has_force() && rsp->force() == 1) {
+    rsp->set_serverip(serverIp_);
+    rsp->set_serverport(serverPort_);
+    rsp->set_loginstance(logInstance_);
+  }
 
   if (state_ != LEARNER) electionTimer_->restart();
 
@@ -2513,7 +2517,12 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         "Server %d : onAppendLogResponce skip reset waitForReply, msgid %llu "
         "guardid %llu",
         localServer_->serverId, msg->msgid(), server->guardId.load());
-  if (msg->has_force() && msg->force() == 1) server->needAddr = true;
+  if (msg->has_force() && msg->force() == 1) {
+    server->needAddr = true;
+    server->serverIp = msg->serverip();
+    server->serverPort = msg->serverport();
+    server->logInstance = msg->loginstance();
+  }
 
   if (msg->term() > currentTerm_) {
     easy_warn_log(
@@ -2549,7 +2558,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
     server->applyDelaySeconds = msg->applydelayseconds();
     server->applyThreadRunning = msg->applythreadrunning();
     server->disableElection = msg->disableelection();
-    server->logInstance = msg->loginstance();
+
     if (server->appliedIndex < msg->appliedindex())
       server->appliedIndex = msg->appliedindex();
     /*
@@ -3022,7 +3031,9 @@ void Paxos::newTerm(uint64_t newTerm) {
   log_->setTerm(currentTerm_);
   log_->setMetaData(keyCurrentTerm, currentTerm_);
   leaderId_.store(0);
-  leaderAddr_ = std::string("");
+  leaderAddr_ = "";
+  leaderIp_ = "";
+  leaderPort_ = 0;
   option.extraStore->setRemote("");
   votedFor_ = 0;
   log_->setMetaData(keyVoteFor, votedFor_);
@@ -3103,6 +3114,8 @@ uint64_t Paxos::appendLogFillForEach(PaxosMsg *msg, RemoteServer *server,
 
   if (server->needAddr) {
     msg->set_addr(localServer_->strAddr);
+    msg->set_serverip(serverIp_);
+    msg->set_serverport(serverPort_);
     msg->set_extra(option.extraStore->getLocal());
     server->needAddr = false;
   }
@@ -4065,6 +4078,8 @@ void Paxos::getMemberInfo(MemberInfoType *mi) {
   mi->votedFor = votedFor_;
   mi->lastAppliedIndex = appliedIndex_.load();
   mi->currentLeaderAddr = leaderAddr_;
+  mi->leaderIp = leaderIp_;
+  mi->leaderPort = leaderPort_;
 }
 
 uint64_t Paxos::getServerIdFromAddr(const std::string &strAddr) {

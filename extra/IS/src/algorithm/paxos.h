@@ -222,17 +222,19 @@ class Paxos : public Consensus {
   } MembershipChangeType;
 
   typedef struct ClusterInfo {
-    uint64_t serverId;
     std::string ipPort;
+    std::string serverIp;
+    uint64_t serverPort;
+    uint64_t serverId;
     uint64_t matchIndex;
     uint64_t nextIndex;
-    StateType role;
     uint64_t hasVoted;
-    bool forceSync;
-    uint electionWeight;
     uint64_t learnerSource;
     uint64_t appliedIndex;
     uint64_t applyDelaySeconds{0};
+    StateType role;
+    uint electionWeight;
+    bool forceSync;
     bool applyThreadRunning{false};
     bool disableElection{false};
     bool logInstance{false};
@@ -251,6 +253,8 @@ class Paxos : public Consensus {
     uint64_t votedFor;
     uint64_t lastAppliedIndex;
     std::string currentLeaderAddr;
+    std::string leaderIp;
+    uint64_t leaderPort;
   } MemberInfoType;
 
   typedef struct HealthInfo {
@@ -564,6 +568,19 @@ class Paxos : public Consensus {
   void setAutoLeaderTransferCheckSeconds(uint64_t arg) {
     option.autoLeaderTransferCheckSeconds_.store(arg);
   }
+  void setServerIp(const char *ipv6) {
+    serverIp_ = ipv6 ? ipv6 : "";
+    if (state_ == LEADER) {
+      leaderIp_ = serverIp_;
+      leaderPort_ = serverPort_;
+    }
+  }
+
+  void setServerPort(uint64_t port) {
+    serverPort_ = port;
+  }
+  std::string getServerIp() const { return serverIp_; }
+  uint64_t getServerPort() const { return serverPort_; }
   void setMaxPipeliningEntrySize(uint64_t arg) {
     option.maxPipeliningEntrySize_.store(arg);
   }
@@ -686,6 +703,8 @@ class Paxos : public Consensus {
   std::atomic<uint64_t> commitIndex_;
   std::atomic<uint64_t> leaderId_;
   std::string leaderAddr_;
+  std::string leaderIp_{""};
+  uint64_t leaderPort_{0};
   uint64_t votedFor_;
   bool forceRequestMode_;
   std::atomic<uint64_t> currentEpoch_;
@@ -714,6 +733,8 @@ class Paxos : public Consensus {
   std::atomic<uint64_t> appliedIndex_;
   std::atomic<uint64_t> applyDelaySeconds_{0};
   std::atomic<bool> applyThreadRunning_{false};
+  std::string serverIp_{""};
+  uint64_t serverPort_{0};
   /* For follower sync learner source. */
   std::atomic<uint64_t> followerMetaNo_;
   uint64_t lastSyncMetaNo_;

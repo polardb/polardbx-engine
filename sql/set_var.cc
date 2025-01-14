@@ -356,7 +356,7 @@ bool sys_var::update(THD *thd, set_var *var) {
       ret = global_update(thd, var) ||
           (on_update && on_update(this, thd, OPT_GLOBAL));
     }
-    if (!ret)
+    if (!ret && thd->query().str)
       LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
              thd->m_main_security_ctx.user().str,
              thd->m_main_security_ctx.host_or_ip().str, thd->query().str);

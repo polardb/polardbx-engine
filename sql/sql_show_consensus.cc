@@ -122,6 +122,8 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
   std::string use_applied;
   std::string instance_type;
   std::string disable_election;
+  std::string server_ip;
+  uint64 server_port = 0;
   size_t node_num = 1;
   alisql::Paxos::MemberInfoType mi;
   std::vector<alisql::Paxos::ClusterInfoType> cis;
@@ -182,6 +184,8 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
     }
     instance_type = cis[i].logInstance ? "Log" : "Normal";
     disable_election = cis[i].disableElection ? "Yes" : "No";
+    server_ip =  cis[i].serverIp;
+    server_port = cis[i].serverPort;
 
     int field_num = 0;
     table->field[field_num++]->store((longlong)id, true);
@@ -206,6 +210,9 @@ int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *) {
                                      system_charset_info);
     table->field[field_num++]->store(disable_election.c_str(), disable_election.length(),
                                      system_charset_info);
+    table->field[field_num++]->store(server_ip.c_str(), server_ip.length(),
+                                     system_charset_info);
+    table->field[field_num++]->store((longlong)server_port, true);
     if (schema_table_store_record(thd, table)) DBUG_RETURN(1);
   }
 
@@ -233,6 +240,9 @@ int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
   std::string disable_election_str;
   std::string apply_running_str;
   std::string instance_type;
+  std::string leader_ip;
+  uint64 leader_port = 0;
+
   alisql::Paxos::MemberInfoType mi;
   consensus_ptr->getMemberInfo(&mi);
   id = mi.serverId;
@@ -276,6 +286,8 @@ int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
   instance_type = opt_cluster_log_type_instance ? "Log" : "Normal";
   disable_election_str = opt_consensus_disable_election ? "Yes" : "No";
   apply_running_str = consensus_ptr->getApplyThreadRunning() ? "Yes" : "No";
+  leader_ip = mi.leaderIp;
+  leader_port = mi.leaderPort;
 
   int field_num = 0;
   table->field[field_num++]->store((longlong)id, true);
@@ -298,6 +310,10 @@ int fill_alisql_cluster_local(THD *thd, Table_ref *tables, Item *) {
                                    disable_election_str.length(), system_charset_info);
   table->field[field_num++]->store(apply_running_str.c_str(),
                                    apply_running_str.length(), system_charset_info);
+  table->field[field_num++]->store(leader_ip.c_str(),
+                                   leader_ip.length(),
+                                   system_charset_info);
+  table->field[field_num++]->store((longlong)leader_port, true);
 
   if (schema_table_store_record(thd, table)) DBUG_RETURN(1);
 
@@ -610,6 +626,8 @@ ST_FIELD_INFO alisql_cluster_global_fields_info[] = {
     {"SEND_APPLIED", 3, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"INSTANCE_TYPE", 10, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"DISABLE_ELECTION", 3, MYSQL_TYPE_STRING, 0, 0, 0, 0},
+    {"SERVER_IP", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, 0, 0},
+    {"SERVER_PORT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, 0, 0},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
 ST_FIELD_INFO alisql_cluster_local_fields_info[] = {
@@ -631,6 +649,8 @@ ST_FIELD_INFO alisql_cluster_local_fields_info[] = {
     {"INSTANCE_TYPE", 10, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"DISABLE_ELECTION", 3, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"APPLY_RUNNING", 3, MYSQL_TYPE_STRING, 0, 0, 0, 0},
+    {"LEADER_IP", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, 0, 0},
+    {"LEADER_PORT", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0, 0, 0},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
 ST_FIELD_INFO alisql_cluster_health_fields_info[] = {

@@ -469,6 +469,8 @@ int ConsensusLogManager::init_service() {
         opt_consensus_auto_reset_match_index);
     consensus_ptr->setEnableAutoLeaderTransfer(
         opt_consensus_auto_leader_transfer);
+    consensus_ptr->setServerIp(opt_consensus_server_ip);
+    consensus_ptr->setServerPort(opt_consensus_server_port);
     consensus_ptr->setAutoLeaderTransferCheckSeconds(
         opt_consensus_auto_leader_transfer_check_seconds);
     consensus_ptr->setThreadHook([]() { my_thread_init(); }, my_thread_end);

@@ -176,6 +176,9 @@ void Sql_cmd_consensus_proc_show_global::send_result(THD *thd, bool error) {
                            result->instance_type.length, system_charset_info);
     protocol->store_string(result->disable_election.str,
                            result->disable_election.length, system_charset_info);
+    protocol->store_string(result->server_ip.str, result->server_ip.length,
+                           system_charset_info);
+    protocol->store(result->server_port);
     if (protocol->end_row()) return;
   }
 
@@ -232,6 +235,9 @@ void Sql_cmd_consensus_proc_show_local::send_result(THD *thd, bool error) {
   protocol->store_string(result->apply_running.str,
                          result->apply_running.length,
                          system_charset_info);
+  protocol->store_string(result->leader_ip.str, result->leader_ip.length,
+                          system_charset_info);
+  protocol->store(result->leader_port);
   if (protocol->end_row()) return;
 
   my_eof(thd);

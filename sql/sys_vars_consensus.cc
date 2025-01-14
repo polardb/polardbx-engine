@@ -109,6 +109,8 @@ bool opt_consensus_force_recovery;
 bool opt_enable_appliedindex_checker;
 ulonglong opt_appliedindex_force_delay;
 char *opt_consensus_flow_control = NULL;
+char *opt_consensus_server_ip = NULL;
+ulonglong opt_consensus_server_port;
 ulonglong opt_consensus_check_commit_index_interval = 0;
 bool opt_commit_pos_watcher = false;
 ulonglong opt_commit_pos_watcher_interval = 0;
@@ -1170,3 +1172,28 @@ extern uint64_t is_ping_not_matched(const uint64_t ping_mode,
 
   return 0;
 }
+
+static bool fix_consensus_server_ip(sys_var *, THD *, enum_var_type) {
+  if (consensus_ptr)
+      consensus_ptr->setServerIp(opt_consensus_server_ip);
+  return false;
+}
+
+static Sys_var_charptr Sys_consensus_server_ip(
+    "consensus_server_ip", "client connect ipv4 or ipv6 string for current node, ipv4/ipv6",
+    READ_ONLY GLOBAL_VAR(opt_consensus_server_ip), CMD_LINE(OPT_ARG), IN_FS_CHARSET,
+    DEFAULT(0), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_server_ip));
+
+static bool fix_consensus_server_port(sys_var *, THD *, enum_var_type) {
+  if (consensus_ptr)
+      consensus_ptr->setServerPort(opt_consensus_server_port);
+  return false;
+}
+
+static Sys_var_ulonglong Sys_consensus_server_port(
+    "consensus_server_port", "client connect port for current node",
+    READ_ONLY GLOBAL_VAR(opt_consensus_server_port), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, 65535), DEFAULT(0), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_server_port));

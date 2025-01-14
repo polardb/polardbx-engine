@@ -77,7 +77,6 @@ class Server : public NetServer {
 
   // const uint64_t serverId;
   uint64_t serverId;
-  // std::string strAddr;
   Paxos *paxos;
   bool forceSync;
   uint electionWeight;
@@ -210,9 +209,11 @@ class RemoteServer : public Server {
   std::atomic<uint64_t> nextIndex;
   std::atomic<uint64_t> matchIndex;
   std::atomic<uint64_t> lastAckEpoch;
-  std::atomic<bool> applyThreadRunning{false};
-  std::atomic<uint64_t> applyDelaySeconds{0};
-  std::atomic<bool> disableElection{false};
+  std::string serverIp;
+  uint64_t serverPort{0};
+  uint64_t applyDelaySeconds{0};
+  bool applyThreadRunning{false};
+  bool disableElection{false};
   bool logInstance{false};
   bool hasVote;
   bool isLeader;

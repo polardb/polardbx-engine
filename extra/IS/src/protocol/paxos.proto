@@ -179,6 +179,8 @@ message PaxosMsg
   optional bool applyThreadRunning = 33;
   optional bool disableElection = 34;
   optional bool logInstance = 35;
+  optional bytes serverIp = 36;
+  optional uint64 serverPort = 37;
 };
 
 message TestMsg1

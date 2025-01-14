@@ -1701,6 +1701,7 @@ class PaxosMsg final :
     kCiEntriesFieldNumber = 25,
     kAddrFieldNumber = 18,
     kExtraFieldNumber = 28,
+    kServerIpFieldNumber = 36,
     kCompressedEntriesFieldNumber = 27,
     kConfigIdFieldNumber = 1,
     kClusterIdFieldNumber = 2,
@@ -1728,6 +1729,7 @@ class PaxosMsg final :
     kMsgErrorFieldNumber = 30,
     kMyServerIdFieldNumber = 31,
     kApplyDelaySecondsFieldNumber = 32,
+    kServerPortFieldNumber = 37,
     kApplyThreadRunningFieldNumber = 33,
     kDisableElectionFieldNumber = 34,
     kLogInstanceFieldNumber = 35,
@@ -1802,6 +1804,24 @@ class PaxosMsg final :
   const std::string& _internal_extra() const;
   inline PROTOBUF_ALWAYS_INLINE void _internal_set_extra(const std::string& value);
   std::string* _internal_mutable_extra();
+  public:
+
+  // optional bytes serverIp = 36;
+  bool has_serverip() const;
+  private:
+  bool _internal_has_serverip() const;
+  public:
+  void clear_serverip();
+  const std::string& serverip() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_serverip(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_serverip();
+  PROTOBUF_NODISCARD std::string* release_serverip();
+  void set_allocated_serverip(std::string* serverip);
+  private:
+  const std::string& _internal_serverip() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_serverip(const std::string& value);
+  std::string* _internal_mutable_serverip();
   public:
 
   // optional .alisql.CompressedLogEntries compressedEntries = 27;
@@ -2160,6 +2180,19 @@ class PaxosMsg final :
   void _internal_set_applydelayseconds(uint64_t value);
   public:
 
+  // optional uint64 serverPort = 37;
+  bool has_serverport() const;
+  private:
+  bool _internal_has_serverport() const;
+  public:
+  void clear_serverport();
+  uint64_t serverport() const;
+  void set_serverport(uint64_t value);
+  private:
+  uint64_t _internal_serverport() const;
+  void _internal_set_serverport(uint64_t value);
+  public:
+
   // optional bool applyThreadRunning = 33;
   bool has_applythreadrunning() const;
   private:
@@ -2209,12 +2242,13 @@ class PaxosMsg final :
   template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
-  ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+  ::PROTOBUF_NAMESPACE_ID::internal::HasBits<2> _has_bits_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::LogEntry > entries_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ClusterInfoEntry > cientries_;
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr addr_;
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr extra_;
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr serverip_;
   ::alisql::CompressedLogEntries* compressedentries_;
   uint64_t configid_;
   uint64_t clusterid_;
@@ -2242,6 +2276,7 @@ class PaxosMsg final :
   int msgerror_;
   uint64_t myserverid_;
   uint64_t applydelayseconds_;
+  uint64_t serverport_;
   bool applythreadrunning_;
   bool disableelection_;
   bool loginstance_;
@@ -4116,7 +4151,7 @@ inline void ClusterInfoEntry::set_loginstance(uint32_t value) {
 
 // optional uint64 configId = 1;
 inline bool PaxosMsg::_internal_has_configid() const {
-  bool value = (_has_bits_[0] & 0x00000008u) != 0;
+  bool value = (_has_bits_[0] & 0x00000010u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_configid() const {
@@ -4124,7 +4159,7 @@ inline bool PaxosMsg::has_configid() const {
 }
 inline void PaxosMsg::clear_configid() {
   configid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000008u;
+  _has_bits_[0] &= ~0x00000010u;
 }
 inline uint64_t PaxosMsg::_internal_configid() const {
   return configid_;
@@ -4134,7 +4169,7 @@ inline uint64_t PaxosMsg::configid() const {
   return _internal_configid();
 }
 inline void PaxosMsg::_internal_set_configid(uint64_t value) {
-  _has_bits_[0] |= 0x00000008u;
+  _has_bits_[0] |= 0x00000010u;
   configid_ = value;
 }
 inline void PaxosMsg::set_configid(uint64_t value) {
@@ -4144,7 +4179,7 @@ inline void PaxosMsg::set_configid(uint64_t value) {
 
 // required uint64 clusterId = 2;
 inline bool PaxosMsg::_internal_has_clusterid() const {
-  bool value = (_has_bits_[0] & 0x00000010u) != 0;
+  bool value = (_has_bits_[0] & 0x00000020u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_clusterid() const {
@@ -4152,7 +4187,7 @@ inline bool PaxosMsg::has_clusterid() const {
 }
 inline void PaxosMsg::clear_clusterid() {
   clusterid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000010u;
+  _has_bits_[0] &= ~0x00000020u;
 }
 inline uint64_t PaxosMsg::_internal_clusterid() const {
   return clusterid_;
@@ -4162,7 +4197,7 @@ inline uint64_t PaxosMsg::clusterid() const {
   return _internal_clusterid();
 }
 inline void PaxosMsg::_internal_set_clusterid(uint64_t value) {
-  _has_bits_[0] |= 0x00000010u;
+  _has_bits_[0] |= 0x00000020u;
   clusterid_ = value;
 }
 inline void PaxosMsg::set_clusterid(uint64_t value) {
@@ -4172,7 +4207,7 @@ inline void PaxosMsg::set_clusterid(uint64_t value) {
 
 // required uint64 serverId = 3;
 inline bool PaxosMsg::_internal_has_serverid() const {
-  bool value = (_has_bits_[0] & 0x00000020u) != 0;
+  bool value = (_has_bits_[0] & 0x00000040u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_serverid() const {
@@ -4180,7 +4215,7 @@ inline bool PaxosMsg::has_serverid() const {
 }
 inline void PaxosMsg::clear_serverid() {
   serverid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000020u;
+  _has_bits_[0] &= ~0x00000040u;
 }
 inline uint64_t PaxosMsg::_internal_serverid() const {
   return serverid_;
@@ -4190,7 +4225,7 @@ inline uint64_t PaxosMsg::serverid() const {
   return _internal_serverid();
 }
 inline void PaxosMsg::_internal_set_serverid(uint64_t value) {
-  _has_bits_[0] |= 0x00000020u;
+  _has_bits_[0] |= 0x00000040u;
   serverid_ = value;
 }
 inline void PaxosMsg::set_serverid(uint64_t value) {
@@ -4200,7 +4235,7 @@ inline void PaxosMsg::set_serverid(uint64_t value) {
 
 // required int32 msgType = 4;
 inline bool PaxosMsg::_internal_has_msgtype() const {
-  bool value = (_has_bits_[0] & 0x00001000u) != 0;
+  bool value = (_has_bits_[0] & 0x00002000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_msgtype() const {
@@ -4208,7 +4243,7 @@ inline bool PaxosMsg::has_msgtype() const {
 }
 inline void PaxosMsg::clear_msgtype() {
   msgtype_ = 0;
-  _has_bits_[0] &= ~0x00001000u;
+  _has_bits_[0] &= ~0x00002000u;
 }
 inline int32_t PaxosMsg::_internal_msgtype() const {
   return msgtype_;
@@ -4218,7 +4253,7 @@ inline int32_t PaxosMsg::msgtype() const {
   return _internal_msgtype();
 }
 inline void PaxosMsg::_internal_set_msgtype(int32_t value) {
-  _has_bits_[0] |= 0x00001000u;
+  _has_bits_[0] |= 0x00002000u;
   msgtype_ = value;
 }
 inline void PaxosMsg::set_msgtype(int32_t value) {
@@ -4228,7 +4263,7 @@ inline void PaxosMsg::set_msgtype(int32_t value) {
 
 // required uint64 term = 5;
 inline bool PaxosMsg::_internal_has_term() const {
-  bool value = (_has_bits_[0] & 0x00000040u) != 0;
+  bool value = (_has_bits_[0] & 0x00000080u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_term() const {
@@ -4236,7 +4271,7 @@ inline bool PaxosMsg::has_term() const {
 }
 inline void PaxosMsg::clear_term() {
   term_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000040u;
+  _has_bits_[0] &= ~0x00000080u;
 }
 inline uint64_t PaxosMsg::_internal_term() const {
   return term_;
@@ -4246,7 +4281,7 @@ inline uint64_t PaxosMsg::term() const {
   return _internal_term();
 }
 inline void PaxosMsg::_internal_set_term(uint64_t value) {
-  _has_bits_[0] |= 0x00000040u;
+  _has_bits_[0] |= 0x00000080u;
   term_ = value;
 }
 inline void PaxosMsg::set_term(uint64_t value) {
@@ -4256,7 +4291,7 @@ inline void PaxosMsg::set_term(uint64_t value) {
 
 // required uint64 msgId = 6;
 inline bool PaxosMsg::_internal_has_msgid() const {
-  bool value = (_has_bits_[0] & 0x00000080u) != 0;
+  bool value = (_has_bits_[0] & 0x00000100u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_msgid() const {
@@ -4264,7 +4299,7 @@ inline bool PaxosMsg::has_msgid() const {
 }
 inline void PaxosMsg::clear_msgid() {
   msgid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000080u;
+  _has_bits_[0] &= ~0x00000100u;
 }
 inline uint64_t PaxosMsg::_internal_msgid() const {
   return msgid_;
@@ -4274,7 +4309,7 @@ inline uint64_t PaxosMsg::msgid() const {
   return _internal_msgid();
 }
 inline void PaxosMsg::_internal_set_msgid(uint64_t value) {
-  _has_bits_[0] |= 0x00000080u;
+  _has_bits_[0] |= 0x00000100u;
   msgid_ = value;
 }
 inline void PaxosMsg::set_msgid(uint64_t value) {
@@ -4284,7 +4319,7 @@ inline void PaxosMsg::set_msgid(uint64_t value) {
 
 // optional uint64 leaderId = 7;
 inline bool PaxosMsg::_internal_has_leaderid() const {
-  bool value = (_has_bits_[0] & 0x00000100u) != 0;
+  bool value = (_has_bits_[0] & 0x00000200u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_leaderid() const {
@@ -4292,7 +4327,7 @@ inline bool PaxosMsg::has_leaderid() const {
 }
 inline void PaxosMsg::clear_leaderid() {
   leaderid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000100u;
+  _has_bits_[0] &= ~0x00000200u;
 }
 inline uint64_t PaxosMsg::_internal_leaderid() const {
   return leaderid_;
@@ -4302,7 +4337,7 @@ inline uint64_t PaxosMsg::leaderid() const {
   return _internal_leaderid();
 }
 inline void PaxosMsg::_internal_set_leaderid(uint64_t value) {
-  _has_bits_[0] |= 0x00000100u;
+  _has_bits_[0] |= 0x00000200u;
   leaderid_ = value;
 }
 inline void PaxosMsg::set_leaderid(uint64_t value) {
@@ -4312,7 +4347,7 @@ inline void PaxosMsg::set_leaderid(uint64_t value) {
 
 // optional uint64 prevLogIndex = 8;
 inline bool PaxosMsg::_internal_has_prevlogindex() const {
-  bool value = (_has_bits_[0] & 0x00000200u) != 0;
+  bool value = (_has_bits_[0] & 0x00000400u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_prevlogindex() const {
@@ -4320,7 +4355,7 @@ inline bool PaxosMsg::has_prevlogindex() const {
 }
 inline void PaxosMsg::clear_prevlogindex() {
   prevlogindex_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000200u;
+  _has_bits_[0] &= ~0x00000400u;
 }
 inline uint64_t PaxosMsg::_internal_prevlogindex() const {
   return prevlogindex_;
@@ -4330,7 +4365,7 @@ inline uint64_t PaxosMsg::prevlogindex() const {
   return _internal_prevlogindex();
 }
 inline void PaxosMsg::_internal_set_prevlogindex(uint64_t value) {
-  _has_bits_[0] |= 0x00000200u;
+  _has_bits_[0] |= 0x00000400u;
   prevlogindex_ = value;
 }
 inline void PaxosMsg::set_prevlogindex(uint64_t value) {
@@ -4340,7 +4375,7 @@ inline void PaxosMsg::set_prevlogindex(uint64_t value) {
 
 // optional uint64 prevLogTerm = 9;
 inline bool PaxosMsg::_internal_has_prevlogterm() const {
-  bool value = (_has_bits_[0] & 0x00000400u) != 0;
+  bool value = (_has_bits_[0] & 0x00000800u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_prevlogterm() const {
@@ -4348,7 +4383,7 @@ inline bool PaxosMsg::has_prevlogterm() const {
 }
 inline void PaxosMsg::clear_prevlogterm() {
   prevlogterm_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000400u;
+  _has_bits_[0] &= ~0x00000800u;
 }
 inline uint64_t PaxosMsg::_internal_prevlogterm() const {
   return prevlogterm_;
@@ -4358,7 +4393,7 @@ inline uint64_t PaxosMsg::prevlogterm() const {
   return _internal_prevlogterm();
 }
 inline void PaxosMsg::_internal_set_prevlogterm(uint64_t value) {
-  _has_bits_[0] |= 0x00000400u;
+  _has_bits_[0] |= 0x00000800u;
   prevlogterm_ = value;
 }
 inline void PaxosMsg::set_prevlogterm(uint64_t value) {
@@ -4408,7 +4443,7 @@ PaxosMsg::entries() const {
 
 // optional uint64 commitIndex = 11;
 inline bool PaxosMsg::_internal_has_commitindex() const {
-  bool value = (_has_bits_[0] & 0x00000800u) != 0;
+  bool value = (_has_bits_[0] & 0x00001000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_commitindex() const {
@@ -4416,7 +4451,7 @@ inline bool PaxosMsg::has_commitindex() const {
 }
 inline void PaxosMsg::clear_commitindex() {
   commitindex_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00000800u;
+  _has_bits_[0] &= ~0x00001000u;
 }
 inline uint64_t PaxosMsg::_internal_commitindex() const {
   return commitindex_;
@@ -4426,7 +4461,7 @@ inline uint64_t PaxosMsg::commitindex() const {
   return _internal_commitindex();
 }
 inline void PaxosMsg::_internal_set_commitindex(uint64_t value) {
-  _has_bits_[0] |= 0x00000800u;
+  _has_bits_[0] |= 0x00001000u;
   commitindex_ = value;
 }
 inline void PaxosMsg::set_commitindex(uint64_t value) {
@@ -4436,7 +4471,7 @@ inline void PaxosMsg::set_commitindex(uint64_t value) {
 
 // optional bool nocache = 12;
 inline bool PaxosMsg::_internal_has_nocache() const {
-  bool value = (_has_bits_[0] & 0x00002000u) != 0;
+  bool value = (_has_bits_[0] & 0x00004000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_nocache() const {
@@ -4444,7 +4479,7 @@ inline bool PaxosMsg::has_nocache() const {
 }
 inline void PaxosMsg::clear_nocache() {
   nocache_ = false;
-  _has_bits_[0] &= ~0x00002000u;
+  _has_bits_[0] &= ~0x00004000u;
 }
 inline bool PaxosMsg::_internal_nocache() const {
   return nocache_;
@@ -4454,7 +4489,7 @@ inline bool PaxosMsg::nocache() const {
   return _internal_nocache();
 }
 inline void PaxosMsg::_internal_set_nocache(bool value) {
-  _has_bits_[0] |= 0x00002000u;
+  _has_bits_[0] |= 0x00004000u;
   nocache_ = value;
 }
 inline void PaxosMsg::set_nocache(bool value) {
@@ -4464,7 +4499,7 @@ inline void PaxosMsg::set_nocache(bool value) {
 
 // optional bool isSuccess = 13;
 inline bool PaxosMsg::_internal_has_issuccess() const {
-  bool value = (_has_bits_[0] & 0x00004000u) != 0;
+  bool value = (_has_bits_[0] & 0x00008000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_issuccess() const {
@@ -4472,7 +4507,7 @@ inline bool PaxosMsg::has_issuccess() const {
 }
 inline void PaxosMsg::clear_issuccess() {
   issuccess_ = false;
-  _has_bits_[0] &= ~0x00004000u;
+  _has_bits_[0] &= ~0x00008000u;
 }
 inline bool PaxosMsg::_internal_issuccess() const {
   return issuccess_;
@@ -4482,7 +4517,7 @@ inline bool PaxosMsg::issuccess() const {
   return _internal_issuccess();
 }
 inline void PaxosMsg::_internal_set_issuccess(bool value) {
-  _has_bits_[0] |= 0x00004000u;
+  _has_bits_[0] |= 0x00008000u;
   issuccess_ = value;
 }
 inline void PaxosMsg::set_issuccess(bool value) {
@@ -4492,7 +4527,7 @@ inline void PaxosMsg::set_issuccess(bool value) {
 
 // optional uint64 candidateId = 14;
 inline bool PaxosMsg::_internal_has_candidateid() const {
-  bool value = (_has_bits_[0] & 0x00020000u) != 0;
+  bool value = (_has_bits_[0] & 0x00040000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_candidateid() const {
@@ -4500,7 +4535,7 @@ inline bool PaxosMsg::has_candidateid() const {
 }
 inline void PaxosMsg::clear_candidateid() {
   candidateid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00020000u;
+  _has_bits_[0] &= ~0x00040000u;
 }
 inline uint64_t PaxosMsg::_internal_candidateid() const {
   return candidateid_;
@@ -4510,7 +4545,7 @@ inline uint64_t PaxosMsg::candidateid() const {
   return _internal_candidateid();
 }
 inline void PaxosMsg::_internal_set_candidateid(uint64_t value) {
-  _has_bits_[0] |= 0x00020000u;
+  _has_bits_[0] |= 0x00040000u;
   candidateid_ = value;
 }
 inline void PaxosMsg::set_candidateid(uint64_t value) {
@@ -4520,7 +4555,7 @@ inline void PaxosMsg::set_candidateid(uint64_t value) {
 
 // optional uint64 lastLogIndex = 15;
 inline bool PaxosMsg::_internal_has_lastlogindex() const {
-  bool value = (_has_bits_[0] & 0x00040000u) != 0;
+  bool value = (_has_bits_[0] & 0x00080000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_lastlogindex() const {
@@ -4528,7 +4563,7 @@ inline bool PaxosMsg::has_lastlogindex() const {
 }
 inline void PaxosMsg::clear_lastlogindex() {
   lastlogindex_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00040000u;
+  _has_bits_[0] &= ~0x00080000u;
 }
 inline uint64_t PaxosMsg::_internal_lastlogindex() const {
   return lastlogindex_;
@@ -4538,7 +4573,7 @@ inline uint64_t PaxosMsg::lastlogindex() const {
   return _internal_lastlogindex();
 }
 inline void PaxosMsg::_internal_set_lastlogindex(uint64_t value) {
-  _has_bits_[0] |= 0x00040000u;
+  _has_bits_[0] |= 0x00080000u;
   lastlogindex_ = value;
 }
 inline void PaxosMsg::set_lastlogindex(uint64_t value) {
@@ -4548,7 +4583,7 @@ inline void PaxosMsg::set_lastlogindex(uint64_t value) {
 
 // optional uint64 lastLogTerm = 16;
 inline bool PaxosMsg::_internal_has_lastlogterm() const {
-  bool value = (_has_bits_[0] & 0x00080000u) != 0;
+  bool value = (_has_bits_[0] & 0x00100000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_lastlogterm() const {
@@ -4556,7 +4591,7 @@ inline bool PaxosMsg::has_lastlogterm() const {
 }
 inline void PaxosMsg::clear_lastlogterm() {
   lastlogterm_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00080000u;
+  _has_bits_[0] &= ~0x00100000u;
 }
 inline uint64_t PaxosMsg::_internal_lastlogterm() const {
   return lastlogterm_;
@@ -4566,7 +4601,7 @@ inline uint64_t PaxosMsg::lastlogterm() const {
   return _internal_lastlogterm();
 }
 inline void PaxosMsg::_internal_set_lastlogterm(uint64_t value) {
-  _has_bits_[0] |= 0x00080000u;
+  _has_bits_[0] |= 0x00100000u;
   lastlogterm_ = value;
 }
 inline void PaxosMsg::set_lastlogterm(uint64_t value) {
@@ -4576,7 +4611,7 @@ inline void PaxosMsg::set_lastlogterm(uint64_t value) {
 
 // optional uint64 force = 17;
 inline bool PaxosMsg::_internal_has_force() const {
-  bool value = (_has_bits_[0] & 0x00100000u) != 0;
+  bool value = (_has_bits_[0] & 0x00200000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_force() const {
@@ -4584,7 +4619,7 @@ inline bool PaxosMsg::has_force() const {
 }
 inline void PaxosMsg::clear_force() {
   force_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00100000u;
+  _has_bits_[0] &= ~0x00200000u;
 }
 inline uint64_t PaxosMsg::_internal_force() const {
   return force_;
@@ -4594,7 +4629,7 @@ inline uint64_t PaxosMsg::force() const {
   return _internal_force();
 }
 inline void PaxosMsg::_internal_set_force(uint64_t value) {
-  _has_bits_[0] |= 0x00100000u;
+  _has_bits_[0] |= 0x00200000u;
   force_ = value;
 }
 inline void PaxosMsg::set_force(uint64_t value) {
@@ -4673,7 +4708,7 @@ inline void PaxosMsg::set_allocated_addr(std::string* addr) {
 
 // optional bool voteGranted = 19;
 inline bool PaxosMsg::_internal_has_votegranted() const {
-  bool value = (_has_bits_[0] & 0x00008000u) != 0;
+  bool value = (_has_bits_[0] & 0x00010000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_votegranted() const {
@@ -4681,7 +4716,7 @@ inline bool PaxosMsg::has_votegranted() const {
 }
 inline void PaxosMsg::clear_votegranted() {
   votegranted_ = false;
-  _has_bits_[0] &= ~0x00008000u;
+  _has_bits_[0] &= ~0x00010000u;
 }
 inline bool PaxosMsg::_internal_votegranted() const {
   return votegranted_;
@@ -4691,7 +4726,7 @@ inline bool PaxosMsg::votegranted() const {
   return _internal_votegranted();
 }
 inline void PaxosMsg::_internal_set_votegranted(bool value) {
-  _has_bits_[0] |= 0x00008000u;
+  _has_bits_[0] |= 0x00010000u;
   votegranted_ = value;
 }
 inline void PaxosMsg::set_votegranted(bool value) {
@@ -4701,7 +4736,7 @@ inline void PaxosMsg::set_votegranted(bool value) {
 
 // optional bool ignoreCheck = 20;
 inline bool PaxosMsg::_internal_has_ignorecheck() const {
-  bool value = (_has_bits_[0] & 0x00010000u) != 0;
+  bool value = (_has_bits_[0] & 0x00020000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_ignorecheck() const {
@@ -4709,7 +4744,7 @@ inline bool PaxosMsg::has_ignorecheck() const {
 }
 inline void PaxosMsg::clear_ignorecheck() {
   ignorecheck_ = false;
-  _has_bits_[0] &= ~0x00010000u;
+  _has_bits_[0] &= ~0x00020000u;
 }
 inline bool PaxosMsg::_internal_ignorecheck() const {
   return ignorecheck_;
@@ -4719,7 +4754,7 @@ inline bool PaxosMsg::ignorecheck() const {
   return _internal_ignorecheck();
 }
 inline void PaxosMsg::_internal_set_ignorecheck(bool value) {
-  _has_bits_[0] |= 0x00010000u;
+  _has_bits_[0] |= 0x00020000u;
   ignorecheck_ = value;
 }
 inline void PaxosMsg::set_ignorecheck(bool value) {
@@ -4729,7 +4764,7 @@ inline void PaxosMsg::set_ignorecheck(bool value) {
 
 // optional uint64 lcType = 21;
 inline bool PaxosMsg::_internal_has_lctype() const {
-  bool value = (_has_bits_[0] & 0x00200000u) != 0;
+  bool value = (_has_bits_[0] & 0x00400000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_lctype() const {
@@ -4737,7 +4772,7 @@ inline bool PaxosMsg::has_lctype() const {
 }
 inline void PaxosMsg::clear_lctype() {
   lctype_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00200000u;
+  _has_bits_[0] &= ~0x00400000u;
 }
 inline uint64_t PaxosMsg::_internal_lctype() const {
   return lctype_;
@@ -4747,7 +4782,7 @@ inline uint64_t PaxosMsg::lctype() const {
   return _internal_lctype();
 }
 inline void PaxosMsg::_internal_set_lctype(uint64_t value) {
-  _has_bits_[0] |= 0x00200000u;
+  _has_bits_[0] |= 0x00400000u;
   lctype_ = value;
 }
 inline void PaxosMsg::set_lctype(uint64_t value) {
@@ -4757,7 +4792,7 @@ inline void PaxosMsg::set_lctype(uint64_t value) {
 
 // optional uint64 minMatchIndex = 22;
 inline bool PaxosMsg::_internal_has_minmatchindex() const {
-  bool value = (_has_bits_[0] & 0x00400000u) != 0;
+  bool value = (_has_bits_[0] & 0x00800000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_minmatchindex() const {
@@ -4765,7 +4800,7 @@ inline bool PaxosMsg::has_minmatchindex() const {
 }
 inline void PaxosMsg::clear_minmatchindex() {
   minmatchindex_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00400000u;
+  _has_bits_[0] &= ~0x00800000u;
 }
 inline uint64_t PaxosMsg::_internal_minmatchindex() const {
   return minmatchindex_;
@@ -4775,7 +4810,7 @@ inline uint64_t PaxosMsg::minmatchindex() const {
   return _internal_minmatchindex();
 }
 inline void PaxosMsg::_internal_set_minmatchindex(uint64_t value) {
-  _has_bits_[0] |= 0x00400000u;
+  _has_bits_[0] |= 0x00800000u;
   minmatchindex_ = value;
 }
 inline void PaxosMsg::set_minmatchindex(uint64_t value) {
@@ -4785,7 +4820,7 @@ inline void PaxosMsg::set_minmatchindex(uint64_t value) {
 
 // optional uint64 appliedIndex = 23;
 inline bool PaxosMsg::_internal_has_appliedindex() const {
-  bool value = (_has_bits_[0] & 0x00800000u) != 0;
+  bool value = (_has_bits_[0] & 0x01000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_appliedindex() const {
@@ -4793,7 +4828,7 @@ inline bool PaxosMsg::has_appliedindex() const {
 }
 inline void PaxosMsg::clear_appliedindex() {
   appliedindex_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x00800000u;
+  _has_bits_[0] &= ~0x01000000u;
 }
 inline uint64_t PaxosMsg::_internal_appliedindex() const {
   return appliedindex_;
@@ -4803,7 +4838,7 @@ inline uint64_t PaxosMsg::appliedindex() const {
   return _internal_appliedindex();
 }
 inline void PaxosMsg::_internal_set_appliedindex(uint64_t value) {
-  _has_bits_[0] |= 0x00800000u;
+  _has_bits_[0] |= 0x01000000u;
   appliedindex_ = value;
 }
 inline void PaxosMsg::set_appliedindex(uint64_t value) {
@@ -4813,7 +4848,7 @@ inline void PaxosMsg::set_appliedindex(uint64_t value) {
 
 // optional uint64 newClusterId = 24;
 inline bool PaxosMsg::_internal_has_newclusterid() const {
-  bool value = (_has_bits_[0] & 0x01000000u) != 0;
+  bool value = (_has_bits_[0] & 0x02000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_newclusterid() const {
@@ -4821,7 +4856,7 @@ inline bool PaxosMsg::has_newclusterid() const {
 }
 inline void PaxosMsg::clear_newclusterid() {
   newclusterid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x01000000u;
+  _has_bits_[0] &= ~0x02000000u;
 }
 inline uint64_t PaxosMsg::_internal_newclusterid() const {
   return newclusterid_;
@@ -4831,7 +4866,7 @@ inline uint64_t PaxosMsg::newclusterid() const {
   return _internal_newclusterid();
 }
 inline void PaxosMsg::_internal_set_newclusterid(uint64_t value) {
-  _has_bits_[0] |= 0x01000000u;
+  _has_bits_[0] |= 0x02000000u;
   newclusterid_ = value;
 }
 inline void PaxosMsg::set_newclusterid(uint64_t value) {
@@ -4881,7 +4916,7 @@ PaxosMsg::cientries() const {
 
 // optional uint32 role = 26;
 inline bool PaxosMsg::_internal_has_role() const {
-  bool value = (_has_bits_[0] & 0x02000000u) != 0;
+  bool value = (_has_bits_[0] & 0x04000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_role() const {
@@ -4889,7 +4924,7 @@ inline bool PaxosMsg::has_role() const {
 }
 inline void PaxosMsg::clear_role() {
   role_ = 0u;
-  _has_bits_[0] &= ~0x02000000u;
+  _has_bits_[0] &= ~0x04000000u;
 }
 inline uint32_t PaxosMsg::_internal_role() const {
   return role_;
@@ -4899,7 +4934,7 @@ inline uint32_t PaxosMsg::role() const {
   return _internal_role();
 }
 inline void PaxosMsg::_internal_set_role(uint32_t value) {
-  _has_bits_[0] |= 0x02000000u;
+  _has_bits_[0] |= 0x04000000u;
   role_ = value;
 }
 inline void PaxosMsg::set_role(uint32_t value) {
@@ -4909,7 +4944,7 @@ inline void PaxosMsg::set_role(uint32_t value) {
 
 // optional .alisql.CompressedLogEntries compressedEntries = 27;
 inline bool PaxosMsg::_internal_has_compressedentries() const {
-  bool value = (_has_bits_[0] & 0x00000004u) != 0;
+  bool value = (_has_bits_[0] & 0x00000008u) != 0;
   PROTOBUF_ASSUME(!value || compressedentries_ != nullptr);
   return value;
 }
@@ -4918,7 +4953,7 @@ inline bool PaxosMsg::has_compressedentries() const {
 }
 inline void PaxosMsg::clear_compressedentries() {
   if (compressedentries_ != nullptr) compressedentries_->Clear();
-  _has_bits_[0] &= ~0x00000004u;
+  _has_bits_[0] &= ~0x00000008u;
 }
 inline const ::alisql::CompressedLogEntries& PaxosMsg::_internal_compressedentries() const {
   const ::alisql::CompressedLogEntries* p = compressedentries_;
@@ -4936,14 +4971,14 @@ inline void PaxosMsg::unsafe_arena_set_allocated_compressedentries(
   }
   compressedentries_ = compressedentries;
   if (compressedentries) {
-    _has_bits_[0] |= 0x00000004u;
+    _has_bits_[0] |= 0x00000008u;
   } else {
-    _has_bits_[0] &= ~0x00000004u;
+    _has_bits_[0] &= ~0x00000008u;
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:alisql.PaxosMsg.compressedEntries)
 }
 inline ::alisql::CompressedLogEntries* PaxosMsg::release_compressedentries() {
-  _has_bits_[0] &= ~0x00000004u;
+  _has_bits_[0] &= ~0x00000008u;
   ::alisql::CompressedLogEntries* temp = compressedentries_;
   compressedentries_ = nullptr;
 #ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
@@ -4959,13 +4994,13 @@ inline ::alisql::CompressedLogEntries* PaxosMsg::release_compressedentries() {
 }
 inline ::alisql::CompressedLogEntries* PaxosMsg::unsafe_arena_release_compressedentries() {
   // @@protoc_insertion_point(field_release:alisql.PaxosMsg.compressedEntries)
-  _has_bits_[0] &= ~0x00000004u;
+  _has_bits_[0] &= ~0x00000008u;
   ::alisql::CompressedLogEntries* temp = compressedentries_;
   compressedentries_ = nullptr;
   return temp;
 }
 inline ::alisql::CompressedLogEntries* PaxosMsg::_internal_mutable_compressedentries() {
-  _has_bits_[0] |= 0x00000004u;
+  _has_bits_[0] |= 0x00000008u;
   if (compressedentries_ == nullptr) {
     auto* p = CreateMaybeMessage<::alisql::CompressedLogEntries>(GetArenaForAllocation());
     compressedentries_ = p;
@@ -4989,9 +5024,9 @@ inline void PaxosMsg::set_allocated_compressedentries(::alisql::CompressedLogEnt
       compressedentries = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
           message_arena, compressedentries, submessage_arena);
     }
-    _has_bits_[0] |= 0x00000004u;
+    _has_bits_[0] |= 0x00000008u;
   } else {
-    _has_bits_[0] &= ~0x00000004u;
+    _has_bits_[0] &= ~0x00000008u;
   }
   compressedentries_ = compressedentries;
   // @@protoc_insertion_point(field_set_allocated:alisql.PaxosMsg.compressedEntries)
@@ -5068,7 +5103,7 @@ inline void PaxosMsg::set_allocated_extra(std::string* extra) {
 
 // optional .alisql.PaxosMsg.MsgErrorType msgError = 30;
 inline bool PaxosMsg::_internal_has_msgerror() const {
-  bool value = (_has_bits_[0] & 0x04000000u) != 0;
+  bool value = (_has_bits_[0] & 0x08000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_msgerror() const {
@@ -5076,7 +5111,7 @@ inline bool PaxosMsg::has_msgerror() const {
 }
 inline void PaxosMsg::clear_msgerror() {
   msgerror_ = 0;
-  _has_bits_[0] &= ~0x04000000u;
+  _has_bits_[0] &= ~0x08000000u;
 }
 inline ::alisql::PaxosMsg_MsgErrorType PaxosMsg::_internal_msgerror() const {
   return static_cast< ::alisql::PaxosMsg_MsgErrorType >(msgerror_);
@@ -5087,7 +5122,7 @@ inline ::alisql::PaxosMsg_MsgErrorType PaxosMsg::msgerror() const {
 }
 inline void PaxosMsg::_internal_set_msgerror(::alisql::PaxosMsg_MsgErrorType value) {
   assert(::alisql::PaxosMsg_MsgErrorType_IsValid(value));
-  _has_bits_[0] |= 0x04000000u;
+  _has_bits_[0] |= 0x08000000u;
   msgerror_ = value;
 }
 inline void PaxosMsg::set_msgerror(::alisql::PaxosMsg_MsgErrorType value) {
@@ -5097,7 +5132,7 @@ inline void PaxosMsg::set_msgerror(::alisql::PaxosMsg_MsgErrorType value) {
 
 // optional uint64 myServerId = 31;
 inline bool PaxosMsg::_internal_has_myserverid() const {
-  bool value = (_has_bits_[0] & 0x08000000u) != 0;
+  bool value = (_has_bits_[0] & 0x10000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_myserverid() const {
@@ -5105,7 +5140,7 @@ inline bool PaxosMsg::has_myserverid() const {
 }
 inline void PaxosMsg::clear_myserverid() {
   myserverid_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x08000000u;
+  _has_bits_[0] &= ~0x10000000u;
 }
 inline uint64_t PaxosMsg::_internal_myserverid() const {
   return myserverid_;
@@ -5115,7 +5150,7 @@ inline uint64_t PaxosMsg::myserverid() const {
   return _internal_myserverid();
 }
 inline void PaxosMsg::_internal_set_myserverid(uint64_t value) {
-  _has_bits_[0] |= 0x08000000u;
+  _has_bits_[0] |= 0x10000000u;
   myserverid_ = value;
 }
 inline void PaxosMsg::set_myserverid(uint64_t value) {
@@ -5125,7 +5160,7 @@ inline void PaxosMsg::set_myserverid(uint64_t value) {
 
 // optional uint64 applyDelaySeconds = 32;
 inline bool PaxosMsg::_internal_has_applydelayseconds() const {
-  bool value = (_has_bits_[0] & 0x10000000u) != 0;
+  bool value = (_has_bits_[0] & 0x20000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_applydelayseconds() const {
@@ -5133,7 +5168,7 @@ inline bool PaxosMsg::has_applydelayseconds() const {
 }
 inline void PaxosMsg::clear_applydelayseconds() {
   applydelayseconds_ = uint64_t{0u};
-  _has_bits_[0] &= ~0x10000000u;
+  _has_bits_[0] &= ~0x20000000u;
 }
 inline uint64_t PaxosMsg::_internal_applydelayseconds() const {
   return applydelayseconds_;
@@ -5143,7 +5178,7 @@ inline uint64_t PaxosMsg::applydelayseconds() const {
   return _internal_applydelayseconds();
 }
 inline void PaxosMsg::_internal_set_applydelayseconds(uint64_t value) {
-  _has_bits_[0] |= 0x10000000u;
+  _has_bits_[0] |= 0x20000000u;
   applydelayseconds_ = value;
 }
 inline void PaxosMsg::set_applydelayseconds(uint64_t value) {
@@ -5153,7 +5188,7 @@ inline void PaxosMsg::set_applydelayseconds(uint64_t value) {
 
 // optional bool applyThreadRunning = 33;
 inline bool PaxosMsg::_internal_has_applythreadrunning() const {
-  bool value = (_has_bits_[0] & 0x20000000u) != 0;
+  bool value = (_has_bits_[0] & 0x80000000u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_applythreadrunning() const {
@@ -5161,7 +5196,7 @@ inline bool PaxosMsg::has_applythreadrunning() const {
 }
 inline void PaxosMsg::clear_applythreadrunning() {
   applythreadrunning_ = false;
-  _has_bits_[0] &= ~0x20000000u;
+  _has_bits_[0] &= ~0x80000000u;
 }
 inline bool PaxosMsg::_internal_applythreadrunning() const {
   return applythreadrunning_;
@@ -5171,7 +5206,7 @@ inline bool PaxosMsg::applythreadrunning() const {
   return _internal_applythreadrunning();
 }
 inline void PaxosMsg::_internal_set_applythreadrunning(bool value) {
-  _has_bits_[0] |= 0x20000000u;
+  _has_bits_[0] |= 0x80000000u;
   applythreadrunning_ = value;
 }
 inline void PaxosMsg::set_applythreadrunning(bool value) {
@@ -5181,7 +5216,7 @@ inline void PaxosMsg::set_applythreadrunning(bool value) {
 
 // optional bool disableElection = 34;
 inline bool PaxosMsg::_internal_has_disableelection() const {
-  bool value = (_has_bits_[0] & 0x40000000u) != 0;
+  bool value = (_has_bits_[1] & 0x00000001u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_disableelection() const {
@@ -5189,7 +5224,7 @@ inline bool PaxosMsg::has_disableelection() const {
 }
 inline void PaxosMsg::clear_disableelection() {
   disableelection_ = false;
-  _has_bits_[0] &= ~0x40000000u;
+  _has_bits_[1] &= ~0x00000001u;
 }
 inline bool PaxosMsg::_internal_disableelection() const {
   return disableelection_;
@@ -5199,7 +5234,7 @@ inline bool PaxosMsg::disableelection() const {
   return _internal_disableelection();
 }
 inline void PaxosMsg::_internal_set_disableelection(bool value) {
-  _has_bits_[0] |= 0x40000000u;
+  _has_bits_[1] |= 0x00000001u;
   disableelection_ = value;
 }
 inline void PaxosMsg::set_disableelection(bool value) {
@@ -5209,7 +5244,7 @@ inline void PaxosMsg::set_disableelection(bool value) {
 
 // optional bool logInstance = 35;
 inline bool PaxosMsg::_internal_has_loginstance() const {
-  bool value = (_has_bits_[0] & 0x80000000u) != 0;
+  bool value = (_has_bits_[1] & 0x00000002u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_loginstance() const {
@@ -5217,7 +5252,7 @@ inline bool PaxosMsg::has_loginstance() const {
 }
 inline void PaxosMsg::clear_loginstance() {
   loginstance_ = false;
-  _has_bits_[0] &= ~0x80000000u;
+  _has_bits_[1] &= ~0x00000002u;
 }
 inline bool PaxosMsg::_internal_loginstance() const {
   return loginstance_;
@@ -5227,12 +5262,109 @@ inline bool PaxosMsg::loginstance() const {
   return _internal_loginstance();
 }
 inline void PaxosMsg::_internal_set_loginstance(bool value) {
-  _has_bits_[0] |= 0x80000000u;
+  _has_bits_[1] |= 0x00000002u;
   loginstance_ = value;
 }
 inline void PaxosMsg::set_loginstance(bool value) {
   _internal_set_loginstance(value);
   // @@protoc_insertion_point(field_set:alisql.PaxosMsg.logInstance)
+}
+
+// optional bytes serverIp = 36;
+inline bool PaxosMsg::_internal_has_serverip() const {
+  bool value = (_has_bits_[0] & 0x00000004u) != 0;
+  return value;
+}
+inline bool PaxosMsg::has_serverip() const {
+  return _internal_has_serverip();
+}
+inline void PaxosMsg::clear_serverip() {
+  serverip_.ClearToEmpty();
+  _has_bits_[0] &= ~0x00000004u;
+}
+inline const std::string& PaxosMsg::serverip() const {
+  // @@protoc_insertion_point(field_get:alisql.PaxosMsg.serverIp)
+  return _internal_serverip();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void PaxosMsg::set_serverip(ArgT0&& arg0, ArgT... args) {
+ _has_bits_[0] |= 0x00000004u;
+ serverip_.SetBytes(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:alisql.PaxosMsg.serverIp)
+}
+inline std::string* PaxosMsg::mutable_serverip() {
+  std::string* _s = _internal_mutable_serverip();
+  // @@protoc_insertion_point(field_mutable:alisql.PaxosMsg.serverIp)
+  return _s;
+}
+inline const std::string& PaxosMsg::_internal_serverip() const {
+  return serverip_.Get();
+}
+inline void PaxosMsg::_internal_set_serverip(const std::string& value) {
+  _has_bits_[0] |= 0x00000004u;
+  serverip_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, value, GetArenaForAllocation());
+}
+inline std::string* PaxosMsg::_internal_mutable_serverip() {
+  _has_bits_[0] |= 0x00000004u;
+  return serverip_.Mutable(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+}
+inline std::string* PaxosMsg::release_serverip() {
+  // @@protoc_insertion_point(field_release:alisql.PaxosMsg.serverIp)
+  if (!_internal_has_serverip()) {
+    return nullptr;
+  }
+  _has_bits_[0] &= ~0x00000004u;
+  auto* p = serverip_.ReleaseNonDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (serverip_.IsDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited())) {
+    serverip_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  return p;
+}
+inline void PaxosMsg::set_allocated_serverip(std::string* serverip) {
+  if (serverip != nullptr) {
+    _has_bits_[0] |= 0x00000004u;
+  } else {
+    _has_bits_[0] &= ~0x00000004u;
+  }
+  serverip_.SetAllocated(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), serverip,
+      GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (serverip_.IsDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited())) {
+    serverip_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:alisql.PaxosMsg.serverIp)
+}
+
+// optional uint64 serverPort = 37;
+inline bool PaxosMsg::_internal_has_serverport() const {
+  bool value = (_has_bits_[0] & 0x40000000u) != 0;
+  return value;
+}
+inline bool PaxosMsg::has_serverport() const {
+  return _internal_has_serverport();
+}
+inline void PaxosMsg::clear_serverport() {
+  serverport_ = uint64_t{0u};
+  _has_bits_[0] &= ~0x40000000u;
+}
+inline uint64_t PaxosMsg::_internal_serverport() const {
+  return serverport_;
+}
+inline uint64_t PaxosMsg::serverport() const {
+  // @@protoc_insertion_point(field_get:alisql.PaxosMsg.serverPort)
+  return _internal_serverport();
+}
+inline void PaxosMsg::_internal_set_serverport(uint64_t value) {
+  _has_bits_[0] |= 0x40000000u;
+  serverport_ = value;
+}
+inline void PaxosMsg::set_serverport(uint64_t value) {
+  _internal_set_serverport(value);
+  // @@protoc_insertion_point(field_set:alisql.PaxosMsg.serverPort)
 }
 
 // -------------------------------------------------------------------

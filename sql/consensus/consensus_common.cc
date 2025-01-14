@@ -95,6 +95,10 @@ void collect_show_global_results(
     res = ci.disableElection ? "Yes" : "No";
     result->disable_election.str = res;
     result->disable_election.length = strlen(res);
+    result->server_ip.str =
+        strmake_root(mem_root, ci.serverIp.c_str(), ci.serverIp.length());
+    result->server_ip.length = ci.serverIp.length();
+    result->server_port = ci.serverPort;
 
     results.push_back(result);
   }
@@ -165,6 +169,11 @@ void collect_show_local_results(MEM_ROOT *mem_root,
   res = consensus_ptr->getApplyThreadRunning() ? "Yes" : "No";
   result->apply_running.str = res;
   result->apply_running.length = strlen(res);
+
+  result->leader_ip.str =
+      strmake_root(mem_root, mi.leaderIp.c_str(), mi.leaderIp.length());
+  result->leader_ip.length = mi.leaderIp.length();
+  result->leader_port = mi.leaderPort;
   return;
 }
 

@@ -1186,8 +1186,7 @@ static Sys_var_charptr Sys_slow_query_user_pattern(
     "match user pattern "
     "match user pattern",
     GLOBAL_VAR(sqb_user_pattern), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
-    DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_UPDATE(nullptr));
+    DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulong Sys_binlog_cache_size(
     "binlog_cache_size",

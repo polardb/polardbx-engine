@@ -47,6 +47,8 @@ typedef struct Consensus_show_global_result {
   LEX_CSTRING send_applied;
   LEX_CSTRING instance_type;
   LEX_CSTRING disable_election;
+  LEX_CSTRING server_ip;
+  ulonglong server_port;
 } Consensus_show_global_result;
 
 /* Result structure for show_cluster_local */
@@ -64,6 +66,8 @@ typedef struct Consensus_show_local_result {
   LEX_CSTRING instance_type;
   LEX_CSTRING disable_election;
   LEX_CSTRING apply_running;
+  LEX_CSTRING leader_ip;
+  ulonglong leader_port;
 } Consensus_show_local_result;
 
 /* Result structure for show_logs */

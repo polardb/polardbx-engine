@@ -651,13 +651,15 @@ static int check_connection(THD *thd) {
 
   auth_rc = acl_authenticate(thd, COM_CONNECT);
   
-  const std::string &user_pattern = sqb_user_pattern;
-  const char* user_name = thd->security_context()->priv_user().str;
-  if (user_pattern != "" && user_name != nullptr) {
-    std::regex pattern(user_pattern);
-    /** Only when set patern and match, block will be triggered */
-    thd->sqb_should_block =
-        std::regex_search(user_name, pattern);
+  if (sqb_user_pattern) {
+    const std::string &user_pattern = sqb_user_pattern;
+    const char* user_name = thd->security_context()->priv_user().str;
+    if (user_pattern != "" && user_name != nullptr) {
+      std::regex pattern(user_pattern);
+      /** Only when set patern and match, block will be triggered */
+      thd->sqb_should_block =
+          std::regex_search(user_name, pattern);
+    }
   }
 
   if (mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_CONNECT))) {
