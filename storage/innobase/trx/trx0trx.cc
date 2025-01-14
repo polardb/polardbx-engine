@@ -2024,10 +2024,10 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     trx_sys->get_shard_by_trx_id(trx->id).active_rw_trxs.latch_and_execute(
         [&](Trx_by_id_with_min &trx_by_id_with_min) {
           state_transition();
-          // ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
-          // ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
+          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
           trx_by_id_with_min.erase(trx->id);
-          // ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
         },
         UT_LOCATION_HERE);
   } else {

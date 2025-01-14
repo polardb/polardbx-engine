@@ -241,12 +241,12 @@ static bool row_vers_find_matching(
     bool looking_for_match, const dict_index_t *const clust_index,
     const rec_t *const clust_rec, ulint *&clust_offsets,
     const dict_index_t *const sec_index, const rec_t *const sec_rec,
-    const ulint *const sec_offsets, const bool comp, txn_rec_t clust_txn_rec,
+    const ulint *const sec_offsets, const bool comp, const trx_id_t trx_id,
     mtr_t *const mtr, mem_heap_t *&heap) {
   const rec_t *version = clust_rec;
-  trx_id_t version_trx_id = clust_txn_rec.trx_id;
+  trx_id_t version_trx_id = trx_id;
 
-  while (version_trx_id == clust_txn_rec.trx_id) {
+  while (version_trx_id == trx_id) {
     mem_heap_t *old_heap = heap;
     const dtuple_t *clust_vrow = nullptr;
     rec_t *prev_version = nullptr;
@@ -270,7 +270,7 @@ static bool row_vers_find_matching(
     delete-marked, because we never start a transaction by
     inserting a delete-marked record. */
     ut_ad(prev_version || !rec_get_deleted_flag(version, comp) ||
-          !lizard::txn_rw_is_active(&clust_txn_rec, false, nullptr).trx);
+          !trx_rw_is_active(trx_id, false));
 
     /* Free version and clust_offsets. */
     mem_heap_free(old_heap);
@@ -307,11 +307,11 @@ static bool row_vers_find_matching(
  NOTE that this function can return false positives but never false
  negatives. The caller must confirm all positive results by calling checking if
  the trx is still active.*/
-static inline txn_rw_t row_vers_impl_x_locked_low(
+static inline trx_t *row_vers_impl_x_locked_low(
     const rec_t *const clust_rec, const dict_index_t *const clust_index,
     const rec_t *const sec_rec, const dict_index_t *const sec_index,
     const ulint *const sec_offsets, mtr_t *const mtr) {
-  txn_rec_t txn_rec;
+  trx_id_t trx_id;
 
   ulint *clust_offsets;
   mem_heap_t *heap;
@@ -505,16 +505,16 @@ static inline txn_rw_t row_vers_impl_x_locked_low(
   clust_offsets = rec_get_offsets(clust_rec, clust_index, nullptr,
                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
 
-  lizard::row_get_txn_rec(clust_rec, clust_index, clust_offsets, &txn_rec);
-  txn_rw_t txn_rw = lizard::txn_rw_is_active(&txn_rec, true, nullptr);
+  trx_id = row_get_rec_trx_id(clust_rec, clust_index, clust_offsets);
 
-  if (txn_rw.trx == nullptr) {
+  trx_t *trx = trx_rw_is_active(trx_id, true);
+
+  if (trx == nullptr) {
     /* The transaction that modified or inserted clust_rec is no
     longer active, or it is corrupt: no implicit lock on rec */
-    lock_check_trx_id_sanity(txn_rec.trx_id, clust_rec, clust_index,
-                             clust_offsets);
+    lock_check_trx_id_sanity(trx_id, clust_rec, clust_index, clust_offsets);
     mem_heap_free(heap);
-    return txn_rw;
+    return nullptr;
   }
 
   auto comp = page_rec_is_comp(sec_rec);
@@ -526,22 +526,21 @@ static inline txn_rw_t row_vers_impl_x_locked_low(
 
   if (!row_vers_find_matching(looking_for_match, clust_index, clust_rec,
                               clust_offsets, sec_index, sec_rec, sec_offsets,
-                              comp, txn_rec, mtr, heap)) {
-    trx_release_reference(txn_rw.trx);
-    txn_rw.reset();
+                              comp, trx_id, mtr, heap)) {
+    trx_release_reference(trx);
+    trx = nullptr;
   }
 
-  DBUG_PRINT("info",
-             ("Implicit lock is held by trx:" TRX_ID_FMT, txn_rec.trx_id));
+  DBUG_PRINT("info", ("Implicit lock is held by trx:" TRX_ID_FMT, trx_id));
 
   mem_heap_free(heap);
-  return txn_rw;
+  return trx;
 }
 
-txn_rw_t row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
-                                const ulint *offsets) {
+trx_t *row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
+                              const ulint *offsets) {
   mtr_t mtr;
-  txn_rw_t txn_rw;
+  trx_t *trx;
   const rec_t *clust_rec;
   dict_index_t *clust_index;
 
@@ -573,17 +572,17 @@ txn_rw_t row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
     a rollback we always undo the modifications to secondary index
     records before the clustered index record. */
 
-    txn_rw.reset();
+    trx = nullptr;
   } else {
-    txn_rw = row_vers_impl_x_locked_low(clust_rec, clust_index, rec, index,
-                                        offsets, &mtr);
+    trx = row_vers_impl_x_locked_low(clust_rec, clust_index, rec, index,
+                                     offsets, &mtr);
 
-    ut_ad(txn_rw.trx == nullptr || trx_is_referenced(txn_rw.trx));
+    ut_ad(trx == nullptr || trx_is_referenced(trx));
   }
 
   mtr_commit(&mtr);
 
-  return (txn_rw);
+  return (trx);
 }
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
@@ -1412,18 +1411,12 @@ void row_vers_build_for_semi_consistent_read(
     mem_heap_t *heap2;
     rec_t *prev_version;
     trx_id_t version_trx_id;
-    txn_rec_t version_txn_rec;
-    txn_rw_t txn_rw;
 
-    //version_trx_id = row_get_rec_trx_id(version, index, *offsets);
-    lizard::row_get_txn_rec(version, index, *offsets, &version_txn_rec);
-    version_trx_id = version_txn_rec.trx_id;
-
+    version_trx_id = row_get_rec_trx_id(version, index, *offsets);
     if (rec == version) {
       rec_trx_id = version_trx_id;
     }
-    txn_rw = lizard::txn_rw_is_active(&version_txn_rec, false, nullptr);
-    if (!txn_rw.trx) {
+    if (!trx_rw_is_active(version_trx_id, false)) {
     committed_version_trx:
       /* We found a version that belongs to a
       committed transaction: return it. */

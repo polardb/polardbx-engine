@@ -707,9 +707,9 @@ class Clone_Snapshot {
 
   /** Wait for a transaction to end.
   @param[in]    thd     current THD
-  @param[in]    txn_id  transaction to wait for
+  @param[in]    trx_id  transaction to wait for
   @return error code. */
-  int wait_trx_end(THD *thd, const txn_id_t &txn_id);
+  int wait_trx_end(THD *thd, trx_id_t trx_id);
 
   /** Begin state transition before waiting for DDL. */
   void begin_transit_ddl_wait() {

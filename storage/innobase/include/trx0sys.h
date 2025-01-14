@@ -192,7 +192,7 @@ void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn);
 
 /** Get a list of all binlog prepared transactions.
 @param[out]     trx_ids all prepared transaction IDs. */
-void trx_sys_get_binlog_prepared(std::vector<txn_id_t> &trx_ids);
+void trx_sys_get_binlog_prepared(std::vector<trx_id_t> &trx_ids);
 
 /** Get current binary log positions stored.
 @param[out]     file    binary log file name
@@ -403,11 +403,11 @@ class Trx_by_id_with_min {
   Reads can be performed without any latch before accessing m_by_id,
   but care must be taken to interpret the result -
   @see trx_rw_is_active for details.*/
-  // std::atomic<trx_id_t> m_min_id{0};
+  std::atomic<trx_id_t> m_min_id{0};
 
  public:
   By_id const &by_id() const { return m_by_id; }
-  //trx_id_t min_id() const { return m_min_id.load(); }
+  trx_id_t min_id() const { return m_min_id.load(); }
   trx_t *get(trx_id_t trx_id) const {
     const auto it = m_by_id.find(trx_id);
     trx_t *trx = it == m_by_id.end() ? nullptr : it->second;
@@ -423,32 +423,32 @@ class Trx_by_id_with_min {
     ut_ad(0 == m_by_id.count(trx_id));
     m_by_id.emplace(trx_id, &trx);
 
-    // if (m_by_id.size() == 1 ||
-    //     trx_id < m_min_id.load(std::memory_order_relaxed)) {
-    //   m_min_id.store(trx_id, std::memory_order_release);
-    //}
+    if (m_by_id.size() == 1 ||
+        trx_id < m_min_id.load(std::memory_order_relaxed)) {
+      m_min_id.store(trx_id, std::memory_order_release);
+    }
   }
   void erase(trx_id_t trx_id) {
     ut_ad(1 == m_by_id.count(trx_id));
     m_by_id.erase(trx_id);
 
-    // if (m_min_id.load(std::memory_order_relaxed) == trx_id) {
-    //  We want at most 1 release store, so we use a local variable for the
-    //  loop.
-    // trx_id_t new_min = trx_id + TRX_SHARDS_N;
-    // if (!m_by_id.empty()) {
+    if (m_min_id.load(std::memory_order_relaxed) == trx_id) {
+      // We want at most 1 release store, so we use a local variable for the
+      // loop.
+      trx_id_t new_min = trx_id + TRX_SHARDS_N;
+      if (!m_by_id.empty()) {
 #ifdef UNIV_DEBUG
-    // These asserts ensure while loop terminates:
-    //    const trx_id_t some_id = m_by_id.begin()->first;
-    //   ut_a(new_min <= some_id);
-    //   ut_a((some_id - new_min) % TRX_SHARDS_N == 0);
+        // These asserts ensure while loop terminates:
+        const trx_id_t some_id = m_by_id.begin()->first;
+        ut_a(new_min <= some_id);
+        ut_a((some_id - new_min) % TRX_SHARDS_N == 0);
 #endif /* UNIV_DEBUG */
-    //   while (m_by_id.count(new_min) == 0) {
-    //    new_min += TRX_SHARDS_N;
-    // }
-    // }
-    // m_min_id.store(new_min, std::memory_order_release);
-    // }
+        while (m_by_id.count(new_min) == 0) {
+          new_min += TRX_SHARDS_N;
+        }
+      }
+      m_min_id.store(new_min, std::memory_order_release);
+    }
   }
 };
 
