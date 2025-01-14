@@ -23,10 +23,6 @@
 # 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 
-SOURCE_DIR="$(pwd)/../"
-export PERL5LIB="${SOURCE_DIR}/extra/openssl/external/perl/Text-Template-1.56/lib:$PERL5LIB"
-echo "Setting PERL5LIB to use bundled Text::Template : $PERL5LIB"
-
 dos2unix $1/script/*.sh
 version=1.0.0
 prefix=/home/admin
