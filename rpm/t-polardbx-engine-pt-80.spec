@@ -161,7 +161,7 @@ $CMAKE_BIN .                            \
 %install
 cd $OLDPWD/../
 MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
-make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL VERBOSE=1  install
+make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 tmp_dir=/u01/polardbx_engine_%{release_date}_current

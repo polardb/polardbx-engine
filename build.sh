@@ -231,6 +231,7 @@ enable_gcov=0
 enable_lizard_dbg=0
 initialize_type="none"
 with_rebuild=0
+with_ssl=system
 
 parse_options "$@"
 
@@ -248,10 +249,12 @@ if [[ x"$build_type" = x"debug" ]]; then
   fi
 elif [[ x"$build_type" = x"release" ]]; then
   build_type="Release"
+  with_ssl=openssl
   debug=0
   gcov=0
 elif [[ x"$build_type" = x"release_with_debinfo" ]]; then
   build_type="RelWithDebInfo"
+  with_ssl=openssl
   debug=0
   gcov=0
 else
@@ -347,8 +350,8 @@ else
       -DENABLE_GCOV=$gcov                \
       -DENABLE_EXPERIMENT_SYSVARS=1      \
       -DINSTALL_LAYOUT=STANDALONE        \
-      -DMYSQL_MAINTAINER_MODE=1          \
-      -DWITH_SSL=system                  \
+      -DMYSQL_MAINTAINER_MODE=0          \
+      -DWITH_SSL=$with_ssl               \
       -DWITH_ZLIB=bundled                \
       -DWITH_ZSTD=bundled                \
       -DWITH_MYISAM_STORAGE_ENGINE=1     \
@@ -361,8 +364,6 @@ else
       -DWITH_EXAMPLE_STORAGE_ENGINE=0    \
       -DWITH_TEMPTABLE_STORAGE_ENGINE=1  \
       -DWITH_EXTRA_CHARSETS=all          \
-      -DDEFAULT_CHARSET=utf8mb4          \
-      -DDEFAULT_COLLATION=utf8mb4_0900_ai_ci \
       -DENABLED_PROFILING=1              \
       -DENABLED_LOCAL_INFILE=1           \
       -DWITH_ASAN=$asan                  \

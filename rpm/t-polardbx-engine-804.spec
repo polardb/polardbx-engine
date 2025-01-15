@@ -78,8 +78,9 @@ echo "__host_vendor" %{?__host_vendor}
 echo "_build_cpu" %{?_build_cpu}
 echo "_build_os" %{?_build_os}
 echo "_build_vendor" %{?_build_vendor}
-cat /etc/redhat-release
-
+if [-f /etc/redhat-release]; then
+    cat /etc/redhat-release
+fi
 
 %build
 cd $OLDPWD/../

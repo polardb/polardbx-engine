@@ -1,0 +1,34 @@
+
+# 当前文件说明
+ * t-polardbx-engine-80.spec
+    * 供线上公有云使用
+ * t-polardbx-engine-804.spec
+    * 供线下大客户使用
+ * t-polardbx-engine-pt-80.spec
+    * 供嵌入式场景用户使用
+ * t-polardbx-engine.spec
+    * 供开源用户使用
+ * t-polardbx-engine-pt-80-build.sh
+    * t-polardbx-engine-pt-80的专用打包脚本,软链接到build.sh
+ * t-polardbx-engine-80-build.sh
+    * t-polardbx-engine-80的专用打包脚本,软链接到build.sh
+ * t-polardbx-engine-804-build.sh
+    * t-polardbx-engine-804的专用打包脚本,软链接到build.sh
+ * t-polardbx-engine-build.sh
+    * t-polardbx-engine的专用打包脚本,软链接到build.sh
+ * build.sh
+    * 打包脚本, 用于使用指定文件的release_date传入rpm_create
+ * rpm_create
+    * 打包工具, 实际打包工具, 防止机器上没有该工具单独冗余保留
+
+
+# 新增rpm包说明
+假定新增包名为t-polardbx-engine-90. 则需要以t-polardbx-engine-80.spec为基线, 拷贝+新增为新的`t-polardbx-engine-90.spec`
+然后`ln -s build.sh t-polardbx-engine-90-build.sh`
+
+# 打包示范
+./build.sh  ../  t-polardbx-engine-80 0001 20250101123456
+
+# 发版说明
+手动调整../RELEASE_DATE文件中版本号, 提交到git. 通过Aone或者手动打包
+
