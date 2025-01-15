@@ -1,7 +1,7 @@
 #! /usr/bin/env perl
 # Copyright 2007-2020 The OpenSSL Project Authors. All Rights Reserved.
 #
-# Licensed under the Apache License 2.0 (the "License").  You may not use
+# Licensed under the OpenSSL license (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
 # in the file LICENSE in the source distribution or at
 # https://www.openssl.org/source/license.html
@@ -44,10 +44,9 @@
 #
 # Add ARMv8 code path performing at 2.0 cpb on Apple A7.
 
-# $output is the last argument if it looks like a file (it has an extension)
-# $flavour is the first argument if it doesn't look like a file
-$output = $#ARGV >= 0 && $ARGV[$#ARGV] =~ m|\.\w+$| ? pop : undef;
-$flavour = $#ARGV >= 0 && $ARGV[0] !~ m|\.| ? shift : undef;
+$flavour = shift;
+if ($flavour=~/\w[\w\-]*\.\w+$/) { $output=$flavour; undef $flavour; }
+else { while (($output=shift) && ($output!~/\w[\w\-]*\.\w+$/)) {} }
 
 if ($flavour && $flavour ne "void") {
     $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
@@ -55,10 +54,9 @@ if ($flavour && $flavour ne "void") {
     ( $xlate="${dir}../../perlasm/arm-xlate.pl" and -f $xlate) or
     die "can't locate arm-xlate.pl";
 
-    open STDOUT,"| \"$^X\" $xlate $flavour \"$output\""
-        or die "can't call $xlate: $!";
+    open STDOUT,"| \"$^X\" $xlate $flavour $output";
 } else {
-    $output and open STDOUT,">$output";
+    open STDOUT,">$output";
 }
 
 $ctx="r0";	$t0="r0";
@@ -183,14 +181,13 @@ $code=<<___;
 # define __ARM_MAX_ARCH__ 7
 #endif
 
+.text
 #if defined(__thumb2__)
 .syntax unified
 .thumb
 #else
 .code   32
 #endif
-
-.text
 
 .type	K256,%object
 .align	5
@@ -215,11 +212,7 @@ K256:
 .word	0				@ terminator
 #if __ARM_MAX_ARCH__>=7 && !defined(__KERNEL__)
 .LOPENSSL_armcap:
-# ifdef	_WIN32
-.word	OPENSSL_armcap_P
-# else
 .word	OPENSSL_armcap_P-.Lsha256_block_data_order
-# endif
 #endif
 .align	5
 
@@ -234,12 +227,10 @@ sha256_block_data_order:
 #endif
 #if __ARM_MAX_ARCH__>=7 && !defined(__KERNEL__)
 	ldr	r12,.LOPENSSL_armcap
-# if !defined(_WIN32)
 	ldr	r12,[r3,r12]		@ OPENSSL_armcap_P
-# endif
-# if defined(__APPLE__) || defined(_WIN32)
+#ifdef	__APPLE__
 	ldr	r12,[r12]
-# endif
+#endif
 	tst	r12,#ARMV8_SHA256
 	bne	.LARMv8
 	tst	r12,#ARMV7_NEON
@@ -607,15 +598,14 @@ my ($ABCD,$EFGH,$abcd)=map("q$_",(0..2));
 my @MSG=map("q$_",(8..11));
 my ($W0,$W1,$ABCD_SAVE,$EFGH_SAVE)=map("q$_",(12..15));
 my $Ktbl="r3";
-my $_byte = ($flavour =~ /win/ ? "DCB" : ".byte");
 
 $code.=<<___;
 #if __ARM_MAX_ARCH__>=7 && !defined(__KERNEL__)
 
 # if defined(__thumb2__)
-#  define INST(a,b,c,d)	$_byte	c,d|0xc,a,b
+#  define INST(a,b,c,d)	.byte	c,d|0xc,a,b
 # else
-#  define INST(a,b,c,d)	$_byte	a,b,c,d
+#  define INST(a,b,c,d)	.byte	a,b,c,d
 # endif
 
 .type	sha256_block_data_order_armv8,%function

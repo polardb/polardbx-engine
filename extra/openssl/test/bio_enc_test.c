@@ -1,7 +1,7 @@
 /*
- * Copyright 2016-2022 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2016-2017 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
@@ -38,7 +38,7 @@ static const unsigned char IV[] = {
 static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
     const unsigned char* iv)
 {
-    BIO *b, *mem;
+    BIO *b;
     static unsigned char inp[BUF_SIZE] = { 0 };
     unsigned char out[BUF_SIZE], ref[BUF_SIZE];
     int i, lref, len;
@@ -51,37 +51,27 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
 
     /* reference output for single-chunk operation */
     b = BIO_new(BIO_f_cipher());
-    if (!TEST_ptr(b))
-        return 0;
     if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, ENCRYPT)))
-        goto err;
-    mem = BIO_new_mem_buf(inp, DATA_SIZE);
-    if (!TEST_ptr(mem))
-        goto err;
-    BIO_push(b, mem);
+        return 0;
+    BIO_push(b, BIO_new_mem_buf(inp, DATA_SIZE));
     lref = BIO_read(b, ref, sizeof(ref));
     BIO_free_all(b);
 
     /* perform split operations and compare to reference */
     for (i = 1; i < lref; i++) {
         b = BIO_new(BIO_f_cipher());
-        if (!TEST_ptr(b))
-            return 0;
         if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, ENCRYPT))) {
             TEST_info("Split encrypt failed @ operation %d", i);
-            goto err;
+            return 0;
         }
-        mem = BIO_new_mem_buf(inp, DATA_SIZE);
-        if (!TEST_ptr(mem))
-            goto err;
-        BIO_push(b, mem);
+        BIO_push(b, BIO_new_mem_buf(inp, DATA_SIZE));
         memset(out, 0, sizeof(out));
         out[i] = ~ref[i];
         len = BIO_read(b, out, i);
         /* check for overstep */
         if (!TEST_uchar_eq(out[i], (unsigned char)~ref[i])) {
             TEST_info("Encrypt overstep check failed @ operation %d", i);
-            goto err;
+            return 0;
         }
         len += BIO_read(b, out + len, sizeof(out) - len);
         BIO_free_all(b);
@@ -97,16 +87,11 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
         int delta;
 
         b = BIO_new(BIO_f_cipher());
-        if (!TEST_ptr(b))
-            return 0;
         if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, ENCRYPT))) {
             TEST_info("Small chunk encrypt failed @ operation %d", i);
-            goto err;
+            return 0;
         }
-        mem = BIO_new_mem_buf(inp, DATA_SIZE);
-        if (!TEST_ptr(mem))
-            goto err;
-        BIO_push(b, mem);
+        BIO_push(b, BIO_new_mem_buf(inp, DATA_SIZE));
         memset(out, 0, sizeof(out));
         for (len = 0; (delta = BIO_read(b, out + len, i)); ) {
             len += delta;
@@ -123,15 +108,10 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
 
     /* reference output for single-chunk operation */
     b = BIO_new(BIO_f_cipher());
-    if (!TEST_ptr(b))
-        return 0;
     if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, DECRYPT)))
-        goto err;
+        return 0;
     /* Use original reference output as input */
-    mem = BIO_new_mem_buf(ref, lref);
-    if (!TEST_ptr(mem))
-        goto err;
-    BIO_push(b, mem);
+    BIO_push(b, BIO_new_mem_buf(ref, lref));
     (void)BIO_flush(b);
     memset(out, 0, sizeof(out));
     len = BIO_read(b, out, sizeof(out));
@@ -143,23 +123,18 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
     /* perform split operations and compare to reference */
     for (i = 1; i < lref; i++) {
         b = BIO_new(BIO_f_cipher());
-        if (!TEST_ptr(b))
-            return 0;
         if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, DECRYPT))) {
             TEST_info("Split decrypt failed @ operation %d", i);
-            goto err;
+            return 0;
         }
-        mem = BIO_new_mem_buf(ref, lref);
-        if (!TEST_ptr(mem))
-            goto err;
-        BIO_push(b, mem);
+        BIO_push(b, BIO_new_mem_buf(ref, lref));
         memset(out, 0, sizeof(out));
         out[i] = ~ref[i];
         len = BIO_read(b, out, i);
         /* check for overstep */
         if (!TEST_uchar_eq(out[i], (unsigned char)~ref[i])) {
             TEST_info("Decrypt overstep check failed @ operation %d", i);
-            goto err;
+            return 0;
         }
         len += BIO_read(b, out + len, sizeof(out) - len);
         BIO_free_all(b);
@@ -175,16 +150,11 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
         int delta;
 
         b = BIO_new(BIO_f_cipher());
-        if (!TEST_ptr(b))
-            return 0;
         if (!TEST_true(BIO_set_cipher(b, cipher, key, iv, DECRYPT))) {
             TEST_info("Small chunk decrypt failed @ operation %d", i);
-            goto err;
+            return 0;
         }
-        mem = BIO_new_mem_buf(ref, lref);
-        if (!TEST_ptr(mem))
-            goto err;
-        BIO_push(b, mem);
+        BIO_push(b, BIO_new_mem_buf(ref, lref));
         memset(out, 0, sizeof(out));
         for (len = 0; (delta = BIO_read(b, out + len, i)); ) {
             len += delta;
@@ -198,10 +168,6 @@ static int do_bio_cipher(const EVP_CIPHER* cipher, const unsigned char* key,
     }
 
     return 1;
-
-err:
-    BIO_free_all(b);
-    return 0;
 }
 
 static int do_test_bio_cipher(const EVP_CIPHER* cipher, int idx)

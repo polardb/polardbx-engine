@@ -1,7 +1,7 @@
 /*
- * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2018 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
@@ -83,7 +83,7 @@ int BN_lshift(BIGNUM *r, const BIGNUM *a, int n)
     int ret;
 
     if (n < 0) {
-        ERR_raise(ERR_LIB_BN, BN_R_INVALID_SHIFT);
+        BNerr(BN_F_BN_LSHIFT, BN_R_INVALID_SHIFT);
         return 0;
     }
 
@@ -152,12 +152,9 @@ int BN_rshift(BIGNUM *r, const BIGNUM *a, int n)
     int ret = 0;
 
     if (n < 0) {
-        ERR_raise(ERR_LIB_BN, BN_R_INVALID_SHIFT);
+        BNerr(BN_F_BN_RSHIFT, BN_R_INVALID_SHIFT);
         return 0;
     }
-
-    bn_check_top(r);
-    bn_check_top(a);
 
     ret = bn_rshift_fixed_top(r, a, n);
 
@@ -179,6 +176,9 @@ int bn_rshift_fixed_top(BIGNUM *r, const BIGNUM *a, int n)
     unsigned int lb, rb;
     BN_ULONG *t, *f;
     BN_ULONG l, m, mask;
+
+    bn_check_top(r);
+    bn_check_top(a);
 
     assert(n >= 0);
 

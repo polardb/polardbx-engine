@@ -1,7 +1,7 @@
 /*
- * Copyright 2002-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2002-2022 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
@@ -184,7 +184,7 @@ static const BN_ULONG _nist_p_521_sqr[] = {
 # error "unsupported BN_BITS2"
 #endif
 
-static const BIGNUM ossl_bignum_nist_p_192 = {
+static const BIGNUM _bignum_nist_p_192 = {
     (BN_ULONG *)_nist_p_192[0],
     BN_NIST_192_TOP,
     BN_NIST_192_TOP,
@@ -192,7 +192,7 @@ static const BIGNUM ossl_bignum_nist_p_192 = {
     BN_FLG_STATIC_DATA
 };
 
-static const BIGNUM ossl_bignum_nist_p_224 = {
+static const BIGNUM _bignum_nist_p_224 = {
     (BN_ULONG *)_nist_p_224[0],
     BN_NIST_224_TOP,
     BN_NIST_224_TOP,
@@ -200,7 +200,7 @@ static const BIGNUM ossl_bignum_nist_p_224 = {
     BN_FLG_STATIC_DATA
 };
 
-static const BIGNUM ossl_bignum_nist_p_256 = {
+static const BIGNUM _bignum_nist_p_256 = {
     (BN_ULONG *)_nist_p_256[0],
     BN_NIST_256_TOP,
     BN_NIST_256_TOP,
@@ -208,7 +208,7 @@ static const BIGNUM ossl_bignum_nist_p_256 = {
     BN_FLG_STATIC_DATA
 };
 
-static const BIGNUM ossl_bignum_nist_p_384 = {
+static const BIGNUM _bignum_nist_p_384 = {
     (BN_ULONG *)_nist_p_384[0],
     BN_NIST_384_TOP,
     BN_NIST_384_TOP,
@@ -216,7 +216,7 @@ static const BIGNUM ossl_bignum_nist_p_384 = {
     BN_FLG_STATIC_DATA
 };
 
-static const BIGNUM ossl_bignum_nist_p_521 = {
+static const BIGNUM _bignum_nist_p_521 = {
     (BN_ULONG *)_nist_p_521,
     BN_NIST_521_TOP,
     BN_NIST_521_TOP,
@@ -226,27 +226,27 @@ static const BIGNUM ossl_bignum_nist_p_521 = {
 
 const BIGNUM *BN_get0_nist_prime_192(void)
 {
-    return &ossl_bignum_nist_p_192;
+    return &_bignum_nist_p_192;
 }
 
 const BIGNUM *BN_get0_nist_prime_224(void)
 {
-    return &ossl_bignum_nist_p_224;
+    return &_bignum_nist_p_224;
 }
 
 const BIGNUM *BN_get0_nist_prime_256(void)
 {
-    return &ossl_bignum_nist_p_256;
+    return &_bignum_nist_p_256;
 }
 
 const BIGNUM *BN_get0_nist_prime_384(void)
 {
-    return &ossl_bignum_nist_p_384;
+    return &_bignum_nist_p_384;
 }
 
 const BIGNUM *BN_get0_nist_prime_521(void)
 {
-    return &ossl_bignum_nist_p_521;
+    return &_bignum_nist_p_521;
 }
 
 /*
@@ -319,28 +319,6 @@ static void nist_cp_bn(BN_ULONG *dst, const BN_ULONG *src, int top)
 # endif
 #endif                          /* BN_BITS2 != 64 */
 
-#ifdef NIST_INT64
-/* Helpers to load/store a 32-bit word (uint32_t) from/into a memory
- * location and avoid potential aliasing issue.  */
-static ossl_inline uint32_t load_u32(const void *ptr)
-{
-    uint32_t tmp;
-
-    memcpy(&tmp, ptr, sizeof(tmp));
-    return tmp;
-}
-
-static ossl_inline void store_lo32(void *ptr, NIST_INT64 val)
-{
-    /* A cast is needed for big-endian system: on a 32-bit BE system
-     * NIST_INT64 may be defined as well if the compiler supports 64-bit
-     * long long.  */
-    uint32_t tmp = (uint32_t)val;
-
-    memcpy(ptr, &tmp, sizeof(tmp));
-}
-#endif /* NIST_INT64 */
-
 #define nist_set_192(to, from, a1, a2, a3) \
         { \
         bn_cp_64(to, 0, from, (a3) - 3) \
@@ -360,16 +338,17 @@ int BN_nist_mod_192(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
                         sizeof(unsigned int)];
     } buf;
     BN_ULONG c_d[BN_NIST_192_TOP], *res;
-    static const BIGNUM ossl_bignum_nist_p_192_sqr = {
+    PTR_SIZE_INT mask;
+    static const BIGNUM _bignum_nist_p_192_sqr = {
         (BN_ULONG *)_nist_p_192_sqr,
         OSSL_NELEM(_nist_p_192_sqr),
         OSSL_NELEM(_nist_p_192_sqr),
         0, BN_FLG_STATIC_DATA
     };
 
-    field = &ossl_bignum_nist_p_192; /* just to make sure */
+    field = &_bignum_nist_p_192; /* just to make sure */
 
-    if (BN_is_negative(a) || BN_ucmp(a, &ossl_bignum_nist_p_192_sqr) >= 0)
+    if (BN_is_negative(a) || BN_ucmp(a, &_bignum_nist_p_192_sqr) >= 0)
         return BN_nnmod(r, a, field, ctx);
 
     i = BN_ucmp(field, a);
@@ -396,42 +375,42 @@ int BN_nist_mod_192(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         unsigned int *rp = (unsigned int *)r_d;
         const unsigned int *bp = (const unsigned int *)buf.ui;
 
-        acc = load_u32(&rp[0]);
+        acc = rp[0];
         acc += bp[3 * 2 - 6];
         acc += bp[5 * 2 - 6];
-        store_lo32(&rp[0], acc);
+        rp[0] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[1]);
+        acc += rp[1];
         acc += bp[3 * 2 - 5];
         acc += bp[5 * 2 - 5];
-        store_lo32(&rp[1], acc);
+        rp[1] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[2]);
+        acc += rp[2];
         acc += bp[3 * 2 - 6];
         acc += bp[4 * 2 - 6];
         acc += bp[5 * 2 - 6];
-        store_lo32(&rp[2], acc);
+        rp[2] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[3]);
+        acc += rp[3];
         acc += bp[3 * 2 - 5];
         acc += bp[4 * 2 - 5];
         acc += bp[5 * 2 - 5];
-        store_lo32(&rp[3], acc);
+        rp[3] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[4]);
+        acc += rp[4];
         acc += bp[4 * 2 - 6];
         acc += bp[5 * 2 - 6];
-        store_lo32(&rp[4], acc);
+        rp[4] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[5]);
+        acc += rp[5];
         acc += bp[4 * 2 - 5];
         acc += bp[5 * 2 - 5];
-        store_lo32(&rp[5], acc);
+        rp[5] = (unsigned int)acc;
 
         carry = (int)(acc >> 32);
     }
@@ -460,9 +439,13 @@ int BN_nist_mod_192(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
      * 'tmp=result-modulus; if (!carry || !borrow) result=tmp;'
      * this is what happens below, but without explicit if:-) a.
      */
-    res = (bn_sub_words(c_d, r_d, _nist_p_192[0], BN_NIST_192_TOP) && carry)
-        ? r_d
-        : c_d;
+    mask =
+        0 - (PTR_SIZE_INT) bn_sub_words(c_d, r_d, _nist_p_192[0],
+                                        BN_NIST_192_TOP);
+    mask &= 0 - (PTR_SIZE_INT) carry;
+    res = c_d;
+    res = (BN_ULONG *)
+        (((PTR_SIZE_INT) res & ~mask) | ((PTR_SIZE_INT) r_d & mask));
     nist_cp_bn(r_d, res, BN_NIST_192_TOP);
     r->top = BN_NIST_192_TOP;
     bn_correct_top(r);
@@ -496,17 +479,21 @@ int BN_nist_mod_224(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
                         sizeof(unsigned int)];
     } buf;
     BN_ULONG c_d[BN_NIST_224_TOP], *res;
-    bn_addsub_f adjust;
-    static const BIGNUM ossl_bignum_nist_p_224_sqr = {
+    PTR_SIZE_INT mask;
+    union {
+        bn_addsub_f f;
+        PTR_SIZE_INT p;
+    } u;
+    static const BIGNUM _bignum_nist_p_224_sqr = {
         (BN_ULONG *)_nist_p_224_sqr,
         OSSL_NELEM(_nist_p_224_sqr),
         OSSL_NELEM(_nist_p_224_sqr),
         0, BN_FLG_STATIC_DATA
     };
 
-    field = &ossl_bignum_nist_p_224; /* just to make sure */
+    field = &_bignum_nist_p_224; /* just to make sure */
 
-    if (BN_is_negative(a) || BN_ucmp(a, &ossl_bignum_nist_p_224_sqr) >= 0)
+    if (BN_is_negative(a) || BN_ucmp(a, &_bignum_nist_p_224_sqr) >= 0)
         return BN_nnmod(r, a, field, ctx);
 
     i = BN_ucmp(field, a);
@@ -610,7 +597,7 @@ int BN_nist_mod_224(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
 # endif
     }
 #endif
-    adjust = bn_sub_words;
+    u.f = bn_sub_words;
     if (carry > 0) {
         carry =
             (int)bn_sub_words(r_d, r_d, _nist_p_224[carry - 1],
@@ -629,14 +616,19 @@ int BN_nist_mod_224(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         carry =
             (int)bn_add_words(r_d, r_d, _nist_p_224[-carry - 1],
                               BN_NIST_224_TOP);
-        adjust = carry ? bn_sub_words : bn_add_words;
+        mask = 0 - (PTR_SIZE_INT) carry;
+        u.p = ((PTR_SIZE_INT) bn_sub_words & mask) |
+            ((PTR_SIZE_INT) bn_add_words & ~mask);
     } else
         carry = 1;
 
     /* otherwise it's effectively same as in BN_nist_mod_192... */
-    res = ((*adjust) (c_d, r_d, _nist_p_224[0], BN_NIST_224_TOP) && carry)
-        ? r_d
-        : c_d;
+    mask =
+        0 - (PTR_SIZE_INT) (*u.f) (c_d, r_d, _nist_p_224[0], BN_NIST_224_TOP);
+    mask &= 0 - (PTR_SIZE_INT) carry;
+    res = c_d;
+    res = (BN_ULONG *)(((PTR_SIZE_INT) res & ~mask) |
+                       ((PTR_SIZE_INT) r_d & mask));
     nist_cp_bn(r_d, res, BN_NIST_224_TOP);
     r->top = BN_NIST_224_TOP;
     bn_correct_top(r);
@@ -668,17 +660,21 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
                         sizeof(unsigned int)];
     } buf;
     BN_ULONG c_d[BN_NIST_256_TOP], *res;
-    bn_addsub_f adjust;
-    static const BIGNUM ossl_bignum_nist_p_256_sqr = {
+    PTR_SIZE_INT mask;
+    union {
+        bn_addsub_f f;
+        PTR_SIZE_INT p;
+    } u;
+    static const BIGNUM _bignum_nist_p_256_sqr = {
         (BN_ULONG *)_nist_p_256_sqr,
         OSSL_NELEM(_nist_p_256_sqr),
         OSSL_NELEM(_nist_p_256_sqr),
         0, BN_FLG_STATIC_DATA
     };
 
-    field = &ossl_bignum_nist_p_256; /* just to make sure */
+    field = &_bignum_nist_p_256; /* just to make sure */
 
-    if (BN_is_negative(a) || BN_ucmp(a, &ossl_bignum_nist_p_256_sqr) >= 0)
+    if (BN_is_negative(a) || BN_ucmp(a, &_bignum_nist_p_256_sqr) >= 0)
         return BN_nnmod(r, a, field, ctx);
 
     i = BN_ucmp(field, a);
@@ -705,36 +701,36 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         unsigned int *rp = (unsigned int *)r_d;
         const unsigned int *bp = (const unsigned int *)buf.ui;
 
-        acc = load_u32(&rp[0]);
+        acc = rp[0];
         acc += bp[8 - 8];
         acc += bp[9 - 8];
         acc -= bp[11 - 8];
         acc -= bp[12 - 8];
         acc -= bp[13 - 8];
         acc -= bp[14 - 8];
-        store_lo32(&rp[0], acc);
+        rp[0] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[1]);
+        acc += rp[1];
         acc += bp[9 - 8];
         acc += bp[10 - 8];
         acc -= bp[12 - 8];
         acc -= bp[13 - 8];
         acc -= bp[14 - 8];
         acc -= bp[15 - 8];
-        store_lo32(&rp[1], acc);
+        rp[1] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[2]);
+        acc += rp[2];
         acc += bp[10 - 8];
         acc += bp[11 - 8];
         acc -= bp[13 - 8];
         acc -= bp[14 - 8];
         acc -= bp[15 - 8];
-        store_lo32(&rp[2], acc);
+        rp[2] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[3]);
+        acc += rp[3];
         acc += bp[11 - 8];
         acc += bp[11 - 8];
         acc += bp[12 - 8];
@@ -743,10 +739,10 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc -= bp[15 - 8];
         acc -= bp[8 - 8];
         acc -= bp[9 - 8];
-        store_lo32(&rp[3], acc);
+        rp[3] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[4]);
+        acc += rp[4];
         acc += bp[12 - 8];
         acc += bp[12 - 8];
         acc += bp[13 - 8];
@@ -754,10 +750,10 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc += bp[14 - 8];
         acc -= bp[9 - 8];
         acc -= bp[10 - 8];
-        store_lo32(&rp[4], acc);
+        rp[4] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[5]);
+        acc += rp[5];
         acc += bp[13 - 8];
         acc += bp[13 - 8];
         acc += bp[14 - 8];
@@ -765,10 +761,10 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc += bp[15 - 8];
         acc -= bp[10 - 8];
         acc -= bp[11 - 8];
-        store_lo32(&rp[5], acc);
+        rp[5] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[6]);
+        acc += rp[6];
         acc += bp[14 - 8];
         acc += bp[14 - 8];
         acc += bp[15 - 8];
@@ -777,10 +773,10 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc += bp[13 - 8];
         acc -= bp[8 - 8];
         acc -= bp[9 - 8];
-        store_lo32(&rp[6], acc);
+        rp[6] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[7]);
+        acc += rp[7];
         acc += bp[15 - 8];
         acc += bp[15 - 8];
         acc += bp[15 - 8];
@@ -789,7 +785,7 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc -= bp[11 - 8];
         acc -= bp[12 - 8];
         acc -= bp[13 - 8];
-        store_lo32(&rp[7], acc);
+        rp[7] = (unsigned int)acc;
 
         carry = (int)(acc >> 32);
     }
@@ -854,7 +850,7 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
     }
 #endif
     /* see BN_nist_mod_224 for explanation */
-    adjust = bn_sub_words;
+    u.f = bn_sub_words;
     if (carry > 0)
         carry =
             (int)bn_sub_words(r_d, r_d, _nist_p_256[carry - 1],
@@ -863,13 +859,18 @@ int BN_nist_mod_256(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         carry =
             (int)bn_add_words(r_d, r_d, _nist_p_256[-carry - 1],
                               BN_NIST_256_TOP);
-        adjust = carry ? bn_sub_words : bn_add_words;
+        mask = 0 - (PTR_SIZE_INT) carry;
+        u.p = ((PTR_SIZE_INT) bn_sub_words & mask) |
+            ((PTR_SIZE_INT) bn_add_words & ~mask);
     } else
         carry = 1;
 
-    res = ((*adjust) (c_d, r_d, _nist_p_256[0], BN_NIST_256_TOP) && carry)
-        ? r_d
-        : c_d;
+    mask =
+        0 - (PTR_SIZE_INT) (*u.f) (c_d, r_d, _nist_p_256[0], BN_NIST_256_TOP);
+    mask &= 0 - (PTR_SIZE_INT) carry;
+    res = c_d;
+    res = (BN_ULONG *)(((PTR_SIZE_INT) res & ~mask) |
+                       ((PTR_SIZE_INT) r_d & mask));
     nist_cp_bn(r_d, res, BN_NIST_256_TOP);
     r->top = BN_NIST_256_TOP;
     bn_correct_top(r);
@@ -905,17 +906,21 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
                         sizeof(unsigned int)];
     } buf;
     BN_ULONG c_d[BN_NIST_384_TOP], *res;
-    bn_addsub_f adjust;
-    static const BIGNUM ossl_bignum_nist_p_384_sqr = {
+    PTR_SIZE_INT mask;
+    union {
+        bn_addsub_f f;
+        PTR_SIZE_INT p;
+    } u;
+    static const BIGNUM _bignum_nist_p_384_sqr = {
         (BN_ULONG *)_nist_p_384_sqr,
         OSSL_NELEM(_nist_p_384_sqr),
         OSSL_NELEM(_nist_p_384_sqr),
         0, BN_FLG_STATIC_DATA
     };
 
-    field = &ossl_bignum_nist_p_384; /* just to make sure */
+    field = &_bignum_nist_p_384; /* just to make sure */
 
-    if (BN_is_negative(a) || BN_ucmp(a, &ossl_bignum_nist_p_384_sqr) >= 0)
+    if (BN_is_negative(a) || BN_ucmp(a, &_bignum_nist_p_384_sqr) >= 0)
         return BN_nnmod(r, a, field, ctx);
 
     i = BN_ucmp(field, a);
@@ -942,32 +947,32 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         unsigned int *rp = (unsigned int *)r_d;
         const unsigned int *bp = (const unsigned int *)buf.ui;
 
-        acc = load_u32(&rp[0]);
+        acc = rp[0];
         acc += bp[12 - 12];
         acc += bp[21 - 12];
         acc += bp[20 - 12];
         acc -= bp[23 - 12];
-        store_lo32(&rp[0], acc);
+        rp[0] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[1]);
+        acc += rp[1];
         acc += bp[13 - 12];
         acc += bp[22 - 12];
         acc += bp[23 - 12];
         acc -= bp[12 - 12];
         acc -= bp[20 - 12];
-        store_lo32(&rp[1], acc);
+        rp[1] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[2]);
+        acc += rp[2];
         acc += bp[14 - 12];
         acc += bp[23 - 12];
         acc -= bp[13 - 12];
         acc -= bp[21 - 12];
-        store_lo32(&rp[2], acc);
+        rp[2] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[3]);
+        acc += rp[3];
         acc += bp[15 - 12];
         acc += bp[12 - 12];
         acc += bp[20 - 12];
@@ -975,10 +980,10 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc -= bp[14 - 12];
         acc -= bp[22 - 12];
         acc -= bp[23 - 12];
-        store_lo32(&rp[3], acc);
+        rp[3] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[4]);
+        acc += rp[4];
         acc += bp[21 - 12];
         acc += bp[21 - 12];
         acc += bp[16 - 12];
@@ -989,10 +994,10 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc -= bp[15 - 12];
         acc -= bp[23 - 12];
         acc -= bp[23 - 12];
-        store_lo32(&rp[4], acc);
+        rp[4] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[5]);
+        acc += rp[5];
         acc += bp[22 - 12];
         acc += bp[22 - 12];
         acc += bp[17 - 12];
@@ -1001,10 +1006,10 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc += bp[21 - 12];
         acc += bp[23 - 12];
         acc -= bp[16 - 12];
-        store_lo32(&rp[5], acc);
+        rp[5] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[6]);
+        acc += rp[6];
         acc += bp[23 - 12];
         acc += bp[23 - 12];
         acc += bp[18 - 12];
@@ -1012,48 +1017,48 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         acc += bp[14 - 12];
         acc += bp[22 - 12];
         acc -= bp[17 - 12];
-        store_lo32(&rp[6], acc);
+        rp[6] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[7]);
+        acc += rp[7];
         acc += bp[19 - 12];
         acc += bp[16 - 12];
         acc += bp[15 - 12];
         acc += bp[23 - 12];
         acc -= bp[18 - 12];
-        store_lo32(&rp[7], acc);
+        rp[7] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[8]);
+        acc += rp[8];
         acc += bp[20 - 12];
         acc += bp[17 - 12];
         acc += bp[16 - 12];
         acc -= bp[19 - 12];
-        store_lo32(&rp[8], acc);
+        rp[8] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[9]);
+        acc += rp[9];
         acc += bp[21 - 12];
         acc += bp[18 - 12];
         acc += bp[17 - 12];
         acc -= bp[20 - 12];
-        store_lo32(&rp[9], acc);
+        rp[9] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[10]);
+        acc += rp[10];
         acc += bp[22 - 12];
         acc += bp[19 - 12];
         acc += bp[18 - 12];
         acc -= bp[21 - 12];
-        store_lo32(&rp[10], acc);
+        rp[10] = (unsigned int)acc;
         acc >>= 32;
 
-        acc += load_u32(&rp[11]);
+        acc += rp[11];
         acc += bp[23 - 12];
         acc += bp[20 - 12];
         acc += bp[19 - 12];
         acc -= bp[22 - 12];
-        store_lo32(&rp[11], acc);
+        rp[11] = (unsigned int)acc;
 
         carry = (int)(acc >> 32);
     }
@@ -1126,7 +1131,7 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
     }
 #endif
     /* see BN_nist_mod_224 for explanation */
-    adjust = bn_sub_words;
+    u.f = bn_sub_words;
     if (carry > 0)
         carry =
             (int)bn_sub_words(r_d, r_d, _nist_p_384[carry - 1],
@@ -1135,13 +1140,18 @@ int BN_nist_mod_384(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
         carry =
             (int)bn_add_words(r_d, r_d, _nist_p_384[-carry - 1],
                               BN_NIST_384_TOP);
-        adjust = carry ? bn_sub_words : bn_add_words;
+        mask = 0 - (PTR_SIZE_INT) carry;
+        u.p = ((PTR_SIZE_INT) bn_sub_words & mask) |
+            ((PTR_SIZE_INT) bn_add_words & ~mask);
     } else
         carry = 1;
 
-    res = ((*adjust) (c_d, r_d, _nist_p_384[0], BN_NIST_384_TOP) && carry)
-        ? r_d
-        : c_d;
+    mask =
+        0 - (PTR_SIZE_INT) (*u.f) (c_d, r_d, _nist_p_384[0], BN_NIST_384_TOP);
+    mask &= 0 - (PTR_SIZE_INT) carry;
+    res = c_d;
+    res = (BN_ULONG *)(((PTR_SIZE_INT) res & ~mask) |
+                       ((PTR_SIZE_INT) r_d & mask));
     nist_cp_bn(r_d, res, BN_NIST_384_TOP);
     r->top = BN_NIST_384_TOP;
     bn_correct_top(r);
@@ -1158,16 +1168,17 @@ int BN_nist_mod_521(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
 {
     int top = a->top, i;
     BN_ULONG *r_d, *a_d = a->d, t_d[BN_NIST_521_TOP], val, tmp, *res;
-    static const BIGNUM ossl_bignum_nist_p_521_sqr = {
+    PTR_SIZE_INT mask;
+    static const BIGNUM _bignum_nist_p_521_sqr = {
         (BN_ULONG *)_nist_p_521_sqr,
         OSSL_NELEM(_nist_p_521_sqr),
         OSSL_NELEM(_nist_p_521_sqr),
         0, BN_FLG_STATIC_DATA
     };
 
-    field = &ossl_bignum_nist_p_521; /* just to make sure */
+    field = &_bignum_nist_p_521; /* just to make sure */
 
-    if (BN_is_negative(a) || BN_ucmp(a, &ossl_bignum_nist_p_521_sqr) >= 0)
+    if (BN_is_negative(a) || BN_ucmp(a, &_bignum_nist_p_521_sqr) >= 0)
         return BN_nnmod(r, a, field, ctx);
 
     i = BN_ucmp(field, a);
@@ -1210,10 +1221,12 @@ int BN_nist_mod_521(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
     r_d[i] &= BN_NIST_521_TOP_MASK;
 
     bn_add_words(r_d, r_d, t_d, BN_NIST_521_TOP);
-    res = bn_sub_words(t_d, r_d, _nist_p_521,
-                       BN_NIST_521_TOP)
-        ? r_d
-        : t_d;
+    mask =
+        0 - (PTR_SIZE_INT) bn_sub_words(t_d, r_d, _nist_p_521,
+                                        BN_NIST_521_TOP);
+    res = t_d;
+    res = (BN_ULONG *)(((PTR_SIZE_INT) res & ~mask) |
+                       ((PTR_SIZE_INT) r_d & mask));
     nist_cp_bn(r_d, res, BN_NIST_521_TOP);
     r->top = BN_NIST_521_TOP;
     bn_correct_top(r);
@@ -1223,15 +1236,15 @@ int BN_nist_mod_521(BIGNUM *r, const BIGNUM *a, const BIGNUM *field,
 
 int (*BN_nist_mod_func(const BIGNUM *p)) (BIGNUM *r, const BIGNUM *a,
                                           const BIGNUM *field, BN_CTX *ctx) {
-    if (BN_ucmp(&ossl_bignum_nist_p_192, p) == 0)
+    if (BN_ucmp(&_bignum_nist_p_192, p) == 0)
         return BN_nist_mod_192;
-    if (BN_ucmp(&ossl_bignum_nist_p_224, p) == 0)
+    if (BN_ucmp(&_bignum_nist_p_224, p) == 0)
         return BN_nist_mod_224;
-    if (BN_ucmp(&ossl_bignum_nist_p_256, p) == 0)
+    if (BN_ucmp(&_bignum_nist_p_256, p) == 0)
         return BN_nist_mod_256;
-    if (BN_ucmp(&ossl_bignum_nist_p_384, p) == 0)
+    if (BN_ucmp(&_bignum_nist_p_384, p) == 0)
         return BN_nist_mod_384;
-    if (BN_ucmp(&ossl_bignum_nist_p_521, p) == 0)
+    if (BN_ucmp(&_bignum_nist_p_521, p) == 0)
         return BN_nist_mod_521;
     return 0;
 }

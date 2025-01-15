@@ -2,24 +2,21 @@
 /.dir-locals.el
 
 # Top level excludes
-/Makefile.in
-/Makefile
+/Makefile.orig
 /MINFO
 /TABLE
+/*.pc
 /rehash.time
 /inc.*
 /makefile.*
 /out.*
 /tmp.*
 /configdata.pm
-/builddata.pm
-/installdata.pm
 
-# Exporters
-/*.pc
-/OpenSSLConfig*.cmake
-/exporters/*.pc
-/exporters/OpenSSLConfig*.cmake
+# *all* Makefiles
+Makefile
+# ... except in demos
+!/demos/*/Makefile
 
 # Links under apps
 /apps/CA.pl
@@ -29,56 +26,10 @@
 
 # Auto generated headers
 /crypto/buildinf.h
+/apps/progs.h
 /include/crypto/*_conf.h
-/include/openssl/asn1.h
-/include/openssl/asn1t.h
-/include/openssl/bio.h
-/include/openssl/cmp.h
-/include/openssl/cms.h
-/include/openssl/conf.h
-/include/openssl/configuration.h
-/include/openssl/crmf.h
-/include/openssl/crypto.h
-/include/openssl/ct.h
-/include/openssl/err.h
-/include/openssl/ess.h
-/include/openssl/fipskey.h
-/include/openssl/lhash.h
-/include/openssl/ocsp.h
-/include/openssl/opensslv.h
-/include/openssl/pkcs12.h
-/include/openssl/pkcs7.h
-/include/openssl/safestack.h
-/include/openssl/srp.h
-/include/openssl/ssl.h
-/include/openssl/ui.h
-/include/openssl/x509.h
-/include/openssl/x509v3.h
-/include/openssl/x509_vfy.h
-# /include/openssl/core_names.h
-/include/internal/param_names.h
-
-# Auto generated parameter name files
-/crypto/params_idx.c
-
-# Auto generated doc files
-doc/man1/openssl-*.pod
-
-# Auto generated der files
-providers/common/der/der_digests_gen.c
-providers/common/der/der_dsa_gen.c
-providers/common/der/der_ec_gen.c
-providers/common/der/der_ecx_gen.c
-providers/common/der/der_rsa_gen.c
-providers/common/der/der_wrap_gen.c
-providers/common/der/der_sm2_gen.c
-providers/common/include/prov/der_dsa.h
-providers/common/include/prov/der_ec.h
-providers/common/include/prov/der_ecx.h
-providers/common/include/prov/der_rsa.h
-providers/common/include/prov/der_digests.h
-providers/common/include/prov/der_wrap.h
-providers/common/include/prov/der_sm2.h
+/openssl/include/opensslconf.h
+/util/domd
 
 # error code files
 /crypto/err/openssl.txt.old
@@ -109,19 +60,10 @@ providers/common/include/prov/der_sm2.h
 /test/versions
 /test/ossl_shim/ossl_shim
 /test/rsa_complex
-/test/confdump
-/test/bio_prefix_text
-/test/evp_extra_test2
-/test/evp_pkey_ctx_new_from_name
-/test/threadstest_fips
-/test/timing_load_creds
 
 # Certain files that get created by tests on the fly
-/test-runs
+/test/test-runs
 /test/buildtest_*
-/test/provider_internal_test.cnf
-/test/fipsmodule.cnf
-/providers/fipsmodule.cnf
 
 # Fuzz stuff.
 # Anything without an extension is an executable on Unix, so we keep files
@@ -134,21 +76,14 @@ providers/common/include/prov/der_sm2.h
 !/fuzz/*.*
 
 # Misc auto generated files
-/doc/man7/openssl_user_macros.pod
+/include/openssl/opensslconf.h
 /tools/c_rehash
 /tools/c_rehash.pl
 /util/shlib_wrap.sh
-/util/wrap.pl
-/util/quicserver
 /tags
 /TAGS
-*.map
-*.ld
-/apps/progs.c
-/apps/progs.h
-
-# macOS
-.DS_Store
+/libcrypto.map
+/libssl.map
 
 # Windows (legacy)
 /tmp32
@@ -161,6 +96,7 @@ providers/common/include/prov/der_sm2.h
 /out32dll.dbg
 /inc32
 /MINFO
+/ms/.rnd
 /ms/bcb.mak
 /ms/libeay32.def
 /ms/nt.mak
@@ -193,10 +129,6 @@ providers/common/include/prov/der_sm2.h
 /test/fips_shatest.c
 /test/fips_test_suite.c
 /test/shatest.c
-
-# Generated docs directories
-/doc/html
-/doc/man
 
 ##### Generic patterns
 # Auto generated assembly language source files
@@ -233,7 +165,6 @@ providers/common/include/prov/der_sm2.h
 *.exp
 *.lib
 *.pdb
-*.tds
 *.ilk
 *.def
 *.rc
@@ -247,18 +178,11 @@ Makefile.save
 *.bak
 cscope.*
 *.d
-!.ctags.d
 *.d.tmp
 pod2htmd.tmp
-MAKE0[0-9][0-9][0-9].@@@
 
 # Windows manifest files
 *.manifest
 doc-nits
 
-# LSP (Language Server Protocol) support
-.cache/
-compile_commands.json
-
-# polardbx addition
 openssl-*

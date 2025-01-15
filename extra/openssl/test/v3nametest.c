@@ -1,7 +1,7 @@
 /*
- * Copyright 2012-2023 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2012-2020 The OpenSSL Project Authors. All Rights Reserved.
  *
- * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * Licensed under the OpenSSL license (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
@@ -14,6 +14,10 @@
 #include <openssl/x509v3.h>
 #include "internal/nelem.h"
 #include "testutil.h"
+
+#ifdef OPENSSL_SYS_WINDOWS
+# define strcasecmp _stricmp
+#endif
 
 static const char *const names[] = {
     "a", "b", ".", "*", "@",
@@ -253,7 +257,7 @@ static X509 *make_cert(void)
 
     if (!TEST_ptr(crt = X509_new()))
         return NULL;
-    if (!TEST_true(X509_set_version(crt, X509_VERSION_3))) {
+    if (!TEST_true(X509_set_version(crt, 2))) {
         X509_free(crt);
         return NULL;
     }
@@ -283,14 +287,12 @@ static int run_cert(X509 *crt, const char *nameincert,
     int failed = 0;
 
     for (; *pname != NULL; ++pname) {
-        int samename = OPENSSL_strcasecmp(nameincert, *pname) == 0;
+        int samename = strcasecmp(nameincert, *pname) == 0;
         size_t namelen = strlen(*pname);
-        char *name = OPENSSL_malloc(namelen + 1);
+        char *name = OPENSSL_malloc(namelen);
         int match, ret;
 
-        if (!TEST_ptr(name))
-            return 0;
-        memcpy(name, *pname, namelen + 1);
+        memcpy(name, *pname, namelen);
 
         match = -1;
         if (!TEST_int_ge(ret = X509_check_host(crt, name, namelen, 0, NULL),
@@ -644,14 +646,6 @@ static struct gennamedata {
             0xb7, 0x09, 0x02, 0x02
         },
         15
-    }, {
-        /*
-         * Regression test for CVE-2023-0286.
-         */
-        {
-            0xa3, 0x00
-        },
-        2
     }
 };
 

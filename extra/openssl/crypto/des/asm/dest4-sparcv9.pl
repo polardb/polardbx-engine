@@ -1,7 +1,7 @@
 #! /usr/bin/env perl
-# Copyright 2013-2021 The OpenSSL Project Authors. All Rights Reserved.
+# Copyright 2013-2020 The OpenSSL Project Authors. All Rights Reserved.
 #
-# Licensed under the Apache License 2.0 (the "License").  You may not use
+# Licensed under the OpenSSL license (the "License").  You may not use
 # this file except in compliance with the License.  You can obtain a copy
 # in the file LICENSE in the source distribution or at
 # https://www.openssl.org/source/license.html
@@ -34,13 +34,11 @@ $0 =~ m/(.*[\/\\])[^\/\\]+$/; $dir=$1;
 push(@INC,"${dir}","${dir}../../perlasm");
 require "sparcv9_modes.pl";
 
-$output=pop and open STDOUT,">$output";
+$output=pop;
+open STDOUT,">$output";
 
 $code.=<<___;
-#ifndef __ASSEMBLER__
-# define __ASSEMBLER__ 1
-#endif
-#include "crypto/sparc_arch.h"
+#include "sparc_arch.h"
 
 #ifdef	__arch64__
 .register       %g2,#scratch
