@@ -1,0 +1,66 @@
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+0	0
+set global read_only=1;
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+0	1
+CREATE DATABASE db1;
+drop DATABASE db1;
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+0	1
+set global super_read_only=1;
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+1	1
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+1	1
+CREATE DATABASE db2;
+ERROR HY000: The MySQL server is running with the --super-read-only option so it cannot execute this statement
+drop DATABASE db2;
+ERROR HY000: The MySQL server is running with the --super-read-only option so it cannot execute this statement
+select SERVER_ID,CURRENT_LEADER,ROLE,LEADER_IP,LEADER_PORT from information_schema.ALISQL_CLUSTER_LOCAL;
+SERVER_ID	CURRENT_LEADER	ROLE	LEADER_IP	LEADER_PORT
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader		0
+select SERVER_ID,ROLE,SERVER_IP,SERVER_PORT from information_schema.ALISQL_CLUSTER_GLOBAL order by SERVER_ID;
+SERVER_ID	ROLE	SERVER_IP	SERVER_PORT
+1	Leader		0
+2	Follower		0
+3	Follower		0
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+1	1
+call dbms_consensus.change_leader("127.0.0.1:13042");
+select SERVER_ID,CURRENT_LEADER,ROLE,LEADER_IP,LEADER_PORT from information_schema.ALISQL_CLUSTER_LOCAL;
+SERVER_ID	CURRENT_LEADER	ROLE	LEADER_IP	LEADER_PORT
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower		0
+select SERVER_ID,ROLE,SERVER_IP,SERVER_PORT from information_schema.ALISQL_CLUSTER_GLOBAL order by SERVER_ID;
+SERVER_ID	ROLE	SERVER_IP	SERVER_PORT
+0			0
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+1	1
+select SERVER_ID,CURRENT_LEADER,ROLE,LEADER_IP,LEADER_PORT from information_schema.ALISQL_CLUSTER_LOCAL;
+SERVER_ID	CURRENT_LEADER	ROLE	LEADER_IP	LEADER_PORT
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader		0
+select SERVER_ID,ROLE,SERVER_IP,SERVER_PORT from information_schema.ALISQL_CLUSTER_GLOBAL order by SERVER_ID;
+SERVER_ID	ROLE	SERVER_IP	SERVER_PORT
+1	Follower		0
+2	Leader		0
+3	Follower		0
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+0	0
+CREATE DATABASE db2;
+show databases like "%db%";
+Database (%db%)
+db2
+set global consensus_force_promote=1;
+set global super_read_only=0;
+set global read_only=0;
+select @@super_read_only, @@read_only;
+@@super_read_only	@@read_only
+0	0
+DROP DATABASE db2;

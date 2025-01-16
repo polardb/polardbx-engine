@@ -40,6 +40,11 @@ THD *Rpl_info_table_access::force_create_thd() {
 
   thd = System_table_access::create_thd();
   thd->system_thread = SYSTEM_THREAD_INFO_REPOSITORY;
+  /*
+      Set the skip_readonly_check flag as this thread should not be
+      blocked by super_read_only check during ha_commit_trans.
+  */
+  thd->set_skip_readonly_check();
   thd_created = true;
 
   return (thd);
