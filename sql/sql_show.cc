@@ -1356,6 +1356,7 @@ bool mysqld_show_create_db(THD *thd, char *dbname,
     buffer.append(STRING_WITH_LEN(" DEFAULT CHARACTER SET "));
     buffer.append(create.default_table_charset->csname);
     if (!(create.default_table_charset->state & MY_CS_PRIMARY) ||
+        need_print_utf8mb4_implicit_collation(thd, create.default_table_charset) ||
         create.default_table_charset == &my_charset_utf8mb4_0900_ai_ci) {
       buffer.append(STRING_WITH_LEN(" COLLATE "));
       buffer.append(create.default_table_charset->m_coll_name);
@@ -2043,6 +2044,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         table charset or was explicitly assigned.
       */
       if (field->charset() != share->table_charset ||
+          need_print_utf8mb4_implicit_collation(thd, field->charset()) ||
           column_has_explicit_collation) {
         packet->append(STRING_WITH_LEN(" CHARACTER SET "));
         packet->append(field->charset()->csname);
@@ -2054,6 +2056,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       */
       if (!(field->charset()->state & MY_CS_PRIMARY) ||
           column_has_explicit_collation ||
+          need_print_utf8mb4_implicit_collation(thd, field->charset()) ||
           (field->charset() == &my_charset_utf8mb4_0900_ai_ci &&
            share->table_charset != &my_charset_utf8mb4_0900_ai_ci)) {
         packet->append(STRING_WITH_LEN(" COLLATE "));
@@ -2391,6 +2394,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append(STRING_WITH_LEN(" DEFAULT CHARSET="));
         packet->append(share->table_charset->csname);
         if (!(share->table_charset->state & MY_CS_PRIMARY) ||
+              need_print_utf8mb4_implicit_collation(thd, table->s->table_charset) ||
             share->table_charset == &my_charset_utf8mb4_0900_ai_ci) {
           packet->append(STRING_WITH_LEN(" COLLATE="));
           packet->append(table->s->table_charset->m_coll_name);

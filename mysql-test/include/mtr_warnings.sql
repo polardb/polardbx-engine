@@ -356,6 +356,7 @@ INSERT INTO global_suppressions VALUES
  ("Plugin polarx_rpc reported: 'Plugin polarx_rpc get shutdown notify.'"),
  ("Plugin polarx_rpc reported: 'Plugin polarx_rpc watch dog exit.'"),
  ("Plugin polarx_rpc reported: 'Plugin polarx_rpc exiting still .* threads running.'"),
+ ("Plugin polarx_rpc reported: 'PolarX RPC disabled.'"),
 
  /*
    Missing Private/Public key files

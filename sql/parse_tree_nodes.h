@@ -2775,8 +2775,10 @@ class PT_check_constraint final : public PT_table_constraint_def {
 class PT_column_def : public PT_table_element {
   typedef PT_table_element super;
 
+public:
   const LEX_STRING field_ident;
   PT_field_def_base *field_def;
+private:
   // Currently we ignore that constraint in the executor.
   PT_table_constraint_def *opt_column_constraint;
 
@@ -5273,4 +5275,8 @@ PT_column_attr_base *make_column_secondary_engine_attribute(MEM_ROOT *,
 PT_base_index_option *make_index_engine_attribute(MEM_ROOT *, LEX_CSTRING);
 PT_base_index_option *make_index_secondary_engine_attribute(MEM_ROOT *,
                                                             LEX_CSTRING);
+
+bool check_implicit_collation_for_utf8mb4(THD *thd, const CHARSET_INFO *cs, 
+                                          const bool collation_used,
+                                          const char *name);
 #endif /* PARSE_TREE_NODES_INCLUDED */

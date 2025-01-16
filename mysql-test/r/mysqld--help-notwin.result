@@ -553,6 +553,9 @@ The following options may be given as the first argument:
  Determine whether to disable the binary log
  checkpointing.Default is True.
  (Defaults to on; use --skip-disable-binlog-savepoint to disable.)
+ --disable-default-collation-for-utf8mb4 
+ When this option is ON, disable use
+ default_collation_for_utf8mb4.
  --disable-wait-commitindex 
  Whether to wait commitdex when applying binlog in
  follower, it may detory the cluster data if some crash
@@ -645,6 +648,9 @@ The following options may be given as the first argument:
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
+ --force-print-utf8mb4-implicit-collation 
+ When this option is on, force print explicit charset and
+ collation.
  --force-revise      force revise or not
  --ft-boolean-syntax=name 
  List of operators for MATCH ... AGAINST ( ... IN BOOLEAN
@@ -2340,6 +2346,7 @@ delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
 disable-binlog-savepoint TRUE
+disable-default-collation-for-utf8mb4 FALSE
 disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
@@ -2364,6 +2371,7 @@ explicit-defaults-for-timestamp TRUE
 external-locking FALSE
 flush FALSE
 flush-time 0
+force-print-utf8mb4-implicit-collation FALSE
 force-revise FALSE
 ft-boolean-syntax + -><()~*:""&|
 ft-max-word-len 84

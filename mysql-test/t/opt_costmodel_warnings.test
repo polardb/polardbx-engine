@@ -28,7 +28,7 @@ SELECT * FROM mysql.engine_cost;
 #
 # This will cause a warning in the error log that needs to be ignored
 --disable_query_log
-call mtr.add_suppression('Failed to open optimizer cost constant tables');
+#call mtr.add_suppression('Failed to open optimizer cost constant tables');
 --enable_query_log
 
 # Rename one of the tables

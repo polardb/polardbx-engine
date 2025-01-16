@@ -664,7 +664,8 @@ void print_on_empty_or_error(const THD *thd, String *str,
 }
 
 /// Prints the type of a column in a JSON_TABLE expression.
-static bool print_json_table_column_type(const Field *field, String *str) {
+static bool print_json_table_column_type(const THD *thd, 
+  const Field *field, String *str) {
   StringBuffer<STRING_BUFFER_USUAL_SIZE> type;
   field->sql_type(type);
   if (str->append(type)) return true;
@@ -675,10 +676,12 @@ static bool print_json_table_column_type(const Field *field, String *str) {
       return true;
     // Append the collation, if it is not the primary collation of the
     // character set.
-    if ((field->charset()->state & MY_CS_PRIMARY) == 0 &&
-        (str->append(STRING_WITH_LEN(" collate ")) ||
-         str->append(field->charset()->m_coll_name)))
+    if ((field->charset()->state & MY_CS_PRIMARY) == 0
+        || need_print_utf8mb4_implicit_collation(thd, field->charset())) {
+      if ((str->append(STRING_WITH_LEN(" collate ")) ||
+          str->append(field->charset()->m_coll_name)))
       return true;
+    }
   }
   return false;
 }
@@ -718,7 +721,8 @@ static bool print_nested_path(const THD *thd, const TABLE *table,
           if (str->append(STRING_WITH_LEN("<column type not resolved yet>"))) {
             return true;
           }
-        } else if (print_json_table_column_type(table->field[jtc.m_field_idx],
+        } else if (print_json_table_column_type(thd,
+                                                table->field[jtc.m_field_idx],
                                                 str)) {
           return true;
         }

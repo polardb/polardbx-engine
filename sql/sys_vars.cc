@@ -7281,6 +7281,18 @@ static Sys_var_struct<CHARSET_INFO, Get_name> Sys_default_collation_for_utf8mb4(
     ON_CHECK(check_default_collation_for_utf8mb4),
     ON_UPDATE(update_deprecated));
 
+static Sys_var_bool Sys_disable_default_collation_for_utf8mb4(
+    "disable_default_collation_for_utf8mb4",
+    "When this option is ON, disable use default_collation_for_utf8mb4.",
+    SESSION_VAR(disable_default_collation_for_utf8mb4), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_force_print_utf8mb4_implicit_collation(
+    "force_print_utf8mb4_implicit_collation",
+    "When this option is on, force print explicit charset and collation.",
+    SESSION_VAR(force_print_utf8mb4_implicit_collation), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
 static Sys_var_bool Sys_show_create_table_verbosity(
     "show_create_table_verbosity",
     "When this option is enabled, it increases the verbosity of "

@@ -1,5 +1,5 @@
 select @@force_print_utf8mb4_implicit_collation;
-set @@force_print_utf8mb4_implicit_collation=OFF;
+set @@force_print_utf8mb4_implicit_collation=ON;
 
 SELECT @@GLOBAL.default_collation_for_utf8mb4;
 SELECT @@SESSION.default_collation_for_utf8mb4;
@@ -170,8 +170,8 @@ DROP TABLE t4;
 --echo #
 
 CREATE FUNCTION db5_utf8mb4_general_ci.f1(
-  c1 CHAR(1) CHARSET utf8mb4,
-  c2 CHAR(1) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+  c1 CHAR(1) charset utf8mb4,
+  c2 CHAR(1) CHARSET UTF8MB4 COLLATE utf8mb4_0900_ai_ci,
   c3 CHAR(1),
   c4 CHAR(1) CHARSET latin1)
   RETURNS CHAR(246)
@@ -303,5 +303,6 @@ DROP DATABASE db1;
 USE test;
 
 SET @@default_collation_for_utf8mb4 = DEFAULT;
+set @@force_print_utf8mb4_implicit_collation=DEFAULT;
 
 --echo #

@@ -187,6 +187,8 @@ default_collation_for_utf8mb4
 default_collation_for_utf8mb4
 disable_binlog_savepoint
 disable_binlog_savepoint
+disable_default_collation_for_utf8mb4
+disable_default_collation_for_utf8mb4
 disable_wait_commitindex
 disable_wait_commitindex
 disabled_storage_engines
@@ -215,6 +217,8 @@ error_log_ring_buffer_size
 error_log_ring_buffer_size
 explain_format
 explain_format
+force_print_utf8mb4_implicit_collation
+force_print_utf8mb4_implicit_collation
 force_revise
 force_revise
 gcn_write_event

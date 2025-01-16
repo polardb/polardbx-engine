@@ -10293,6 +10293,9 @@ ER_IC_NOT_MATCH_TARGET
 ER_MYISAM_NOT_SUPPORT_ROLLBACK
   eng "When disable_binlog_savepoint is on, don't use MyISAM table, because MyISAM table can't rollback"
 
+ER_NO_COLLATION_FOR_UTF8MB4_CHARSET 42000
+  eng "Need explicitly specified utf8mb4 COLLATE for '%s' from @@disable_default_collation_for_utf8mb4"
+
 #
 # End of PolarDB-X special error messages intended to be return to CN.
 #

@@ -5068,4 +5068,11 @@ inline bool is_xa_tran_detached_on_prepare(const THD *thd) {
   return thd->variables.xa_detach_on_prepare;
 }
 
+inline bool need_print_utf8mb4_implicit_collation(const THD *thd,
+  const CHARSET_INFO *charset)
+{
+  return thd->variables.force_print_utf8mb4_implicit_collation
+         && strcmp(charset->csname, "utf8mb4") == 0;
+}
+
 #endif /* SQL_CLASS_INCLUDED */

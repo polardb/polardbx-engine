@@ -77,5 +77,9 @@ gtid_mode=OFF
 xa_detach_on_prepare=ON
 consensus_log_level=LOG_ERROR
 
+disable_default_collation_for_utf8mb4=0
+force_print_utf8mb4_implicit_collation=0
+
+
 [mysqld.1]
 report-port=                @mysqld.1.port

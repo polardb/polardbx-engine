@@ -402,6 +402,8 @@ struct System_variables {
       internal_tmp_mem_storage_engine;  // enum_internal_tmp_mem_storage_engine
 
   const CHARSET_INFO *default_collation_for_utf8mb4;
+  bool disable_default_collation_for_utf8mb4;
+  bool force_print_utf8mb4_implicit_collation;
 
   /** Used for controlling preparation of queries against secondary engine. */
   ulong use_secondary_engine;

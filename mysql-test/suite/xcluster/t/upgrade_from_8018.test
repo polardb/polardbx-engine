@@ -86,14 +86,15 @@ let $DATADIR = $old_datadir/data;
 --echo # restart 2
 --exec echo "restart:--datadir=$DATADIR " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --enable_reconnect
+--sleep 10
 --source include/wait_until_connected_again_old.inc
---source include/wait_apply_catchup.inc
 
 --remove_file $MYSQLTEST_VARDIR/tmp/force-change-meta.log
 
 --echo # check
 --connect (follower21,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower21
+--source include/wait_apply_catchup.inc
 xa recover;
 show consensus logs;
 --disconnect follower21

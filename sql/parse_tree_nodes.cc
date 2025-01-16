@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "field_types.h"
+#include "log.h"
 #include "m_ctype.h"
 #include "m_string.h"
 #include "mem_root_deque.h"
@@ -2176,6 +2177,12 @@ bool PT_column_def::contextualize(Table_ddl_parse_context *pc) {
           ? dd::Column::enum_hidden_type::HT_HIDDEN_USER
           : dd::Column::enum_hidden_type::HT_VISIBLE;
 
+  if (check_implicit_collation_for_utf8mb4(pc->thd, 
+                                           field_def->charset,
+                                           field_def->has_explicit_collation,
+                                           field_ident.str))
+    return true;
+
   return pc->alter_info->add_field(
       pc->thd, &field_ident, field_def->type, field_def->length, field_def->dec,
       field_def->type_flags, field_def->default_value,
@@ -2233,6 +2240,14 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
     if (opt_create_table_options) {
       for (auto option : *opt_create_table_options)
         if (option->contextualize(&pc2)) return nullptr;
+
+      if ((pc2.create_info->used_fields & HA_CREATE_USED_DEFAULT_CHARSET)
+          && check_implicit_collation_for_utf8mb4(thd, 
+                pc2.create_info->default_table_charset,
+                (pc2.create_info->used_fields & HA_CREATE_USED_DEFAULT_COLLATE),
+                table_name->table.str)) {
+        return nullptr;
+      }
     }
 
     if (opt_partitioning) {
@@ -4797,4 +4812,20 @@ PT_base_index_option *make_index_secondary_engine_attribute(MEM_ROOT *mem_root,
         pc->key_create_info->m_secondary_engine_attribute = a;
         return false;
       });
+}
+
+bool check_implicit_collation_for_utf8mb4(THD *thd, 
+  const CHARSET_INFO *charset, const bool collation_used,
+  const char *name)
+{
+  if (!opt_initialize
+      && thd->system_thread == NON_SYSTEM_THREAD
+      && charset != nullptr
+      && !collation_used
+      && thd->variables.disable_default_collation_for_utf8mb4
+      && (native_strcasecmp(charset->csname, "utf8mb4") == 0)) {
+    my_error(ER_NO_COLLATION_FOR_UTF8MB4_CHARSET, MYF(0), name);
+    return true;
+  }
+  return false;
 }
