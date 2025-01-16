@@ -36,6 +36,7 @@
     dbms_consensus.downgrade_follower
     dbms_consensus.refresh_learner_meta
     dbms_consensus.configure_follower
+    dbms_consensus.configure_followers
     dbms_consensus.configure_learner
     dbms_consensus.force_single_mode
     dbms_consensus.force_learner_node
@@ -482,6 +483,55 @@ class Consensus_proc_configure_follower final : public Consensus_proc {
   Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
   const std::string str() const override {
     return std::string("configure_follower");
+  }
+};
+
+/**
+  dbms_consensus.configure_followers(...)
+*/
+class Sql_cmd_consensus_proc_configure_followers
+    : public Sql_cmd_consensus_proc {
+ public:
+  Sql_cmd_consensus_proc_configure_followers(THD *thd,
+                                            mem_root_deque<Item *> *list,
+                                            const Consensus_proc *proc)
+      : Sql_cmd_consensus_proc(thd, list, proc) {}
+
+  bool pc_execute(THD *thd) override;
+  bool check_parameter_num() override;
+
+};
+
+class Consensus_proc_configure_followers final : public Consensus_proc {
+  using Sql_cmd_type = Sql_cmd_consensus_proc_configure_followers;
+
+ public:
+  explicit Consensus_proc_configure_followers(PSI_memory_key key)
+      : Consensus_proc(key) {
+    static constexpr auto params = {
+        Consensus_proc_type_enum::NODE,  // node1
+        Consensus_proc_type_enum::UINT,  // weight
+        Consensus_proc_type_enum::BOOL,  // force_sync
+        Consensus_proc_type_enum::NODE,  // node2
+        Consensus_proc_type_enum::UINT,  // weight
+        Consensus_proc_type_enum::BOOL,  // force_sync
+        Consensus_proc_type_enum::NODE,  // node3
+        Consensus_proc_type_enum::UINT,  // weight
+        Consensus_proc_type_enum::BOOL,  // force_sync
+        Consensus_proc_type_enum::NODE,  // node4
+        Consensus_proc_type_enum::UINT,  // weight
+        Consensus_proc_type_enum::BOOL,  // force_sync
+        Consensus_proc_type_enum::NODE,  // node5
+        Consensus_proc_type_enum::UINT,  // weight
+        Consensus_proc_type_enum::BOOL,  // force_sync
+    };
+    fill_params(params);
+  }
+  ~Consensus_proc_configure_followers() override = default;
+  static Proc *instance();
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+  const std::string str() const override {
+    return std::string("configure_followers");
   }
 };
 

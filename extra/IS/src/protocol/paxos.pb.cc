@@ -75,11 +75,27 @@ struct CompressedLogEntriesDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT CompressedLogEntriesDefaultTypeInternal _CompressedLogEntries_default_instance_;
+constexpr ConfigureChangeItem::ConfigureChangeItem(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : addr_(&::PROTOBUF_NAMESPACE_ID::internal::fixed_address_empty_string)
+  , serverid_(uint64_t{0u})
+  , forcesync_(0u)
+  , electionweight_(0u){}
+struct ConfigureChangeItemDefaultTypeInternal {
+  constexpr ConfigureChangeItemDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ConfigureChangeItemDefaultTypeInternal() {}
+  union {
+    ConfigureChangeItem _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ConfigureChangeItemDefaultTypeInternal _ConfigureChangeItem_default_instance_;
 constexpr ConfigureChangeValue::ConfigureChangeValue(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : addrs_()
   , allservers_()
   , alllearners_()
+  , multiitems_()
   , cctype_(0)
   , optype_(0)
   , serverid_(uint64_t{0u})
@@ -1618,6 +1634,317 @@ std::string CompressedLogEntries::GetTypeName() const {
 
 // ===================================================================
 
+class ConfigureChangeItem::_Internal {
+ public:
+  using HasBits = decltype(std::declval<ConfigureChangeItem>()._has_bits_);
+  static void set_has_addr(HasBits* has_bits) {
+    (*has_bits)[0] |= 1u;
+  }
+  static void set_has_serverid(HasBits* has_bits) {
+    (*has_bits)[0] |= 2u;
+  }
+  static void set_has_forcesync(HasBits* has_bits) {
+    (*has_bits)[0] |= 4u;
+  }
+  static void set_has_electionweight(HasBits* has_bits) {
+    (*has_bits)[0] |= 8u;
+  }
+};
+
+ConfigureChangeItem::ConfigureChangeItem(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:alisql.ConfigureChangeItem)
+}
+ConfigureChangeItem::ConfigureChangeItem(const ConfigureChangeItem& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(),
+      _has_bits_(from._has_bits_) {
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  addr_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    addr_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (from._internal_has_addr()) {
+    addr_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, from._internal_addr(), 
+      GetArenaForAllocation());
+  }
+  ::memcpy(&serverid_, &from.serverid_,
+    static_cast<size_t>(reinterpret_cast<char*>(&electionweight_) -
+    reinterpret_cast<char*>(&serverid_)) + sizeof(electionweight_));
+  // @@protoc_insertion_point(copy_constructor:alisql.ConfigureChangeItem)
+}
+
+inline void ConfigureChangeItem::SharedCtor() {
+addr_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  addr_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&serverid_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&electionweight_) -
+    reinterpret_cast<char*>(&serverid_)) + sizeof(electionweight_));
+}
+
+ConfigureChangeItem::~ConfigureChangeItem() {
+  // @@protoc_insertion_point(destructor:alisql.ConfigureChangeItem)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<std::string>();
+}
+
+inline void ConfigureChangeItem::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  addr_.DestroyNoArena(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+}
+
+void ConfigureChangeItem::ArenaDtor(void* object) {
+  ConfigureChangeItem* _this = reinterpret_cast< ConfigureChangeItem* >(object);
+  (void)_this;
+}
+void ConfigureChangeItem::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ConfigureChangeItem::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ConfigureChangeItem::Clear() {
+// @@protoc_insertion_point(message_clear_start:alisql.ConfigureChangeItem)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _has_bits_[0];
+  if (cached_has_bits & 0x00000001u) {
+    addr_.ClearNonDefaultToEmpty();
+  }
+  if (cached_has_bits & 0x0000000eu) {
+    ::memset(&serverid_, 0, static_cast<size_t>(
+        reinterpret_cast<char*>(&electionweight_) -
+        reinterpret_cast<char*>(&serverid_)) + sizeof(electionweight_));
+  }
+  _has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ConfigureChangeItem::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  _Internal::HasBits has_bits{};
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // optional bytes addr = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_addr();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional uint64 serverId = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _Internal::set_has_serverid(&has_bits);
+          serverid_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional uint32 forceSync = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _Internal::set_has_forcesync(&has_bits);
+          forcesync_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // optional uint32 electionWeight = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _Internal::set_has_electionweight(&has_bits);
+          electionweight_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  _has_bits_.Or(has_bits);
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ConfigureChangeItem::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:alisql.ConfigureChangeItem)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = _has_bits_[0];
+  // optional bytes addr = 1;
+  if (cached_has_bits & 0x00000001u) {
+    target = stream->WriteBytesMaybeAliased(
+        1, this->_internal_addr(), target);
+  }
+
+  // optional uint64 serverId = 2;
+  if (cached_has_bits & 0x00000002u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(2, this->_internal_serverid(), target);
+  }
+
+  // optional uint32 forceSync = 3;
+  if (cached_has_bits & 0x00000004u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_forcesync(), target);
+  }
+
+  // optional uint32 electionWeight = 4;
+  if (cached_has_bits & 0x00000008u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(4, this->_internal_electionweight(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:alisql.ConfigureChangeItem)
+  return target;
+}
+
+size_t ConfigureChangeItem::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:alisql.ConfigureChangeItem)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _has_bits_[0];
+  if (cached_has_bits & 0x0000000fu) {
+    // optional bytes addr = 1;
+    if (cached_has_bits & 0x00000001u) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+          this->_internal_addr());
+    }
+
+    // optional uint64 serverId = 2;
+    if (cached_has_bits & 0x00000002u) {
+      total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_serverid());
+    }
+
+    // optional uint32 forceSync = 3;
+    if (cached_has_bits & 0x00000004u) {
+      total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_forcesync());
+    }
+
+    // optional uint32 electionWeight = 4;
+    if (cached_has_bits & 0x00000008u) {
+      total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_electionweight());
+    }
+
+  }
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ConfigureChangeItem::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::PROTOBUF_NAMESPACE_ID::internal::DownCast<const ConfigureChangeItem*>(
+      &from));
+}
+
+void ConfigureChangeItem::MergeFrom(const ConfigureChangeItem& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:alisql.ConfigureChangeItem)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._has_bits_[0];
+  if (cached_has_bits & 0x0000000fu) {
+    if (cached_has_bits & 0x00000001u) {
+      _internal_set_addr(from._internal_addr());
+    }
+    if (cached_has_bits & 0x00000002u) {
+      serverid_ = from.serverid_;
+    }
+    if (cached_has_bits & 0x00000004u) {
+      forcesync_ = from.forcesync_;
+    }
+    if (cached_has_bits & 0x00000008u) {
+      electionweight_ = from.electionweight_;
+    }
+    _has_bits_[0] |= cached_has_bits;
+  }
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ConfigureChangeItem::CopyFrom(const ConfigureChangeItem& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:alisql.ConfigureChangeItem)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ConfigureChangeItem::IsInitialized() const {
+  return true;
+}
+
+void ConfigureChangeItem::InternalSwap(ConfigureChangeItem* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_has_bits_[0], other->_has_bits_[0]);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(),
+      &addr_, lhs_arena,
+      &other->addr_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ConfigureChangeItem, electionweight_)
+      + sizeof(ConfigureChangeItem::electionweight_)
+      - PROTOBUF_FIELD_OFFSET(ConfigureChangeItem, serverid_)>(
+          reinterpret_cast<char*>(&serverid_),
+          reinterpret_cast<char*>(&other->serverid_));
+}
+
+std::string ConfigureChangeItem::GetTypeName() const {
+  return "alisql.ConfigureChangeItem";
+}
+
+
+// ===================================================================
+
 class ConfigureChangeValue::_Internal {
  public:
   using HasBits = decltype(std::declval<ConfigureChangeValue>()._has_bits_);
@@ -1649,7 +1976,8 @@ ConfigureChangeValue::ConfigureChangeValue(::PROTOBUF_NAMESPACE_ID::Arena* arena
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned),
   addrs_(arena),
   allservers_(arena),
-  alllearners_(arena) {
+  alllearners_(arena),
+  multiitems_(arena) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -1661,7 +1989,8 @@ ConfigureChangeValue::ConfigureChangeValue(const ConfigureChangeValue& from)
       _has_bits_(from._has_bits_),
       addrs_(from.addrs_),
       allservers_(from.allservers_),
-      alllearners_(from.alllearners_) {
+      alllearners_(from.alllearners_),
+      multiitems_(from.multiitems_) {
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&cctype_, &from.cctype_,
     static_cast<size_t>(reinterpret_cast<char*>(&applymode_) -
@@ -1706,6 +2035,7 @@ void ConfigureChangeValue::Clear() {
   addrs_.Clear();
   allservers_.Clear();
   alllearners_.Clear();
+  multiitems_.Clear();
   cached_has_bits = _has_bits_[0];
   if (cached_has_bits & 0x0000007fu) {
     ::memset(&cctype_, 0, static_cast<size_t>(
@@ -1828,6 +2158,19 @@ const char* ConfigureChangeValue::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
+      // repeated .alisql.ConfigureChangeItem multiItems = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_multiitems(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<90>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -1919,6 +2262,14 @@ uint8_t* ConfigureChangeValue::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(10, this->_internal_applymode(), target);
   }
 
+  // repeated .alisql.ConfigureChangeItem multiItems = 11;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_multiitems_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(11, this->_internal_multiitems(i), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -1957,6 +2308,13 @@ size_t ConfigureChangeValue::ByteSizeLong() const {
   for (int i = 0, n = alllearners_.size(); i < n; i++) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
       alllearners_.Get(i));
+  }
+
+  // repeated .alisql.ConfigureChangeItem multiItems = 11;
+  total_size += 1UL * this->_internal_multiitems_size();
+  for (const auto& msg : this->multiitems_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
   cached_has_bits = _has_bits_[0];
@@ -2020,6 +2378,7 @@ void ConfigureChangeValue::MergeFrom(const ConfigureChangeValue& from) {
   addrs_.MergeFrom(from.addrs_);
   allservers_.MergeFrom(from.allservers_);
   alllearners_.MergeFrom(from.alllearners_);
+  multiitems_.MergeFrom(from.multiitems_);
   cached_has_bits = from._has_bits_[0];
   if (cached_has_bits & 0x0000007fu) {
     if (cached_has_bits & 0x00000001u) {
@@ -2066,6 +2425,7 @@ void ConfigureChangeValue::InternalSwap(ConfigureChangeValue* other) {
   addrs_.InternalSwap(&other->addrs_);
   allservers_.InternalSwap(&other->allservers_);
   alllearners_.InternalSwap(&other->alllearners_);
+  multiitems_.InternalSwap(&other->multiitems_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ConfigureChangeValue, applymode_)
       + sizeof(ConfigureChangeValue::applymode_)
@@ -4489,6 +4849,9 @@ template<> PROTOBUF_NOINLINE ::alisql::PolarFields* Arena::CreateMaybeMessage< :
 }
 template<> PROTOBUF_NOINLINE ::alisql::CompressedLogEntries* Arena::CreateMaybeMessage< ::alisql::CompressedLogEntries >(Arena* arena) {
   return Arena::CreateMessageInternal< ::alisql::CompressedLogEntries >(arena);
+}
+template<> PROTOBUF_NOINLINE ::alisql::ConfigureChangeItem* Arena::CreateMaybeMessage< ::alisql::ConfigureChangeItem >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::alisql::ConfigureChangeItem >(arena);
 }
 template<> PROTOBUF_NOINLINE ::alisql::ConfigureChangeValue* Arena::CreateMaybeMessage< ::alisql::ConfigureChangeValue >(Arena* arena) {
   return Arena::CreateMessageInternal< ::alisql::ConfigureChangeValue >(arena);

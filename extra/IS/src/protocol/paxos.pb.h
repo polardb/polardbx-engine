@@ -45,7 +45,7 @@ struct TableStruct_paxos_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[9]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[10]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -58,6 +58,9 @@ extern ClusterInfoEntryDefaultTypeInternal _ClusterInfoEntry_default_instance_;
 class CompressedLogEntries;
 struct CompressedLogEntriesDefaultTypeInternal;
 extern CompressedLogEntriesDefaultTypeInternal _CompressedLogEntries_default_instance_;
+class ConfigureChangeItem;
+struct ConfigureChangeItemDefaultTypeInternal;
+extern ConfigureChangeItemDefaultTypeInternal _ConfigureChangeItem_default_instance_;
 class ConfigureChangeValue;
 struct ConfigureChangeValueDefaultTypeInternal;
 extern ConfigureChangeValueDefaultTypeInternal _ConfigureChangeValue_default_instance_;
@@ -83,6 +86,7 @@ extern TestMsg2DefaultTypeInternal _TestMsg2_default_instance_;
 PROTOBUF_NAMESPACE_OPEN
 template<> ::alisql::ClusterInfoEntry* Arena::CreateMaybeMessage<::alisql::ClusterInfoEntry>(Arena*);
 template<> ::alisql::CompressedLogEntries* Arena::CreateMaybeMessage<::alisql::CompressedLogEntries>(Arena*);
+template<> ::alisql::ConfigureChangeItem* Arena::CreateMaybeMessage<::alisql::ConfigureChangeItem>(Arena*);
 template<> ::alisql::ConfigureChangeValue* Arena::CreateMaybeMessage<::alisql::ConfigureChangeValue>(Arena*);
 template<> ::alisql::LogEntry* Arena::CreateMaybeMessage<::alisql::LogEntry>(Arena*);
 template<> ::alisql::PaxosMsg* Arena::CreateMaybeMessage<::alisql::PaxosMsg>(Arena*);
@@ -911,6 +915,198 @@ class CompressedLogEntries final :
 };
 // -------------------------------------------------------------------
 
+class ConfigureChangeItem final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:alisql.ConfigureChangeItem) */ {
+ public:
+  inline ConfigureChangeItem() : ConfigureChangeItem(nullptr) {}
+  ~ConfigureChangeItem() override;
+  explicit constexpr ConfigureChangeItem(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ConfigureChangeItem(const ConfigureChangeItem& from);
+  ConfigureChangeItem(ConfigureChangeItem&& from) noexcept
+    : ConfigureChangeItem() {
+    *this = ::std::move(from);
+  }
+
+  inline ConfigureChangeItem& operator=(const ConfigureChangeItem& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ConfigureChangeItem& operator=(ConfigureChangeItem&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  inline const std::string& unknown_fields() const {
+    return _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString);
+  }
+  inline std::string* mutable_unknown_fields() {
+    return _internal_metadata_.mutable_unknown_fields<std::string>();
+  }
+
+  static const ConfigureChangeItem& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ConfigureChangeItem* internal_default_instance() {
+    return reinterpret_cast<const ConfigureChangeItem*>(
+               &_ConfigureChangeItem_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    4;
+
+  friend void swap(ConfigureChangeItem& a, ConfigureChangeItem& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ConfigureChangeItem* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ConfigureChangeItem* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ConfigureChangeItem* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ConfigureChangeItem>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const ConfigureChangeItem& from);
+  void MergeFrom(const ConfigureChangeItem& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(ConfigureChangeItem* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "alisql.ConfigureChangeItem";
+  }
+  protected:
+  explicit ConfigureChangeItem(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kAddrFieldNumber = 1,
+    kServerIdFieldNumber = 2,
+    kForceSyncFieldNumber = 3,
+    kElectionWeightFieldNumber = 4,
+  };
+  // optional bytes addr = 1;
+  bool has_addr() const;
+  private:
+  bool _internal_has_addr() const;
+  public:
+  void clear_addr();
+  const std::string& addr() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_addr(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_addr();
+  PROTOBUF_NODISCARD std::string* release_addr();
+  void set_allocated_addr(std::string* addr);
+  private:
+  const std::string& _internal_addr() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_addr(const std::string& value);
+  std::string* _internal_mutable_addr();
+  public:
+
+  // optional uint64 serverId = 2;
+  bool has_serverid() const;
+  private:
+  bool _internal_has_serverid() const;
+  public:
+  void clear_serverid();
+  uint64_t serverid() const;
+  void set_serverid(uint64_t value);
+  private:
+  uint64_t _internal_serverid() const;
+  void _internal_set_serverid(uint64_t value);
+  public:
+
+  // optional uint32 forceSync = 3;
+  bool has_forcesync() const;
+  private:
+  bool _internal_has_forcesync() const;
+  public:
+  void clear_forcesync();
+  uint32_t forcesync() const;
+  void set_forcesync(uint32_t value);
+  private:
+  uint32_t _internal_forcesync() const;
+  void _internal_set_forcesync(uint32_t value);
+  public:
+
+  // optional uint32 electionWeight = 4;
+  bool has_electionweight() const;
+  private:
+  bool _internal_has_electionweight() const;
+  public:
+  void clear_electionweight();
+  uint32_t electionweight() const;
+  void set_electionweight(uint32_t value);
+  private:
+  uint32_t _internal_electionweight() const;
+  void _internal_set_electionweight(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:alisql.ConfigureChangeItem)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  ::PROTOBUF_NAMESPACE_ID::internal::HasBits<1> _has_bits_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr addr_;
+  uint64_t serverid_;
+  uint32_t forcesync_;
+  uint32_t electionweight_;
+  friend struct ::TableStruct_paxos_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ConfigureChangeValue final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:alisql.ConfigureChangeValue) */ {
  public:
@@ -957,7 +1153,7 @@ class ConfigureChangeValue final :
                &_ConfigureChangeValue_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    4;
+    5;
 
   friend void swap(ConfigureChangeValue& a, ConfigureChangeValue& b) {
     a.Swap(&b);
@@ -1027,6 +1223,7 @@ class ConfigureChangeValue final :
     kAddrsFieldNumber = 3,
     kAllServersFieldNumber = 4,
     kAllLearnersFieldNumber = 5,
+    kMultiItemsFieldNumber = 11,
     kCcTypeFieldNumber = 1,
     kOpTypeFieldNumber = 2,
     kServerIdFieldNumber = 6,
@@ -1106,6 +1303,24 @@ class ConfigureChangeValue final :
   const std::string& _internal_alllearners(int index) const;
   std::string* _internal_add_alllearners();
   public:
+
+  // repeated .alisql.ConfigureChangeItem multiItems = 11;
+  int multiitems_size() const;
+  private:
+  int _internal_multiitems_size() const;
+  public:
+  void clear_multiitems();
+  ::alisql::ConfigureChangeItem* mutable_multiitems(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ConfigureChangeItem >*
+      mutable_multiitems();
+  private:
+  const ::alisql::ConfigureChangeItem& _internal_multiitems(int index) const;
+  ::alisql::ConfigureChangeItem* _internal_add_multiitems();
+  public:
+  const ::alisql::ConfigureChangeItem& multiitems(int index) const;
+  ::alisql::ConfigureChangeItem* add_multiitems();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ConfigureChangeItem >&
+      multiitems() const;
 
   // optional int32 ccType = 1;
   bool has_cctype() const;
@@ -1210,6 +1425,7 @@ class ConfigureChangeValue final :
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> addrs_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> allservers_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> alllearners_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ConfigureChangeItem > multiitems_;
   int32_t cctype_;
   int32_t optype_;
   uint64_t serverid_;
@@ -1267,7 +1483,7 @@ class ClusterInfoEntry final :
                &_ClusterInfoEntry_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    5;
+    6;
 
   friend void swap(ClusterInfoEntry& a, ClusterInfoEntry& b) {
     a.Swap(&b);
@@ -1604,7 +1820,7 @@ class PaxosMsg final :
                &_PaxosMsg_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    6;
+    7;
 
   friend void swap(PaxosMsg& a, PaxosMsg& b) {
     a.Swap(&b);
@@ -2330,7 +2546,7 @@ class TestMsg1 final :
                &_TestMsg1_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    7;
+    8;
 
   friend void swap(TestMsg1& a, TestMsg1& b) {
     a.Swap(&b);
@@ -2487,7 +2703,7 @@ class TestMsg2 final :
                &_TestMsg2_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    8;
+    9;
 
   friend void swap(TestMsg2& a, TestMsg2& b) {
     a.Swap(&b);
@@ -3326,6 +3542,163 @@ inline void CompressedLogEntries::set_checksum(uint32_t value) {
 
 // -------------------------------------------------------------------
 
+// ConfigureChangeItem
+
+// optional bytes addr = 1;
+inline bool ConfigureChangeItem::_internal_has_addr() const {
+  bool value = (_has_bits_[0] & 0x00000001u) != 0;
+  return value;
+}
+inline bool ConfigureChangeItem::has_addr() const {
+  return _internal_has_addr();
+}
+inline void ConfigureChangeItem::clear_addr() {
+  addr_.ClearToEmpty();
+  _has_bits_[0] &= ~0x00000001u;
+}
+inline const std::string& ConfigureChangeItem::addr() const {
+  // @@protoc_insertion_point(field_get:alisql.ConfigureChangeItem.addr)
+  return _internal_addr();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void ConfigureChangeItem::set_addr(ArgT0&& arg0, ArgT... args) {
+ _has_bits_[0] |= 0x00000001u;
+ addr_.SetBytes(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:alisql.ConfigureChangeItem.addr)
+}
+inline std::string* ConfigureChangeItem::mutable_addr() {
+  std::string* _s = _internal_mutable_addr();
+  // @@protoc_insertion_point(field_mutable:alisql.ConfigureChangeItem.addr)
+  return _s;
+}
+inline const std::string& ConfigureChangeItem::_internal_addr() const {
+  return addr_.Get();
+}
+inline void ConfigureChangeItem::_internal_set_addr(const std::string& value) {
+  _has_bits_[0] |= 0x00000001u;
+  addr_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, value, GetArenaForAllocation());
+}
+inline std::string* ConfigureChangeItem::_internal_mutable_addr() {
+  _has_bits_[0] |= 0x00000001u;
+  return addr_.Mutable(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+}
+inline std::string* ConfigureChangeItem::release_addr() {
+  // @@protoc_insertion_point(field_release:alisql.ConfigureChangeItem.addr)
+  if (!_internal_has_addr()) {
+    return nullptr;
+  }
+  _has_bits_[0] &= ~0x00000001u;
+  auto* p = addr_.ReleaseNonDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (addr_.IsDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited())) {
+    addr_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  return p;
+}
+inline void ConfigureChangeItem::set_allocated_addr(std::string* addr) {
+  if (addr != nullptr) {
+    _has_bits_[0] |= 0x00000001u;
+  } else {
+    _has_bits_[0] &= ~0x00000001u;
+  }
+  addr_.SetAllocated(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), addr,
+      GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (addr_.IsDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited())) {
+    addr_.Set(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), "", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:alisql.ConfigureChangeItem.addr)
+}
+
+// optional uint64 serverId = 2;
+inline bool ConfigureChangeItem::_internal_has_serverid() const {
+  bool value = (_has_bits_[0] & 0x00000002u) != 0;
+  return value;
+}
+inline bool ConfigureChangeItem::has_serverid() const {
+  return _internal_has_serverid();
+}
+inline void ConfigureChangeItem::clear_serverid() {
+  serverid_ = uint64_t{0u};
+  _has_bits_[0] &= ~0x00000002u;
+}
+inline uint64_t ConfigureChangeItem::_internal_serverid() const {
+  return serverid_;
+}
+inline uint64_t ConfigureChangeItem::serverid() const {
+  // @@protoc_insertion_point(field_get:alisql.ConfigureChangeItem.serverId)
+  return _internal_serverid();
+}
+inline void ConfigureChangeItem::_internal_set_serverid(uint64_t value) {
+  _has_bits_[0] |= 0x00000002u;
+  serverid_ = value;
+}
+inline void ConfigureChangeItem::set_serverid(uint64_t value) {
+  _internal_set_serverid(value);
+  // @@protoc_insertion_point(field_set:alisql.ConfigureChangeItem.serverId)
+}
+
+// optional uint32 forceSync = 3;
+inline bool ConfigureChangeItem::_internal_has_forcesync() const {
+  bool value = (_has_bits_[0] & 0x00000004u) != 0;
+  return value;
+}
+inline bool ConfigureChangeItem::has_forcesync() const {
+  return _internal_has_forcesync();
+}
+inline void ConfigureChangeItem::clear_forcesync() {
+  forcesync_ = 0u;
+  _has_bits_[0] &= ~0x00000004u;
+}
+inline uint32_t ConfigureChangeItem::_internal_forcesync() const {
+  return forcesync_;
+}
+inline uint32_t ConfigureChangeItem::forcesync() const {
+  // @@protoc_insertion_point(field_get:alisql.ConfigureChangeItem.forceSync)
+  return _internal_forcesync();
+}
+inline void ConfigureChangeItem::_internal_set_forcesync(uint32_t value) {
+  _has_bits_[0] |= 0x00000004u;
+  forcesync_ = value;
+}
+inline void ConfigureChangeItem::set_forcesync(uint32_t value) {
+  _internal_set_forcesync(value);
+  // @@protoc_insertion_point(field_set:alisql.ConfigureChangeItem.forceSync)
+}
+
+// optional uint32 electionWeight = 4;
+inline bool ConfigureChangeItem::_internal_has_electionweight() const {
+  bool value = (_has_bits_[0] & 0x00000008u) != 0;
+  return value;
+}
+inline bool ConfigureChangeItem::has_electionweight() const {
+  return _internal_has_electionweight();
+}
+inline void ConfigureChangeItem::clear_electionweight() {
+  electionweight_ = 0u;
+  _has_bits_[0] &= ~0x00000008u;
+}
+inline uint32_t ConfigureChangeItem::_internal_electionweight() const {
+  return electionweight_;
+}
+inline uint32_t ConfigureChangeItem::electionweight() const {
+  // @@protoc_insertion_point(field_get:alisql.ConfigureChangeItem.electionWeight)
+  return _internal_electionweight();
+}
+inline void ConfigureChangeItem::_internal_set_electionweight(uint32_t value) {
+  _has_bits_[0] |= 0x00000008u;
+  electionweight_ = value;
+}
+inline void ConfigureChangeItem::set_electionweight(uint32_t value) {
+  _internal_set_electionweight(value);
+  // @@protoc_insertion_point(field_set:alisql.ConfigureChangeItem.electionWeight)
+}
+
+// -------------------------------------------------------------------
+
 // ConfigureChangeValue
 
 // optional int32 ccType = 1;
@@ -3747,6 +4120,46 @@ inline void ConfigureChangeValue::_internal_set_applymode(bool value) {
 inline void ConfigureChangeValue::set_applymode(bool value) {
   _internal_set_applymode(value);
   // @@protoc_insertion_point(field_set:alisql.ConfigureChangeValue.applyMode)
+}
+
+// repeated .alisql.ConfigureChangeItem multiItems = 11;
+inline int ConfigureChangeValue::_internal_multiitems_size() const {
+  return multiitems_.size();
+}
+inline int ConfigureChangeValue::multiitems_size() const {
+  return _internal_multiitems_size();
+}
+inline void ConfigureChangeValue::clear_multiitems() {
+  multiitems_.Clear();
+}
+inline ::alisql::ConfigureChangeItem* ConfigureChangeValue::mutable_multiitems(int index) {
+  // @@protoc_insertion_point(field_mutable:alisql.ConfigureChangeValue.multiItems)
+  return multiitems_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ConfigureChangeItem >*
+ConfigureChangeValue::mutable_multiitems() {
+  // @@protoc_insertion_point(field_mutable_list:alisql.ConfigureChangeValue.multiItems)
+  return &multiitems_;
+}
+inline const ::alisql::ConfigureChangeItem& ConfigureChangeValue::_internal_multiitems(int index) const {
+  return multiitems_.Get(index);
+}
+inline const ::alisql::ConfigureChangeItem& ConfigureChangeValue::multiitems(int index) const {
+  // @@protoc_insertion_point(field_get:alisql.ConfigureChangeValue.multiItems)
+  return _internal_multiitems(index);
+}
+inline ::alisql::ConfigureChangeItem* ConfigureChangeValue::_internal_add_multiitems() {
+  return multiitems_.Add();
+}
+inline ::alisql::ConfigureChangeItem* ConfigureChangeValue::add_multiitems() {
+  ::alisql::ConfigureChangeItem* _add = _internal_add_multiitems();
+  // @@protoc_insertion_point(field_add:alisql.ConfigureChangeValue.multiItems)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::alisql::ConfigureChangeItem >&
+ConfigureChangeValue::multiitems() const {
+  // @@protoc_insertion_point(field_list:alisql.ConfigureChangeValue.multiItems)
+  return multiitems_;
 }
 
 // -------------------------------------------------------------------
@@ -5537,6 +5950,8 @@ TestMsg2::mutable_c2() {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

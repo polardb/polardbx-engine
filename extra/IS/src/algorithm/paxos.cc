@@ -199,6 +199,26 @@ void Paxos::membershipChangeHistoryUpdate_(const MembershipChangeType &mc) {
   membershipChangeHistory_.push_back(mc);
 }
 
+void Paxos::applyOneConfigureNode(std::string &addr, uint64_t serverId,
+  bool forceSync, uint electionWeight)
+{
+  if (state_ != LEARNER) {
+    auto server = config_->getServer(serverId);
+    if (server == nullptr || addr != server->strAddr) {
+      easy_error_log(
+          "Server %d : Can't find the target server(id:%llu, addr:%s) in "
+          "the configure!! Current member configure:%s\n",
+          localServer_->serverId, serverId, addr.c_str(),
+          config_->membersToString(localServer_->strAddr).c_str());
+    } else {
+      config_->configureMember(serverId, forceSync,
+                                electionWeight, this);
+      if (serverId == localServer_->serverId)
+        electionTimer_->setRandWeight(electionWeight);
+    }
+  }
+}
+
 int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
   LogEntry entry;
   uint64_t index = 0;
@@ -215,6 +235,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
 
   ConfigureChangeValue val;
   val.ParseFromString(std::move(entry.value()));
+  bool finish_history_update = false;
 
   MembershipChangeType mc;
   mc.cctype = (CCOpTypeT)val.cctype();
@@ -222,8 +243,8 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
   if (val.addrs().size()) mc.address = *(val.addrs().begin());
   if (val.cctype() == CCMemberOp) {
     // for membership change
-    const std::string &addr = *(val.addrs().begin());
     if (val.optype() == CCAddNode) {
+      const std::string &addr = *(val.addrs().begin());
       assert(val.addrs_size() == 1);
       if (state_ != LEARNER)
         config_->addMember(addr, this);
@@ -286,6 +307,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         ccMgr_.condChangeDone.notify_all();
       }
     } else if (val.optype() == CCDelNode) {
+      const std::string &addr = *(val.addrs().begin());
       if (state_ != LEARNER) {
         if (addr != localServer_->strAddr)
           config_->delMember(addr, this);
@@ -301,6 +323,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         }
       }
     } else if (val.optype() == CCDowngradeNode) {
+      const std::string &addr = *(val.addrs().begin());
       std::vector<std::string> strConfig;
       strConfig.push_back(addr);
       if (state_ != LEARNER) {
@@ -335,22 +358,25 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         config_->addLearners(strConfig, this);
       }
     } else if (val.optype() == CCConfigureNode) {
-      mc.forceSync = val.forcesync();
-      mc.electionWeight = val.electionweight();
-      if (state_ != LEARNER) {
-        auto server = config_->getServer(val.serverid());
-        if (server == nullptr || addr != server->strAddr) {
-          easy_error_log(
-              "Server %d : Can't find the target server(id:%llu, addr:%s) in "
-              "the configure!! Current member configure:%s\n",
-              localServer_->serverId, val.serverid(), addr.c_str(),
-              config_->membersToString(localServer_->strAddr).c_str());
-        } else {
-          config_->configureMember(val.serverid(), val.forcesync(),
-                                   val.electionweight(), this);
-          if (val.serverid() == localServer_->serverId)
-            electionTimer_->setRandWeight(val.electionweight());
+      if (val.addrs().size()) {
+        mc.forceSync = val.forcesync();
+        mc.electionWeight = val.electionweight();
+        applyOneConfigureNode(mc.address, 
+                              val.serverid(), 
+                              mc.forceSync, 
+                              mc.electionWeight);
+      } else {
+        for (auto &it : val.multiitems()) {
+          mc.address = it.addr();
+          mc.forceSync = it.forcesync();
+          mc.electionWeight = it.electionweight();
+          applyOneConfigureNode(mc.address, 
+                                it.serverid(), 
+                                mc.forceSync, 
+                                mc.electionWeight);
+          membershipChangeHistoryUpdate_(mc);
         }
+        finish_history_update = true;
       }
     }
   } else if (val.cctype() == CCLearnerOp) {
@@ -450,7 +476,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
     assert(0);
   }
 
-  membershipChangeHistoryUpdate_(mc);
+  if (!finish_history_update) membershipChangeHistoryUpdate_(mc);
 
   uint64_t itmp;
   log_->getMetaData(std::string(keyScanIndex), &itmp);
@@ -1162,6 +1188,71 @@ int Paxos::configureMember(const std::string &addr, bool forceSync,
   std::unique_lock<std::mutex> ul(lock_);
   uint64_t serverId = config_->getServerIdFromAddr(addr);
   return configureMember_(serverId, forceSync, electionWeight, ul);
+}
+
+int Paxos::configureMembers(std::vector<uint64_t> &serverIds,
+  std::vector<bool> &forceSyncs, std::vector<uint> &electionWeights) {
+  std::unique_lock<std::mutex> ul(lock_);
+  int ret = PaxosErrorCode::PE_NONE;
+  ConfigureChangeValue val;
+  val.set_cctype(CCMemberOp);
+  val.set_optype(CCConfigureNode);
+  ConfigureChangeItem item;
+
+  for (int i = 0; i < serverIds.size(); i++) {
+    auto serverId = serverIds[i];
+    auto electionWeight = electionWeights[i];
+    auto forceSync = forceSyncs[i];
+
+    if (electionWeight > 9) {
+      easy_error_log(
+          "Server %d : Fail to change electionWeight. Max electionWeight is 9, but input is %d",
+          localServer_->serverId, electionWeight);
+      abort();
+      return PaxosErrorCode::PE_INVALIDARGUMENT;
+    }
+    auto server = config_->getServer(serverId);
+
+    if (!server) {
+      easy_error_log("Server %d : can't find server %llu in configureMember\n",
+                    localServer_->serverId, serverId);
+      return PaxosErrorCode::PE_NOTFOUND;
+    }
+
+    if (serverId >= 100) {
+      easy_error_log(
+          "Server %d : can't configure learner %llu in configureMember\n",
+          localServer_->serverId, serverId);
+      return PaxosErrorCode::PE_WEIGHTLEARNER;
+    }
+
+    if (server->forceSync == forceSync &&
+        server->electionWeight == electionWeight) {
+      easy_warn_log(
+          "Server %d : nothing changed in configureMember server %llu, "
+          "forceSync:%u electionWeight:%u\n",
+          localServer_->serverId, serverId, forceSync, electionWeight);
+      continue;
+    }
+
+    /* For check. */
+    item.set_addr(server->strAddr);
+    item.set_serverid(serverId);
+    item.set_forcesync(forceSync);
+    item.set_electionweight(electionWeight);
+    *(val.mutable_multiitems()->Add()) = item;
+  }
+  
+  ret = sendConfigureAndWait_(val, ul);
+  easy_system_log(
+      "Server %d : configureMembers return(%d) success(%d) "
+      "preparedIndex(%llu) lli(%llu)\n",
+      localServer_->serverId, ret, ccMgr_.applied,
+      ccMgr_.preparedIndex, log_->getLastLogIndex());
+  if (ret != PaxosErrorCode::PE_REPLICATEFAIL &&
+      ret != PaxosErrorCode::PE_CONFLICTS && ret != PaxosErrorCode::PE_TIMEOUT)
+    ccMgr_.clear();
+  return ret;
 }
 
 int Paxos::downgradeMember_(uint64_t serverId,

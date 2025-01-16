@@ -64,6 +64,14 @@ message CompressedLogEntries
   optional uint32 checksum = 4;
 }
 
+message ConfigureChangeItem
+{
+  optional bytes addr = 1;
+  optional uint64 serverId = 2;
+  optional uint32 forceSync = 3;
+  optional uint32 electionWeight = 4;
+}
+
 message ConfigureChangeValue
 {
   optional int32 ccType = 1;
@@ -76,7 +84,9 @@ message ConfigureChangeValue
   optional uint32 electionWeight = 8;
   optional uint64 learnerSource = 9;
   optional bool applyMode = 10;
+  optional repeated ConfigureChangeItem multiItems = 11;
 }
+
 
 message ClusterInfoEntry
 {

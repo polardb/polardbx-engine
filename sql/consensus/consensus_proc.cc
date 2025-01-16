@@ -21,6 +21,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/consensus/consensus_proc.h"
+#include <cstdint>
+#include <vector>
 #include "my_sys.h"
 #include "mysql/components/services/log_builtins.h"
 #include "sql/auth/auth_acls.h"
@@ -638,6 +640,65 @@ bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
                  *it++));
 
   res = consensus_ptr->configureMember(node_id, force_sync, election_weight);
+  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+         thd->m_main_security_ctx.user().str,
+         thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
+  if (res != 0 && res != 1)
+    my_error(ER_CONSENSUS_COMMAND_ERROR, MYF(0), res, alisql::pxserror(res));
+  return (res != 0 && res != 1);
+}
+
+/**
+  dbms_consensus.configure_followers(...)
+*/
+Proc *Consensus_proc_configure_followers::instance() {
+  static Proc *proc = new Consensus_proc_configure_followers(key_memory_package);
+  return proc;
+}
+
+Sql_cmd *Consensus_proc_configure_followers::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+bool Sql_cmd_consensus_proc_configure_followers::check_parameter_num() {
+  std::size_t actual_size = (m_list == nullptr ? 0 : m_list->size());
+  std::size_t define_size = m_proc->get_parameters()->size();
+  std::size_t consensus_define_size =
+      m_consensus_proc->consensus_proc_params().size();
+
+  if (actual_size < 3
+      || actual_size > 15
+      || (actual_size % 3 != 0)
+      || define_size != consensus_define_size) {
+    my_error(ER_SP_WRONG_NO_OF_ARGS, MYF(0), "PROCEDURE",
+             m_proc->qname().c_str(), define_size, actual_size);
+    return true;
+  }
+  return false;
+}
+
+
+bool Sql_cmd_consensus_proc_configure_followers::pc_execute(THD *thd) {
+  int res = 0;
+  if (!consensus_ptr) return false;
+  const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
+
+  size_t consensus_proc_params_idx = 0;
+
+  std::vector<uint64_t> node_ids;
+  std::vector<uint> election_weights;
+  std::vector<bool> force_syncs;
+  for (auto it = m_list->begin(); consensus_proc_params_idx < m_list->size();) {
+    if (consensus_proc_params_idx < m_list->size())
+      node_ids.push_back(consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++));
+    if (consensus_proc_params_idx < m_list->size())
+      election_weights.push_back(consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++));
+    if (consensus_proc_params_idx < m_list->size())
+      force_syncs.push_back(consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
+  }
+
+  res = consensus_ptr->configureMembers(node_ids, force_syncs, election_weights);
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);

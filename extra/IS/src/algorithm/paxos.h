@@ -327,6 +327,10 @@ class Paxos : public Consensus {
       bool applyMode = false); /* support ip:port argument */
   virtual int configureMember(uint64_t serverId, bool forceSync,
                               uint electionWeight);
+  void applyOneConfigureNode(std::string &addr, uint64_t serverId,
+                             bool forceSync, uint electionWeight);
+  virtual int configureMembers(std::vector<uint64_t> &serverIds, std::vector<bool> &forceSyncs,
+                              std::vector<uint> &electionWeights);
   virtual int configureMember(
       const std::string &addr, bool forceSync,
       uint electionWeight); /* support ip:port argument */

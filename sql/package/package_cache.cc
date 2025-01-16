@@ -243,6 +243,8 @@ void package_context_init() {
       CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_configure_follower>(
       CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_configure_followers>(
+      CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_configure_learner>(
       CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_force_single_mode>(
