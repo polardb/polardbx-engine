@@ -1,0 +1,29 @@
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	
+include/assert.inc [init_bp_size <= expect_bp_size]
+# ----------------------- case 1 ------------------------------
+set GLOBAL debug ='+d, simulate_polarx_license_exist_and_valid';
+set GLOBAL polarx_license_path ='test_license1.perm';
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license1.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license1.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL innodb_buffer_pool_size = 268435456;
+Warnings:
+Warning	1292	Truncated incorrect innodb_buffer_pool_size value: '268435456'
+include/assert.inc [actural_bp_size >= expect_bp_size]
+# ----------------------- case 2 ------------------------------
+set GLOBAL debug ='+d, simulate_polarx_license_too_much_conns';
+ERROR HY000: Beyond the authorization limits(too many connections). Please check the license file or connect with support team.
+set GLOBAL debug ='-d, simulate_polarx_license_too_much_conns';
+set GLOBAL debug ='+d, simulate_polarx_license_unpermitted_size';
+set GLOBAL innodb_buffer_pool_size = 536870912;
+include/assert.inc [actural_bp_size = expect_bp_size]
+set GLOBAL debug ='-d, simulate_polarx_license_unpermitted_size';
+set GLOBAL innodb_buffer_pool_size = 25165824;
+include/assert.inc [actural_bp_size = init_bp_size]
+set GLOBAL polarx_license_path ='';
+set GLOBAL debug ='-d, simulate_polarx_license_exist_and_valid';

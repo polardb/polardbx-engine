@@ -1,0 +1,13 @@
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	
+include/assert.inc [init_bp_size <= expect_bp_size]
+# ----------------------- case 1 ------------------------------
+ERROR HY000: License file not found. Please check the file path in the configuration file.
+# ----------------------- case 2 ------------------------------
+set GLOBAL innodb_buffer_pool_size = 100663296;
+include/assert.inc [actural_bp_size = set_bp_size]
+set GLOBAL innodb_buffer_pool_size = 268435456;
+include/assert.inc [actural_bp_size = expect_bp_size]
+set GLOBAL innodb_buffer_pool_size = 25165824;
+include/assert.inc [actural_bp_size = init_bp_size]

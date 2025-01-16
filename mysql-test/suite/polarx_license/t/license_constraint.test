@@ -1,0 +1,135 @@
+--connect(con1,localhost,root,,test)
+--source ../inc/have_polarx_license_plugin.inc
+
+# This is used to test the license constraint. By dafault, no license 
+# is required for start up, and the buffer pool must have been reset 
+# to 100 M, even when other values are specified. Max number of 
+# connections is 10.
+show variables like 'polarx_license_path';
+
+--let $init_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $expect_bp_size = `select 100 * 1024 * 1024 `
+
+--let $assert_text=init_bp_size <= expect_bp_size
+--let $assert_cond=$init_bp_size <= $expect_bp_size
+--source include/assert.inc
+
+
+--echo # ----------------------- case 1 ------------------------------
+# Simulate standard license. There is no any constraint for this type.
+# User could do any operation.
+set GLOBAL debug ='+d, simulate_polarx_license_exist_and_valid';
+
+set GLOBAL polarx_license_path ='test_license1.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+
+# It seems that MTR use an extra connections. So we expect the 10th connection 
+# could be created successfully.
+
+--connect(con2,localhost,root,,test)
+--connect(con3,localhost,root,,test)
+--connect(con4,localhost,root,,test)
+--connect(con5,localhost,root,,test)
+--connect(con6,localhost,root,,test)
+--connect(con7,localhost,root,,test)
+--connect(con8,localhost,root,,test)
+--connect(con9,localhost,root,,test)
+--connect(con10,localhost,root,,test)
+
+disconnect con2;
+disconnect con3;
+disconnect con4;
+disconnect con5;
+disconnect con6;
+disconnect con7;
+disconnect con8;
+disconnect con9;
+disconnect con10;
+
+--connection con1
+
+# Test the constraint of buffer pool. So we can resize the BP to any size.
+# set innodb_buffer_pool_size to 256 M
+--let $set_bp_size = `select 256 * 1024 *1024`
+--eval set GLOBAL innodb_buffer_pool_size = $set_bp_size
+
+# wait until resizing of buffer is finished
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+# When set innodb_buffer_pool_size, the real size of BP may not be equal to 
+# the set value because of the alignment. Here, it will still be more than
+# the limit of 100 M.
+
+--let $expect_bp_size = `select 100 * 1024 * 1024 `
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size >= expect_bp_size
+--let $assert_cond=$actural_bp_size >= $expect_bp_size
+--source include/assert.inc
+
+--echo # ----------------------- case 2 ------------------------------
+# Simulate other license with constraint. Max number of connections is 10.
+# Max bp size will be 100 M
+
+set GLOBAL debug ='+d, simulate_polarx_license_too_much_conns';
+
+--connect(con11,localhost,root,,test)
+--connect(con12,localhost,root,,test)
+--connect(con13,localhost,root,,test)
+--connect(con14,localhost,root,,test)
+--connect(con15,localhost,root,,test)
+--connect(con16,localhost,root,,test)
+--connect(con17,localhost,root,,test)
+--connect(con18,localhost,root,,test)
+
+--disable_query_log
+--error ER_LICENSE_FILE_RESTRICTION
+--connect(con19,localhost,root,,test)
+--enable_query_log
+
+set GLOBAL debug ='-d, simulate_polarx_license_too_much_conns';
+
+disconnect con11;
+disconnect con12;
+disconnect con13;
+disconnect con14;
+disconnect con15;
+disconnect con16;
+disconnect con17;
+disconnect con18;
+
+--connection con1
+
+# try to set innodb_buffer_pool_size to 512 M, and should do nothing
+set GLOBAL debug ='+d, simulate_polarx_license_unpermitted_size';
+--let $expect_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $set_bp_size = `select 512 * 1024 *1024`
+--eval set GLOBAL innodb_buffer_pool_size = $set_bp_size
+
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size = expect_bp_size
+--let $assert_cond=$actural_bp_size = $expect_bp_size
+--source include/assert.inc
+
+set GLOBAL debug ='-d, simulate_polarx_license_unpermitted_size';
+
+# CLEAN UP
+--eval set GLOBAL innodb_buffer_pool_size = $init_bp_size
+
+# wait until resizing of buffer is finished
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size = init_bp_size
+--let $assert_cond=$actural_bp_size = $init_bp_size
+--source include/assert.inc
+
+set GLOBAL polarx_license_path ='';
+set GLOBAL debug ='-d, simulate_polarx_license_exist_and_valid';
+
+disconnect con1;

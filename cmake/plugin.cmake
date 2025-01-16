@@ -35,6 +35,9 @@ MACRO(MYSQL_ADD_PLUGIN plugin_arg)
     TEST_ONLY
     VISIBILITY_HIDDEN # Add -fvisibility=hidden on UNIX
                       # TODO(tdidriks) make this default if MODULE_ONLY
+    BEFORE_MANATORY  # Used with MANDATORY, the plugin will be add to 
+                     # mysql_before_mandatory_plugins, which is in front
+                     # of mysql_mandatory_plugins. 
     )
   SET(PLUGIN_ONE_VALUE_KW
     MODULE_OUTPUT_NAME
@@ -165,9 +168,15 @@ MACRO(MYSQL_ADD_PLUGIN plugin_arg)
       "${PLUGINS_IN_THIS_SCOPE}${THIS_PLUGIN_REFERENCE}")
 
     IF(ARG_MANDATORY)
-      SET (mysql_mandatory_plugins  
-        "${mysql_mandatory_plugins} ${PLUGINS_IN_THIS_SCOPE}" 
+      IF (ARG_BEFORE_MANATORY)
+        SET (mysql_before_mandatory_plugins  
+        "${mysql_before_mandatory_plugins} ${PLUGINS_IN_THIS_SCOPE}" 
         PARENT_SCOPE)
+      ELSE()
+        SET (mysql_mandatory_plugins  
+          "${mysql_mandatory_plugins} ${PLUGINS_IN_THIS_SCOPE}" 
+          PARENT_SCOPE)
+      ENDIF()
     ELSE()
       SET (mysql_optional_plugins  
         "${mysql_optional_plugins} ${PLUGINS_IN_THIS_SCOPE}"

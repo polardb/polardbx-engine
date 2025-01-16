@@ -23,6 +23,8 @@
 
 #include "sys_vars_ext.h"
 #include "my_config.h"
+#include "mysql/psi/mysql_file.h"
+#include "mysqld.h"
 #include "plugin/x/src/module_mysqlx.h"
 #include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_internal_account.h"
@@ -37,9 +39,6 @@
 #include "sql/sys_vars.h"
 #include "sql_statistics_common.h"
 #include "sys_vars.h"
-
-#include "my_config.h"
-#include "mysqld.h"
 
 #include <assert.h>
 #include <limits.h>

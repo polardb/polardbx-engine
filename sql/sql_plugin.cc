@@ -356,7 +356,8 @@ const LEX_CSTRING plugin_type_names[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     {STRING_WITH_LEN("GROUP REPLICATION")},
     {STRING_WITH_LEN("KEYRING")},
     {STRING_WITH_LEN("CLONE")},
-    {STRING_WITH_LEN("PERFORMANCE POINT")}};
+    {STRING_WITH_LEN("PERFORMANCE POINT")},
+    {STRING_WITH_LEN("POLARX LICENSE")}};
 
 extern int initialize_schema_table(st_plugin_int *plugin);
 extern int finalize_schema_table(st_plugin_int *plugin);
@@ -1627,8 +1628,8 @@ bool plugin_register_builtin_and_init_core_se(int *argc, char **argv) {
         disable_extra_plugins = true;
 
       /*
-        Only initialize daemon_keyring_proxy, MyISAM, InnoDB and CSV at this
-        stage. Note that when the --help option is supplied,
+      Only initialize daemon_keyring_proxy, POLARX_LICENSE, MyISAM, InnoDB and
+        CSV at this stage. Note that when the --help option is supplied,
         daemon_keyring_proxy and InnoDB are not initialized because the plugin
         table will not be read anyway, as indicated by the flag set when the
         plugin_init() function is called.
@@ -1641,7 +1642,8 @@ bool plugin_register_builtin_and_init_core_se(int *argc, char **argv) {
           !my_strcasecmp(&my_charset_latin1, plugin->name, "InnoDB");
       if ((!is_daemon_keyring_proxy || is_help_or_validate_option()) &&
           !is_myisam && (!is_innodb || is_help_or_validate_option()) &&
-          my_strcasecmp(&my_charset_latin1, plugin->name, "CSV"))
+          my_strcasecmp(&my_charset_latin1, plugin->name, "CSV") &&
+          my_strcasecmp(&my_charset_latin1, plugin->name, "POLARX_LICENSE"))
         continue;
 
       if (plugin_ptr->state != PLUGIN_IS_UNINITIALIZED ||

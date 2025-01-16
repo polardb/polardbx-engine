@@ -66,6 +66,7 @@
 #include "mysqld_error.h"
 #include "password.h"  // my_make_scrambled_password
 #include "pfs_thread_provider.h"
+#include "pli/pli.h"  // polarx license verify
 #include "prealloced_array.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"
@@ -99,7 +100,6 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "violite.h"
-
 struct MEM_ROOT;
 
 #include <openssl/err.h>
@@ -3762,6 +3762,13 @@ inline void assign_priv_user_host(Security_context *sctx, ACL_USER *user) {
   is set in Diagnostics_area.
 */
 static inline bool check_restrictions_for_com_connect_command(THD *thd) {
+  /** Check the License file first. */
+  if (!(xlicense::POLARX_LICENSE_CALL(verify_license_conns_constrains(
+          Connection_handler_manager::get_instance()
+              ->get_connection_count())))) {
+    return true;
+  }
+
   if (thd->is_admin_connection() &&
       !thd->m_main_security_ctx
            .has_global_grant(STRING_WITH_LEN("SERVICE_CONNECTION_ADMIN"))

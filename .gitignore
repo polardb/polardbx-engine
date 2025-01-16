@@ -126,6 +126,7 @@ plugin/x/libmysqlx.a
 plugin/x/protocol/protobuf/libmysqlxmessages.a
 plugin/x/protocol/protobuf/libmysqlxmessages_lite.a
 plugin/performance_point/libperformance_point.a
+plugin/polarx_license/libpolarx_license.a
 plugin/rds_audit_log/librds_audit_log.a
 plugin/polarx_rpc/libpolarx_rpc.a
 plugin/polarx_rpc/libpolarx_rpc_client.a
@@ -353,6 +354,7 @@ plugin/keyring/CTestTestfile.cmake
 plugin/keyring_udf/CTestTestfile.cmake
 plugin/password_validation/CTestTestfile.cmake
 plugin/performance_point/CTestTestfile.cmake
+plugin/polarx_license/CTestTestfile.cmake
 plugin/pfs_table_plugin/CTestTestfile.cmake
 plugin/polarx_rpc/CTestTestfile.cmake
 plugin/polarx_udf/CTestTestfile.cmake

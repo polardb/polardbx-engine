@@ -1,0 +1,88 @@
+--connect(con1,localhost,root,,test)
+--source ../inc/have_polarx_license_plugin.inc
+
+# By dafault, no license is required for starting up, and the buffer pool 
+# must be reset to less than 100 M, even when other values are specified.
+# The max number of connections is 10.
+show variables like 'polarx_license_path';
+
+--let $init_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $expect_bp_size = `select 100 * 1024 * 1024 `
+
+--let $assert_text=init_bp_size <= expect_bp_size
+--let $assert_cond=$init_bp_size <= $expect_bp_size
+--source include/assert.inc
+
+--echo # ----------------------- case 1 ------------------------------
+# Test the default constrain of connection. It seems that MTR use an 
+# extra connections. So we expect the error when the 10th connection is
+# created.
+
+--connect(con2,localhost,root,,test)
+--connect(con3,localhost,root,,test)
+--connect(con4,localhost,root,,test)
+--connect(con5,localhost,root,,test)
+--connect(con6,localhost,root,,test)
+--connect(con7,localhost,root,,test)
+--connect(con8,localhost,root,,test)
+--connect(con9,localhost,root,,test)
+
+--disable_query_log
+--error ER_LICENSE_FILE_NOT_FOUND
+--connect(con10,localhost,root,,test)
+--enable_query_log
+
+--echo # ----------------------- case 2 ------------------------------
+# Test the default constrain of BP size. When trying to set the BP size 
+# to less than 100 M, and it should be set successfully. When trying to 
+# set it to more than 100 M, it should fail and the BP size should not 
+# be changed.
+
+# set buffer to 96 M
+--let $set_bp_size = `select 96 * 1024 *1024`
+--eval set GLOBAL innodb_buffer_pool_size = $set_bp_size
+
+# wait until resizing of buffer is finished
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size = set_bp_size
+--let $assert_cond=$actural_bp_size = $set_bp_size
+--source include/assert.inc
+
+# Set buffer to 256 M
+--let $expect_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $set_bp_size = `select 256 * 1024 *1024`
+--eval set GLOBAL innodb_buffer_pool_size = $set_bp_size
+
+# wait until resizing of buffer is finished
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size = expect_bp_size
+--let $assert_cond=$actural_bp_size = $expect_bp_size
+--source include/assert.inc
+
+# CLEAN UP
+--eval set GLOBAL innodb_buffer_pool_size = $init_bp_size
+
+# wait until resizing of buffer is finished
+--let $wait_condition= SELECT VARIABLE_VALUE = 0 FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Innodb_buffer_pool_resize_status_code'
+--source include/wait_condition.inc
+
+--let $actural_bp_size = `select @@global.innodb_buffer_pool_size`
+--let $assert_text=actural_bp_size = init_bp_size
+--let $assert_cond=$actural_bp_size = $init_bp_size
+--source include/assert.inc
+
+disconnect con1;
+disconnect con2;
+disconnect con3;
+disconnect con4;
+disconnect con5;
+disconnect con6;
+disconnect con7;
+disconnect con8;
+disconnect con9;

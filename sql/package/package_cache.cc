@@ -48,9 +48,10 @@
 #include "sql/package/show_native_procedure.h"
 
 #include "sql/lizard/undo_proc.h"
+#include "sql/pli/license_proc.h"
+#include "sql/proxy/proxy_proc.h"
 #include "sql/xa/lizard_xa_proc.h"
 #include "sql/xrpc/xrpc_proc.h"
-#include "sql/proxy/proxy_proc.h"
 
 #include "sql/polarx_proc/changeset_proc.h"
 
@@ -206,6 +207,10 @@ void package_context_init() {
   /* dbms_recycle.restore_table(...) */
   register_package<Proc, im::recycle_bin::Recycle_proc_restore>(
       im::recycle_bin::RECYCLE_BIN_PROC_SCHEMA);
+
+  /** dbms_license */
+  register_package<Proc, License_proc_show_info>(LICENSE_PROC_SCHEMA);
+  register_package<Proc, License_proc_check_license>(LICENSE_PROC_SCHEMA);
 
   /* dbms_admin.show_native_procedure() */
   register_package<Proc, im::Show_native_procedure_proc>(im::ADMIN_PROC_SCHEMA);

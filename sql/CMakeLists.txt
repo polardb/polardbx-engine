@@ -731,6 +731,9 @@ SET(SQL_SHARED_SOURCES
   inventory/inventory_hint.cc
   lizard/undo_proc.cc
   lizard_sql_class.cc
+  pli/license_proc.cc
+  pli/pli.cc
+  pli/pli_noop.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -1227,6 +1230,10 @@ ENDIF()
 # build as static library
 SET (PPI_SOURCE ppi/ppi.cc ppi/ppi_noop.cc)
 ADD_CONVENIENCE_LIBRARY(ppi ${PPI_SOURCE})
+
+# build as static library
+SET (PLI_SOURCE pli/pli.cc pli/pli_noop.cc)
+ADD_CONVENIENCE_LIBRARY(pli ${PLI_SOURCE})
 
 IF(WIN32)
   SET(MYSQLD_SOURCE

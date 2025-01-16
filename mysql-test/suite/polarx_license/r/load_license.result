@@ -1,0 +1,423 @@
+# ----------------------- case 1 ------------------------------
+set GLOBAL polarx_license_path ='/home/user/projectsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+ERROR HY000: License file not found. Please check the file path in the configuration file.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	
+set GLOBAL polarx_license_path ='/aaaaaa/user/projects.perm';
+ERROR HY000: License file not found. Please check the file path in the configuration file.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	
+set GLOBAL polarx_license_path ='user/projects.perm';
+ERROR HY000: License file not found. Please check the file path in the configuration file.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	
+# ----------------------- case 2 ------------------------------
+set GLOBAL debug ='+d, simulate_polarx_license_exist_and_valid';
+set GLOBAL polarx_license_path ='test_license.perm';
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='+d, simulate_polarx_license_base64_decode_fail';
+call dbms_license.check_license('test_license1.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license1.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license1.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_base64_decode_fail';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_magic_number_len';
+call dbms_license.check_license('test_license2.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license2.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license2.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_magic_number_len';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_magic_number';
+call dbms_license.check_license('test_license3.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license3.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license3.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_magic_number';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_version_len';
+call dbms_license.check_license('test_license4.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license4.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license4.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_version_len';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_version';
+call dbms_license.check_license('test_license5.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license5.perm	 UNSUPPOTED FORMAT 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license5.perm';
+ERROR HY000: Unsupported license format. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_version';
+# ----------------------- case 3 ------------------------------
+call dbms_license.check_license('test_license6.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license6.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_MD5_len';
+set GLOBAL polarx_license_path ='test_license6.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_MD5_len';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_MD5';
+call dbms_license.check_license('test_license7.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license7.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license7.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_MD5';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_signature_len';
+call dbms_license.check_license('test_license8.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license8.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license8.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_signature_len';
+set GLOBAL debug ='+d, simulate_polarx_license_load_rsa_public_fail';
+call dbms_license.check_license('test_license9.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license9.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license9.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_load_rsa_public_fail';
+set GLOBAL debug ='+d, simulate_polarx_license_rsa_decrypt_fail';
+call dbms_license.check_license('test_license10.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license10.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license10.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_rsa_decrypt_fail';
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_aes_data_len';
+call dbms_license.check_license('test_license11.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license11.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license11.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_aes_data_len';
+set GLOBAL debug ='+d, simulate_polarx_license_aes_decrypt_init_fail';
+call dbms_license.check_license('test_license12.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license12.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license12.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug ='-d, simulate_polarx_license_aes_decrypt_init_fail';
+set GLOBAL debug='+d, simulate_polarx_license_aes_decrypt_update_fail';
+call dbms_license.check_license('test_license13.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license13.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license13.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_aes_decrypt_update_fail';
+set GLOBAL debug='+d, simulate_polarx_license_aes_decrypt_final_fail';
+call dbms_license.check_license('test_license14.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license14.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license14.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_aes_decrypt_final_fail';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_mac_number_len';
+call dbms_license.check_license('test_license15.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license15.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license15.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_mac_number_len';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_mac_number';
+call dbms_license.check_license('test_license16.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license16.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license16.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_mac_number';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_MAC';
+call dbms_license.check_license('test_license17.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license17.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license17.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_MAC';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_time_len';
+call dbms_license.check_license('test_license18.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license18.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license18.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_time_len';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_params_num_len';
+call dbms_license.check_license('test_license19.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license19.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license19.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_params_num_len';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_key_len';
+call dbms_license.check_license('test_license20.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license20.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license20.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_key_len';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_value_len';
+call dbms_license.check_license('test_license21.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license21.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license21.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_value_len';
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_type';
+call dbms_license.check_license('test_license22.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license22.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license22.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_type';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_type';
+call dbms_license.check_license('test_license23.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license23.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license23.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_type';
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_max_connections';
+call dbms_license.check_license('test_license24.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license24.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL polarx_license_path ='test_license24.perm';
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license24.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license24.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_max_connections';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_max_connections';
+call dbms_license.check_license('test_license25.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license25.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license25.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license24.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license24.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_max_connections';
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_innodb_buffer_pool_size';
+call dbms_license.check_license('test_license26.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL polarx_license_path ='test_license26.perm';
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_innodb_buffer_pool_size';
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
+call dbms_license.check_license('test_license27.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license27.perm	 CORRUPTED 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license27.perm';
+ERROR HY000: License file is corrupted. Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
+# ----------------------- case 4 ------------------------------
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='+d, simulate_polarx_license_unsupport_extra_param_type';
+call dbms_license.check_license('test_license28.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license28.perm	 UNKOWN TYPE 	1677-09-21 03:12:44	1677-09-21 03:12:44	 UNSUPPORT 	0	0
+set GLOBAL polarx_license_path ='test_license28.perm';
+ERROR HY000: License file is invalid(unsupported license type). Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_unsupport_extra_param_type';
+set GLOBAL debug='+d, simulate_polarx_license_unauthorized_machine';
+call dbms_license.check_license('test_license29.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license29.perm	 UNAUTHORIZED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL polarx_license_path ='test_license29.perm';
+ERROR HY000: License file is invalid(unauthorized machine). Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 UNAUTHORIZED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_unauthorized_machine';
+set GLOBAL debug='+d, simulate_polarx_license_expired';
+call dbms_license.check_license('test_license30.perm');
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license30.perm	 EXPIRED 	1677-09-21 03:12:44	1677-09-22 03:12:44	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL polarx_license_path ='test_license30.perm';
+ERROR HY000: License file is invalid(license expired). Please check the license file or connect with support team.
+show variables like 'polarx_license_path';
+Variable_name	Value
+polarx_license_path	test_license26.perm
+call dbms_license.show_info();
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
+test_license26.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+set GLOBAL debug='-d, simulate_polarx_license_expired';
+set GLOBAL polarx_license_path ='';
+set GLOBAL debug='-d, simulate_polarx_license_exist_and_valid';

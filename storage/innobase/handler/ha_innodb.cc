@@ -244,6 +244,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sys_vars_ext.h"
 #include "polarx_proc/changeset_manager.h"
 
+#include "pli/pli.h"
 #include "sql/xa/lizard_cmmt_policy.h"
 
 static char *innodb_version_str = (char *)innodb_version;
@@ -5084,6 +5085,10 @@ static int innodb_init_params() {
       srv_log_write_ahead_size = srv_log_write_ahead_size_tmp / 2;
     }
   }
+
+  /** Here, we check the license  */
+  xlicense::POLARX_LICENSE_CALL(
+      verify_license_BP_constrains(srv_buf_pool_curr_size));
 
   srv_buf_pool_size = srv_buf_pool_curr_size;
 
@@ -20975,6 +20980,12 @@ static void innodb_buffer_pool_size_update(THD *thd, SYS_VAR *, void *var_ptr,
 in status code only if no other resize is in progress */
   if (buf_pool_resize_status_code.load() == BUF_POOL_RESIZE_COMPLETE ||
       buf_pool_resize_status_code.load() == BUF_POOL_RESIZE_FAILED) {
+    /** Before do real resize, check if the liense allow to resize */
+    if (!(xlicense::POLARX_LICENSE_CALL(
+            verify_license_BP_constrains(requested_buffer_pool_size)))) {
+      return;
+    }
+
     /* No other resize is in progress */
     snprintf(export_vars.innodb_buffer_pool_resize_status,
              sizeof(export_vars.innodb_buffer_pool_resize_status),

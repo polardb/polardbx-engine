@@ -10208,6 +10208,22 @@ ER_VARIABLE_CHANGE_FAIL
 
 ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
   eng "The authentication of user is denied for entering the wrong password multiple times with the period."
+
+ER_LICENSE_FILE_NOT_FOUND
+  eng "License file not found. Please check the file path in the configuration file."
+
+ER_LICENSE_FILE_CORRUPTED
+  eng "%s. Please check the license file or connect with support team."
+
+ER_LICENSE_FILE_INVALID
+  eng "License file is invalid(%s). Please check the license file or connect with support team."
+
+ER_LICENSE_FILE_RESTRICTION
+  eng "Beyond the authorization limits(%s). Please check the license file or connect with support team."
+
+ER_LICENSE_PROC_DISABLE
+  eng "DBMS_LICENSE is disabled for current version."
+
 #
 #  End of RDS error message.
 #

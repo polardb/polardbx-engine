@@ -122,7 +122,8 @@ struct MYSQL_XID {
 #define MYSQL_KEYRING_PLUGIN 10           /* The Keyring plugin type   */
 #define MYSQL_CLONE_PLUGIN 11             /* The Clone plugin type   */
 #define MYSQL_PERFORMANCE_POINT_PLUGIN 12 /* Performance Point plugin type */
-#define MYSQL_MAX_PLUGIN_TYPE_NUM 13      /* The number of plugin types   */
+#define MYSQL_POLARX_LICENSE_PLUGIN 13    /* The PolarX License plugin */
+#define MYSQL_MAX_PLUGIN_TYPE_NUM 14      /* The number of plugin types   */
 
 /* We use the following strings to define licenses for plugins */
 #define PLUGIN_LICENSE_PROPRIETARY 0

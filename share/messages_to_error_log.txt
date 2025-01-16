@@ -12235,6 +12235,9 @@ ER_RPL_GTID_UNSAFE_STMT_ON_NON_TRANS_TABLE_FOR_XA
 ER_CONN_CONTROL_STAT_CONN_REFUSE_TRIGGERED_RESET_FAILED
   eng "Failed to reset connection refuse triggered stats"
 
+ER_LICENSE_FILE_ERROR
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

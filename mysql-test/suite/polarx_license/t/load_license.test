@@ -1,0 +1,330 @@
+--connect(con1,localhost,root,,test)
+--source ../inc/have_polarx_license_plugin.inc
+
+--connection con1
+
+--echo # ----------------------- case 1 ------------------------------
+# Before testing the real load of license file, try to test different 
+# kinds of wrong paths and files. If the path of license file is 
+# uncorrect, then the server will refuse to load it.
+
+# Path is too long, truncate it to 512 bytes
+--error ER_LICENSE_FILE_NOT_FOUND
+set GLOBAL polarx_license_path ='/home/user/projectsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+show variables like 'polarx_license_path';
+
+# Non-exist file, absoulute path
+--error ER_LICENSE_FILE_NOT_FOUND
+set GLOBAL polarx_license_path ='/aaaaaa/user/projects.perm';
+show variables like 'polarx_license_path';
+
+# Non-exist file, relative path
+--error ER_LICENSE_FILE_NOT_FOUND
+set GLOBAL polarx_license_path ='user/projects.perm';
+show variables like 'polarx_license_path';
+
+
+--echo # ----------------------- case 2 ------------------------------
+# Cause that we don't have all kinds of invalid license, we use 
+# 'simulate_polarx_license_exist_and_valid' to simuluate a valid license
+# file (standard type), and use other debug to simuluate errors. Here, 
+# we test the basic header of license file.
+
+# simulate a valid license file
+set GLOBAL debug ='+d, simulate_polarx_license_exist_and_valid';
+set GLOBAL polarx_license_path ='test_license.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+
+# simulate the error of base64 decoding 
+set GLOBAL debug ='+d, simulate_polarx_license_base64_decode_fail';
+call dbms_license.check_license('test_license1.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license1.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_base64_decode_fail';
+
+# simulate the error of invalid magic number length
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_magic_number_len';
+call dbms_license.check_license('test_license2.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license2.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_magic_number_len';
+
+# simulate the error of invalid magic number
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_magic_number';
+call dbms_license.check_license('test_license3.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license3.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_magic_number';
+
+# simulate the error of invalid version length
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_version_len';
+call dbms_license.check_license('test_license4.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license4.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_version_len';
+
+# simulate the error of invalid version
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_version';
+call dbms_license.check_license('test_license5.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license5.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_version';
+
+--echo # ----------------------- case 3 ------------------------------
+# License support different kinds of format. The above has tested the 
+# basic header of license file. Here, we test how to parse the license 
+# file using FORMAT V1
+
+# simulate the error of invalid MD5 length
+call dbms_license.check_license('test_license6.perm');
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_MD5_len';
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license6.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_MD5_len';
+
+# simulate the error of invalid MD5
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_MD5';
+call dbms_license.check_license('test_license7.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license7.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_MD5';
+
+# simulate the error of invalid signature length
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_signature_len';
+call dbms_license.check_license('test_license8.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license8.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_signature_len';
+
+# simulate the error of loading public rsa key
+set GLOBAL debug ='+d, simulate_polarx_license_load_rsa_public_fail';
+call dbms_license.check_license('test_license9.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license9.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_load_rsa_public_fail';
+
+# simulate the error of rsa decrypting data 
+set GLOBAL debug ='+d, simulate_polarx_license_rsa_decrypt_fail';
+call dbms_license.check_license('test_license10.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license10.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_rsa_decrypt_fail';
+
+# simulate the error of invalid aes data length
+set GLOBAL debug ='+d, simulate_polarx_license_invalid_aes_data_len';
+call dbms_license.check_license('test_license11.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license11.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_invalid_aes_data_len';
+
+# simulate the error of aes decrypting init failure
+set GLOBAL debug ='+d, simulate_polarx_license_aes_decrypt_init_fail';
+call dbms_license.check_license('test_license12.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license12.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug ='-d, simulate_polarx_license_aes_decrypt_init_fail';
+
+# simulate the error of aes decrypting update failure
+set GLOBAL debug='+d, simulate_polarx_license_aes_decrypt_update_fail';
+call dbms_license.check_license('test_license13.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license13.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_aes_decrypt_update_fail';
+
+# simulate the error of aes decrypting final failure
+set GLOBAL debug='+d, simulate_polarx_license_aes_decrypt_final_fail';
+call dbms_license.check_license('test_license14.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license14.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_aes_decrypt_final_fail';
+
+# simulate the error of invalid mac number length
+set GLOBAL debug='+d, simulate_polarx_license_invalid_mac_number_len';
+call dbms_license.check_license('test_license15.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license15.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_mac_number_len';
+
+# simulate the error of invalid mac number
+set GLOBAL debug='+d, simulate_polarx_license_invalid_mac_number';
+call dbms_license.check_license('test_license16.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license16.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_mac_number';
+
+# simulate the error of invalid mac 
+set GLOBAL debug='+d, simulate_polarx_license_invalid_MAC';
+call dbms_license.check_license('test_license17.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license17.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_MAC';
+
+# simulate the error of invalid time length
+set GLOBAL debug='+d, simulate_polarx_license_invalid_time_len';
+call dbms_license.check_license('test_license18.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license18.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_time_len';
+
+# simulate the error of extra params number length
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_params_num_len';
+call dbms_license.check_license('test_license19.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license19.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_params_num_len';
+
+# simulate the error of extra params key length
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_key_len';
+call dbms_license.check_license('test_license20.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license20.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_key_len';
+
+# simulate the error of extra params value length
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_value_len';
+call dbms_license.check_license('test_license21.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license21.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_value_len';
+
+# simulate the error of non-exist extra params (type)
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_type';
+call dbms_license.check_license('test_license22.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license22.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_type';
+
+# simulate the error of extra params (type): invalid
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_type';
+call dbms_license.check_license('test_license23.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license23.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_type';
+
+# simulate the error of non-exist extra params (max_connections)
+# There will not be constraints if not exist
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_max_connections';
+call dbms_license.check_license('test_license24.perm');
+set GLOBAL polarx_license_path ='test_license24.perm';
+show variables like 'polarx_license_path';
+# should have no constraints
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_max_connections';
+
+# simulate the error of extra params (max_connections):invalid
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_max_connections';
+call dbms_license.check_license('test_license25.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license25.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_max_connections';
+
+# simulate the error of non-exist extra params (innodb_buffer_pool_size)
+# There will not be constraints if not exist
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_innodb_buffer_pool_size';
+call dbms_license.check_license('test_license26.perm');
+set GLOBAL polarx_license_path ='test_license26.perm';
+show variables like 'polarx_license_path';
+# should have no constraints
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_innodb_buffer_pool_size';
+
+# simulate the error of extra params (innodb_buffer_pool_size):invalid
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
+call dbms_license.check_license('test_license27.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license27.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
+
+
+--echo # ----------------------- case 4 ------------------------------
+# After testing all kinds of format, we now test the cases that the format 
+# of license file is valid, but can not be used in current environment.
+
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+
+# simulate the error of extra params (type): not support
+set GLOBAL debug='+d, simulate_polarx_license_unsupport_extra_param_type';
+call dbms_license.check_license('test_license28.perm');
+--error ER_LICENSE_FILE_INVALID
+set GLOBAL polarx_license_path ='test_license28.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_unsupport_extra_param_type';
+
+# simulate the error of unauthorized machine
+set GLOBAL debug='+d, simulate_polarx_license_unauthorized_machine';
+call dbms_license.check_license('test_license29.perm');
+--error ER_LICENSE_FILE_INVALID
+set GLOBAL polarx_license_path ='test_license29.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_unauthorized_machine';
+
+# simulate of the error of expired license
+set GLOBAL debug='+d, simulate_polarx_license_expired';
+call dbms_license.check_license('test_license30.perm');
+--error ER_LICENSE_FILE_INVALID
+set GLOBAL polarx_license_path ='test_license30.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_expired';
+
+
+# Clean UP
+set GLOBAL polarx_license_path ='';
+set GLOBAL debug='-d, simulate_polarx_license_exist_and_valid'; 
+disconnect con1;
+
+
