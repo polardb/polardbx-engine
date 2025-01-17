@@ -97,6 +97,7 @@
 #include "sql/auth/auth_internal.h"
 #include "sql/auth/sql_auth_cache.h"
 #include "sql/auth/sql_authentication.h"
+#include "sql/auth/sql_internal_account.h"
 #include "sql/auth/sql_mfa.h"
 #include "sql/auth/sql_user_table.h"
 #include "sql/current_thd.h"
@@ -1623,6 +1624,11 @@ bool set_and_validate_user_attributes(
       random_password_info p{std::string(Str->user.str),
                              std::string(Str->host.str), gen_password, 1};
       generated_passwords.push_back(p);
+    }
+    if (im::internal_account_need_protected(Str->user.str) &&
+        !my_strcasecmp(&my_charset_latin1, Str->host.str, "localhost")) {
+      /** For internal accounts, we disable password validation temporarily */
+      thd->m_disable_password_validation = true;
     }
     if (auth->generate_authentication_string(outbuf, &buflen, inbuf,
                                              inbuflen) ||
