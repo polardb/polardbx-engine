@@ -480,6 +480,180 @@ case, the return value has a different meaning.
   return len;
 }
 
+uint Plain_serializer::serialize_connection_event_v4(
+    const struct mysql_event_rds_connection *event, char *buf, uint buf_len) {
+  uint len;
+  len = snprintf(
+      buf, buf_len,
+      "MYSQL_V4\t" /* 0. Rds audit log version, keep compatible with rds 5.6 */
+      "%ld\t"      /* 1. thread id */
+      "%s\t"       /* 2. host or ip */
+      "%hu\t"      /* 3. port */
+      "%s\t"       /* 4. user */
+      "%s\t"       /* 5. db */
+      "%llu\t"     /* 6. start_utime */
+      "%llu\t"     /* 7. transaction utime */
+      "%d\t"       /* 8. error code */
+      "%llu\t"     /* 9. time cost*/
+      "%llu\t"     /* 10. sent_rows*/
+      "%llu\t"     /* 11. updated_rows*/
+      "%llu\t"     /* 12. examnied_rows*/
+      "%lld\t"     /* 13. memory_used*/
+      "%lld\t"     /* 14. memory_used_by_query */
+      "%llu\t"     /* 15. logical read */
+      "%llu\t"     /* 16. physical sync read */
+      "%llu\t"     /* 17. physical async read */
+      "%llu\t"     /* 18. temp user table size */
+      "%llu\t"     /* 19. temp sort table size */
+      "%llu\t"     /* 20. temp sort file size */
+      "%d\t"       /* 21. sql command, this is different from rds 5.6 */
+      "%d\t"       /* 22. is super */
+      "%llu\t"     /* 23. lock wait time */
+      "%s"         /* 24. message */
+      "%s",        /* 25. terminator */
+      event->thread_id,                              /* 1 */
+      event->ip.length ? event->ip.str : "nulll",    /* 2 */
+      event->port,                                   /* 3 */
+      event->user.length ? event->user.str : "null", /* 4 */
+      event->db.length ? event->db.str : "null",     /* 5 */
+      event->start_utime,                            /* 6 */
+      (ulonglong)0,                                  /* 7 */
+      event->error_code,                             /* 8 */
+      event->cost_utime,                             /* 9 */
+      (ulonglong)0,                                  /* 10 */
+      (ulonglong)0,                                  /* 11 */
+      (ulonglong)0,                                  /* 12 */
+      (ulonglong)0,                                  /* 13 */
+      (ulonglong)0,                                  /* 14 */
+      (ulonglong)0,                                  /* 15 */
+      (ulonglong)0,                                  /* 16 */
+      (ulonglong)0,                                  /* 17 */
+      (ulonglong)0,                                  /* 18 */
+      (ulonglong)0,                                  /* 19 */
+      (ulonglong)0,                                  /* 20 */
+      /* 21 */
+      /* 3 for login, 4 for logout as defined in RDS MySQL 5.6 */
+      event->event_subclass == MYSQL_AUDIT_RDS_CONNECTION_CONNECT ? 3 : 4,
+      event->is_super,    /* 22 */
+      (ulonglong)0,       /* 23 */
+      event->message.str, /* 24 */
+      "\1\n");            /* 25 */
+
+  /*
+    If buf_len is not big enough, the output will be trucated, in that
+    case, the return value has a different meaning.
+  */
+  return len >= buf_len ? buf_len : len;
+}
+
+uint Plain_serializer::serialize_query_event_v4(
+    const struct mysql_event_rds_query *event, char *buf, uint buf_len) {
+  uint len;
+  uint command = 0;
+
+  /*
+    Command column value meanings as defined in RDS MySQL 5.6:
+    0 : for normal query
+    1 : for statement execute (COM or SQLCOM)
+    2 : for statement prepare (COM or SQLCOM)
+  */
+  switch (event->command) {
+    case COM_QUERY:
+      command = 0;
+      if (event->sql_command == SQLCOM_PREPARE) {
+        command = 2;
+      } else if (event->sql_command == SQLCOM_EXECUTE) {
+        command = 1;
+      }
+      break;
+    case COM_STMT_PREPARE:
+      command = 2;
+      break;
+    case COM_STMT_EXECUTE:
+      command = 1;
+      break;
+    default:
+      assert(0);
+      break;
+  }
+
+  len = snprintf(
+      buf, buf_len,
+      "MYSQL_V4\t" /* 0. RDS audit log version, keep compatible with rds 5.6 */
+      "%ld\t"      /* 1. thread id */
+      "%s\t"       /* 2. host or ip */
+      "%hu\t"      /* 3. port */
+      "%s\t"       /* 4. user */
+      "%s\t"       /* 5. db */
+      "%llu\t"     /* 6. start_utime */
+      "%llu\t"     /* 7. transaction utime */
+      "%d\t"       /* 8. error code */
+      "%llu\t"     /* 9. time cost*/
+      "%llu\t"     /* 10. sent_rows*/
+      "%llu\t"     /* 11. updated_rows*/
+      "%llu\t"     /* 12. examnied_rows*/
+      "%lld\t"     /* 13. memory_used*/
+      "%lld\t"     /* 14. memory_used_by_query */
+      "%llu\t"     /* 15. logical read */
+      "%llu\t"     /* 16. physical sync read */
+      "%llu\t"     /* 17. physical async read */
+      "%llu\t"     /* 18. temp user table size */
+      "%llu\t"     /* 19. temp sort table size */
+      "%llu\t"     /* 20. temp sort file size */
+      "%d\t"       /* 21. sql command */
+      "%d\t"       /* 22. is super */
+      "%llu\t",    /* 23. lock wait time */
+      event->thread_id,                              /* 1 */
+      event->ip.length ? event->ip.str : "nulll",    /* 2 */
+      event->port,                                   /* 3 */
+      event->user.length ? event->user.str : "null", /* 4 */
+      event->db.length ? event->db.str : "null",     /* 5 */
+      event->start_utime,                            /* 6 */
+      event->trx_utime,                              /* 7 */
+      event->error_code,                             /* 8 */
+      event->cost_utime,                             /* 9 */
+      event->sent_rows,                              /* 10 */
+      event->updated_rows,                           /* 11 */
+      event->examined_rows,                          /* 12 */
+      event->memory_used,                            /* 13 */
+      event->query_memory_used,                      /* 14 */
+      event->logical_reads,                          /* 15 */
+      event->physical_sync_reads,                    /* 16 */
+      event->physical_async_reads,                   /* 17 */
+      event->temp_user_table_size,                   /* 18 */
+      event->temp_sort_table_size,                   /* 19 */
+      event->temp_sort_file_size,                    /* 20 */
+      command,                                       /* 21 */
+      event->is_super,                               /* 22 */
+      event->lock_utime);                            /* 23 */
+
+  /*
+    If buf_len is not big enough, the output will be trucated, in that
+    case, the return value has a different meaning.
+  */
+  if (len >= buf_len) {
+    len = buf_len;
+  }
+
+  uint remain_len = buf_len - len;
+  uint copy_len =
+      event->query.length < remain_len ? event->query.length : remain_len;
+
+  /* Use memcpy here because query may contain '\0' character. */
+  memcpy(buf + len, event->query.str, copy_len);
+  len += copy_len;
+
+  /* Use "\1\n" as audit log record separator */
+  len += snprintf(buf + len, buf_len - len, "\1\n");
+
+  /* Make sure audit log record always end with "\1\n" */
+  if (len >= buf_len) {
+    len = buf_len;
+    memcpy(&buf[len - 2], "\1\n", 2);
+  }
+
+  return len;
+}
 /*
   fill the ext and msg field for connection or query event iff version of event
   is no less than V3. For connection event, msg is the connection message.

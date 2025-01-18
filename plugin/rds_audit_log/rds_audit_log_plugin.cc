@@ -184,7 +184,7 @@ static MYSQL_SYSVAR_ENUM(format,
     nullptr, nullptr, MYSQL_RDS_AUDIT_LOG::PLAIN, &audit_log_format_typelib);
 
 /* PolorDB 8.0 supports MYSQL_V2, we don't */
-const char *log_version_names[] = {"MYSQL_V1", "MYSQL_V3", NullS};
+const char *log_version_names[] = {"MYSQL_V1", "MYSQL_V3", "MYSQL_V4", NullS};
 static TYPELIB audit_log_version_typelib = {array_elements(log_version_names) - 1,
                                            "", log_version_names, NULL};
 
@@ -206,7 +206,7 @@ static void audit_log_version_update(THD *thd MY_ATTRIBUTE((unused)),
 
 static MYSQL_SYSVAR_ENUM(version,
     rds_audit_log_version, PLUGIN_VAR_RQCMDARG,
-    "The version of audit log, currently support MYSQL_V1 and MYSQL_V3.",
+    "The version of audit log, currently support MYSQL_V1, MYSQL_V3 and MYSQL_V4.",
     NULL, audit_log_version_update,
     MYSQL_RDS_AUDIT_LOG::MYSQL_V1, &audit_log_version_typelib);
 

@@ -992,6 +992,10 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
           serialized_len = m_serializer->serialize_connection_event_v3(
               event_rds_connection, buf, buf_len);
           break;
+        case MYSQL_V4:
+          serialized_len = m_serializer->serialize_connection_event_v4(
+              event_rds_connection, buf, buf_len);
+          break;
         default:
           assert(0);
       }
@@ -1037,6 +1041,10 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
           break;
         case MYSQL_V3:
           serialized_len = m_serializer->serialize_query_event_v3(
+              event_rds_query, buf, buf_len);
+          break;
+        case MYSQL_V4:
+          serialized_len = m_serializer->serialize_query_event_v4(
               event_rds_query, buf, buf_len);
           break;
         default:

@@ -1040,6 +1040,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   assert(event.user.length <= USERNAME_LENGTH);
   event.host = sctx->host();
   event.ip = sctx->ip();
+  event.port = thd->peer_port;
   event.db = thd->db();
   event.connection_type = thd->get_vio_type();
   event.start_utime = thd->start_utime;
@@ -1102,6 +1103,7 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   assert(event.user.length <= USERNAME_LENGTH);
   event.external_user = sctx->external_user();
   event.ip = sctx->ip();
+  event.port = thd->peer_port;
   event.host = sctx->host();
   event.db = thd->db();
   event.command = thd->get_command();

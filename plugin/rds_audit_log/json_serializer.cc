@@ -46,3 +46,15 @@ uint JSON_serializer::serialize_query_event_v3(
     char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
   return 0;
 }
+
+uint JSON_serializer::serialize_connection_event_v4(
+    const struct mysql_event_rds_connection *event MY_ATTRIBUTE((unused)),
+    char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
+  return 0;
+}
+
+uint JSON_serializer::serialize_query_event_v4(
+    const struct mysql_event_rds_query *event MY_ATTRIBUTE((unused)),
+    char *buf MY_ATTRIBUTE((unused)), uint buf_len MY_ATTRIBUTE((unused))) {
+  return 0;
+}

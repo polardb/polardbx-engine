@@ -655,6 +655,8 @@ struct mysql_event_rds_connection {
   MYSQL_LEX_CSTRING host;
   /** IP of the connection. */
   MYSQL_LEX_CSTRING ip;
+  /** Port of the connection. */
+  uint16 port;
   /** Database name specified at connection time. */
   MYSQL_LEX_CSTRING db;
   /** Connection type:
@@ -712,6 +714,8 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING ip;
   /** Host */
   MYSQL_LEX_CSTRING host;
+  /** Port */
+  uint16 port;
   /** Database name */
   MYSQL_LEX_CSTRING db;
   /** MySQL command */

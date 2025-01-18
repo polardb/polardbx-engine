@@ -41,5 +41,10 @@ class JSON_serializer : public Serializer {
       uint buf_len) override;
   uint serialize_query_event_v3(const struct mysql_event_rds_query *event,
                                 char *buf, uint buf_len) override;
+  uint serialize_connection_event_v4(
+      const struct mysql_event_rds_connection *event, char *buf,
+      uint buf_len) override;
+  uint serialize_query_event_v4(const struct mysql_event_rds_query *event,
+                                char *buf, uint buf_len) override;
 };
 #endif /* JSON_SERIALIZER_H */

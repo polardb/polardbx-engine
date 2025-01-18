@@ -43,6 +43,12 @@ class Plain_serializer : public Serializer {
   uint serialize_query_event_v3(const struct mysql_event_rds_query *event,
                                 char *buf, uint buf_len) override;
 
+  uint serialize_connection_event_v4(
+      const struct mysql_event_rds_connection *event, char *buf,
+      uint buf_len) override;
+  uint serialize_query_event_v4(const struct mysql_event_rds_query *event,
+                                char *buf, uint buf_len) override;
+
  private:
   static const char *s_ext_str_;
   uint fill_ext_and_msg(char *buf, uint limit, const char *msg, uint msg_size);

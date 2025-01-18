@@ -1588,8 +1588,8 @@ The following options may be given as the first argument:
  The audit log strategy, currently support ASYNCHRONOUS,
  PERFORMANCE, SEMISYNCHRONOUS and SYNCHRONOUS.
  --rds-audit-log-version=name 
- The version of audit log, currently support MYSQL_V1 and
- MYSQL_V3.
+ The version of audit log, currently support MYSQL_V1,
+ MYSQL_V3 and MYSQL_V4.
  --rds-ic-reduce-hint-enable 
  This option is deprecated. Use
  polardb_ic_reduce_hint_enable instead.
@@ -2676,7 +2676,7 @@ rds-audit-log-version MYSQL_V1
 rds-ic-reduce-hint-enable TRUE
 rds-kill-connections 0
 rds-kill-user-list (No default value)
-rds-version 32
+rds-version 41
 read-buffer-size 131072
 read-lsn 0
 read-only FALSE

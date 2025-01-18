@@ -585,6 +585,7 @@ struct mysql_event_rds_connection {
   MYSQL_LEX_CSTRING user;
   MYSQL_LEX_CSTRING host;
   MYSQL_LEX_CSTRING ip;
+  uint16 port;
   MYSQL_LEX_CSTRING db;
   int connection_type;
   unsigned long long start_utime;
@@ -604,6 +605,7 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING external_user;
   MYSQL_LEX_CSTRING ip;
   MYSQL_LEX_CSTRING host;
+  uint16 port;
   MYSQL_LEX_CSTRING db;
   enum enum_server_command command;
   MYSQL_LEX_CSTRING command_name;
