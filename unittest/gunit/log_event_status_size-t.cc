@@ -115,6 +115,7 @@ class LogEventStatusSizeTest : public ::testing::Test {
     qe.default_collation_for_utf8mb4_number = 1;
     qe.need_opt_flashback_area = 1;
     qe.need_opt_index_format_gpp_enabled = 1;
+    qe.need_opt_index_format_panda_enabled = 1;
 
     for (size_t did = 0; did < MAX_DBS_IN_EVENT_MTS; ++did) {
       std::string db = fill_str(NAME_LEN, 'a' + did);

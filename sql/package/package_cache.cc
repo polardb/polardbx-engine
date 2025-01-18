@@ -59,6 +59,7 @@
 #include "sql/sql_jemalloc.h"
 #endif
 #include "sql/package/proc_gpp.h"
+#include "sql/package/proc_cleanout.h"
 
 namespace im {
 
@@ -295,6 +296,9 @@ void package_context_init() {
 
   /* dbms_stat.flush_gpp() */
   register_package<Proc, Proc_index_stat_flush_gpp>(PROC_STAT_SCHEMA);
+
+  /* dbms_stat.flush_cleanout() */
+  register_package<Proc, Proc_flush_cleanout>(PROC_STAT_SCHEMA);
 
   /* dbms_conn.comment_connection(...) */
   register_package<Proc, Conn_proc_comment>(PROC_CONN_SCHEMA);

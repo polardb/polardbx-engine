@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package transfer
 
 import (
@@ -37,6 +36,7 @@ import (
 const (
 	tablePrefix = "accounts"
 	indexPrefix = "index_balance"
+	ukPrefix    = "uk_user"
 )
 
 func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
@@ -50,6 +50,7 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 	type ddlGenSpec struct {
 		tableName    string
 		indexName    string
+		ukName       string
 		createSuffix string
 	}
 
@@ -58,6 +59,7 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 		specs = append(specs, ddlGenSpec{
 			tableName:    tablePrefix,
 			indexName:    indexPrefix,
+			ukName:       ukPrefix,
 			createSuffix: conf.CreateTableSuffix,
 		})
 	} else {
@@ -65,6 +67,7 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 			specs = append(specs, ddlGenSpec{
 				tableName: fmt.Sprintf("%s_%06d", tablePrefix, i),
 				indexName: fmt.Sprintf("%s_%06d", indexPrefix, i),
+				ukName:    fmt.Sprintf("%s_%06d", ukPrefix, i),
 			})
 		}
 	}
@@ -76,7 +79,7 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 		if conf.DbType == "postgres" {
 			ddl = fmt.Sprintf("CREATE TABLE %s (id INT PRIMARY KEY, balance INT NOT NULL, version INT NOT NULL DEFAULT '0') %s", spec.tableName, spec.createSuffix)
 		} else {
-			ddl = fmt.Sprintf("CREATE TABLE %s (id INT PRIMARY KEY, balance INT NOT NULL, version INT NOT NULL DEFAULT '0', gmt_modified TIMESTAMP DEFAULT NOW() ON UPDATE NOW()) %s", spec.tableName, spec.createSuffix)
+			ddl = fmt.Sprintf("CREATE TABLE %s (id INT NOT NULL, balance INT NOT NULL, user VARCHAR(512), version INT NOT NULL DEFAULT '0', gmt_modified TIMESTAMP DEFAULT NOW() ON UPDATE NOW(), PRIMARY KEY (id), UNIQUE KEY uk_user (user), UNIQUE KEY user_balance (user DESC, balance DESC), UNIQUE KEY balance_user (balance, user DESC)) %s", spec.tableName, spec.createSuffix)
 			ddl += " COMMENT 'Created by transfer-test'"
 		}
 		ddls = append(ddls, ddl)
@@ -101,7 +104,7 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 		id := i
 		tableName := RoutePoint(conf)(id)
 		dmlTuples[tableName] = append(dmlTuples[tableName],
-			fmt.Sprintf("(%v, %v)", i, conf.InitialBalance),
+			fmt.Sprintf("(%v, %v, '%s')", i, conf.InitialBalance, randomString()),
 		)
 	}
 	conn, err := db.Conn(ctx)
@@ -127,12 +130,13 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 			} else {
 				j = i + STEP
 			}
-			dml := "INSERT INTO " + tableName + " (id, balance) VALUES " + strings.Join(tuples[i:j], ", ")
+			dml := "INSERT INTO " + tableName + " (id, balance, user) VALUES " + strings.Join(tuples[i:j], ", ")
 			_, err = conn.ExecContext(ctx, dml)
+			if err != nil {
+				return fmt.Errorf("DML failed: %w", err)
+			}
 		}
-		if err != nil {
-			return fmt.Errorf("DML failed: %w", err)
-		}
+
 	}
 
 	_, err = conn.ExecContext(ctx, "COMMIT")
@@ -145,9 +149,21 @@ func PrepareData(ctx context.Context, db *sql.DB, conf *Config) (err error) {
 	return nil
 }
 
-func SetGlobalIsolationLevel(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, "SET GLOBAL TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-	return err
+func SetConfig(ctx context.Context, db *sql.DB) error {
+	// Set the transaction isolation level
+	if _, err := db.ExecContext(ctx, "SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED"); err != nil {
+		return fmt.Errorf("failed to set global transaction isolation level: %w", err)
+	}
+
+	// Set the lock wait timeout
+	if _, err := db.ExecContext(ctx, "SET GLOBAL innodb_lock_wait_timeout = 1"); err != nil {
+		return fmt.Errorf("failed to set global innodb_lock_wait_timeout: %w", err)
+	}
+
+	if _, err := db.ExecContext(ctx, "SET GLOBAL innodb_undo_retention = 1800"); err != nil {
+		return fmt.Errorf("failed to set global innodb_undo_retention: %w", err)
+	}
+	return nil
 }
 
 func RecoverAll(ctx context.Context, db *sql.DB) error {

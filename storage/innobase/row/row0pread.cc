@@ -45,6 +45,7 @@ Created 2018-01-27 by Sunny Bains */
 #include "lizard0row.h"
 #include "lizard0undo.h"
 #include "lizard0txn0rec.h"
+#include "lizard0btr0pcur.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
@@ -471,25 +472,26 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
         always consistent read. */
         goto sees;
       }
+      ut_ad(lizard::pcur_position_validate(pcur, rec, m_config.m_index));
 
-      txn_rec_t txn_rec;
-      lizard::row_get_txn_rec(rec, m_config.m_index, offsets, &txn_rec);
+      const txn_layout_t layout = TL_CLOVER;
+      txn_rec_t txn_rec(rec, m_config.m_index, offsets, layout);
 
       if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
-        lizard::cleanout_ctx_t cctx(pcur, cleanout);
-        if (lizard::txn_rec_try_see(&txn_rec, rec, m_config.m_index, offsets,
-                                    vision, cctx)) {
+        Cleanout_ctx_t cctx(pcur, cleanout);
+        if (lizard::txn_rec_try_see(&txn_rec, layout, vision,
+                                    cctx(MTR_LOG_NO_REDO))) {
           goto sees;
         }
-        lizard::txn_rec_execute_when_query(&txn_rec, rec, m_config.m_index,
-                                           offsets, vision->visible_by(), cctx);
+        lizard::txn_rec_execute_when_query(&txn_rec, layout,
+                                           vision->visible_by(), cctx);
 
         if (!vision->modifications_visible(&txn_rec, table_name)) {
           rec_t *old_vers;
 
-          row_vers_build_for_consistent_read(rec, mtr, m_config.m_index,
-                                             &offsets, vision, &heap, heap,
-                                             &old_vers, nullptr, nullptr);
+          row_vers_build_for_consistent_read(
+              rec, mtr, m_config.m_index, &offsets, vision, &heap, heap,
+              &old_vers, nullptr, nullptr, layout);
 
           rec = old_vers;
 
@@ -567,7 +569,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(
   if (page_rec_is_supremum(rec)) {
     /* Empty page, only root page can be empty. */
     ut_a(!is_infimum ||
-         page_cursor.block->page.id.page_no() == m_config.m_index->page);
+         page_cursor.block->page.id.page_no() == m_config.m_index->page_no());
     return (iter);
   }
 
@@ -771,6 +773,10 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     m_first_rec = false;
 
     page_cur_move_to_next(cur);
+  }
+
+  if (m_ddl_cleanout != nullptr) {
+    m_ddl_cleanout->execute();
   }
 
   if (err != DB_SUCCESS) {
@@ -1201,7 +1207,7 @@ dberr_t Parallel_reader::Scan_ctx::partition(
 
   dberr_t err{DB_SUCCESS};
 
-  err = create_ranges(scan_range, m_config.m_index->page, 0, split_level,
+  err = create_ranges(scan_range, m_config.m_index->page_no(), 0, split_level,
                       ranges, &mtr);
 
   if (err == DB_SUCCESS && scan_range.m_end != nullptr && !ranges.empty()) {

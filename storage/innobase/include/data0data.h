@@ -714,6 +714,9 @@ struct dtuple_t {
   size_t magic_n{MAGIC_N};
 #endif /* UNIV_DEBUG */
 
+  /** Suffix fields for panda index search entry that was adjusted. */
+  uint16_t n_panda_suffix{0};
+
   /** Print the tuple to the output stream.
   @param[in,out] out            Stream to output to.
   @return stream */

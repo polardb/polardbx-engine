@@ -94,6 +94,7 @@ The tablespace memory cache */
 #include <unordered_map>
 
 #include "lizard0dict.h"
+#include "lizard0fil0types.h"
 #include "lizard0fsp.h"
 
 using Dirs = std::vector<std::string>;
@@ -11743,6 +11744,7 @@ const char *fil_get_page_type_str(page_type_t type) noexcept {
     PAGE_TYPE(FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY);
     PAGE_TYPE(FIL_PAGE_TYPE_RSEG_ARRAY);
     PAGE_TYPE(FIL_PAGE_TYPE_LEGACY_DBLWR);
+    PAGE_TYPE(FIL_PAGE_INDEX_PANDA);
   }
   ut_d(ut_error);
   ut_o(return "UNKNOWN");

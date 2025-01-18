@@ -311,8 +311,10 @@ struct plan_t {
   btr_pcur_t clust_pcur;     /*!< if index is non-clustered, we use
                              this pcur to search the clustered
                              index */
-  mem_heap_t *old_vers_heap; /*!< memory heap used in building an old
-                             version of a row, or NULL */
+  mem_heap_t *lizard_old_vers_heap; /*!< memory heap used in building a lizard
+                                    old version of a row, or NULL */
+  mem_heap_t *panda_old_vers_heap; /*!< memory heap used in building a panda old
+                                   version of a row, or NULL */
 };
 
 /** Select node states */

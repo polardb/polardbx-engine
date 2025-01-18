@@ -34,6 +34,7 @@ insert into gpp_options.t1 values (7,7,7,'77777');
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=100
 --let $NON_INDEX_COL=pad
+--let $IS_PARTITION=0
 --source suite/lizard/include/gpp_has_options.inc
 
 # ----------------------------------------------------------------------------------------------------- #
@@ -471,6 +472,58 @@ RENAME TABLE gpp_options.t1_renamed TO gpp_options.t1;
 --let $INDEX_NAME=b_c
 --let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
+# ----------------------------------------------------------------------------------------------------- #
+
+# ----------------------------------------------------------------------------------------------------- #
+--echo # Multi-valued indexes can have gpp
+
+SET opt_index_format_gpp_enabled=true;
+CREATE TABLE gpp_options.t_multi (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  data JSON,
+  INDEX multi_idx ((CAST(data->'$[*]' AS UNSIGNED ARRAY)))
+);
+
+INSERT INTO gpp_options.t_multi(data) VALUES
+  ('[1, 2, 3]'),
+  ('[3, 4, 5]'),
+  ('[5, 6, 7]'),
+  ('[7, 8, 9]'),
+  ('[2, 4, 6]');
+
+--let $INDEX_COL=
+--let $INDEX_NAME=multi_idx
+--let $CONTAIN_GPP=1
+--let $TABLE_NAME=t_multi
+--source suite/lizard/include/gpp_has_options.inc
+
+--echo # test MEMBER OF() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE 3 MEMBER OF (data->'$[*]');
+show status like "Lizard_index_scan_guess_clust_hit";
+show status like "Lizard_index_scan_guess_clust_miss";
+
+--echo # test JSON_CONTAINS() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE JSON_CONTAINS(data->'$[*]', '[3]');
+show status like "Lizard_index_scan_guess_clust_hit";
+show status like "Lizard_index_scan_guess_clust_miss";
+
+--echo # test JSON_OVERLAPS() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE JSON_OVERLAPS(data->'$[*]', '[3, 5]');
+show status like "Lizard_index_scan_guess_clust_hit";
+show status like "Lizard_index_scan_guess_clust_miss";
+
+--echo # disable GPP and create a new multi-valued index, confirm it does not contain GPP
+SET opt_index_format_gpp_enabled=false;
+DROP INDEX multi_idx ON gpp_options.t_multi;
+CREATE INDEX multi_idx2 ON gpp_options.t_multi ((CAST(data->'$[*]' AS UNSIGNED ARRAY)));
+--let $INDEX_NAME=multi_idx2
+--let $CONTAIN_GPP=0
+--source suite/lizard/include/gpp_has_options.inc
+
+DROP TABLE gpp_options.t_multi;
 # ----------------------------------------------------------------------------------------------------- #
 
 --echo # ------------------------- Clean up --------------------------------------------------

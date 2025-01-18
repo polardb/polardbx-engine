@@ -19,9 +19,9 @@ INSERT INTO t1 (id, k, c, pad) VALUES (70, 70, 70, LEFT(REPEAT('A', 7000), CHAR_
 select * from information_schema.innodb_gpp_stats;
 TABLE_NAME	INDEX_NAME	GPP_HIT	GPP_MISS
 test/t1	k	0	0
-show status like '%sec_clean%';
+show status like '%gpp_clean%';
 Variable_name	Value
-Lizard_scan_cleanout_sec_cleaned	0
+Lizard_scan_cleanout_gpp_clean	0
 select c from t1 force index(k) where k > 0;
 c
 1
@@ -50,9 +50,9 @@ c
 select * from information_schema.innodb_gpp_stats;
 TABLE_NAME	INDEX_NAME	GPP_HIT	GPP_MISS
 test/t1	k	13	3
-show status like '%sec_clean%';
+show status like '%gpp_clean%';
 Variable_name	Value
-Lizard_scan_cleanout_sec_cleaned	3
+Lizard_scan_cleanout_gpp_clean	3
 # ------------------------- Test Partition table ----------------------------------------
 create table test12 (name varchar(30),age bigint,grade bigint,date datetime not null,partition_id int not null,   PRIMARY KEY (`name`,`PARTITION_ID`),   KEY `IDX_DATE` (`date`,`name`,`partition_id`),   KEY `IDX_AGE` (`age`,`partition_id`) ) PARTITION BY RANGE COLUMNS(PARTITION_ID) (PARTITION p0 VALUES LESS THAN (0) ENGINE = InnoDB,  PARTITION P1 VALUES LESS THAN (1) ENGINE = InnoDB);
 insert into test12 values('Tom27',21,1,'2017-08-25 12:12:12',0);

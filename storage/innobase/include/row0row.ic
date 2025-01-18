@@ -43,7 +43,7 @@ static inline ulint row_get_trx_id_offset(const dict_index_t *index,
   ulint offset;
   ulint len;
 
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(rec_offs_validate(nullptr, index, offsets));
 
   pos = index->get_sys_col_pos(DATA_TRX_ID);
@@ -60,7 +60,7 @@ static inline trx_id_t row_get_rec_trx_id(const rec_t *rec,
                                           const ulint *offsets) {
   ulint offset;
 
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   offset = index->trx_id_offset;
@@ -77,7 +77,7 @@ static inline roll_ptr_t row_get_rec_roll_ptr(const rec_t *rec,
                                               const ulint *offsets) {
   ulint offset;
 
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   offset = index->trx_id_offset;

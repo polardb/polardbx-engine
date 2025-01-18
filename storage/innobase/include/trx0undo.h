@@ -93,6 +93,16 @@ static inline page_t *trx_undo_page_get_s_latched_low(
     const page_id_t &page_id, const page_size_t &page_size, Page_fetch mode,
     mtr_t *mtr);
 
+/** Gets an undo log page block and s-latches it.
+@param[in]      page_id         Page id
+@param[in]      page_size       Page size
+@param[in]      mode            Fetch mode.
+@param[in,out]  mtr             Mini-transaction
+@return pointer to block s-latched */
+static inline buf_block_t *trx_undo_block_get_s_latched_low(
+    const page_id_t &page_id, const page_size_t &page_size, Page_fetch mode,
+    mtr_t *mtr);
+
 #define trx_undo_page_get_s_latched(page_id, page_size, mtr) \
   trx_undo_page_get_s_latched_low(page_id, page_size, Page_fetch::NORMAL, mtr)
 

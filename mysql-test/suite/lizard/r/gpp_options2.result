@@ -283,6 +283,63 @@ include/assert.inc [The options for gpp_options.t1.b should match the expected I
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
+# Multi-valued indexes can have gpp
+SET opt_index_format_gpp_enabled=true;
+CREATE TABLE gpp_options.t_multi (
+id INT PRIMARY KEY AUTO_INCREMENT,
+data JSON,
+INDEX multi_idx ((CAST(data->'$[*]' AS UNSIGNED ARRAY)))
+);
+INSERT INTO gpp_options.t_multi(data) VALUES
+('[1, 2, 3]'),
+('[3, 4, 5]'),
+('[5, 6, 7]'),
+('[7, 8, 9]'),
+('[2, 4, 6]');
+include/assert.inc [The options for gpp_options.t_multi.multi_idx should match the expected IFT=1 condition]
+# test MEMBER OF() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE 3 MEMBER OF (data->'$[*]');
+id	data
+1	[1, 2, 3]
+2	[3, 4, 5]
+show status like "Lizard_index_scan_guess_clust_hit";
+Variable_name	Value
+Lizard_index_scan_guess_clust_hit	0
+show status like "Lizard_index_scan_guess_clust_miss";
+Variable_name	Value
+Lizard_index_scan_guess_clust_miss	2
+# test JSON_CONTAINS() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE JSON_CONTAINS(data->'$[*]', '[3]');
+id	data
+1	[1, 2, 3]
+2	[3, 4, 5]
+show status like "Lizard_index_scan_guess_clust_hit";
+Variable_name	Value
+Lizard_index_scan_guess_clust_hit	0
+show status like "Lizard_index_scan_guess_clust_miss";
+Variable_name	Value
+Lizard_index_scan_guess_clust_miss	2
+# test JSON_OVERLAPS() query
+call dbms_stat.flush_gpp();
+SELECT * FROM gpp_options.t_multi WHERE JSON_OVERLAPS(data->'$[*]', '[3, 5]');
+id	data
+2	[3, 4, 5]
+3	[5, 6, 7]
+1	[1, 2, 3]
+show status like "Lizard_index_scan_guess_clust_hit";
+Variable_name	Value
+Lizard_index_scan_guess_clust_hit	0
+show status like "Lizard_index_scan_guess_clust_miss";
+Variable_name	Value
+Lizard_index_scan_guess_clust_miss	4
+# disable GPP and create a new multi-valued index, confirm it does not contain GPP
+SET opt_index_format_gpp_enabled=false;
+DROP INDEX multi_idx ON gpp_options.t_multi;
+CREATE INDEX multi_idx2 ON gpp_options.t_multi ((CAST(data->'$[*]' AS UNSIGNED ARRAY)));
+include/assert.inc [The options for gpp_options.t_multi.multi_idx2 should match the expected IFT=0 condition]
+DROP TABLE gpp_options.t_multi;
 # ------------------------- Clean up --------------------------------------------------
 SET opt_index_format_gpp_enabled= 1;
 SET GLOBAL innodb_lizard_stat_enabled= 0;

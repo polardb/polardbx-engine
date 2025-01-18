@@ -560,6 +560,7 @@ struct System_variables {
   bool flush_gcov_enabled;
 #endif
 
+  bool opt_index_format_panda_enabled;
 };
 
 /**

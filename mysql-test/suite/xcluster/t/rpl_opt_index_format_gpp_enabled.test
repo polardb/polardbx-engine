@@ -45,6 +45,7 @@ CREATE INDEX b_c ON gpp_options.t1(b,c);
 --let $NON_INDEX_COL=pad
 --let $INDEX_NAME=b_c
 --let $CONTAIN_GPP=0
+--let $IS_PARTITION=0
 --source suite/lizard/include/gpp_has_options.inc
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=1

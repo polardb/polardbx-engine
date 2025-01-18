@@ -77,6 +77,8 @@ double fseg_reserve_pct = FSEG_RESERVE_PCT_DFLT;
 #include "transaction.h"
 #include "ut0stage.h"
 
+#include "lizard0fil0types.h"
+
 /** DDL records for tablespace (un)encryption. */
 std::vector<DDL_Record *> ts_encrypt_ddl_records;
 
@@ -1086,8 +1088,11 @@ bool fsp_header_init(space_id_t space_id, page_no_t size, mtr_t *mtr) {
   space->encryption_op_in_progress = Encryption::Progress::NONE;
 
   if (space_id == TRX_SYS_SPACE) {
-    if (btr_create(DICT_CLUSTERED | DICT_IBUF, 0, DICT_IBUF_ID_MIN + space_id,
-                   dict_ind_redundant, mtr) == FIL_NULL) {
+    auto root =
+        btr_create(DICT_CLUSTERED | DICT_IBUF, 0, DICT_IBUF_ID_MIN + space_id,
+                   dict_ind_redundant, FIL_PAGE_TYPE_UNUSED, mtr);
+    ut_a(root.page_no == FIL_NULL || root.page_type == FIL_PAGE_INDEX);
+    if (root.page_no == FIL_NULL) {
       return (false);
     }
   }

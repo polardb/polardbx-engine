@@ -1148,6 +1148,7 @@ class buf_page_t {
         list(other.list),
         newest_modification(other.newest_modification),
         oldest_modification(other.oldest_modification),
+        cleanouts(other.cleanouts),
         LRU(other.LRU),
         zip(other.zip)
 #ifndef UNIV_HOTBACKUP
@@ -1301,6 +1302,11 @@ class buf_page_t {
   it was clean. */
   lsn_t get_oldest_lsn() const noexcept { return oldest_modification; }
 
+  /** @return how many cleanouts */
+  ulint get_cleanouts() const noexcept { return cleanouts; }
+  /** increase cleanouts */
+  void inc_cleanouts() noexcept { cleanouts++; }
+
   /** @return true if the page is dirty. */
   bool is_dirty() const noexcept { return get_oldest_lsn() > 0; }
 
@@ -1313,7 +1319,10 @@ class buf_page_t {
   void set_oldest_lsn(lsn_t lsn) noexcept;
 
   /** Set page to clean state. */
-  void set_clean() noexcept { set_oldest_lsn(0); }
+  void set_clean() noexcept {
+    set_oldest_lsn(0);
+    cleanouts = 0;
+  }
 
   /** @name General fields
   None of these bit-fields must be modified without holding
@@ -1583,6 +1592,9 @@ class buf_page_t {
   /** log sequence number of the youngest modification to this block, zero
   if not modified. Protected by block mutex */
   lsn_t oldest_modification;
+
+  /** How many records has been cleanout. */
+  ulint cleanouts;
 
  public:
   /** log sequence number of the START of the log entry written of the oldest

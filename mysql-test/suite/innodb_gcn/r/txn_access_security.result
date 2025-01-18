@@ -42,7 +42,7 @@ END$$
 ###################
 # Try guessing TXN ...
 ###################
-include/assert.inc [Lizard_txn_read_guess_cnt must at least 40000]
+include/assert.inc [Lizard_txn_read_guess_request must at least 40000]
 ###################
 # Cleanup
 ###################

@@ -4,4 +4,4 @@
 #    will happen when read DD (open tables), which will write redo but it
 #    cannot do.
 # disable cleanout
---innodb_cleanout_disable=1
+--innodb_txn_cleanout_disable=1

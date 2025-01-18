@@ -609,6 +609,7 @@ int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple, const rec_t *rec,
   ut_ad(n_cmp <= dtuple_get_n_fields(dtuple));
   ut_ad(*matched_fields == DISABLE_MIN_REC_FLAG_CHECK ||
         *matched_fields <= rec_offs_n_fields(offsets));
+  ut_ad(lizard::row_index_entry_cmp_fields_check(index, dtuple));
 
   if (*matched_fields == 0) {
     ulint rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));

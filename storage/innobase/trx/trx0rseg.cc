@@ -155,8 +155,6 @@ void trx_rseg_mem_free(trx_rseg_t *rseg) {
 
     MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
 
-    LIZARD_MONITOR_DEC_TXN_CACHED(1);
-
     trx_undo_mem_free(undo);
   }
 
@@ -298,8 +296,6 @@ static trx_rseg_t *trx_rseg_physical_initialize(
     /** Lizard: Initialize free list size */
     auto free_list_len = flst_get_len(rseg_header + TXN_RSEG_FREE_LIST);
     if (free_list_len > 0) {
-      lizard::gcs->txn_undo_log_free_list_len += free_list_len;
-
       fil_addr_t node_addr;
       rseg->last_free_ommt =
           lizard::txn_free_get_last_log(rseg, node_addr);
@@ -458,11 +454,8 @@ trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
       1 + sum_of_undo_sizes);
 
   if (rseg->is_txn) {
-    /** Lizard: Initialize free list size */
     auto free_list_len = flst_get_len(rseg_header + TXN_RSEG_FREE_LIST);
     if (free_list_len > 0) {
-      lizard::gcs->txn_undo_log_free_list_len += free_list_len;
-
       fil_addr_t node_addr;
       rseg->last_free_ommt =
           lizard::txn_free_get_last_log(rseg, node_addr);
@@ -547,7 +540,6 @@ active undo logs.
 @param[in]      purge_heap      queue of rsegs to purge */
 void trx_rsegs_init_start(lizard::purge_heap_t *purge_heap) {
   trx_sys->rseg_history_len.store(0);
-  lizard::gcs->txn_undo_log_free_list_len.store(0);
 
   uint32_t slot;
   mtr_t mtr;
@@ -700,7 +692,6 @@ active undo logs.
 void trx_rsegs_init(lizard::purge_heap_t *purge_heap,
                     lizard::erase_heap_t *erase_heap) {
   trx_sys->rseg_history_len.store(0);
-  lizard::gcs->txn_undo_log_free_list_len.store(0);
 
   ulint slot;
   mtr_t mtr;

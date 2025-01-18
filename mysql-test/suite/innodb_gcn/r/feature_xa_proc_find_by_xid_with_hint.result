@@ -1713,10 +1713,10 @@ call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
 xa commit 'fbx_t1', '240';
 call dbms_xa.find_by_xid(#gtrid, #bqual, #formatID)
 call dbms_xa.find_by_xid_with_hint(#gtrid, #bqual, #formatID, #undo_ptr)
-include/assert.inc [Lizard_txn_read_guess_cnt must at least 240]
+include/assert.inc [Lizard_txn_read_guess_request must at least 240]
 connection con1;
 connection con1;
-include/assert.inc [Lizard_txn_read_guess_failed must be 0]
+include/assert.inc [Lizard_txn_read_guess_fail must be 0]
 connection con1;
 connection con1;
 ###############################

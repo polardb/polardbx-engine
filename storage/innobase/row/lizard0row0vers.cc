@@ -64,8 +64,8 @@ const Vision *row_vers_old_simulate_vision() {
  * @param[in]		dict table
  *
  * @retval	true	maybe still usable by normal query or asof query. */
-bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
-                                       const dict_table_t *table) {
+bool row_clust_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
+                                             const dict_table_t *table) {
   mtr_t mtr;
 
   /** Caller has held cluster index page lock. */
@@ -74,6 +74,29 @@ bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
   /** delete marked record will be not inherited after ddl, so table->is_2pp is
    * safe here. */
   bool missing = txn_rec_is_missing_history(txn_rec, table->is_2pp, &mtr);
+
+  mtr_commit(&mtr);
+  return !missing;
+}
+
+/** Jedge whether the panda delete marked record still was needed.
+ *
+ * Before, it judge through purge_sys view, it promise that will never older
+ * query to see it.
+ *
+ * after, we support asof query, so change dependency to txn slot.
+ *
+ *
+ * @param[in/out]	txn rec
+ * @param[in]		dict table
+ *
+ * @retval	true	maybe still usable by normal query or asof query. */
+bool row_panda_vers_must_preserve_del_marked(txn_rec_t *txn_rec) {
+  mtr_t mtr;
+
+  mtr_start(&mtr);
+
+  bool missing = txn_rec_is_missing_history(txn_rec, false, &mtr);
 
   mtr_commit(&mtr);
   return !missing;

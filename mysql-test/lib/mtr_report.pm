@@ -79,7 +79,7 @@ our $prev_report_length = 0;
 our $timediff           = 0;
 our $timer              = 1;
 our $timestamp          = 1;
-our $verbose_restart    = 1;
+our $verbose_restart    = 0;
 
 sub disk_usage() {
   my $du = "";

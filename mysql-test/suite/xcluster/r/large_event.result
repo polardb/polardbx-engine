@@ -56,7 +56,7 @@ show global status like '%fifo%';
 Variable_name	Value
 consensus_fifo_cache_first_index	2
 consensus_fifo_cache_log_count	115
-consensus_fifo_cache_used_size	22540150
+consensus_fifo_cache_used_size	22540152
 call dbms_consensus.force_purge_cache(2);;
 show global status like '%fifo%';
 Variable_name	Value

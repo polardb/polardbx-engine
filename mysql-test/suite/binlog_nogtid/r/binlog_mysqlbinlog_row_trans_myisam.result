@@ -169,6 +169,7 @@ SET @@session.collation_database=DEFAULT/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 CREATE TABLE t1 (
 c1 INT,
 c2 VARCHAR(20)
@@ -194,6 +195,7 @@ SET TIMESTAMP=#/*!*/;
 /*!80013 SET @@session.sql_require_primary_key=0*//*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 CREATE TABLE t2 (
 c1 INT,
 c2 VARCHAR(20)
@@ -293,6 +295,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t1
 /*!*/;
 # at #
@@ -314,6 +317,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t1
 /*!*/;
 # at #
@@ -537,6 +541,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t1
 /*!*/;
 # at #
@@ -558,6 +563,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t2
 /*!*/;
 # at #
@@ -706,6 +712,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t1
 /*!*/;
 # at #
@@ -727,6 +734,7 @@ SET @@SESSION.GTID_NEXT= '#'/*!*/;
 SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
 TRUNCATE TABLE t2
 /*!*/;
 # at #

@@ -764,8 +764,10 @@ struct row_prebuilt_t {
                              in fetch_cache */
   mem_heap_t *blob_heap;     /*!< in SELECTS BLOB fields are copied
                              to this heap */
-  mem_heap_t *old_vers_heap; /*!< memory heap where a previous
-                             version is built in consistent read */
+  mem_heap_t *lizard_old_vers_heap; /*!< memory heap where a lizard previous
+                                    version is built in consistent read */
+  mem_heap_t *panda_old_vers_heap;  /*!< memory heap where a panda previous
+                                    version is built in consistent read */
   enum {
     LOCK_PCUR,
     LOCK_CLUST_PCUR,

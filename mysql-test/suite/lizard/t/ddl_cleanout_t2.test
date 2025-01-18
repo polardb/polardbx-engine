@@ -37,9 +37,9 @@ CALL populate_t1(0, 11000);
 
 
 ALTER TABLE t1 add index idx_c(c2);
-#show status like '%ddl_cleanout_clust_cleaned%';
+#show status like '%ddl_cleanout_clean%';
 
---let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clust_cleaned", Value, 1)
+--let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clean", Value, 1)
 --let $assert_text= ddl_cleanout should make sense.
 --let $assert_cond= $var_value > 0
 --source include/assert.inc
@@ -93,7 +93,7 @@ ALTER TABLE large_table ADD INDEX idx_name (name);
 #show status like '%ddl_cleanout_clust_cleaned%';
 
 
---let $var_value1=query_get_value(show status like 'lizard_ddl_cleanout_clust_cleaned', Value, 1)
+--let $var_value1=query_get_value(show status like 'lizard_ddl_cleanout_clean', Value, 1)
 --let $assert_text= ddl_cleanout should make sense.
 --let $assert_cond= $var_value1 > $var_value
 --source include/assert.inc

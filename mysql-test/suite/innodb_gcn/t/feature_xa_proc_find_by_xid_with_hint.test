@@ -99,12 +99,12 @@ while($i < 240)
   --remove_file $MYSQLTEST_VARDIR/tmp/find_by_xid_with_hint.log
 }
 
---let $assert_cond= VARIABLE_VALUE >= 240 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_cnt"
---let $assert_text= Lizard_txn_read_guess_cnt must at least 240
+--let $assert_cond= VARIABLE_VALUE >= 240 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_request"
+--let $assert_text= Lizard_txn_read_guess_request must at least 240
 --source include/assert.inc
 
---let $assert_cond= VARIABLE_VALUE = 0 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_failed"
---let $assert_text= Lizard_txn_read_guess_failed must be 0
+--let $assert_cond= VARIABLE_VALUE = 0 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_fail"
+--let $assert_text= Lizard_txn_read_guess_fail must be 0
 --source include/assert.inc
 
 --disable_query_log

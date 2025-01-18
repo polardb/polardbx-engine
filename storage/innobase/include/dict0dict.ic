@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "sync0rw.h"
 
+#include "lizard0dict0mem.h"
+
 /** Gets the column number.
  @return col->ind, table column position (starting from 0) */
 static inline ulint dict_col_get_no(const dict_col_t *col) /*!< in: column */
@@ -712,7 +714,7 @@ static inline ulint dict_index_get_n_unique_in_tree(
 
   /* Lizard-4.0 revision: stored gpp field is not unique. */
   return (static_cast<uint16_t>(dict_index_get_n_fields(index)) -
-          index->n_s_gfields);
+          lizard::dict_index_n_sec_functional_fields(index));
 }
 
 /**
@@ -796,7 +798,7 @@ static inline page_no_t dict_index_get_page(
   ut_ad(index);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
 
-  return (index->page);
+  return (index->page_no());
 }
 
 /** Gets the read-write lock of the index tree.

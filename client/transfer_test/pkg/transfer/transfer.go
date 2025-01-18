@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package transfer
 
 import (
@@ -44,18 +43,6 @@ type TransferPlugin struct {
 
 func (*TransferPlugin) Name() string {
 	return "transfer_basic"
-}
-
-func rand2(upperbound int) (int, int) {
-	var a1, a2 int
-	a1 = rand.Intn(upperbound)
-	for {
-		a2 = rand.Intn(upperbound)
-		if a2 != a1 {
-			break
-		}
-	}
-	return a1, a2
 }
 
 func (p *TransferPlugin) Round(ctx context.Context, id string) (err error) {
@@ -100,38 +87,74 @@ func transfer(ctx context.Context, p *basePlugin, src, dst, amount int, isOnePha
 	if err != nil {
 		return fmt.Errorf("create trx failed: %w", err)
 	}
-	if ok, err := transferInternal(ctx,
-		trx, trx, src, dst, amount, src > dst,
-		RoutePoint(p.conf),
-	); err != nil || !ok {
-		return err
-	}
-	if isOnePhase {
-		// TODO: may cause inconsistent between backend and ssot.
-		err = p.sourceTruth.Transfer(src, dst, amount, p.tso.Next())
+
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = trx.Rollback() // Rollback if there was an issue
+		}
+	}()
+
+	if p.conf.EnableUK {
+		var srcUser, dstUser string
+		srcUser, dstUser, err = getUserPair(trx, trx)
+		if srcUser == "" || dstUser == "" {
+			if err != nil {
+				logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			}
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternalByUser(ctx,
+			trx, trx, srcUser, dstUser, amount,
+		); err != nil || !ok {
+			return err
+		}
+	} else {
+		src, err = getRandomID(trx)
 		if err != nil {
-			return fmt.Errorf("failed to update ssot: %w", err)
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+		dst, err = getRandomID(trx)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternal(ctx,
+			trx, trx, src, dst, amount, src > dst,
+			RoutePoint(p.conf),
+		); err != nil || !ok {
+			return err
+		}
+	}
+
+	if isOnePhase {
+		if p.conf.EnableSsot {
+			// TODO: may cause inconsistent between backend and ssot.
+			err = p.sourceTruth.Transfer(src, dst, amount, p.tso.Next())
+			if err != nil {
+				return fmt.Errorf("failed to update ssot: %w", err)
+			}
 		}
 		err = trx.CommitOnePhase()
 	} else {
 		err = trx.PrepareAndCommit(func(commitTs int64) error {
-			return p.sourceTruth.Transfer(src, dst, amount, commitTs)
+			if p.conf.EnableSsot {
+				return p.sourceTruth.Transfer(src, dst, amount, commitTs)
+			} else {
+				return nil
+			}
 		})
 	}
+
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
-	return nil
-}
 
-func maxInt64(val1 int64, vals ...int64) int64 {
-	res := val1
-	for _, val := range vals {
-		if val > res {
-			res = val
-		}
-	}
-	return res
+	rollbackNeeded = false
+	return nil
 }
 
 func transferTwoXA(ctx context.Context, p *basePlugin, src, dst, amount int) error {
@@ -156,14 +179,52 @@ func transferTwoXA(ctx context.Context, p *basePlugin, src, dst, amount int) err
 	if err != nil {
 		return fmt.Errorf("create trx failed: %w", err)
 	}
-	if ok, err := transferInternal(ctx,
-		trx1, trx2,
-		src, dst, amount,
-		src > dst,
-		RoutePoint(p.conf),
-	); err != nil || !ok {
-		return err
+
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = trx1.Rollback()
+			_ = trx2.Rollback()
+		}
+	}()
+
+	if p.conf.EnableUK {
+		var srcUser, dstUser string
+		srcUser, dstUser, err = getUserPair(trx1, trx2)
+		if srcUser == "" || dstUser == "" {
+			if err != nil {
+				logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			}
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternalByUser(ctx,
+			trx1, trx2, srcUser, dstUser, amount,
+		); err != nil || !ok {
+			return err
+		}
+	} else {
+		src, err = getRandomID(trx1)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+		dst, err = getRandomID(trx2)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternal(ctx,
+			trx1, trx2,
+			src, dst, amount,
+			src > dst,
+			RoutePoint(p.conf),
+		); err != nil || !ok {
+			return err
+		}
 	}
+
 	var commitTs int64
 	if p.conf.EnableAsyncCommit {
 		prepareTs := p.tso.Next()
@@ -204,6 +265,8 @@ func transferTwoXA(ctx context.Context, p *basePlugin, src, dst, amount int) err
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
+
+	rollbackNeeded = false
 	return nil
 }
 
@@ -321,12 +384,42 @@ func transferSimple(ctx context.Context, p *basePlugin, src, dst, amount int) er
 	if err != nil {
 		return fmt.Errorf("create trx failed: %w", err)
 	}
-	if ok, err := transferInternal(ctx,
-		trx, trx, src, dst, amount, src > dst,
-		RoutePoint(p.conf),
-	); err != nil || !ok {
-		return err
+
+	if p.conf.EnableUK {
+		var srcUser, dstUser string
+		srcUser, dstUser, err = getUserPair(trx, trx)
+		if srcUser == "" || dstUser == "" {
+			if err != nil {
+				logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			}
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternalByUser(ctx,
+			trx, trx, srcUser, dstUser, amount,
+		); err != nil || !ok {
+			return err
+		}
+	} else {
+		src, err = getRandomID(trx)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+		dst, err = getRandomID(trx)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+			return nil // No avaiable user.
+		}
+
+		if ok, err := transferInternal(ctx,
+			trx, trx, src, dst, amount, src > dst,
+			RoutePoint(p.conf),
+		); err != nil || !ok {
+			return err
+		}
 	}
+
 	err = trx.CommitOnePhase()
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -338,4 +431,173 @@ func (b PluginBuilder) BuildTransferSimple() Plugin {
 	return &TransferSimplePlugin{
 		basePlugin: b.basePlugin,
 	}
+}
+
+func updateUserBalance(trx Trx, user string, amount int) error {
+	_, err := trx.Exec(fmt.Sprintf("UPDATE accounts SET balance = balance + %d, version = version + 1 where user = '%s'", amount, user))
+	if err != nil {
+		return fmt.Errorf("update balance failed: %w", err)
+	}
+	return nil
+}
+
+func transferInternalByUser(ctx context.Context,
+	trx1, trx2 Trx,
+	src, dst string,
+	amount int,
+) (ok bool, err error) {
+	defer func() {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if isMySQLError(err, 1213) {
+			// Deadlock error.
+			err = nil
+		}
+		if err != nil || !ok {
+			logutils.FromContext(ctx).Info("Will rollback trx.", zap.Error(err), zap.String("src", src), zap.String("dst", dst))
+			for trx := range map[Trx]struct{}{
+				trx1: {},
+				trx2: {},
+			} {
+				if rollbackErr := trx.Rollback(); rollbackErr != nil {
+					logutils.FromContext(ctx).Error("Rollback trx failed.", zap.Error(rollbackErr), zap.Stringer("trx", trx))
+					err = rollbackErr
+				}
+			}
+			if isMySQLError(err, 1213) || isMySQLError(err, 1205) {
+				// Deadlock error or Lockwait timeout error
+				err = nil
+			}
+		}
+	}()
+
+	row := trx1.QueryRow(fmt.Sprintf("SELECT balance FROM accounts WHERE user = '%s' FOR UPDATE", src))
+	var balance int
+	err = row.Scan(&balance)
+	if err != nil {
+		return false, fmt.Errorf("read balance failed: %w", err)
+	}
+	if balance < amount {
+		logutils.FromContext(ctx).Info("insufficient balance", zap.Int("balance", balance), zap.Int("required", amount))
+		return false, nil
+	}
+
+	if err := updateUserBalance(trx1, src, -amount); err != nil {
+		return false, err
+	}
+	if err := updateUserBalance(trx2, dst, amount); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+type UserManagePlugin struct {
+	basePlugin
+}
+
+func (*UserManagePlugin) Name() string {
+	return "user_manage"
+}
+
+func (p *UserManagePlugin) Round(ctx context.Context, id string) (err error) {
+	return manageUser(ctx, &p.basePlugin, p.conf.EnableCts)
+}
+
+func (b PluginBuilder) BuildUserManage() Plugin {
+	return &UserManagePlugin{
+		basePlugin: b.basePlugin,
+	}
+}
+
+func updateUserName(trx Trx, user string) error {
+	var query string
+	if rand.Intn(100000) == 0 {
+		query = fmt.Sprintf("UPDATE accounts SET user = NULL WHERE user = '%s'", user)
+	} else {
+		newName := randomString()
+		query = fmt.Sprintf("UPDATE accounts SET user = '%s' WHERE user = '%s'", newName, user)
+	}
+
+	_, err := trx.Exec(query)
+	if err != nil {
+		return fmt.Errorf("Update user failed: %w", err)
+	}
+	return nil
+}
+
+func updateUserId(trx Trx, user string) error {
+	newId := randomId(1000)
+	_, err := trx.Exec(fmt.Sprintf("UPDATE accounts SET id = %d where user = '%s'", newId, user))
+	if err != nil {
+		return fmt.Errorf("Update user failed: %w", err)
+	}
+	return nil
+}
+
+func manageUser(ctx context.Context, p *basePlugin, useCts bool) error {
+	conn, err := p.connector.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("new connection failed: %w", err)
+	}
+	defer conn.Close()
+
+	var trx Trx
+	if useCts {
+		trx = NewXATrx(ctx, p.tso, conn, p.conf)
+	} else {
+		trx = NewSimpleTrx(ctx, p.tso, conn, p.conf)
+	}
+
+	err = trx.Start()
+	if err != nil {
+		return fmt.Errorf("create trx failed: %w", err)
+	}
+
+	rollbackNeeded := true
+	defer func() {
+		if rollbackNeeded {
+			_ = trx.Rollback() // Rollback if there was an issue
+		}
+	}()
+
+	user, err := getRandomUser(trx)
+	if user == "" {
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Get user failed.")
+		}
+		return nil // No avaiable user.
+	}
+
+	updateName := !(rand.Intn(2) < 1)
+	if updateName {
+		err = updateUserName(trx, user)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Manage user failed.")
+			if isMySQLError(err, 1062) {
+				// Duplicate entry
+				err = nil
+			}
+			return err
+		}
+	} else {
+		err = updateUserId(trx, user)
+		if err != nil {
+			logutils.FromContext(ctx).With(zap.Error(err)).Info("Manage user failed.")
+			if isMySQLError(err, 1062) {
+				// Duplicate entry
+				err = nil
+			}
+			return err
+		}
+	}
+
+	err = trx.CommitOnePhase()
+	if err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
+	}
+
+	rollbackNeeded = false
+	return nil
 }

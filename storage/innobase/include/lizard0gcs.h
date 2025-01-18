@@ -177,12 +177,6 @@ struct gcs_t {
   /** The min active trx id */
   std::atomic<trx_id_t> min_active_tid;
 
-  /** Length of txn undo log segment free list */
-  std::atomic<uint64_t> txn_undo_log_free_list_len;
-
-  /** Count of txn undo log which is cached */
-  std::atomic<uint64_t> txn_undo_log_cached;
-
   /** A min safe SCN, only used for purge */
   std::atomic<scn_t> min_safe_scn;
 

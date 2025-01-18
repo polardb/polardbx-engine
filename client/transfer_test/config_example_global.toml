@@ -6,25 +6,26 @@ verbose = true
 enable_cts = true # set innodb_snapshot_seq
 enable_ssot = false
 enable_async_commit = false
+enable_uk = true
 
 [check_balance]
 enabled = true
-threads = 5
+threads = 1
 
 [check_secondary_index]
 enabled = true
-threads = 5
+threads = 1
 
 [read_long]
 enabled = true
-threads = 5
+threads = 0
 interval = "5s"
 total = "20m"
 
 # local read
 [read_current_snapshot]
 enabled = true
-threads = 5
+threads = 1
 
 # global xa with 1 branch
 [transfer_basic]
@@ -41,3 +42,7 @@ threads = 5
 enabled = true
 threads = 5
 
+# update user
+[user_manage]
+enabled = true
+threads = 5

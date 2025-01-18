@@ -127,7 +127,7 @@ dberr_t row_prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
 
   if (snapshot_vision->get_flashback_area()) {
     ut_ad(prebuilt->table->is_2pp);
-    lizard_stats.flashback_area_query_cnt.inc();
+    generic_stats.flashback_area_query_cnt.inc();
   }
 
   if (snapshot_vision->too_old()) {

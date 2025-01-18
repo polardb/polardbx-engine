@@ -40,6 +40,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 
+#include "lizard0txn0rec0types.h"
+
 /** Checks if foreign key constraint fails for an index entry. Sets shared locks
  which lock either the success or the failure of the constraint. NOTE that
  the caller must have a shared latch on dict_foreign_key_check_lock.
@@ -75,6 +77,7 @@ unique key violation error occurs. The delete marked record is then
 updated to an existing record, and we must write an undo log record on
 the delete marked record.
 @param[in] flags Undo logging and locking flags.
+@param[in] layout Txn layout
 @param[in] mode BTR_MODIFY_LEAF or BTR_MODIFY_TREE, depending on whether we wish
 optimistic or pessimistic descent down the index tree.
 @param[in] index Clustered index.
@@ -89,13 +92,15 @@ execute actual insert.
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
 [[nodiscard]] dberr_t row_ins_clust_index_entry_low(
-    uint32_t flags, ulint mode, dict_index_t *index, ulint n_uniq,
-    dtuple_t *entry, gpp_no_t *gpp_no, que_thr_t *thr, bool dup_chk_only);
+    uint32_t flags, const txn_layout_t &layout, ulint mode, dict_index_t *index,
+    ulint n_uniq, dtuple_t *entry, gpp_no_t *gpp_no, que_thr_t *thr,
+    bool dup_chk_only);
 
 /** Tries to insert an entry into a secondary index. If a record with exactly
 the same fields is found, the other record is necessarily marked deleted.
 It is then unmarked. Otherwise, the entry is just inserted to the index.
 @param[in]      flags           undo logging and locking flags
+@param[in]      layout          txn layout
 @param[in]      mode            BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
                                 depending on whether we wish optimistic or
                                 pessimistic descent down the index tree
@@ -114,9 +119,9 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
 [[nodiscard]] dberr_t row_ins_sec_index_entry_low(
-    uint32_t flags, ulint mode, dict_index_t *index, mem_heap_t *offsets_heap,
-    mem_heap_t *heap, dtuple_t *entry, trx_id_t trx_id, que_thr_t *thr,
-    bool dup_chk_only);
+    uint32_t flags, const txn_layout_t &layout, ulint mode, dict_index_t *index,
+    mem_heap_t *offsets_heap, mem_heap_t *heap, dtuple_t *entry,
+    trx_id_t trx_id, que_thr_t *thr, bool dup_chk_only);
 
 /** Sets the values of the dtuple fields in entry from the values of appropriate
 columns in row.

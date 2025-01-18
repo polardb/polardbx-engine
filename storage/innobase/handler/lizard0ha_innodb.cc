@@ -278,14 +278,23 @@ void innobase_purge_status(lizard::purge_status_t &status) {
 }
 
 void innobase_flush_gpp_stat() {
-  lizard::lizard_stats.index_scan_guess_clust_hit.reset();
-  lizard::lizard_stats.index_scan_guess_clust_miss.reset();
-  lizard::lizard_stats.index_purge_guess_clust_hit.reset();
-  lizard::lizard_stats.index_purge_guess_clust_miss.reset();
-  lizard::lizard_stats.index_lock_guess_clust_hit.reset();
-  lizard::lizard_stats.index_lock_guess_clust_miss.reset();
+  lizard::generic_stats.index_scan_guess_clust_hit.reset();
+  lizard::generic_stats.index_scan_guess_clust_miss.reset();
+  lizard::generic_stats.index_purge_guess_clust_hit.reset();
+  lizard::generic_stats.index_purge_guess_clust_miss.reset();
+  lizard::generic_stats.index_lock_guess_clust_hit.reset();
+  lizard::generic_stats.index_lock_guess_clust_miss.reset();
   lizard::Gpp_index_stat_flusher flusher;
   dict_sys->for_each_table(flusher);
+}
+
+void innobase_flush_cleanout_stat() {
+  lizard::generic_stats.cleanout_cursor_restore_fail.reset();
+
+  lizard::generic_stats.scan_cleanout_txn_clean.reset();
+  lizard::generic_stats.scan_cleanout_gpp_clean.reset();
+  lizard::generic_stats.ddl_cleanout_clean.reset();
+  lizard::generic_stats.commit_cleanout_clean.reset();
 }
 
 /**
@@ -359,6 +368,7 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.trunc_status = innobase_trunc_status;
   hton->ext.purge_status = innobase_purge_status;
   hton->ext.flush_gpp_stat = innobase_flush_gpp_stat;
+  hton->ext.flush_cleanout_stat = innobase_flush_cleanout_stat;
   hton->ext.trx_slot_check_retention = innobase_trx_slot_check_retention;
   hton->ext.has_started_mysql_trx = innobase_has_started_mysql_trx;
 }

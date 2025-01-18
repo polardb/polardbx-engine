@@ -76,11 +76,11 @@ bool opt_cleanout_safe_mode = false;
 /**------------- Page Cleanout is deprecated. --------------*/
 
 /** Lizard max scan record count once cleanout one page.*/
-ulint cleanout_max_scans_on_page = 0;
+// ulint cleanout_max_scans_on_page = 0;
 /** Lizard max clean record count once cleanout one page.*/
-ulint cleanout_max_cleans_on_page = 1;
+// ulint cleanout_max_cleans_on_page = 1;
 /** Lizard cleanout mode, default(cursor) */
-ulong cleanout_mode = CLEANOUT_BY_CURSOR;
+// ulong cleanout_mode = CLEANOUT_BY_CURSOR;
 /**------------- Page Cleanout is deprecated. --------------*/
 
 /** Global txn undo logs container */
@@ -102,7 +102,7 @@ void txn_undo_hash_close() {
 
 static void txn_undo_hdr_hash_insert(Undo_hdr hdr) {
   bool result = txn_undo_logs->insert(hdr);
-  if (result) lizard_stats.txn_undo_log_hash_element.inc();
+  if (result) generic_stats.txn_undo_log_hash_element.inc();
 }
 /**
   Put txn undo into hash table.
@@ -207,10 +207,10 @@ bool Undo_logs::exist(Undo_hdr hdr) {
   auto it = m_hash.find(key);
   if (it == m_hash.end()) {
     exist = false;
-    lizard_stats.txn_undo_log_hash_miss.inc();
+    generic_stats.txn_undo_log_hash_miss.inc();
   } else {
     exist = true;
-    lizard_stats.txn_undo_log_hash_hit.inc();
+    generic_stats.txn_undo_log_hash_hit.inc();
   }
   mutex_exit(&m_mutex);
 

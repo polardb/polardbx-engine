@@ -802,4 +802,3 @@ static Sys_var_bool Sys_hotspot_for_autocommit(
     "Update with autocommit can also use hotspot function.",
     GLOBAL_VAR(hotspot_for_autocommit), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
-

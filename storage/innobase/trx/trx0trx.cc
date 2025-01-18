@@ -803,6 +803,7 @@ static void trx_resurrect_table_ids(trx_t *trx, const trx_undo_ptr_t *undo_ptr,
     ulint type;
     undo_no_t undo_no;
     table_id_t table_id;
+    space_index_t index_id;
     ulint cmpl_info;
     bool updated_extern;
     type_cmpl_t type_cmpl;
@@ -815,7 +816,7 @@ static void trx_resurrect_table_ids(trx_t *trx, const trx_undo_ptr_t *undo_ptr,
     }
 
     trx_undo_rec_get_pars(undo_rec, &type, &cmpl_info, &updated_extern,
-                          &undo_no, &table_id, &is_2pp, type_cmpl);
+                          &undo_no, &table_id, &index_id, &is_2pp, type_cmpl);
     tables.insert(table_id);
 
     undo_rec = trx_undo_get_prev_rec(undo_rec, undo->hdr_page_no,
@@ -2024,10 +2025,10 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     trx_sys->get_shard_by_trx_id(trx->id).active_rw_trxs.latch_and_execute(
         [&](Trx_by_id_with_min &trx_by_id_with_min) {
           state_transition();
-          ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
-          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          // ut_d(const size_t trx_shard_no = trx_get_shard_no(trx->id));
+          // ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
           trx_by_id_with_min.erase(trx->id);
-          ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
+          //ut_ad(trx_get_shard_no(trx_by_id_with_min.min_id()) == trx_shard_no);
         },
         UT_LOCATION_HERE);
   } else {

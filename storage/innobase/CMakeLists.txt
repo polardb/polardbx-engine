@@ -66,7 +66,8 @@ SET(INNOBASE_ZIP_DECOMPRESS_SOURCES
   rem/rem0wrec.cc
   ut/crc32.cc
   ut/ut.cc
-  ut/ut0new.cc)
+  ut/ut0new.cc
+  dict/lizard0dict0mem.cc )
 
 SET(INNOBASE_SOURCES
   api/api0api.cc
@@ -298,8 +299,25 @@ SET(INNOBASE_SOURCES
   trx/lizard0undo0retent.cc
   trx/lizard0service.cc
   trx/lizard0txn0service.cc
-  lock/lizard0lock.cc
   row/lizard0row0vers.cc
+  btr/lizard0btr0btr.cc
+  row/lizard0row0upd.cc
+  lock/lizard0lock0lock.cc
+  trx/lizard0row0purge.cc
+  row/lizard0row0uins.cc
+  row/lizard0row0ins.cc
+  row/lizard0row0umod.cc
+  trx/lizard0trx0rec.cc
+  dict/lizard0dict0gpp.cc
+  row/lizard0row0clover.cc
+  row/lizard0row0bamboo.cc
+  trx/lizard0trx0rec0clover.cc
+  trx/lizard0trx0rec0bamboo.cc
+  btr/lizard0btr0cur0clover.cc
+  btr/lizard0btr0cur0bamboo.cc
+  btr/lizard0btr0cur0gpp.cc
+  btr/lizard0btr0pcur.cc
+  row/lizard0row0undo.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

@@ -1245,8 +1245,6 @@ rec_t *page_cur_insert_rec_low(
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  assert_row_lizard_valid(rec, index, offsets);
-
   page = page_align(current_rec);
   ut_ad(dict_table_is_comp(index->table) == page_is_comp(page));
   ut_ad(fil_page_index_page_check(page));
@@ -1415,7 +1413,7 @@ rec_t *page_cur_insert_rec_low(
 
   if (index->is_clustered() && !index->table->is_intrinsic() &&
       !recv_recovery_is_on()) {
-    assert_lizard_page_attributes(page, index);
+    assert_page_txn_attributes(page, index);
   }
 
   return (insert_rec);
@@ -1586,7 +1584,7 @@ rec_t *page_cur_direct_insert_rec_low(rec_t *current_rec, dict_index_t *index,
   }
 
   if (index->is_clustered() && !index->table->is_intrinsic()) {
-    assert_lizard_page_attributes(page, index);
+    assert_page_txn_attributes(page, index);
   }
 
   return (insert_rec);

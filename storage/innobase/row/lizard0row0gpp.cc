@@ -43,6 +43,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0upd.h"
 
 namespace lizard {
+
+/** Whether to enable clustered index record inference during the scan. */
+bool index_scan_guess_clust_enabled = true;
+
+/** Whether to enable clustered index record inference during the purge. */
+bool index_purge_guess_clust_enabled = true;
+
+/** Whether to enable clustered index record inference during the locking. */
+bool index_lock_guess_clust_enabled = true;
+
+#ifdef UNIV_DEBUG
+gpp_no_t dbug_gpp_no = PAGE_NO_MAX;
+#endif /* UNIV_DEBUG */
 /**
    Allocate row buffers for GPP_NO field of insert node.
 
@@ -408,7 +421,9 @@ ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets) {
   ut_ad(index->n_s_gfields > 0);
 
   /** The GPP NO resides on the last field of the index. */
-  pos = index->n_fields - 1;
+  /** Revision : GPP NO will be not last field after index page version.*/
+  pos = index->get_gpp_col_pos();
+  ut_ad(pos != ULINT_UNDEFINED);
 
   offset = rec_get_nth_field_offs(index, offsets, pos, &len);
   ut_ad(len == DATA_GPP_NO_LEN);
@@ -422,17 +437,20 @@ ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets) {
  * @param[in] rec     Pointer to the record
  * @param[in] index   Pointer to the dictionary index object, non-clustered
  * @param[in] offsets Record field offsets array
- * @return            Returns the GPP Number from the record
+ *
+ * @return            Returns the GPP Number and offset from the record
  */
-gpp_no_t row_get_gpp_no(const rec_t *rec, const dict_index_t *index,
-                        const ulint *offsets, ulint &gpp_no_offset) {
+std::pair<gpp_no_t, ulint> row_get_gpp_no(const rec_t *rec,
+                                          const dict_index_t *index,
+                                          const ulint *offsets) {
   ut_ad(!index->is_clustered());
   ut_ad(index->n_s_gfields > 0);
   assert_lizard_dict_index_check(index);
 
-  gpp_no_offset = row_get_gpp_no_offset(index, offsets);
+  ulint gpp_no_offset = row_get_gpp_no_offset(index, offsets);
+  gpp_no_t gpp_no = mach_read_from_4(rec + gpp_no_offset);
 
-  return mach_read_from_4(rec + gpp_no_offset);
+  return {gpp_no, gpp_no_offset};
 }
 
 void row_write_gpp_no(rec_t *rec, const dict_index_t *index,
@@ -454,7 +472,6 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
   ut_ad(!index->is_clustered());
   ut_d(gpp_no_t gpp_no = mv_entry->read_v_gpp_no());
   ut_ad(gpp_no != 0 && gpp_no != FIL_NULL);
-
   if (index->n_s_gfields > 0) {
     ut_ad(mv_entry->read_s_gpp_no() == gpp_no);
   }
@@ -477,19 +494,20 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
  * @param[in]     mode            latching mode
- * @param[in]     pcur            Persistent cursor for the secondary index
- * @param[in]     cursor          Point to Cursor for the secondary index
+ * @param[in]     cleanout        cleanout context
  * @param[in]     mtr             Mini-transaction handle
+ *
  * @return        True if successful positioning, False otherwise
  */
 bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
                                     dict_index_t *sec_idx, dtuple_t *clust_ref,
                                     const rec_t *sec_rec,
                                     btr_pcur_t *clust_pcur, ulint *sec_offsets,
-                                    ulint mode,
-                                    btr_pcur_t *pcur,
-                                    SCursor **scursor,
+                                    ulint mode, Cleanout_ctx_t &cctx,
                                     mtr_t *mtr) {
+  bool hit = false;
+  ulint gpp_no_offset = ULINT_UNDEFINED;
+
   ut_ad(!sec_idx->is_clustered());
   ut_ad(mode == BTR_SEARCH_LEAF);
 
@@ -499,15 +517,15 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
 
   ut_ad(sec_offsets);
 
-  ulint gpp_no_offset = 0;
-  bool hit = btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
-                                        clust_pcur, sec_offsets, mode, gpp_no_offset ,mtr);
+  std::tie(hit, gpp_no_offset) =
+      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
+                                 clust_pcur, sec_offsets, mode, mtr);
 
   /* Try to add the cursor into scan_cleanout. */
-  if(!hit && scursor && pcur->m_cleanout){
-    *scursor = pcur->m_cleanout ->acquire_for_gpp(pcur, gpp_no_offset);
+  if (!hit && cctx.is_usable()) {
+    cctx.collect_gpp(gpp_no_offset);
   }
-  
+
   index_scan_guess_clust_stat(hit);
   return hit;
 }
@@ -522,7 +540,6 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     clust_ref       Reference tuple for the clustered index
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
- * @param[out]    sec_offsets     Offsets array for the secondary record
  * @param[in]     mode            latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
@@ -530,9 +547,10 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
 bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
                                       dict_index_t *sec_idx,
                                       dtuple_t *clust_ref, const rec_t *sec_rec,
-                                      btr_pcur_t *clust_pcur,
-                                      ulint *sec_offsets, ulint mode,
+                                      btr_pcur_t *clust_pcur, ulint mode,
                                       mtr_t *mtr) {
+  mem_heap_t *heap = nullptr;
+  bool hit = false;
   ut_ad(!sec_idx->is_clustered());
   ut_ad(mode == BTR_SEARCH_LEAF);
 
@@ -540,16 +558,15 @@ bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
     return false;
   }
 
-  mem_heap_t *heap = nullptr;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  ulint *offsets = offsets_;
+
   rec_offs_init(offsets_);
-  if (!sec_offsets) {
-    sec_offsets = rec_get_offsets(sec_rec, sec_idx, offsets_, ULINT_UNDEFINED,
-                                  UT_LOCATION_HERE, &heap);
-  }
-  ulint gpp_no_offset = 0;
-  bool hit = btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
-                                        clust_pcur, sec_offsets, mode, gpp_no_offset ,mtr);
+  offsets = rec_get_offsets(sec_rec, sec_idx, offsets, ULINT_UNDEFINED,
+                            UT_LOCATION_HERE, &heap);
+
+  std::tie(hit, std::ignore) = btr_cur_guess_clust_by_gpp(
+      clust_idx, sec_idx, clust_ref, sec_rec, clust_pcur, offsets, mode, mtr);
 
   index_purge_guess_clust_stat(hit);
 
@@ -580,22 +597,22 @@ bool row_lock_optimistic_guess_clust(dict_index_t *clust_idx,
                                      btr_pcur_t *clust_pcur,
                                      const ulint *sec_offsets, ulint mode,
                                      mtr_t *mtr) {
+  bool hit = false;
   ut_ad(!sec_idx->is_clustered());
   ut_ad(mode == BTR_SEARCH_LEAF);
 
   if (!index_lock_guess_clust_enabled || sec_idx->n_s_gfields == 0) {
     return false;
   }
-
   ut_ad(sec_offsets);
-  ulint gpp_no_offset = 0;
-  bool hit = btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
-                                        clust_pcur, sec_offsets, mode, gpp_no_offset , mtr);
+
+  std::tie(hit, std::ignore) =
+      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
+                                 clust_pcur, sec_offsets, mode, mtr);
 
   index_lock_guess_clust_stat(hit);
 
   return hit;
 }
-
 
 }  // namespace lizard

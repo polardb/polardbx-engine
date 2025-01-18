@@ -41,6 +41,7 @@
 #include "sql/dd/types/table.h"
 #include "sql/table.h"
 #include "storage/innobase/handler/i_s_ext.h"
+#include "dict0dd.h"
 
 static const char plugin_author[] = "Alibaba Corporation";
 
@@ -715,6 +716,12 @@ ST_FIELD_INFO innodb_index_status_fields_info[] = {
      STRUCT_FLD(field_flags, 0), STRUCT_FLD(old_name, ""),
      STRUCT_FLD(open_method, 0)},
 
+#define IDX_IS_INDEX_PAGE_TYPE 4
+    {STRUCT_FLD(field_name, "INDEX_PAGE_TYPE"), STRUCT_FLD(field_length, 64),
+     STRUCT_FLD(field_type, MYSQL_TYPE_STRING), STRUCT_FLD(value, 0),
+     STRUCT_FLD(field_flags, MY_I_S_MAYBE_NULL), STRUCT_FLD(old_name, ""),
+     STRUCT_FLD(open_method, 0)},
+
     END_OF_ST_FIELD_INFO};
 
 static int innodb_index_status_fill_one(THD *thd, const dict_index_t *index,
@@ -732,14 +739,17 @@ static int innodb_index_status_fill_one(THD *thd, const dict_index_t *index,
   OK(field_store_string(fields[IDX_IS_TABLE_NAME], table_name.c_str()));
   OK(field_store_string(fields[IDX_IS_INDEX_NAME], index->name));
   OK(fields[IDX_IS_GPP_ENABLED]->store(index->gpp_stored));
+  ut_ad(fil_page_type_is_index(index->page_type()) || index->type & DICT_FTS);
+  OK(field_store_string(fields[IDX_IS_INDEX_PAGE_TYPE],
+                        i_s_index_page_type_to_str(index->page_type())));
 
   OK(schema_table_store_record(thd, table));
   DBUG_RETURN(0);
 }
 
 static int innodb_index_status_fill_table(THD *thd, Table_ref *tables, Item *) {
-  return fill_i_s_innodb_indexes_low(thd, tables, nullptr,
-                                     innodb_index_status_fill_one, false);
+  return fill_i_s_innodb_indexes_low(
+      thd, tables, nullptr, innodb_index_status_fill_one, false, false);
 }
 
 static int innodb_index_status_init(void *p) {

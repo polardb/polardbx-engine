@@ -227,16 +227,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0read.h"
 #include "lizard0row.h"
 #include "lizard0scn.h"
+#include "lizard0trx0rec.h"
 #include "lizard0txn0space.h"
 #include "lizard0undo.h"
-#include "lizard0data0data.h"
 
-#include "lizard0ha_innodb.h"
-#include "lizard0tcn.h"
-#include "lizard0xa.h"
-#include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 #include "lizard0dict0mem.h"
+#include "lizard0ha_innodb.h"
+#include "lizard0row0bamboo.h"
+#include "lizard0row0gpp.h"
+#include "lizard0tcn.h"
 #include "lizard0undo0retent.h"
+#include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 
 #include "sql/xa_specification.h"
 #include "sql/dd/lizard_policy_types.h"
@@ -14496,8 +14497,8 @@ cleanup:
       for (dict_index_t *index = table->first_index(); index != nullptr;
            index = index->next()) {
         ut_ad(index->space == table->space);
-        page_no_t root = index->page;
-        index->page = FIL_NULL;
+        page_no_t root = index->page_no();
+        index->root = PAGE_MARK_NULL;
         dict_drop_temporary_table_index(index, root);
       }
       dict_table_remove_from_cache(table);
@@ -15340,7 +15341,8 @@ bool ha_innobase::upgrade_table(THD *thd, const char *db_name,
 @param          reset           reset counters
 @retval         true            an error occurred
 @retval         false           success */
-bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
+bool ha_innobase::get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
+                                      dd::Table *dd_table, bool reset) {
   static uint n_tables = 0;
   static uint n_indexes = 0;
   static uint n_pages = 4;
@@ -15412,6 +15414,8 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     dd_index_set_se_private_for_system_cols(
         i, 0,
         txn_info_t{txn_desc->cmmt.scn, txn_desc->undo_ptr, txn_desc->cmmt.gcn});
+
+    p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], FIL_PAGE_INDEX);
 
 #ifdef UNIV_DEBUG
     /* dd_properties shouldn't have IFT option. */
@@ -22365,7 +22369,8 @@ static void innodb_log_checksums_update(THD *, SYS_VAR *, void *var_ptr,
 
 static SHOW_VAR innodb_status_variables_export[] = {
     {"Innodb", (char *)&show_innodb_vars, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"Lizard", (char *)&lizard::show_lizard_vars, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Lizard", (char *)&lizard::show_generic_vars, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 static struct st_mysql_storage_engine innobase_storage_engine = {
@@ -23670,14 +23675,8 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to reboot innodb on safe cleanout mode (off by default)", NULL,
     NULL, false);
 
-static const char *innodb_cleanout_mode_names[] = {"record", "page", NullS};
-
-static TYPELIB innodb_cleanout_mode_typelib = {
-    array_elements(innodb_cleanout_mode_names) - 1,
-    "innodb_cleanout_mode_typelib", innodb_cleanout_mode_names, NULL};
-
 static MYSQL_SYSVAR_BOOL(
-    cleanout_disable, lizard::opt_cleanout_disable, PLUGIN_VAR_OPCMDARG,
+    txn_cleanout_disable, lizard::opt_txn_cleanout_disable, PLUGIN_VAR_OPCMDARG,
     "Whether to disable cleanout when read (off by default)", NULL, NULL,
     false);
 
@@ -23694,25 +23693,8 @@ static MYSQL_SYSVAR_BOOL(
 static MYSQL_SYSVAR_ULONG(commit_cleanout_max_rows,
                           lizard::srv_commit_cleanout_max_rows,
                           PLUGIN_VAR_OPCMDARG, "max cleanout rows at commit",
-                          NULL, NULL, lizard::Commit_cleanout::STATIC_CURSORS, 0,
-                          lizard::Commit_cleanout::MAX_CURSORS, 0);
-
-static MYSQL_SYSVAR_ENUM(cleanout_mode, lizard::cleanout_mode,
-                         PLUGIN_VAR_RQCMDARG, " Cleanout mode, default(cursor)",
-                         NULL, NULL, lizard::CLEANOUT_BY_CURSOR,
-                         &innodb_cleanout_mode_typelib);
-
-static MYSQL_SYSVAR_ULONG(cleanout_max_scans_on_page,
-                          lizard::cleanout_max_scans_on_page,
-                          PLUGIN_VAR_OPCMDARG,
-                          "max scan record count once cleanout one page", NULL,
-                          NULL, 0, 0, 1024 * 1024, 0);
-
-static MYSQL_SYSVAR_ULONG(cleanout_max_cleans_on_page,
-                          lizard::cleanout_max_cleans_on_page,
-                          PLUGIN_VAR_OPCMDARG,
-                          "max clean record count once cleanout one page", NULL,
-                          NULL, 1, 1, 1024 * 1024, 0);
+                          NULL, NULL, lizard::Commit_cleanout::STATIC_CURSORS,
+                          0, lizard::Commit_cleanout::MAX_CURSORS, 0);
 
 static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
                           lizard::txn_undo_page_reuse_max_percent,
@@ -23875,10 +23857,27 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to enable guess primary pageno during the lock. ", NULL, NULL,
     true);
 
+static MYSQL_SYSVAR_ULONG(cleanout_dirty_threshold,
+                          lizard::srv_cleanout_dirty_threshold,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Make page dirty if cleaned records are more than "
+                          "threshold and page was still clean",
+                          NULL, NULL, 5, 0, 1024 * 1024, 0);
+
+static MYSQL_SYSVAR_BOOL(inject_stress_test_for_panda,
+                         lizard::inject_stress_test_for_panda,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether to enable inject stress test for panda.",
+                         NULL, NULL, false);
 #ifdef UNIV_DEBUG
 static MYSQL_SYSVAR_UINT(dbug_gpp_no, lizard::dbug_gpp_no, PLUGIN_VAR_OPCMDARG,
                          "Set gpp_no for debug use.", NULL, NULL, PAGE_NO_MAX,
                          0, PAGE_NO_MAX, 0);
+
+static MYSQL_SYSVAR_ULONG(dbug_panda_index_id, lizard::dbug_panda_index_id,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Set index_id of a panda index for debug use.", NULL,
+                          NULL, 0, 0, ULONG_MAX, 0);
 #endif /* UNIV_DEBUG */
 
 static SYS_VAR *innobase_system_variables[] = {
@@ -24112,14 +24111,11 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(print_data_file_purge_process),
     MYSQL_SYSVAR(rds_flashback_enabled),
     MYSQL_SYSVAR(cleanout_safe_mode),
-    MYSQL_SYSVAR(cleanout_disable),
+    MYSQL_SYSVAR(txn_cleanout_disable),
     MYSQL_SYSVAR(gpp_cleanout_disable),
     MYSQL_SYSVAR(ddl_cleanout_disable),
-    MYSQL_SYSVAR(cleanout_max_scans_on_page),
-    MYSQL_SYSVAR(cleanout_max_cleans_on_page),
     MYSQL_SYSVAR(commit_cleanout_max_rows),
     MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
-    MYSQL_SYSVAR(cleanout_mode),
     MYSQL_SYSVAR(scn_history_interval),
     MYSQL_SYSVAR(scn_history_task_enabled),
     MYSQL_SYSVAR(scn_history_keep_days),
@@ -24142,8 +24138,11 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(index_scan_guess_clust_enabled),
     MYSQL_SYSVAR(index_purge_guess_clust_enabled),
     MYSQL_SYSVAR(index_lock_guess_clust_enabled),
+    MYSQL_SYSVAR(inject_stress_test_for_panda),
+    MYSQL_SYSVAR(cleanout_dirty_threshold),
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(dbug_gpp_no),
+    MYSQL_SYSVAR(dbug_panda_index_id),
 #endif /* UNIV_DEBUG */
     MYSQL_SYSVAR(encrypt_algorithm),
     nullptr};
@@ -24573,6 +24572,14 @@ bool ha_innobase::is_record_buffer_wanted(ha_rows *const max_rows) const {
   we don't want one. The decision on whether to use a buffer is taken in
   row_search_mvcc(), look for the comment that starts with "Decide
   whether to prefetch extra rows." Let's do the same check here. */
+
+  /** TODO: fix it <08-02-25, zanye.zjy> */
+  if (m_prebuilt->index &&
+      lizard::dict_index_inject_stress_test_for_panda(
+          m_prebuilt->index)) {
+    *max_rows = 0;
+    return false;
+  }
 
   if (!m_prebuilt->can_prefetch_records()) {
     *max_rows = 0;

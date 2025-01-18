@@ -97,12 +97,12 @@ namespace lizard {
 extern bool opt_cleanout_safe_mode;
 
 /**------------- Page Cleanout is deprecated. --------------*/
-extern ulong cleanout_mode;
-enum cleanout_mode_enum { CLEANOUT_BY_CURSOR, CLEANOUT_BY_PAGE };
+// extern ulong cleanout_mode;
+// enum cleanout_mode_enum { CLEANOUT_BY_CURSOR, CLEANOUT_BY_PAGE };
 /** Lizard max scan record count once cleanout one page.*/
-extern ulint cleanout_max_scans_on_page;
+// extern ulint cleanout_max_scans_on_page;
 /** Lizard max clean record count once cleanout one page.*/
-extern ulint cleanout_max_cleans_on_page;
+// extern ulint cleanout_max_cleans_on_page;
 /**------------- Page Cleanout is deprecated. --------------*/
 
 /**

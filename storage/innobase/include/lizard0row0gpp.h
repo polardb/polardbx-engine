@@ -37,6 +37,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
+/** Whether to enable clustered index record inference during the scan. */
+extern bool index_scan_guess_clust_enabled;
+
+/** Whether to enable clustered index record inference during the purge. */
+extern bool index_purge_guess_clust_enabled;
+
+/** Whether to enable clustered index record inference during the locking. */
+extern bool index_lock_guess_clust_enabled;
+
+#ifdef UNIV_DEBUG
+extern gpp_no_t dbug_gpp_no;
+#endif /* UNIV_DEBUG */
+
 /**
    Allocate row buffers for GPP_NO field.
 
@@ -205,10 +218,12 @@ ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets);
  * @param[in] rec     Pointer to the record
  * @param[in] index   Pointer to the dictionary index object, non-clustered
  * @param[in] offsets Record field offsets array
- * @return            Returns the GPP Number from the record
+ *
+ * @return            Returns the GPP Number and offset from the record
  */
-gpp_no_t row_get_gpp_no(const rec_t *rec, const dict_index_t *index,
-                        const ulint *offsets, ulint &gpp_no_offset);
+std::pair<gpp_no_t, ulint> row_get_gpp_no(const rec_t *rec,
+                                          const dict_index_t *index,
+                                          const ulint *offsets);
 
 /**
  * Write the GPP Number
@@ -247,17 +262,17 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
  * @param[in]     mode            latching mode
- * @param[in]     pcur            Persistent cursor for the secondary index
- * @param[in]     cursor          Point to Cursor for the secondary index
+ * @param[in]     cleanout        cleanout context
  * @param[in]     mtr             Mini-transaction handle
+ *
  * @return        True if successful positioning, False otherwise
  */
 bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
                                     dict_index_t *sec_idx, dtuple_t *clust_ref,
                                     const rec_t *sec_rec,
                                     btr_pcur_t *clust_pcur, ulint *sec_offsets,
-                                    ulint mode, btr_pcur_t *pcur,
-                                    SCursor **scursor, mtr_t *mtr);
+                                    ulint mode, Cleanout_ctx_t &cctx,
+                                    mtr_t *mtr);
 
 /**
  * When attempting to purge a secondary index record, this operation tries to
@@ -269,7 +284,6 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     clust_ref       Reference tuple for the clustered index
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
- * @param[out]    sec_offsets     Offsets array for the secondary record
  * @param[in]     mode            latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
@@ -277,8 +291,7 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
 bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
                                       dict_index_t *sec_idx,
                                       dtuple_t *clust_ref, const rec_t *sec_rec,
-                                      btr_pcur_t *clust_pcur,
-                                      ulint *sec_offsets, ulint mode,
+                                      btr_pcur_t *clust_pcur, ulint mode,
                                       mtr_t *mtr);
 
 /**

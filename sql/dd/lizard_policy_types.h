@@ -43,6 +43,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 class THD;
 struct dict_table_t;
 struct dict_index_t;
+namespace dd {
+class Table;
+class Index;
+}  // namespace dd
 
 namespace lizard {
 
@@ -66,31 +70,51 @@ constexpr char OPTION_IFT[] = "IFT";
 /** TABLE OPTION: Flashback Area */
 constexpr char TABLE_OPTION_FBA[] = "flashback_area";
 
+/** String of page type */
+constexpr char PAGE_TYPE_STR[] = "page_type";
+
 /** GPP format */
 constexpr const ulonglong IFT_GPP = 1L << 0;
 
 /** TXN format */
 constexpr const ulonglong IFT_TXN = 1L << 1;
 
+/** PANDA page type */
+constexpr uint16_t PANDA_PAGE_TYPE = 40;
+
 /**
   Index external DDL policy like GPP info.
 */
 class Index_policy {
  public:
-  Index_policy() : m_inited(false), m_gpp(0) {}
+  Index_policy()
+      : m_inited(false), m_gpp(0), m_page_type(1 /*FIL_PAGE_TYPE_UNUSED*/) {}
 
   bool has_gpp() const { return m_gpp; }
 
+  uint16_t page_type() const { return m_page_type; }
+
+  /**
+   * Initializes the Index_policy with options based on the ddl policy and the
+   * table/index information.
+   * @param[in]     ddl_policy DDL policy.
+   * @param[in]     table dict table.
+   * @param[in]     index dict index.
+   */
   void create(Ha_ddl_policy *ddl_policy, const dict_table_t *table,
               const dict_index_t *index);
 
-  void restore(const dd::Properties &options);
+  void restore(const dd::Properties &options,
+               const dd::Properties &se_private_data);
 
   bool inited() const { return m_inited; }
 
  private:
   bool m_inited;
   unsigned int m_gpp : 1;
+  /* Expected or real page type. Currently, only FIL_PAGE_INDEX_PANDA and
+   * FIL_PAGE_TYPE_UNUSED can be used.*/
+  uint16_t m_page_type;
 };
 
 typedef std::vector<Index_policy> Indexes_policy;
@@ -126,6 +150,8 @@ class Ha_ddl_policy {
 
   bool should_inherit() const { return m_inherit; }
 
+  bool hint_panda() const;
+
  private:
   /** ------Table options------- */
   /** Hint flashback area. */
@@ -134,6 +160,8 @@ class Ha_ddl_policy {
   /** ------Index options------- */
   /** Hint GPP */
   unsigned int m_hint_gpp : 1;
+  /** Hint PANDA */
+  bool m_hint_panda;
 
   /** Indicates whether a partitioned table should inherit table options from
    * the parent table */

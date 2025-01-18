@@ -29,6 +29,7 @@ Copyright (c) 2018, 2021, Alibaba and/or its affiliates. All rights reserved.
 #include "btr0pcur.h"
 #include "buf0buf.h"
 #include "lizard0dbg.h"
+#include "lizard0dict0mem.h"
 #include "lizard0mon.h"
 #include "lizard0row.h"
 #include "lizard0undo.h"
@@ -59,6 +60,11 @@ bool trx_search_tcn(txn_rec_t *txn_rec, txn_status_t *txn_status) {
   Cache_tcn *cont = nullptr;
   ut_ad(txn_rec && txn_status);
 
+  /* Disable tcn cache for stress test of panda index.*/
+  if (lizard::inject_stress_test_for_panda) {
+    return false;
+  }
+
   switch (srv_tcn_cache_level) {
     case NONE_LEVEL:
       return false;
@@ -82,11 +88,11 @@ bool trx_search_tcn(txn_rec_t *txn_rec, txn_status_t *txn_status) {
 
       ut_ad(txn_rec->is_whole_committed());
 
-      TCN_CACHE_AGGR(srv_tcn_cache_level, HIT);
+      tcn_cache_stat(true);
       return true;
     }
   }
-  TCN_CACHE_AGGR(srv_tcn_cache_level, MISS);
+  tcn_cache_stat(false);
   return false;
 }
 
@@ -114,7 +120,6 @@ void trx_cache_tcn(const txn_rec_t &txn_rec, const txn_status_t &status) {
   if (cont) {
     tcn_t value(txn_rec, status);
     cont->insert(value);
-    TCN_CACHE_AGGR(srv_tcn_cache_level, EVICT);
   }
 }
 
@@ -148,7 +153,6 @@ void trx_cache_tcn(const trx_t *trx, bool serialised) {
       tcn_t value(trx->id, trx->txn_desc.cmmt, trx->txn_desc.undo_ptr,
                   txn_status_t::COMMITTED);
       cont->insert(value);
-      TCN_CACHE_AGGR(srv_tcn_cache_level, EVICT);
     }
   }
 }

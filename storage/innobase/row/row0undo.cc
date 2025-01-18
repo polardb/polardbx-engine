@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fsp0fsp.h"
 #include "ha_prototypes.h"
 #include "mach0data.h"
+#include "mysqld_error.h"
 #include "que0que.h"
 #include "row0mysql.h"
 #include "row0row.h"
@@ -172,6 +173,7 @@ bool row_undo_search_clust_to_pcur(
   rec_offs_init(offsets_);
 
   ut_ad(!node->table->skip_alter_undo);
+  ut_ad(node->layout == TL_CLOVER);
 
   mtr_start(&mtr);
   dict_disable_redo_if_temporary(node->table, &mtr);
@@ -191,6 +193,14 @@ bool row_undo_search_clust_to_pcur(
                             UT_LOCATION_HERE, &heap);
 
   found = row_get_rec_roll_ptr(rec, clust_index, offsets) == node->roll_ptr;
+
+#ifdef UNIV_DEBUG
+  if (!found) {
+    lizard_info(ER_LIZARD) << "Ignore clust undo record due to not find a "
+                              "record that matching roll_ptr, table_name="
+                           << node->table->name.m_name;
+  }
+#endif
 
   if (found) {
     ut_ad(row_get_rec_trx_id(rec, clust_index, offsets) == node->trx->id);
@@ -341,7 +351,7 @@ void row_convert_impl_to_expl_if_needed(btr_cur_t *cursor, undo_node_t *node) {
   if (heap_no != PAGE_HEAP_NO_SUPREMUM && !dict_index_is_spatial(index) &&
       !index->table->is_temporary() && !index->table->is_intrinsic()) {
     lock_rec_convert_impl_to_expl(block, rec, index,
-                                  Rec_offsets().compute(rec, index));
+                                  Rec_offsets().compute(rec, index), node->trx);
   }
 }
 
@@ -363,6 +373,12 @@ que_thr_t *row_undo_step(que_thr_t *thr) /*!< in: query thread */
   node = static_cast<undo_node_t *>(thr->run_node);
 
   ut_ad(que_node_get_type(node) == QUE_NODE_UNDO);
+  node->layout = TL_NONE;
+  node->is_rlog = false;
+  node->index_id = 0;
+  node->found_panda = false;
+  node->row = nullptr;
+  node->ref = nullptr;
 
   err = row_undo(node, thr);
 

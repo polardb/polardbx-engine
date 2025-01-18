@@ -142,6 +142,8 @@ typedef void (*purge_status_t)(lizard::purge_status_t &status);
 
 typedef void (*flush_gpp_stat_t)();
 
+typedef void (*flush_cleanout_stat_t)();
+
 typedef bool (*trx_slot_check_retention_t)();
 
 typedef bool (*has_started_mysql_trx_t)();
@@ -178,6 +180,7 @@ struct handlerton_ext {
   trunc_status_t trunc_status;
   purge_status_t purge_status;
   flush_gpp_stat_t flush_gpp_stat;
+  flush_cleanout_stat_t flush_cleanout_stat;
   trx_slot_check_retention_t trx_slot_check_retention;
   has_started_mysql_trx_t has_started_mysql_trx;
 };

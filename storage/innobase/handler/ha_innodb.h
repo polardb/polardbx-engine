@@ -280,7 +280,8 @@ class ha_innobase : public handler {
   @param                reset           reset counters
   @retval               true            an error occurred
   @retval               false           success */
-  bool get_se_private_data(dd::Table *dd_table, bool reset) override;
+  bool get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
+                           dd::Table *dd_table, bool reset) override;
 
   /** Add hidden columns and indexes to an InnoDB table definition.
   @param[in,out]        dd_table        data dictionary cache object

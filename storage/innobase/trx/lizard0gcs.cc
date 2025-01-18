@@ -85,10 +85,6 @@ void gcs_init() {
   /** Promise here didn't have any active trx */
   ut_ad(trx_sys == nullptr || UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
 
-  /** Attention: it's monitor metrics, didn't promise accuration */
-  gcs->txn_undo_log_free_list_len = 0;
-  gcs->txn_undo_log_cached = 0;
-
   UT_LIST_INIT(gcs->serialisation_list_scn);
 
   mutex_create(LATCH_ID_SCN_LIST, &gcs->m_scn_list_mutex);

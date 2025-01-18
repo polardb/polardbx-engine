@@ -83,6 +83,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0page.h"
 #include "lizard0row0gpp.h"
+#include "lizard0row0upd.h"
 
 #ifndef UNIV_HOTBACKUP
 /* What kind of latch and lock can we assume when the control comes to
@@ -342,7 +343,7 @@ void row_upd_index_entry_sys_field(dtuple_t *entry, dict_index_t *index,
   byte *field;
   ulint pos;
 
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
 
   pos = index->get_sys_col_pos(type);
 
@@ -554,10 +555,10 @@ void row_upd_rec_in_place(
 }
 
 #ifndef UNIV_HOTBACKUP
-byte *row_upd_write_sys_vals_to_log(dict_index_t *index, trx_id_t trx_id,
+byte *row_upd_write_sys_vals_to_log(const dict_index_t *index, trx_id_t trx_id,
                                     roll_ptr_t roll_ptr, byte *log_ptr,
                                     mtr_t *mtr [[maybe_unused]]) {
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(mtr);
 
   log_ptr +=
@@ -787,7 +788,7 @@ upd_t *row_upd_build_sec_rec_difference_binary(
 
   n_diff = 0;
 
-  for (i = 0; i < lizard::row_upd_dtuple_get_ordered_n_fields(entry, index);
+  for (i = 0; i < lizard::row_upd_dtuple_get_user_n_fields(entry, index);
        i++) {
     data = rec_get_nth_field(index, rec, offsets, i, &len);
 
@@ -1191,7 +1192,7 @@ void row_upd_index_replace_new_col_vals_index_pos(dtuple_t *entry,
  entry given.
 @param[in,out] entry Index entry where replaced; the clustered index record must
 be covered by a lock or a page latch to prevent deletion (rollback or purge)
-@param[in] index Index; note that this may also be a non-clustered index
+@param[in] index Index; must be a clustered index or a panda index
 @param[in] update An update vector built for the clustered index so that the
 field number in an upd_field is the clustered index position
 @param[in] heap Memory heap for allocating and copying the new values */
@@ -1199,10 +1200,10 @@ void row_upd_index_replace_new_col_vals(dtuple_t *entry,
                                         const dict_index_t *index,
                                         const upd_t *update, mem_heap_t *heap) {
   ulint i;
-  const dict_index_t *clust_index = index->table->first_index();
   const page_size_t &page_size = dict_table_page_size(index->table);
 
   ut_ad(!index->table->skip_alter_undo);
+  ut_ad(index->is_clustered() || index->is_panda());
 
   dtuple_set_info_bits(entry, update->info_bits);
 
@@ -1218,8 +1219,8 @@ void row_upd_index_replace_new_col_vals(dtuple_t *entry,
 
       uf = upd_get_field_by_field_no(update, vcol->v_pos, true);
     } else {
-      uf = upd_get_field_by_field_no(
-          update, dict_col_get_clust_pos(col, clust_index), false);
+      uf = upd_get_field_by_field_no(update, dict_col_get_index_pos(col, index),
+                                     false);
     }
 
     if (uf) {
@@ -2012,6 +2013,7 @@ static inline dberr_t row_upd_del_one_multi_sec_index_entry(dict_index_t *index,
   const rec_t *rec;
   ulint mode;
   ulint flags = 0;
+  txn_layout_t layout;
   dberr_t err = DB_SUCCESS;
   enum row_search_result search_result;
   ut_d(trx_t *trx = thr_get_trx(thr));
@@ -2038,6 +2040,7 @@ static inline dberr_t row_upd_del_one_multi_sec_index_entry(dict_index_t *index,
     flags |= BTR_NO_LOCKING_FLAG;
     mtr.set_log_mode(MTR_LOG_NO_REDO);
   }
+  layout = lizard::dict_index_txn_layout(index);
 
   /* Set the query thread, so that ibuf_insert_low() will be
   able to invoke thd_get_trx(). */
@@ -2079,7 +2082,8 @@ static inline dberr_t row_upd_del_one_multi_sec_index_entry(dict_index_t *index,
       delete marked if we return after a lock wait in
       row_ins_sec_index_entry() afterwards */
       if (!rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
-        err = btr_cur_del_mark_set_sec_rec(flags, btr_cur, true, thr, &mtr);
+        err = btr_cur_del_mark_set_sec_rec(flags, layout, btr_cur, true, thr,
+                                           &mtr);
         if (err != DB_SUCCESS) {
           break;
         }
@@ -2167,6 +2171,7 @@ func_exit:
   return (err);
 }
 
+
 /** Updates a secondary index entry of a row.
 @param[in]      node            row update node
 @param[in]      old_entry       the old entry to search, or nullptr then it
@@ -2188,6 +2193,7 @@ code or DB_LOCK_WAIT */
   trx_t *trx = thr_get_trx(thr);
   ulint mode;
   ulint flags = 0;
+  txn_layout_t layout;
   enum row_search_result search_result;
 
   ut_ad(trx->id != 0);
@@ -2225,6 +2231,8 @@ code or DB_LOCK_WAIT */
   if (entry == nullptr) {
     entry = row_build_index_entry(node->row, node->ext, index, heap);
     ut_a(entry);
+
+    lizard::row_search_entry_adjust_cmp_fields(index, entry);
   }
 
   if (!index->table->is_intrinsic()) {
@@ -2243,10 +2251,14 @@ code or DB_LOCK_WAIT */
   if (index->table->is_temporary()) {
     flags |= BTR_NO_LOCKING_FLAG;
     mtr.set_log_mode(MTR_LOG_NO_REDO);
+  }
 
-    if (index->table->is_intrinsic()) {
-      flags |= BTR_NO_UNDO_LOG_FLAG;
-    }
+  if (index->table->is_intrinsic()) {
+    layout = TL_NONE;
+    flags |= BTR_NO_UNDO_LOG_FLAG;
+  } else {
+    layout = lizard::dict_index_txn_layout(index);
+    flags |= ((layout != TL_BAMBOO) ? BTR_NO_UNDO_LOG_FLAG : 0);
   }
 
   if (!index->is_committed()) {
@@ -2263,15 +2275,21 @@ code or DB_LOCK_WAIT */
         break;
       case ONLINE_INDEX_CREATION:
         /* Log a DELETE and optionally INSERT. */
-        row_log_online_op(index, entry, 0);
+        lizard::btr_cur_rlog_delete(index, trx, entry, flags, layout);
 
         if (!node->is_delete) {
           mem_heap_empty(heap);
           entry =
               row_build_index_entry(node->upd_row, node->upd_ext, index, heap);
+          /** Set trx id for secondary indexes with sys fields. */
+          if (layout != TL_NONE) {
+            ut_ad(layout == TL_BAMBOO);
+            row_upd_index_entry_sys_field(entry, index, DATA_TRX_ID, trx->id);
+          }
           ut_a(entry);
-          row_log_online_op(index, entry, trx->id);
+          lizard::btr_cur_rlog_insert(index, trx, entry, flags, layout);
         }
+
         [[fallthrough]];
       case ONLINE_INDEX_ABORTED:
       case ONLINE_INDEX_ABORTED_DROPPED:
@@ -2368,7 +2386,8 @@ code or DB_LOCK_WAIT */
       delete marked if we return after a lock wait in
       row_ins_sec_index_entry() below */
       if (!rec_get_deleted_flag(rec, dict_table_is_comp(index->table))) {
-        err = btr_cur_del_mark_set_sec_rec(flags, btr_cur, true, thr, &mtr);
+        err = btr_cur_del_mark_set_sec_rec(flags, layout, btr_cur, true, thr,
+                                           &mtr);
         if (err != DB_SUCCESS) {
           break;
         }
@@ -2406,6 +2425,12 @@ code or DB_LOCK_WAIT */
   /* Lizard-4.0: verify gpp_no is valid. */
   lizard_row_upd_sec_assert_gpp_no(node, index, entry, node->upd_row);
 
+  /** Set trx id for secondary indexes with sys fields. */
+  if (layout != TL_NONE) {
+    ut_ad(layout == TL_BAMBOO);
+    row_upd_index_entry_sys_field(entry, index, DATA_TRX_ID, trx->id);
+  }
+
   /* Insert new index entry */
   err = row_ins_sec_index_entry(index, entry, thr, false);
 
@@ -2423,6 +2448,15 @@ code or DB_LOCK_WAIT */
 [[nodiscard]] static inline dberr_t row_upd_sec_index_entry(upd_node_t *node,
                                                             que_thr_t *thr) {
   return (row_upd_sec_index_entry_low(node, nullptr, thr));
+}
+
+[[nodiscard]] static inline dberr_t row_upd_sec_index_entry_general(
+    upd_node_t *node, que_thr_t *thr, bool change_ord_field) {
+  if (lizard::row_upd_panda_only_pk_changed(node, change_ord_field)) {
+    return lizard::row_upd_panda_only_pk(node, thr);
+  } else {
+    return row_upd_sec_index_entry(node, thr);
+  }
 }
 
 /** Delete secondary index entries of a row, when the index is built on
@@ -2483,10 +2517,16 @@ func_exit:
 
   bool non_mv_upd = false;
 
-  if (node->state == UPD_NODE_UPDATE_ALL_SEC ||
-      row_upd_changes_ord_field_binary(
-          node->index, node->update, thr, node->row, node->ext,
-          (node->index->is_multi_value() ? &non_mv_upd : nullptr))) {
+  bool change_ord_field;
+  if (node->is_delete) {
+    change_ord_field = false;
+  } else {
+    change_ord_field = row_upd_changes_ord_field_binary(
+        node->index, node->update, thr, node->row, node->ext,
+        (node->index->is_multi_value() ? &non_mv_upd : nullptr));
+  }
+
+  if (node->state == UPD_NODE_UPDATE_ALL_SEC || change_ord_field) {
     if (node->index->is_multi_value()) {
       if (node->is_delete) {
         return (row_upd_del_multi_sec_index_entry(node, thr));
@@ -2495,11 +2535,29 @@ func_exit:
             node, thr, (node->state == UPD_NODE_UPDATE_ALL_SEC || non_mv_upd)));
       }
     } else {
-      return (row_upd_sec_index_entry(node, thr));
+      return (row_upd_sec_index_entry_general(node, thr, change_ord_field));
     }
   }
 
   return (DB_SUCCESS);
+
+  // if (node->state == UPD_NODE_UPDATE_ALL_SEC ||
+  //     row_upd_changes_ord_field_binary(
+  //         node->index, node->update, thr, node->row, node->ext,
+  //         (node->index->is_multi_value() ? &non_mv_upd : nullptr))) {
+  //   if (node->index->is_multi_value()) {
+  //     if (node->is_delete) {
+  //       return (row_upd_del_multi_sec_index_entry(node, thr));
+  //     } else {
+  //       return (row_upd_multi_sec_index_entry(
+  //           node, thr, (node->state == UPD_NODE_UPDATE_ALL_SEC || non_mv_upd)));
+  //     }
+  //   } else {
+  //     return (row_upd_sec_index_entry(node, thr));
+  //   }
+  // }
+
+  // return (DB_SUCCESS);
 }
 
 /** Mark non-updated off-page columns inherited when the primary key is
@@ -2589,13 +2647,14 @@ static inline bool row_upd_clust_rec_by_insert_inherit(
  @return DB_SUCCESS if operation successfully completed, else error
  code or DB_LOCK_WAIT */
 [[nodiscard]] static dberr_t row_upd_clust_rec_by_insert(
-    ulint flags,         /*!< in: undo logging and locking flags */
-    upd_node_t *node,    /*!< in/out: row update node */
-    dict_index_t *index, /*!< in: clustered index of the record */
-    que_thr_t *thr,      /*!< in: query thread */
-    bool referenced,     /*!< in: true if index may be referenced in
-                       a foreign key constraint */
-    mtr_t *mtr)          /*!< in/out: mtr; gets committed here */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    upd_node_t *node,           /*!< in/out: row update node */
+    dict_index_t *index,        /*!< in: clustered index of the record */
+    que_thr_t *thr,             /*!< in: query thread */
+    bool referenced,            /*!< in: true if index may be referenced in
+                              a foreign key constraint */
+    mtr_t *mtr)                 /*!< in/out: mtr; gets committed here */
 {
   mem_heap_t *heap;
   btr_pcur_t *pcur;
@@ -2652,9 +2711,9 @@ static inline bool row_upd_clust_rec_by_insert_inherit(
         goto check_fk;
       }
 
-      err =
-          btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur), rec,
-                                         index, offsets, thr, node->row, mtr);
+      err = btr_cur_del_mark_set_clust_rec(flags, layout,
+                                           btr_cur_get_block(btr_cur), rec,
+                                           index, offsets, thr, node->row, mtr);
       if (err != DB_SUCCESS) {
       err_exit:
         mtr_commit(mtr);
@@ -2793,10 +2852,11 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
  @return DB_SUCCESS if operation successfully completed, else error
  code or DB_LOCK_WAIT */
 [[nodiscard]] static dberr_t row_upd_clust_rec(
-    ulint flags,         /*!< in: undo logging and locking flags */
-    upd_node_t *node,    /*!< in: row update node */
-    dict_index_t *index, /*!< in: clustered index */
-    ulint *offsets,      /*!< in: rec_get_offsets() on node->pcur */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    upd_node_t *node,           /*!< in: row update node */
+    dict_index_t *index,        /*!< in: clustered index */
+    ulint *offsets,             /*!< in: rec_get_offsets() on node->pcur */
     mem_heap_t **offsets_heap,
     /*!< in/out: memory heap, can be emptied */
     que_thr_t *thr, /*!< in: query thread */
@@ -2819,7 +2879,7 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
   pcur = node->pcur;
   btr_cur = pcur->get_btr_cur();
 
-  assert_lizard_page_attributes(btr_cur_get_page(btr_cur), index);
+  assert_page_txn_attributes(btr_cur_get_page(btr_cur), index);
 
   ut_ad(btr_cur->index == index);
   ut_ad(!rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
@@ -2846,12 +2906,12 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
   record to update */
 
   if (node->cmpl_info & UPD_NODE_NO_SIZE_CHANGE) {
-    err = btr_cur_update_in_place(flags | BTR_NO_LOCKING_FLAG, btr_cur, offsets,
-                                  node->update, node->cmpl_info, thr,
+    err = btr_cur_update_in_place(flags | BTR_NO_LOCKING_FLAG, layout, btr_cur,
+                                  offsets, node->update, node->cmpl_info, thr,
                                   thr_get_trx(thr)->id, mtr);
   } else {
     err = btr_cur_optimistic_update(
-        flags | BTR_NO_LOCKING_FLAG, btr_cur, &offsets, offsets_heap,
+        flags | BTR_NO_LOCKING_FLAG, layout, btr_cur, &offsets, offsets_heap,
         node->update, node->cmpl_info, thr, thr_get_trx(thr)->id, mtr);
   }
 
@@ -2899,9 +2959,9 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
   }
 
   err = btr_cur_pessimistic_update(
-      flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_POS_FLAG, btr_cur, &offsets,
-      offsets_heap, heap, &big_rec, node->update, node->cmpl_info, thr, trx_id,
-      trx->undo_no, mtr);
+      flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_POS_FLAG, layout, btr_cur,
+      &offsets, offsets_heap, heap, &big_rec, node->update, node->cmpl_info,
+      thr, trx_id, trx->undo_no, mtr);
   if (big_rec) {
     ut_a(err == DB_SUCCESS);
 
@@ -2951,12 +3011,13 @@ func_exit:
 /** Delete marks a clustered index record.
  @return DB_SUCCESS if operation successfully completed, else error code */
 [[nodiscard]] static dberr_t row_upd_del_mark_clust_rec(
-    ulint flags,         /*!< in: undo logging and locking flags */
-    upd_node_t *node,    /*!< in: row update node */
-    dict_index_t *index, /*!< in: clustered index */
-    ulint *offsets,      /*!< in/out: rec_get_offsets() for the
-                         record under the cursor */
-    que_thr_t *thr,      /*!< in: query thread */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    upd_node_t *node,           /*!< in: row update node */
+    dict_index_t *index,        /*!< in: clustered index */
+    ulint *offsets,             /*!< in/out: rec_get_offsets() for the
+                                record under the cursor */
+    que_thr_t *thr,             /*!< in: query thread */
     bool referenced,
     /*!< in: true if index may be referenced in
     a foreign key constraint */
@@ -2982,9 +3043,9 @@ func_exit:
   /* Mark the clustered index record deleted; we do not have to check
   locks, because we assume that we have an x-lock on the record */
 
-  err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur),
-                                       btr_cur_get_rec(btr_cur), index, offsets,
-                                       thr, node->row, mtr);
+  err = btr_cur_del_mark_set_clust_rec(
+      flags, layout, btr_cur_get_block(btr_cur), btr_cur_get_rec(btr_cur),
+      index, offsets, thr, node->row, mtr);
   if (err == DB_SUCCESS && referenced) {
     /* NOTE that the following call loses the position of pcur ! */
 
@@ -3013,6 +3074,7 @@ func_exit:
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
   ulint *offsets;
   ulint flags = 0;
+  txn_layout_t layout;
   trx_t *const trx = thr_get_trx(thr);
   rec_offs_init(offsets_);
 
@@ -3035,10 +3097,12 @@ func_exit:
   if (index->table->is_temporary()) {
     flags |= BTR_NO_LOCKING_FLAG;
     mtr.set_log_mode(MTR_LOG_NO_REDO);
-
-    if (index->table->is_intrinsic()) {
-      flags |= BTR_NO_UNDO_LOG_FLAG;
-    }
+  }
+  if (index->table->is_intrinsic()) {
+    flags |= BTR_NO_UNDO_LOG_FLAG;
+    layout = TL_NONE;
+  } else {
+    layout = lizard::dict_index_txn_layout(index);
   }
 
   /* If the restoration does not succeed, then the same
@@ -3093,7 +3157,7 @@ func_exit:
   /* NOTE: the following function calls will also commit mtr */
 
   if (node->is_delete) {
-    err = row_upd_del_mark_clust_rec(flags, node, index, offsets, thr,
+    err = row_upd_del_mark_clust_rec(flags, layout, node, index, offsets, thr,
                                      referenced, &mtr);
 
     if (err == DB_SUCCESS) {
@@ -3115,7 +3179,8 @@ func_exit:
   }
 
   if (node->cmpl_info & UPD_NODE_NO_ORD_CHANGE) {
-    err = row_upd_clust_rec(flags, node, index, offsets, &heap, thr, &mtr);
+    err = row_upd_clust_rec(flags, layout, node, index, offsets, &heap, thr,
+                            &mtr);
     goto exit_func;
   }
 
@@ -3135,8 +3200,8 @@ func_exit:
     choosing records to update. MySQL solves now the problem
     externally! */
 
-    err =
-        row_upd_clust_rec_by_insert(flags, node, index, thr, referenced, &mtr);
+    err = row_upd_clust_rec_by_insert(flags, layout, node, index, thr,
+                                      referenced, &mtr);
 
     if (err != DB_SUCCESS) {
       goto exit_func;
@@ -3144,7 +3209,8 @@ func_exit:
 
     node->state = UPD_NODE_UPDATE_ALL_SEC;
   } else {
-    err = row_upd_clust_rec(flags, node, index, offsets, &heap, thr, &mtr);
+    err = row_upd_clust_rec(flags, layout, node, index, offsets, &heap, thr,
+                            &mtr);
 
     if (err != DB_SUCCESS) {
       goto exit_func;
@@ -3526,3 +3592,4 @@ const Binary_diff_vector *upd_t::get_binary_diff_by_field_no(
   return (mysql_table->get_binary_diffs(fld));
 }
 #endif /* !UNIV_HOTBACKUP */
+

@@ -72,5 +72,6 @@ typedef int (*Fill_func)(THD *thd, const dict_index_t *index,
 
 int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
                                 Fill_func fill_func,
-                                bool exclude_partition_index);
+                                bool exclude_partition_index,
+                                bool exclude_dd_table);
 #endif /* i_s_h */

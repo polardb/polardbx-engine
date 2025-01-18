@@ -5,6 +5,13 @@
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
 
+--disable_query_log
+# Panda indexes don't hold gap locks.
+--let $orig_opt_index_format_panda_enabled = `SELECT @@global.opt_index_format_panda_enabled`
+SET opt_index_format_panda_enabled=off;
+SET GLOBAL opt_index_format_panda_enabled=off;
+--enable_query_log
+
 let i=0;
 
 while ($i <=2 )
@@ -297,3 +304,7 @@ SET GLOBAL innodb_lock_wait_timeout = @old_innodb_lock_wait_timeout;
 --disable_warnings
 SET DEBUG_SYNC= 'RESET';
 --enable_warnings
+--disable_query_log
+--eval SET opt_index_format_panda_enabled= $orig_opt_index_format_panda_enabled
+--eval SET GLOBAL opt_index_format_panda_enabled= $orig_opt_index_format_panda_enabled
+--enable_query_log

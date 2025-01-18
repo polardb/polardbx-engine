@@ -53,8 +53,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <assert.h>
 
-#include "lizard0mtr0log.h"
-#include "lizard0txn0rec.h"
 #include "my_dbug.h"
 
 #ifndef UNIV_HOTBACKUP
@@ -94,9 +92,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0btr0cur.h"
 #include "lizard0dict.h"
+#include "lizard0fil0types.h"
+#include "lizard0mtr0log.h"
 #include "lizard0page.h"
 #include "lizard0row.h"
+#include "lizard0row0bamboo.h"
+#include "lizard0row0clover.h"
+#include "lizard0txn0rec.h"
 #include "lizard0undo.h"
 
 #include <array>
@@ -704,6 +708,7 @@ void btr_cur_search_to_nth_level(
   ut_ad(level == 0 || mode == PAGE_CUR_LE || RTREE_SEARCH_MODE(mode));
   ut_ad(dict_index_check_search_tuple(index, tuple));
   ut_ad(!dict_index_is_ibuf(index) || ibuf_inside(mtr));
+  ut_ad(lizard::row_index_entry_cmp_fields_check(index, tuple));
 
   UNIV_MEM_INVALID(&cursor->up_match, sizeof cursor->up_match);
   UNIV_MEM_INVALID(&cursor->up_bytes, sizeof cursor->up_bytes);
@@ -1103,6 +1108,7 @@ retry_page_get:
   }
 
   ut_ad(fil_page_index_page_check(page));
+  ut_a(lizard::dict_index_fil_page_check(index, page));
   ut_ad(index->id == btr_page_get_index_id(page));
 
   if (UNIV_UNLIKELY(height == ULINT_UNDEFINED)) {
@@ -2323,7 +2329,7 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
 
   DBUG_EXECUTE_IF("test_index_is_unavailable", return (false););
 
-  if (index->page == FIL_NULL) {
+  if (index->page_no() == FIL_NULL) {
     /* Since we don't hold index lock until just now, the index
     could be modified by others, for example, if this is a
     statistics updater for referenced table, it could be marked
@@ -2557,16 +2563,17 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
 /** For an insert, checks the locks and does the undo logging if desired.
  @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number */
 [[nodiscard]] static inline dberr_t btr_cur_ins_lock_and_undo(
-    ulint flags,       /*!< in: undo logging and locking flags: if
-                       not zero, the parameters index and thr
-                       should be specified */
-    btr_cur_t *cursor, /*!< in: cursor on page after which to insert */
-    dtuple_t *entry,   /*!< in/out: entry to insert */
-    que_thr_t *thr,    /*!< in: query thread or NULL */
-    mtr_t *mtr,        /*!< in/out: mini-transaction */
-    bool *inherit)     /*!< out: true if the inserted new record maybe
-                        should inherit LOCK_GAP type locks from the
-                        successor record */
+    ulint flags,                /*!< in: undo logging and locking flags: if
+                                not zero, the parameters index and thr
+                                should be specified */
+    const txn_layout_t &layout, /*!<in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor on page after which to insert */
+    dtuple_t *entry,            /*!< in/out: entry to insert */
+    que_thr_t *thr,             /*!< in: query thread or NULL */
+    mtr_t *mtr,                 /*!< in/out: mini-transaction */
+    bool *inherit)              /*!< out: true if the inserted new record maybe
+                                 should inherit LOCK_GAP type locks from the
+                                 successor record */
 {
   dict_index_t *index;
   dberr_t err = DB_SUCCESS;
@@ -2604,14 +2611,17 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
     }
   }
 
-  if (err != DB_SUCCESS || !index->is_clustered() ||
+  /* Skip generating undo for normal secondary indexes and insert buffer trees.
+   */
+  if (err != DB_SUCCESS || (!index->is_clustered() && !index->is_panda()) ||
       dict_index_is_ibuf(index)) {
     return (err);
   }
 
-  err = trx_undo_report_row_operation(flags, TRX_UNDO_INSERT_OP, thr, index,
-                                      entry, nullptr, 0, nullptr, nullptr,
-                                      &roll_ptr);
+  err = trx_undo_report_row_operation(
+      flags, layout, TRX_UNDO_INSERT_OP, thr ? thr_get_trx(thr) : nullptr,
+      index, entry, nullptr, 0, nullptr, nullptr, &roll_ptr);
+
   if (err != DB_SUCCESS) {
     return (err);
   }
@@ -2641,7 +2651,8 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
 
     /** If a table is temporary, fill TXN_DESC_TEMP,
     else fill the normal scn and undo_ptr */
-    lizard::row_upd_index_entry_lizard_field(thr, entry, index);
+    ut_ad(txn_layout_is_arranged(layout));
+    lizard::row_upd_index_entry_txn_field(thr, entry, index, layout);
   }
 
   return (DB_SUCCESS);
@@ -2678,26 +2689,27 @@ static void btr_cur_prefetch_siblings(buf_block_t *block) {
  prevent trying to split a page with just one record.
  @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number */
 dberr_t btr_cur_optimistic_insert(
-    ulint flags,         /*!< in: undo logging and locking flags: if not
-                         zero, the parameters index and thr should be
-                         specified */
-    btr_cur_t *cursor,   /*!< in: cursor on page after which to insert;
-                         cursor stays valid */
-    ulint **offsets,     /*!< out: offsets on *rec */
-    mem_heap_t **heap,   /*!< in/out: pointer to memory heap, or NULL */
-    dtuple_t *entry,     /*!< in/out: entry to insert */
-    rec_t **rec,         /*!< out: pointer to inserted record if
-                         succeed */
-    big_rec_t **big_rec, /*!< out: big rec vector whose fields have to
-                         be stored externally by the caller, or
-                         NULL */
-    que_thr_t *thr,      /*!< in: query thread or NULL */
-    mtr_t *mtr)          /*!< in/out: mini-transaction;
-                         if this function returns DB_SUCCESS on
-                         a leaf page of a secondary index in a
-                         compressed tablespace, the caller must
-                         mtr_commit(mtr) before latching
-                         any further pages */
+    ulint flags,                /*!< in: undo logging and locking flags: if not
+                                zero, the parameters index and thr should be
+                                specified */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor on page after which to insert;
+                                cursor stays valid */
+    ulint **offsets,            /*!< out: offsets on *rec */
+    mem_heap_t **heap,          /*!< in/out: pointer to memory heap, or NULL */
+    dtuple_t *entry,            /*!< in/out: entry to insert */
+    rec_t **rec,                /*!< out: pointer to inserted record if
+                                succeed */
+    big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
+                                be stored externally by the caller, or
+                                NULL */
+    que_thr_t *thr,             /*!< in: query thread or NULL */
+    mtr_t *mtr)                 /*!< in/out: mini-transaction;
+                                if this function returns DB_SUCCESS on
+                                a leaf page of a secondary index in a
+                                compressed tablespace, the caller must
+                                mtr_commit(mtr) before latching
+                                any further pages */
 {
   big_rec_t *big_rec_vec = nullptr;
   dict_index_t *index;
@@ -2825,12 +2837,14 @@ dberr_t btr_cur_optimistic_insert(
     const rec_t *page_cursor_rec = page_cur_get_rec(page_cursor);
 
     if (index->table->is_intrinsic()) {
+      ut_ad(layout == TL_NONE);
       *rec = page_cur_tuple_direct_insert(page_cursor, entry, index, mtr,
                                           rec_size);
     } else {
       /* Check locks and write to the undo log,
       if specified */
-      err = btr_cur_ins_lock_and_undo(flags, cursor, entry, thr, mtr, &inherit);
+      err = btr_cur_ins_lock_and_undo(flags, layout, cursor, entry, thr, mtr,
+                                      &inherit);
 
       if (err != DB_SUCCESS) {
         goto fail_err;
@@ -2937,7 +2951,7 @@ dberr_t btr_cur_optimistic_insert(
 
   *big_rec = big_rec_vec;
 
-  lizard::commit_cleanout_collect(thr, cursor, *rec, flags);
+  lizard::commit_cleanout_collect(thr, cursor, *rec, flags, layout);
 
   return (DB_SUCCESS);
 }
@@ -2948,25 +2962,26 @@ dberr_t btr_cur_optimistic_insert(
  to brothers of page, if those brothers exist.
  @return DB_SUCCESS or error number */
 dberr_t btr_cur_pessimistic_insert(
-    uint32_t flags,      /*!< in: undo logging and locking flags: if not
-                         zero, the parameter thr should be
-                         specified; if no undo logging is specified,
-                         then the caller must have reserved enough
-                         free extents in the file space so that the
-                         insertion will certainly succeed */
-    btr_cur_t *cursor,   /*!< in: cursor after which to insert;
-                         cursor stays valid */
-    ulint **offsets,     /*!< out: offsets on *rec */
-    mem_heap_t **heap,   /*!< in/out: pointer to memory heap
-                         that can be emptied, or NULL */
-    dtuple_t *entry,     /*!< in/out: entry to insert */
-    rec_t **rec,         /*!< out: pointer to inserted record if
-                         succeed */
-    big_rec_t **big_rec, /*!< out: big rec vector whose fields have to
-                         be stored externally by the caller, or
-                         NULL */
-    que_thr_t *thr,      /*!< in: query thread or NULL */
-    mtr_t *mtr)          /*!< in/out: mini-transaction */
+    uint32_t flags,             /*!< in: undo logging and locking flags: if not
+                                zero, the parameter thr should be
+                                specified; if no undo logging is specified,
+                                then the caller must have reserved enough
+                                free extents in the file space so that the
+                                insertion will certainly succeed */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor after which to insert;
+                                cursor stays valid */
+    ulint **offsets,            /*!< out: offsets on *rec */
+    mem_heap_t **heap,          /*!< in/out: pointer to memory heap
+                                that can be emptied, or NULL */
+    dtuple_t *entry,            /*!< in/out: entry to insert */
+    rec_t **rec,                /*!< out: pointer to inserted record if
+                                succeed */
+    big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
+                                be stored externally by the caller, or
+                                NULL */
+    que_thr_t *thr,             /*!< in: query thread or NULL */
+    mtr_t *mtr)                 /*!< in/out: mini-transaction */
 {
   dict_index_t *index = cursor->index;
   big_rec_t *big_rec_vec = nullptr;
@@ -2991,7 +3006,8 @@ dberr_t btr_cur_pessimistic_insert(
 
   /* Check locks and write to undo log, if specified */
 
-  err = btr_cur_ins_lock_and_undo(flags, cursor, entry, thr, mtr, &inherit);
+  err = btr_cur_ins_lock_and_undo(flags, layout, cursor, entry, thr, mtr,
+                                  &inherit);
 
   if (err != DB_SUCCESS) {
     return (err);
@@ -3086,7 +3102,7 @@ dberr_t btr_cur_pessimistic_insert(
 
   *big_rec = big_rec_vec;
 
-  lizard::commit_cleanout_collect(thr, cursor, *rec, flags);
+  lizard::commit_cleanout_collect(thr, cursor, *rec, flags, layout);
 
   return (DB_SUCCESS);
 }
@@ -3096,20 +3112,21 @@ dberr_t btr_cur_pessimistic_insert(
 /** For an update, checks the locks and does the undo logging.
  @return DB_SUCCESS, DB_WAIT_LOCK, or error number */
 [[nodiscard]] static inline dberr_t btr_cur_upd_lock_and_undo(
-    ulint flags,          /*!< in: undo logging and locking flags */
-    btr_cur_t *cursor,    /*!< in: cursor on record to update */
-    const ulint *offsets, /*!< in: rec_get_offsets() on cursor */
-    const upd_t *update,  /*!< in: update vector */
-    ulint cmpl_info,      /*!< in: compiler info on secondary index
-                        updates */
-    que_thr_t *thr,       /*!< in: query thread
-                          (can be NULL if BTR_NO_LOCKING_FLAG) */
-    mtr_t *mtr,           /*!< in/out: mini-transaction */
-    roll_ptr_t *roll_ptr) /*!< out: roll pointer */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor on record to update */
+    const ulint *offsets,       /*!< in: rec_get_offsets() on cursor */
+    const upd_t *update,        /*!< in: update vector */
+    ulint cmpl_info,            /*!< in: compiler info on secondary index
+                              updates */
+    que_thr_t *thr,             /*!< in: query thread
+                                (can be NULL if BTR_NO_LOCKING_FLAG) */
+    mtr_t *mtr,                 /*!< in/out: mini-transaction */
+    roll_ptr_t *roll_ptr)       /*!< out: roll pointer */
 {
   dict_index_t *index;
   const rec_t *rec;
-  dberr_t err;
+  dberr_t err = DB_SUCCESS;
 
   ut_ad(thr != nullptr || (flags & BTR_NO_LOCKING_FLAG));
 
@@ -3118,39 +3135,41 @@ dberr_t btr_cur_pessimistic_insert(
 
   ut_ad(rec_offs_validate(rec, index, offsets));
 
-  if (!index->is_clustered()) {
-    ut_ad(dict_index_is_online_ddl(index) == !!(flags & BTR_CREATE_FLAG));
-
-    /* We do undo logging only when we update a clustered index
-    record */
-    return (lock_sec_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor),
-                                               rec, index, thr, mtr));
-  }
-
   /* Check if we have to wait for a lock: enqueue an explicit lock
   request if yes */
 
   if (!(flags & BTR_NO_LOCKING_FLAG)) {
-    err = lock_clust_rec_modify_check_and_lock(flags, btr_cur_get_block(cursor),
-                                               rec, index, offsets, thr);
+    if (index->is_clustered()) {
+      err = lock_clust_rec_modify_check_and_lock(
+          flags, btr_cur_get_block(cursor), rec, index, offsets, thr);
+    } else {
+      err = (lock_sec_rec_modify_check_and_lock(
+          flags, btr_cur_get_block(cursor), rec, index, thr, mtr));
+    }
     if (err != DB_SUCCESS) {
       return (err);
     }
+  }
+
+  /** Skip generating undo for normal secondary indexes. */
+  if (!index->is_clustered() && !index->is_panda()) {
+    ut_ad(dict_index_is_online_ddl(index) == !!(flags & BTR_CREATE_FLAG));
+    return err;
   }
 
   /** Lizard: Do the cleanout, thr can be NULL if BTR_NO_LOCKING_FLAG */
   if (thr != nullptr && !index->table->is_intrinsic() &&
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
     lizard::txn_rec_cleanout_when_modify(
-        thr_get_trx(thr)->id, const_cast<rec_t *>(rec), index, offsets,
+        thr_get_trx(thr)->id, const_cast<rec_t *>(rec), index, offsets, layout,
         btr_cur_get_block(cursor), mtr);
   }
 
   /* Append the info about the update in the undo log */
-
-  return (trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index,
-                                        nullptr, update, cmpl_info, rec,
-                                        offsets, roll_ptr));
+  err = trx_undo_report_row_operation(
+      flags, layout, TRX_UNDO_MODIFY_OP, thr ? thr_get_trx(thr) : nullptr,
+      index, nullptr, update, cmpl_info, rec, offsets, roll_ptr);
+  return err;
 }
 
 /** Writes a redo log record of updating a record in-place.
@@ -3161,20 +3180,34 @@ dberr_t btr_cur_pessimistic_insert(
 @param[in] trx_id Transaction id
 @param[in] roll_ptr Roll ptr
 @param[in] lizard info in the record
-@param[in] mtr Mini-transaction */
-void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
-                                 dict_index_t *index, const upd_t *update,
-                                 trx_id_t trx_id, roll_ptr_t roll_ptr,
-                                 const txn_rec_t *txn_rec, mtr_t *mtr) {
+@param[in] mtr Mini-transaction
+@param[in] layout Txn layout
+*/
+void btr_cur_update_in_place_log(ulint flags, const txn_layout_t &layout,
+                                 const rec_t *rec, dict_index_t *index,
+                                 const upd_t *update, trx_id_t trx_id,
+                                 roll_ptr_t roll_ptr, const txn_rec_t *txn_rec,
+                                 mtr_t *mtr) {
   byte *log_ptr = nullptr;
   ut_d(const page_t *page = page_align(rec));
   ut_ad(flags < 256);
   ut_ad(page_is_comp(page) == dict_table_is_comp(index->table));
 
+  size_t size = 1 + 2 + MLOG_BUF_MARGIN;
+  switch (layout) {
+    case TL_NONE: /* Normal sec index keeps same as pk. */
+    case TL_CLOVER:
+      size += REDO_SYS_FIELDS_LEN + REDO_CLOVER_FIELDS_LEN;
+      break;
+    case TL_BAMBOO:
+      size += REDO_SYS_FIELDS_LEN + REDO_BAMBOO_FIELDS_LEN;
+      break;
+    default:
+      ut_error;
+  }
+
   const bool opened = mlog_open_and_write_index(
-      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
-      1 + REDO_SYS_FIELDS_LEN + REDO_LIZARD_FIELDS_LEN + 2 + MLOG_BUF_MARGIN,
-      log_ptr);
+      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE, size, log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
@@ -3190,34 +3223,43 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
   mach_write_to_1(log_ptr, flags);
   log_ptr++;
 
-  if (index->is_clustered()) {
-    log_ptr =
-        row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
+  switch (layout) {
+    case TL_CLOVER:
+      log_ptr =
+          row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
+      log_ptr = lizard::row_upd_write_clover_vals_to_log(index, txn_rec,
+                                                         log_ptr, mtr);
+      break;
+    case TL_BAMBOO:
+      log_ptr =
+          row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
+      log_ptr = lizard::row_upd_write_bamboo_vals_to_log(index, txn_rec,
+                                                         log_ptr, mtr);
+      break;
+    case TL_NONE:
+      ut_ad(flags & BTR_KEEP_SYS_FLAG);
+      /* Dummy system fields for a secondary index */
+      /* TRX_ID Position */
+      log_ptr += mach_write_compressed(log_ptr, 0);
+      /* ROLL_PTR */
+      trx_write_roll_ptr(log_ptr, 0);
+      log_ptr += DATA_ROLL_PTR_LEN;
+      /* TRX_ID */
+      log_ptr += mach_u64_write_compressed(log_ptr, 0);
 
-    log_ptr =
-        lizard::row_upd_write_lizard_vals_to_log(index, txn_rec, log_ptr, mtr);
-  } else {
-    /* Dummy system fields for a secondary index */
-    /* TRX_ID Position */
-    log_ptr += mach_write_compressed(log_ptr, 0);
-    /* ROLL_PTR */
-    trx_write_roll_ptr(log_ptr, 0);
-    log_ptr += DATA_ROLL_PTR_LEN;
-    /* TRX_ID */
-    log_ptr += mach_u64_write_compressed(log_ptr, 0);
+      /* Dummy lizard fields for a secondary index */
+      /* SCN_ID Position */
+      log_ptr += mach_write_compressed(log_ptr, 0);
+      /* SCN_ID */
+      log_ptr += mach_u64_write_compressed(log_ptr, 0);
+      /* Undo Ptr */
+      lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
+      log_ptr += DATA_UNDO_PTR_LEN;
 
-    /* Dummy lizard fields for a secondary index */
-    /* SCN_ID Position */
-    log_ptr += mach_write_compressed(log_ptr, 0);
-    /* SCN_ID */
-    log_ptr += mach_u64_write_compressed(log_ptr, 0);
-    /* Undo Ptr */
-    lizard::trx_write_undo_ptr(log_ptr, (undo_ptr_t)0);
-    log_ptr += DATA_UNDO_PTR_LEN;
-
-    /* GCN ID */
-    lizard::trx_write_gcn(log_ptr, (gcn_t)0);
-    log_ptr += DATA_GCN_ID_LEN;
+      /* GCN ID */
+      lizard::trx_write_gcn(log_ptr, (gcn_t)0);
+      log_ptr += DATA_GCN_ID_LEN;
+      break;
   }
 
   mach_write_to_2(log_ptr, page_offset(rec));
@@ -3230,11 +3272,12 @@ void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
 /** Parses a redo log record of updating a record in-place.
  @return end of log record or NULL */
 byte *btr_cur_parse_update_in_place(
-    byte *ptr,                /*!< in: buffer */
-    byte *end_ptr,            /*!< in: buffer end */
-    page_t *page,             /*!< in/out: page or NULL */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-    dict_index_t *index)      /*!< in: index corresponding to page */
+    byte *ptr,                  /*!< in: buffer */
+    byte *end_ptr,              /*!< in: buffer end */
+    page_t *page,               /*!< in/out: page or NULL */
+    page_zip_des_t *page_zip,   /*!< in/out: compressed page, or NULL */
+    dict_index_t *index,        /*!< in: index corresponding to page */
+    const txn_layout_t &layout) /*!< in: txn layout */
 {
   ulint flags;
   rec_t *rec;
@@ -3257,17 +3300,29 @@ byte *btr_cur_parse_update_in_place(
   flags = mach_read_from_1(ptr);
   ptr++;
 
+  /* Parse the redo. */
   ptr = row_upd_parse_sys_vals(ptr, end_ptr, &pos, &trx_id, &roll_ptr);
+  if (ptr == nullptr) {
+    return nullptr;
+  }
+
+  switch (layout) {
+    case TL_CLOVER:
+      /* redo log of normal sec index has the same
+                               transactional cols as pk, but dummy values. */
+      ptr = lizard::row_upd_parse_clover_vals(ptr, end_ptr, &txn_pos, &scn,
+                                              &undo_ptr, &gcn);
+      break;
+    case TL_BAMBOO:
+      ptr = lizard::row_upd_parse_bamboo_vals(ptr, end_ptr, &txn_pos, &scn,
+                                              &undo_ptr);
+      break;
+    default:
+      ut_error;
+  }
 
   if (ptr == nullptr) {
     return (nullptr);
-  }
-
-  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn,
-                                          &undo_ptr, &gcn);
-
-  if (ptr == NULL) {
-    return (NULL);
   }
 
   if (end_ptr < ptr + 2) {
@@ -3296,12 +3351,26 @@ byte *btr_cur_parse_update_in_place(
   offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
                             UT_LOCATION_HERE, &heap);
 
+  /* Recover transactional fields. */
   if (!(flags & BTR_KEEP_SYS_FLAG)) {
     row_upd_rec_sys_fields_in_recovery(rec, page_zip, offsets, pos, trx_id,
                                        roll_ptr);
-
-    lizard::row_upd_rec_lizard_fields_in_recovery(rec, page_zip, index, txn_pos,
-                                                  offsets, scn, undo_ptr, gcn);
+    ut_ad(txn_layout_is_arranged(layout));
+    switch (layout) {
+      case TL_CLOVER:
+        /* Notice clustered indexes of redundant tables don't have
+         * DICT_CLUSTERED flag.
+         */
+        lizard::row_upd_rec_clover_fields_in_recovery(
+            rec, page_zip, index, txn_pos, offsets, scn, undo_ptr, gcn);
+        break;
+      case  TL_BAMBOO:
+        lizard::row_upd_rec_bamboo_fields_in_recovery(
+            rec, page_zip, index, txn_pos, offsets, scn, undo_ptr);
+        break;
+      default:
+        ut_error;
+    }
   }
 
   row_upd_rec_in_place(rec, index, offsets, update, page_zip);
@@ -3388,7 +3457,8 @@ must mtr_commit(mtr) before latching any further pages
 @retval DB_SUCCESS on success
 @retval DB_ZIP_OVERFLOW if there is not enough space left
 on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
-dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
+dberr_t btr_cur_update_in_place(ulint flags, const txn_layout_t &layout,
+                                btr_cur_t *cursor, ulint *offsets,
                                 const upd_t *update, ulint cmpl_info,
                                 que_thr_t *thr, trx_id_t trx_id, mtr_t *mtr) {
   dict_index_t *index;
@@ -3439,11 +3509,11 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     rec = btr_cur_get_rec(cursor);
   }
 
-  assert_row_lizard_valid(rec, index, offsets);
+  assert_row_txn_is_valid(rec, index, offsets, layout);
 
   /* Do lock checking and undo logging */
-  err = btr_cur_upd_lock_and_undo(flags, cursor, offsets, update, cmpl_info,
-                                  thr, mtr, &roll_ptr);
+  err = btr_cur_upd_lock_and_undo(flags, layout, cursor, offsets, update,
+                                  cmpl_info, thr, mtr, &roll_ptr);
   if (UNIV_UNLIKELY(err != DB_SUCCESS)) {
     /* We may need to update the IBUF_BITMAP_FREE
     bits after a reorganize that was done in
@@ -3455,8 +3525,9 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     row_upd_rec_sys_fields(rec, nullptr, index, offsets, thr_get_trx(thr),
                            roll_ptr);
 
-    lizard::row_upd_rec_lizard_fields(rec, NULL, index, offsets,
-                                      &(thr_get_trx(thr)->txn_desc));
+    ut_ad(txn_layout_is_arranged(layout));
+    lizard::row_upd_rec_txn_fields(rec, NULL, index, offsets, layout,
+                                   &(thr_get_trx(thr)->txn_desc));
   }
 
   was_delete_marked =
@@ -3494,11 +3565,11 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     txn_rec = {trx_id, 0, 0, 0};
   }
 
-  btr_cur_update_in_place_log(flags, rec, index, update, trx_id, roll_ptr,
-                              &txn_rec, mtr);
+  btr_cur_update_in_place_log(flags, layout, rec, index, update, trx_id,
+                              roll_ptr, &txn_rec, mtr);
 
   if (index->is_clustered() && !index->table->is_intrinsic()) {
-    assert_lizard_page_attributes(page_align(rec), index);
+    assert_page_txn_attributes(page_align(rec), index);
   }
 
   if (was_delete_marked &&
@@ -3510,7 +3581,7 @@ dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor, ulint *offsets,
     btr_ctx.unmark_extern_fields();
   }
 
-  lizard::commit_cleanout_collect(thr, cursor, rec, flags);
+  lizard::commit_cleanout_collect(thr, cursor, rec, flags, layout);
 
   ut_ad(err == DB_SUCCESS);
 
@@ -3579,10 +3650,11 @@ bool materialize_instant_default(const dict_index_t *index, const rec_t *rec) {
   return true;
 }
 
-dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
-                                  ulint **offsets, mem_heap_t **heap,
-                                  const upd_t *update, ulint cmpl_info,
-                                  que_thr_t *thr, trx_id_t trx_id, mtr_t *mtr) {
+dberr_t btr_cur_optimistic_update(ulint flags, const txn_layout_t &layout,
+                                  btr_cur_t *cursor, ulint **offsets,
+                                  mem_heap_t **heap, const upd_t *update,
+                                  ulint cmpl_info, que_thr_t *thr,
+                                  trx_id_t trx_id, mtr_t *mtr) {
   dict_index_t *index;
   page_cur_t *page_cursor;
   dberr_t err;
@@ -3639,8 +3711,8 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
     externally stored in rec or update, and there is enough space
     on the compressed page to log the update. */
 
-    return (btr_cur_update_in_place(flags, cursor, *offsets, update, cmpl_info,
-                                    thr, trx_id, mtr));
+    return (btr_cur_update_in_place(flags, layout, cursor, *offsets, update,
+                                    cmpl_info, thr, trx_id, mtr));
   }
 
   if (rec_offs_any_extern(*offsets)) {
@@ -3760,8 +3832,8 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   }
 
   /* Do lock checking and undo logging */
-  err = btr_cur_upd_lock_and_undo(flags, cursor, *offsets, update, cmpl_info,
-                                  thr, mtr, &roll_ptr);
+  err = btr_cur_upd_lock_and_undo(flags, layout, cursor, *offsets, update,
+                                  cmpl_info, thr, mtr, &roll_ptr);
   if (err != DB_SUCCESS) {
     /* We may need to update the IBUF_BITMAP_FREE
     bits after a reorganize that was done in
@@ -3788,7 +3860,8 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
 
     /** If a table is temporary, fill TXN_DESC_TEMP,
     else fill the normal scn and undo_ptr */
-    lizard::row_upd_index_entry_lizard_field(thr, new_entry, index);
+    ut_ad(txn_layout_is_arranged(layout));
+    lizard::row_upd_index_entry_txn_field(thr, new_entry, index, layout);
   }
 
   /* There are no externally stored columns in new_entry */
@@ -3801,7 +3874,7 @@ dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
   }
 
   page_cur_move_to_next(page_cursor);
-  lizard::commit_cleanout_collect(thr, cursor, rec, flags);
+  lizard::commit_cleanout_collect(thr, cursor, rec, flags, layout);
   ut_ad(err == DB_SUCCESS);
 
 func_exit:
@@ -3862,13 +3935,11 @@ static void btr_cur_pess_upd_restore_supremum(
                                        page_rec_get_heap_no(rec));
 }
 
-dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
-                                   ulint **offsets, mem_heap_t **offsets_heap,
-                                   mem_heap_t *entry_heap, big_rec_t **big_rec,
-                                   upd_t *update, ulint cmpl_info,
-                                   que_thr_t *thr, trx_id_t trx_id,
-                                   undo_no_t undo_no, mtr_t *mtr,
-                                   btr_pcur_t *pcur) {
+dberr_t btr_cur_pessimistic_update(
+    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, ulint **offsets,
+    mem_heap_t **offsets_heap, mem_heap_t *entry_heap, big_rec_t **big_rec,
+    upd_t *update, ulint cmpl_info, que_thr_t *thr, trx_id_t trx_id,
+    undo_no_t undo_no, mtr_t *mtr, btr_pcur_t *pcur) {
   DBUG_TRACE;
   big_rec_t *big_rec_vec = nullptr;
   big_rec_t *dummy_big_rec;
@@ -3914,8 +3985,8 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
         thr_get_trx(thr)->id == trx_id);
 
   err = optim_err = btr_cur_optimistic_update(
-      flags | BTR_KEEP_IBUF_BITMAP, cursor, offsets, offsets_heap, update,
-      cmpl_info, thr, trx_id, mtr);
+      flags | BTR_KEEP_IBUF_BITMAP, layout, cursor, offsets, offsets_heap,
+      update, cmpl_info, thr, trx_id, mtr);
 
   switch (err) {
     case DB_ZIP_OVERFLOW:
@@ -3994,8 +4065,8 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   }
 
   /* Do lock checking and undo logging */
-  err = btr_cur_upd_lock_and_undo(flags, cursor, *offsets, update, cmpl_info,
-                                  thr, mtr, &roll_ptr);
+  err = btr_cur_upd_lock_and_undo(flags, layout, cursor, *offsets, update,
+                                  cmpl_info, thr, mtr, &roll_ptr);
   if (err != DB_SUCCESS) {
     goto err_exit;
   }
@@ -4077,7 +4148,8 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
 
     /** If a table is temporary, fill TXN_DESC_TEMP,
     else fill the normal scn and undo_ptr */
-    lizard::row_upd_index_entry_lizard_field(thr, new_entry, index);
+    ut_ad(txn_layout_is_arranged(layout));
+    lizard::row_upd_index_entry_txn_field(thr, new_entry, index, layout);
   }
 
   if (!page_zip) {
@@ -4113,7 +4185,7 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   if (rec) {
     page_cursor->rec = rec;
 
-    lizard::commit_cleanout_collect(thr, cursor, rec, flags);
+    lizard::commit_cleanout_collect(thr, cursor, rec, flags, layout);
 
     if (!dict_table_is_locking_disabled(index->table)) {
       lock_rec_restore_from_page_infimum(btr_cur_get_block(cursor), rec, block);
@@ -4199,8 +4271,9 @@ dberr_t btr_cur_pessimistic_update(ulint flags, btr_cur_t *cursor,
   btr_cur_insert_if_possible() already failed above. */
 
   err = btr_cur_pessimistic_insert(
-      BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, cursor,
-      offsets, offsets_heap, new_entry, &rec, &dummy_big_rec, nullptr, mtr);
+      BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG, layout,
+      cursor, offsets, offsets_heap, new_entry, &rec, &dummy_big_rec, nullptr,
+      mtr);
   ut_a(rec);
   ut_a(err == DB_SUCCESS);
   ut_a(dummy_big_rec == nullptr);
@@ -4266,9 +4339,9 @@ return_after_reservations:
 }
 
 /*==================== B-TREE DELETE MARK AND UNMARK ===============*/
-
 /** Writes the redo log record for delete marking or unmarking of an index
  record. */
+
 static inline void btr_cur_del_mark_set_clust_rec_log(
     rec_t *rec,               /*!< in: record */
     dict_index_t *index,      /*!< in: index of the record */
@@ -4283,21 +4356,23 @@ static inline void btr_cur_del_mark_set_clust_rec_log(
 
   const bool opened = mlog_open_and_write_index(
       mtr, rec, index, MLOG_REC_CLUST_DELETE_MARK,
-      1 + 1 + REDO_SYS_FIELDS_LEN + REDO_LIZARD_FIELDS_LEN + 2, log_ptr);
+      1 + 1 + REDO_SYS_FIELDS_LEN + REDO_CLOVER_FIELDS_LEN + 2, log_ptr);
 
   if (!opened) {
     /* Logging in mtr is switched off during crash recovery */
     return;
   }
 
+  /** flag */
   *log_ptr++ = 0;
+  /** value */
   *log_ptr++ = 1;
 
   log_ptr =
       row_upd_write_sys_vals_to_log(index, trx_id, roll_ptr, log_ptr, mtr);
 
   log_ptr =
-      lizard::row_upd_write_lizard_vals_to_log(index, txn_rec, log_ptr, mtr);
+      lizard::row_upd_write_clover_vals_to_log(index, txn_rec, log_ptr, mtr);
 
   mach_write_to_2(log_ptr, page_offset(rec));
   log_ptr += 2;
@@ -4343,7 +4418,7 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
     return (nullptr);
   }
 
-  ptr = lizard::row_upd_parse_lizard_vals(ptr, end_ptr, &txn_pos, &scn,
+  ptr = lizard::row_upd_parse_clover_vals(ptr, end_ptr, &txn_pos, &scn,
                                           &undo_ptr, &gcn);
 
   if (ptr == NULL) {
@@ -4380,7 +4455,7 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
                           UT_LOCATION_HERE, &heap),
           pos, trx_id, roll_ptr);
 
-      lizard::row_upd_rec_lizard_fields_in_recovery(
+      lizard::row_upd_rec_clover_fields_in_recovery(
           rec, page_zip, index, txn_pos,
           rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
                           UT_LOCATION_HERE, &heap),
@@ -4403,15 +4478,16 @@ byte *btr_cur_parse_del_mark_set_clust_rec(
  undo log record created.
  @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
 dberr_t btr_cur_del_mark_set_clust_rec(
-    ulint flags,           /*!< in: undo logging and locking flags */
-    buf_block_t *block,    /*!< in/out: buffer block of the record */
-    rec_t *rec,            /*!< in/out: record */
-    dict_index_t *index,   /*!< in: clustered index of the record */
-    const ulint *offsets,  /*!< in: rec_get_offsets(rec) */
-    que_thr_t *thr,        /*!< in: query thread */
-    const dtuple_t *entry, /*!< in: dtuple for the deleting record, also
-                           contains the virtual cols if there are any */
-    mtr_t *mtr)            /*!< in/out: mini-transaction */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    buf_block_t *block,         /*!< in/out: buffer block of the record */
+    rec_t *rec,                 /*!< in/out: record */
+    dict_index_t *index,        /*!< in: clustered index of the record */
+    const ulint *offsets,       /*!< in: rec_get_offsets(rec) */
+    que_thr_t *thr,             /*!< in: query thread */
+    const dtuple_t *entry,      /*!< in: dtuple for the deleting record, also
+                                contains the virtual cols if there are any */
+    mtr_t *mtr)                 /*!< in/out: mini-transaction */
 {
   roll_ptr_t roll_ptr;
   dberr_t err;
@@ -4425,13 +4501,17 @@ dberr_t btr_cur_del_mark_set_clust_rec(
   ut_ad(buf_block_get_frame(block) == page_align(rec));
   ut_ad(page_is_leaf(page_align(rec)));
 
+  ut_a(!index->is_panda());
+  /** This function is sepecial for cluster.*/
+  ut_ad(layout == TL_CLOVER || layout == TL_NONE);
+
   if (rec_get_deleted_flag(rec, rec_offs_comp(offsets))) {
     /* While cascading delete operations, this becomes possible. */
     ut_ad(rec_get_trx_id(rec, index) == thr_get_trx(thr)->id);
     return (DB_SUCCESS);
   }
 
-  assert_lizard_page_attributes(page_align(rec), index);
+  assert_page_txn_attributes(page_align(rec), index);
 
   err = lock_clust_rec_modify_check_and_lock(BTR_NO_LOCKING_FLAG, block, rec,
                                              index, offsets, thr);
@@ -4445,12 +4525,12 @@ dberr_t btr_cur_del_mark_set_clust_rec(
       !(flags & BTR_NO_UNDO_LOG_FLAG)) {
     lizard::txn_rec_cleanout_when_modify(thr_get_trx(thr)->id,
                                          const_cast<rec_t *>(rec), index,
-                                         offsets, block, mtr);
+                                         offsets, layout, block, mtr);
   }
 
-  err =
-      trx_undo_report_row_operation(flags, TRX_UNDO_MODIFY_OP, thr, index,
-                                    entry, nullptr, 0, rec, offsets, &roll_ptr);
+  err = trx_undo_report_row_operation(
+      flags, layout, TRX_UNDO_MODIFY_OP, thr ? thr_get_trx(thr) : nullptr,
+      index, entry, nullptr, 0, rec, offsets, &roll_ptr);
   if (err != DB_SUCCESS) {
     return (err);
   }
@@ -4491,46 +4571,21 @@ dberr_t btr_cur_del_mark_set_clust_rec(
 
   row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
 
-  lizard::row_upd_rec_lizard_fields(rec, page_zip, index, offsets,
-                                    &trx->txn_desc);
+  lizard::row_upd_rec_txn_fields(rec, page_zip, index, offsets, layout,
+                                 &trx->txn_desc);
 
-  assert_lizard_page_attributes(page_align(rec), index);
+  assert_page_txn_attributes(page_align(rec), index);
 
   btr_cur_del_mark_set_clust_rec_log(rec, index, trx->id, roll_ptr, &txn_rec,
                                      mtr);
 
   btr_cur_t cleanout_cursor;
   btr_cur_position(index, rec, block, &cleanout_cursor);
-  lizard::commit_cleanout_collect(thr, &cleanout_cursor, rec, flags);
+  lizard::commit_cleanout_collect(thr, &cleanout_cursor, rec, flags, layout);
 
   return (err);
 }
 
-/** Writes the redo log record for a delete mark setting of a secondary
- index record. */
-static inline void btr_cur_del_mark_set_sec_rec_log(
-    rec_t *rec, /*!< in: record */
-    bool val,   /*!< in: value to set */
-    mtr_t *mtr) /*!< in: mtr */
-{
-  byte *log_ptr = nullptr;
-
-  if (!mlog_open(mtr, 11 + 1 + 2, log_ptr)) {
-    /* Logging in mtr is switched off during crash recovery:
-    in that case mlog_open returns false */
-    return;
-  }
-
-  log_ptr = mlog_write_initial_log_record_fast(rec, MLOG_REC_SEC_DELETE_MARK,
-                                               log_ptr, mtr);
-  mach_write_to_1(log_ptr, val);
-  log_ptr++;
-
-  mach_write_to_2(log_ptr, page_offset(rec));
-  log_ptr += 2;
-
-  mlog_close(mtr, log_ptr);
-}
 #endif /* !UNIV_HOTBACKUP */
 
 /** Parses the redo log record for delete marking or unmarking of a secondary
@@ -4574,16 +4629,29 @@ byte *btr_cur_parse_del_mark_set_sec_rec(
 /** Sets a secondary index record delete mark to true or false.
  @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
 dberr_t btr_cur_del_mark_set_sec_rec(
-    ulint flags,       /*!< in: locking flag */
-    btr_cur_t *cursor, /*!< in: cursor */
-    bool val,          /*!< in: value to set */
-    que_thr_t *thr,    /*!< in: query thread */
-    mtr_t *mtr)        /*!< in/out: mini-transaction */
+    ulint flags,                /*!< in: locking flag */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor */
+    bool val,                   /*!< in: value to set */
+    que_thr_t *thr,             /*!< in: query thread */
+    mtr_t *mtr)                 /*!< in/out: mini-transaction */
 {
   buf_block_t *block;
   rec_t *rec;
   dberr_t err;
+  dict_index_t *index;
+  trx_id_t trx_id = 0;
+  roll_ptr_t roll_ptr;
+  txn_rec_t txn_rec;
+  page_zip_des_t *page_zip;
+  ulint *offsets = nullptr;
+  mem_heap_t *heap = nullptr;
+  ulint offsets_[REC_OFFS_NORMAL_SIZE];
 
+  ut_ad(layout == TL_BAMBOO || layout == TL_NONE);
+
+  index = cursor->index;
+  ut_ad(!index->is_clustered());
   block = btr_cur_get_block(cursor);
   rec = btr_cur_get_rec(cursor);
 
@@ -4601,13 +4669,56 @@ dberr_t btr_cur_del_mark_set_sec_rec(
               unsigned(page_rec_get_heap_no(rec)), cursor->index->name(),
               cursor->index->id, trx_get_id_for_print(thr_get_trx(thr))));
 
+  if (layout == TL_BAMBOO) {
+    offsets = offsets_;
+    rec_offs_init(offsets_);
+    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                              UT_LOCATION_HERE, &heap);
+    assert_row_txn_is_valid(rec, index, offsets, layout);
+    /** Lizard: Do the cleanout. */
+    if (thr != nullptr && !(flags & BTR_NO_UNDO_LOG_FLAG)) {
+      ut_ad(!index->table->is_intrinsic());
+      lizard::txn_rec_cleanout_when_modify(thr_get_trx(thr)->id,
+                                           const_cast<rec_t *>(rec), index,
+                                           offsets, layout, block, mtr);
+    }
+    err = trx_undo_report_row_operation(
+        flags, layout, TRX_UNDO_MODIFY_OP, thr ? thr_get_trx(thr) : nullptr,
+        index, nullptr, nullptr, 0, rec, offsets, &roll_ptr);
+    if (err != DB_SUCCESS) {
+      if (heap) mem_heap_free(heap);
+      return (err);
+    }
+  }
+
   /* We do not need to reserve search latch, as the
   delete-mark flag is being updated in place and the adaptive
   hash index does not depend on it. */
-  btr_rec_set_deleted_flag(rec, buf_block_get_page_zip(block), val);
+  page_zip = buf_block_get_page_zip(block);
+  btr_rec_set_deleted_flag(rec, page_zip, val);
 
-  btr_cur_del_mark_set_sec_rec_log(rec, val, mtr);
+  if (layout == TL_BAMBOO) {
+    trx_t *trx = thr_get_trx(thr);
+    ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
+    ut_a(val == true); /* val must be true for panda. */
+    trx_id = trx->id;
+    txn_rec = {trx->id, trx->txn_desc.cmmt.scn, trx->txn_desc.undo_ptr,
+               trx->txn_desc.cmmt.gcn};
+    row_upd_rec_sys_fields(rec, page_zip, index, offsets, trx, roll_ptr);
 
+    lizard::row_upd_rec_txn_fields(rec, page_zip, index, offsets, layout,
+                                   &trx->txn_desc);
+  }
+
+  lizard::btr_cur_del_mark_set_sec_rec_log(rec, val, index, trx_id, roll_ptr,
+                                           &txn_rec, offsets, layout, page_zip,
+                                           mtr);
+
+  lizard::commit_cleanout_collect(thr, cursor, rec, flags, layout);
+
+  if (heap) {
+    mem_heap_free(heap);
+  }
   return (DB_SUCCESS);
 }
 
@@ -4630,7 +4741,8 @@ void btr_cur_set_deleted_flag_for_ibuf(
 
   btr_rec_set_deleted_flag(rec, page_zip, val);
 
-  btr_cur_del_mark_set_sec_rec_log(rec, val, mtr);
+  lizard::btr_cur_del_mark_set_sec_rec_log(rec, val, nullptr, 0, 0, nullptr,
+                                           nullptr, TL_NONE, nullptr, mtr);
 }
 
 /*==================== B-TREE RECORD REMOVE =========================*/

@@ -265,6 +265,7 @@ bool Snapshot_scn_vision::modification_visible(void *txn_rec) const {
   txn_rec_t *rec = static_cast<txn_rec_t *>(txn_rec);
   /** Promise committed trx and not myself. */
   ut_ad(rec->is_committed());
+
   return rec->scn <= m_scn;
 }
 

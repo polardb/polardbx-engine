@@ -35,6 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/types/table.h"
 #include "sql/sql_class.h"
 
+#include "dict0dd.h"
 #include "dict0dict.h"
 #include "dict0mem.h"
 #include "ut0dbg.h"
@@ -55,31 +56,74 @@ static bool can_gpp(const dict_table_t *table, const dict_index_t *index) {
          !dict_index_is_spatial(index) && !index->is_clustered();
 }
 
+/**
+ * Detemines whether the root page type of the index should be upgraded to
+ * PANDA.
+ * @param[in]     table dict table.
+ * @param[in]     index dict index.
+ * @param[in]     ddl_policy DDL policy.
+ * @return The upgraded root page type.
+ */
+static page_type_t upgrade_root_page_type(const dict_table_t *table,
+                                          const dict_index_t *index,
+                                          const Ha_ddl_policy *ddl_policy) {
+  page_type_t index_type;
+  if (dict_index_is_spatial(index)) {
+    index_type = FIL_PAGE_RTREE;
+  } else if (dict_index_is_sdi(index)) {
+    index_type = FIL_PAGE_SDI;
+  } else {
+    index_type = FIL_PAGE_INDEX;
+  }
+
+  /* For normal b-tree index creation. */
+  if (index_type == FIL_PAGE_INDEX && dict_index_is_unique(index) &&
+      !index->is_clustered() && ddl_policy && ddl_policy->hint_panda() &&
+      !dict_index_has_virtual(index) && !table->is_temporary() &&
+      !table->is_compressed() && !dict_sys_t::is_dd_table_id(table->id) &&
+      !table->is_system_table && !dict_sys->is_permanent_table(table) &&
+      !index->is_multi_value()) {
+    return FIL_PAGE_INDEX_PANDA;
+  } else {
+    return FIL_PAGE_TYPE_UNUSED;
+  }
+}
+
 static bool can_fba(const dict_table_t *table) {
   return !table->is_temporary() && !table->is_intrinsic() &&
          !dict_sys_t::is_dd_table_id(table->id) && !table->is_system_table &&
          !dict_sys->is_permanent_table(table);
 }
 
+/**
+ * Initializes the Index_policy with options based on the ddl policy and the
+ * table/index information.
+ * @param[in]     ddl_policy DDL policy.
+ * @param[in]     table dict table.
+ * @param[in]     index dict index.
+ */
 void Index_policy::create(Ha_ddl_policy *ddl_policy, const dict_table_t *table,
                           const dict_index_t *index) {
   ut_ad(!m_gpp);
+  ut_ad(m_page_type == FIL_PAGE_TYPE_UNUSED);
   ut_a(m_inited == false);
   m_inited = true;
 
-  if (!ddl_policy) {
-    return;
-  }
-
-  if (ddl_policy->hint_gpp()) {
+  if (ddl_policy && ddl_policy->hint_gpp()) {
     ut_ad(!(index->type & DICT_SDI));
     ut_ad(!(index->type & DICT_IBUF));
 
     m_gpp = can_gpp(table, index);
   }
+  m_page_type = upgrade_root_page_type(table, index, ddl_policy);
 }
 
-void Index_policy::restore(const dd::Properties &options) {
+void Index_policy::restore(const dd::Properties &options,
+                           const dd::Properties &se_private_data) {
+  ut_ad(!m_gpp);
+  ut_ad(m_page_type == FIL_PAGE_TYPE_UNUSED);
+  ut_a(m_inited == false);
+  m_inited = true;
   ulonglong format = 0;
 
   if (options.exists(OPTION_IFT)) {
@@ -88,7 +132,12 @@ void Index_policy::restore(const dd::Properties &options) {
 
   m_gpp = (format & IFT_GPP);
 
-  m_inited = true;
+  if (se_private_data.exists(dd_index_key_strings[DD_INDEX_PAGE_TYPE])) {
+    se_private_data.get(dd_index_key_strings[DD_INDEX_PAGE_TYPE], &m_page_type);
+  }
+  if (m_page_type != FIL_PAGE_INDEX_PANDA) {
+    m_page_type = FIL_PAGE_TYPE_UNUSED;
+  }
 }
 
 /**
@@ -161,7 +210,7 @@ const Table_policy ha_ddl_create_table_policy(const Ha_ddl_policy *ddl_policy,
 }
 
 Ha_ddl_policy::Ha_ddl_policy(const THD *thd, bool inherit)
-    : m_hint_fba(0), m_hint_gpp(0), m_inherit(inherit) {
+    : m_hint_fba(0), m_hint_gpp(0), m_hint_panda(false), m_inherit(inherit) {
   if (thd->variables.opt_flashback_area) {
     ut_a(!m_hint_fba);
     m_hint_fba = 1;
@@ -171,7 +220,13 @@ Ha_ddl_policy::Ha_ddl_policy(const THD *thd, bool inherit)
     ut_a(!m_hint_gpp);
     m_hint_gpp = 1;
   }
+
+  if (thd->variables.opt_index_format_panda_enabled) {
+    m_hint_panda = true;
+  }
 }
+
+bool Ha_ddl_policy::hint_panda() const { return m_hint_panda; }
 
 // static bool dd_index_options_has_ift(const dd::Properties *options) {
 //   return (options->exists(OPTION_IFT));
@@ -189,7 +244,8 @@ Indexes_policy dd_fill_indexes_policy(const Table *dd_table) {
 
   for (auto dd_index : dd_table->indexes()) {
     indexes_policy.emplace_back();
-    indexes_policy.back().restore(dd_index->options());
+    indexes_policy.back().restore(dd_index->options(),
+                                  dd_index->se_private_data());
   }
 
   return indexes_policy;

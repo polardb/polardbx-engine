@@ -734,6 +734,7 @@ SET(SQL_SHARED_SOURCES
   pli/license_proc.cc
   pli/pli.cc
   pli/pli_noop.cc
+  package/proc_cleanout.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)

@@ -26,15 +26,20 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** @file data/lizard0data0data.cc
    Lizard SQL data field and tuple
-  
+
 
  Created 2024-03-26 by Jianwei.zhao
  *******************************************************/
+#include <stdlib.h>
+#include <stdio.h>
 
-#include "lizard0data0data.h"
+#include "data0data.h"
 #include "dict0mem.h"
-#include "lizard0dict.h"
 #include "rem0cmp.h"
+#include "trx0undo.h"
+
+#include "lizard0dict.h"
+#include "lizard0undo.h"
 
 /**
  * Read GPP_NO from dfield data which only exist in memory.
@@ -52,10 +57,14 @@ gpp_no_t dtuple_t::read_v_gpp_no() const {
  * Read GPP_NO from dfield data which is stored in sec index.
  * */
 gpp_no_t dtuple_t::read_s_gpp_no() const {
-  const dfield_t &field = fields[n_fields - 1];
-  ut_ad(field.type.mtype == DATA_SYS_GPP && field.type.prtype == DATA_NOT_NULL);
-  gpp_no_t s_gpp_no = mach_read_from_4((byte *)field.data);
-  return s_gpp_no;
+  for (uint i = 0; i < n_fields; i++) {
+    const dfield_t &field = fields[i];
+    if (field.type.mtype == DATA_SYS_GPP) {
+      ut_ad(field.type.prtype == DATA_NOT_NULL);
+      return mach_read_from_4((byte *)field.data);
+    }
+  }
+  return 0;
 }
 
 namespace lizard {
@@ -104,10 +113,10 @@ void dtuple_set_data_v_gfield(dtuple_t *entry, const dtuple_t *row) {
 */
 ulint ibuf_dtuple_get_ordered_n_fields(const dtuple_t *entry,
                                        const dict_index_t *index) {
-  ut_ad(entry && index && !index->is_clustered());
+  ut_ad(entry && index && !index->is_clustered() && !index->is_panda());
   assert_lizard_dict_index_gstored_check(index);
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
-  return dtuple_get_n_fields(entry) - index->n_s_gfields;
+  return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
 
 /**
@@ -121,7 +130,13 @@ ulint row_search_dtuple_get_ordered_n_fields(const dtuple_t *entry,
   ut_ad(entry && index && !index->is_clustered());
   assert_lizard_dict_index_gstored_check(index);
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
-  return dtuple_get_n_fields(entry) - index->n_s_gfields;
+  if (entry->n_panda_suffix) {
+    ut_ad(dict_index_is_panda(index) &&
+          !row_index_entry_contains_null_in_unique(index, entry));
+  }
+  return dtuple_get_n_fields(entry) -
+         dict_index_n_sec_functional_fields(index) -
+         dtuple_get_n_panda_suffix(entry);
 }
 
 /**
@@ -130,12 +145,12 @@ ulint row_search_dtuple_get_ordered_n_fields(const dtuple_t *entry,
   @param[in]      index     dict_index_t
   @retval ordered field number
 */
-ulint row_upd_dtuple_get_ordered_n_fields(const dtuple_t *entry,
-                                          const dict_index_t *index) {
+ulint row_upd_dtuple_get_user_n_fields(const dtuple_t *entry,
+                                       const dict_index_t *index) {
   ut_ad(entry && index && !index->is_clustered());
   assert_lizard_dict_index_gstored_check(index);
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
-  return dtuple_get_n_fields(entry) - index->n_s_gfields;
+  return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
 
 /**
@@ -149,7 +164,7 @@ ulint row_ver_dtuple_get_ordered_n_fields(const dtuple_t *entry,
   ut_ad(entry && index && !index->is_clustered());
   assert_lizard_dict_index_gstored_check(index);
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
-  return dtuple_get_n_fields(entry) - index->n_s_gfields;
+  return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
 
 /** Compare two data tuples of secondary index.
@@ -194,6 +209,64 @@ bool row_ver_sec_dtuple_coll_eq(const dtuple_t *tuple1, const dtuple_t *tuple2,
   }
 
   return (cmp == 0);
+}
+
+bool row_index_entry_contains_null_in_unique(const dict_index_t *index,
+                                             const dtuple_t *tuple) {
+  auto n_unique = dict_index_get_n_unique(index);
+
+  for (ulint i = 0; i < n_unique && i < tuple->n_fields; i++) {
+    if (dfield_is_null(dtuple_get_nth_field(tuple, i))) {
+      return (true);
+    }
+  }
+
+  return (false);
+}
+
+void dtuple_set_n_fields_cmp_for_panda(dtuple_t *tuple, ulint n_fields_cmp) {
+  ut_ad(tuple->n_fields_cmp >= n_fields_cmp);
+  ut_ad(tuple->n_panda_suffix == 0);
+
+  tuple->n_panda_suffix = tuple->n_fields_cmp - n_fields_cmp;
+  tuple->n_fields_cmp = n_fields_cmp;
+}
+
+void DField_wrapper::copy_types_and_len(const dict_col_t *col) {
+  dtype_t *dtype = dfield_get_type(&m_dfield);
+  col->copy_type(dtype);
+
+  ut_ad(col->len <= BUFFER_MAX_BYTES);
+  dfield_set_data(&m_dfield, m_buf, col->len);
+}
+
+bool row_index_entry_cmp_fields_check(const dict_index_t *index,
+                                      const dtuple_t *tuple) {
+  if (dict_index_is_panda(index)) {
+    if (lizard::row_index_entry_contains_null_in_unique(index, tuple)) {
+      return (dtuple_get_n_fields_cmp(tuple) <=
+              dict_index_get_n_unique_in_tree(index));
+    } else {
+      /*
+       * In a panda index btree search, we ensure that the comparison fields
+       * (n_fields_cmp) only include UK and not PK. This is because in panda
+       * indexes, the PK values in the first leaf node records and in branch
+       * nodes may become inconsistent.
+       * Consider the following two scenario:
+       * 1. Optimistic update pk in-place for the first records in leaf pages
+       * (See row_upd_panda_only_pk()).
+       * 2. Optimistic delete the first records in leaf pages. (Purge and row
+       * log apply).
+       * Theses optimisitic ops only modify the leaf page without
+       * updating the branch pages. Including the PK in the n_fields_cmp could
+       * lead to incorrect low_match or up_match results.
+       */
+      return dtuple_get_n_fields_cmp(tuple) <= dict_index_get_n_unique(index);
+    }
+  } else {
+    return (dtuple_get_n_fields_cmp(tuple) <=
+            dict_index_get_n_unique_in_tree(index));
+  }
 }
 
 }  // namespace lizard

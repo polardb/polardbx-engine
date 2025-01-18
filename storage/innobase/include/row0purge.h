@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0vec.h"
 
 #include "lizard0row0purge.h"
+#include "lizard0undo0rec0types.h"
 
 /** Create a purge node to a query graph.
 @param[in]      parent  parent node, i.e., a thr node
@@ -155,6 +156,15 @@ struct purge_node_t {
   /** The heap is owned by purge_sys and is reset after a purge
   batch has completed. */
   mem_heap_t *heap;
+
+  /** Undo record txn layout. */
+  txn_layout_t layout;
+
+  /** undo of row log  */
+  bool is_rlog;
+
+  /* index_id parsed from the panda undo record. */
+  space_index_t index_id;
 
   /** true if the clustered index record determined by ref was
   found in the clustered index, and we were able to position pcur on it */

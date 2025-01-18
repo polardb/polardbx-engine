@@ -147,7 +147,7 @@ const page_size_t TxnUndoRsegsIterator::set_next(bool *keep_top) {
 
   const page_size_t page_size(m_purge_sys->rseg->page_size);
 
-  /** ZEUS: We don't hold pq_mutex when we commit a trx. The possible case:
+  /** Lizard: We don't hold pq_mutex when we commit a trx. The possible case:
   TRX_A: scn = 5, scn allocated, rseg not pushed in purge_heap
   TRX_B: scn = 6, scn allocated, rseg pushed in purge_heap
 
@@ -267,9 +267,6 @@ void trx_purge_set_purged_scn(scn_t txn_scn) {
 */
 bool txn_rec_is_purged_by_precheck(const txn_rec_t *txn_rec) {
   if (txn_rec->is_committed()) {
-    /** scn must allocated */
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
-
     return (txn_rec->scn <= purge_sys->purged_scn);
   }
   return false;
@@ -419,8 +416,7 @@ bool row_purge_optimistic_reposition_pcur(ulint mode, purge_node_t *node,
     /** Try to guess the clustered index record optimistically. */
     node->found_clust = row_purge_optimistic_guess_clust(
         node->table->first_index(), sec_cursor->index, node->ref,
-        btr_cur_get_rec(sec_cursor), &node->pcur,
-        btr_cur_get_page_cur(sec_cursor)->offsets, mode, mtr);
+        btr_cur_get_rec(sec_cursor), &node->pcur, mode, mtr);
     if (node->found_clust) {
       node->pcur.store_position(mtr);
     }

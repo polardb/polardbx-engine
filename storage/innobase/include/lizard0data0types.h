@@ -84,6 +84,4 @@ constexpr uint32_t DATA_GPP_NO_FIELDS = 1;
 /** GPP PAGE NO type. */
 typedef page_no_t gpp_no_t;
 
-namespace lizard {} /* namespace lizard */
-
 #endif

@@ -659,14 +659,18 @@ constexpr uint32_t BIG_ROW_SIZE = 1024;
 @param[in,out]  table   table on which the index is
 @param[in,out]  index   index; NOTE! The index memory
                         object is freed in this function!
-@param[in]      page_no root page number of the index
+@param[in]      root    root page mark that is going to be assigned to new_index
+@param[in]      expected_or_real_page_type  expected page type in creation path,
+                                            or real page type in restored path.
+                                            Currently, it is only used in
+                                            FIL_PAGE_INDEX_PANDA.
 @param[in]      strict  true=refuse to create the index
                         if records could be too big to fit in
                         an B-tree page
 @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
-[[nodiscard]] dberr_t dict_index_add_to_cache(dict_table_t *table,
-                                              dict_index_t *index,
-                                              page_no_t page_no, bool strict);
+[[nodiscard]] dberr_t dict_index_add_to_cache(
+    dict_table_t *table, dict_index_t *index, const page_mark_t &root,
+    page_type_t expected_or_real_page_type, bool strict);
 
 /** Clears the virtual column's index list before index is being freed.
 @param[in]  index   Index being freed */
@@ -679,14 +683,19 @@ added column.
                         object is freed in this function!
 @param[in]      add_v   new virtual column that being added along with
                         an add index call
-@param[in]      page_no root page number of the index
+@param[in]      root    root page mark that is going to be assigned to new_index
+@param[in]      expected_or_real_page_type  expected page type in creation path,
+                                            or real page type in restored path.
+                                            Currently, it is only used in
+                                            FIL_PAGE_INDEX_PANDA.
 @param[in]      strict  true=refuse to create the index
                         if records could be too big to fit in
                         an B-tree page
 @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
 [[nodiscard]] dberr_t dict_index_add_to_cache_w_vcol(
     dict_table_t *table, dict_index_t *index, const dict_add_v_col_t *add_v,
-    page_no_t page_no, bool strict);
+    const page_mark_t &root, page_type_t expected_or_real_page_type,
+    bool strict);
 #endif /* !UNIV_HOTBACKUP */
 /** Gets the number of fields in the internal representation of an index,
  including fields added by the dictionary system.
@@ -826,10 +835,10 @@ store the prefix, the new buffer will be allocated.
 /** Builds a typed data tuple out of a physical record.
  @return own: data tuple */
 [[nodiscard]] dtuple_t *dict_index_build_data_tuple(
-    dict_index_t *index, /*!< in: index */
-    rec_t *rec,          /*!< in: record for which to build data tuple */
-    ulint n_fields,      /*!< in: number of data fields */
-    mem_heap_t *heap);   /*!< in: memory heap where tuple created */
+    const dict_index_t *index, /*!< in: index */
+    const rec_t *rec,          /*!< in: record for which to build data tuple */
+    ulint n_fields,            /*!< in: number of data fields */
+    mem_heap_t *heap);         /*!< in: memory heap where tuple created */
 /** Gets the space id of the root of the index tree.
  @return space id */
 [[nodiscard]] static inline space_id_t dict_index_get_space(

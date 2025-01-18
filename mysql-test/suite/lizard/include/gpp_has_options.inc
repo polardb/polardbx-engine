@@ -8,6 +8,8 @@
 # $TABLE_NAME
 # $FULL_TABLE_NAME
 # $INDEX_NAME
+# $IS_PARTITION
+# $PK_COL
 # $INDEX_COL          column name of the index
 # $INDEX_COL_MIN_VAL  minimum value of the index column
 # $INDEX_COL_MAX_VAL  maximum value of the index column
@@ -31,8 +33,13 @@ if($FULL_TABLE_NAME){
 # Test actual gpp.
 if ($INDEX_COL!='') {
   call dbms_stat.flush_gpp();
-  --eval select $NON_INDEX_COL from $SCHEMA_NAME.$TABLE_NAME force index ($INDEX_NAME) where $INDEX_COL >= $INDEX_COL_MIN_VAL and $INDEX_COL <= $INDEX_COL_MAX_VAL;
-
+  if ($IS_PARTITION==1) {
+    --eval select $NON_INDEX_COL from $SCHEMA_NAME.$TABLE_NAME force index ($INDEX_NAME) where $PK_COL>=$INDEX_COL_MIN_VAL and $PK_COL<=$INDEX_COL_MAX_VAL and $INDEX_COL >= $INDEX_COL_MIN_VAL and $INDEX_COL <= $INDEX_COL_MAX_VAL;
+  }
+  if ($IS_PARTITION==0) {
+    --eval select $NON_INDEX_COL from $SCHEMA_NAME.$TABLE_NAME force index ($INDEX_NAME) where $INDEX_COL >= $INDEX_COL_MIN_VAL and $INDEX_COL <= $INDEX_COL_MAX_VAL;
+  }
+ 
   --let $guess_hit= query_get_value(show status like "Lizard_index_scan_guess_clust_hit", Value, 1)
   --let $guess_miss=query_get_value(show status like "Lizard_index_scan_guess_clust_miss", Value, 1)
   --let $actual_gpp=0

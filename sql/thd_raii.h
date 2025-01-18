@@ -451,4 +451,44 @@ class Disable_gpp_guard {
   bool m_guarded;
 };
 
+/**
+  RAII class to temporarily disable panda.
+*/
+class Disable_panda_guard {
+ public:
+  Disable_panda_guard(THD *thd) : m_thd(thd) {
+    m_stored_panda = thd->variables.opt_index_format_panda_enabled;
+    thd->variables.opt_index_format_panda_enabled = false;
+    m_guarded = true;
+  }
+  ~Disable_panda_guard() {
+    if (m_guarded)
+      m_thd->variables.opt_index_format_panda_enabled = m_stored_panda;
+  }
+
+ private:
+  THD *m_thd;
+  bool m_stored_panda;
+  bool m_guarded;
+};
+
+/**
+  RAII class to temporarily disable fba.
+*/
+class Disable_fba_guard {
+ public:
+  Disable_fba_guard(THD *thd) : m_thd(thd) {
+    m_stored_fba = thd->variables.opt_flashback_area;
+    thd->variables.opt_flashback_area = false;
+    m_guarded = true;
+  }
+  ~Disable_fba_guard() {
+    if (m_guarded) m_thd->variables.opt_flashback_area = m_stored_fba;
+  }
+
+ private:
+  THD *m_thd;
+  bool m_stored_fba;
+  bool m_guarded;
+};
 #endif  // THD_RAII_INCLUDED

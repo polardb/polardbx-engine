@@ -440,6 +440,7 @@ struct PRINT_EVENT_INFO {
   uint8_t default_table_encryption;
   uint8_t opt_flashback_area;
   uint8_t opt_index_format_gpp_enabled;
+  uint8_t opt_index_format_panda_enabled;
 
   PRINT_EVENT_INFO();
 
@@ -1528,6 +1529,10 @@ class Query_log_event : public virtual binary_log::Query_event,
   /** Whether or not the statement represented by this event requires
       `Q_OPT_INDEX_FORMAT_GPP_ENABLED` to be logged along aside. */
   bool need_opt_index_format_gpp_enabled{false};
+
+  /** Whether or not the statement represented by this event requires
+    `Q_OPT_INDEX_FORMAT_PANDA_ENBLED` to be logged along aside. */
+  bool need_opt_index_format_panda_enabled{false};
 };
 
 /**

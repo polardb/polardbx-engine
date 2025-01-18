@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef dict0mem_h
 #define dict0mem_h
 
+#include "lizard0fil0types.h"
 #include "sql/dd/object_id.h"
 #include "sql/dd/types/column.h"
 #include "univ.i"
@@ -1069,9 +1070,6 @@ struct dict_index_t {
   /** space where the index tree is placed */
   unsigned space : 32;
 
-  /** index tree root page number */
-  unsigned page : 32;
-
   /** In the pessimistic delete, if the page data size drops below this limit
   in percent, merging it to a neighbor is tried */
   unsigned merge_threshold : 6;
@@ -1297,9 +1295,9 @@ struct dict_index_t {
   void set_gstored(bool stored) { gpp_stored = stored; }
 
   /** The count of successful gpp (Guess Primary Page). */
-  mutable lizard_stats_t::ulint_ctr_1_t gpp_hit;
+  mutable lizard::generic_stats_t::ulint_ctr_1_t gpp_hit;
   /** The count of failed gpp (Guess Primary Page). */
-  mutable lizard_stats_t::ulint_ctr_1_t gpp_miss;
+  mutable lizard::generic_stats_t::ulint_ctr_1_t gpp_miss;
 
   void gpp_stat(bool hit) const {
     if (hit) {
@@ -1307,6 +1305,21 @@ struct dict_index_t {
     } else {
       gpp_miss.inc();
     }
+  }
+
+  /** Actual index tree root page number and page type.
+      The two fields mush have the same lifecycle.
+      We can't just init or modify only one of them. */
+  page_mark_t root;
+
+  page_no_t page_no() const {
+    assert_lizard_page_mark_consistent(root);
+    return root.page_no;
+  }
+
+  page_type_t page_type() const {
+    assert_lizard_page_mark_consistent(root);
+    return root.page_type;
   }
 
   /** Determine if the index has been committed to the
@@ -1357,6 +1370,8 @@ struct dict_index_t {
 
     return (type & DICT_CLUSTERED);
   }
+
+  bool is_panda() const;
 
   /** Check whether the index is the multi-value index
   @return nonzero for multi-value index, zero for other indexes */
@@ -1602,6 +1617,10 @@ struct dict_index_t {
   @param[in] type               DATA_ROW_ID, ...
   @return position, ULINT_UNDEFINED if not contained */
   ulint get_sys_col_pos(ulint type) const;
+
+  /** Returns position of gpp column in an index.
+  @return position, ULINT_UNDEFINED if not contained */
+  ulint get_gpp_col_pos() const;
 
   /** Looks for column n in an index.
   @param[in]    n               column number

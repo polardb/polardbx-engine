@@ -13,7 +13,8 @@ while ($i <= $number_of_formats)
 {
   --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT'  END`
   --echo $row_format;
-  --let $PRODUCE_REDO_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;
+  --let $PREPARE_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format;
+  --let $PRODUCE_REDO_STATEMENTS = INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;
   --let $CLEANUP_STATEMENTS = SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;
   --source suite/lizard/include/gpp_redo.inc
   inc $i;
@@ -28,7 +29,8 @@ while ($i <= $number_of_formats)
 {
   --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT'  END`
   --echo $row_format;
-  --let $PRODUCE_REDO_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);
+  --let $PREPARE_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;
+  --let $PRODUCE_REDO_STATEMENTS =  INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;
   --let $CLEANUP_STATEMENTS = SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;
   --source suite/lizard/include/gpp_redo.inc
   inc $i;
@@ -38,7 +40,8 @@ while ($i <= $number_of_formats)
 {
   --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT'  END`
   --echo $row_format;
-  --let $PRODUCE_REDO_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);
+  --let $PREPARE_STATEMENTS = CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=$row_format; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;
+  --let $PRODUCE_REDO_STATEMENTS = INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;
   --let $CLEANUP_STATEMENTS = SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;
   --source suite/lizard/include/gpp_redo.inc
   inc $i;
@@ -72,7 +75,8 @@ END|
 delimiter ;|
 
 --disable_warnings
---let $PRODUCE_REDO_STATEMENTS =  create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ; call fill_table_ibstd_39_j();
+--let $PREPARE_STATEMENTS = create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ;
+--let $PRODUCE_REDO_STATEMENTS = call fill_table_ibstd_39_j();
 --let $CLEANUP_STATEMENTS = SHOW CREATE TABLE ibstd_39_j; SELECT * FROM ibstd_39_j; DROP TABLE IF EXISTS ibstd_39_j;
 --source suite/lizard/include/gpp_redo.inc
 --enable_warnings

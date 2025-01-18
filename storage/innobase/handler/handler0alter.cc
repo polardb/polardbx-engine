@@ -6991,6 +6991,8 @@ when rebuilding the table.
         static_cast<ha_innobase_inplace_ctx *>(ha_alter_info->handler_ctx)
             ->m_stage);
 
+    DEBUG_SYNC_C("commit_inplace_after_index_build");
+
     if (s_templ) {
       ut_ad(ctx->need_rebuild());
       dict_free_vc_templ(s_templ);
@@ -7263,7 +7265,7 @@ after a successful commit_try_norebuild() call.
 
       /* It is a single table tablespace and the .ibd file is
       missing if root is FIL_NULL, do nothing. */
-      if (index->page != FIL_NULL) {
+      if (index->page_no() != FIL_NULL) {
         dict_sys_mutex_exit();
         ut_d(dberr_t err =) log_ddl->write_free_tree_log(trx, index, true);
         ut_ad(err == DB_SUCCESS);

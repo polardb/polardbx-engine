@@ -85,6 +85,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0data0data.h"
 #include "lizard0row0gpp.h"
 #include "lizard0row0sel.h"
+#include "lizard0lock0lock.h"
 
 /** Maximum number of rows to prefetch; MySQL interface has another parameter */
 constexpr uint32_t SEL_MAX_N_PREFETCH = 16;
@@ -387,8 +388,12 @@ void sel_node_free_private(sel_node_t *node) /*!< in: select node struct */
       plan->pcur.close();
       plan->clust_pcur.close();
 
-      if (plan->old_vers_heap) {
-        mem_heap_free(plan->old_vers_heap);
+      if (plan->lizard_old_vers_heap) {
+        mem_heap_free(plan->lizard_old_vers_heap);
+      }
+
+      if (plan->panda_old_vers_heap) {
+        mem_heap_free(plan->panda_old_vers_heap);
       }
     }
   }
@@ -721,9 +726,12 @@ static inline void sel_enqueue_prefetched_row(
     *old_vers_heap = mem_heap_create(512, UT_LOCATION_HERE);
   }
 
+  const txn_layout_t layout = lizard::dict_index_txn_layout(index);
+  ut_ad(txn_layout_is_arranged(layout));
+
   err = row_vers_build_for_consistent_read(rec, mtr, index, offsets, vision,
                                            offset_heap, *old_vers_heap,
-                                           old_vers, nullptr, nullptr);
+                                           old_vers, nullptr, nullptr, layout);
   return (err);
 }
 
@@ -745,16 +753,16 @@ static void row_sel_build_committed_vers_for_mysql(
                                column version if any */
     mtr_t *mtr)                /*!< in: mtr */
 {
-  if (prebuilt->old_vers_heap) {
-    mem_heap_empty(prebuilt->old_vers_heap);
+  if (prebuilt->lizard_old_vers_heap) {
+    mem_heap_empty(prebuilt->lizard_old_vers_heap);
   } else {
-    prebuilt->old_vers_heap =
+    prebuilt->lizard_old_vers_heap =
         mem_heap_create(rec_offs_size(*offsets), UT_LOCATION_HERE);
   }
 
-  row_vers_build_for_semi_consistent_read(rec, mtr, clust_index, offsets,
-                                          offset_heap, prebuilt->old_vers_heap,
-                                          old_vers, vrow);
+  row_vers_build_for_semi_consistent_read(
+      rec, mtr, clust_index, offsets, offset_heap,
+      prebuilt->lizard_old_vers_heap, old_vers, vrow);
 }
 
 /** Tests the conditions which determine when the index segment we are searching
@@ -896,12 +904,17 @@ static inline bool row_sel_test_other_conds(
 
     old_vers = nullptr;
 
-    if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets,
-                                       /** TODO: Add cleanout logic */
-                                       nullptr, node->vision)) {
-      err =
-          row_sel_build_prev_vers(node->vision, index, clust_rec, &offsets,
-                                  &heap, &plan->old_vers_heap, &old_vers, mtr);
+    if (thr_get_trx(thr)->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
+        srv_read_only_mode || index->table->is_temporary()) {
+      /* Temp-tables are not shared across connections and multiple transactions
+       * from different connections cannot simultaneously operate on same
+       * temp-table and so read of temp-table is always consistent read. */
+    } else if (!lock_clust_rec_cons_read_sees(clust_rec, index, offsets,
+                                              /** TODO: Add cleanout logic */
+                                              nullptr, node->vision)) {
+      err = row_sel_build_prev_vers(node->vision, index, clust_rec, &offsets,
+                                    &heap, &plan->lizard_old_vers_heap,
+                                    &old_vers, mtr);
 
       if (err != DB_SUCCESS) {
         goto err_exit;
@@ -1404,15 +1417,20 @@ static ulint row_sel_try_search_shortcut(
   offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
                             UT_LOCATION_HERE, &heap);
 
-  if (index->is_clustered()) {
-    if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
-                                       /**TODO: Add cleanout logic */
-                                       nullptr, node->vision)) {
+  if (trx->isolation_level == TRX_ISO_READ_UNCOMMITTED || srv_read_only_mode ||
+      index->table->is_temporary()) {
+    /* Temp-tables are not shared across connections and multiple transactions
+     * from different connections cannot simultaneously operate on same
+     * temp-table and so read of temp-table is always consistent read. */
+  } else if (index->is_clustered() || index->is_panda()) {
+    if (!lizard::lock_clust_or_panda_rec_cons_read_sees(
+            rec, index, offsets,
+            /**TODO: Add cleanout logic */
+            nullptr, node->vision)) {
       ret = SEL_RETRY;
       goto func_exit;
     }
-  } else if (!srv_read_only_mode &&
-             !lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
+  } else if (!lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
     ret = SEL_RETRY;
     goto func_exit;
   }
@@ -1770,12 +1788,21 @@ skip_lock:
     /* This is a non-locking consistent read: if necessary, fetch
     a previous version of the record */
 
-    if (index->is_clustered()) {
-      if (!lock_clust_rec_cons_read_sees(rec, index, offsets,
-                                         /**TODO: cleanout logic */
-                                         nullptr, node->vision)) {
-        err = row_sel_build_prev_vers(node->vision, index, rec, &offsets, &heap,
-                                      &plan->old_vers_heap, &old_vers, &mtr);
+    if (thr_get_trx(thr)->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
+        srv_read_only_mode || index->table->is_temporary()) {
+      /* Temp-tables are not shared across connections and multiple transactions
+       * from different connections cannot simultaneously operate on same
+       * temp-table and so read of temp-table is always consistent read. */
+    } else if (index->is_clustered() || index->is_panda()) {
+      if (!lizard::lock_clust_or_panda_rec_cons_read_sees(
+              rec, index, offsets,
+              /**TODO: cleanout logic */
+              nullptr, node->vision)) {
+        err = row_sel_build_prev_vers(
+            node->vision, index, rec, &offsets, &heap,
+            (index->is_clustered() ? &plan->lizard_old_vers_heap
+                                   : &plan->panda_old_vers_heap),
+            &old_vers, &mtr);
 
         if (err != DB_SUCCESS) {
           goto lock_wait_or_error;
@@ -1815,8 +1842,7 @@ skip_lock:
 
         rec = old_vers;
       }
-    } else if (!srv_read_only_mode &&
-               !lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
+    } else if (!lock_sec_rec_cons_read_sees(rec, index, node->vision)) {
       cons_read_requires_clust_rec = true;
     }
   }
@@ -3043,9 +3069,9 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
   return true;
 }
 
-/** Builds a previous version of a clustered index record for a consistent read
+/** Builds a previous version of an index record for a consistent read
 @param[in]      read_view       read view
-@param[in]      clust_index     clustered index
+@param[in]      index           index with transactional information
 @param[in]      prebuilt        prebuilt struct
 @param[in]      rec             record in clustered index
 @param[in,out]  offsets         offsets returned by
@@ -3060,23 +3086,22 @@ bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
 @param[in,out]  lob_undo        Undo information for BLOBs.
 @return DB_SUCCESS or error code */
 [[nodiscard]] static dberr_t row_sel_build_prev_vers_for_mysql(
-    lizard::Vision *vision, dict_index_t *clust_index, row_prebuilt_t *prebuilt,
+    lizard::Vision *vision, dict_index_t *index, row_prebuilt_t *prebuilt,
     const rec_t *rec, ulint **offsets, mem_heap_t **offset_heap,
     rec_t **old_vers, const dtuple_t **vrow, mtr_t *mtr,
     lob::undo_vers_t *lob_undo) {
   DBUG_TRACE;
 
   dberr_t err;
+  const txn_layout_t layout = lizard::dict_index_txn_layout(index);
+  ut_ad(txn_layout_is_arranged(layout));
 
-  if (prebuilt->old_vers_heap) {
-    mem_heap_empty(prebuilt->old_vers_heap);
-  } else {
-    prebuilt->old_vers_heap = mem_heap_create(200, UT_LOCATION_HERE);
-  }
+  mem_heap_t *old_vers_heap =
+      lizard::row_sel_decide_old_vers_heap(index, prebuilt);
 
-  err = row_vers_build_for_consistent_read(
-      rec, mtr, clust_index, offsets, vision, offset_heap,
-      prebuilt->old_vers_heap, old_vers, vrow, lob_undo);
+  err = row_vers_build_for_consistent_read(rec, mtr, index, offsets, vision,
+                                           offset_heap, old_vers_heap, old_vers,
+                                           vrow, lob_undo, layout);
 
   return err;
 }
@@ -3128,13 +3153,15 @@ non-clustered index. Does the necessary locking.
     lob::undo_vers_t *lob_undo) {
   DBUG_TRACE;
 
+  ut_ad(prebuilt && (prebuilt->need_to_access_clustered ||
+                     !lizard::dict_index_is_panda(sec_index)));
+
   dict_index_t *clust_index;
   const rec_t *clust_rec;
   rec_t *old_vers;
   dberr_t err;
   trx_t *trx;
-
-  lizard::SCursor *scursor = nullptr;
+  Cleanout_ctx_t cctx(prebuilt->pcur);
 
   *out_rec = nullptr;
   trx = thr_get_trx(thr);
@@ -3145,7 +3172,8 @@ non-clustered index. Does the necessary locking.
 
   if (lizard::row_sel_optimistic_guess_clust(
           clust_index, sec_index, prebuilt->clust_ref, rec,
-          prebuilt->clust_pcur, *offsets, BTR_SEARCH_LEAF, prebuilt->pcur, &scursor, mtr)) {
+          prebuilt->clust_pcur, *offsets, BTR_SEARCH_LEAF,
+          cctx(MTR_LOG_NO_REDO), mtr)) {
     clust_rec = prebuilt->clust_pcur->get_rec();
     prebuilt->clust_pcur->m_trx_if_known = trx;
     goto clust_rec_found;
@@ -3268,10 +3296,7 @@ non-clustered index. Does the necessary locking.
   }
 
 clust_rec_found:
-  if (scursor != nullptr) {
-    page_no_t gpp_no = page_get_page_no(prebuilt->clust_pcur->get_page());
-    scursor->set_gpp_no(gpp_no);
-  }
+  cctx.address_gpp_if_missing(page_get_page_no(prebuilt->clust_pcur->get_page()));
 
   *offsets = rec_get_offsets(clust_rec, clust_index, *offsets, ULINT_UNDEFINED,
                              UT_LOCATION_HERE, offset_heap);
@@ -3308,9 +3333,14 @@ clust_rec_found:
     /* If the isolation level allows reading of uncommitted data,
     then we never look for an earlier version */
 
-    if (trx_get_vision(trx)->is_asof_gcn()) {
+    if (trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
+        srv_read_only_mode || clust_index->table->is_temporary()) {
+      /* Temp-tables are not shared across connections and multiple transactions
+       * from different connections cannot simultaneously operate on same
+       * temp-table and so read of temp-table is always consistent read. */
+    } else if (trx_get_vision(trx)->is_asof_gcn()) {
       dberr_t gp_error = DB_SUCCESS;
-      bool see = lizard::gp_clust_rec_cons_read_sees(
+      bool see = lizard::gp_clust_or_panda_rec_cons_read_sees(
           trx, clust_rec, clust_index, *offsets, prebuilt->clust_pcur,
           trx_get_vision(trx), &gp_error);
       if (gp_error != DB_SUCCESS) {
@@ -3362,8 +3392,7 @@ clust_rec_found:
         }
       }
 
-    } else if (trx->isolation_level > TRX_ISO_READ_UNCOMMITTED &&
-               !lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
+    } else if (!lock_clust_rec_cons_read_sees(clust_rec, clust_index, *offsets,
                                               prebuilt->clust_pcur,
                                               trx_get_vision(trx))) {
       if (clust_rec != cached_clust_rec) {
@@ -3809,8 +3838,13 @@ static ulint row_sel_try_search_shortcut_for_mysql(
   *offsets = rec_get_offsets(rec, index, *offsets, ULINT_UNDEFINED,
                              UT_LOCATION_HERE, heap);
 
-  if (!lock_clust_rec_cons_read_sees(rec, index, *offsets, pcur,
-                                     trx_get_vision(trx))) {
+  if (trx->isolation_level == TRX_ISO_READ_UNCOMMITTED || srv_read_only_mode ||
+      index->table->is_temporary()) {
+    /* Temp-tables are not shared across connections and multiple transactions
+     * from different connections cannot simultaneously operate on same
+     * temp-table and so read of temp-table is always consistent read. */
+  } else if (!lock_clust_rec_cons_read_sees(rec, index, *offsets, pcur,
+                                            trx_get_vision(trx))) {
     return (SEL_RETRY);
   }
 
@@ -4544,6 +4578,11 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   it. */
   if (prebuilt->index->type & DICT_FTS) {
     return DB_END_OF_INDEX;
+  }
+
+  if (dict_index_is_unique(index) && !index->is_clustered() &&
+      strcmp(index->name, FTS_DOC_ID_INDEX_NAME)) {
+    ut_ad(dtuple_get_n_fields(search_tuple) <= index->n_uniq);
   }
 
 #ifdef UNIV_DEBUG
@@ -5396,7 +5435,15 @@ rec_loop:
       /* Do nothing: we let a non-locking SELECT read the
       latest version of the record */
 
-    } else if (index == clust_index) {
+    } else if (srv_read_only_mode || index->table->is_temporary()) {
+      /* Temp-tables are not shared across connections and multiple transactions
+       * from different connections cannot simultaneously operate on same
+       * temp-table and so read of temp-table is always consistent read. */
+
+      ut_ad(trx_get_vision(trx) == 0 || !trx_get_vision(trx)->is_active() ||
+            index->table->is_temporary());
+    } else if (srv_force_recovery < 5 &&
+               (index->is_clustered() || index->is_panda())) {
       /* Fetch a previous version of the row if the current
       one is not visible in the snapshot; if we have a very
       high force recovery level set, we try to avoid crashes
@@ -5404,7 +5451,7 @@ rec_loop:
 
       if (trx_get_vision(trx)->is_asof_gcn()) {
         dberr_t gp_error = DB_SUCCESS;
-        bool see = lizard::gp_clust_rec_cons_read_sees(
+        bool see = lizard::gp_clust_or_panda_rec_cons_read_sees(
             trx, rec, index, offsets, pcur, trx_get_vision(trx), &gp_error);
         if (gp_error != DB_SUCCESS) {
           err = gp_error;
@@ -5415,9 +5462,8 @@ rec_loop:
             /* The following call returns 'offsets' associated with 'old_vers'
              */
             err = row_sel_build_prev_vers_for_mysql(
-                &trx->vision, clust_index, prebuilt, rec, &offsets, &heap,
-                &old_vers, need_vrow ? &vrow : NULL, &mtr,
-                prebuilt->get_lob_undo());
+                &trx->vision, index, prebuilt, rec, &offsets, &heap, &old_vers,
+                need_vrow ? &vrow : NULL, &mtr, prebuilt->get_lob_undo());
 
             if (err != DB_SUCCESS) {
               goto lock_wait_or_error;
@@ -5434,15 +5480,13 @@ rec_loop:
             prev_rec = rec;
           }
         }
-      } else if (srv_force_recovery < 5 &&
-                 !lock_clust_rec_cons_read_sees(rec, index, offsets, pcur,
-                                                trx_get_vision(trx))) {
+      } else if (!lizard::lock_clust_or_panda_rec_cons_read_sees(
+                     rec, index, offsets, pcur, trx_get_vision(trx))) {
         rec_t *old_vers;
         /* The following call returns 'offsets' associated with 'old_vers' */
         err = row_sel_build_prev_vers_for_mysql(
-            &trx->vision, clust_index, prebuilt, rec, &offsets, &heap,
-            &old_vers, need_vrow ? &vrow : nullptr, &mtr,
-            prebuilt->get_lob_undo());
+            &trx->vision, index, prebuilt, rec, &offsets, &heap, &old_vers,
+            need_vrow ? &vrow : nullptr, &mtr, prebuilt->get_lob_undo());
 
         if (err != DB_SUCCESS) {
           goto lock_wait_or_error;
@@ -5470,8 +5514,7 @@ rec_loop:
 
       ut_ad(!index->is_clustered());
 
-      if (!srv_read_only_mode &&
-          !lock_sec_rec_cons_read_sees(rec, index, &trx->vision)) {
+      if (!lock_sec_rec_cons_read_sees(rec, index, &trx->vision)) {
         /* We should look at the clustered index.
         However, as this is a non-locking read,
         we can skip the clustered index lookup if

@@ -24,7 +24,9 @@ PARTITION BY RANGE(a) (
 );
 --let $FULL_TABLE_NAME=t1#p#p0
 --let $INDEX_COL_MIN_VAL=0
---let $INDEX_COL_MAX_VAL=3
+--let $INDEX_COL_MAX_VAL=2
+--let $IS_PARTITION=1
+--let $PK_COL=a
 insert into gpp_options.t1 values (1,1,1,'11111');
 insert into gpp_options.t1 values (2,2,2,'22222');
 insert into gpp_options.t1 values (3,3,3,'33333');
@@ -67,233 +69,7 @@ CREATE INDEX b_c ON gpp_options.t1(b,c);
 
 # ------------------------------------------------------------------------------------------------------------------------- #
 # ####
-# The following cases are testing partition.
-# ####
-# ------------------------------------------------------------------------------------------------------------------------- #
---echo # Test export and import partition.
-CREATE DATABASE gpp_tmp;
-# First, create a table with index b and b_c both gpp enabled.
-set opt_index_format_gpp_enabled=true;
-CREATE TABLE gpp_tmp.t1 (
-  a int NOT NULL,
-  b int NOT NULL,
-  c int NOT NULL,
-  pad varchar(8192),
-  primary key (a),
-  KEY (b),
-  KEY b_c (b,c)
-) ENGINE=InnoDB AUTO_INCREMENT=0
-PARTITION BY RANGE(a) (
-    PARTITION p0 VALUES LESS THAN (3),
-    PARTITION p1 VALUES LESS THAN (5),
-    PARTITION p2 VALUES LESS THAN (20)
-);
-ALTER TABLE gpp_tmp.t1 DISCARD PARTITION p0 TABLESPACE;
-
-FLUSH TABLE gpp_options.t1 FOR EXPORT;
-LET $MYSQLD_DATADIR = `SELECT @@datadir`;
---copy_file $MYSQLD_DATADIR/gpp_options/t1#p#p0.ibd $MYSQLTEST_VARDIR/tmp/t1#p#p0.ibd
---copy_file $MYSQLD_DATADIR/gpp_options/t1#p#p0.cfg $MYSQLTEST_VARDIR/tmp/t1#p#p0.cfg
-UNLOCK TABLES;
---copy_file $MYSQLTEST_VARDIR/tmp/t1#p#p0.ibd $MYSQLD_DATADIR/gpp_tmp/t1#p#p0.ibd
---copy_file $MYSQLTEST_VARDIR/tmp/t1#p#p0.cfg $MYSQLD_DATADIR/gpp_tmp/t1#p#p0.cfg
-
---error ER_TABLE_SCHEMA_MISMATCH
-ALTER TABLE gpp_tmp.t1 IMPORT PARTITION p0 TABLESPACE;
-
-# alter table with index b and b_c both gpp disabled.
-ALTER TABLE gpp_tmp.t1 DROP INDEX b, DROP INDEX b_c;
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_tmp.t1 ADD INDEX b_c (b,c), ADD INDEX b (b);
---error ER_TABLE_SCHEMA_MISMATCH
-ALTER TABLE gpp_tmp.t1 IMPORT PARTITION p0 TABLESPACE;
-
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_tmp.t1 DROP INDEX b;
-ALTER TABLE gpp_tmp.t1 ADD INDEX b (b);
-
---remove_file $MYSQLD_DATADIR/gpp_tmp/t1#p#p0.cfg
---error ER_TABLE_CFG_MISSING
-ALTER TABLE gpp_tmp.t1 IMPORT PARTITION p0 TABLESPACE;
---copy_file $MYSQLTEST_VARDIR/tmp/t1#p#p0.cfg $MYSQLD_DATADIR/gpp_tmp/t1#p#p0.cfg
-ALTER TABLE gpp_tmp.t1 IMPORT PARTITION p0 TABLESPACE;
-
---remove_file $MYSQLTEST_VARDIR/tmp/t1#p#p0.cfg
---remove_file $MYSQLTEST_VARDIR/tmp/t1#p#p0.ibd
-DROP DATABASE gpp_tmp;
-
---echo # Test ADD PARTITION
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 ADD PARTITION (PARTITION p3 VALUES LESS THAN (30));
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---let $INDEX_COL=b
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---let $INDEX_COL=b
---source suite/lizard/include/gpp_has_options.inc
-insert into gpp_options.t1 values (25,25,25,'25252525');
---source include/restart_mysqld.inc
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---let $INDEX_COL=b
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---let $INDEX_COL=b
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test DROP PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 DROP PARTITION p3;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test TRUNCATE PARTITION
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 TRUNCATE PARTITION p2;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test REORGANIZE PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LESS THAN (4), PARTITION p1a VALUES LESS THAN (5));
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test EXCHANGE PARTITION
-#Before exchange, p2's indexes all have gpp.
-insert into gpp_options.t1 values (9,9,9,'99999');
---let $FULL_TABLE_NAME=t1#p#p2
---let $TABLE_NAME=t1
---let $INDEX_COL_MIN_VAL=5
---let $INDEX_COL_MAX_VAL=20
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
-SET opt_index_format_gpp_enabled=false;
-create table gpp_options.exchange_table (a int, b int not null, c int not null, pad varchar(8192), primary key (a),key (b),key `b_c` (b,c)) engine=innodb;
-insert into gpp_options.exchange_table values (8,8,8,'88888');
-ALTER TABLE gpp_options.t1 EXCHANGE PARTITION p2 WITH TABLE gpp_options.exchange_table WITHOUT VALIDATION;
---let $FULL_TABLE_NAME=
---let $TABLE_NAME=exchange_table
---let $INDEX_COL_MIN_VAL=0
---let $INDEX_COL_MAX_VAL=100
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
---let $FULL_TABLE_NAME=t1#p#p2
---let $TABLE_NAME=t1
---let $INDEX_COL_MIN_VAL=5
---let $INDEX_COL_MAX_VAL=20
---let $INDEX_NAME=b
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
---let $FULL_TABLE_NAME=t1#p#p2
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
-# p0 doesn't change
---let $FULL_TABLE_NAME=t1#p#p0
---let $INDEX_COL_MIN_VAL=0
---let $INDEX_COL_MAX_VAL=3
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
-DROP TABLE gpp_options.exchange_table;
-
---echo # Test ANALYZE PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 ANALYZE PARTITION p0;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test CHECK PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 CHECK PARTITION p0;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test OPTIMIZE PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 OPTIMIZE PARTITION p0;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test REBUILD PARTITION
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 REBUILD PARTITION p0;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test REPAIR PARTITION
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 REPAIR PARTITION p0;
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
---echo # Test REMOVE PARTITIONING
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 REMOVE PARTITIONING;
---let $FULL_TABLE_NAME=
---let $TABLE_NAME=t1
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
-
-# ------------------------------------------------------------------------------------------------------------------------- #
-# ####
-# The following cases are from gpp_options.test
+# The following cases are from gpp_options2.test
 # ####
 # ------------------------------------------------------------------------------------------------------------------------- #
 
@@ -324,6 +100,34 @@ insert into gpp_options.t1 values (8,8,8,'88888');
 insert into gpp_options.t1 values (9,9,9,'99999');
 SET opt_index_format_gpp_enabled=false;
 CREATE INDEX b_c ON gpp_options.t1(b,c);
+
+# ----------------------------------------------------------------------------------------------------- #
+--echo # Rename an existing index b_c to bc_renamed, verify GPP option consistency.
+SET opt_index_format_gpp_enabled=true;
+ALTER TABLE gpp_options.t1 RENAME INDEX b_c TO bc_renamed;
+--let $INDEX_NAME=bc_renamed
+--let $CONTAIN_GPP=0
+--source suite/lizard/include/gpp_has_options.inc
+--let $INDEX_NAME=b
+--let $CONTAIN_GPP=1
+--source suite/lizard/include/gpp_has_options.inc
+--source include/restart_mysqld.inc
+--let $INDEX_NAME=bc_renamed
+--let $CONTAIN_GPP=0
+--source suite/lizard/include/gpp_has_options.inc
+--let $INDEX_NAME=b
+--let $CONTAIN_GPP=1
+--source suite/lizard/include/gpp_has_options.inc
+
+SET opt_index_format_gpp_enabled=false;
+ALTER TABLE gpp_options.t1 RENAME INDEX bc_renamed TO b_c;
+--let $INDEX_NAME=b_c
+--let $CONTAIN_GPP=0
+--source suite/lizard/include/gpp_has_options.inc
+--let $INDEX_NAME=b
+--let $CONTAIN_GPP=1
+--source suite/lizard/include/gpp_has_options.inc
+# ----------------------------------------------------------------------------------------------------- #
 
 # ----------------------------------------------------------------------------------------------------- #
 --echo # Modify column b's data type, indexes b and b_c will be rebuilt.

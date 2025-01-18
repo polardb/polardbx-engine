@@ -75,18 +75,19 @@ static inline void row_log_abort_sec(
 @param[in,out] index Index, S- or X-latched.
 @param[in] tuple Index tuple.
 @param[in] trx_id Transaction ID for insert, or 0 for delete.
+@param[in] trx Transaction
 @retval true if the operation was logged or can be ignored
 @retval false if online index creation is not taking place */
 [[nodiscard]] static inline bool row_log_online_op_try(dict_index_t *index,
-                                                       const dtuple_t *tuple,
+                                                       dtuple_t *tuple,
                                                        trx_id_t trx_id);
 #endif /* !UNIV_HOTBACKUP */
 /** Logs an operation to a secondary index that is (or was) being created. */
 void row_log_online_op(
-    dict_index_t *index,   /*!< in/out: index, S or X latched */
-    const dtuple_t *tuple, /*!< in: index tuple */
-    trx_id_t trx_id)       /*!< in: transaction ID for insert,
-                           or 0 for delete */
+    dict_index_t *index, /*!< in/out: index, S or X latched */
+    dtuple_t *tuple,     /*!< in: index tuple */
+    trx_id_t trx_id)     /*!< in: transaction ID for insert,
+                         or 0 for delete */
     UNIV_COLD;
 
 /** Gets the error status of the online index rebuild log.
@@ -207,6 +208,11 @@ of an ALTER TABLE for this index.
 */
 ulint row_log_estimate_work(const dict_index_t *index);
 #endif /* HAVE_PSI_STAGE_INTERFACE */
+
+/** Set error of the creating index when using row log.
+@param[in]  index   index that is creating
+@param[in]  err     err info */
+void row_log_set_error(dict_index_t *index, const dberr_t err);
 
 #include "row0log.ic"
 

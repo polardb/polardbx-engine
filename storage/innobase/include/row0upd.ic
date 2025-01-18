@@ -40,6 +40,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0zip.h"
 #include "lizard0row.h"
 
+#include "lizard0undo.h"
+
 /** Creates an update vector object.
  @return own: update vector object */
 static inline upd_t *upd_create(
@@ -155,13 +157,14 @@ static inline void row_upd_rec_sys_fields(
     rec_t *rec,                /*!< in/out: record */
     page_zip_des_t *page_zip,  /*!< in/out: compressed page whose
                               uncompressed part will be updated, or NULL */
-    const dict_index_t *index, /*!< in: clustered index */
+    const dict_index_t *index, /*!< in: clustered index or panda index */
     const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     const trx_t *trx,          /*!< in: transaction */
     roll_ptr_t roll_ptr)       /*!< in: roll ptr of the undo log record,
                        can be 0 during IMPORT */
 {
-  ut_ad(index->is_clustered());
+  ut_ad(!index->table->is_intrinsic());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(rec_offs_validate(rec, index, offsets));
 
   if (page_zip) {
@@ -178,7 +181,11 @@ static inline void row_upd_rec_sys_fields(
     /* During IMPORT the trx id in the record can be in the
     future, if the .ibd file is being imported from another
     instance. During IMPORT roll_ptr will be 0. */
+
+    /** Revision: During IMPORT roll_ptr will be lizard::ROLL_PTR_IMPORT
+    for now to keep MVCC working fine. */
     ut_ad(roll_ptr == 0 ||
+          roll_ptr == lizard::ROLL_PTR_IMPORT ||
           lock_check_trx_id_sanity(trx_read_trx_id(rec + offset), rec, index,
                                    offsets));
 

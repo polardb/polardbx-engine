@@ -24,7 +24,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0trx.h
+/** @file trx/lizard0trx.cc
   Lizard transaction structure.
 
  Created 2020-08-27 by Jianwei.zhao

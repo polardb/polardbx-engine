@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0undo0types.h"
 
 namespace lizard {
+constexpr trx_id_t TRX_ID_FAKE_FOR_RLOG_INS = 1;
 
 /** Alloc & release cleanout cursors. */
 extern void alloc_commit_cleanout(trx_t *trx);

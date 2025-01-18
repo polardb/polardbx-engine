@@ -100,7 +100,7 @@ to determine their positions within a clustered index record.
 @param[in] log_ptr  Pointer to a buffer of size > 20 opened in mlog.
 @param[in] mtr      Mini-transaction.
 @return new pointer to mlog */
-byte *row_upd_write_sys_vals_to_log(dict_index_t *index, trx_id_t trx_id,
+byte *row_upd_write_sys_vals_to_log(const dict_index_t *index, trx_id_t trx_id,
                                     roll_ptr_t roll_ptr, byte *log_ptr,
                                     mtr_t *mtr);
 
@@ -110,7 +110,7 @@ row is updated or marked deleted.
 @param[in,out]  rec             record
 @param[in,out]  page_zip        compressed page whose uncompressed part will
                                 be updated, or NULL
-@param[in]      index           clustered index
+@param[in]      index           clustered index or panda index
 @param[in]      offsets         rec_get_offsets(rec, index)
 @param[in]      trx             transaction
 @param[in]      roll_ptr        roll ptr of the undo log record, can be 0

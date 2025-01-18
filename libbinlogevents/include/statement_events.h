@@ -539,6 +539,11 @@ class Query_event : public Binary_log_event {
       Replicate opt_index_format_gpp_enabled.
     */
     Q_OPT_INDEX_FORMAT_GPP_ENABLED,
+
+    /*
+      Replicate opt_index_format_panda_enabled.
+    */
+    Q_OPT_INDEX_FORMAT_PANDA_ENABLED = 255
   };
   const char *query;
   const char *db;
@@ -659,6 +664,8 @@ class Query_event : public Binary_log_event {
   uint8_t opt_flashback_area;
 
   uint8_t opt_index_format_gpp_enabled;
+
+  uint8_t opt_index_format_panda_enabled;
 
   /**
     The constructor will be used while creating a Query_event, to be

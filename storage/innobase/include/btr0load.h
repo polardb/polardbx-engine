@@ -175,6 +175,9 @@ class Btree_load : private ut::Non_copyable {
   /** Root page level */
   size_t m_root_level{};
 
+  /** Root page type. */
+  page_type_t m_root_page_type{FIL_PAGE_TYPE_UNUSED};
+
   /** Flush observer */
   Flush_observer *m_flush_observer{};
 

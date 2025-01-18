@@ -208,7 +208,7 @@ Ret_t Tester::find_space_id(std::vector<std::string> &tokens) noexcept {
   space_id_t space_id = table->space;
 
   dict_index_t *clust_index = table->first_index();
-  page_no_t root_page_no = clust_index->page;
+  page_no_t root_page_no = clust_index->page_no();
 
   TLOG("table_name=" << table_name << ", space_id=" << space_id
                      << ", root_page_no=" << root_page_no);
@@ -235,7 +235,7 @@ Ret_t Tester::find_root_page_no(std::vector<std::string> &tokens) noexcept {
   space_id_t space_id = table->space;
 
   dict_index_t *clust_index = table->first_index();
-  page_no_t root_page_no = clust_index->page;
+  page_no_t root_page_no = clust_index->page_no();
 
   TLOG("table_name=" << table_name << ", space_id=" << space_id
                      << ", root_page_no=" << root_page_no);
@@ -391,7 +391,7 @@ DISPATCH_FUNCTION_DEF(Tester::make_ondisk_root_page_zeroes) {
   ut_ad(table != nullptr);
 
   const dict_index_t *const clust_index = table->first_index();
-  const page_no_t root_page_no = clust_index->page;
+  const page_no_t root_page_no = clust_index->page_no();
   const page_size_t page_size = dict_table_page_size(table);
 
   return clear_page_prefix(table->space, root_page_no, page_size.physical());
@@ -428,7 +428,7 @@ Ret_t Tester::corrupt_ondisk_root_page(
   }
 
   const dict_index_t *const clust_index = table->first_index();
-  const page_no_t root_page_no = clust_index->page;
+  const page_no_t root_page_no = clust_index->page_no();
 
   return clear_page_prefix(table->space, root_page_no, FIL_PAGE_DATA);
 }

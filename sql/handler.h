@@ -4912,7 +4912,8 @@ class handler {
     @retval false               Success - no errors.
    */
 
-  bool ha_get_se_private_data(dd::Table *dd_table, bool reset);
+  bool ha_get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
+                              dd::Table *dd_table, bool reset);
 
   void adjust_next_insert_id_after_explicit_value(ulonglong nr);
   int update_auto_increment();
@@ -6834,7 +6835,9 @@ class handler {
   virtual int create(const char *name, TABLE *form, HA_CREATE_INFO *info,
                      dd::Table *table_def) = 0;
 
-  virtual bool get_se_private_data(dd::Table *dd_table [[maybe_unused]],
+  virtual bool get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy
+                                   [[maybe_unused]],
+                                   dd::Table *dd_table [[maybe_unused]],
                                    bool reset [[maybe_unused]]) {
     return false;
   }

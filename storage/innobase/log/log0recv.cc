@@ -84,6 +84,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout.h"
 #include "lizard0gcs.h"
 #include "lizard0btr0cur.h"
+#include "lizard0btr0cur0bamboo.h"
+#include "lizard0btr0cur0clover.h"
+#include "lizard0btr0cur0gpp.h"
 
 std::list<space_id_t> recv_encr_ts_list;
 
@@ -1776,6 +1779,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   page_t *page;
   page_zip_des_t *page_zip;
   dict_index_t *index = nullptr;
+  txn_layout_t layout;
 
 #ifdef UNIV_DEBUG
   ulint page_type;
@@ -2017,7 +2021,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = page_cur_parse_insert_rec(false, ptr, end_ptr, block, index, mtr);
@@ -2042,13 +2046,24 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = btr_cur_parse_del_mark_set_clust_rec(ptr, end_ptr, page, page_zip,
                                                    index);
       }
 
+      break;
+
+    case MLOG_REC_SEC_PANDA_DELETE_MARK:
+      ut_ad(!page || fil_page_type_is_index(page_type));
+
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
+        ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+
+        ptr = lizard::btr_cur_parse_del_mark_set_panda_sec_rec(ptr, end_ptr, page,
+                                                           page_zip, index);
+      }
       break;
 
     case MLOG_REC_CLUST_DELETE_MARK_8027:
@@ -2068,12 +2083,22 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       break;
 
-    case MLOG_REC_CLUST_LIZARD_UPDATE:
+    case MLOG_REC_CLUST_CLOVER_UPDATE:
       ut_ad(!page || fil_page_type_is_index(page_type));
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
-        ptr = lizard::btr_cur_parse_lizard_fields_upd_clust_rec(
+        ptr = lizard::btr_cur_parse_clover_fields_upd_clust_rec(
+            ptr, end_ptr, page, page_zip, index);
+      }
+      break;
+
+    case MLOG_REC_SEC_BAMBOO_UPDATE:
+      ut_ad(!page || fil_page_type_is_index(page_type));
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
+        ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+
+        ptr = lizard::btr_cur_parse_bamboo_fields_upd_sec_rec(
             ptr, end_ptr, page, page_zip, index);
       }
       break;
@@ -2102,8 +2127,8 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ptr = btr_cur_parse_del_mark_set_sec_rec(ptr, end_ptr, page, page_zip);
       break;
-    
-    case MLOG_REC_SEC_GPP_NO:
+
+    case MLOG_REC_SEC_GPP_NO_UPDATE:
       ut_ad(!page || fil_page_type_is_index(page_type));
 
       ptr = lizard::btr_cur_parse_gpp_no_upd_sec_rec(ptr, end_ptr, page,
@@ -2114,11 +2139,11 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
-        ptr =
-            btr_cur_parse_update_in_place(ptr, end_ptr, page, page_zip, index);
+        ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, page_zip, index,
+                                            layout);
       }
 
       break;
@@ -2134,8 +2159,8 @@ static byte *recv_parse_or_apply_log_rec_body(
                &index))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
-        ptr =
-            btr_cur_parse_update_in_place(ptr, end_ptr, page, page_zip, index);
+        ptr = btr_cur_parse_update_in_place(ptr, end_ptr, page, page_zip, index,
+                                            TL_CLOVER);
       }
 
       break;
@@ -2145,7 +2170,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = page_parse_delete_rec_list(type, ptr, end_ptr, block, index, mtr);
@@ -2176,7 +2201,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = page_parse_copy_rec_list_to_created_page(ptr, end_ptr, block,
@@ -2206,7 +2231,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = btr_parse_page_reorganize(ptr, end_ptr, index,
@@ -2231,7 +2256,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = btr_parse_page_reorganize(ptr, end_ptr, index, true, block, mtr);
@@ -2277,6 +2302,14 @@ static byte *recv_parse_or_apply_log_rec_body(
     case MLOG_COMP_PAGE_CREATE_SDI:
 
       page_parse_create(block, type == MLOG_COMP_PAGE_CREATE_SDI, FIL_PAGE_SDI);
+
+      break;
+
+    case MLOG_PAGE_CREATE_PANDA:
+    case MLOG_COMP_PAGE_CREATE_PANDA:
+
+      page_parse_create(block, type == MLOG_COMP_PAGE_CREATE_PANDA,
+                        FIL_PAGE_INDEX_PANDA);
 
       break;
 
@@ -2333,7 +2366,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       ut_ad(!page || fil_page_type_is_index(page_type));
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
         ptr = page_cur_parse_delete_rec(ptr, end_ptr, block, index, mtr);
@@ -2440,7 +2473,7 @@ static byte *recv_parse_or_apply_log_rec_body(
 
     case MLOG_ZIP_PAGE_COMPRESS_NO_DATA:
 
-      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index))) {
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || (page_is_comp(page) == dict_table_is_comp(index->table)));
 
         ptr = page_zip_parse_compress_no_data(ptr, end_ptr, page, page_zip,
@@ -4277,8 +4310,8 @@ const char *get_mlog_string(mlog_id_t type) {
     case MLOG_REC_SEC_DELETE_MARK:
       return "MLOG_REC_SEC_DELETE_MARK";
 
-    case MLOG_REC_SEC_GPP_NO:
-      return "MLOG_REC_SEC_GPP_NO";
+    case MLOG_REC_SEC_GPP_NO_UPDATE:
+      return "MLOG_REC_SEC_GPP_NO_UPDATE";
 
     case MLOG_REC_UPDATE_IN_PLACE_8027:
       return "MLOG_REC_UPDATE_IN_PLACE_8027";
@@ -4458,11 +4491,23 @@ const char *get_mlog_string(mlog_id_t type) {
     case MLOG_LIST_START_DELETE:
       return "MLOG_LIST_START_DELETE";
 
-    case MLOG_REC_CLUST_LIZARD_UPDATE:
-      return ("MLOG_REC_CLUST_LIZARD_UPDATE");
+    case MLOG_REC_CLUST_CLOVER_UPDATE:
+      return ("MLOG_REC_CLUST_CLOVER_UPDATE");
 
     case MLOG_GCN_METADATA:
       return ("MLOG_GCN_METADATA");
+
+    case MLOG_REC_SEC_BAMBOO_UPDATE:
+      return ("MLOG_REC_SEC_BAMBOO_UPDATE");
+
+    case MLOG_REC_SEC_PANDA_DELETE_MARK:
+      return ("MLOG_REC_SEC_PANDA_DELETE_MARK");
+
+    case MLOG_PAGE_CREATE_PANDA:
+      return "MLOG_PAGE_CREATE_PANDA";
+
+    case MLOG_COMP_PAGE_CREATE_PANDA:
+      return "MLOG_COMP_PAGE_CREATE_PANDA";
 
     case MLOG_TEST:
       return "MLOG_TEST";

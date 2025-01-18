@@ -7,6 +7,8 @@ dbms_ccl	flush_ccl_queue	ADMIN_PROC	NULL
 dbms_ccl	flush_ccl_rule	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_queue	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_rule	ADMIN_PROC	NULL
+dbms_conn	comment_connection	ADMIN_PROC	VARCHAR
+dbms_conn	show_connection	ADMIN_PROC	NULL
 dbms_consensus	add_follower	ADMIN_PROC	VARCHAR
 dbms_consensus	add_learner	ADMIN_PROC	VARCHAR
 dbms_consensus	change_leader	ADMIN_PROC	VARCHAR
@@ -38,12 +40,15 @@ dbms_outln	flush_outline	ADMIN_PROC	NULL
 dbms_outln	preview_outline	ADMIN_PROC	VARCHAR, VARCHAR
 dbms_outln	show_outline	ADMIN_PROC	NULL
 dbms_proxy	get_token	ADMIN_PROC	NULL
+dbms_proxy	ping	TRANS_PROC	NULL
 dbms_proxy	reset_db	TRANS_PROC	NULL
 dbms_proxy	switch_user	TRANS_PROC	VARCHAR, VARCHAR, VARCHAR
 dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
+dbms_stat	flush_cleanout	ADMIN_PROC	NULL
 dbms_stat	flush_gpp	ADMIN_PROC	NULL
+dbms_trans	backfill	TRANS_PROC	VARCHAR, VARCHAR
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR
 dbms_trans	returning_all	TRANS_PROC	VARCHAR, VARCHAR
 dbms_trans	rollback_to_implicit_savepoint	TRANS_PROC	NULL
@@ -54,6 +59,7 @@ dbms_xa	ac_commit	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONG
 dbms_xa	ac_prepare	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG, LONGLONG, LONGLONG
 dbms_xa	advance_gcn_no_flush	ADMIN_PROC	LONGLONG
 dbms_xa	find_by_xid	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG
+dbms_xa	find_by_xid_with_hint	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG, LONGLONG
 dbms_xa	prepare_with_trx_slot	TRANS_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_xa	send_heartbeat	ADMIN_PROC	NULL
 polarx	changeset_fetch	ADMIN_PROC	NULL

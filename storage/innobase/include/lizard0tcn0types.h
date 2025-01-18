@@ -124,6 +124,7 @@ class Atomic_linear_array : public Linear_array<Key, Value> {
 
   virtual void do_after_operation(bool required, size_t pos) override {
     if (required) {
+      ut_ad(m_used[pos % ATOMIC_ARRAY_SIZE].load() == true);
       m_used[pos % ATOMIC_ARRAY_SIZE].store(false);
     }
   }

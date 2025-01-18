@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <time.h>
 
+#include "fil0fil.h"
 #include "sql/table.h"
 
 #include "univ.i"
@@ -52,5 +53,8 @@ extern int field_store_string(Field *field, const char *str);
 
 /* Defined with in 'handler/i_s.cc' */
 extern int field_store_time_t(Field *field, time_t time);
+
+/* Defined with in 'handler/i_s.cc' */
+extern const char *i_s_index_page_type_to_str(page_type_t page_type);
 
 #endif

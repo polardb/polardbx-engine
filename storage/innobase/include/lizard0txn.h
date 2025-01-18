@@ -103,45 +103,66 @@ struct txn_desc_t {
   bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
 };
 
-///** Transaction object if active. */
-//struct txn_rw_t {
-// public:
-//  trx_t *trx;
-//  undo_ptr_t undo_ptr;
-//
-// public:
-//  txn_rw_t() : trx(nullptr), undo_ptr(UNDO_PTR_NULL) {}
-//
-//  txn_rw_t(trx_t *trx_arg, undo_ptr_t undo_ptr_arg)
-//      : trx(trx_arg), undo_ptr(undo_ptr_arg) {}
-//
-//  void reset() {
-//    trx = nullptr;
-//    undo_ptr = UNDO_PTR_NULL;
-//  }
-//
-//  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
-//
-//  bool is_active() const {
-//    return trx != nullptr && undo_ptr != UNDO_PTR_NULL &&
-//           undo_ptr_is_active(undo_ptr);
-//  }
-//};
-//
-///** transaction identity include trx_id and txn slot address.*/
-//struct txn_id_t {
-// public:
-//  trx_id_t trx_id;
-//  undo_ptr_t undo_ptr;
-//
-// public:
-//  txn_id_t() : trx_id(0), undo_ptr(UNDO_PTR_NULL) {}
-//
-//  txn_id_t(trx_id_t trx_id_arg, undo_ptr_t undo_ptr_arg)
-//      : trx_id(trx_id_arg), undo_ptr(undo_ptr_arg) {}
-//
-//  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
-//};
+/** Transaction object if active. */
+struct txn_rw_t {
+ public:
+  // referenced trx object if active.
+  trx_t *trx;
+  // fixed txn slot buf block object if active.
+  buf_block_t *block;
+
+  // Txn slot address and transaction state.
+  undo_ptr_t undo_ptr;
+
+ public:
+  txn_rw_t() : trx(nullptr), block(nullptr), undo_ptr(UNDO_PTR_NULL) {}
+
+  txn_rw_t(trx_t *trx_arg, buf_block_t *block_arg, undo_ptr_t undo_ptr_arg)
+      : trx(trx_arg), block(block_arg), undo_ptr(undo_ptr_arg) {}
+
+  void reset() {
+    ut_a(block == nullptr);
+
+    trx = nullptr;
+    block = nullptr;
+    undo_ptr = UNDO_PTR_NULL;
+  }
+
+  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
+
+  bool is_active() const {
+    return trx != nullptr && undo_ptr != UNDO_PTR_NULL &&
+           undo_ptr_is_active(undo_ptr);
+  }
+
+  /** release the txn slot buf block fix count. */
+  void release_slot() {
+    if (block) {
+      ut_ad(was_slot_fixed());
+      buf_block_unfix(block);
+      block = nullptr;
+    }
+  }
+
+  bool was_slot_fixed() const {
+    return block != nullptr && block->page.buf_fix_count.load() > 0;
+  }
+};
+
+/** transaction identity include trx_id and txn slot address.*/
+struct txn_id_t {
+ public:
+  trx_id_t trx_id;
+  undo_ptr_t undo_ptr;
+
+ public:
+  txn_id_t() : trx_id(0), undo_ptr(UNDO_PTR_NULL) {}
+
+  txn_id_t(trx_id_t trx_id_arg, undo_ptr_t undo_ptr_arg)
+      : trx_id(trx_id_arg), undo_ptr(undo_ptr_arg) {}
+
+  bool alloced() const { return undo_ptr != UNDO_PTR_NULL; }
+};
 
 /**
   Lizard transaction attributes in index (used by Vision)
@@ -293,7 +314,6 @@ struct txn_sys_t {
 
   bool is_special(const undo_ptr_t &undo_ptr) {
     undo_addr_t undo_addr(undo_ptr);
-
     return is_special(undo_addr);
   }
 
@@ -348,44 +368,44 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *scn_ptr,
  * @param[in]			serialised */
 void txn_commit_in_memory(trx_t *trx, bool serialised);
 
-///** Get active transaction according to txn rec.
-// *
-// * @param[in/out]	txn rec
-// * @param[in]		increment ref count
-// * @param[in]		optional trx which is used to get local min active tid
-// *
-// * @retval	txn rw object.
-// * */
-//txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count,
-//                          const trx_t *optional_trx);
-//
-///** Get active transaction according to txn rw.
-// *
-// * @param[in]		txn rw
-// * @param[in]		increment ref count
-// *
-// * @retval	txn rw object.
-// * */
-//txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count);
-//
-///** Get active transaction according to txn identity.
-// *
-// * @param[in]		txn identity
-// * @param[in]		increment ref count
-// *
-// * @retval	txn rw object.
-// * */
-//txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count);
-//
-///**
-// * Judge transaction have committed through txn slot.
-// *
-// * @param[in]	txn rw object
-// *
-// * @retval	true	Committed
-// * @retval	false	Active
-// * */
-//bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw);
+/** Get active transaction according to txn rec.
+ *
+ * @param[in/out]	txn rec
+ * @param[in]		increment ref count
+ * @param[in]		optional trx which is used to get local min active tid
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count,
+                          const trx_t *optional_trx);
+
+/** Get active transaction according to txn rw.
+ *
+ * @param[in]		txn rw
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count);
+
+/** Get active transaction according to txn identity.
+ *
+ * @param[in]		txn identity
+ * @param[in]		increment ref count
+ *
+ * @retval	txn rw object.
+ * */
+txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count);
+
+/**
+ * Judge transaction have committed through txn slot.
+ *
+ * @param[in]	txn rw object
+ *
+ * @retval	true	Committed
+ * @retval	false	Active
+ * */
+bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw);
 
 /**
    Resurrect txn undo log segment,

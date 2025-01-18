@@ -1003,8 +1003,12 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
     row_mysql_prebuilt_free_blob_heap(prebuilt);
   }
 
-  if (prebuilt->old_vers_heap) {
-    mem_heap_free(prebuilt->old_vers_heap);
+  if (prebuilt->lizard_old_vers_heap) {
+    mem_heap_free(prebuilt->lizard_old_vers_heap);
+  }
+
+  if (prebuilt->panda_old_vers_heap) {
+    mem_heap_free(prebuilt->panda_old_vers_heap);
   }
 
   if (prebuilt->fetch_cache[0] != nullptr) {
@@ -1311,9 +1315,11 @@ run_again:
 @param[in]      entry   Entry to remove/rollback.
 @param[in,out]  thr     Thread handler.
 @param[in,out]  mtr     Mini-transaction.
+@param[in]      layout  txn layout.
 @return error code or DB_SUCCESS */
 static dberr_t row_explicit_rollback(dict_index_t *index, const dtuple_t *entry,
-                                     que_thr_t *thr, mtr_t *mtr) {
+                                     que_thr_t *thr, mtr_t *mtr,
+                                     const txn_layout_t &layout) {
   btr_cur_t cursor;
   ulint flags;
   ulint offsets_[REC_OFFS_NORMAL_SIZE];
@@ -1330,12 +1336,13 @@ static dberr_t row_explicit_rollback(dict_index_t *index, const dtuple_t *entry,
   offsets = rec_get_offsets(btr_cur_get_rec(&cursor), index, offsets_,
                             ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
 
+  ut_ad(layout == TL_NONE && index->table->is_intrinsic());
   if (index->is_clustered()) {
-    err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(&cursor),
+    err = btr_cur_del_mark_set_clust_rec(flags, layout, btr_cur_get_block(&cursor),
                                          btr_cur_get_rec(&cursor), index,
                                          offsets, thr, entry, mtr);
   } else {
-    err = btr_cur_del_mark_set_sec_rec(flags, &cursor, true, thr, mtr);
+    err = btr_cur_del_mark_set_sec_rec(flags, layout, &cursor, true, thr, mtr);
   }
   ut_ad(err == DB_SUCCESS);
 
@@ -1513,7 +1520,8 @@ static dberr_t row_insert_for_mysql_using_cursor(const byte *mysql_rec,
     for (dict_index_t *index = UT_LIST_GET_FIRST(node->table->indexes);
          inserted_upto != nullptr; index = UT_LIST_GET_NEXT(indexes, index),
                       node->entry = UT_LIST_GET_NEXT(tuple_list, node->entry)) {
-      row_explicit_rollback(index, node->entry, thr, &mtr);
+      /* In the rollback of intrinsic table. */
+      row_explicit_rollback(index, node->entry, thr, &mtr, TL_NONE);
 
       if (index == inserted_upto) {
         break;
@@ -2522,15 +2530,22 @@ void row_delete_all_rows(dict_table_t *table) {
   DML action. Any error during this action is ir-reversible. */
   for (auto index : table->indexes) {
     ut_ad(index->space == table->space);
-    const page_id_t root(index->space, index->page);
+    const page_id_t root(index->space, index->page_no());
     btr_free(root, page_size);
 
     mtr_t mtr;
 
     mtr.start();
     mtr.set_log_mode(MTR_LOG_NO_REDO);
-    index->page = btr_create(index->type, index->space, index->id, index, &mtr);
-    ut_ad(index->page != FIL_NULL);
+    /* TODO: ddl_policy */
+    page_type_t expected_page_type = index->page_type() == FIL_PAGE_INDEX_PANDA
+                                         ? FIL_PAGE_INDEX_PANDA
+                                         : FIL_PAGE_TYPE_UNUSED;
+    auto root_page = btr_create(index->type, index->space, index->id, index,
+                                expected_page_type, &mtr);
+    ut_ad(root_page.page_no != FIL_NULL);
+    ut_ad(root_page.page_type == index->page_type());
+    index->root = root_page;
     mtr.commit();
   }
 }
@@ -2990,9 +3005,10 @@ dberr_t row_create_index_for_mysql(
 
   trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
+  page_type_t expected_page_type;
   lizard::dd_fill_dict_index_format(
       lizard::ha_ddl_create_index_policy(ddl_policy, table, index), table,
-      index);
+      index, &expected_page_type);
 
   /* For temp-table we avoid insertion into SYSTEM TABLES to
   maintain performance and so we have separate path that directly
@@ -3001,8 +3017,9 @@ dberr_t row_create_index_for_mysql(
     /* Create B-tree */
     dict_build_index_def(table, index, trx);
 
-    err = dict_index_add_to_cache_w_vcol(table, index, nullptr, FIL_NULL,
-                                         trx_is_strict(trx));
+    err =
+        dict_index_add_to_cache_w_vcol(table, index, nullptr, index->root,
+                                       expected_page_type, trx_is_strict(trx));
 
     if (err != DB_SUCCESS) {
       goto error_handling;
@@ -3010,7 +3027,7 @@ dberr_t row_create_index_for_mysql(
 
     index = UT_LIST_GET_LAST(table->indexes);
 
-    err = dict_create_index_tree_in_mem(index, trx);
+    err = dict_create_index_tree_in_mem(index, trx, expected_page_type);
 
     if (err != DB_SUCCESS) {
       goto error_handling;
@@ -3025,7 +3042,7 @@ dberr_t row_create_index_for_mysql(
     /* add index to dictionary cache and also free index object.
     We allow intrinsic table to violate the size limits because
     they are used by optimizer for all record formats. */
-    err = dict_index_add_to_cache(table, index, FIL_NULL,
+    err = dict_index_add_to_cache(table, index, index->root, expected_page_type,
                                   !table->is_intrinsic() && trx_is_strict(trx));
 
     if (err != DB_SUCCESS) {
@@ -3047,7 +3064,7 @@ dberr_t row_create_index_for_mysql(
     ut_a(index != nullptr);
     index->table = table;
 
-    err = dict_create_index_tree_in_mem(index, trx);
+    err = dict_create_index_tree_in_mem(index, trx, expected_page_type);
 
     if (err != DB_SUCCESS && !table->is_intrinsic()) {
       dict_sys_mutex_enter();
@@ -4069,9 +4086,9 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
     page_no_t page;
 
     rw_lock_x_lock(dict_index_get_lock(index), UT_LOCATION_HERE);
-    page = index->page;
+    page = index->page_no();
     /* Mark the index unusable. */
-    index->page = FIL_NULL;
+    index->root = PAGE_MARK_NULL;
     rw_lock_x_unlock(dict_index_get_lock(index));
 
     if (table->is_temporary()) {

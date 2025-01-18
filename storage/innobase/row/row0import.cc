@@ -68,9 +68,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_aes.h"
 #include "my_dbug.h"
 
+#include "lizard0fil0types.h"
 #include "lizard0row.h"
 #include "lizard0scn.h"
 #include "lizard0undo.h"
+#include "lizard0btr0btr.h"
 
 extern bool lower_case_file_system;
 
@@ -105,6 +107,8 @@ struct row_index_t {
   space_id_t m_space; /*!< Space where it is placed */
 
   page_no_t m_page_no; /*!< Root page number */
+
+  page_type_t m_page_type;
 
   ulint m_type; /*!< Index type */
 
@@ -964,8 +968,9 @@ class PageConverter : public AbstractCallback {
   @param rec record to update
   @param offsets column offsets for the record
   @return DB_SUCCESS or error code. */
-  dberr_t adjust_cluster_record(const dict_index_t *index, rec_t *rec,
-                                const ulint *offsets) UNIV_NOTHROW;
+  dberr_t adjust_transactional_record(const dict_index_t *index, rec_t *rec,
+                                      const ulint *offsets,
+                                      const txn_layout_t &layout) UNIV_NOTHROW;
 
   /** Find an index with the matching id.
   @return row_index_t* instance or 0 */
@@ -1125,6 +1130,16 @@ dberr_t row_import::match_index_columns(THD *thd, const dict_index_t *index)
             "Index field count %lu doesn't match"
             " tablespace metadata file value %lu",
             (ulong)index->n_fields, (ulong)cfg_index->m_n_fields);
+
+    return (DB_ERROR);
+  }
+
+  if (cfg_index->m_page_type != FIL_PAGE_SDI &&
+      cfg_index->m_page_type != index->page_type()) {
+    ib_errf(thd, IB_LOG_LEVEL_ERROR, ER_TABLE_SCHEMA_MISMATCH,
+            "Page type (%u) of the index %s is mismatch with the page type "
+            "(%u) tablespace meta-data file.",
+            index->page_type(), index->name(), cfg_index->m_page_type);
 
     return (DB_ERROR);
   }
@@ -1538,7 +1553,9 @@ void row_import::set_root_by_name() UNIV_NOTHROW {
 
     ut_ad(index != nullptr);
     index->space = m_table->space;
-    index->page = cfg_index->m_page_no;
+    index->root = {cfg_index->m_page_no, cfg_index->m_page_type};
+    assert_lizard_page_mark_consistent(
+        index->root);  // currently, assert will fail.
     ++cfg_index;
   }
 
@@ -1554,7 +1571,9 @@ void row_import::set_root_by_name() UNIV_NOTHROW {
 
     /* Set the root page number and space id. */
     index->space = m_table->space;
-    index->page = cfg_index->m_page_no;
+    /* TODO: get page type*/
+    index->root = {cfg_index->m_page_no, cfg_index->m_page_type};
+    assert_lizard_page_mark_consistent(index->root);
   }
 }
 
@@ -1610,7 +1629,8 @@ dberr_t row_import::set_root_by_heuristic() UNIV_NOTHROW {
     cfg_index[i].m_srv_index = index;
 
     index->space = m_table->space;
-    index->page = cfg_index[i].m_page_no;
+    index->root = {cfg_index[i].m_page_no, cfg_index[i].m_page_type};
+    assert_lizard_page_mark_consistent(index->root);
     ++i;
   }
 
@@ -1640,7 +1660,8 @@ dberr_t row_import::set_root_by_heuristic() UNIV_NOTHROW {
       cfg_index[i].m_srv_index = index;
 
       index->space = m_table->space;
-      index->page = cfg_index[i].m_page_no;
+      index->root = {cfg_index[i].m_page_no, cfg_index[i].m_page_type};
+      assert_lizard_page_mark_consistent(index->root);
       ++i;
     }
   }
@@ -2409,13 +2430,18 @@ bool PageConverter::purge() UNIV_NOTHROW {
   return (false);
 }
 
-dberr_t PageConverter::adjust_cluster_record(
-    const dict_index_t *index, rec_t *rec, const ulint *offsets) UNIV_NOTHROW {
-  dberr_t err;
+dberr_t PageConverter::adjust_transactional_record(
+    const dict_index_t *index, rec_t *rec, const ulint *offsets,
+    const txn_layout_t &layout) UNIV_NOTHROW {
+  dberr_t err = DB_SUCCESS;
 
-  ut_ad(index->is_clustered());
+  ut_ad(txn_layout_is_arranged(layout));
 
-  if ((err = adjust_cluster_index_blob_ref(rec, offsets)) == DB_SUCCESS) {
+  if (index->is_clustered()) {
+    err = adjust_cluster_index_blob_ref(rec, offsets);
+  }
+
+  if (err == DB_SUCCESS) {
     /* Reset DB_TRX_ID and DB_ROLL_PTR.  Normally, these fields
     are only written in conjunction with other changes to the
     record. */
@@ -2433,13 +2459,30 @@ dberr_t PageConverter::adjust_cluster_record(
 
     if (!index->table->is_temporary()) {
       assert_txn_desc_allocated(m_trx);
-      lizard::row_upd_rec_lizard_fields(rec, m_page_zip_ptr, index, m_offsets,
-                                        &m_trx->txn_desc);
+      lizard::row_upd_rec_txn_fields(rec, m_page_zip_ptr, index, m_offsets,
+                                     layout, &m_trx->txn_desc);
     } else {
       /* An import operation with no temporary tables is expected */
       ut_ad(0);
     }
   }
+
+  // if ((err = adjust_cluster_index_blob_ref(rec, offsets)) == DB_SUCCESS) {
+  //   /* Reset DB_TRX_ID and DB_ROLL_PTR.  Normally, these fields
+  //   are only written in conjunction with other changes to the
+  //   record. */
+
+  //   row_upd_rec_sys_fields(rec, m_page_zip_ptr, index, m_offsets, m_trx, 0);
+
+  //   if (!index->table->is_temporary()) {
+  //     assert_txn_desc_allocated(m_trx);
+  //     lizard::row_upd_rec_itl_fields(rec, m_page_zip_ptr, index, m_offsets,
+  //                                    &m_trx->txn_desc);
+  //   } else {
+  //     /* An import operation with no temporary tables is expected */
+  //     ut_ad(0);
+  //   }
+  // }
 
   return (err);
 }
@@ -2452,9 +2495,14 @@ dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
   auto comp = dict_table_is_comp(m_cfg->m_table);
   bool clust_index = (m_index->m_srv_index == m_cluster_index) ||
                      dict_index_is_sdi(m_index->m_srv_index);
+  txn_layout_t layout = TL_NONE;
+  if (clust_index) {
+    layout = TL_CLOVER;
+  } else if (m_index->m_srv_index->page_type() == FIL_PAGE_INDEX_PANDA) {
+    layout = TL_BAMBOO;
+  }
 
   /* This will also position the cursor on the first user record. */
-
   m_rec_iter.open(block);
 
   while (!m_rec_iter.end()) {
@@ -2475,13 +2523,14 @@ dberr_t PageConverter::update_records(buf_block_t *block) UNIV_NOTHROW {
     delete marked flag. The adjustment of delete marked
     cluster records is required for purge to work later. */
 
-    if (deleted || clust_index) {
+    if (deleted || layout != TL_NONE) {
       m_offsets = rec_get_offsets(rec, m_index->m_srv_index, m_offsets,
                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &m_heap);
     }
 
-    if (clust_index) {
-      dberr_t err = adjust_cluster_record(m_index->m_srv_index, rec, m_offsets);
+    if (layout != TL_NONE) {
+      dberr_t err = adjust_transactional_record(m_index->m_srv_index, rec,
+                                                m_offsets, layout);
 
       if (err != DB_SUCCESS) {
         return (err);
@@ -2541,6 +2590,12 @@ dberr_t PageConverter::update_index_page(buf_block_t *block) UNIV_NOTHROW {
   ut_a(!is_compressed_table() ||
        page_zip_validate(m_page_zip_ptr, page, m_index->m_srv_index));
 #endif /* UNIV_ZIP_DEBUG */
+
+  if (fil_page_get_type(get_frame(block)) == FIL_PAGE_INDEX_PANDA) {
+    ut_a(m_index->m_srv_index->page_type() == FIL_PAGE_INDEX_PANDA);
+  } else if (fil_page_get_type(get_frame(block)) == FIL_PAGE_INDEX) {
+    ut_a(m_index->m_srv_index->page_type() == FIL_PAGE_INDEX);
+  }
 
   /* This has to be written to uncompressed index header. Set it to
   the current index id. */
@@ -2613,6 +2668,7 @@ dberr_t PageConverter::update_page(buf_block_t *block,
       return (update_header(block));
 
     case FIL_PAGE_INDEX:
+    case FIL_PAGE_INDEX_PANDA:
     case FIL_PAGE_RTREE:
     case FIL_PAGE_SDI:
       /* We need to decompress the contents into block->frame
@@ -2854,7 +2910,8 @@ static void row_import_discard_changes(
   the btr_search_drop_page_hash_index() will fail for these indexes. */
 
   for (auto index : table->indexes) {
-    index->page = FIL_NULL;
+    /* index->root = PAGE_MARK_NULL; */
+    index->root.page_no = FIL_NULL;
     index->space = FIL_NULL;
   }
 
@@ -2941,7 +2998,7 @@ static void row_import_discard_changes(
     ut_a(!index->is_clustered());
 
     if (!index->is_corrupted() && index->space != FIL_NULL &&
-        index->page != FIL_NULL) {
+        index->page_no() != FIL_NULL) {
       /* Update the Btree segment headers for index node and
       leaf nodes in the root page. Set the new space id. */
 
@@ -3242,7 +3299,14 @@ static dberr_t row_import_cfg_read_string(
 {
   byte *ptr;
   row_index_t *cfg_index;
-  byte row[sizeof(space_index_t) + sizeof(uint32_t) * 9];
+  byte row[sizeof(space_index_t) + sizeof(uint32_t) * 9 +
+           IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH];
+  /** Row size when version < IB_EXPORT_CFG_VERSION_V8 */
+  size_t row_size = sizeof(space_index_t) + sizeof(uint32_t) * 9;
+  /** Row size when version >= IB_EXPORT_CFG_VERSION_V8 */
+  if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V8) {
+    row_size += IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH;
+  }
 
   /* FIXME: What is the max value? */
   ut_a(cfg->m_n_indexes > 0);
@@ -3269,20 +3333,20 @@ static dberr_t row_import_cfg_read_string(
                     (void)fseek(file, 0L, SEEK_END););
 
     /* Read the index data. */
-    size_t n_bytes = fread(row, 1, sizeof(row), file);
+    size_t n_bytes = fread(row, 1, row_size, file);
 
     /* Trigger EOF */
     DBUG_EXECUTE_IF("ib_import_io_read_error",
                     (void)fseek(file, 0L, SEEK_END););
 
-    if (n_bytes != sizeof(row)) {
+    if (n_bytes != row_size) {
       char msg[BUFSIZ];
 
       snprintf(msg, sizeof(msg),
                "while reading index meta-data, expected"
                " to read %lu bytes but read only %lu"
                " bytes",
-               (ulong)sizeof(row), (ulong)n_bytes);
+               (ulong)(row_size), (ulong)n_bytes);
 
       ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_IO_READ_ERROR, errno,
                   strerror(errno), msg);
@@ -3305,6 +3369,19 @@ static dberr_t row_import_cfg_read_string(
 
     cfg_index->m_type = mach_read_from_4(ptr);
     ptr += sizeof(uint32_t);
+
+    if (cfg->m_version >= IB_EXPORT_CFG_VERSION_V8) {
+      static_assert(IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH == sizeof(uint16_t));
+      cfg_index->m_page_type = mach_read_from_2(ptr);
+      ptr += sizeof(uint16_t);
+      ut_a(cfg_index->m_page_type == FIL_PAGE_INDEX_PANDA ||
+           cfg_index->m_page_type == FIL_PAGE_INDEX ||
+           cfg_index->m_page_type == FIL_PAGE_RTREE ||
+           cfg_index->m_page_type == FIL_PAGE_SDI);
+    } else {
+      cfg_index->m_page_type =
+          lizard::dict_index_legacy_ptype(cfg_index->m_type);
+    }
 
     cfg_index->m_trx_id_offset = mach_read_from_4(ptr);
     if (cfg_index->m_trx_id_offset != mach_read_from_4(ptr)) {
@@ -4205,6 +4282,7 @@ Read the contents of the @<tablespace@>.cfg file.
     case IB_EXPORT_CFG_VERSION_V5:
     case IB_EXPORT_CFG_VERSION_V6:
     case IB_EXPORT_CFG_VERSION_V7:
+    case IB_EXPORT_CFG_VERSION_V8:
       err = row_import_read_v1(file, thd, &cfg);
 
       if (err == DB_SUCCESS) {
@@ -4526,7 +4604,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
       err = cfg.match_schema(trx->mysql_thd, table_def);
     }
 
-    /* Update index->page and SYS_INDEXES.PAGE_NO to match the
+    /* Update index->page_no() and SYS_INDEXES.PAGE_NO to match the
     B-tree root page numbers in the tablespace. Use the index
     name from the .cfg file to find match. */
 
@@ -4583,7 +4661,7 @@ dberr_t row_import_for_mysql(dict_table_t *table, dd::Table *table_def,
     // if (err == DB_SUCCESS) {
     //   err = fetchIndexRootPages.build_row_import(&cfg);
 
-    //   /* Update index->page and SYS_INDEXES.PAGE_NO
+    //   /* Update index->page_no() and SYS_INDEXES.PAGE_NO
     //   to match the B-tree root page numbers in the
     //   tablespace. */
 

@@ -270,7 +270,7 @@ class CBuffer {
     Item *ptr = biggest_less_than(lhs);
 #ifdef UNIV_DEBUG
     if (ptr != nullptr) {
-      lizard_stats.commit_snapshot_gcn_search_hit.inc();
+      generic_stats.commit_snapshot_gcn_search_hit.inc();
     }
 #endif
     return ptr;
@@ -280,7 +280,7 @@ class CBuffer {
     Item *ptr = biggest_less_equal_than(lhs);
 #ifdef UNIV_DEBUG
     if (ptr != nullptr) {
-      lizard_stats.commit_snapshot_scn_search_hit.inc();
+      generic_stats.commit_snapshot_scn_search_hit.inc();
     }
 #endif
     return ptr;

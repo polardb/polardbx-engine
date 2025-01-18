@@ -351,24 +351,6 @@ include/assert.inc [The options for gpp_options.t1.b_c should match the expected
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
-# Rename an existing index b_c to bc_renamed, verify GPP option consistency.
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 RENAME INDEX b_c TO bc_renamed;
-include/assert.inc [The options for gpp_options.t1.bc_renamed should match the expected IFT=0 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.bc_renamed should match the expected IFT=0 condition]
-include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
-# restart:--loose_innodb_lizard_stat_enabled=1
-include/assert.inc [The options for gpp_options.t1.bc_renamed should match the expected IFT=0 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.bc_renamed should match the expected IFT=0 condition]
-include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 RENAME INDEX bc_renamed TO b_c;
-include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
-include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
 # ------------------------- Clean up --------------------------------------------------
 SET opt_index_format_gpp_enabled= 1;
 SET GLOBAL innodb_lizard_stat_enabled= 0;

@@ -448,6 +448,8 @@ struct Builder {
 
   /** Stage per builder. */
   Alter_stage *m_local_stage{};
+
+  lizard::DField_wrapper m_panda_roll_ptr{};
 };
 
 struct Load_cursor : Btree_load::Cursor {

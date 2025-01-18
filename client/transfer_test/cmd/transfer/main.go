@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package main
 
 import (
@@ -128,10 +127,11 @@ func main() {
 	defer db.Close()
 	tso := transfer.NewTSO()
 
+	if err := transfer.SetConfig(ctx, db); err != nil {
+		logger.Warn("Set config failed.", zap.Error(err))
+	}
+
 	if conf.ForXDB {
-		if err := transfer.SetGlobalIsolationLevel(ctx, db); err != nil {
-			logger.Warn("Set transaction level failed.", zap.Error(err))
-		}
 		logger.Info("Recover all hanging XA transactions")
 		err = transfer.RecoverAll(ctx, db)
 		if err != nil {
@@ -264,6 +264,12 @@ func main() {
 	if conf.TransferSimple.Enabled {
 		for i := 0; i < conf.TransferSimple.Threads; i++ {
 			app.Register(builder.BuildTransferSimple())
+		}
+	}
+
+	if conf.UserManage.Enabled {
+		for i := 0; i < conf.UserManage.Threads; i++ {
+			app.Register(builder.BuildUserManage())
 		}
 	}
 

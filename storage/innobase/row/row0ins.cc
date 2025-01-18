@@ -70,7 +70,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row.h"
 #include "lizard0row0gpp.h"
 
-#include "lizard0data0data.h"
+#include "lizard0row0ins.h"
+#include "lizard0row.h"
+
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
 is enough space in the redo log before for that operation. This is
@@ -218,8 +220,8 @@ void ins_node_set_new_row(
 
   row_ins_alloc_sys_fields(node);
 
-  /* Lizard: Allocate buffers for lizard SCN and UBA fields */
-  lizard::ins_alloc_lizard_fields(node);
+  /* Allocate buffers for txn fields */
+  lizard::ins_alloc_txn_fields(node);
 
   lizard::ins_alloc_gpp_field(node);
 
@@ -233,13 +235,14 @@ void ins_node_set_new_row(
  in the index. This situation can occur if the delete-marked record is
  kept in the index for consistent reads.
  @return DB_SUCCESS or error code */
-[[nodiscard]] static dberr_t row_ins_sec_index_entry_by_modify(
-    ulint flags,       /*!< in: undo logging and locking flags */
-    ulint mode,        /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
-                       depending on whether mtr holds just a leaf
-                       latch or also a tree latch */
-    btr_cur_t *cursor, /*!< in: B-tree cursor */
-    ulint **offsets,   /*!< in/out: offsets on cursor->page_cur.rec */
+[[nodiscard]] dberr_t row_ins_sec_index_entry_by_modify(
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    ulint mode,                 /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+                                depending on whether mtr holds just a leaf
+                                latch or also a tree latch */
+    btr_cur_t *cursor,          /*!< in: B-tree cursor */
+    ulint **offsets,            /*!< in/out: offsets on cursor->page_cur.rec */
     mem_heap_t *offsets_heap,
     /*!< in/out: memory heap that can be emptied */
     mem_heap_t *heap,      /*!< in/out: memory heap */
@@ -284,14 +287,20 @@ void ins_node_set_new_row(
     return (DB_SUCCESS);
   }
 
+  /** Keep sys fields for non-panda secondary indexes, as these indexes do not
+   * have their own system fields. */
+  if (!cursor->index->is_panda()) {
+    flags = flags | BTR_KEEP_SYS_FLAG;
+  }
+
   if (mode == BTR_MODIFY_LEAF) {
     /* Try an optimistic updating of the record, keeping changes
     within the page */
 
     /* TODO: pass only *offsets */
-    err = btr_cur_optimistic_update(flags | BTR_KEEP_SYS_FLAG, cursor, offsets,
-                                    &offsets_heap, update, 0, thr,
-                                    thr_get_trx(thr)->id, mtr);
+    err =
+        btr_cur_optimistic_update(flags, layout, cursor, offsets, &offsets_heap,
+                                  update, 0, thr, thr_get_trx(thr)->id, mtr);
     switch (err) {
       case DB_OVERFLOW:
       case DB_UNDERFLOW:
@@ -308,8 +317,8 @@ void ins_node_set_new_row(
 
     trx_t *trx = thr_get_trx(thr);
     err = btr_cur_pessimistic_update(
-        flags | BTR_KEEP_SYS_FLAG, cursor, offsets, &offsets_heap, heap,
-        &dummy_big_rec, update, 0, thr, trx->id, trx->undo_no, mtr);
+        flags, layout, cursor, offsets, &offsets_heap, heap, &dummy_big_rec,
+        update, 0, thr, trx->id, trx->undo_no, mtr);
     ut_ad(!dummy_big_rec);
   }
 
@@ -321,13 +330,14 @@ void ins_node_set_new_row(
  record is kept in the index for consistent reads.
  @return DB_SUCCESS, DB_FAIL, or error code */
 [[nodiscard]] static dberr_t row_ins_clust_index_entry_by_modify(
-    btr_pcur_t *pcur, /*!< in/out: a persistent cursor pointing
-                      to the clust_rec that is being modified. */
-    ulint flags,      /*!< in: undo logging and locking flags */
-    ulint mode,       /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
-                      depending on whether mtr holds just a leaf
-                      latch or also a tree latch */
-    ulint **offsets,  /*!< out: offsets on cursor->page_cur.rec */
+    btr_pcur_t *pcur,           /*!< in/out: a persistent cursor pointing
+                                to the clust_rec that is being modified. */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    ulint mode,                 /*!< in: BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
+                                depending on whether mtr holds just a leaf
+                                latch or also a tree latch */
+    ulint **offsets,            /*!< out: offsets on cursor->page_cur.rec */
     mem_heap_t **offsets_heap,
     /*!< in/out: pointer to memory heap that can
     be emptied, or NULL */
@@ -368,8 +378,9 @@ void ins_node_set_new_row(
     /* Try optimistic updating of the record, keeping changes
     within the page */
 
-    err = btr_cur_optimistic_update(flags, cursor, offsets, offsets_heap,
-                                    update, 0, thr, thr_get_trx(thr)->id, mtr);
+    err =
+        btr_cur_optimistic_update(flags, layout, cursor, offsets, offsets_heap,
+                                  update, 0, thr, thr_get_trx(thr)->id, mtr);
     switch (err) {
       case DB_OVERFLOW:
       case DB_UNDERFLOW:
@@ -389,9 +400,9 @@ void ins_node_set_new_row(
 
     DEBUG_SYNC_C("before_row_ins_upd_pessimistic");
 
-    err = btr_cur_pessimistic_update(flags | BTR_KEEP_POS_FLAG, cursor, offsets,
-                                     offsets_heap, heap, &big_rec, update, 0,
-                                     thr, trx_id, trx->undo_no, mtr);
+    err = btr_cur_pessimistic_update(flags | BTR_KEEP_POS_FLAG, layout, cursor,
+                                     offsets, offsets_heap, heap, &big_rec,
+                                     update, 0, thr, trx_id, trx->undo_no, mtr);
 
     if (big_rec) {
       ut_a(err == DB_SUCCESS);
@@ -1343,10 +1354,10 @@ nonstandard_exit_func:
 @param[in]      offsets rec_get_offsets(rec, index)
 @param[in]      thr     query thread
 @return DB_SUCCESS, DB_SUCCESS_LOCKED_REC, or error code */
-static dberr_t row_ins_set_rec_lock(lock_mode mode, ulint type,
-                                    const buf_block_t *block, const rec_t *rec,
-                                    dict_index_t *index, const ulint *offsets,
-                                    que_thr_t *thr) {
+dberr_t row_ins_set_rec_lock(lock_mode mode, ulint type,
+                             const buf_block_t *block, const rec_t *rec,
+                             dict_index_t *index, const ulint *offsets,
+                             que_thr_t *thr) {
   dberr_t err;
   lock_ignore_t ignore;
 
@@ -1834,7 +1845,7 @@ exit_func:
 /** Checks if a unique key violation to rec would occur at the index entry
  insert.
  @return true if error */
-static bool row_ins_dupl_error_with_rec(
+bool row_ins_dupl_error_with_rec(
     const rec_t *rec,      /*!< in: user record; NOTE that we assume
                            that the caller already has a record lock on
                            the record! */
@@ -1877,7 +1888,7 @@ duplicate values should be allowed (and further processed) instead of causing
 an error
 @param thr The query thread running the query
 @return true iff duplicated values should be allowed */
-static bool row_allow_duplicates(que_thr_t *thr) {
+bool row_allow_duplicates(que_thr_t *thr) {
   return (thr->prebuilt && thr->prebuilt->allow_duplicates());
 }
 
@@ -2220,6 +2231,9 @@ a newer version of entry (the entry should not be inserted)
   }
 
   if (cursor->up_match >= n_unique) {
+    /** TODO: Don't know how to come into it. <26-09-24, zanye.zjy> */
+    ut_error;
+
     rec = page_rec_get_next(btr_cur_get_rec(cursor));
 
     if (!page_rec_is_supremum(rec)) {
@@ -2359,7 +2373,8 @@ static void row_ins_temp_prebuilt_tree_modified(dict_table_t *table) {
   }
 }
 
-dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
+dberr_t row_ins_clust_index_entry_low(uint32_t flags,
+                                      const txn_layout_t &layout, ulint mode,
                                       dict_index_t *index, ulint n_uniq,
                                       dtuple_t *entry, gpp_no_t *gpp_no,
                                       que_thr_t *thr, bool dup_chk_only) {
@@ -2439,7 +2454,7 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
     page_t *page = btr_cur_get_page(cursor);
     rec_t *first_rec = page_rec_get_next(page_get_infimum_rec(page));
 
-    assert_lizard_page_attributes(page, index);
+    assert_page_txn_attributes(page, index);
 
     /* After INSTANT ADD/DROP, # of fields might differ from other records. */
     ut_ad(page_rec_is_supremum(first_rec) || index->has_row_versions() ||
@@ -2527,9 +2542,9 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
     }
 
     ut_ad(thr != nullptr);
-    err = row_ins_clust_index_entry_by_modify(&pcur, flags, mode, &offsets,
-                                              &offsets_heap, entry_heap, entry,
-                                              thr, &mtr);
+    err = row_ins_clust_index_entry_by_modify(&pcur, flags, layout, mode,
+                                              &offsets, &offsets_heap,
+                                              entry_heap, entry, thr, &mtr);
 
     if (err == DB_SUCCESS && dict_index_is_online_ddl(index)) {
       row_log_table_insert(btr_cur_get_rec(cursor), entry, index, offsets);
@@ -2543,8 +2558,9 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
 
     if (mode != BTR_MODIFY_TREE) {
       ut_ad((mode & ~BTR_ALREADY_S_LATCHED) == BTR_MODIFY_LEAF);
-      err = btr_cur_optimistic_insert(flags, cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, &mtr);
+      err = btr_cur_optimistic_insert(flags, layout, cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, &mtr);
     } else {
       if (buf_LRU_buf_pool_running_out()) {
         err = DB_LOCK_TABLE_FULL;
@@ -2553,13 +2569,14 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
 
       DEBUG_SYNC_C("before_insert_pessimitic_row_ins_clust");
 
-      err = btr_cur_optimistic_insert(flags, cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, &mtr);
+      err = btr_cur_optimistic_insert(flags, layout, cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, &mtr);
 
       if (err == DB_FAIL) {
-        err =
-            btr_cur_pessimistic_insert(flags, cursor, &offsets, &offsets_heap,
-                                       entry, &insert_rec, &big_rec, thr, &mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, cursor, &offsets,
+                                         &offsets_heap, entry, &insert_rec,
+                                         &big_rec, thr, &mtr);
 
         if (index->table->is_intrinsic() && err == DB_SUCCESS) {
           row_ins_temp_prebuilt_tree_modified(index->table);
@@ -2628,6 +2645,7 @@ used when data is sorted.
 @param[in,out]  index   clustered index
 @param[in,out]  entry   index entry to insert
 @param[in]      thr     query thread
+@param[in]      layout  txn layout
 @return error code */
 static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
                                                 dtuple_t *entry,
@@ -2679,6 +2697,7 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
   }
 
   const ulint flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG;
+  const txn_layout_t layout = TL_NONE;
 
   for (;;) {
     rec_t *insert_rec;
@@ -2687,8 +2706,9 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
     if (mode != BTR_MODIFY_TREE) {
       ut_ad((mode & ~BTR_ALREADY_S_LATCHED) == BTR_MODIFY_LEAF);
 
-      err = btr_cur_optimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, mtr);
+      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, mtr);
       if (err != DB_SUCCESS) {
         break;
       }
@@ -2699,13 +2719,14 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
         break;
       }
 
-      err = btr_cur_optimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, mtr);
+      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, mtr);
 
       if (err == DB_FAIL) {
-        err =
-            btr_cur_pessimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                       entry, &insert_rec, &big_rec, thr, mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, &cursor, &offsets,
+                                         &offsets_heap, entry, &insert_rec,
+                                         &big_rec, thr, mtr);
         if (index->table->is_intrinsic() && err == DB_SUCCESS) {
           row_ins_temp_prebuilt_tree_modified(index->table);
         }
@@ -2760,7 +2781,7 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
 @param[in]      check           Whether to check
 @param[in]      search_mode     Flags
 @return true if the index is to be dropped */
-[[nodiscard]] static bool row_ins_sec_mtr_start_and_check_if_aborted(
+[[nodiscard]] bool row_ins_sec_mtr_start_and_check_if_aborted(
     mtr_t *mtr, dict_index_t *index, bool check, ulint search_mode) {
   ut_ad(!index->is_clustered());
 
@@ -2798,6 +2819,7 @@ static dberr_t row_ins_sorted_clust_index_entry(ulint mode, dict_index_t *index,
 the same fields is found, the other record is necessarily marked deleted.
 It is then unmarked. Otherwise, the entry is just inserted to the index.
 @param[in]      flags           undo logging and locking flags
+@param[in]      layout          txn layout
 @param[in]      mode            BTR_MODIFY_LEAF or BTR_MODIFY_TREE,
                                 depending on whether we wish optimistic or
                                 pessimistic descent down the index tree
@@ -2815,11 +2837,10 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 @retval DB_LOCK_WAIT on lock wait when !(flags & BTR_NO_LOCKING_FLAG)
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
-dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
-                                    dict_index_t *index,
-                                    mem_heap_t *offsets_heap, mem_heap_t *heap,
-                                    dtuple_t *entry, trx_id_t trx_id,
-                                    que_thr_t *thr, bool dup_chk_only) {
+static inline dberr_t row_ins_ancient_sec_index_entry_low(
+    uint32_t flags, const txn_layout_t &layout, ulint mode, dict_index_t *index,
+    mem_heap_t *offsets_heap, mem_heap_t *heap, dtuple_t *entry,
+    trx_id_t trx_id, que_thr_t *thr, bool dup_chk_only) {
   DBUG_TRACE;
 
   btr_cur_t cursor;
@@ -2833,6 +2854,7 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
   rtr_info_t rtr_info;
 
   ut_ad(!index->is_clustered());
+  ut_ad(layout == TL_NONE);
   ut_ad(mode == BTR_MODIFY_LEAF || mode == BTR_MODIFY_TREE);
 
   /** Lizard: There is no SCN and UBA in secondary index */
@@ -2972,6 +2994,8 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
 
     switch (err) {
       case DB_SUCCESS:
+        DEBUG_SYNC_C(
+            "row_ins_ancient_sec_index_entry_dup_locks_created_success");
         break;
       case DB_DUPLICATE_KEY:
         if (!index->is_committed()) {
@@ -3039,8 +3063,9 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
     offsets = rec_get_offsets(btr_cur_get_rec(&cursor), index, offsets,
                               ULINT_UNDEFINED, UT_LOCATION_HERE, &offsets_heap);
 
-    err = row_ins_sec_index_entry_by_modify(
-        flags, mode, &cursor, &offsets, offsets_heap, heap, entry, thr, &mtr);
+    err = row_ins_sec_index_entry_by_modify(flags, layout, mode, &cursor,
+                                            &offsets, offsets_heap, heap, entry,
+                                            thr, &mtr);
 
     if (err == DB_SUCCESS && dict_index_is_spatial(index) && rtr_info.mbr_adj) {
       err = rtr_ins_enlarge_mbr(&cursor, &mtr);
@@ -3050,8 +3075,9 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
     big_rec_t *big_rec;
 
     if (mode == BTR_MODIFY_LEAF) {
-      err = btr_cur_optimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, &mtr);
+      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, &mtr);
       if (err == DB_SUCCESS && dict_index_is_spatial(index) &&
           rtr_info.mbr_adj) {
         err = rtr_ins_enlarge_mbr(&cursor, &mtr);
@@ -3063,12 +3089,13 @@ dberr_t row_ins_sec_index_entry_low(uint32_t flags, ulint mode,
         goto func_exit;
       }
 
-      err = btr_cur_optimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, &mtr);
+      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
+                                      &offsets_heap, entry, &insert_rec,
+                                      &big_rec, thr, &mtr);
       if (err == DB_FAIL) {
-        err =
-            btr_cur_pessimistic_insert(flags, &cursor, &offsets, &offsets_heap,
-                                       entry, &insert_rec, &big_rec, thr, &mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, &cursor, &offsets,
+                                         &offsets_heap, entry, &insert_rec,
+                                         &big_rec, thr, &mtr);
       }
       if (err == DB_SUCCESS && dict_index_is_spatial(index) &&
           rtr_info.mbr_adj) {
@@ -3091,6 +3118,22 @@ func_exit:
 
   mtr_commit(&mtr);
   return err;
+}
+
+dberr_t row_ins_sec_index_entry_low(uint32_t flags, const txn_layout_t &layout,
+                                    ulint mode, dict_index_t *index,
+                                    mem_heap_t *offsets_heap, mem_heap_t *heap,
+                                    dtuple_t *entry, trx_id_t trx_id,
+                                    que_thr_t *thr, bool dup_chk_only) {
+  if (lizard::dict_index_is_panda(index)) {
+    return lizard::row_ins_panda_sec_index_entry_low(flags, layout, mode, index,
+                                                     offsets_heap, heap, entry,
+                                                     trx_id, thr, dup_chk_only);
+  } else {
+    return row_ins_ancient_sec_index_entry_low(flags, layout, mode, index,
+                                               offsets_heap, heap, entry,
+                                               trx_id, thr, dup_chk_only);
+  }
 }
 
 /** Inserts an entry into a clustered index. Tries first optimistic,
@@ -3126,6 +3169,7 @@ and return. don't execute actual insert. */
 
   /* Try first optimistic descent to the B-tree */
   uint32_t flags;
+  txn_layout_t layout;
 
   if (!index->table->is_intrinsic()) {
     log_free_check();
@@ -3137,9 +3181,10 @@ and return. don't execute actual insert. */
     if (index->table->skip_alter_undo) {
       flags |= BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG;
     }
-
+    layout = lizard::dict_index_txn_layout(index);
   } else {
     flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG;
+    layout = TL_NONE;
   }
 
   if (index->table->is_intrinsic() && dict_index_is_auto_gen_clust(index)) {
@@ -3150,8 +3195,9 @@ and return. don't execute actual insert. */
     err = row_ins_sorted_clust_index_entry(BTR_MODIFY_LEAF, index, entry,
                                            gpp_no, thr);
   } else {
-    err = row_ins_clust_index_entry_low(flags, BTR_MODIFY_LEAF, index, n_uniq,
-                                        entry, gpp_no, thr, dup_chk_only);
+    err =
+        row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_LEAF, index,
+                                      n_uniq, entry, gpp_no, thr, dup_chk_only);
   }
 
   DEBUG_SYNC(thr_get_trx(thr)->mysql_thd,
@@ -3176,8 +3222,9 @@ and return. don't execute actual insert. */
     err = row_ins_sorted_clust_index_entry(BTR_MODIFY_TREE, index, entry,
                                            gpp_no, thr);
   } else {
-    err = row_ins_clust_index_entry_low(flags, BTR_MODIFY_TREE, index, n_uniq,
-                                        entry, gpp_no, thr, dup_chk_only);
+    err =
+        row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
+                                      n_uniq, entry, gpp_no, thr, dup_chk_only);
   }
 
   return err;
@@ -3200,6 +3247,8 @@ and return. don't execute actual insert. */
   mem_heap_t *offsets_heap;
   mem_heap_t *heap;
   trx_id_t trx_id = 0;
+
+  DEBUG_SYNC(thr_get_trx(thr)->mysql_thd, "before_row_ins_sec_index_entry");
 
   DBUG_EXECUTE_IF("row_ins_sec_index_entry_timeout", {
     DBUG_SET("-d,row_ins_sec_index_entry_timeout");
@@ -3250,8 +3299,12 @@ and return. don't execute actual insert. */
     flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG;
   }
 
-  err = row_ins_sec_index_entry_low(flags, BTR_MODIFY_LEAF, index, offsets_heap,
-                                    heap, entry, trx_id, thr, dup_chk_only);
+  txn_layout_t layout = lizard::dict_index_txn_layout(index);
+  ut_ad(layout != TL_CLOVER);
+
+  err = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_LEAF, index,
+                                    offsets_heap, heap, entry, trx_id, thr,
+                                    dup_chk_only);
   if (err == DB_FAIL) {
     mem_heap_empty(heap);
 
@@ -3266,9 +3319,9 @@ and return. don't execute actual insert. */
       index->last_sel_cur->invalid = true;
     }
 
-    err =
-        row_ins_sec_index_entry_low(flags, BTR_MODIFY_TREE, index, offsets_heap,
-                                    heap, entry, 0, thr, dup_chk_only);
+    err = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
+                                      offsets_heap, heap, entry, 0, thr,
+                                      dup_chk_only);
   }
 
   mem_heap_free(heap);

@@ -152,6 +152,22 @@ static inline page_t *trx_undo_page_get_s_latched_low(
   return (buf_block_get_frame(block));
 }
 
+/** Gets an undo log page block and s-latches it.
+@param[in]      page_id         Page id
+@param[in]      page_size       Page size
+@param[in]      mode            Fetch mode.
+@param[in,out]  mtr             Mini-transaction
+@return pointer to block s-latched */
+static inline buf_block_t *trx_undo_block_get_s_latched_low(
+    const page_id_t &page_id, const page_size_t &page_size, Page_fetch mode,
+    mtr_t *mtr) {
+  buf_block_t *block = buf_page_get_gen(page_id, page_size, RW_S_LATCH, nullptr,
+                                        mode, UT_LOCATION_HERE, mtr);
+  buf_block_dbg_add_level(block, SYNC_TRX_UNDO_PAGE);
+
+  return block;
+}
+
 /** Returns the start offset of the undo log records of the specified undo
  log on the page.
  @return start offset */

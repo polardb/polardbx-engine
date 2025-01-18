@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package transfer
 
 import (
@@ -218,6 +217,45 @@ type Account struct {
 	Version int
 }
 
+func checkUserUnique(ctx context.Context, conn *sql.Conn, flashbackTimestamp string) (bool, error) {
+	var query string
+	if flashbackTimestamp == "" {
+		query = "SELECT user, COUNT(*) as count FROM accounts GROUP BY user HAVING COUNT(*) > 1"
+	} else {
+		query = "SELECT user, COUNT(*) as count FROM accounts " + flashbackTimestamp + " GROUP BY user HAVING COUNT(*) > 1"
+	}
+
+	rows, err := conn.QueryContext(ctx, query)
+	if err != nil {
+		logutils.FromContext(ctx).Error("Failed to execute query.", zap.Error(err))
+		return false, err
+	}
+	defer rows.Close()
+
+	var user sql.NullString
+	var count int
+
+	for rows.Next() {
+		err := rows.Scan(&user, &count)
+		if err != nil {
+			logutils.FromContext(ctx).Error("Check user uniqueness failed. Failed to scan row.", zap.Error(err))
+			return false, err
+		}
+
+		// Check if user is not NULL
+		if user.Valid {
+			logMessage := "Duplicate user found."
+			logutils.FromContext(ctx).Error(logMessage, zap.String("user", user.String), zap.Int("count", count))
+			return false, fmt.Errorf("%s: user: %s, count: %d", logMessage, user.String, count)
+		} else {
+			// logMessage := "Null users found."
+			// logutils.FromContext(ctx).Info(logMessage, zap.Int("count", count))
+		}
+	}
+
+	return true, nil
+}
+
 func GetAccounts(ctx context.Context, conn *sql.Conn, tables []string, hint string, sessionVar string, useSecIdx bool) ([]Account, error) {
 	if sessionVar != "" {
 		_, err := conn.ExecContext(ctx, sessionVar)
@@ -226,12 +264,28 @@ func GetAccounts(ctx context.Context, conn *sql.Conn, tables []string, hint stri
 		}
 	}
 
+	success, err := checkUserUnique(ctx, conn, "")
+	if !success {
+		return nil, err
+	}
+
 	var records []Account
 	for _, tableName := range tables {
 		if partials, err := func(tableName string) (partialRecods []Account, err error) {
-			var query = "SELECT id, balance, version FROM " + tableName + " ORDER BY balance"
+			var query string
 			if useSecIdx {
-				query = "SELECT id, balance, version FROM " + tableName + " force index(index_balance) ORDER BY balance"
+				secIndexes := []string{"index_balance", "uk_user", "user_balance", "balance_user"}
+				selectedIndex := secIndexes[rand.Intn(len(secIndexes))]
+				query = fmt.Sprintf(
+					"SELECT id, balance, version FROM %s FORCE INDEX(%s) ORDER BY balance",
+					tableName,
+					selectedIndex,
+				)
+			} else {
+				query = fmt.Sprintf(
+					"SELECT id, balance, version FROM %s ORDER BY balance",
+					tableName,
+				)
 			}
 			rows, err := conn.QueryContext(ctx, hint+query)
 			if err != nil {
@@ -327,6 +381,11 @@ func GetAccountsWithFlashbackQuery(ctx context.Context, conn *sql.Conn, tables [
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	success, err := checkUserUnique(ctx, conn, flashbackTimestamp)
+	if !success {
+		return nil, err
 	}
 
 	var records []Account

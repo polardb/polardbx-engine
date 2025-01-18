@@ -329,6 +329,7 @@ libservices/CTestTestfile.cmake
 man/CTestTestfile.cmake
 mysql-test/CTestTestfile.cmake
 mysql-test/lib/My/SafeProcess/CTestTestfile.cmake
+mysql-test/lib/My/SafeProcess/*asan*
 mysys/CTestTestfile.cmake
 packaging/WiX/CTestTestfile.cmake
 packaging/deb-in/CTestTestfile.cmake

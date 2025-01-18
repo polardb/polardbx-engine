@@ -1548,6 +1548,7 @@ void Double_write::check_block(const buf_block_t *block) noexcept {
 
   switch (fil_page_get_type(block->frame)) {
     case FIL_PAGE_INDEX:
+    case FIL_PAGE_INDEX_PANDA:
     case FIL_PAGE_RTREE:
     case FIL_PAGE_SDI:
       if (page_is_comp(block->frame)) {

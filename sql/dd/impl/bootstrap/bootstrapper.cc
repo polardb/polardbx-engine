@@ -1704,11 +1704,17 @@ bool update_properties(THD *thd, const std::set<String_type> *create_set,
         ss << DD_properties::dd_key(DD_properties::DD_property::IDX) << count;
         tbl_props->set(ss.str().c_str(),
                        (*idx)->se_private_data().raw_string());
+        /* Check dd table not contains panda */
+        if ((*idx)->se_private_data().exists(lizard::PAGE_TYPE_STR)) {
+          uint16_t page_type = 0;
+          (*idx)->se_private_data().get(lizard::PAGE_TYPE_STR, &page_type);
+          assert(page_type != lizard::PANDA_PAGE_TYPE);
+        }
 
         /* Deal with IFT option. */
-        std::stringstream option_ss;
-        ss << DD_properties::dd_key(DD_properties::DD_property::IDX) << count
-           << "options";
+        std::stringstream options_ss;
+        options_ss << DD_properties::dd_key(DD_properties::DD_property::IDX)
+                   << count << "options";
         ulonglong IFT_option = 0;
         if ((*idx)->options().exists(lizard::OPTION_IFT)) {
           (*idx)->options().get(lizard::OPTION_IFT, &IFT_option);
@@ -1717,7 +1723,7 @@ bool update_properties(THD *thd, const std::set<String_type> *create_set,
                                 IFT_option == 0));
         std::unique_ptr<Properties> options(Properties::parse_properties(""));
         options->set(lizard::OPTION_IFT, IFT_option);
-        tbl_props->set(option_ss.str().c_str(), options->raw_string());
+        tbl_props->set(options_ss.str().c_str(), options->raw_string());
       }
 
       // Store the se private data for each column.

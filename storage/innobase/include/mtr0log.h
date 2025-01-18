@@ -37,6 +37,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mtr0mtr.h"
 #include "univ.i"
 
+#include "lizard0txn0rec0types.h"
+
 // Forward declaration
 struct dict_index_t;
 
@@ -57,12 +59,12 @@ constexpr uint8_t INDEX_LOG_VERSION_MAX = INDEX_LOG_VERSION_CURRENT;
 #define SET_VERSIONED(flags) (flag |= VERSION_FLAG)
 #define SET_COMPACT(flags) (flag |= COMPACT_FLAG)
 
-/* Lizard-4.0: Secondary index Lizard Fields Flag */
-#define SEC_LFIELDS_FLAG 0x80
+/* Lizard-4.0: Secondary index Extra Flag */
+#define SEC_EXTRA_FLAG 0x80
 
-#define IS_SEC_LFIELDS(flags) (flags & SEC_LFIELDS_FLAG)
+#define IS_SEC_EXTRA(flags) (flags & SEC_EXTRA_FLAG)
 
-#define SET_SEC_LFILEDS(flags) (flag |= SEC_LFIELDS_FLAG)
+#define SET_SEC_EXTRA(flags) (flag |= SEC_EXTRA_FLAG)
 
 /* Size of initial info on REDO log
   1   byte  for LOG TYPE
@@ -258,8 +260,10 @@ bool mlog_open_and_write_index(mtr_t *mtr, const byte *rec,
 @param[in]  ptr      buffer
 @param[in]  end_ptr  buffer end
 @param[out] index    own: dummy index
+@param[out] layout   txn layout
 @return parsed record end, NULL if not a complete record */
-byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index);
+byte *mlog_parse_index(byte *ptr, const byte *end_ptr, dict_index_t **index,
+                       txn_layout_t *layout);
 
 /** Parses a log record written by mlog_open_and_write_index in version <= 8027.
 This function should never be changed and should be removed once recovery from

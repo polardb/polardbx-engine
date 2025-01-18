@@ -43,6 +43,8 @@ Created 2020-11-01 by Sunny Bains. */
 #include "row0vers.h"
 #include "ut0stage.h"
 
+#include "lizard0dict.h"
+
 namespace ddl {
 
 /** Context for copying cluster index row for the index to being created. */
@@ -595,6 +597,8 @@ Builder::Builder(ddl::Context &ctx, Loader &loader, size_t i) noexcept
       !dict_table_is_comp(m_ctx.m_new_table)) {
     m_conv_heap.create(sizeof(mrec_buf_t), UT_LOCATION_HERE);
   }
+
+  lizard::dict_index_panda_alloc_roll_ptr_for_ddl(m_index, &m_panda_roll_ptr);
 }
 
 Builder::~Builder() noexcept {
@@ -906,6 +910,12 @@ dberr_t Builder::copy_columns(Copy_ctx &ctx, size_t &mv_rows_added,
       } else {
         if (ifield->col->ind == DATA_GPP_NO) {
           src_field = lizard::dtuple_get_v_gfield(ctx.m_row.m_ptr);
+
+        } else if (lizard::dict_index_is_panda(m_index) &&
+                   ifield->col->mtype == DATA_SYS &&
+                   (ifield->col->prtype & (~DATA_NOT_NULL)) == DATA_ROLL_PTR) {
+          ut_a(ifield->col == m_index->table->get_sys_col(DATA_ROLL_PTR));
+          src_field = m_panda_roll_ptr.dfield();
         } else {
           src_field = dtuple_get_nth_field(ctx.m_row.m_ptr, col_no);
         }
@@ -1199,6 +1209,8 @@ dberr_t Builder::key_buffer_sort(size_t thread_id) noexcept {
     key_buffer->sort(&dup);
 
     if (dup.m_n_dup > 0) {
+      lizard_error(ER_LIZARD) << "DB_DUPLICATE_KEY "
+                              << "ddl0builder.cc:1213";
       set_error(DB_DUPLICATE_KEY);
       return get_error();
     }
@@ -1259,7 +1271,7 @@ dberr_t Builder::insert_direct(Cursor &cursor, size_t thread_id) noexcept {
     auto ind = index();
     ib::error(ER_IB_MSG_DDL_FAIL_NO_BUILDER, static_cast<unsigned>(get_state()),
               static_cast<unsigned>(get_error()), id(), ind->name(),
-              ind->space_id(), static_cast<unsigned>(ind->page),
+              ind->space_id(), static_cast<unsigned>(ind->page_no()),
               ctx().old_table()->name.m_name, ctx().new_table()->name.m_name);
     return DB_ERROR;
   }
@@ -1402,6 +1414,8 @@ dberr_t Builder::add_to_key_buffer(Copy_ctx &ctx,
     /* Detect duplicates by comparing the current record with previous record.*/
     if (m_prev_fields != nullptr &&
         Key_sort_buffer::compare(m_prev_fields, fields, &m_clust_dup) == 0) {
+      lizard_error(ER_LIZARD) << "DB_DUPLICATE_KEY "
+                              << "ddl0builder.cc:1418";
       set_error(DB_DUPLICATE_KEY);
       return get_error();
     }
@@ -1715,6 +1729,8 @@ dberr_t Builder::check_duplicates(Thread_ctxs &dupcheck, Dup *dup) noexcept {
         return DB_CORRUPTION;
       }
       if (cmp == 0) {
+        lizard_error(ER_LIZARD) << "DB_DUPLICATE_KEY "
+                                << "ddl0builder.cc:1733";
         return DB_DUPLICATE_KEY;
       }
     }
@@ -1903,8 +1919,8 @@ void Builder::write_redo(const dict_index_t *index) noexcept {
   byte *log_ptr{};
 
   if (mlog_open(&mtr, 11 + 8, log_ptr)) {
-    log_ptr = mlog_write_initial_log_record_low(MLOG_INDEX_LOAD, index->space,
-                                                index->page, log_ptr, &mtr);
+    log_ptr = mlog_write_initial_log_record_low(
+        MLOG_INDEX_LOAD, index->space, index->page_no(), log_ptr, &mtr);
 
     mach_write_to_8(log_ptr, index->id);
     mlog_close(&mtr, log_ptr + 8);

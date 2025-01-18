@@ -33,13 +33,54 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn0rec0types_h
 #define lizard0txn0rec0types_h
 
+#include "rem0types.h"
+
 #include "lizard0undo0types.h"
 
+/**Transactional field layout class.
+ *
+ * All txn fields include [SCN, UBA, GCN], those can be combined into different
+ * layout when design redo log, row log, undo log, index row. /
+ *
+ * */
+enum txn_layout_t {
+  /** None txn fields */
+  TL_NONE = -1,
+  /** [SCN, UBA, GCN]*/
+  TL_CLOVER = 0,
+  /** [SCN, UBA] */
+  TL_BAMBOO = 1
+};
+
+typedef enum txn_layout_t txn_layout_t;
+
+/** At least have txn field in layout. */
+inline bool txn_layout_is_arranged(const txn_layout_t &layout) {
+  return layout != TL_NONE;
+}
+
+inline ulint txn_layout_get_n_transactional_fields(txn_layout_t layout) {
+  switch (layout) {
+    case TL_CLOVER:
+      return 5;
+    case TL_BAMBOO:
+      return 4;
+    default:
+      return 0;
+  }
+}
+
 /**
-  Lizard transaction attributes in record (used by Vision)
-   1) trx_id
-   2) scn
-   3) undo_ptr
+  Transaction attributes related transaction slot strategy:
+   1) TID
+   2) SCN
+   3) UBA
+   4) GCN
+
+   We can read from:
+   1) clust or panda index record on btree leaf page.
+   2) index dd options
+   3) temporary construct when master lookup.
 */
 struct txn_rec_t {
  public:
@@ -69,6 +110,10 @@ struct txn_rec_t {
         undo_ptr(undo_ptr_arg),
         gcn(gcn_arg) {}
 
+  /** Construct txn attributes from rec offsets. */
+  txn_rec_t(const rec_t *rec, const dict_index_t *index, const ulint *offsets,
+            const txn_layout_t &layout);
+
   /** Whether txn has committed through undo_ptr commit flag.
    *
    * Commit number value maybe are null if come from index row although
@@ -78,8 +123,7 @@ struct txn_rec_t {
    * @retval	false	active */
   bool is_committed() const {
     if (!undo_ptr_is_active(undo_ptr)) {
-      ut_ad(trx_id != 0);
-
+      ut_ad(trx_id != 0 && scn != SCN_NULL);
       return true;
     } else {
       /** Active trx didn't known Commit Info. */

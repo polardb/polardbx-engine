@@ -27,7 +27,7 @@ INSERT INTO t1 (id, k, c, pad) VALUES (30, 30, 30, LEFT(REPEAT('A', 7000), CHAR_
 INSERT INTO t1 (id, k, c, pad) VALUES (70, 70, 70, LEFT(REPEAT('A', 7000), CHAR_LENGTH(REPEAT('A', 7000))));
   
 select * from information_schema.innodb_gpp_stats;
-show status like '%sec_clean%';
+show status like '%gpp_clean%';
  
 select c from t1 force index(k) where k > 0; 
  
@@ -39,7 +39,7 @@ select c from t1 force index(k) where k > 0;
  
 select * from information_schema.innodb_gpp_stats;
  
-show status like '%sec_clean%';
+show status like '%gpp_clean%';
 
 
 --echo # ------------------------- Test Partition table ----------------------------------------

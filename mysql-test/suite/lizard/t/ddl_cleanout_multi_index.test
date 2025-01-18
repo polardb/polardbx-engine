@@ -30,7 +30,7 @@ CALL insert_data1();
 
 ALTER TABLE large_table4 ADD INDEX idx_name(name), ADD INDEX idx_age(age), ADD INDEX idx_city(city);
 
---let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clust_cleaned", Value, 1)
+--let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clean", Value, 1)
 --let $assert_text= ddl_cleanout should make sense.
 --let $assert_cond= $var_value > 0
 --source include/assert.inc

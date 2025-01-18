@@ -472,6 +472,7 @@ void Context::note_max_trx_id(dict_index_t *index) noexcept {
     return;
   }
 
+  /*
   auto rw_latch = dict_index_get_lock(index);
 
   rw_lock_x_lock(rw_latch, UT_LOCATION_HERE);
@@ -485,6 +486,24 @@ void Context::note_max_trx_id(dict_index_t *index) noexcept {
   }
 
   rw_lock_x_unlock(rw_latch);
+  */
+
+  /**
+    Lizard Revision:
+    trx_id and uba of dict_index_t should remain consistent, otherwise the MVCC
+    might failed.
+
+    It seems that advancing trx_id might also cause MVCC problem (See bug#117964).
+
+    To fix these problems, the dict_index_t::trx_id will always be kept as the
+    trx_id of the DDL transaction.
+  */
+
+  /** Only secondary index using row log, and clusterd index using row log
+  table. */
+  ut_ad(!index->is_clustered());
+  ut_ad(index->trx_id == m_trx->id);
+  ut_ad(index->txn.uba == m_trx->txn_desc.undo_ptr);
 }
 
 dberr_t Context::setup_pk_sort(Cursor *cursor) noexcept {

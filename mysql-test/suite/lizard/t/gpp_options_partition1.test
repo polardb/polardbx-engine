@@ -24,7 +24,9 @@ PARTITION BY RANGE(a) (
 );
 --let $FULL_TABLE_NAME=t1#p#p0
 --let $INDEX_COL_MIN_VAL=0
---let $INDEX_COL_MAX_VAL=3
+--let $INDEX_COL_MAX_VAL=2
+--let $IS_PARTITION=1
+--let $PK_COL=a
 insert into gpp_options.t1 values (1,1,1,'11111');
 insert into gpp_options.t1 values (2,2,2,'22222');
 insert into gpp_options.t1 values (3,3,3,'33333');
@@ -218,7 +220,7 @@ ALTER TABLE gpp_options.t1 EXCHANGE PARTITION p2 WITH TABLE gpp_options.exchange
 # p0 doesn't change
 --let $FULL_TABLE_NAME=t1#p#p0
 --let $INDEX_COL_MIN_VAL=0
---let $INDEX_COL_MAX_VAL=3
+--let $INDEX_COL_MAX_VAL=2
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=1
 --source suite/lizard/include/gpp_has_options.inc
@@ -293,7 +295,7 @@ ALTER TABLE gpp_options.t1 REMOVE PARTITIONING;
 
 # ------------------------------------------------------------------------------------------------------------------------- #
 # ####
-# The following cases are from gpp_options.test
+# The following cases are from gpp_options1.test
 # ####
 # ------------------------------------------------------------------------------------------------------------------------- #
 
@@ -498,34 +500,6 @@ ALTER TABLE gpp_options.t1 ADD UNIQUE INDEX b_unique (b,a);
 
 SET opt_index_format_gpp_enabled=false;
 ALTER TABLE gpp_options.t1 DROP INDEX b_unique;
---let $INDEX_NAME=b_c
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-# ----------------------------------------------------------------------------------------------------- #
-
-# ----------------------------------------------------------------------------------------------------- #
---echo # Rename an existing index b_c to bc_renamed, verify GPP option consistency.
-SET opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 RENAME INDEX b_c TO bc_renamed;
---let $INDEX_NAME=bc_renamed
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
---source include/restart_mysqld.inc
---let $INDEX_NAME=bc_renamed
---let $CONTAIN_GPP=0
---source suite/lizard/include/gpp_has_options.inc
---let $INDEX_NAME=b
---let $CONTAIN_GPP=1
---source suite/lizard/include/gpp_has_options.inc
-
-SET opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 RENAME INDEX bc_renamed TO b_c;
 --let $INDEX_NAME=b_c
 --let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc

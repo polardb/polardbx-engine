@@ -36,32 +36,86 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0mem.h"
 
 #include "lizard0data0types.h"
+#include "lizard0txn0rec0types.h"
 
+/** Whether Btree Index Record has transactional capability or not, its totally
+  depended on transactional columns;
+
+  1) Cluster index
+
+  It included [trx_id, rollptr, scn, uba, gcn] to address transactional
+  capability, But intrinsic table is a special case, we must deal with it
+  individually.
+
+  2) Secondary index
+        2.1) Normal Btree structure
+            It didn't have any transactional columns.
+
+        2.2) Panda index
+           It included [trx_id, rollptr, scn, uba] columns. But temporary table
+           is also a special case. we can assert it since panda not support
+           temporary table.
+ */
 namespace lizard {
+extern bool inject_stress_test_for_panda;
 
-/** Whether to enable clustered index record inference during the scan. */
-extern bool index_scan_guess_clust_enabled;
-
-/** Whether to enable clustered index record inference during the purge. */
-extern bool index_purge_guess_clust_enabled;
-
-/** Whether to enable clustered index record inference during the locking. */
-extern bool index_lock_guess_clust_enabled;
-
-#ifdef UNIV_DEBUG
-extern gpp_no_t dbug_gpp_no;
-#endif /* UNIV_DEBUG */
-
-/** Build column definition for GPP_NO.
+/**
+ * Whether btree index is panda structure.
  *
- * @param[in]	table
- * @param[in]	heap
+ * @param[in]	index
  *
- * @retval	GPP_NO column
+ * @retval	true	Panda structure index
+ * @retval	false
  * */
-extern dict_col_t *dict_mem_table_add_v_gcol(dict_table_t *table,
-                                             mem_heap_t *heap);
+inline bool dict_index_is_panda(const dict_index_t *index) {
+  return index->is_panda();
+}
+inline bool dict_index_is_clust(const dict_index_t *index) {
+  return index->is_clustered();
+}
 
+inline bool dict_index_inject_stress_test_for_panda(
+    const dict_index_t *index) {
+  return dict_index_is_panda(index) && inject_stress_test_for_panda;
+}
+
+/** Attention: pls use it carefully. make sure you judge table type before. */
+inline txn_layout_t dict_index_txn_layout(const dict_index_t *index) {
+  if (index->is_clustered())
+    return txn_layout_t::TL_CLOVER;
+  else if (index->is_panda())
+    return txn_layout_t::TL_BAMBOO;
+  else
+    return txn_layout_t::TL_NONE;
+}
+
+/** Judge count of secondary functional fields according to index/table
+ * structure. */
+inline ulint dict_index_n_sec_functional_fields(const dict_index_t *index) {
+  ut_ad(!index->is_clustered());
+  if (index->table && index->table->is_intrinsic()) {
+    return 0;
+  }
+  return txn_layout_get_n_transactional_fields(dict_index_txn_layout(index)) +
+         index->n_s_gfields;
+}
+
+/**
+ * Check the type of a given index page against the expected type for the
+ * specified index.
+ * The function handles different types of indexes that require specific
+ * page types:
+ * - For spatial indexes, it expects pages of type FIL_PAGE_RTREE.
+ * - For SDI, it expects pages of type FIL_PAGE_SDI.
+ * - For Panda indexes, it expects pages of type FIL_PAGE_INDEX_PANDA.
+ * - For normal indexes, it expects the default page type FIL_PAGE_INDEX.
+ *
+ * @param index Pointer to the index structure.
+ * @param page  Pointer to the index page.
+ * @return true if the page type matches the expected type for the given index;
+ *         false otherwise.
+ */
+bool dict_index_fil_page_check(const dict_index_t *index, const byte *page);
 
 }  // namespace lizard
 #endif

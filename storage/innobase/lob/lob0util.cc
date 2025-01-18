@@ -48,7 +48,7 @@ buf_block_t *alloc_lob_page(dict_index_t *index, mtr_t *lob_mtr, page_no_t hint,
   ulint r_extents;
   mtr_t mtr_bulk;
   mtr_t *alloc_mtr;
-  buf_block_t *block = nullptr;
+  btr_alloc_t alloc;
 
   space_id_t space_id = dict_index_get_space(index);
 
@@ -74,7 +74,7 @@ buf_block_t *alloc_lob_page(dict_index_t *index, mtr_t *lob_mtr, page_no_t hint,
     return (nullptr);
   }
 
-  block = btr_page_alloc(index, hint, FSP_NO_DIR, 0, alloc_mtr, lob_mtr);
+  alloc = btr_page_alloc(index, hint, FSP_NO_DIR, 0, alloc_mtr, lob_mtr);
 
   fil_space_release_free_extents(space_id, r_extents);
 
@@ -83,7 +83,7 @@ buf_block_t *alloc_lob_page(dict_index_t *index, mtr_t *lob_mtr, page_no_t hint,
     alloc_mtr->commit();
   }
 
-  return (block);
+  return (alloc.new_block);
 }
 
 dberr_t get_affected_index_entries(const ref_t &ref, dict_index_t *index,

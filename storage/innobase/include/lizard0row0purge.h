@@ -32,6 +32,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0row0purge_h
 #define lizard0row0purge_h
 
+struct purge_node_t;
+class THD;
+
 namespace lizard {
 
 /** Purge phase for 2PC-Purge */
@@ -42,6 +45,13 @@ enum e_2pp_phase {
   PURGE_SP_LIST,
 };
 
+/** Purges the parsed panda record.
+ * @param[in,out]  node            row purge node
+ * @param[in]      updated_extern  whether external columns were updated
+ * @param[in,out]  thd             current thread
+@return true if purged, false if skipped */
+bool row_purge_record_for_panda(purge_node_t *node, bool updated_extern,
+                                THD *thd);
 }
 
 #endif

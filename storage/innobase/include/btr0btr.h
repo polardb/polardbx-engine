@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0cur.h"
 #include "univ.i"
 
+#include "lizard0btr0types.h"
+
 /** Maximum record size which can be stored on a page, without using the
 special big record storage structure */
 #define BTR_PAGE_MAX_REC_SIZE (UNIV_PAGE_SIZE / 2 - 200)
@@ -264,11 +266,13 @@ buf_block_t *btr_node_ptr_get_child(const rec_t *node_ptr, dict_index_t *index,
 @param[in]      space                   Space where created
 @param[in]      index_id                Index id
 @param[in]      index                   Index tree
+@param[in]      expected_page_type      Expected page type of the btree
 @param[in,out]  mtr                     Mini-transaction
-@return page number of the created root
-@retval FIL_NULL if did not succeed */
-ulint btr_create(ulint type, space_id_t space, space_index_t index_id,
-                 dict_index_t *index, mtr_t *mtr);
+@return page mark of the created root
+@retval {FIL_NULL,FIL_PAGE_TYPE_UNUSED} if did not succeed */
+page_mark_t btr_create(ulint type, space_id_t space, space_index_t index_id,
+                       dict_index_t *index, page_type_t expected_page_type,
+                       mtr_t *mtr);
 
 /** Free a persistent index tree if it exists.
 @param[in]      page_id         Root page id
@@ -490,7 +494,7 @@ page
 @retval block, rw_lock_x_lock_count(&block->lock) == 1 if allocation succeeded
 (init_mtr == mtr, or the page was not previously freed in mtr),
 returned block is not allocated nor initialized otherwise */
-[[nodiscard]] buf_block_t *btr_page_alloc_priv(
+[[nodiscard]] btr_alloc_t btr_page_alloc_priv(
     dict_index_t *index, page_no_t hint_page_no, byte file_direction,
     ulint level, mtr_t *mtr, mtr_t *init_mtr IF_DEBUG(, const ut::Location &loc)
 
@@ -504,11 +508,12 @@ void btr_page_free(dict_index_t *index, /*!< in: index tree */
 /** Creates a new index page (not the root, and also not
  used in page reorganization).  @see btr_page_empty(). */
 void btr_page_create(
-    buf_block_t *block,       /*!< in/out: page to be created */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-    dict_index_t *index,      /*!< in: index */
-    ulint level,              /*!< in: the B-tree level of the page */
-    mtr_t *mtr);              /*!< in: mtr */
+    buf_block_t *block,         /*!< in/out: page to be created */
+    page_zip_des_t *page_zip,   /*!< in/out: compressed page, or NULL */
+    dict_index_t *index,        /*!< in: index */
+    ulint level,                /*!< in: the B-tree level of the page */
+    page_type_t root_page_type, /*!< in: root page type */
+    mtr_t *mtr);                /*!< in: mtr */
 
 /** Frees a file page used in an index tree. Can be used also to BLOB
  external storage pages.

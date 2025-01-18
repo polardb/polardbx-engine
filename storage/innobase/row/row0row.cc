@@ -624,6 +624,8 @@ dtuple_t *row_rec_to_index_entry_low(
 
   ut_ad(dtuple_check_typed(entry));
 
+  lizard::row_search_entry_adjust_cmp_fields(index, entry);
+
   return (entry);
 }
 

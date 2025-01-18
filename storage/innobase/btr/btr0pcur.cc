@@ -38,6 +38,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "ut0byte.h"
 
+#include "lizard0row0bamboo.h"
+
 void btr_pcur_t::store_position(mtr_t *mtr) {
   ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
   ut_ad(m_latch_mode != BTR_NO_LATCHES);
@@ -76,7 +78,7 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
     ut_a(btr_page_get_next(page, mtr) == FIL_NULL);
     ut_a(btr_page_get_prev(page, mtr) == FIL_NULL);
     ut_ad(page_is_leaf(page));
-    ut_ad(page_get_page_no(page) == index->page);
+    ut_ad(page_get_page_no(page) == index->page_no());
 
     m_old_stored = true;
 
@@ -175,6 +177,10 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr,
   ut_a(m_old_rec != nullptr);
   ut_a(m_old_n_fields > 0);
 
+  if (lizard::dict_index_inject_stress_test_for_panda(m_btr_cur.index)) {
+    goto pessimistic_restore;
+  }
+
   /* Optimistic latching involves S/X latch not required for
   intrinsic table instead we would prefer to search fresh. */
   if ((latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF ||
@@ -229,6 +235,7 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr,
     }
   }
 
+pessimistic_restore:
   /* If optimistic restoration did not succeed, open the cursor anew */
 
   auto heap = mem_heap_create(256, UT_LOCATION_HERE);

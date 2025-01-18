@@ -1104,6 +1104,7 @@ void buf_flush_init_for_writing(const buf_block_t *block, byte *page,
             case FIL_PAGE_TYPE_ZLOB_FRAG:
             case FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY:
             case FIL_PAGE_TYPE_RSEG_ARRAY:
+            case FIL_PAGE_INDEX_PANDA:
               break;
             case FIL_PAGE_TYPE_FSP_HDR:
             case FIL_PAGE_TYPE_XDES:

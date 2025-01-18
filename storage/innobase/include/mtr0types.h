@@ -260,22 +260,35 @@ enum mlog_id_t {
 
   /** TODO: Compatible with previous records <01-06-23, zanye.zjy> */
   // /** Lizard: update the lizard fields (scn, uba) in non-compact format */
-  // MLOG_REC_CLUST_LIZARD_UPDATE_80027 = 79,
+  // MLOG_REC_CLUST_CLOVER_UPDATE_80027 = 79,
 
   // /** Lizard: update the lizard fields (scn, uba) in compact format */
-  // MLOG_COMP_REC_CLUST_LIZARD_UPDATE_80027 = 80,
+  // MLOG_COMP_REC_CLUST_CLOVER_UPDATE_80027 = 80,
 
   /** Lizard: GCN metadata when commit. */
   MLOG_GCN_METADATA = 81,
 
   /** Lizard: update the gpp_no of a secondary index record */
-  MLOG_REC_SEC_GPP_NO = 82,
+  MLOG_REC_SEC_GPP_NO_UPDATE = 82,
 
-  /** Lizard: update the lizard fields (scn, uba) after 8029 */
-  MLOG_REC_CLUST_LIZARD_UPDATE = 100,
+  /** Lizard: update bamboo fields of secondary index record */
+  MLOG_REC_SEC_BAMBOO_UPDATE = 83,
+
+  /** Lizard: mark panda secondary index record deleted, sys cols is acquired.
+   */
+  MLOG_REC_SEC_PANDA_DELETE_MARK = 84,
+
+  /** Create a panda index page */
+  MLOG_PAGE_CREATE_PANDA = 85,
+
+  /** create a panda compact index page */
+  MLOG_COMP_PAGE_CREATE_PANDA = 86,
+
+  /** Lizard: update clover fields (scn, uba, gcn) after 8029 */
+  MLOG_REC_CLUST_CLOVER_UPDATE = 100,
 
   /** biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE = MLOG_REC_CLUST_LIZARD_UPDATE
+  MLOG_BIGGEST_TYPE = MLOG_REC_CLUST_CLOVER_UPDATE
 };
 
 /** @} */

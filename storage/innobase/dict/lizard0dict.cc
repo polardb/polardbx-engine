@@ -30,17 +30,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-03-19 by Jianwei.zhao
  *******************************************************/
 
-#include "lizard0dict.h"
 #include "dict0dd.h"
 #include "dict0mem.h"
-#include "lizard0data0types.h"
-#include "lizard0undo.h"
+#include "data0data.h"
 #include "row0mysql.h"
 
+#include "lizard0dict.h"
+#include "lizard0btr0btr.h"
+#include "lizard0data0types.h"
+#include "lizard0undo.h"
 #include "lizard0dict0mem.h"
-#include "lizard0data0data.h"
 #include "lizard0dd0policy.h"
 #include "lizard0txn0rec.h"
+#include "lizard0dict0gpp.h"
 
 #include "sql/sql_class.h"
 
@@ -82,7 +84,7 @@ static_assert(DATA_GCN_ID_LEN == 8, "DATA_GCN_ID_LEN != 8");
   @param[in]      table       dict_table_t
   @param[in]      heap        memory slice
 */
-void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap) {
+void dict_table_add_functional_columns(dict_table_t *table, mem_heap_t *heap) {
   ut_ad(table && heap);
 
   if (!table->is_intrinsic()) {
@@ -259,99 +261,56 @@ void dd_add_lizard_columns(dd::Table *dd_table, dd::Index *primary) {
   dd_add_hidden_element(primary, db_gcn_id);
 }
 
-/**
- * Return prefined dict_table_t GPP_NO column.
- *
- * @return	always valid column.
- * */
-dict_col_t *dict_table_get_v_gcol(const dict_table_t *table) {
-  ut_ad(table->v_gcol != nullptr);
-  return table->v_gcol;
+static void dict_index_add_panda_cols(dict_index_t *index,
+                                      const dict_table_t *table) {
+  ut_ad(!index->is_clustered() && dict_index_is_unique(index));
+  ut_ad(!(index->type & DICT_SDI) && !dict_index_is_spatial(index));
+  ut_ad(!table->is_intrinsic());
+
+  /* Add TRX_ID field. */
+  dict_index_add_col(index, table, table->get_sys_col(DATA_TRX_ID), 0, true);
+  /* Add ROLL_PTR field. */
+  dict_index_add_col(index, table, table->get_sys_col(DATA_ROLL_PTR), 0, true);
+  /* Add SCN field. */
+  dict_index_add_col(index, table, table->get_sys_col(DATA_SCN_ID), 0, true);
+  /* Add UBA field. */
+  dict_index_add_col(index, table, table->get_sys_col(DATA_UNDO_PTR), 0, true);
 }
 
-/**
- * Return prefined dict_index_t GPP_NO field.
- *
- * @return	always valid column.
- * */
-dict_field_t *dict_index_get_v_gfield(const dict_index_t *index) {
-  ut_ad(index);
-  ut_ad(index->v_gfield);
-
-  return index->v_gfield;
+static void dict_index_add_sec_transactional_cols(
+    dict_index_t *new_index, const dict_index_t *index,
+    const dict_table_t *table, page_type_t expected_page_type) {
+  switch (expected_page_type) {
+    case FIL_PAGE_INDEX_PANDA:
+      return dict_index_add_panda_cols(new_index, table);
+    case FIL_PAGE_TYPE_UNUSED:
+      break;
+    default:
+      ut_a(0);
+  }
 }
 
-/** Add virtual GPP_NO column on index as virtual column.
- *
- * @param[in/out]	index
- * @param[in]		table
- * */
-void dict_index_add_virtual_gcol(dict_index_t *index,
-                                 const dict_table_t *table) {
-  dict_col_t *col = nullptr;
-  const char *col_name = nullptr;
-  dict_field_t *field = nullptr;
-  ut_ad(index);
-
-  /** GPP NO column */
-  col = dict_table_get_v_gcol(table);
-  ut_ad(col);
-  col_name = table->get_col_name(dict_col_get_no(col));
-  field = index->v_gfield;
-  ut_ad(field && index->n_v_gfields == 0);
-
-  index->n_v_gfields = 1;
-  field->name = col_name;
-  field->prefix_len = 0;
-  field->is_ascending = true;
-
-  field->col = col;
-  field->fixed_len = col->get_fixed_size(dict_table_is_comp(table));
-
-  ut_ad(field->fixed_len == DATA_GPP_NO_LEN);
-}
-
-/** Add stored GPP_NO column on secondary index following PK Columns.
+/** Add extra functional columns in secondary index following PK Columns.
  *
  * @param[in/out]	new index.
  * @param[in]		index.
- * @param[in]		dictionary table
+ * @param[in]		dictionary table.
+ * @param[in]		page type.
  */
-void dict_index_add_stored_gcol(dict_index_t *new_index,
-                                const dict_index_t *index,
-                                const dict_table_t *table) {
-  dict_col_t *col = nullptr;
-  const char *col_name = nullptr;
-  dict_field_t *field = nullptr;
-
-  ut_ad(new_index && index);
-  ut_a(new_index->n_s_gfields == 0);
-
-  if (!index->is_gstored()) return;
-
-  /** Not support stored GPP_NO column on primary key. */
-  ut_ad(!index->is_clustered());
-
-  /** Not supoort stored GPP_NO column on compressed table. */
-  ut_ad(!table->is_compressed());
-
-  /** GPP NO column */
-  col = dict_table_get_v_gcol(table);
-  ut_ad(col);
-  col_name = table->get_col_name(dict_col_get_no(col));
-
-  new_index->add_field(col_name, 0, true);
-  field = new_index->get_field(new_index->n_def - 1);
-  field->col = col;
-  field->fixed_len = col->get_fixed_size(dict_table_is_comp(table));
-  ut_ad(field->fixed_len == DATA_GPP_NO_LEN);
-
-  new_index->n_s_gfields = 1;
-  new_index->set_gstored(true);
+void dict_index_add_sec_functional_cols(dict_index_t *new_index,
+                                        const dict_index_t *index,
+                                        const dict_table_t *table,
+                                        page_type_t expected_page_type) {
+  /* Add gpp fields for sec index. */
+  dict_index_add_stored_gcol(new_index, index, table);
+  /* Add transactional fields for sec index */
+  dict_index_add_sec_transactional_cols(new_index, index, table,
+                                        expected_page_type);
 }
 
 void dd_fill_dict_index_format(const Index_policy &index_policy,
-                               const dict_table_t *table, dict_index_t *index) {
+                               const dict_table_t *table, dict_index_t *index,
+                               page_type_t *expected_or_real_page_type) {
   /** Promise only fill once. */
   ut_a(index->is_gstored() == false);
   ut_a(index->n_s_gfields == 0);
@@ -371,25 +330,26 @@ void dd_fill_dict_index_format(const Index_policy &index_policy,
   }
 
   index->set_gstored(index_policy.has_gpp());
-}
 
-/**
- * Copy column definition
- *
- * @param[in/out]	tuple
- * @Param[in]		dict_table_t */
-void dict_table_copy_g_types(dtuple_t *tuple, const dict_table_t *table) {
-  dict_col_t *col = nullptr;
-  dfield_t *dfield = nullptr;
-  dtype_t *dtype = nullptr;
-  ut_ad(table && tuple);
+  if (index_policy.page_type() == FIL_PAGE_INDEX_PANDA) {
+    ut_ad(!table->is_system_table);
+  }
 
-  col = dict_table_get_v_gcol(table);
-  dfield = dtuple_get_v_gfield(tuple);
-  dtype = dfield_get_type(dfield);
+  *expected_or_real_page_type = index_policy.page_type();
 
-  dfield_set_null(dfield);
-  col->copy_type(dtype);
+#ifdef UNIV_DEBUG
+  /* Validate root page type. */
+  switch (*expected_or_real_page_type) {
+    case FIL_PAGE_INDEX_PANDA:
+      ut_ad(!index->is_clustered());
+      ut_ad(dict_index_is_unique(index));
+      [[fallthrough]];
+    case FIL_PAGE_TYPE_UNUSED:
+      break;
+    default:
+      ut_ad(0);
+  }
+#endif
 }
 
 /**
@@ -399,7 +359,10 @@ void dict_table_copy_g_types(dtuple_t *tuple, const dict_table_t *table) {
 */
 ulint row_log_dict_index_get_ordered_n_fields(const dict_index_t *index) {
   ut_ad(index && !index->is_clustered());
-  return dict_index_get_n_fields(index) - index->n_s_gfields;
+  assert_lizard_dict_index_gstored_check(index);
+
+  return dict_index_get_n_fields(index) -
+         dict_index_n_sec_functional_fields(index);
 }
 
 void dd_write_index_format(dd::Properties *options, const dict_index_t *index,
@@ -526,6 +489,82 @@ void dd_exchange_table_fba(dd::Properties &part_dd_options,
   swap_dd_options.set(TABLE_OPTION_FBA, part_fba);
 }
 
+/** Judge legacy fil page type that will be stored.
+ *
+ * Legacy file page type including:
+ * 1. FIL_PAGE_RTREE
+ * 2. FIL_PAGE_SDI
+ * 3. FIL_PAGE_INDEX
+ *
+ * When creating B-Tree, importing B-Tree, or some others
+ * The Legacy file page type will be upgraded as:
+ * 1. FIL_PAGE_RTREE --> FIL_PAGE_RTREE
+ * 2. FIL_PAGE_SDI   --> FIL_PAGE_SDI
+ * 3. FIL_PAGE_INDEX --> FIL_PAGE_INDEX_PANDA
+ *
+ * @param[in]	dict index
+ *
+ * @retval	storage page type. */
+page_type_t dict_index_legacy_ptype(const dict_index_t *index) {
+  return dict_index_legacy_ptype(index->type);
+}
+
+page_type_t dict_index_legacy_ptype(ulint index_type) {
+  if (index_type & DICT_SPATIAL) {
+    return FIL_PAGE_RTREE;
+  } else if (index_type & DICT_SDI) {
+    return FIL_PAGE_SDI;
+  } else {
+    return FIL_PAGE_INDEX;
+  }
+}
+
+void dict_index_panda_alloc_roll_ptr_for_ddl(const dict_index_t *index,
+                                             DField_wrapper *df_wrapper) {
+  byte *field;
+  ulint pos;
+
+  if (!dict_index_is_panda(index)) {
+    return;
+  }
+
+  /** Get positioin of roll ptr on the index */
+  pos = index->get_sys_col_pos(DATA_ROLL_PTR);
+  dict_field_t *dd_field = index->get_field(pos);
+  ut_a(dd_field->col == index->table->get_sys_col(DATA_ROLL_PTR));
+  ut_a(dd_field->col->len == DATA_ROLL_PTR_LEN);
+
+  /** Copy column types and length to the field */
+  df_wrapper->copy_types_and_len(dd_field->col);
+
+  /** Write special valu for roll ptr. */
+  field = static_cast<byte *>(dfield_get_data(df_wrapper->dfield()));
+  trx_write_roll_ptr(field, ROLL_PTR_SEC_DDL);
+
+  return;
+}
+
+/** Retrieve root page type from dd index se private data.
+ *
+ * @param[in]	dict index
+ * @param[in]	se private data
+ *
+ * @retval	root page type. */
+page_type_t dd_index_get_page_type(const dict_index_t *index,
+                                   const dd::Properties &se_private_data) {
+  page_type_t page_type;
+  const char *key;
+
+  page_type = dict_index_legacy_ptype(index);
+  key = dd_index_key_strings[DD_INDEX_PAGE_TYPE];
+
+  if (se_private_data.exists(key)) {
+    se_private_data.get(key, &page_type);
+  }
+
+  return page_type;
+}
+
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
   Check the dict_table_t object
@@ -633,6 +672,122 @@ bool lizard_dict_table_check(const dict_table_t *table) {
   return true;
 }
 
+/** Check cluster index structure
+ *
+ * @param[in]	index
+ *
+ * @retval	true	valid
+ * */
+static bool dict_index_check_clust(const dict_index_t *index) {
+  size_t n_uniq;
+  dict_field_t *field;
+  dict_col_t *col;
+  const char *col_name;
+
+  ut_a(index->is_clustered());
+  ut_a(!index->is_panda());
+
+  /** [trxid, rollptr, scn, uba, gcn] for non-intrinsic table. */
+  if (!index->table->is_intrinsic()) {
+    n_uniq = index->n_uniq;
+    /* trx_id */
+    field = index->get_field(n_uniq);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_TRX_ID") == 0);
+
+    /* roll ptr */
+    field = index->get_field(n_uniq + 1);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_ROLL_PTR") == 0);
+
+    /* scn id */
+    field = index->get_field(n_uniq + 2);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_SCN_ID") == 0);
+
+    /* undo ptr */
+    field = index->get_field(n_uniq + 3);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_UNDO_PTR") == 0);
+
+    /* gcn id */
+    field = index->get_field(n_uniq + 4);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_GCN_ID") == 0);
+  } else {
+    /** [trxid] for intrinsic table. */
+    n_uniq = index->n_uniq;
+    /* trx_id */
+    field = index->get_field(n_uniq);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(strcmp(col_name, "DB_TRX_ID") == 0);
+  }
+  return true;
+}
+
+/** Check panda index structure
+ *
+ * @param[in]	index
+ *
+ * @retval	true	valid
+ * */
+static bool dict_index_check_panda(const dict_index_t *index) {
+  dict_field_t *field;
+  dict_col_t *col;
+  const char *col_name;
+  size_t trx_id_pos;
+
+  ut_a(index->is_panda());
+  ut_a(!index->is_clustered());
+
+  /** [trx_id, rollptr, scn, uba] for non-temporary table. */
+  if (!index->table->is_temporary()) {
+    trx_id_pos =
+        dict_index_get_n_unique_in_tree(index) + (index->is_gstored() ? 1 : 0);
+
+    /* trx_id */
+    field = index->get_field(trx_id_pos);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(col == index->table->get_sys_col(DATA_TRX_ID));
+    ut_a(strcmp(col_name, "DB_TRX_ID") == 0);
+
+    /* roll ptr */
+    field = index->get_field(trx_id_pos + 1);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(col == index->table->get_sys_col(DATA_ROLL_PTR));
+    ut_a(strcmp(col_name, "DB_ROLL_PTR") == 0);
+
+    /* scn id */
+    field = index->get_field(trx_id_pos + 2);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(col == index->table->get_sys_col(DATA_SCN_ID));
+    ut_a(strcmp(col_name, "DB_SCN_ID") == 0);
+
+    /* undo ptr */
+    field = index->get_field(trx_id_pos + 3);
+    col = field->col;
+    col_name = index->table->get_col_name(col->ind);
+    ut_a(col == index->table->get_sys_col(DATA_UNDO_PTR));
+    ut_a(strcmp(col_name, "DB_UNDO_PTR") == 0);
+
+    ut_a((trx_id_pos + 4) == dict_index_get_n_fields(index));
+  } else {
+    /** We didn't allow panda index on temporary table. */
+    ut_a(0);
+    return false;
+  }
+  return true;
+}
+
 /**
   Check the dict_incex object
 
@@ -643,57 +798,27 @@ bool lizard_dict_table_check(const dict_table_t *table) {
 */
 bool lizard_dict_index_check(const dict_index_t *index, bool check_table) {
   bool is_clust;
-  size_t n_uniq;
   dict_field_t *field;
   dict_col_t *col;
   const char *col_name;
-
+  bool is_panda;
   ut_a(index);
+
+  if (dict_index_is_ibuf(index)) {
+    return true;
+  }
+
   if (check_table) {
     assert_lizard_dict_table_check(index->table);
   }
+
   is_clust = index->is_clustered();
+  is_panda = dict_index_is_panda(index);
 
   if (is_clust) {
-    if (!index->table->is_intrinsic()) {
-      n_uniq = index->n_uniq;
-      /* trx_id */
-      field = index->get_field(n_uniq);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_TRX_ID") == 0);
-
-      /* roll ptr */
-      field = index->get_field(n_uniq + 1);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_ROLL_PTR") == 0);
-
-      /* scn id */
-      field = index->get_field(n_uniq + 2);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_SCN_ID") == 0);
-
-      /* undo ptr */
-      field = index->get_field(n_uniq + 3);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_UNDO_PTR") == 0);
-
-      /* gcn id */
-      field = index->get_field(n_uniq + 4);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_GCN_ID") == 0);
-    } else {
-      n_uniq = index->n_uniq;
-      /* trx_id */
-      field = index->get_field(n_uniq);
-      col = field->col;
-      col_name = index->table->get_col_name(col->ind);
-      ut_a(strcmp(col_name, "DB_TRX_ID") == 0);
-    }
+    return dict_index_check_clust(index);
+  } else if (is_panda) {
+    return dict_index_check_panda(index);
   } else {
     for (size_t i = 0; i < index->n_def; i++) {
       field = index->get_field(i);
@@ -704,6 +829,7 @@ bool lizard_dict_index_check(const dict_index_t *index, bool check_table) {
       } else {
         col_name = index->table->get_col_name(col->ind);
       }
+
       ut_a(strcmp(col_name, "DB_TRX_ID") != 0 &&
            strcmp(col_name, "DB_ROLL_PTR") != 0 &&
            strcmp(col_name, "DB_SCN_ID") != 0 &&

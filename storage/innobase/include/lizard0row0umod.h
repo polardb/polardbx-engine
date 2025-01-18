@@ -24,30 +24,34 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-/** @file include/lizard0lock.h
- lizard lock operation.
+/** @file include/lizard0row0umod.h
+ Lizard row undo modify implementation.
 
- Created 2024-12-27 by Jianwei.zhao
+ Created 2024-10-09 by Yichang Song
  *******************************************************/
 
-#ifndef lizard0lock_h
-#define lizard0lock_h
+#ifndef lizard0row0umod_h
+#define lizard0row0umod_h
 
-#include "lizard0row.h"
+#include "row0umod.h"
 
 namespace lizard {
+/** Rollback the modified panda record.
+ * @param[in,out]  node            row rollback node
+ * @param[in]      thr             que thread
+ * @param[in,out]  thd             current MySQL connection (for mdl)
+ * @param[in,out]  mdl             MDL ticket
+@return DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
+dberr_t row_undo_mod_record_for_panda(undo_node_t *node, que_thr_t *thr,
+                                      THD *thd, MDL_ticket *mdl);
 
-/** Read txn rec info from index record.
- *
- * @param[in]		rec
- * @param[in]		cluster index
- * @param[in]		offsets
- * @param[out]		txn rec.
- * */
-extern void lock_clust_rec_some_has_impl(const rec_t *rec,
-                                         const dict_index_t *index,
-                                         const ulint *offsets,
-                                         txn_rec_t *txn_rec);
-
+/** Rollback the modified panda record of row log.
+ * @param[in,out]  node            row rollback node
+ * @param[in]      thr             que thread
+ * @param[in,out]  thd             current MySQL connection (for mdl)
+ * @param[in,out]  mdl             MDL ticket
+@return DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
+dberr_t row_undo_mod_record_for_rlog(undo_node_t *node, que_thr_t *thr,
+                                     THD *thd, MDL_ticket *mdl);
 }  // namespace lizard
 #endif

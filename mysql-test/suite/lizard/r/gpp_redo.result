@@ -5,15 +5,17 @@
 DYNAMIC;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -30,15 +32,16 @@ a	b	c
 1	1	3
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -56,15 +59,17 @@ a	b	c
 REDUNDANT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -81,15 +86,16 @@ a	b	c
 1	1	3
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -107,15 +113,17 @@ a	b	c
 COMPACT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -132,15 +140,16 @@ a	b	c
 1	1	3
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
+INSERT INTO t1 VALUES (1,1,1); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -160,15 +169,17 @@ a	b	c
 DYNAMIC;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -183,19 +194,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -210,20 +222,22 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 REDUNDANT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -238,19 +252,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -265,20 +280,22 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 COMPACT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -293,19 +310,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1); ALTER TABLE t1 ADD COLUMN c2 INT NOT NULL DEFAULT 10, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2,2);;
+INSERT INTO t1 VALUES (2,2,2,2); UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -320,20 +338,22 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
 a	b	c	c2
-1	1	1	10
+1	1	3	10
 2	2	2	2
 DYNAMIC;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -347,19 +367,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=DYNAMIC; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -373,20 +394,22 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 REDUNDANT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -400,19 +423,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=REDUNDANT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -426,20 +450,22 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 COMPACT;
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 1.2 Apply redo log within n_gfields when restarting and crash.
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -453,19 +479,20 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-CREATE TABLE t1 (a INT NOT NULL AUTO_INCREMENT PRIMARY KEY, b INT, c INT NOT NULL, c2 INT, INDEX(b), UNIQUE KEY(c)) ROW_FORMAT=COMPACT; INSERT INTO t1 VALUES (1,1,1,1); ALTER TABLE t1 DROP COLUMN c2, ALGORITHM=INSTANT; INSERT INTO t1 VALUES (2,2,2);;
+INSERT INTO t1 VALUES (2,2,2);UPDATE t1 SET c=3 where c=1;;
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE t1; SELECT * FROM t1; DROP TABLE IF EXISTS t1;;
@@ -479,7 +506,7 @@ t1	CREATE TABLE `t1` (
   KEY `b` (`b`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
 a	b	c
-1	1	1
+1	1	3
 2	2	2
 # --------------------------------------------------------------------------
 # ------From innodb.zlob_redundant_partial_update---------------------------
@@ -500,9 +527,11 @@ select j from ibstd_39_j where pkey=7;
 END|
 # 1. Test GPP mode enabled
 SET opt_index_format_gpp_enabled = TRUE;
+create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ;;
+SET GLOBAL innodb_log_checkpoint_now=1;
 # 1.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ; call fill_table_ibstd_39_j();;
+call fill_table_ibstd_39_j();;
 a	d	b	c	pkey	j	vjh	vjha	vjhh
 316	1	bbb0.758247362686085	c0.788127900761083	7	{"foo": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "hash": ["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"], " and ": ["and fffffffffoo", "and fffffffffoo"], " ffff": ["ffffffoo", "ffffffoo"], "asdfg": ["fffffoo", "fffffoo"], "cvbnm": ["vbnm and fffffffffoo", "vbnm and fffffffffoo"], "d fff": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "dfghj": ["cvbnm and fffffffffoo", "cvbnm and fffffffffoo"], "fffff": ["ghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo"], "fghjk": ["ffffffoo", "ffffffoo"], "ghjkl": ["yuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo"], "hash1": [" and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo", " and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo"], "hash2": {"oo": ["qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo"], "foo": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "ffoo": ["foo", "foo"], " and ": ["ffffoo", "ffffoo"], " ffff": ["uiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo"], "and f": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "asdfg": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "bnm a": ["ffffffffoo", "ffffffffoo"], "cvbnm": [" and fffffffffoo", " and fffffffffoo"], "d fff": ["fghjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo"], "dfghj": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "ertyu": ["m and fffffffffoo", "m and fffffffffoo"], "fffff": ["d fffffffffoo", "d fffffffffoo"], "ffffo": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "fffoo": [" fffffffffoo", " fffffffffoo"], "fghjk": [" and fffffffffoo", " and fffffffffoo"], "ghjkl": ["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"], "hash3": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "hjklz": ["ffffffffoo", "ffffffffoo"], "iopas": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "jklzx": ["ffffoo", "ffffoo"], "klzxc": ["fffffffffoo", "fffffffffoo"], "lzxcv": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "m and": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "nd ff": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "nm an": ["ffoo", "ffoo"], "opasd": ["jklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo"], "pasdf": ["m and fffffffffoo", "m and fffffffffoo"], "qwert": ["d fffffffffoo", "d fffffffffoo"], "rtyui": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "sdfgh": ["fffffffffoo", "fffffffffoo"], "tyuio": ["xcvbnm and fffffffffoo", "xcvbnm and fffffffffoo"], "uiopa": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "vbnm ": ["fffffffffoo", "fffffffffoo"], "werty": ["opasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffffoo", "fffffoo"], "yuiop": [" fffffffffoo", " fffffffffoo"], "zxcvb": ["ffffoo", "ffffoo"]}, "hjklz": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "m and": ["foo", "foo"], "opasd": ["oo", "oo"], "rtyui": ["m and fffffffffoo", "m and fffffffffoo"], "sdfgh": ["ertyuiopasdfghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo"], "tyuio": ["m and fffffffffoo", "m and fffffffffoo"], "werty": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffoo", "fffoo"], "yuiop": ["hjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo"]}	["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"]	 and fffffffffoo	["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"]
 j
@@ -512,7 +541,7 @@ j
 # 1.3 Apply redo log within n_gfields when restarting and no crash.
 # restart
 # 1.4 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE ibstd_39_j; SELECT * FROM ibstd_39_j; DROP TABLE IF EXISTS ibstd_39_j;;
@@ -546,19 +575,20 @@ a	d	b	c	pkey	j	vjh	vjha	vjhh
 199	1	bbb0.477488901131142	c0.989795566440701	1	{"hash": "d fffffffffoo", "asdfg": "fffffoo", "bnm a": "lzxcvbnm and fffffffffoo", "cvbnm": "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghj": "nm and fffffffffoo", "fffff": "ffffoo", "ffffo": " fffffffffoo", "hash1": ["ffoo", "fffffffffoo", "fffffffffoo", "and fffffffffoo", "nd ffffffff", "fghjklzxcvbnm an", "nd fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "foo", "jklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "fffffffoo", "ghjklzxcvbnm and fffffffff", "ffoo", "fffffffoo", "cvbnm and fffffffffoo", "nm and fffffffffoo", "fffffoo", "xcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffff", "fffffffoo", "klzxcvbn", "nd fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", " fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm", "vbnm and fffffff", "dfghjklzxcvbnm and fffffffffoo", "ffffoo", "oo", "o", "uio", "wertyuiopasdfghjklzxcvbnm and ffffffff", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "hjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "ffffoo", "fffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and ffff", "dfghjklzxcvbnm and ffff", "zxcvbnm and fffffffffoo", " and fffffffffoo", "ffoo", "d fffffffffoo", "nd fffffffffoo", "jklzxcvbnm and fffffffffoo", "f", "d fffffffffoo", "asdfghjklzxcvbnm ", "fff", "fffffffffoo", "ffoo", "fffffffffoo", "cvbnm and fffffffffoo", "fff", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "cvbnm and ff", "lzxcvbnm and fffffffffoo", "ffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and ff", " fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "nd fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", " fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", " and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "fffffoo", "ffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffoo", "pasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "vbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "m and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "o", "opasdfghjklzxc", "bnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", " fffffffffoo", " and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "ffffoo", "fghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and ", "nm and fffffffffo", "opasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvb", "ghjklzxcvbnm and fffffffff", "fffffffoo", "m and fffff", "sdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "nd fffffffffoo", "jklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "fffffffffoo", "ffoo", "wertyuiopasdfghjklzxcvbnm and fffff", "xcvbnm and fffffffffoo", "bnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbn", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "iopasdfgh", "ffoo", "sdfghjklzxcvbnm and", "ffffoo", "ffoo", "fghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "o", "fffoo", "ghjklzxcvbnm and fffffffffo", " fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffff", "oo", "opasdfghjklzxcvbnm and fffffff", "pasdfghjklzxc", "iopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "opasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "pasdfghjklzxcvbnm ", "bnm and fffffffffoo", "nd fffffffffoo", "foo", "oo", "rtyuiopasdfghjk", "foo", "pasdfghjklzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "d fffffffffoo", "fffffoo", "ffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbn", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "nm and fffffffffoo", "fffff", "zxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "fghjklzxcvbnm and ffffff", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffffffoo", "tyuiopasdfghjklzxcvbnm and fff", "hjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "nd fffffffffoo", "cvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "oo", "ffff", "iopasdfghjklzxcvbnm a", "hjklzxcvbnm and fffffffffoo", "ffoo", "dfghjklzxcvbnm and fffffffffoo", "hjk", "as", "fghjklzxcvbnm and fffffffffoo", "and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and", "cvbnm and fffffffffoo", "o", "oo", "sdfghjklzxcvbnm and ff", "cvbnm and fffffffffoo", "as", "fffffoo", "ffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "cvbnm and fffffffffoo", "foo", "jklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "d fffffffffoo", "xcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfgh", "nm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdf", "fghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffff", "zxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "cvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffffoo", "rtyuio", "lzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "fffoo", "foo", "ty", "and fffffffffoo", "hjklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffffoo", "d ff", "cvbnm and fffffffffoo", "xcv", "nd fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo", "ffoo", "fg", "ffffffoo", "wertyuiopasdfghjklzxcvbnm and fff", "foo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", " fffffffffoo", "d fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "d fffffffffoo", "fffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "klzxcvbnm and ffffff", "nm and fffffffffoo", "cvbnm and fffff", "fffffoo", "nm and fffffffffoo", "tyuiopasd", "m and fffffffffoo", "d fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "fffffffffoo", "hjkl", "fffffffoo", "oo", "m and fffffffffoo", "bnm and fffffffffoo", "d fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "oo", "zxcvbnm and ff", "dfgh", "fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffoo", "yuiopasdf", "fffffffoo", "lzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "m and", "klzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "ffffffoo", "cvbnm and fffffffffoo", "vbnm and fffffffffoo", "xcvbnm and ", " and fffffffffoo", "w", "dfghjklzxcvbnm and", "vbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffoo", "tyuiopasdfghj", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fff", "opasdfghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and ffffff", "nd fffffffffoo", "hjklzxcvbnm and fffffffffoo", "iopasdfghjklzx", "nd fffffffffoo", "lzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "fffffffoo", "fffffoo", "fffffffoo", "fffffoo", "nm and fffffffffoo", "oo", "fffffffoo", "yuiopasdfghjklzx", "vbnm and fffffffffoo", "fffoo", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "xcvbnm and fffffffffoo", "fffffoo", "f", "ffoo", "zxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffffoo", "zxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", " an", "fffffoo", "ffoo", "fffoo", "d f", "klzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "fffffoo", "ffffffoo", "foo", "ffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfgh", "zxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "werty", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "and fffffffffoo", "sdfghjklzxcvbnm and ffffffff", "iopasdfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "ffffffffoo", "asdfghjklzxcvbn", "jklzxcvbnm and fffffffffoo", "fffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm ", "ghjklzxcvbnm and fffffffffo", "fffffffffoo", "tyuiopasdfghjklzxcv", "m and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffff", "vbnm and fffffffffoo", "ffffffoo", "fffffffoo", "nd fffffffffoo", "iop", "qwertyuiopasd", "lzxcvbnm", "ffoo", "tyuiopasdfghjklzxcvbnm and f", "fffffffffoo", " fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "klzx", "nm and fffffffffoo", "nd fffffffffoo", "foo", "lzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "ffffffffoo", "nm and fffffffffoo", "wertyuiopasdfghjkl", "cvbnm and fffffffffoo", "nd fffffffffoo", " and fffffffffoo", "o", "ffffoo", "d fffffffffoo", "oo", "qw", "pasdfghjklzxcvbnm and fffffffffoo", "oo", "lzxcvbnm and fffffffffoo", "hjklzxcvbnm and ", "ffffoo", "dfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "lzxcvbnm and ffffff", "ghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "iop", "ffffoo", "foo", "foo", "nd fffffffffoo", "oo", "fffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "nd fffffffff", "sdfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffffffffoo", "fffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "ffffffff", "nm and ffff", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "oo", "ghjklzxcvbnm and fffffffffoo", "o", " fffffffffoo", "fffffffffoo", "oo", "oo", "tyuiopasdfghjklz", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "d f", "ffffffffoo", "vbnm and fffffffffoo", "and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "ghjklzxc", "jklzxcvbnm and fffffffffoo", "fffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "nd ", "foo", "sdfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "ffffffffoo", "nd fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffoo", "fffffffoo", "fffffffoo", "nm and fffffffffoo", "zxcvbnm and fffffffffoo", "ffffffffoo", "nm and fffffffffoo", "nd fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "vbnm and ", "zxcvbnm and fffffffffoo", "ffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "fffffoo", "jklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fff", "klz", "opasdfghjklzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffffoo", "nm and fffffff", "fffffffoo", "and fffffffffoo", "fffffffoo", "oo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "foo", " fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "hjklzxcv", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbn", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm", "fffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "ffoo", "fffoo", "and f", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ffffoo", " fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "zxcvbn", "vbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "nd fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "cvbnm and fffffffffoo", "ffffoo", "vbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "ffffffoo", "xcvbnm and ffff", "fffffffffoo", "fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "ffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "fffffoo", "xcvbnm and fffffffffoo", "sdfghjklz", "bnm and fffffffffoo", "sd", "and fffffffffoo", "and fffffffffoo", "fffffffoo", "dfghjklzxcvbnm a", "opasdfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "ffffoo", "fffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "fffoo", "klzxcvbnm and fffffffffoo", "and fffffffffoo", "cvbnm and ffffffff", "uiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "d fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "fffffff", "bnm and fffffffffoo", "fffffffffoo", "cvbnm and ff", "ffffoo", "fghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "xcvbnm and fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ghjklz", "an", "ffffffoo", "d fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and ", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvb", " fffffffffoo", "fffffffoo", "fffffffffoo", "yuiopasdfghjklzx", "m and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and ffffffff", "fghjklzxcvbnm and fffffffffoo", "cvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", " fffffffffoo", "ffffffffoo", "qwertyuiopasdfghjklzxcvbnm and", "nm and ffff", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyui", "ffffffffoo", "p", "m and fffffff", "ffffffoo", "bnm and fffffffffoo", " fffffff", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fff", "ffffffffoo", " and fffffffffoo", "ffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffoo", "m and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "klzxcvbnm and ff", "tyuiopasdfghjklzxcvbnm an", "jklzxcvbnm and fffffffffoo", " fffffffffoo", "foo", "nm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "bnm a", "m and fffffffffoo", "fffffffoo", "dfghjklzxcvbnm and ffffff", "xcvbnm and ", "fffoo", "and fffffffff", "m and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffo", "bnm an", " and fffffffffoo", "fffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "cvbnm and fffffffffoo", "ffffffoo", "fffffffffoo", "wertyuiopasdfghjklzx", "ffffoo", "bnm and fffffffffoo", "uiopasdfghjkl", "d fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "lzxcvbnm and fffffffffoo", "fffffffoo", " and ffff"], "hash2": {"oo": "vbnm and fffffffffoo", "foo": "ffoo", "ffoo": "d fffffffffoo", " and ": "tyuiopasdfghjklzxcvbnm and fffffffffoo", " ffff": "jklzxcvbnm and fffffffffoo", "and f": "nm and fffffffffoo", "asdfg": "klzxcvbnm and fffffffffoo", "bnm a": "and fffffffffoo", "cvbnm": " fffffffffoo", "d fff": "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghj": "fffffoo", "ertyu": "oo", "fffff": "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffffo": "dfghjklzxcvbnm and fffffffffoo", "fffoo": "fffffffffoo", "fghjk": "bnm and fffffffffoo", "ghjkl": "fffffoo", "hash3": "hjklzxcvbnm and fffffffffoo", "hjklz": "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "iopas": "dfghjklzxcvbnm and fffffffffoo", "jklzx": "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "klzxc": "fffffffoo", "lzxcv": "pasdfghjklzxcvbnm and fffffffffoo", "m and": "tyuiopasdfghjklzxcvbnm and fffffffffoo", "nd ff": "sdfghjklzxcvbnm and fffffffffoo", "nm an": "oo", "opasd": "pasdfghjklzxcvbnm and fffffffffoo", "pasdf": "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "qwert": "sdfghjklzxcvbnm and fffffffffoo", "rtyui": "zxcvbnm and fffffffffoo", "sdfgh": "jklzxcvbnm and fffffffffoo", "tyuio": "tyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopa": "ffffffffoo", "vbnm ": "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "werty": "and fffffffffoo", "xcvbn": "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiop": "fghjklzxcvbnm and fffffffffoo", "zxcvb": "sdfghjklzxcvbnm and fffffffffoo"}, "jklzx": "oo", "lzxcv": "m and fffffffffoo", "nd ff": "hjklzxcvbnm and fffffffffoo", "opasd": "ffoo", "tyuio": "ffffoo", "vbnm ": "dfghjklzxcvbnm and fffffffffoo", "yuiop": "lzxcvbnm and fffffffffoo"}	d fffffffffoo	ffoo	hjklzxcvbnm and fffffffffoo
 # 2. Test GPP mode disabled
 SET opt_index_format_gpp_enabled = FALSE;
+create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ;;
 SET GLOBAL innodb_log_checkpoint_now=1;
 # 2.1 Produce redo log.
 SET GLOBAL innodb_checkpoint_disabled=1;
-create table ibstd_39_j (a int not null, d varchar(15) not null, b varchar(198) not null, c char(156), pkey int not null auto_increment, j json, vjh varchar(100) as (json_unquote(j->"$.hash")) virtual, vjha varchar(100) as (json_unquote(j->"$.hash1[0]")) virtual, vjhh varchar(100) as (json_unquote(j->"$.hash2.hash3")) virtual , primary key (pkey  desc), index(vjhh  desc), index(d  desc), index(a  desc) , fulltext ftsic(c) , fulltext ftsic2(c,b,d) , fulltext ftsic3(c,b) ) engine=InnoDB row_format=redundant  ; call fill_table_ibstd_39_j();;
+call fill_table_ibstd_39_j();;
 a	d	b	c	pkey	j	vjh	vjha	vjhh
 316	1	bbb0.758247362686085	c0.788127900761083	7	{"foo": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "hash": ["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"], " and ": ["and fffffffffoo", "and fffffffffoo"], " ffff": ["ffffffoo", "ffffffoo"], "asdfg": ["fffffoo", "fffffoo"], "cvbnm": ["vbnm and fffffffffoo", "vbnm and fffffffffoo"], "d fff": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "dfghj": ["cvbnm and fffffffffoo", "cvbnm and fffffffffoo"], "fffff": ["ghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo"], "fghjk": ["ffffffoo", "ffffffoo"], "ghjkl": ["yuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo"], "hash1": [" and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo", " and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo"], "hash2": {"oo": ["qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo"], "foo": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "ffoo": ["foo", "foo"], " and ": ["ffffoo", "ffffoo"], " ffff": ["uiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo"], "and f": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "asdfg": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "bnm a": ["ffffffffoo", "ffffffffoo"], "cvbnm": [" and fffffffffoo", " and fffffffffoo"], "d fff": ["fghjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo"], "dfghj": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "ertyu": ["m and fffffffffoo", "m and fffffffffoo"], "fffff": ["d fffffffffoo", "d fffffffffoo"], "ffffo": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "fffoo": [" fffffffffoo", " fffffffffoo"], "fghjk": [" and fffffffffoo", " and fffffffffoo"], "ghjkl": ["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"], "hash3": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "hjklz": ["ffffffffoo", "ffffffffoo"], "iopas": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "jklzx": ["ffffoo", "ffffoo"], "klzxc": ["fffffffffoo", "fffffffffoo"], "lzxcv": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "m and": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "nd ff": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "nm an": ["ffoo", "ffoo"], "opasd": ["jklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo"], "pasdf": ["m and fffffffffoo", "m and fffffffffoo"], "qwert": ["d fffffffffoo", "d fffffffffoo"], "rtyui": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "sdfgh": ["fffffffffoo", "fffffffffoo"], "tyuio": ["xcvbnm and fffffffffoo", "xcvbnm and fffffffffoo"], "uiopa": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "vbnm ": ["fffffffffoo", "fffffffffoo"], "werty": ["opasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffffoo", "fffffoo"], "yuiop": [" fffffffffoo", " fffffffffoo"], "zxcvb": ["ffffoo", "ffffoo"]}, "hjklz": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "m and": ["foo", "foo"], "opasd": ["oo", "oo"], "rtyui": ["m and fffffffffoo", "m and fffffffffoo"], "sdfgh": ["ertyuiopasdfghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo"], "tyuio": ["m and fffffffffoo", "m and fffffffffoo"], "werty": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffoo", "fffoo"], "yuiop": ["hjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo"]}	["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"]	 and fffffffffoo	["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"]
 j
 {"foo": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "hash": "uiopasdfghjklzxcvbnm and fffffffffoo", " and ": ["and fffffffffoo", "and fffffffffoo"], " ffff": ["ffffffoo", "ffffffoo"], "asdfg": ["fffffoo", "fffffoo"], "cvbnm": ["vbnm and fffffffffoo", "vbnm and fffffffffoo"], "d fff": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "dfghj": ["cvbnm and fffffffffoo", "cvbnm and fffffffffoo"], "fffff": ["ghjklzxcvbnm and fffffffffoo", "ghjklzxcvbnm and fffffffffoo"], "fghjk": ["ffffffoo", "ffffffoo"], "ghjkl": ["yuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo"], "hash1": [" and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo", " and fffffffffoo", "fffoo", "sdfghjklzxcvbnm and fffffff", " and fffffffffoo", "ghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "m and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "s", "fffoo", "ffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffff", "oo", "d ffff", "ffffoo", "ffffoo", "vbnm an", "dfghjklzxcvbnm and fffffffffoo", "ffffffffoo", "fffffoo", "fghjklzxcvbnm and fffffffffoo", "asdfghjklzxcv", "hjklzxcvbnm and fffffffffoo", "fffffffoo", "ertyuiopasdfghjklzxcvb", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "o", "sdfghjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "o", "o", "xcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "oo", "d fffffffffoo", "vbnm and fffffffffoo", "oo", "vbnm and fffffffffoo", "ffffffff", "lzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "ffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "ffoo", "foo", "rtyuiopasdfghjklzxcvbnm and f", "fghjklzxcvbnm and fffff", "ffffffoo", "fghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo", "bnm and fffffffffoo", "jklzxcvbnm and ffffff", "zxcvbnm and", "bnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklz", "fffoo", "opasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and ffffffff", " and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "tyuiopasdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "fffffffoo", "and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "ffffoo", "jklzxcv", "vbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo", "oo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo", "ffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "d", "d fffffffffoo", "cvbnm and fffffffffoo", "dfghjklzxcvbnm and fffffffffoo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcv", "nm ", "tyuiopasdfghjk", "m an", "xcvbnm and fffffffffoo", "d fffffffffoo", "klzxcvbnm and fffffffffoo", "ffffffffoo", "hjklzxcvbnm and ffff", "cvbnm and fffffffffoo", "ffffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", " and fffffffffoo", "ffo", "yuiopasdfghjklzxcvbnm and fffffffffoo", " and ff", "uiopasdf", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "d ffffffff", "ertyuiopasdfghjklzxcvbnm and", "fffoo", "foo", "rtyuiopasdfghjklzxcvbnm and fff", "jklzxcvbnm and fffffffffoo", "ffoo", "d fffffffffoo", "ffffffoo", "and ff", "ffffffffoo", "fffffoo", "rtyuiopasdfghjklzxcvbnm and f", "lzxcvbnm and fffffffffoo", "klzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "nm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and ffffffff", "jklzxcvbnm and fffffffffoo", "m and fffffffffoo", "vbnm and ff", "ffff", "lzxcvbnm and fffffffffoo", "o", "nd fffffffffoo", "vbnm and fffffffffoo", "opasdfghjklzxcvb", "lzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "vbnm and fffffffffoo", "fffffoo", "opasdfghjklzxcvbnm and fffffffffoo", " and fffffffffoo", "opasdfghjklzxcvbn", "wertyuiopasdfghjklzxcvbn", "xcvbnm and fffffffffoo", "and fffffffffoo", "jklzxcvbnm and fffffffffoo", "sdfg", "bnm and fffffffffoo", "nm and f", "iopasdfghjklzxcvbnm and f", " fffffffffoo", "vbnm and f", "rtyuiopasdfghjklzxcvbnm a", "qwertyuiopasdfghjklzxcvb", "xcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo", "bn", "oo", "o", "xcvbnm and fffffffffoo", "fffoo", "fghjklzxcvbnm and fffffffffoo", "f", "o", " ffffffff", "fffffoo", "ghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo", "fffffffoo", "lzxcvbnm and fffff", "lzxcvbnm and fffffffffoo", "nd fffffffffoo", "ffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo", "qwer", "vbnm and fffffffffoo", "d fffffffffoo", "sdfghjklzxcvbnm and fff", "and fffffffffoo", "xcvbnm an", "m and fffffffffoo", "ffffffoo", " and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo", "fffffffffoo", "ffffffoo", "fffffffffoo", "hjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo", " fffffffffoo", "pasdfghjklzxcvbnm and fffffffffoo", "ffffffoo", "ffffffffo", "d fffffffffoo", "oo", "fffffffoo", "ertyuiopasdfghjklzxcvbnm ", "foo", " and fffffffffoo", " and fffffffffoo"], "hash2": {"oo": ["qwertyuiopasdfghjklzxcvbnm and fffffffffoo", "qwertyuiopasdfghjklzxcvbnm and fffffffffoo"], "foo": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "ffoo": ["foo", "foo"], " and ": ["ffffoo", "ffffoo"], " ffff": ["uiopasdfghjklzxcvbnm and fffffffffoo", "uiopasdfghjklzxcvbnm and fffffffffoo"], "and f": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "asdfg": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "bnm a": ["ffffffffoo", "ffffffffoo"], "cvbnm": [" and fffffffffoo", " and fffffffffoo"], "d fff": ["fghjklzxcvbnm and fffffffffoo", "fghjklzxcvbnm and fffffffffoo"], "dfghj": ["lzxcvbnm and fffffffffoo", "lzxcvbnm and fffffffffoo"], "ertyu": ["m and fffffffffoo", "m and fffffffffoo"], "fffff": ["d fffffffffoo", "d fffffffffoo"], "ffffo": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "fffoo": [" fffffffffoo", " fffffffffoo"], "fghjk": [" and fffffffffoo", " and fffffffffoo"], "ghjkl": ["zxcvbnm and fffffffffoo", "zxcvbnm and fffffffffoo"], "hash3": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "hjklz": ["ffffffffoo", "ffffffffoo"], "iopas": ["sdfghjklzxcvbnm and fffffffffoo", "sdfghjklzxcvbnm and fffffffffoo"], "jklzx": ["ffffoo", "ffffoo"], "klzxc": ["fffffffffoo", "fffffffffoo"], "lzxcv": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "m and": ["rtyuiopasdfghjklzxcvbnm and fffffffffoo", "rtyuiopasdfghjklzxcvbnm and fffffffffoo"], "nd ff": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "nm an": ["ffoo", "ffoo"], "opasd": ["jklzxcvbnm and fffffffffoo", "jklzxcvbnm and fffffffffoo"], "pasdf": ["m and fffffffffoo", "m and fffffffffoo"], "qwert": ["d fffffffffoo", "d fffffffffoo"], "rtyui": ["iopasdfghjklzxcvbnm and fffffffffoo", "iopasdfghjklzxcvbnm and fffffffffoo"], "sdfgh": ["fffffffffoo", "fffffffffoo"], "tyuio": ["xcvbnm and fffffffffoo", "xcvbnm and fffffffffoo"], "uiopa": ["asdfghjklzxcvbnm and fffffffffoo", "asdfghjklzxcvbnm and fffffffffoo"], "vbnm ": ["fffffffffoo", "fffffffffoo"], "werty": ["opasdfghjklzxcvbnm and fffffffffoo", "opasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffffoo", "fffffoo"], "yuiop": [" fffffffffoo", " fffffffffoo"], "zxcvb": ["ffffoo", "ffffoo"]}, "hjklz": ["bnm and fffffffffoo", "bnm and fffffffffoo"], "m and": ["foo", "foo"], "opasd": ["oo", "oo"], "rtyui": ["m and fffffffffoo", "m and fffffffffoo"], "sdfgh": ["ertyuiopasdfghjklzxcvbnm and fffffffffoo", "ertyuiopasdfghjklzxcvbnm and fffffffffoo"], "tyuio": ["m and fffffffffoo", "m and fffffffffoo"], "werty": ["wertyuiopasdfghjklzxcvbnm and fffffffffoo", "wertyuiopasdfghjklzxcvbnm and fffffffffoo"], "xcvbn": ["fffoo", "fffoo"], "yuiop": ["hjklzxcvbnm and fffffffffoo", "hjklzxcvbnm and fffffffffoo"]}
 # Kill the server
 # 2.2 Apply redo log within n_gfields when restarting and no crash.
-# restart: --debug=d,crash_if_n_gfields_in_redo
+# restart: --debug=d,crash_if_gpp_in_redo
 # 2.3 Clean up
-SET DEBUG = '-d,crash_if_n_gfields_in_redo';
+SET DEBUG = '-d,crash_if_gpp_in_redo';
 SET GLOBAL innodb_checkpoint_disabled=0;
 SET opt_index_format_gpp_enabled= 1;
 SHOW CREATE TABLE ibstd_39_j; SELECT * FROM ibstd_39_j; DROP TABLE IF EXISTS ibstd_39_j;;

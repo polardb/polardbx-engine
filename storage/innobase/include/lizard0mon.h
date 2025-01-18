@@ -42,29 +42,7 @@ struct SHOW_VAR;
 
 namespace lizard {
 
-enum txn_lookup_entry {
-  TXN_DD_INDEX_VISIBLE,
-  TXN_ONLINE_DDL,
-  TXN_CONS_READ_SEES,
-  TXN_GCN_READ_SEES,
-  TXN_PURGE_SEES,
-  TXN_MODIFY_CLEANOUT,
-  TXN_LOCK_CONVERT,
-  TXN_BUILD_PREV_VER_ASOF,
-  TXN_BUILD_PREV_VER_NORMAL,
-  TXN_UNDO_BUILD_REC,
-  TXN_ENTRY_COUNT
-};
-
-}
-
-struct lizard_var_t {
-  /** txn undo rollback segment free list length */
-  ulint txn_undo_log_free_list_len;
-
-  /** txn undo log cached for reuse */
-  ulint txn_undo_log_cached;
-
+struct generic_vars_t {
   /** txn undo log segment request count */
   ulint txn_undo_log_request;
 
@@ -99,121 +77,18 @@ struct lizard_var_t {
 
   ulint txn_undo_lookup_by_uba;
 
-  ulint cleanout_page_collect;
+  ulint cleanout_cursor_restore_fail;
 
-  ulint scan_cleanout_clust_clean;
-  ulint scan_cleanout_sec_clean;
-  ulint ddl_cleanout_clust_clean;
-
-  ulint cleanout_clust_collect;
-  ulint cleanout_sec_collect;
-  ulint ddl_clust_collect;
-
-  ulint cleanout_cursor_restore_failed;
-
-  ulint commit_cleanout_skip;
-  ulint commit_cleanout_collects;
-  ulint commit_cleanout_cleaned;
+  ulint scan_cleanout_txn_clean;
+  ulint scan_cleanout_gpp_clean;
+  ulint ddl_cleanout_clean;
+  ulint commit_cleanout_clean;
 
   /*Max commit gcn. */
   ulint current_gcn;
 
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */
   ulint purged_gcn;
-
-  ulint block_tcn_cache_hit;
-  ulint block_tcn_cache_miss;
-  ulint block_tcn_cache_evict;
-
-  ulint session_tcn_cache_hit;
-  ulint session_tcn_cache_miss;
-  ulint session_tcn_cache_evict;
-
-  ulint global_tcn_cache_hit;
-  ulint global_tcn_cache_miss;
-  ulint global_tcn_cache_evict;
-
-  // page write/flush/load/evit of types
-  ulint innodb_buffer_pool_write_req_undo;
-  ulint innodb_buffer_pool_write_req_txn;
-  ulint innodb_buffer_pool_write_req_index;
-  ulint innodb_buffer_pool_write_req_sys;
-  ulint innodb_buffer_pool_flush_undo;
-  ulint innodb_buffer_pool_flush_txn;
-  ulint innodb_buffer_pool_flush_index;
-  ulint innodb_buffer_pool_flush_sys;
-  ulint innodb_buffer_pool_read_undo;
-  ulint innodb_buffer_pool_read_txn;
-  ulint innodb_buffer_pool_read_index;
-  ulint innodb_buffer_pool_read_sys;
-  ulint innodb_buffer_pool_evit_undo;
-  ulint innodb_buffer_pool_evit_txn;
-  ulint innodb_buffer_pool_evit_index;
-  ulint innodb_buffer_pool_evit_sys;
-
-  // txn undo page hit
-  ulint innodb_buffer_pool_txn_r_hit;
-  ulint innodb_buffer_pool_txn_r_disk;
-  ulint innodb_buffer_pool_txn_w_hit;
-  ulint innodb_buffer_pool_txn_w_disk;
-
-  // txn loopup entry
-  ulint innodb_buffer_pool_txn_lookup[lizard::TXN_ENTRY_COUNT];
-
-  // MONITOR_LRU_GET_FREE_SEARCH
-  ulint innodb_buffer_pool_lru_get_free_search;
-  // MONITOR_LRU_SEARCH_SCANNED_NUM_CALL
-  ulint innodb_buffer_pool_lru_search_scans;
-  // MONITOR_LRU_SEARCH_SCANNED
-  ulint innodb_buffer_pool_lru_search_scanned;
-  // MONITOR_LRU_SINGLE_FLUSH_SCANNED_NUM_CALL
-  ulint innodb_buffer_pool_lru_single_flush_scans;
-  // MONITOR_LRU_SINGLE_FLUSH_SCANNED
-  ulint innodb_buffer_pool_lru_single_flush_scanned;
-  // MONITOR_LRU_GET_FREE_LOOPS
-  ulint innodb_buffer_pool_lru_get_free_loops;
-  // MONITOR_LRU_GET_FREE_WAITS
-  ulint innodb_buffer_pool_lru_get_free_waits;
-
-  // MONITOR_LRU_BATCH_SCANNED_NUM_CALL
-  ulint innodb_buffer_pool_lru_batch_scans;
-  // MONITOR_LRU_BATCH_SCANNED
-  ulint innodb_buffer_pool_lru_batch_scanned;
-  // MONITOR_LRU_BATCH_EVICT_COUNT
-  ulint innodb_buffer_pool_lru_batch_evits;
-  // MONITOR_LRU_BATCH_EVICT_TOTAL_PAGE
-  ulint innodb_buffer_pool_lru_batch_evited;
-
-  // MONITOR_FLUSH_BATCH_SCANNED_NUM_CALL
-  ulint innodb_buffer_pool_flu_batch_scans;
-  // MONITOR_FLUSH_BATCH_SCANNED
-  ulint innodb_buffer_pool_flu_batch_scanned;
-  // MONITOR_FLUSH_BATCH_COUNT
-  ulint innodb_buffer_pool_flu_batch_count;
-  // MONITOR_FLUSH_BATCH_TOTAL_PAGE
-  ulint innodb_buffer_pool_flu_batch_pages;
-
-  // MONITOR_FLUSH_NEIGHBOR_COUNT
-  ulint innodb_buffer_pool_flush_neighbor_count;
-  // MONITOR_FLUSH_NEIGHBOR_TOTAL_PAGE
-  ulint innodb_buffer_pool_flush_neighbor_pages;
-
-  // MONITOR_LRU_BATCH_FLUSH_COUNT
-  ulint innodb_buffer_pool_lru_flush_count;
-  // MONITOR_FLUSH_SYNC_TOTAL_PAGE
-  ulint innodb_buffer_pool_lru_flush_pages;
-  // MONITOR_FLUSH_ADAPTIVE_COUNT
-  ulint innodb_buffer_pool_flush_adapt_count;
-  // MONITOR_FLUSH_ADAPTIVE_TOTAL_PAGE
-  ulint innodb_buffer_pool_flush_adapt_pages;
-  // MONITOR_FLUSH_SYNC_COUNT
-  ulint innodb_buffer_pool_flush_sync_count;
-  // MONITOR_FLUSH_SYNC_TOTAL_PAGE
-  ulint innodb_buffer_pool_flush_sync_pages;
-  // MONITOR_FLUSH_BACKGROUND_COUNT
-  ulint innodb_buffer_pool_flush_background_count;
-  // MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE
-  ulint innodb_buffer_pool_flush_background_pages;
 
   /** txn undo log segment put into rseg cached list */
   ulint txn_undo_log_recycle;
@@ -247,16 +122,16 @@ struct lizard_var_t {
   /** Number of previous version built. */
   ulint row_prev_vers_build_cnt;
 
-  ulint txn_read_guess_cnt;
-  ulint txn_read_guess_failed;
+  ulint txn_read_guess_request;
+  ulint txn_read_guess_fail;
+
+  ulint tcn_cache_hit;
+  ulint tcn_cache_miss;
 };
 
-struct lizard_stats_t {
-  typedef ib_counter_t<ulint, 64> ulint_ctr_64_t;
-  typedef ib_counter_t<lsn_t, 1, single_indexer_t> lsn_ctr_1_t;
+struct generic_stats_t {
+  // typedef ib_counter_t<ulint, 64> ulint_ctr_64_t;
   typedef ib_counter_t<ulint, 1, single_indexer_t> ulint_ctr_1_t;
-  typedef ib_counter_t<lint, 1, single_indexer_t> lint_ctr_1_t;
-  typedef ib_counter_t<int64_t, 1, single_indexer_t> int64_ctr_1_t;
 
   /** txn undo log segment request count */
   ulint_ctr_1_t txn_undo_log_request;
@@ -297,55 +172,12 @@ struct lizard_stats_t {
   /** lookup scn by uba */
   ulint_ctr_1_t txn_undo_lookup_by_uba;
 
-  ulint_ctr_1_t cleanout_page_collect;
+  ulint_ctr_1_t cleanout_cursor_restore_fail;
 
-  ulint_ctr_1_t scan_cleanout_clust_clean;
-  ulint_ctr_1_t scan_cleanout_sec_clean;
-  ulint_ctr_1_t ddl_cleanout_clust_clean;
-
-  ulint_ctr_1_t cleanout_clust_collect;
-  ulint_ctr_1_t cleanout_sec_collect;
-  ulint_ctr_1_t ddl_clust_collect;
-
-  ulint_ctr_1_t cleanout_cursor_restore_failed;
-
-  ulint_ctr_1_t commit_cleanout_skip;
-  ulint_ctr_1_t commit_cleanout_collects;
-  ulint_ctr_1_t commit_cleanout_cleaned;
-
-  ulint_ctr_1_t block_tcn_cache_hit;
-  ulint_ctr_1_t block_tcn_cache_miss;
-  ulint_ctr_1_t block_tcn_cache_evict;
-
-  ulint_ctr_1_t global_tcn_cache_hit;
-  ulint_ctr_1_t global_tcn_cache_miss;
-  ulint_ctr_1_t global_tcn_cache_evict;
-
-  ulint_ctr_1_t txn_undo_page_read_hit;
-  ulint_ctr_1_t txn_undo_page_read_miss;
-  ulint_ctr_1_t txn_undo_page_write_hit;
-  ulint_ctr_1_t txn_undo_page_write_miss;
-
-  ulint_ctr_1_t buf_pool_flush_undo;
-  ulint_ctr_1_t buf_pool_flush_txn;
-  ulint_ctr_1_t buf_pool_flush_index;
-  ulint_ctr_1_t buf_pool_flush_sys;
-  ulint_ctr_1_t buf_pool_read_undo;
-  ulint_ctr_1_t buf_pool_read_txn;
-  ulint_ctr_1_t buf_pool_read_index;
-  ulint_ctr_1_t buf_pool_read_sys;
-
-  ulint_ctr_1_t buf_pool_evit_undo;
-  ulint_ctr_1_t buf_pool_evit_txn;
-  ulint_ctr_1_t buf_pool_evit_index;
-  ulint_ctr_1_t buf_pool_evit_sys;
-
-  ulint_ctr_1_t buf_pool_write_req_undo;
-  ulint_ctr_1_t buf_pool_write_req_txn;
-  ulint_ctr_1_t buf_pool_write_req_index;
-  ulint_ctr_1_t buf_pool_write_req_sys;
-
-  ulint_ctr_1_t txn_lookup[lizard::TXN_ENTRY_COUNT];
+  ulint_ctr_1_t scan_cleanout_txn_clean;
+  ulint_ctr_1_t scan_cleanout_gpp_clean;
+  ulint_ctr_1_t ddl_cleanout_clean;
+  ulint_ctr_1_t commit_cleanout_clean;
 
   ulint_ctr_1_t txn_undo_log_recycle;
 
@@ -377,33 +209,18 @@ struct lizard_stats_t {
 
   ulint_ctr_1_t row_prev_vers_build_cnt;
 
-  ulint_ctr_1_t txn_read_guess_cnt;
-  ulint_ctr_1_t txn_read_guess_failed;
-};
+  ulint_ctr_1_t txn_read_guess_request;
+  ulint_ctr_1_t txn_read_guess_fail;
 
-namespace lizard {
+  ulint_ctr_1_t tcn_cache_hit;
+  ulint_ctr_1_t tcn_cache_miss;
+};
 
 extern bool stat_enabled;
 
-extern lizard_stats_t lizard_stats;
+extern generic_stats_t generic_stats;
 
-int show_lizard_vars(THD *thd, SHOW_VAR *var, char *buff);
-
-/* Fetch txn undo page hit or miss statistics */
-void txn_undo_page_hit_stat(bool hit, const buf_block_t *block, ulint rw_latch);
-
-/* Physical io statistics for undo/index/sys pages */
-void page_physical_io_stat(enum buf_io_fix io_type, const byte *frame,
-                           ulint page_type);
-
-/* Evit statistics for undo/index/sys pages */
-void page_evit_stat(const buf_page_t *bpage);
-
-/* Page flush requests for undo/index/sys pages */
-void page_write_req_stat(const buf_block_t *block);
-
-/* Txn lookup statistics */
-void txn_lookup_stat(txn_lookup_entry entry);
+int show_generic_vars(THD *thd, SHOW_VAR *var, char *buff);
 
 /** The count of successful / failed  clustered index record inferences during
  * the scan. */
@@ -411,9 +228,9 @@ inline void index_scan_guess_clust_stat(bool hit) {
   if (!stat_enabled) return;
 
   if (hit) {
-    lizard_stats.index_scan_guess_clust_hit.inc();
+    generic_stats.index_scan_guess_clust_hit.inc();
   } else {
-    lizard_stats.index_scan_guess_clust_miss.inc();
+    generic_stats.index_scan_guess_clust_miss.inc();
   }
 }
 
@@ -423,9 +240,9 @@ inline void index_purge_guess_clust_stat(bool hit) {
   if (!stat_enabled) return;
 
   if (hit) {
-    lizard_stats.index_purge_guess_clust_hit.inc();
+    generic_stats.index_purge_guess_clust_hit.inc();
   } else {
-    lizard_stats.index_purge_guess_clust_miss.inc();
+    generic_stats.index_purge_guess_clust_miss.inc();
   }
 }
 
@@ -435,68 +252,49 @@ inline void index_lock_guess_clust_stat(bool hit) {
   if (!stat_enabled) return;
 
   if (hit) {
-    lizard_stats.index_lock_guess_clust_hit.inc();
+    generic_stats.index_lock_guess_clust_hit.inc();
   } else {
-    lizard_stats.index_lock_guess_clust_miss.inc();
+    generic_stats.index_lock_guess_clust_miss.inc();
   }
 }
 
+inline void tcn_cache_stat(bool hit) {
+  if (!stat_enabled) return;
+
+  if (hit) {
+    generic_stats.tcn_cache_hit.inc();
+  } else {
+    generic_stats.tcn_cache_miss.inc();
+  }
+}
+
+inline void scan_cleanout_txn_clean_stat(ulint value) {
+  if (value > 0 && stat_enabled) {
+    generic_stats.scan_cleanout_txn_clean.add(value);
+  }
+}
+
+inline void scan_cleanout_gpp_clean_stat(ulint value) {
+  if (value > 0 && stat_enabled) {
+    generic_stats.scan_cleanout_gpp_clean.add(value);
+  }
+}
+
+inline void ddl_cleanout_clean_stat(ulint value) {
+  if (value > 0 && stat_enabled) {
+    generic_stats.ddl_cleanout_clean.add(value);
+  }
+}
+inline void commit_cleanout_clean_stat(ulint value) {
+  if (value > 0 && stat_enabled) {
+    generic_stats.commit_cleanout_clean.add(value);
+  }
+}
+
+inline void cleanout_cursor_restore_fail_stat() {
+  generic_stats.cleanout_cursor_restore_fail.inc();
+}
+
 }  // namespace lizard
-#ifdef UNIV_DEBUG
-
-#define BLOCK_TCN_CACHE_HIT                         \
-  do {                                              \
-    lizard::lizard_stats.block_tcn_cache_hit.inc(); \
-  } while (0)
-
-#define BLOCK_TCN_CACHE_MISS                         \
-  do {                                               \
-    lizard::lizard_stats.block_tcn_cache_miss.inc(); \
-  } while (0)
-
-#define BLOCK_TCN_CACHE_EVICT                         \
-  do {                                                \
-    lizard::lizard_stats.block_tcn_cache_evict.inc(); \
-  } while (0)
-
-#define GLOBAL_TCN_CACHE_HIT                         \
-  do {                                               \
-    lizard::lizard_stats.global_tcn_cache_hit.inc(); \
-  } while (0)
-
-#define GLOBAL_TCN_CACHE_MISS                         \
-  do {                                                \
-    lizard::lizard_stats.global_tcn_cache_miss.inc(); \
-  } while (0)
-
-#define GLOBAL_TCN_CACHE_EVICT                         \
-  do {                                                 \
-    lizard::lizard_stats.global_tcn_cache_evict.inc(); \
-  } while (0)
-
-#else
-
-#define BLOCK_TCN_CACHE_HIT
-#define BLOCK_TCN_CACHE_MISS
-#define BLOCK_TCN_CACHE_EVICT
-#define GLOBAL_TCN_CACHE_HIT
-#define GLOBAL_TCN_CACHE_MISS
-#define GLOBAL_TCN_CACHE_EVICT
-
-#endif
-
-#define LIZARD_MONITOR_INC_TXN_CACHED(NUMBER)             \
-  do {                                                    \
-    if (lizard::gcs != nullptr) {                         \
-      lizard::gcs->txn_undo_log_cached.fetch_add(NUMBER); \
-    }                                                     \
-  } while (0)
-
-#define LIZARD_MONITOR_DEC_TXN_CACHED(NUMBER)             \
-  do {                                                    \
-    if (lizard::gcs != nullptr) {                         \
-      lizard::gcs->txn_undo_log_cached.fetch_sub(NUMBER); \
-    }                                                     \
-  } while (0)
 
 #endif  // lizard0mon_h

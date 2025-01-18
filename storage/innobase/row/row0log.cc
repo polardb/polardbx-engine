@@ -59,6 +59,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 
 #include "lizard0row0gpp.h"
+#include "lizard0trx0rec.h"
+#include "lizard0undo.h"
+
 /** Table row modification operations during online table rebuild.
 Delete-marked records are not copied to the rebuilt table. */
 enum row_tab_op {
@@ -278,10 +281,10 @@ static void row_log_block_free(row_log_buf_t &log_buf) {
 
 /** Logs an operation to a secondary index that is (or was) being created. */
 void row_log_online_op(
-    dict_index_t *index,   /*!< in/out: index, S or X latched */
-    const dtuple_t *tuple, /*!< in: index tuple */
-    trx_id_t trx_id)       /*!< in: transaction ID for insert,
-                           or 0 for delete */
+    dict_index_t *index, /*!< in/out: index, S or X latched */
+    dtuple_t *tuple,     /*!< in: index tuple */
+    trx_id_t trx_id)     /*!< in: transaction ID for insert,
+                         or 0 for delete */
 {
   byte *b;
   ulint extra_size;
@@ -1503,6 +1506,7 @@ multi-value field. For each value to be inserted, if a record with exactly
 the same fields is found, the other record is necessarily marked deleted.
 It is then unmarked. Otherwise, the entry is just inserted to the index.
 @param[in]      flags           undo logging and locking flags
+@param[in]      layout          txn layout
 @param[in]      index           secondary index
 @param[in,out]  offsets_heap    memory heap that can be emptied
 @param[in,out]  heap            memory heap
@@ -1516,8 +1520,9 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 @retval DB_FAIL if retry with BTR_MODIFY_TREE is needed
 @return error code */
 [[nodiscard]] static dberr_t apply_insert_multi_value(
-    uint32_t flags, dict_index_t *index, mem_heap_t *offsets_heap,
-    mem_heap_t *heap, dtuple_t *entry, trx_id_t trx_id, que_thr_t *thr) {
+    uint32_t flags, const txn_layout_t &layout, dict_index_t *index,
+    mem_heap_t *offsets_heap, mem_heap_t *heap, dtuple_t *entry,
+    trx_id_t trx_id, que_thr_t *thr) {
   dberr_t err = DB_SUCCESS;
   Multi_value_entry_builder_insert mv_entry_builder(index, entry);
 
@@ -1527,9 +1532,9 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
     /* Lizard-4.0: Assert entry of json multi-value index. */
     lizard_row_sec_multi_value_assert_gpp_no(index, entry);
 
-    err =
-        row_ins_sec_index_entry_low(flags, BTR_MODIFY_TREE, index, offsets_heap,
-                                    heap, mv_entry, trx_id, thr, false);
+    err = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
+                                      offsets_heap, heap, mv_entry, trx_id, thr,
+                                      false);
     if (err != DB_SUCCESS) {
       break;
     }
@@ -1567,11 +1572,13 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
 
   static const uint32_t flags = (BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG |
                                  BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG);
+  const txn_layout_t layout = TL_CLOVER;
 
   entry = row_build_index_entry(row, nullptr, index, heap);
 
-  error = row_ins_clust_index_entry_low(
-      flags, BTR_MODIFY_TREE, index, index->n_uniq, entry, &gpp_no, thr, false);
+  error =
+      row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
+                                    index->n_uniq, entry, &gpp_no, thr, false);
 
   switch (error) {
     case DB_SUCCESS:
@@ -1596,15 +1603,17 @@ It is then unmarked. Otherwise, the entry is just inserted to the index.
       continue;
     }
 
+    const txn_layout_t layout = lizard::dict_index_txn_layout(index);
+
     entry = row_build_index_entry(row, nullptr, index, heap);
 
     lizard_row_log_table_sec_assert_gpp_no(index, entry, row, gpp_no);
 
     if (index->is_multi_value()) {
-      error = apply_insert_multi_value(flags, index, offsets_heap, heap, entry,
-                                       trx_id, thr);
+      error = apply_insert_multi_value(flags, layout, index, offsets_heap, heap,
+                                       entry, trx_id, thr);
     } else {
-      error = row_ins_sec_index_entry_low(flags, BTR_MODIFY_TREE, index,
+      error = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
                                           offsets_heap, heap, entry, trx_id,
                                           thr, false);
     }
@@ -1805,7 +1814,8 @@ flag_ok:
       continue;
     }
 
-    const dtuple_t *entry = row_build_index_entry(row, ext, index, heap);
+    dtuple_t *entry = row_build_index_entry(row, ext, index, heap);
+    lizard::row_rlog_table_entry_adjust_cmp_fields(index, entry);
 
     if (row_log_table_delete_sec(index, entry, pcur) == DB_INDEX_CORRUPT) {
       return (DB_INDEX_CORRUPT);
@@ -2003,8 +2013,8 @@ flag_ok:
       error = row_ins_sec_index_entry_low(
           BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
               BTR_KEEP_SYS_FLAG,
-          BTR_MODIFY_TREE, index, offsets_heap, heap, entry, trx_id, thr,
-          false);
+          lizard::dict_index_txn_layout(index), BTR_MODIFY_TREE, index,
+          offsets_heap, heap, entry, trx_id, thr, false);
 
       if (error == DB_DUPLICATE_KEY) {
         thr_get_trx(thr)->error_key_num = n_index;
@@ -2301,8 +2311,8 @@ flag_ok:
   error = btr_cur_pessimistic_update(
       BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
           BTR_KEEP_SYS_FLAG | BTR_KEEP_POS_FLAG,
-      pcur.get_btr_cur(), &cur_offsets, &offsets_heap, heap, &big_rec, update,
-      0, thr, 0, 0, &mtr);
+      lizard::dict_index_txn_layout(index), pcur.get_btr_cur(), &cur_offsets,
+      &offsets_heap, heap, &big_rec, update, 0, thr, 0, 0, &mtr);
 
   if (big_rec) {
     if (error == DB_SUCCESS) {
@@ -2355,6 +2365,7 @@ flag_ok:
       ut_d(ut_error);
       ut_o(return (DB_CORRUPTION));
     }
+    lizard::row_rlog_table_entry_adjust_cmp_fields(index, entry);
 
     mtr_start(&mtr);
 
@@ -2382,7 +2393,8 @@ flag_ok:
     error = row_ins_sec_index_entry_low(
         BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
             BTR_KEEP_SYS_FLAG,
-        BTR_MODIFY_TREE, index, offsets_heap, heap, entry, trx_id, thr, false);
+        lizard::dict_index_txn_layout(index), BTR_MODIFY_TREE, index,
+        offsets_heap, heap, entry, trx_id, thr, false);
 
     /* Report correct index name for duplicate key error. */
     if (error == DB_DUPLICATE_KEY) {
@@ -3210,6 +3222,8 @@ static void row_log_apply_op_low(
   mtr_t mtr;
   btr_cur_t cursor;
   ulint *offsets = nullptr;
+  ulint flags;
+  txn_layout_t layout;
 
   ut_ad(!index->is_clustered());
 
@@ -3223,6 +3237,12 @@ static void row_log_apply_op_low(
               op == ROW_OP_INSERT ? "insert" : "delete",
               has_index_lock ? "locked" : "unlocked", index->id, trx_id,
               rec_printer(entry).str().c_str()));
+
+  flags = BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_CREATE_FLAG;
+  if (index->is_panda()) {
+    flags |= BTR_KEEP_SYS_FLAG;
+  }
+  layout = lizard::dict_index_txn_layout(index);
 
   mtr_start(&mtr);
 
@@ -3241,96 +3261,147 @@ static void row_log_apply_op_low(
   but not identical for unique secondary indexes. */
   if (cursor.low_match >= dict_index_get_n_unique(index) &&
       !page_rec_is_infimum(btr_cur_get_rec(&cursor))) {
-    /* We have a matching record. */
-    bool exists = (cursor.low_match ==
-                   lizard::row_log_dict_index_get_ordered_n_fields(index));
 #ifdef UNIV_DEBUG
     rec_t *rec = btr_cur_get_rec(&cursor);
     ut_ad(page_rec_is_user_rec(rec));
     ut_ad(!rec_get_deleted_flag(rec, page_rec_is_comp(rec)));
 #endif /* UNIV_DEBUG */
+    if (lizard::dict_index_is_panda(index)) {
+      switch (op) {
+        case ROW_OP_DELETE:
+          if (btr_cur_optimistic_delete(&cursor, BTR_CREATE_FLAG, &mtr)) {
+            *error = DB_SUCCESS;
+            break;
+          }
 
-    ut_ad(exists || dict_index_is_unique(index));
+          if (!has_index_lock) {
+            /* This needs a pessimistic operation.
+            Lock the index tree exclusively. */
+            mtr_commit(&mtr);
 
-    switch (op) {
-      case ROW_OP_DELETE:
-        if (!exists) {
-          /* The existing record matches the
-          unique secondary index key, but the
-          PRIMARY KEY columns differ. So, this
-          exact record does not exist. For
-          example, we could detect a duplicate
-          key error in some old index before
-          logging an ROW_OP_INSERT for our
-          index. This ROW_OP_DELETE could have
-          been logged for rolling back
-          TRX_UNDO_INSERT_REC. */
-          goto func_exit;
-        }
+            mtr_start(&mtr);
 
-        if (btr_cur_optimistic_delete(&cursor, BTR_CREATE_FLAG, &mtr)) {
-          *error = DB_SUCCESS;
+            btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE,
+                                        BTR_MODIFY_TREE, &cursor, 0, __FILE__,
+                                        __LINE__, &mtr);
+
+            /* No other thread than the current one
+            is allowed to modify the index tree.
+            Thus, the record should still exist. */
+            ut_ad(page_rec_is_user_rec(btr_cur_get_rec(&cursor)));
+          }
+
+          /* As there are no externally stored fields in
+          a secondary index record, the parameter
+          rollback=false will be ignored. */
+
+          btr_cur_pessimistic_delete(error, false, &cursor, BTR_CREATE_FLAG,
+                                     false, 0, 0, 0, &mtr, nullptr, nullptr);
           break;
-        }
+        case ROW_OP_INSERT:
+          if (dtuple_contains_null(entry)) {
+            /* The UNIQUE KEY columns match, but
+            there is a NULL value in the key, and
+            NULL!=NULL. */
+            ut_a(cursor.low_match !=
+                 lizard::row_log_dict_index_get_ordered_n_fields(index));
+            goto insert_the_rec;
+          }
+          /* This should be a real duplicate error. */
+          lizard::btr_cur_print_duplicate_error_in_uk_online(
+              &cursor, index, entry, UT_LOCATION_HERE);
+          goto duplicate;
+      }
+    } else {
+      /* We have a matching record. */
+      bool exists = (cursor.low_match ==
+                     lizard::row_log_dict_index_get_ordered_n_fields(index));
 
-        if (!has_index_lock) {
-          /* This needs a pessimistic operation.
-          Lock the index tree exclusively. */
-          mtr_commit(&mtr);
+      ut_ad(exists || dict_index_is_unique(index));
 
-          mtr_start(&mtr);
+      switch (op) {
+        case ROW_OP_DELETE:
+          if (!exists) {
+            /* The existing record matches the
+            unique secondary index key, but the
+            PRIMARY KEY columns differ. So, this
+            exact record does not exist. For
+            example, we could detect a duplicate
+            key error in some old index before
+            logging an ROW_OP_INSERT for our
+            index. This ROW_OP_DELETE could have
+            been logged for rolling back
+            TRX_UNDO_INSERT_REC. */
+            goto func_exit;
+          }
 
-          btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE,
-                                      BTR_MODIFY_TREE, &cursor, 0, __FILE__,
-                                      __LINE__, &mtr);
+          if (btr_cur_optimistic_delete(&cursor, BTR_CREATE_FLAG, &mtr)) {
+            *error = DB_SUCCESS;
+            break;
+          }
 
-          /* No other thread than the current one
-          is allowed to modify the index tree.
-          Thus, the record should still exist. */
-          ut_ad(cursor.low_match >= dict_index_get_n_fields(index));
-          ut_ad(page_rec_is_user_rec(btr_cur_get_rec(&cursor)));
-        }
+          if (!has_index_lock) {
+            /* This needs a pessimistic operation.
+            Lock the index tree exclusively. */
+            mtr_commit(&mtr);
 
-        /* As there are no externally stored fields in
-        a secondary index record, the parameter
-        rollback=false will be ignored. */
+            mtr_start(&mtr);
 
-        btr_cur_pessimistic_delete(error, false, &cursor, BTR_CREATE_FLAG,
-                                   false, 0, 0, 0, &mtr, nullptr, nullptr);
-        break;
-      case ROW_OP_INSERT:
-        if (exists) {
-          /* The record already exists. There
-          is nothing to be inserted.
-          This could happen when processing
-          TRX_UNDO_DEL_MARK_REC in statement
-          rollback:
+            btr_cur_search_to_nth_level(index, 0, entry, PAGE_CUR_LE,
+                                        BTR_MODIFY_TREE, &cursor, 0, __FILE__,
+                                        __LINE__, &mtr);
 
-          UPDATE of PRIMARY KEY can lead to
-          statement rollback if the updated
-          value of the PRIMARY KEY already
-          exists. In this case, the UPDATE would
-          be mapped to DELETE;INSERT, and we
-          only wrote undo log for the DELETE
-          part. The duplicate key error would be
-          triggered before logging the INSERT
-          part.
+            /* No other thread than the current one
+            is allowed to modify the index tree.
+            Thus, the record should still exist. */
+            ut_ad(cursor.low_match >= dict_index_get_n_fields(index));
+            ut_ad(page_rec_is_user_rec(btr_cur_get_rec(&cursor)));
+          }
 
-          Theoretically, we could also get a
-          similar situation when a DELETE operation
-          is blocked by a FOREIGN KEY constraint. */
-          goto func_exit;
-        }
+          /* As there are no externally stored fields in
+          a secondary index record, the parameter
+          rollback=false will be ignored. */
 
-        if (dtuple_contains_null(entry)) {
-          /* The UNIQUE KEY columns match, but
-          there is a NULL value in the key, and
-          NULL!=NULL. */
-          goto insert_the_rec;
-        }
+          btr_cur_pessimistic_delete(error, false, &cursor, BTR_CREATE_FLAG,
+                                     false, 0, 0, 0, &mtr, nullptr, nullptr);
+          break;
+        case ROW_OP_INSERT:
+          if (exists) {
+            /* The record already exists. There
+            is nothing to be inserted.
+            This could happen when processing
+            TRX_UNDO_DEL_MARK_REC in statement
+            rollback:
 
-        goto duplicate;
+            UPDATE of PRIMARY KEY can lead to
+            statement rollback if the updated
+            value of the PRIMARY KEY already
+            exists. In this case, the UPDATE would
+            be mapped to DELETE;INSERT, and we
+            only wrote undo log for the DELETE
+            part. The duplicate key error would be
+            triggered before logging the INSERT
+            part.
+
+            Theoretically, we could also get a
+            similar situation when a DELETE operation
+            is blocked by a FOREIGN KEY constraint. */
+            goto func_exit;
+          }
+
+          if (dtuple_contains_null(entry)) {
+            /* The UNIQUE KEY columns match, but
+            there is a NULL value in the key, and
+            NULL!=NULL. */
+            goto insert_the_rec;
+          }
+          /* This should be a real duplicate error. */
+          lizard::btr_cur_print_duplicate_error_in_uk_online(
+              &cursor, index, entry, UT_LOCATION_HERE);
+          goto duplicate;
+      }
     }
+
   } else {
     switch (op) {
       rec_t *rec;
@@ -3341,12 +3412,28 @@ static void row_log_apply_op_low(
         index before logging an ROW_OP_INSERT for our
         index. This ROW_OP_DELETE could be logged for
         rolling back TRX_UNDO_INSERT_REC. */
+        /* PANDA: the row logs of a panda index are driven by itself, so this
+         * scenario will nevel happen in panda index.*/
+        ut_a(!lizard::dict_index_is_panda(index));
         goto func_exit;
       case ROW_OP_INSERT:
+        if (lizard::dict_index_is_panda(index) &&
+            (!index->n_nullable || !dtuple_contains_null(entry))) {
+          /* Panda Index searches b-tree only by uk if the entry does not have
+           * nullable field, so it is impossible to get up_match >= uk. */
+          ut_a(!(cursor.up_match >= dict_index_get_n_unique(index)));
+        }
         if (dict_index_is_unique(index) &&
             (cursor.up_match >= dict_index_get_n_unique(index) ||
-             cursor.low_match >= dict_index_get_n_unique(index)) &&
+             (cursor.low_match >= dict_index_get_n_unique(index) &&
+              DBUG_EVALUATE_IF(
+                  "row_log_apply_skip_inf_check", true,
+                  !page_rec_is_infimum(btr_cur_get_rec(&cursor))))) &&
             (!index->n_nullable || !dtuple_contains_null(entry))) {
+          /* We have to tolerate the duplicate error when encountering
+           *(Normal uk + up_match >= uk + next_rec == supremum) */
+          lizard::btr_cur_print_duplicate_error_in_uk_online(
+              &cursor, index, entry, UT_LOCATION_HERE);
         duplicate:
           /* Duplicate key */
           ut_ad(dict_index_is_unique(index));
@@ -3359,9 +3446,8 @@ static void row_log_apply_op_low(
         a secondary index, there cannot be externally
         stored columns (!big_rec). */
         *error = btr_cur_optimistic_insert(
-            BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_CREATE_FLAG,
-            &cursor, &offsets, &offsets_heap, const_cast<dtuple_t *>(entry),
-            &rec, &big_rec, nullptr, &mtr);
+            flags, layout, &cursor, &offsets, &offsets_heap,
+            const_cast<dtuple_t *>(entry), &rec, &big_rec, nullptr, &mtr);
         ut_ad(!big_rec);
         if (*error != DB_FAIL) {
           break;
@@ -3386,9 +3472,8 @@ static void row_log_apply_op_low(
         record should still not exist. */
 
         *error = btr_cur_pessimistic_insert(
-            BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_CREATE_FLAG,
-            &cursor, &offsets, &offsets_heap, const_cast<dtuple_t *>(entry),
-            &rec, &big_rec, nullptr, &mtr);
+            flags, layout, &cursor, &offsets, &offsets_heap,
+            const_cast<dtuple_t *>(entry), &rec, &big_rec, nullptr, &mtr);
         ut_ad(!big_rec);
         break;
     }
@@ -3502,6 +3587,15 @@ func_exit:
     return (nullptr);
   }
 
+  /* Attention: Although during the row log apply, the B-tree is clean (meaning
+   * there are no delete mark records), we still cannot guarantee that the PK
+   * values of the first leaf node records are the same as those of their upper
+   * branch node records. This is because, when applying the "delete row log",
+   * we can optimistically delete the first record of the leaf node without
+   * modifying the PK value of the parent node. After this operation, their PK
+   * values may become inconsistent. If we perform a search on the panda index
+   * with n_fields_cmp carrying the PK, then the low_match/up_match in the final
+   * result may be incorrect. */
   entry = row_rec_to_index_entry_low(mrec - data_size, index, offsets, heap);
   /* Online index creation is only implemented for secondary
   indexes, which never contain off-page columns. */
@@ -3866,3 +3960,15 @@ dberr_t row_log_apply(const trx_t *trx, dict_index_t *index,
 
   return error;
 }
+
+/** Set error of the creating index when using row log.
+@param[in]  index   index that is creating
+@param[in]  err     err info */
+void row_log_set_error(dict_index_t *index, const dberr_t err) {
+  row_log_t *log;
+  log = index->online_log;
+  mutex_enter(&log->mutex);
+  log->error = err;
+  mutex_exit(&log->mutex);
+}
+

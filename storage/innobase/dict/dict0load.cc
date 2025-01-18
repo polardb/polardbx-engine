@@ -64,6 +64,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "srv0start.h"
 
+#include "lizard0btr0btr.h"
+
 /** Following are the InnoDB system tables. The positions in
 this array are referenced by enum dict_system_table_id. */
 const char *SYSTEM_TABLE_NAME[] = {
@@ -474,8 +476,10 @@ static const char *dict_load_index_low(
   }
 
   (*index)->id = id;
-  (*index)->page = mach_read_from_4(field);
-  ut_ad((*index)->page);
+  page_no_t page_no = mach_read_from_4(field);
+  page_type_t page_type = lizard::dict_index_legacy_ptype(*index);
+  (*index)->root = {page_no, page_type};
+  ut_ad((*index)->page_no());
   (*index)->merge_threshold = merge_threshold;
 
   return (nullptr);
@@ -1986,7 +1990,12 @@ loading the index definition */
 
       dict_sys_mutex_exit();
 
-      error = dict_index_add_to_cache(table, index, index->page, false);
+      /* root page no and root page type have been restored in
+       * dict_load_index_low. */
+      ut_ad(index->page_no() != FIL_NULL);
+      assert_lizard_page_mark_consistent(index->root);
+      error = dict_index_add_to_cache(table, index, index->root,
+                                      FIL_PAGE_TYPE_UNUSED, false);
 
       dict_sys_mutex_enter();
 

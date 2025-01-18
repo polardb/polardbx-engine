@@ -663,13 +663,14 @@ static void dd_upgrade_process_index(Index dd_index, dict_index_t *index,
   dd::Properties &p = dd_index->se_private_data();
   txn_desc_t *txn_desc = &lizard::txn_sys_t::instance()->txn_desc_dd_upgrade;
 
-  p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page);
+  p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page_no());
   p.set(dd_index_key_strings[DD_INDEX_SPACE_ID], index->space);
   p.set(dd_index_key_strings[DD_INDEX_ID], index->id);
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   dd_index_set_se_private_for_system_cols(
       dd_index, 0,
       txn_info_t{txn_desc->cmmt.scn, txn_desc->undo_ptr, txn_desc->cmmt.gcn});
+  p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], index->page_type());
 
   if (has_auto_inc) {
     ut_ad(auto_inc_index_name != nullptr);
@@ -1388,7 +1389,7 @@ static void dd_upgrade_drop_sys_tables() {
          index = index->next()) {
       ut_ad(index->space == system_table->space);
 
-      const page_id_t root(index->space, index->page);
+      const page_id_t root(index->space, index->page_no());
 
       mtr_t mtr;
       mtr_start(&mtr);

@@ -36,12 +36,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "buf0block_hint.h"
 #include "buf0types.h"
 #include "fil0fil.h"
-#include "lizard0mon.h"
 #include "page0types.h"
 #include "rem0types.h"
 #include "trx0types.h"
 #include "ut0mutex.h"
 
+#include "lizard0mon.h"
 #include "lizard0txn0rec0types.h"
 #include "lizard0ut.h"
 
@@ -56,11 +56,42 @@ namespace lizard {
 /*----------------------------------------------------------------*/
 /* Lizard cleanout structure and function. */
 /*----------------------------------------------------------------*/
+
+/*----------------------------------------------------------------*/
+/* Lizard cleanout structure and function. */
+/*----------------------------------------------------------------*/
+/* Revision:
+ *
+ * We take a new strategy to do cleanout when opt_cleanout_write_redo
+ * setting is false.
+ *
+ * 1. try see
+ *	MTR_NONE
+ *
+ * 2. real see
+ * 	MTR_NO_REDO
+ *
+ * 3. modify
+ * 	MTR_NONE:
+ *
+ * 4. ddl
+ * 	MTR_NO_REDO
+ *
+ * 5. commit
+ * 	MTR_NONE
+ *
+ * 6. gpp
+ * 	MTR_NO_REDO
+ *
+ * Make dirty through MTR_NO_REDO if page cleanouts has been more than
+ * srv_cleanout_dirty_threshold and was still clean page.
+ */
+
 /** Whether to write redo log when cleanout */
 extern bool opt_cleanout_write_redo;
 
 /** Whether disable the delayed cleanout when read */
-extern bool opt_cleanout_disable;
+extern bool opt_txn_cleanout_disable;
 
 /** Whether disable the gpp cleanout when read */
 extern bool opt_gpp_cleanout_disable;
@@ -71,9 +102,15 @@ extern bool opt_ddl_cleanout_disable;
 /* Commit cleanout max num. */
 extern ulint srv_commit_cleanout_max_rows;
 
+/** Make page dirty if cleaned records are more than threshold and page was
+ * still clean */
+extern ulint srv_cleanout_dirty_threshold;
+
 /*----------------------------------------------------------------*/
-/* Lizard cleanout by cursor. */
-/*----------------------------------------------------------------*/
+/* Cleanout by cursor.
+ *
+ * We defined different cursor about what to cleanout.
+----------------------------------------------------------------*/
 class Cursor {
  public:
   explicit Cursor()
@@ -82,34 +119,51 @@ class Cursor {
         m_block(nullptr),
         m_index(nullptr),
         m_modify_clock(0),
-        m_block_when_stored() {
+        m_block_when_stored(),
+        m_log_mode(MTR_LOG_ALL) {
     m_block_when_stored.clear();
   }
+
+  virtual ~Cursor() { reset(); }
 
   Cursor(const Cursor &other);
 
   Cursor &operator=(const Cursor &);
 
-  bool store_position(btr_pcur_t *pcur);
-
-  bool store_position(dict_index_t *index, buf_block_t *block, rec_t *rec);
+  /** Store the record position.
+   *
+   * @param[in]		cursor
+   * @param[in]		mtr log mode
+   *
+   * @retval		true	successful */
+  bool store_position(const btr_cur_t *bcur, mtr_log_t log_mode);
 
   bool restore_position(mtr_t *mtr, ut::Location location);
+
+  /** inc page cleanouts */
+  void inc_cleanouts(mtr_t *mtr);
 
   virtual ulint cleanout() = 0;
 
   /* Reset the cursor. */
-  virtual void reset() {
+  void reset() {
     m_old_stored = false;
     m_old_rec = nullptr;
     m_block = nullptr;
     m_index = nullptr;
     m_modify_clock = 0;
     m_block_when_stored.clear();
+    m_log_mode = MTR_LOG_ALL;
   }
+
   bool stored() const { return m_old_stored; }
 
-  virtual ~Cursor() { reset(); }
+  buf_block_t *get_block() const { return m_block; }
+  dict_index_t *get_index() const { return m_index; }
+  rec_t *get_old_rec() const { return m_old_rec; }
+
+ private:
+  void set_log_mode(mtr_t *mtr);
 
  protected:
   bool m_old_stored;
@@ -123,28 +177,35 @@ class Cursor {
   uint64_t m_modify_clock;
 
   buf::Block_hint m_block_when_stored;
+
+  mtr_log_t m_log_mode;
 };
 
 /*----------------------------------------------------------------*/
-/* CCursor extends Cursor for lizard primary key cleanout.  */
+/* TCursor extends Cursor for indexes w/ transactional fields cleanout.  */
 /*----------------------------------------------------------------*/
-class CCursor : public Cursor {
+class TCursor : public Cursor {
  public:
-  explicit CCursor() : Cursor(), m_txn_rec(), m_stored(false) {}
+  explicit TCursor()
+      : Cursor(), m_txn_rec(), m_layout(TL_NONE), m_stored(false) {}
 
-  CCursor(const CCursor &other)
-      : Cursor(other), m_txn_rec(other.m_txn_rec), m_stored(other.m_stored) {}
+  TCursor(const TCursor &other)
+      : Cursor(other),
+        m_txn_rec(other.m_txn_rec),
+        m_layout(other.m_layout),
+        m_stored(other.m_stored) {}
 
-  CCursor &operator=(const CCursor &other) {
+  TCursor &operator=(const TCursor &other) {
     if (this != &other) {
       Cursor::operator=(other);
       m_txn_rec = other.m_txn_rec;
+      m_layout = other.m_layout;
       m_stored = other.m_stored;
     }
     return (*this);
   }
 
-  void set_txn_rec(const txn_rec_t &txn_rec) {
+  void commit(const txn_rec_t &txn_rec) {
     ut_ad(txn_rec.is_committed());
     ut_ad(m_old_stored == true);
 
@@ -152,60 +213,88 @@ class CCursor : public Cursor {
     m_stored = true;
   }
 
-  bool store(btr_pcur_t *pcur, const txn_rec_t &txn_rec) {
+  /** Store position and txn info.
+   *
+   * @retval	true	if successful
+   * */
+  bool store(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+             const txn_layout_t &layout, mtr_log_t log_mode) {
     ut_ad(txn_rec.is_committed());
 
     m_txn_rec = txn_rec;
+    m_layout = layout;
     m_stored = true;
-    return store_position(pcur);
+    return store_position(bcur, log_mode);
   }
 
-  bool store(dict_index_t *index, buf_block_t *block, rec_t *rec,
-             const txn_rec_t &txn_rec) {
-    ut_ad(m_txn_rec.is_committed());
-
-    m_txn_rec = txn_rec;
-    m_stored = true;
-    return store_position(index, block, rec);
+  /** Store position and layout
+   *
+   * @retval	true	if successful
+   * */
+  bool store(const btr_cur_t *bcur, const txn_layout_t &layout,
+             mtr_log_t log_mode) {
+    m_layout = layout;
+    return store_position(bcur, log_mode);
   }
 
-  ulint cleanout() override;
+  /** Cleanout txn field in record, include Clover or Bamboo layout
+   *
+   * @retval	how many records were cleanouted. */
+  virtual ulint cleanout() override;
 
-  virtual void reset() override {
-    m_txn_rec.reset();
-    m_stored = false;
+  void reset() {
+    clear();
     Cursor::reset();
   }
 
-  bool is_on_same_page(btr_pcur_t *pcur) const;
+  bool is_on_same_page(const btr_cur_t *bcur) const;
 
-  ~CCursor() { reset(); }
+  ~TCursor() { clear(); }
 
-  buf_block_t *get_block() const { return m_block; }
-  dict_index_t *get_index() const { return m_index; }
+  txn_layout_t get_layout() const { return m_layout; }
 
-  rec_t* get_old_rec() const { return m_old_rec; }
+ private:
+  void clear() {
+    m_txn_rec.reset();
+    m_layout = TL_NONE;
+    m_stored = false;
+  }
+  /** Cleanout Clover layout txn record.
+   *
+   * @retval	How many record was cleanouted.*/
+  ulint cleanout_clover_rec();
+  /** Cleanout Bamboo layout txn record.
+   *
+   * @retval	How many record was cleanouted.*/
+  ulint cleanout_bamboo_rec();
 
  private:
   txn_rec_t m_txn_rec;
+
+  txn_layout_t m_layout;
+
   bool m_stored;
 };
 
 /*----------------------------------------------------------------*/
-/* SCursor extends Cursor for gpp secondary key cleanout. */
+/* GCursor extends Cursor for gpp cleanout. */
 /*----------------------------------------------------------------*/
 
-class SCursor : public Cursor {
+class GCursor : public Cursor {
  public:
-  explicit SCursor() : Cursor(), m_gpp_no(FIL_NULL), m_gpp_no_offset(0) {}
+  explicit GCursor()
+      : Cursor(),
+        m_gpp_no(FIL_NULL),
+        m_gpp_no_offset(ULINT_UNDEFINED),
+        m_stored(false) {}
 
-  SCursor(const SCursor &other)
+  GCursor(const GCursor &other)
       : Cursor(other),
         m_gpp_no(other.m_gpp_no),
         m_gpp_no_offset(other.m_gpp_no_offset),
         m_stored(other.m_stored) {}
 
-  SCursor &operator=(const SCursor &other) {
+  GCursor &operator=(const GCursor &other) {
     if (this != &other) {
       Cursor::operator=(other);
       m_gpp_no = other.m_gpp_no;
@@ -215,28 +304,37 @@ class SCursor : public Cursor {
     return (*this);
   }
 
-  bool store(btr_pcur_t *pcur, const ulint &gpp_no_offset) {
+  /** Store position and save gpp no offset.
+   *
+   * @retval	true	if successful */
+  bool store(const btr_cur_t *bcur, const ulint &gpp_no_offset,
+             mtr_log_t log_mode) {
+    ut_a(gpp_no_offset != ULINT_UNDEFINED);
     m_gpp_no_offset = gpp_no_offset;
-    return store_position(pcur);
+    return store_position(bcur, log_mode);
   }
 
-  ulint cleanout() override;
+  virtual ulint cleanout() override;
 
-  virtual void reset() override {
-    m_gpp_no = FIL_NULL;
-    m_gpp_no_offset = 0;
-    m_stored = false;
-
+  void reset() {
+    clear();
     Cursor::reset();
   }
 
   void set_gpp_no(const page_no_t &gpp_no) {
-    ut_ad(m_gpp_no_offset != 0 && gpp_no != FIL_NULL);
+    ut_ad(m_gpp_no_offset != ULINT_UNDEFINED && gpp_no != FIL_NULL);
     m_gpp_no = gpp_no;
     m_stored = true;
   }
 
-  ~SCursor() { reset(); }
+  ~GCursor() { clear(); }
+
+ private:
+  void clear() {
+    m_gpp_no = FIL_NULL;
+    m_gpp_no_offset = ULINT_UNDEFINED;
+    m_stored = false;
+  }
 
  private:
   /* Primary key page_no for gpp backfill. */
@@ -258,34 +356,30 @@ class Cleanout {
 
   virtual ~Cleanout() {}
 
-  virtual void clear() = 0;
-
   /** Execute cleanout work. */
   virtual void execute() = 0;
 
-  /** Collect record */
-  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
-                       const rec_t *rec, const dict_index_t *index,
-                       const ulint *offsets, btr_pcur_t *pcur) = 0;
-};
+  /** Collect txn record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		commit info
+   * @param[in]		rec layout
+   *
+   * @retval		txn cursor for cleanout.
+   * */
+  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+                               const txn_layout_t &layout,
+                               mtr_log_t log_mode) = 0;
 
-/** Cleanout runtime context for pcursor. */
-struct cleanout_ctx_t {
- public:
-  explicit cleanout_ctx_t(btr_pcur_t *pcur);
-
-  explicit cleanout_ctx_t(btr_pcur_t *pcur, Cleanout *cleanout)
-      : m_pcur(pcur), m_cleanout(cleanout) {}
-
-  bool is_active() const { return m_cleanout != nullptr && m_pcur != nullptr; }
-
-  Cleanout *cleanout() { return m_cleanout; }
-
-  btr_pcur_t *pcur() { return m_pcur; }
-
- public:
-  btr_pcur_t *m_pcur;
-  Cleanout *m_cleanout;
+  /** Collect gpp record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		gpp no offset within record
+   *
+   * @retval		gpp cursor for cleanout.
+   * */
+  virtual GCursor *collect_gpp(const btr_cur_t *btr, const ulint gpp_no_offset,
+                               mtr_log_t log_mode) = 0;
 };
 
 /*------------------------------------------------------------------------*/
@@ -297,105 +391,102 @@ class Scan_cleanout : public Cleanout {
   constexpr static size_t MAX_CURSORS = 3;
 
  public:
-
-
   explicit Scan_cleanout()
       : Cleanout(),
-        m_clust_cursors(),
-        m_clust_num(0),
-        m_sec_cursors(),
-        m_sec_num(0) {}
+        m_txn_cursors(),
+        m_txn_num(0),
+        m_gpp_cursors(),
+        m_gpp_num(0) {}
 
   virtual ~Scan_cleanout() { clear(); }
 
-  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
-                       const rec_t *rec, const dict_index_t *index,
-                       const ulint *offsets, btr_pcur_t *pcur) override;
+  /** Collect txn record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		commit info
+   * @param[in]		rec layout
+   *
+   * @retval		txn cursor for cleanout.
+   * */
+  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+                               const txn_layout_t &layout,
+                               mtr_log_t log_mode) override;
+
+  /** Collect gpp record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		gpp no offset within record
+   *
+   * @retval		gpp cursor for cleanout.
+   * */
+  virtual GCursor *collect_gpp(const btr_cur_t *btr, const ulint gpp_no_offset,
+                               mtr_log_t log_mode) override;
 
   virtual void execute() override {
     ulint cleaned = 0;
-    for (ulint i = 0; i < m_clust_num; i++) {
-      cleaned += m_clust_cursors[i].cleanout();
+    for (ulint i = 0; i < m_txn_num; i++) {
+      cleaned += m_txn_cursors[i].cleanout();
     }
-    if (cleaned > 0) lizard_stats.scan_cleanout_clust_clean.add(cleaned);
+    scan_cleanout_txn_clean_stat(cleaned);
 
     cleaned = 0;
-    for (ulint i = 0; i < m_sec_num; i++) {
-      cleaned += m_sec_cursors[i].cleanout();
+    for (ulint i = 0; i < m_gpp_num; i++) {
+      cleaned += m_gpp_cursors[i].cleanout();
     }
-    if (cleaned > 0) lizard_stats.scan_cleanout_sec_clean.add(cleaned);
+    scan_cleanout_gpp_clean_stat(cleaned);
 
     clear();
   }
 
-  virtual void clear() override {
-    m_clust_num = 0;
-    m_sec_num = 0;
-  }
+  bool is_empty() const { return m_txn_num == 0 && m_gpp_num == 0; }
 
-  bool is_empty() const { return m_clust_num == 0 && m_sec_num == 0; }
-
-  /** Acquire a secondary cursor and store record position for gpp cleanout.
-   *
-   * @param[in]		pcursor
-   * @param[in]		gpp no offset within sec record.
-   *
-   * @retval		cursor or nullptr if disable or unavailable slot */
-  SCursor *acquire_for_gpp(btr_pcur_t *pcur, ulint gpp_no_offset) {
-    SCursor *cur =nullptr;
-    if (opt_gpp_cleanout_disable) {
-      return nullptr;
-    }
-    if ((cur = acquire_sec()) != nullptr) {
-      cur->store(pcur, gpp_no_offset);
-      lizard_stats.cleanout_sec_collect.inc();
-    }
-    return cur;
-  }
-
-  /** Acquire a primary cursor and store record position for lizard cleanout.
+  /** Acquire a txn cursor and store record position for cleanout.
    *
    * @param[in]		pcursor
    * @param[in]		committed txn rec
    *
    * @retval		cursor or nullptr if disable or unavailable slot */
-  CCursor *acquire_for_lizard(btr_pcur_t *pcur, const txn_rec_t &txn_rec) {
-    CCursor *cur = nullptr;
-    if ((cur = acquire_clust()) != nullptr) {
-      cur->store(pcur, txn_rec);
-      lizard_stats.cleanout_clust_collect.inc();
+  TCursor *request_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+                       const txn_layout_t &layout, mtr_log_t log_mode) {
+    TCursor *cur = nullptr;
+    if (m_txn_num < MAX_CURSORS) {
+      m_txn_cursors[m_txn_num].reset();
+      cur = &m_txn_cursors[m_txn_num++];
+      cur->store(bcur, txn_rec, layout, log_mode);
     }
+
     return cur;
   }
 
- private:
-  /** Acquire a secondary cursor for cleanout.
+  /** Acquire a gpp cursor and store record position for cleanout.
+   *
+   * @param[in]		pcursor
+   * @param[in]		committed txn rec
    *
    * @retval		cursor or nullptr if disable or unavailable slot */
-  SCursor *acquire_sec() {
-    if (m_sec_num < MAX_CURSORS) {
-      m_sec_cursors[m_sec_num].reset();
-      return &m_sec_cursors[m_sec_num++];
+  GCursor *request_gpp(const btr_cur_t *bcur, const ulint gpp_no_offset,
+                       mtr_log_t log_mode) {
+    GCursor *cur = nullptr;
+    if (m_gpp_num < MAX_CURSORS) {
+      m_gpp_cursors[m_gpp_num].reset();
+      cur = &m_gpp_cursors[m_gpp_num++];
+      cur->store(bcur, gpp_no_offset, log_mode);
     }
-    return nullptr;
+
+    return cur;
   }
-  /** Acquire a primary cursor for cleanout.
-   *
-   * @retval		cursor or nullptr if disable or unavailable slot */
-  CCursor *acquire_clust() {
-    if (m_clust_num < MAX_CURSORS) {
-      m_clust_cursors[m_clust_num].reset();
-      return &m_clust_cursors[m_clust_num++];
-    }
-    return nullptr;
+
+  void clear() {
+    m_txn_num = 0;
+    m_gpp_num = 0;
   }
 
  private:
-  CCursor m_clust_cursors[MAX_CURSORS];
-  ulint m_clust_num;
+  TCursor m_txn_cursors[MAX_CURSORS];
+  ulint m_txn_num;
 
-  SCursor m_sec_cursors[MAX_CURSORS];
-  ulint m_sec_num;
+  GCursor m_gpp_cursors[MAX_CURSORS];
+  ulint m_gpp_num;
 };
 
 /*------------------------------------------------------------------------*/
@@ -404,7 +495,7 @@ class Scan_cleanout : public Cleanout {
 class Commit_cleanout : public Cleanout {
  public:
   /** How many cursors can be saved to static array after commit. If it
-  is greater than MAX_CURSORS, it will be saved to dynamic array. */
+  is greater than STATIC_CURSORS, it will be saved to dynamic array. */
   constexpr static size_t STATIC_CURSORS = 3;
 
   constexpr static size_t MAX_CURSORS = 4096;
@@ -419,22 +510,32 @@ class Commit_cleanout : public Cleanout {
 
   virtual ~Commit_cleanout() { clear(); }
 
-  virtual void clear() override {
-    m_dynamic_cursors.clear();
-    m_static_num = 0;
-    m_dynamic_num = 0;
+  void commit(const txn_rec_t &txn_rec) { m_txn_rec = txn_rec; }
 
-    m_txn_rec.reset();
-  }
+  /** Collect txn record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		commit info
+   * @param[in]		rec layout
+   *
+   * @retval		txn cursor for cleanout.
+   * */
+  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+                               const txn_layout_t &layout,
+                               mtr_log_t log_mode) override;
 
-  void set_commit(const txn_rec_t &txn_rec) { m_txn_rec = txn_rec; }
-
-
-  /** Collect record */
-  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
-                       const rec_t *rec, const dict_index_t *index,
-                       const ulint *offsets, btr_pcur_t *pcur) override {
-    ut_a(0);
+  /** Collect gpp record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		gpp no offset within record
+   *
+   * @retval		gpp cursor for cleanout.
+   * */
+  virtual GCursor *collect_gpp(const btr_cur_t *btr, const ulint gpp_no_offset,
+                               mtr_log_t log_mode) override {
+    /** Commit cleanout didn't support gpp.*/
+    ut_ad(0);
+    return nullptr;
   }
 
   virtual void execute() override {
@@ -446,55 +547,68 @@ class Commit_cleanout : public Cleanout {
     ulint cleaned = 0;
 
     for (ulint i = 0; i < m_static_num; i++) {
-      m_static_cursors[i].set_txn_rec(m_txn_rec);
+      m_static_cursors[i].commit(m_txn_rec);
       cleaned += m_static_cursors[i].cleanout();
     }
 
     for (auto &it : m_dynamic_cursors) {
-      it.set_txn_rec(m_txn_rec);
+      it.commit(m_txn_rec);
       cleaned += it.cleanout();
     }
-    if (stat_enabled) {
-      lizard_stats.commit_cleanout_collects.add(count());
-      lizard_stats.commit_cleanout_cleaned.add(cleaned);
-    }
+
+    commit_cleanout_clean_stat(cleaned);
 
     clear();
   }
   ulint count() const { return m_static_num + m_dynamic_num; }
   bool is_empty() const { return count() == 0; }
 
-  /** Push cusor into commit lizard cleanout and store record position.
+
+  /** Acquire a txn cursor and store record position for cleanout.
    *
-   * @param[in]		index     index
-   * @param[in]		block     buffer block
-   * @param[in]		rec       current rec
-   */
-  void push_cursor(dict_index_t *index, buf_block_t *block, rec_t *rec) {
-    CCursor ccursor;
+   * @param[in]		pcursor
+   * @param[in]		committed txn rec
+   *
+   * @retval		cursor or nullptr if disable or unavailable slot */
+  TCursor *request_txn(const btr_cur_t *bcur, const txn_layout_t &layout,
+                       mtr_log_t log_mode) {
+    TCursor *cur = nullptr;
     if (count() < srv_commit_cleanout_max_rows) {
-      ccursor.store_position(index, block, rec);
-      push_clust(ccursor);
-    } else if (stat_enabled) {
-      lizard_stats.commit_cleanout_skip.inc();
+      TCursor tcursor;
+      tcursor.store(bcur, layout, log_mode);
+      cur = push_back(tcursor);
     }
+    return cur;
+  }
+
+  void clear() {
+    m_dynamic_cursors.clear();
+    m_static_num = 0;
+    m_dynamic_num = 0;
+
+    m_txn_rec.reset();
   }
 
  private:
-  void push_clust(const CCursor &cursor) {
+  TCursor *push_back(const TCursor &cursor) {
+    TCursor *cur = nullptr;
     if (m_static_num < STATIC_CURSORS) {
-      m_static_cursors[m_static_num++] = cursor;
+      cur = &m_static_cursors[m_static_num++];
+      *cur = cursor;
     } else {
       m_dynamic_cursors.push_back(cursor);
       m_dynamic_num++;
+      cur = &m_dynamic_cursors.back();
     }
+
+    return cur;
   }
 
  private:
-  CCursor m_static_cursors[STATIC_CURSORS];
+  TCursor m_static_cursors[STATIC_CURSORS];
 
-  /* If m_static_num extends MAX_CURSORS, use m_dynamic_cursors. */
-  std::vector<CCursor, ut::allocator<CCursor>> m_dynamic_cursors;
+  /* If m_static_num extends STATIC_CURSORS, use m_dynamic_cursors. */
+  std::vector<TCursor, ut::allocator<TCursor>> m_dynamic_cursors;
 
   ulint m_static_num;
   ulint m_dynamic_num;
@@ -511,58 +625,120 @@ class DDL_cleanout : public Cleanout {
   explicit DDL_cleanout()
       : Cleanout(), m_cursor(), m_old_recs(), m_txn_recs(), m_rec_nums{0} {}
 
-  virtual ~DDL_cleanout() override { clear(); }
-
-  virtual void clear() override {
-    m_rec_nums = 0;
-    m_cursor.reset();
+  virtual ~DDL_cleanout() override { 
+    ut_ad(m_rec_nums == 0);
+    clear(); 
   }
 
-  virtual void execute() override {
-    ulint cleaned = do_cleanout();
+  virtual void execute() override;
 
-    clear();
-    lizard::lizard_stats.ddl_cleanout_clust_clean.add(cleaned);
+  /** Collect txn record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		commit info
+   * @param[in]		rec layout
+   *
+   * @retval		txn cursor for cleanout.
+   * */
+  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+                               const txn_layout_t &layout,
+                               mtr_log_t log_mode) override;
+
+  /** Collect gpp record for cleanout.
+   *
+   * @param[in]		btree cursor
+   * @param[in]		gpp no offset within record
+   *
+   * @retval		gpp cursor for cleanout.
+   * */
+  virtual GCursor *collect_gpp(const btr_cur_t *btr, const ulint gpp_no_offset,
+                               mtr_log_t log_mode) override {
+    ut_ad(0);
+    return nullptr;
   }
-
-  /** Collect record */
-  virtual void collect(const trx_id_t trx_id, const txn_rec_t &txn_rec,
-                       const rec_t *rec, const dict_index_t *index,
-                       const ulint *offsets, btr_pcur_t *pcur) override;
 
  private:
-  ulint do_cleanout();
-
-  void store(const rec_t *rec, const txn_rec_t &txn_rec, btr_pcur_t *pcur) {
-    /** Store the first record of new page. */
-    if (!m_cursor.stored()) {
-      ut_ad(m_rec_nums == 0);
-      m_cursor.store_position(pcur);
-    }
-
-    /** If the record is on the different page, return. */
-    if (!m_cursor.is_on_same_page(pcur)) {
-      clear();
-      return;
-    }
-
-    if (m_rec_nums >= MAX_CURSORS) return;
-
-    m_old_recs[m_rec_nums] = const_cast<rec_t *>(rec);
-    m_txn_recs[m_rec_nums] = txn_rec;
-    m_rec_nums++;
+  void clear() {
+    m_rec_nums = 0;
+    m_cursor.reset();
   }
 
  private:
   /** If the cursor can restore, it means that the offsets of other records
    * haven't change. */
-  CCursor m_cursor;
+  TCursor m_cursor;
 
-  rec_t* m_old_recs[MAX_CURSORS];
+  rec_t *m_old_recs[MAX_CURSORS];
   txn_rec_t m_txn_recs[MAX_CURSORS];
 
   ulint m_rec_nums;
 };
+
+/** Cleanout runtime context for pcursor. */
+struct cleanout_ctx_t {
+ public:
+  explicit cleanout_ctx_t(btr_pcur_t *pcur);
+
+  explicit cleanout_ctx_t(btr_pcur_t *pcur, Cleanout *cleanout);
+
+  explicit cleanout_ctx_t(btr_cur_t *bcur, Cleanout *cleanout);
+
+  /**Setting mtr log mode. */
+  cleanout_ctx_t &operator()(const mtr_log_t log_mode) {
+    if (opt_cleanout_write_redo) {
+      m_log_mode = MTR_LOG_ALL;
+    } else {
+      m_log_mode = log_mode;
+    }
+
+    m_setting = true;
+
+    return *this;
+  }
+
+  bool is_usable() const { return m_cleanout != nullptr && m_bcur != nullptr; }
+
+  Cleanout *cleanout() { return m_cleanout; }
+
+  void collect_txn(const txn_rec_t &txn_rec, const txn_layout_t &layout) {
+    ut_ad(is_usable());
+    ut_ad(m_setting);
+    m_tcursor = m_cleanout->collect_txn(m_bcur, txn_rec, layout, m_log_mode);
+
+    return;
+  }
+
+  void collect_gpp(const ulint gpp_no_offset) {
+    ut_ad(is_usable());
+    ut_ad(m_setting);
+    m_gcursor = m_cleanout->collect_gpp(m_bcur, gpp_no_offset, m_log_mode);
+
+    return;
+  }
+
+  void address_gpp_if_missing(const gpp_no_t gpp_no) {
+    if (m_gcursor) {
+      m_gcursor->set_gpp_no(gpp_no);
+    }
+  }
+
+  btr_cur_t *btr_cur() { return m_bcur; }
+
+ public:
+  /** Btree position of record */
+  btr_cur_t *m_bcur;
+  /** Container which save tcursor or gcursor to cleanout later.*/
+  Cleanout *m_cleanout;
+  /** Saved txn cursor. */
+  TCursor *m_tcursor;
+  /** Saved gpp cursor. */
+  GCursor *m_gcursor;
+  /** future cleanout mtr log mode. */
+  mtr_log_t m_log_mode;
+  /** whether log mode was set. */
+  bool m_setting;
+};
+
 
 /**
   Collect rows updated in current transaction.
@@ -573,7 +749,8 @@ class DDL_cleanout : public Cleanout {
   @param[in]        flags           mode flags for btr_cur operations
 */
 extern void commit_cleanout_collect(que_thr_t *thr, btr_cur_t *cursor,
-                                    rec_t *rec, ulint flags);
+                                    rec_t *rec, ulint flags,
+                                    const txn_layout_t &layout);
 /**
   After search row complete, do the cleanout.
 
@@ -588,5 +765,7 @@ extern void cleanout_after_read(row_prebuilt_t *prebuilt);
 extern void cleanout_after_commit(trx_t *trx, bool serialised);
 
 }  // namespace lizard
+
+using Cleanout_ctx_t = lizard::cleanout_ctx_t;
 
 #endif

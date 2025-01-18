@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  ***********************************************************************/
 
 #include "debug_sync.h"
+#include "lizard0btr0btr.h"
 #include "my_config.h"
 
 #include <stdlib.h>
@@ -127,6 +128,9 @@ extern uint ibuf_debug;
 
 #include "lizard0data0types.h"
 #include "lizard0dict.h"
+#include "lizard0dict0gpp.h"
+#include "lizard0rem0lrec.h"
+#include "lizard0row0bamboo.h"
 #include "lizard0scn.h"
 #include "lizard0undo.h"
 
@@ -218,9 +222,10 @@ static dict_index_t *dict_index_build_internal_clust(
  index, containing also system fields not defined by the user.
  @return own: the internal representation of the non-clustered index */
 static dict_index_t *dict_index_build_internal_non_clust(
-    const dict_table_t *table, /*!< in: table */
-    dict_index_t *index);      /*!< in: user representation of
-                               a non-clustered index */
+    const dict_table_t *table,       /*!< in: table */
+    dict_index_t *index,             /*!< in: user representation of
+                                     a non-clustered index */
+    page_type_t expected_page_type); /*!< in: expected page type */
 /** Builds the internal dictionary cache representation for an FTS index.
  @return own: the internal representation of the FTS index */
 static dict_index_t *dict_index_build_internal_fts(
@@ -1169,7 +1174,7 @@ void dict_table_add_system_columns(dict_table_t *table, mem_heap_t *heap) {
     the program, it should be dealt with here */
   }
 
-  lizard::dict_table_add_lizard_columns(table, heap);
+  lizard::dict_table_add_functional_columns(table, heap);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -2051,6 +2056,7 @@ ulint dict_index_node_ptr_max_size(const dict_index_t *index) /*!< in: index */
   ulint i;
   /* maximum possible storage size of a record */
   ulint rec_max_size;
+  assert_lizard_dict_index_check(index);
 
   if (dict_index_is_ibuf(index)) {
     /* cannot estimate accurately */
@@ -2323,16 +2329,22 @@ bool dict_index_validate_max_rec_size(const dict_table_t *table,
 @param[in,out]  table   table on which the index is
 @param[in,out]  index   index; NOTE! The index memory
                         object is freed in this function!
-@param[in]      page_no root page number of the index
+@param[in]      root    root page mark that is going to be assigned to new_index
+@param[in]      expected_or_real_page_type  expected page type in creation path,
+                                            or real page type in restored path.
+                                            Currently, it is only used in
+                                            FIL_PAGE_INDEX_PANDA.
 @param[in]      strict  true=refuse to create the index
                         if records could be too big to fit in
                         an B-tree page
 @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
 dberr_t dict_index_add_to_cache(dict_table_t *table, dict_index_t *index,
-                                page_no_t page_no, bool strict) {
+                                const page_mark_t &root,
+                                page_type_t expected_or_real_page_type,
+                                bool strict) {
   ut_ad(!dict_sys_mutex_own());
-  return (
-      dict_index_add_to_cache_w_vcol(table, index, nullptr, page_no, strict));
+  return (dict_index_add_to_cache_w_vcol(table, index, nullptr, root,
+                                         expected_or_real_page_type, strict));
 }
 
 /** Clears the virtual column's index list before index is being freed.
@@ -2385,8 +2397,9 @@ that we can avoid calling the costly rec_get_offsets() in many cases. That is:
 static void dict_index_try_cache_rec_offsets(dict_index_t *index) {
   ut_ad(index->rec_cache.offsets == nullptr);
   ut_ad(index->rec_cache.nullable_cols == 0);
-
+  assert_lizard_dict_index_check(index);
   const auto n_unique_in_tree = dict_index_get_n_unique_in_tree(index);
+
   ut_a(0 < n_unique_in_tree);
 #ifdef UNIV_DEBUG
   /* Check for backward compatibility - in the past we used cache only for
@@ -2440,14 +2453,20 @@ added column.
                         object is freed in this function!
 @param[in]      add_v   new virtual column that being added along with
                         an add index call
-@param[in]      page_no root page number of the index
+@param[in]      root    root page mark that is going to be assigned to new_index
+@param[in]      expected_or_real_page_type  expected page type in creation path,
+                                            or real page type in restored path.
+                                            Currently, it is only used in
+                                            FIL_PAGE_INDEX_PANDA.
 @param[in]      strict  true=refuse to create the index
                         if records could be too big to fit in
                         an B-tree page
 @return DB_SUCCESS, DB_TOO_BIG_RECORD, or DB_CORRUPTION */
 dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
                                        const dict_add_v_col_t *add_v,
-                                       page_no_t page_no, bool strict) {
+                                       const page_mark_t &root,
+                                       page_type_t expected_or_real_page_type,
+                                       bool strict) {
   dict_index_t *new_index;
   ulint n_ord;
   ulint i;
@@ -2475,7 +2494,8 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   } else if (index->is_clustered()) {
     new_index = dict_index_build_internal_clust(table, index);
   } else {
-    new_index = dict_index_build_internal_non_clust(table, index);
+    new_index = dict_index_build_internal_non_clust(table, index,
+                                                    expected_or_real_page_type);
   }
 
   assert_lizard_dict_index_gstored_check(new_index);
@@ -2560,7 +2580,9 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   new_index->table_name = table->name.m_name;
   new_index->search_info = btr_search_info_create(new_index->heap);
 
-  new_index->page = page_no;
+  new_index->root = root;
+  assert_lizard_page_mark_consistent(new_index->root);
+
   rw_lock_create(index_tree_rw_lock_key, &new_index->lock, LATCH_ID_INDEX_TREE);
 
   /* The conditions listed here correspond to the simplest call-path through
@@ -2570,7 +2592,19 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   if (dict_table_is_comp(table) && !dict_index_has_virtual(index) &&
       (!table->has_instant_cols() && !table->has_row_versions()) &&
       !dict_index_is_spatial(index)) {
-    dict_index_try_cache_rec_offsets(new_index);
+    {
+      /* In index creation path, index has not been initialized completely at
+      this point. For panda index, the current fields layout and the
+      root_page_type are inconsistent. So we temporarily set page_type of
+      new_index to expected_page_type, get the right n_unique_in_tree for
+      function `dict_index_try_cache_rec_offsets` and restore it afterwards. */
+      page_type_t old_page_type = new_index->page_type();
+      new_index->root.page_type = expected_or_real_page_type;
+
+      dict_index_try_cache_rec_offsets(new_index);
+
+      new_index->root.page_type = old_page_type;
+    }
   } else {
     /* The rules should not prevent caching for intrinsic tables */
     ut_ad(!table->is_intrinsic());
@@ -3178,9 +3212,10 @@ static dict_index_t *dict_index_build_internal_clust(
  index, containing also system fields not defined by the user.
  @return own: the internal representation of the non-clustered index */
 static dict_index_t *dict_index_build_internal_non_clust(
-    const dict_table_t *table, /*!< in: table */
-    dict_index_t *index)       /*!< in: user representation of
-                               a non-clustered index */
+    const dict_table_t *table,      /*!< in: table */
+    dict_index_t *index,            /*!< in: user representation of
+                                    a non-clustered index */
+    page_type_t expected_page_type) /*!< in: expected page type */
 {
   dict_field_t *field;
   dict_index_t *new_index;
@@ -3257,8 +3292,8 @@ static dict_index_t *dict_index_build_internal_non_clust(
     }
   }
 
-  /* Copy gpp fields for sec index. */
-  lizard::dict_index_add_stored_gcol(new_index, index, table);
+  lizard::dict_index_add_sec_functional_cols(new_index, index, table,
+                                             expected_page_type);
 
   ut::free(indexed);
 
@@ -3664,8 +3699,8 @@ bool dict_index_check_search_tuple(
   ut_a(index);
   ut_a(dtuple_get_n_fields_cmp(tuple) <=
        dict_index_get_n_unique_in_tree(index));
-  ut_ad(index->page != FIL_NULL);
-  ut_ad(index->page >= FSP_FIRST_INODE_PAGE_NO);
+  ut_ad(index->page_no() != FIL_NULL);
+  ut_ad(index->page_no() >= FSP_FIRST_INODE_PAGE_NO);
   ut_ad(dtuple_check_typed(tuple));
   ut_ad(!(index->type & DICT_FTS));
   return true;
@@ -3733,6 +3768,8 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, /*!< in: index */
 
   ut_ad(dtuple_check_typed(tuple));
 
+  lizard::row_search_entry_adjust_cmp_fields(index, tuple);
+
   return (tuple);
 }
 
@@ -3743,6 +3780,7 @@ rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
   ulint n;
 
   UNIV_PREFETCH_R(rec);
+  assert_lizard_dict_index_check(index);
 
   if (dict_index_is_ibuf(index)) {
     ut_a(!dict_table_is_comp(index->table));
@@ -3759,6 +3797,26 @@ rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
         n++;
       }
     }
+
+    if (lizard::dict_index_is_panda(index)) {
+      if (!lizard::rec_panda_contains_null_in_unique(index, rec)) {
+        n = dict_index_get_n_unique(index);
+      }
+    }
+
+    if (lizard::dict_index_inject_stress_test_for_panda(index)) {
+      if (dict_table_is_comp(index->table)) {
+        ut_ad(rec_get_status(rec) != REC_STATUS_INFIMUM &&
+              rec_get_status(rec) != REC_STATUS_SUPREMUM);
+      } else {
+        ut_ad(rec_get_n_fields_old(rec, index) > 1);
+      }
+      auto heap = mem_heap_create(256, UT_LOCATION_HERE);
+      dtuple_t *tuple = dict_index_build_data_tuple(index, rec, n, heap);
+      ut_a(lizard::row_index_entry_contains_null_in_unique(index, tuple) ==
+           lizard::rec_panda_contains_null_in_unique(index, rec));
+      mem_heap_free(heap);
+    }
   }
 
   *n_fields = n;
@@ -3768,10 +3826,10 @@ rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
 /** Builds a typed data tuple out of a physical record.
  @return own: data tuple */
 dtuple_t *dict_index_build_data_tuple(
-    dict_index_t *index, /*!< in: index tree */
-    rec_t *rec,          /*!< in: record for which to build data tuple */
-    ulint n_fields,      /*!< in: number of data fields */
-    mem_heap_t *heap)    /*!< in: memory heap where tuple created */
+    const dict_index_t *index, /*!< in: index tree */
+    const rec_t *rec,          /*!< in: record for which to build data tuple */
+    ulint n_fields,            /*!< in: number of data fields */
+    mem_heap_t *heap)          /*!< in: memory heap where tuple created */
 {
   dtuple_t *tuple;
 
@@ -5277,7 +5335,11 @@ void DDTableBuffer::open() {
   m_index->id = dict_sys_t::s_dynamic_meta_index_id;
   m_index->n_uniq = 1;
 
-  dberr_t err = dict_index_add_to_cache(table, m_index, root, false);
+  page_type_t root_page_type =
+      lizard::dict_index_legacy_ptype(m_index);
+  dberr_t err =
+      dict_index_add_to_cache(table, m_index, page_mark_t{root, root_page_type},
+                              FIL_PAGE_TYPE_UNUSED, false);
   if (err != DB_SUCCESS) {
     ut_d(ut_error);
   }
@@ -5406,10 +5468,12 @@ dberr_t DDTableBuffer::replace(table_id_t id, uint64_t version,
     add the row for this table of id, we need to insert it */
     static const ulint flags = (BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG |
                                 BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG);
+    const txn_layout_t layout = lizard::dict_index_txn_layout(m_index);
+    ut_ad(layout == TL_CLOVER);
 
     mtr.commit();
 
-    error = row_ins_clust_index_entry_low(flags, BTR_MODIFY_TREE, m_index,
+    error = row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_TREE, m_index,
                                           m_index->n_uniq, entry, nullptr,
                                           nullptr, false);
     ut_a(error == DB_SUCCESS);
@@ -5431,9 +5495,10 @@ dberr_t DDTableBuffer::replace(table_id_t id, uint64_t version,
     static const ulint flags =
         (BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
          BTR_KEEP_POS_FLAG | BTR_KEEP_SYS_FLAG);
+    const txn_layout_t layout = lizard::dict_index_txn_layout(m_index);
 
     error = btr_cur_pessimistic_update(
-        flags, pcur.get_btr_cur(), &cur_offsets, &m_dynamic_heap,
+        flags, layout, pcur.get_btr_cur(), &cur_offsets, &m_dynamic_heap,
         m_replace_heap, &big_rec, update, 0, nullptr, 0, 0, &mtr);
     ut_a(error == DB_SUCCESS);
     /* We don't have big rec in this table */

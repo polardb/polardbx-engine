@@ -34,6 +34,7 @@ insert into gpp_options.t1 values (7,7,7,'77777');
 --let $INDEX_COL_MIN_VAL=0
 --let $INDEX_COL_MAX_VAL=100
 --let $NON_INDEX_COL=pad
+--let $IS_PARTITION=0
 --source suite/lizard/include/gpp_has_options.inc
 
 # ----------------------------------------------------------------------------------------------------- #

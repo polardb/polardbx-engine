@@ -51,8 +51,9 @@ static inline void dict_mem_fill_index_struct(
   if (heap) {
     index->heap = heap;
     index->name = mem_heap_strdup(heap, index_name);
+    /* Lizard: Allocate 3 extra space for potentially extra system column. */
     index->fields = (dict_field_t *)mem_heap_alloc(
-        heap, 1 + n_fields * sizeof(dict_field_t));
+        heap, 1 + (n_fields + 5) * sizeof(dict_field_t));
     index->v_gfield =
         (dict_field_t *)mem_heap_alloc(heap, sizeof(dict_field_t));
   } else {
@@ -70,7 +71,7 @@ static inline void dict_mem_fill_index_struct(
   index->type = type;
 #ifndef UNIV_HOTBACKUP
   index->space = (unsigned int)space;
-  index->page = FIL_NULL;
+  index->root = PAGE_MARK_NULL;
   index->merge_threshold = DICT_INDEX_MERGE_THRESHOLD_DEFAULT;
 #endif /* !UNIV_HOTBACKUP */
   index->table_name = table_name;

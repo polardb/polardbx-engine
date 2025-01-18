@@ -131,8 +131,8 @@ while($rseg_id <= 4)
 
 connection default;
 
---let $assert_cond= VARIABLE_VALUE >= 40000 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_cnt"
---let $assert_text= Lizard_txn_read_guess_cnt must at least 40000
+--let $assert_cond= VARIABLE_VALUE >= 40000 from performance_schema.global_status where VARIABLE_NAME = "Lizard_txn_read_guess_request"
+--let $assert_text= Lizard_txn_read_guess_request must at least 40000
 --source include/assert.inc
 
 --echo ###################

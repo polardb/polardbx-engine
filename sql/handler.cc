@@ -5109,8 +5109,9 @@ int handler::ha_unload_table(const char *db_name, const char *table_name,
 
   @sa handler::get_se_private_data()
 */
-bool handler::ha_get_se_private_data(dd::Table *dd_table, bool reset) {
-  return get_se_private_data(dd_table, reset);
+bool handler::ha_get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
+                                     dd::Table *dd_table, bool reset) {
+  return get_se_private_data(ddl_policy, dd_table, reset);
 }
 
 /**

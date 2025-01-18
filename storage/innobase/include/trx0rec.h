@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef trx0rec_h
 #define trx0rec_h
 
+#include "lizard0undo0rec0types.h"
 #include "univ.i"
 
 #include "data0data.h"
@@ -49,6 +50,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0read0types.h"
 #include "lizard0undo0types.h"
 #include "que0types.h"
+
+struct urec_trx_t;
 
 /** Copies the undo record to the heap.
 @param[in]      undo_page       Undo Page
@@ -91,7 +94,7 @@ byte *trx_undo_rec_get_row_ref(
                          be preserved as long as the row reference is
                          used, as we do NOT copy the data in the
                          record! */
-    dict_index_t *index, /*!< in: clustered index */
+    dict_index_t *index, /*!< in: transactional index */
     dtuple_t **ref,      /*!< out, own: row reference */
     mem_heap_t *heap);   /*!< in: memory heap from which the memory
                          needed is allocated */
@@ -124,12 +127,14 @@ added to the update vector.
 @param[out] lob_undo LOB undo information.
 @param[out] type_cmpl Type compilation info.
 @param[in] txn information
+@param[in] txn layout
 @return remaining part of the record, NULL if an error detected, which
 means that the record is corrupted. */
 byte *trx_undo_update_rec_get_update(
     const byte *ptr, const dict_index_t *index, ulint type, trx_id_t trx_id,
     roll_ptr_t roll_ptr, ulint info_bits, mem_heap_t *heap, upd_t **upd,
-    lob::undo_vers_t *lob_undo, type_cmpl_t &type_cmpl, txn_info_t txn_info);
+    lob::undo_vers_t *lob_undo, type_cmpl_t &type_cmpl, txn_info_t txn_info,
+    const txn_layout_t &layout);
 
 /** Builds a partial row from an update undo log record, for purge.
  It contains the columns which occur as ordering in any index of the table.
@@ -150,7 +155,9 @@ byte *trx_undo_update_rec_get_update(
                    only in the assertion. */
     mem_heap_t *heap);   /*!< in: memory heap from which the memory
                         needed is allocated */
-/** Writes information to an undo log about an insert, update, or a delete
+
+/** Writes undo logs for row operations.
+ Writes information to an undo log about an insert, update, or a delete
  marking of a clustered index record. This information is used in a rollback of
  the transaction and in consistent reads that must look to the history of this
  transaction.
@@ -158,9 +165,10 @@ byte *trx_undo_update_rec_get_update(
 [[nodiscard]] dberr_t trx_undo_report_row_operation(
     ulint flags,                 /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
                                  set, does nothing */
+    const txn_layout_t &layout,  /*!< in: txn layout */
     ulint op_type,               /*!< in: TRX_UNDO_INSERT_OP or
                                  TRX_UNDO_MODIFY_OP */
-    que_thr_t *thr,              /*!< in: query thread */
+    trx_t *trx,                  /*!< in: transaction */
     dict_index_t *index,         /*!< in: clustered index */
     const dtuple_t *clust_entry, /*!< in: in the case of an insert,
                                  index entry to insert into the
@@ -174,9 +182,42 @@ byte *trx_undo_update_rec_get_update(
                                  index, otherwise NULL */
     const ulint *offsets,        /*!< in: rec_get_offsets(rec) */
     roll_ptr_t *roll_ptr);       /*!< out: rollback pointer to the
-                                inserted undo log record,
-                                0 if BTR_NO_UNDO_LOG
-                                flag was specified */
+                                  inserted undo log record,
+                                  0 if BTR_NO_UNDO_LOG
+                                  flag was specified */
+
+/** Writes undo logs for row log operations.
+ Writes information to an undo log about an insert, update, or a delete
+ marking of a clustered index record. This information is used in a rollback of
+ the transaction and in consistent reads that must look to the history of this
+ transaction.
+ @return DB_SUCCESS or error code */
+[[nodiscard]] dberr_t trx_undo_report_rlog_operation(
+    ulint flags,                 /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
+                                 set, does nothing */
+    const txn_layout_t &layout,  /*!< in: txn layout */
+    ulint op_type,               /*!< in: TRX_UNDO_INSERT_OP or
+                                 TRX_UNDO_MODIFY_OP */
+    trx_t *trx,                  /*!< in: transaction */
+    dict_index_t *index,         /*!< in: clustered index */
+    const dtuple_t *clust_entry, /*!< in: in the case of an insert,
+                                 index entry to insert into the
+                                 clustered index, otherwise NULL */
+    const upd_t *update,         /*!< in: in the case of an update,
+                                 the update vector, otherwise NULL */
+    ulint cmpl_info,             /*!< in: compiler info on secondary
+                                 index updates */
+    const rec_t *rec,            /*!< in: case of an update or delete
+                                 marking, the record in the clustered
+                                 index, otherwise NULL */
+    const ulint *offsets,        /*!< in: rec_get_offsets(rec) */
+    const urec_trx_t *urec_trx,  /*!< in: values of itl cols
+                                             if reporting row log undo,
+                                             nullptr if not. */
+    roll_ptr_t *roll_ptr);       /*!< out: rollback pointer to the
+                                  inserted undo log record,
+                                  0 if BTR_NO_UNDO_LOG
+                                  flag was specified */
 
 /** status bit used for trx_undo_prev_version_build() */
 
@@ -235,7 +276,8 @@ bool trx_undo_prev_version_build(const rec_t *index_rec, mtr_t *index_mtr,
                                  rec_t **old_vers, mem_heap_t *v_heap,
                                  const dtuple_t **vrow, ulint v_status,
                                  lob::undo_vers_t *lob_undo,
-                                 const lizard::Vision *vision, Cache_hint hint);
+                                 const lizard::Vision *vision, Cache_hint hint,
+                                 const txn_layout_t &layout);
 
 #endif /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of adding an undo log record.
@@ -297,8 +339,9 @@ const byte *trx_undo_read_v_idx(const dict_table_t *table, const byte *ptr,
 /* Types of an undo log record: these have to be smaller than 16, as the
 compilation info multiplied by 16 is ORed to this value in an undo log
 record */
-
-/** fresh insert into clustered index */
+/** BAMBOO Layout Undo Record */
+constexpr uint32_t TRX_UNDO_BAMBOO_REC = 0;
+/** fresh insert into index */
 constexpr uint32_t TRX_UNDO_INSERT_REC = 11;
 /** update of a non-delete-marked  record */
 constexpr uint32_t TRX_UNDO_UPD_EXIST_REC = 12;
@@ -317,7 +360,44 @@ constexpr uint32_t TRX_UNDO_MODIFY_BLOB = 64;
  fields: used by purge to free the external storage */
 constexpr uint32_t TRX_UNDO_UPD_EXTERN = 128;
 
-/* Lizard: This bit indicates whether this undo record will undergo a two-phase
+/**************************************************************************/
+/* BAMBOO Layout Undo Format */
+/* i) Used both in update undo and insert undo. */
+
+/* Byte 1: Extend Flags */
+/* - Bit 0-3: TRX_UNDO_BAMBOO_REC */
+/* - Bit 4: unused */
+/* - Bit 5: unused */
+/* - Bit 6: unused */
+/* - Bit 7: Set if it is an undo of row log. */
+constexpr uint32_t TRX_UNDO_BAMBOO_ROW_LOG = 128;
+
+/* Byte 2: Type Cmpl info */
+/* - Bit 0-3: Type info like TRX_UNDO_INSERT_REC, TRX_UNDO_UPD_EXIST_REC... */
+/* - Bit 4-5: TRX_UNDO_CMPL_INFO_MULT */
+/* - Bit 6: TRX_UNDO_MODIFY_BLOB (Set if unpdate undo)*/
+/* - Bit 7: TRX_UNDO_UPD_EXTERN (Always unset) */
+
+/* Byte 3: 1-byte flag introduced by TRX_UNDO_MODIFY_BLOB */
+
+/* Undo No */
+/* Table ID */
+/* Index ID (BAMBOO layout only) */
+/**************************************************************************/
+
+/**********************************************************************/
+/** Update undo one-byte flag */
+/** i) Specified by TRX_UNDO_MODIFY_BLOB bit */
+/** ii) Used only in update undo. */
+/**********************************************************************/
+/* Bit 0: unused */
+/* Bit 1: unused */
+/* Bit 2: unused */
+/* Bit 3: unused */
+/* Bit 4: unused */
+/* Bit 5: unused */
+/* Bit 6: unused */
+/* Bit 7: This bit indicates whether this undo record will undergo a two-phase
  purge when purging . */
 constexpr uint32_t TRX_UNDO_UPD_FLAG_2PP = 128;
 
@@ -329,11 +409,23 @@ constexpr uint32_t TRX_UNDO_MODIFY_OP = 2;
 For easier understanding let the 8 bits be numbered as
 7, 6, 5, 4, 3, 2, 1, 0. */
 struct type_cmpl_t {
-  type_cmpl_t() : m_flag(0) {}
+  type_cmpl_t() : m_layout(TL_NONE), m_rlog(false), m_flag(0) {}
 
   const byte *read(const byte *ptr) {
-    m_flag = mach_read_from_1(ptr);
-    return (ptr + 1);
+    uint8_t peek = mach_read_from_1(ptr++);
+    if ((peek & 0x0F) == TRX_UNDO_BAMBOO_REC) {
+      m_layout = TL_BAMBOO;
+      if (peek & TRX_UNDO_BAMBOO_ROW_LOG) {
+        m_rlog = true;
+      }
+      m_flag = mach_read_from_1(ptr++);
+    } else {
+      m_layout = TL_CLOVER;
+      m_rlog = false;
+      m_flag = peek;
+    }
+
+    return ptr;
   }
 
   ulint type_info() {
@@ -361,7 +453,13 @@ struct type_cmpl_t {
     return (m_flag & TRX_UNDO_MODIFY_BLOB);
   }
 
+  bool is_rlog() const { return m_rlog; }
+
+  txn_layout_t txn_layout() const { return m_layout; }
+
  private:
+  txn_layout_t m_layout;
+  bool m_rlog;
   uint8_t m_flag;
 };
 
@@ -377,12 +475,28 @@ byte *trx_undo_rec_get_pars(
                               externally stored fild */
     undo_no_t *undo_no,       /*!< out: undo log record number */
     table_id_t *table_id,     /*!< out: table id */
-    bool *is_2pp,       /*!< out: true if it's two phase purge */
+    space_index_t *index_id,  /*!< out: index id */
+    bool *is_2pp,             /*!< out: true if it's two phase purge */
     type_cmpl_t &type_cmpl);  /*!< out: type compilation info. */
+
+/** Calculates the free space left for extending an undo log record.
+ @return bytes left */
+ulint trx_undo_left(const page_t *page, /*!< in: undo log page */
+                    const byte *ptr);   /*!< in: pointer to page */
 
 /** Get the max free space of undo log by assuming it's a fresh new page
 and the free space doesn't count for the undo log header too. */
 size_t trx_undo_max_free_space();
+
+/** Set the next and previous pointers in the undo page for the undo record
+ that was written to ptr. Update the first free value by the number of bytes
+ written for this undo record.
+ @return offset of the inserted entry on the page if succeeded, 0 if fail */
+ulint trx_undo_page_set_next_prev_and_add(
+    page_t *undo_page, /*!< in/out: undo log page */
+    byte *ptr,         /*!< in: ptr up to where data has been
+                       written on this undo page. */
+    mtr_t *mtr);       /*!< in: mtr */
 
 /** Decide if the following undo log record is a multi-value virtual column
 @param[in]     undo_rec        undo log record

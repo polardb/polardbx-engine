@@ -34,46 +34,40 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dict.h"
 #include "lizard0dict0mem.h"
 
-namespace lizard {
-
-/** Whether to enable clustered index record inference during the scan. */
-bool index_scan_guess_clust_enabled = true;
-
-/** Whether to enable clustered index record inference during the purge. */
-bool index_purge_guess_clust_enabled = true;
-
-/** Whether to enable clustered index record inference during the locking. */
-bool index_lock_guess_clust_enabled = true;
-
-#ifdef UNIV_DEBUG
-gpp_no_t dbug_gpp_no = PAGE_NO_MAX;
-#endif /* UNIV_DEBUG */
-
-/** Build column definition for GPP_NO.
+/**
+ * Whether btree index is panda structure.
  *
- * @param[in]	table
- * @param[in]	heap
+ * @param[in]	index
  *
- * @retval	GPP_NO column
+ * @retval	true	Panda structure index
+ * @retval	false
  * */
-dict_col_t *dict_mem_table_add_v_gcol(dict_table_t *table, mem_heap_t *heap) {
-  dict_col_t *col = nullptr;
-  ut_ad(table);
-  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+bool dict_index_t::is_panda() const {
+  if (root.page_type == FIL_PAGE_INDEX_PANDA) {
+    /** Panda index only address secondary index. */
+    ut_ad(!is_clustered());
+    /** Panda didn't support temporary table. */
+    ut_ad(!table || !table->is_temporary());
+    return true;
+  }
+  return false;
+}
 
-  /** Predefined physical position, It's not necessary to reposition it from
-   * dd_column since dd didn't save GPP_NO column definition. */
-  const uint32_t phy_pos = DATA_GPP_NO;
-  const uint8_t v_added = 0;
-  const uint8_t v_dropped = 0;
+namespace lizard {
+bool inject_stress_test_for_panda = false;
 
-  col = dict_table_get_v_gcol(table);
+bool dict_index_fil_page_check(const dict_index_t *index, const byte *page) {
+  ut_a(fil_page_index_page_check(page));
 
-  dict_mem_fill_column_struct(col, DATA_GPP_NO, DATA_SYS_GPP, DATA_NOT_NULL,
-                              DATA_GPP_NO_LEN, false, phy_pos, v_added,
-                              v_dropped);
-
-  return col;
+  if (dict_index_is_spatial(index)) {
+    return (fil_page_get_type(page) == FIL_PAGE_RTREE);
+  } else if (dict_index_is_sdi(index)) {
+    return (fil_page_get_type(page) == FIL_PAGE_SDI);
+  } else if (index->is_panda()) {
+    return (fil_page_get_type(page) == FIL_PAGE_INDEX_PANDA);
+  } else {
+    return (fil_page_get_type(page) == FIL_PAGE_INDEX);
+  }
 }
 
 }  // namespace lizard

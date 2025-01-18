@@ -115,7 +115,7 @@ inline bool is_lizard_column(const char *col_name) {
   @param[in]      table       dict_table_t
   @param[in]      heap        memory slice
 */
-void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap);
+void dict_table_add_functional_columns(dict_table_t *table, mem_heap_t *heap);
 
 /**
   Add the lizard columns into data dictionary in server
@@ -125,23 +125,17 @@ void dict_table_add_lizard_columns(dict_table_t *table, mem_heap_t *heap);
 */
 void dd_add_lizard_columns(dd::Table *dd_table, dd::Index *primary);
 
-/** Add virtual GPP_NO column on index as virtual column.
- *
- * @param[in/out]	index
- * @param[in]		table
- * */
-void dict_index_add_virtual_gcol(dict_index_t *index,
-                                 const dict_table_t *table);
-
-/** Add stored GPP_NO column on secondary index following PK Columns.
+/** Add extra functional columns in secondary index following PK Columns.
  *
  * @param[in/out]	new index.
  * @param[in]		index.
- * @param[in]		dictionary table
+ * @param[in]		dictionary table.
+ * @param[in]		page type.
  */
-void dict_index_add_stored_gcol(dict_index_t *new_index,
-                                const dict_index_t *index,
-                                const dict_table_t *table);
+void dict_index_add_sec_functional_cols(dict_index_t *new_index,
+                                        const dict_index_t *index,
+                                        const dict_table_t *table,
+                                        page_type_t expected_page_type);
 
 /**
   Init txn_desc with the creator trx when created.
@@ -171,19 +165,6 @@ bool dd_index_fill_txn_desc(dict_index_t *index, const dd::Properties &p);
 bool dd_index_modification_visible(
     dict_index_t *index, const trx_t *trx,
     const lizard::Snapshot_vision *snapshot_vision);
-
-/**
- * Return prefined dict_table_t GPP_NO column.
- *
- * @return	always valid column. */
-dict_col_t *dict_table_get_v_gcol(const dict_table_t *table);
-
-/**
- * Copy column definition
- *
- * @param[in/out]	tuple
- * @Param[in]		dict_table_t */
-void dict_table_copy_g_types(dtuple_t *tuple, const dict_table_t *table);
 
 /** Collect gpp stats of each index. */
 class Collector {
@@ -237,13 +218,16 @@ ulint row_log_dict_index_get_ordered_n_fields(const dict_index_t *index);
 
 /**
   Instantiate index related metadata about GPP...
-  @param[in]      index_policy  index config info about GPP
-  @param[in]      table         InnoDB table definition
-  @param[in,out]  index         dict_index_t to fill
+  @param[in]      index_policy                 index config info about GPP
+  @param[in]      table                        InnoDB table definition
+  @param[in,out]  index                        dict_index_t to fill
+  @param[out]     expected_or_real_page_type   exptected page type of
+  dict_index_t that we want to create, or the real page type in restored
 */
 extern void dd_fill_dict_index_format(const Index_policy &index_policy,
                                       const dict_table_t *table,
-                                      dict_index_t *index);
+                                      dict_index_t *index,
+                                      page_type_t *expected_or_real_page_type);
 
 /**
   Write lizard metadata of a index to dd::Index for regular table or
@@ -323,6 +307,39 @@ extern bool dd_check_table_fba(const dict_table_t *table,
 */
 extern void dd_exchange_table_fba(dd::Properties &part_dd_options,
                                   dd::Properties &swap_dd_options);
+
+/** Judge legacy fil page type that will be stored.
+ *
+ * Legacy file page type including:
+ * 1. FIL_PAGE_RTREE
+ * 2. FIL_PAGE_SDI
+ * 3. FIL_PAGE_INDEX
+ *
+ * When creating B-Tree, importing B-Tree, or some others
+ * The Legacy file page type will be upgraded as:
+ * 1. FIL_PAGE_RTREE --> FIL_PAGE_RTREE
+ * 2. FIL_PAGE_SDI   --> FIL_PAGE_SDI
+ * 3. FIL_PAGE_INDEX --> FIL_PAGE_INDEX_PANDA
+ *
+ * @param[in]	dict index
+ *
+ * @retval	storage page type. */
+extern page_type_t dict_index_legacy_ptype(
+    const dict_index_t *index);
+
+extern page_type_t dict_index_legacy_ptype(ulint index_type);
+
+/** Retrieve root page type from dd index se private data.
+ *
+ * @param[in]	dict index
+ * @param[in]	se private data
+ *
+ * @retval	root page type. */
+extern page_type_t dd_index_get_page_type(
+    const dict_index_t *index, const dd::Properties &se_private_data);
+
+extern void dict_index_panda_alloc_roll_ptr_for_ddl(const dict_index_t *index,
+                                                    DField_wrapper *df_wrapper);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**

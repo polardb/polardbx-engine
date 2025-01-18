@@ -301,6 +301,7 @@ our @DEFAULT_SUITES = qw(
   changeset
   polarx_rpc
   proxy
+  panda
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

@@ -77,8 +77,10 @@ void dict_build_index_def(const dict_table_t *table, /*!< in: table */
 /** Creates an index tree for the index if it is not a member of a cluster.
  @param[in,out] index   InnoDB index object
  @param[in,out] trx     transaction
+ @param[in]      expected_page_type  expected page type of the index tree.
  @return        DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx);
+dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx,
+                                      page_type_t expected_page_type);
 
 /** Drop an index tree belonging to a temporary table.
 @param[in]      index           index in a temporary table

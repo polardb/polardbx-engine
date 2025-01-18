@@ -148,8 +148,9 @@ dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
                                   __LINE__, &mtr);
     }
 
-    err = btr_cur_optimistic_insert(flag, &cursor, &offsets, &m_dml_heap,
-                                    dtuple, &rec, &big_rec, nullptr, &mtr);
+    err =
+        btr_cur_optimistic_insert(flag, TL_NONE, &cursor, &offsets, &m_dml_heap,
+                                  dtuple, &rec, &big_rec, nullptr, &mtr);
 
     if (err == DB_FAIL) {
       ut_ad(big_rec == nullptr);
@@ -168,8 +169,9 @@ dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
                                   BTR_MODIFY_TREE, &cursor, 0, __FILE__,
                                   __LINE__, &mtr);
 
-      err = btr_cur_pessimistic_insert(flag, &cursor, &offsets, &m_dml_heap,
-                                       dtuple, &rec, &big_rec, nullptr, &mtr);
+      err = btr_cur_pessimistic_insert(flag, TL_NONE, &cursor, &offsets,
+                                       &m_dml_heap, dtuple, &rec, &big_rec,
+                                       nullptr, &mtr);
     }
 
     IF_ENABLED("ddl_ins_spatial_fail", err = DB_FAIL;)

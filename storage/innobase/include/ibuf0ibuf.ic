@@ -121,8 +121,11 @@ static inline bool ibuf_should_try(
 {
   return (innodb_change_buffering != IBUF_USE_NONE && ibuf->max_size != 0 &&
           index->space != dict_sys_t::s_dict_space_id &&
-          !index->is_clustered() && !dict_index_is_spatial(index) &&
-          !dict_index_has_desc(index) &&
+          !index->is_clustered() &&
+          /* Panda indexes report individual undo logs, so any ops can't be
+             buffered in ibuf. */
+          !lizard::dict_index_is_panda(index) &&
+          !dict_index_is_spatial(index) && !dict_index_has_desc(index) &&
           index->table->quiesce == QUIESCE_NONE &&
           (ignore_sec_unique || !dict_index_is_unique(index)) &&
           srv_force_recovery < SRV_FORCE_NO_IBUF_MERGE);

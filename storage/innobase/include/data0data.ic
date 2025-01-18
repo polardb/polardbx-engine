@@ -342,6 +342,14 @@ static inline ulint dtuple_get_n_fields_cmp(
   return (tuple->n_fields_cmp);
 }
 
+static inline ulint dtuple_get_n_panda_suffix(
+    const dtuple_t *tuple) /*!< in: tuple */
+{
+  ut_ad(tuple);
+
+  return (tuple->n_panda_suffix);
+}
+
 static inline void dtuple_set_n_fields_cmp(dtuple_t *tuple,
                                            ulint n_fields_cmp) {
   ut_ad(tuple);
@@ -407,6 +415,7 @@ static inline dtuple_t *dtuple_create_from_mem(void *buf, ulint buf_size,
   tuple->n_v_fields = n_v_fields;
   tuple->n_fields_cmp = n_fields;
   tuple->fields = (dfield_t *)&tuple[1];
+  tuple->n_panda_suffix = 0;
   if (n_v_fields > 0) {
     tuple->v_fields = &tuple->fields[n_fields];
   } else {

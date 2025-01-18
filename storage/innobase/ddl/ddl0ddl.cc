@@ -228,11 +228,14 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   dict_build_index_def(table, index, trx);
 
+  page_type_t expected_page_type;
   lizard::dd_fill_dict_index_format(
-      lizard::ha_ddl_create_index_policy(ddl_policy, table, index), table, index);
+      lizard::ha_ddl_create_index_policy(ddl_policy, table, index), table,
+      index, &expected_page_type);
 
-  auto err = dict_index_add_to_cache_w_vcol(table, index, add_v, index->page,
-                                            trx_is_strict(trx));
+  ut_ad(index->page_no() == FIL_NULL);
+  auto err = dict_index_add_to_cache_w_vcol(
+      table, index, add_v, index->root, expected_page_type, trx_is_strict(trx));
 
   if (err != DB_SUCCESS) {
     trx->error_state = err;
@@ -244,7 +247,7 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
                                        index_def->m_rebuild);
   ut_ad(index != nullptr);
 
-  err = dict_create_index_tree_in_mem(index, trx);
+  err = dict_create_index_tree_in_mem(index, trx, expected_page_type);
 
   dict_sys_mutex_enter();
 

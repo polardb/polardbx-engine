@@ -51,6 +51,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
+#include "lizard0row0uins.h"
+#include "lizard0row0undo.h"
+#include "lizard0trx0rec.h"
+
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
 is enough space in the redo log before for that operation. This is
@@ -154,6 +158,7 @@ retry:
 func_exit:
   node->pcur.commit_specify_mtr(&mtr);
 
+  DEBUG_SYNC_C("ib_clust_after_undo_ins");
   return (err);
 }
 
@@ -311,10 +316,11 @@ retry:
 @param[in,out]  mdl     MDL ticket or nullptr if unnecessary */
 static void row_undo_ins_parse_undo_rec(undo_node_t *node, THD *thd,
                                         MDL_ticket **mdl) {
-  dict_index_t *clust_index;
+  dict_index_t *index;
   byte *ptr;
   undo_no_t undo_no;
   table_id_t table_id;
+  space_index_t index_id;
   ulint type;
   ulint dummy;
   bool dummy_extern;
@@ -323,14 +329,18 @@ static void row_undo_ins_parse_undo_rec(undo_node_t *node, THD *thd,
 
   ut_ad(node);
 
-  ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &dummy, &dummy_extern,
-                              &undo_no, &table_id, &is_2pp, type_cmpl);
+  ptr =
+      trx_undo_rec_get_pars(node->undo_rec, &type, &dummy, &dummy_extern,
+                            &undo_no, &table_id, &index_id, &is_2pp, type_cmpl);
   ut_ad(type == TRX_UNDO_INSERT_REC);
   node->rec_type = type;
 
   node->update = nullptr;
 
   node->table = dd_table_open_on_id(table_id, thd, mdl, false, true);
+  ut_ad(node->layout == TL_NONE);
+  node->layout = type_cmpl.txn_layout();
+  node->is_rlog = type_cmpl.is_rlog();
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (node->table == nullptr) {
@@ -342,26 +352,74 @@ static void row_undo_ins_parse_undo_rec(undo_node_t *node, THD *thd,
   } else {
     ut_ad(!node->table->skip_alter_undo);
 
-    clust_index = node->table->first_index();
+    index = lizard::trx_undo_rec_choose_index(node->table, type_cmpl, index_id);
+    node->index_id = index_id;
 
-    if (clust_index != nullptr) {
-      ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &node->ref, node->heap);
+    if (index != nullptr) {
+      if (node->is_rlog) {
+        ptr = lizard::trx_undo_rec_get_row_ref_derived_from_row_log(
+            ptr, index, &node->ref, node->heap);
+      } else {
+        ptr = trx_undo_rec_get_row_ref(ptr, index, &node->ref, node->heap);
 
-      if (!row_undo_search_clust_to_pcur(node)) {
-        goto close_table;
+        switch (node->layout) {
+          case TL_CLOVER:
+            if (!row_undo_search_clust_to_pcur(node)) {
+              goto close_table;
+            }
+            if (node->table->n_v_cols) {
+              trx_undo_read_v_cols(node->table, ptr, node->row, false, false,
+                                   nullptr, node->heap);
+            }
+            break;
+
+          case TL_BAMBOO:
+            if (!lizard::row_undo_search_panda_to_pcur(node, index)) {
+              goto close_table;
+            }
+            break;
+
+          default:
+            ut_error;
+        }
       }
-      if (node->table->n_v_cols) {
-        trx_undo_read_v_cols(node->table, ptr, node->row, false, false, nullptr,
-                             node->heap);
-      }
-
     } else {
-      ib::warn(ER_IB_MSG_1037) << "Table " << node->table->name
-                               << " has no indexes,"
-                                  " ignoring the table";
+      if (node->is_rlog) {
+        ib::warn(ER_IB_MSG_1037)
+            << "Table " << node->table->name
+            << " has no index_id = " << index_id << ", ignoring the index";
+      } else {
+        ib::warn(ER_IB_MSG_1037) << "Table " << node->table->name
+                                 << " has no indexes,"
+                                    " ignoring the table";
+      }
       goto close_table;
     }
   }
+}
+
+/* Skip secondary indexes while undo-inserting the clustered undo logs. */
+static inline void row_undo_ins_skip_index(dict_index_t *&index) {
+  while (index) {
+    /* Skip corrupted index */
+    if (index->is_corrupted()) {
+      goto next_index;
+    }
+
+    /* Skip panda index */
+    if (index->is_panda()) {
+      goto next_index;
+    }
+    break;
+  next_index:
+    index = index->next();
+  }
+}
+
+/* Get the next suitable index while undo-inserting the clustered undo logs. */
+static inline void row_undo_ins_next_suitable_index(dict_index_t *&index) {
+  index = index->next();
+  row_undo_ins_skip_index(index);
 }
 
 /** Removes a secondary index entry from the index, which is built on
@@ -408,7 +466,7 @@ static dberr_t row_undo_ins_remove_multi_sec(dict_index_t *index,
     dtuple_t *entry;
 
     if (index->type & DICT_FTS) {
-      dict_table_next_uncorrupted_index(index);
+      row_undo_ins_next_suitable_index(index);
       continue;
     }
 
@@ -418,7 +476,7 @@ static dberr_t row_undo_ins_remove_multi_sec(dict_index_t *index,
         goto func_exit;
       }
       mem_heap_empty(heap);
-      dict_table_next_uncorrupted_index(index);
+      row_undo_ins_next_suitable_index(index);
       continue;
     }
 
@@ -448,13 +506,42 @@ static dberr_t row_undo_ins_remove_multi_sec(dict_index_t *index,
     }
 
     mem_heap_empty(heap);
-    dict_table_next_uncorrupted_index(index);
+    row_undo_ins_next_suitable_index(index);
   }
 
 func_exit:
   node->index = index;
   mem_heap_free(heap);
   return (err);
+}
+
+static dberr_t row_undo_ins_remove(undo_node_t *node, que_thr_t *thr, THD *thd,
+                                   MDL_ticket *mdl) {
+  dberr_t err;
+  /* Iterate over all the indexes and undo the insert.*/
+
+  node->index = node->table->first_index();
+  ut_ad(node->index->is_clustered());
+  ut_ad(node->index_id == 0);
+  /* Skip the clustered index (the first index) */
+  node->index = node->index->next();
+
+  row_undo_ins_skip_index(node->index);
+
+  err = row_undo_ins_remove_sec_rec(node, thr);
+
+  if (err == DB_SUCCESS) {
+    log_free_check();
+
+    // FIXME: We need to update the dict_index_t::space and
+    // page number fields too.
+    err = row_undo_ins_remove_clust_rec(node);
+  }
+
+  dd_table_close(node->table, thd, &mdl, false);
+
+  node->table = nullptr;
+  return err;
 }
 
 /** Undoes a fresh insert of a row to a table. A fresh insert means that
@@ -482,28 +569,21 @@ dberr_t row_undo_ins(undo_node_t *node, /*!< in: row undo node */
     return (DB_SUCCESS);
   }
 
-  /* Iterate over all the indexes and undo the insert.*/
-
-  node->index = node->table->first_index();
-  ut_ad(node->index->is_clustered());
-  /* Skip the clustered index (the first index) */
-  node->index = node->index->next();
-
-  dict_table_skip_corrupt_index(node->index);
-
-  err = row_undo_ins_remove_sec_rec(node, thr);
-
-  if (err == DB_SUCCESS) {
-    log_free_check();
-
-    // FIXME: We need to update the dict_index_t::space and
-    // page number fields too.
-    err = row_undo_ins_remove_clust_rec(node);
+  switch (node->layout) {
+    case TL_CLOVER:
+      err = row_undo_ins_remove(node, thr, thd, mdl);
+      break;
+    case TL_BAMBOO:
+      if (node->is_rlog) {
+        err = lizard::row_undo_ins_remove_for_rlog(node, thd, mdl);
+      } else {
+        err = lizard::row_undo_ins_remove_for_panda(node, thd, mdl);
+      }
+      break;
+    default:
+      err = DB_ERROR;
+      ut_error;
   }
-
-  dd_table_close(node->table, thd, &mdl, false);
-
-  node->table = nullptr;
 
   return (err);
 }

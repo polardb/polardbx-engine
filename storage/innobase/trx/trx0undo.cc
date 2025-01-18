@@ -1429,7 +1429,6 @@ static trx_undo_t *trx_undo_mem_init(
     UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
 
     MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-    LIZARD_MONITOR_INC_TXN_CACHED(1);
 
     lizard_info(ER_LIZARD) << "Found a recycled txn undo log segment";
     return undo;
@@ -1807,7 +1806,7 @@ void trx_undo_mem_free(trx_undo_t *undo) /*!< in: the undo object to be freed */
 
     lizard::txn_undo_hash_insert(*undo);
 
-    lizard::lizard_stats.txn_undo_log_create.inc();
+    lizard::generic_stats.txn_undo_log_create.inc();
   }
 
   if (*undo == nullptr) {
@@ -1869,8 +1868,7 @@ trx_undo_t *trx_undo_reuse_cached(trx_t *trx, trx_rseg_t *rseg, ulint type,
 
     MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
 
-    LIZARD_MONITOR_DEC_TXN_CACHED(1);
-    lizard::lizard_stats.txn_undo_log_reuse.inc();
+    lizard::generic_stats.txn_undo_log_reuse.inc();
   }
 
   ut_ad(undo->size == 1);
@@ -2488,7 +2486,6 @@ bool trx_undo_truncate_tablespace(undo::Tablespace *marked_space) {
       UT_LIST_REMOVE(rseg->txn_undo_cached, undo);
       MONITOR_DEC(MONITOR_NUM_UNDO_SLOT_CACHED);
 
-      LIZARD_MONITOR_DEC_TXN_CACHED(1);
       trx_undo_mem_free(undo);
     }
 

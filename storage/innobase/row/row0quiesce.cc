@@ -114,7 +114,20 @@ this program; if not, write to the Free Software Foundation, Inc.,
     const dict_index_t *index, FILE *file, THD *thd) {
   dberr_t err;
   byte *ptr;
-  byte row[sizeof(space_index_t) + sizeof(uint32_t) * 8];
+  uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V8;
+  DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
+                  cfg_version = IB_EXPORT_CFG_VERSION_V3;);
+  DBUG_EXECUTE_IF("ib_export_use_cfg_version_99",
+                  cfg_version = IB_EXPORT_CFG_VERSION_V99;);
+
+  byte row[sizeof(space_index_t) + sizeof(uint32_t) * 8 +
+           IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH];
+  size_t row_size;
+  row_size = sizeof(space_index_t) + sizeof(uint32_t) * 8;
+  if (cfg_version >= IB_EXPORT_CFG_VERSION_V8) {
+    /** Row size when version >= IB_EXPORT_CFG_VERSION_V8 */
+    row_size += IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH;
+  }
 
   ptr = row;
 
@@ -125,11 +138,18 @@ this program; if not, write to the Free Software Foundation, Inc.,
   mach_write_to_4(ptr, index->space);
   ptr += sizeof(uint32_t);
 
-  mach_write_to_4(ptr, index->page);
+  mach_write_to_4(ptr, index->page_no());
   ptr += sizeof(uint32_t);
 
   mach_write_to_4(ptr, index->type);
   ptr += sizeof(uint32_t);
+
+  if (cfg_version >= IB_EXPORT_CFG_VERSION_V8) {
+    /** The v8 .cfg has metadata of index page type. */
+    mach_write_to_2(ptr, index->page_type());
+    ptr += sizeof(uint16_t);
+    static_assert(sizeof(uint16_t) == IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH);
+  }
 
   mach_write_to_4(ptr, index->trx_id_offset);
   ptr += sizeof(uint32_t);
@@ -147,7 +167,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
   DBUG_EXECUTE_IF("ib_export_io_write_failure_12", close(fileno(file)););
 
-  if (fwrite(row, 1, sizeof(row), file) != sizeof(row)) {
+  if (fwrite(row, 1, row_size, file) != row_size) {
     ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IO_WRITE_ERROR, errno,
                 strerror(errno), "while writing index meta-data.");
 
@@ -475,7 +495,7 @@ of dict_col_t default value part if exists.
     }
 
     /* Write column's INSTANT metadata */
-    uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V7;
+    uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V8;
     DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
                     cfg_version = IB_EXPORT_CFG_VERSION_V3;);
     DBUG_EXECUTE_IF("ib_export_use_cfg_version_99",
@@ -539,7 +559,7 @@ of dict_col_t default value part if exists.
   byte value[sizeof(uint32_t)];
 
   /* Write the current meta-data version number. */
-  uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V7;
+  uint32_t cfg_version = IB_EXPORT_CFG_VERSION_V8;
   DBUG_EXECUTE_IF("ib_export_use_cfg_version_3",
                   cfg_version = IB_EXPORT_CFG_VERSION_V3;);
   DBUG_EXECUTE_IF("ib_export_use_cfg_version_99",

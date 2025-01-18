@@ -36,6 +36,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row.h"
 #include "lizard0txn0rec.h"
 #include "lizard0undo.h"
+#include "lizard0btr0pcur.h"
+
 #include "page0page.h"
 #include "row0row.h"
 #include "srv0conc.h"
@@ -461,7 +463,7 @@ void gp_wait_suspend_thread(trx_t *trx) {
 
   @param[in]      trx     global query trx context
   @param[in]      rec     user record which should be read
-  @param[in]      index   cluster index
+  @param[in]      index   index with transactional info
   @param[in]      offset  rec_get_offsets(rec, index)
   @param[in]      pcur    used in cleanout
   @param[in]      vision  consistent read view
@@ -469,40 +471,33 @@ void gp_wait_suspend_thread(trx_t *trx) {
   @retval         true    visible = true
   @retval         false
 */
-bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
-                                 dict_index_t *index, const ulint *offsets,
-                                 btr_pcur_t *pcur, lizard::Vision *vision,
-                                 dberr_t *error) {
+bool gp_clust_or_panda_rec_cons_read_sees(
+    trx_t *trx, const rec_t *rec, dict_index_t *index, const ulint *offsets,
+    btr_pcur_t *pcur, lizard::Vision *vision, dberr_t *error) {
 #ifdef UNIV_DEBUG
   bool looped = false;
 #endif
-  ut_ad(index->is_clustered());
+  ut_ad(!index->table->is_temporary());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(page_rec_is_user_rec(rec));
   ut_ad(rec_offs_validate(rec, index, offsets));
-
-  /* Temp-tables are not shared across connections and multiple
-  transactions from different connections cannot simultaneously
-  operate on same temp-table and so read of temp-table is
-  always consistent read. */
-  if (srv_read_only_mode || index->table->is_temporary()) {
-    ut_ad(vision == 0 || !vision->is_active() || index->table->is_temporary());
-    return (true);
-  }
-
   ut_ad(vision->is_asof_gcn());
+  ut_ad(lizard::pcur_position_validate(pcur, rec, index));
 
-  txn_rec_t txn_rec;
-  row_get_txn_rec(rec, index, offsets, &txn_rec);
+  const txn_layout_t layout = dict_index_txn_layout(index);
+  ut_ad(txn_layout_is_arranged(layout));
 
-  cleanout_ctx_t cctx(pcur);
+  txn_rec_t txn_rec(rec, index, offsets, layout);
+  Cleanout_ctx_t cctx(pcur);
+
   /** Try to see optimistically. */
-  if (txn_rec_try_see(&txn_rec, rec, index, offsets, vision, cctx)) {
+  if (txn_rec_try_see(&txn_rec, layout, vision, cctx(MTR_LOG_NONE))) {
     return true;
   }
 
 retry:
-  txn_rec_execute_when_query(&txn_rec, rec, index, offsets,
-                             vision->visible_by(), cctx);
+  txn_rec_execute_when_query(&txn_rec, layout, vision->visible_by(),
+                             cctx(MTR_LOG_NO_REDO));
 
   /** 1. Already committed; */
   if (txn_rec.is_committed()) {

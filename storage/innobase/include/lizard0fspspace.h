@@ -25,7 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 /** @file include/lizard0fspspace.h
- Special Zeus tablespace implementation.
+ Special lizard tablespace implementation.
 
  Created 2020-03-20 by Jianwei.zhao
  *******************************************************/

@@ -138,8 +138,9 @@
    2 /* type, default_collation_for_utf8mb4_number */ + 1U +                  \
    1 /* sql_require_primary_key */ + 1U +                                     \
    1 /* type, default_table_encryption */ + 1U +                              \
-   1 /* opt_flashback_area */  + 1U +                              \
-   1 /* type, opt_index_format_gpp_enabled */ )
+   1 /* opt_flashback_area */  + 1U +                                         \
+   1 /* type, opt_index_format_gpp_enabled */                                 \
+   + 1U + 1 /* type, opt_index_format_panda_enabled */)
 
 /**
    Uninitialized timestamp value (for either last committed or sequence number).

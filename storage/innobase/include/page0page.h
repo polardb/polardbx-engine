@@ -47,6 +47,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0types.h"
 #include "rem0rec.h"
 
+#include "lizard0fil0types.h"
+
 /*                      PAGE DIRECTORY
                         ==============
 */

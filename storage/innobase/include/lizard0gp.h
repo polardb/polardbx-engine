@@ -170,7 +170,7 @@ void gp_wait_suspend_thread(trx_t *trx);
 
   @param[in]      trx     global query trx context
   @param[in]      rec     user record which should be read
-  @param[in]      index   cluster index
+  @param[in]      index   index with transactional info
   @param[in]      offset  rec_get_offsets(rec, index)
   @param[in]      pcur
   @param[in]      vision  consistent read view
@@ -178,10 +178,9 @@ void gp_wait_suspend_thread(trx_t *trx);
   @retval         true    visible = true
   @retval         false
 */
-bool gp_clust_rec_cons_read_sees(trx_t *trx, const rec_t *rec,
-                                 dict_index_t *index, const ulint *offsets,
-                                 btr_pcur_t *pcur, lizard::Vision *vision,
-                                 dberr_t *error);
+bool gp_clust_or_panda_rec_cons_read_sees(
+    trx_t *trx, const rec_t *rec, dict_index_t *index, const ulint *offsets,
+    btr_pcur_t *pcur, lizard::Vision *vision, dberr_t *error);
 
 /**
   Cancal all blocked global query when commit

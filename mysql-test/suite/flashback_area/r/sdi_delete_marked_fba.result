@@ -477,7 +477,7 @@ SET GLOBAL DEBUG= '+d, skip_purge_check_shutdown';
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "IFT=0;flags=0;",
-                "se_private_data": "gcn=F;id=A;root=B;space_id=C,table_id=D,trx_id=E",
+                "se_private_data": "gcn=F;id=A;page_type=G;root=B;space_id=C,table_id=D,trx_id=E",
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,

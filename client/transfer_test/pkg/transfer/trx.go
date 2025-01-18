@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package transfer
 
 import (
@@ -52,6 +51,7 @@ type Trx interface {
 	Rollback() error
 
 	QueryRow(query string, args ...interface{}) *sql.Row
+	Query(query string, args ...interface{}) (*sql.Rows, error)
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
@@ -71,6 +71,10 @@ func (trx *baseTrx) Exec(query string, args ...interface{}) (sql.Result, error) 
 
 func (trx *baseTrx) QueryRow(query string, args ...interface{}) *sql.Row {
 	return trx.conn.QueryRowContext(trx.ctx, query, args...)
+}
+
+func (trx *baseTrx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return trx.conn.QueryContext(trx.ctx, query, args...)
 }
 
 func (trx *baseTrx) setSnapshotTs(ts int64) error {

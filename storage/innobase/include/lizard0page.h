@@ -43,7 +43,7 @@ struct txn_desc_t;
 namespace lizard {
 
 /**
-  Write the scn and uba of a record on a B-tree leaf node page.
+  Write Clover layout fields of a record on a B-tree leaf node page.
   @param[in/out]  page_zip    compressed page
   @param[in]      index       dict_index_t
   @param[in/out]  rec         record
@@ -52,11 +52,10 @@ namespace lizard {
   @param[in]      scn         transaction scn
   @param[in]      undo_ptr    undo_ptr
 */
-void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
-                                     const dict_index_t *index, byte *rec,
-                                     const ulint *offsets, ulint scn_col,
-                                     const scn_t scn, const undo_ptr_t undo_ptr,
-                                     const gcn_t gcn);
+void page_zip_write_clover(page_zip_des_t *page_zip, const dict_index_t *index,
+                           byte *rec, const ulint *offsets, ulint scn_col,
+                           const scn_t scn, const undo_ptr_t undo_ptr,
+                           const gcn_t gcn);
 
 #if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
@@ -66,18 +65,18 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
 
   @retval         true        Success
 */
-bool lizard_page_attributes(page_t *page, const dict_index_t *index);
+bool page_txn_attributes(page_t *page, const dict_index_t *index);
 #endif /* UNIV_DEBUG || LIZARD_DEBUG define */
 
 }  // namespace lizard
 
 #if defined UNIV_DEBUG || defined lizard_DEBUG
-#define assert_lizard_page_attributes(page, index)     \
+#define assert_page_txn_attributes(page, index)     \
   do {                                                 \
-    ut_a(lizard::lizard_page_attributes(page, index)); \
+    ut_a(lizard::page_txn_attributes(page, index)); \
   } while (0)
 #else
-#define assert_lizard_page_attributes(page, index)
+#define assert_page_txn_attributes(page, index)
 #endif /* UNIV_DEBUG || LIZARD_DEBUG define */
 
 #endif

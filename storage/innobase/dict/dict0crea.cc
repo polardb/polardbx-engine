@@ -58,6 +58,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "usr0sess.h"
 #include "ut0vec.h"
 
+#include "lizard0btr0btr.h"
 #include "lizard0dict.h"
 
 dberr_t dict_build_table_def(dict_table_t *table,
@@ -387,10 +388,12 @@ void dict_build_index_def(const dict_table_t *table, /*!< in: table */
 /** Creates an index tree for the index if it is not a member of a cluster.
 @param[in,out]  index   InnoDB index object
 @param[in,out]  trx     transaction
+@param[in]      expected_page_type  expected page type of the index tree.
 @return DB_SUCCESS or DB_OUT_OF_FILE_SPACE */
-dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
+dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx,
+                                      page_type_t expected_page_type) {
   mtr_t mtr;
-  ulint page_no = FIL_NULL;
+  page_mark_t root;
 
   ut_ad(!dict_sys_mutex_own());
 
@@ -413,7 +416,13 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
       index->table->ibd_file_missing || dict_table_is_discarded(index->table);
 
   if (missing) {
-    index->page = FIL_NULL;
+    page_type_t page_type = lizard::dict_index_legacy_ptype(index);
+    page_type =
+        lizard::btr_page_upgrade_root(index, page_type, expected_page_type);
+
+    /** Lizard: We can only decide the root page type. */
+    index->root = {FIL_NULL, page_type};
+
     index->trx_id = trx->id;
 
     return (DB_SUCCESS);
@@ -426,10 +435,11 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
   }
 
   if (err == DB_SUCCESS) {
-    page_no = btr_create(index->type, index->space, index->id, index, &mtr);
+    root = btr_create(index->type, index->space, index->id, index,
+                      expected_page_type, &mtr);
   }
 
-  index->page = page_no;
+  index->root = root;
   index->trx_id = trx->id;
 
   mtr_commit(&mtr);
@@ -461,7 +471,7 @@ void dict_drop_temporary_table_index(const dict_index_t *index,
                                      page_no_t root_page_no) {
   ut_ad(dict_sys_mutex_own() || index->table->is_intrinsic());
   ut_ad(index->table->is_temporary());
-  ut_ad(index->page == FIL_NULL);
+  ut_ad(index->page_no() == FIL_NULL);
 
   space_id_t space = index->space;
   bool found;
@@ -736,7 +746,7 @@ dict_index_t *dict_sdi_create_idx_in_mem(space_id_t space, bool space_discarded,
   /* Disable AHI on SDI tables */
   temp_index->disable_ahi = true;
 
-  page_no_t index_root_page_num;
+  page_mark_t sdi_root;
 
   /* When we do DISCARD TABLESPACE, there will be no fil_space_t
   for the tablespace. In this case, we should not use fil_space_*()
@@ -745,19 +755,19 @@ dict_index_t *dict_sdi_create_idx_in_mem(space_id_t space, bool space_discarded,
     mtr_t mtr;
     mtr.start();
 
-    index_root_page_num =
+    sdi_root.page_no =
         fsp_sdi_get_root_page_num(space, page_size_t(flags), &mtr);
+    sdi_root.page_type = lizard::dict_index_legacy_ptype(temp_index);
 
     mtr_commit(&mtr);
-
   } else {
-    index_root_page_num = FIL_NULL;
+    ut_ad(sdi_root.page_no == FIL_NULL);
   }
 
   temp_index->id = dict_sdi_get_index_id();
 
-  dberr_t error =
-      dict_index_add_to_cache(table, temp_index, index_root_page_num, false);
+  dberr_t error = dict_index_add_to_cache(table, temp_index, sdi_root,
+                                          FIL_PAGE_TYPE_UNUSED, false);
   ut_a(error == DB_SUCCESS);
 
   dict_sys_mutex_enter();

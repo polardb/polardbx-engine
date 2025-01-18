@@ -504,6 +504,8 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
   dict_index_t *index = m_table->first_index();
   dtuple_t *entry;
   uint32_t flags = BTR_NO_LOCKING_FLAG;
+  txn_layout_t layout = lizard::dict_index_txn_layout(index);
+  ut_ad(layout == TL_CLOVER);
   mem_heap_t *offsets_heap = mem_heap_create(100, UT_LOCATION_HERE);
   static std::atomic<uint64_t> count(0);
 
@@ -524,7 +526,7 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
 
   if (insert) {
 #endif
-    error = row_ins_clust_index_entry_low(flags, BTR_MODIFY_LEAF, index,
+    error = row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_LEAF, index,
                                           index->n_uniq, entry, nullptr, m_thr,
                                           false);
 #ifdef UNIV_DEBUG
@@ -534,7 +536,7 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
 #endif
 
   if (error == DB_FAIL) {
-    error = row_ins_clust_index_entry_low(flags, BTR_MODIFY_TREE, index,
+    error = row_ins_clust_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
                                           index->n_uniq, entry, nullptr, m_thr,
                                           false);
     ut_ad(error == DB_SUCCESS);
@@ -547,17 +549,18 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
   }
 
   index = index->next();
+  layout = lizard::dict_index_txn_layout(index);
 
   entry = row_build_index_entry(m_tuple, nullptr, index, m_heap);
 
-  error =
-      row_ins_sec_index_entry_low(flags, BTR_MODIFY_LEAF, index, offsets_heap,
-                                  m_heap, entry, m_trx->id, m_thr, false);
+  error = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_LEAF, index,
+                                      offsets_heap, m_heap, entry, m_trx->id,
+                                      m_thr, false);
 
   if (error == DB_FAIL) {
-    error =
-        row_ins_sec_index_entry_low(flags, BTR_MODIFY_TREE, index, offsets_heap,
-                                    m_heap, entry, m_trx->id, m_thr, false);
+    error = row_ins_sec_index_entry_low(flags, layout, BTR_MODIFY_TREE, index,
+                                        offsets_heap, m_heap, entry, m_trx->id,
+                                        m_thr, false);
   }
 
   mem_heap_free(offsets_heap);
@@ -789,6 +792,9 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   ulint flags = BTR_NO_LOCKING_FLAG;
   static uint64_t count = 0;
 
+  /* Notice DDL_Log_Table is neither intrinsic nor temporary. */
+  txn_layout_t layout;
+
   if (count++ % 64 == 0) {
     log_free_check();
   }
@@ -818,9 +824,10 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   rec = btr_cur_get_rec(btr_cur);
 
   if (!rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
-    err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur), rec,
-                                         clust_index, offsets, m_thr, m_tuple,
-                                         &mtr);
+    layout = lizard::dict_index_txn_layout(clust_index);
+    err = btr_cur_del_mark_set_clust_rec(
+        flags, layout, btr_cur_get_block(btr_cur), rec, clust_index, offsets,
+        m_thr, m_tuple, &mtr);
   }
 
   pcur.close();
@@ -833,6 +840,7 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   mtr_start(&mtr);
 
   index = clust_index->next();
+  layout = lizard::dict_index_txn_layout(index);
   entry = row_build_index_entry(row, nullptr, index, m_heap);
   search_result = row_search_index_entry(
       index, entry, BTR_MODIFY_LEAF | BTR_DELETE_MARK, &pcur, &mtr);
@@ -848,7 +856,8 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   rec = btr_cur_get_rec(btr_cur);
 
   if (!rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
-    err = btr_cur_del_mark_set_sec_rec(flags, btr_cur, true, m_thr, &mtr);
+    err =
+        btr_cur_del_mark_set_sec_rec(flags, layout, btr_cur, true, m_thr, &mtr);
   }
 
   pcur.close();
@@ -906,7 +915,7 @@ dberr_t Log_DDL::write_free_tree_log(trx_t *trx, const dict_index_t *index,
   }
 
   if (index->type & DICT_FTS) {
-    ut_ad(index->page == FIL_NULL);
+    ut_ad(index->page_no() == FIL_NULL);
     return (DB_SUCCESS);
   }
 
@@ -966,7 +975,7 @@ dberr_t Log_DDL::write_free_tree_log(trx_t *trx, const dict_index_t *index,
 
 dberr_t Log_DDL::insert_free_tree_log(trx_t *trx, const dict_index_t *index,
                                       uint64_t id, ulint thread_id) {
-  ut_ad(index->page != FIL_NULL);
+  ut_ad(index->page_no() != FIL_NULL);
 
   dberr_t error;
   bool has_dd_trx = (trx != nullptr);
@@ -985,7 +994,7 @@ dberr_t Log_DDL::insert_free_tree_log(trx_t *trx, const dict_index_t *index,
   record.set_thread_id(thread_id);
   record.set_type(Log_Type::FREE_TREE_LOG);
   record.set_space_id(index->space);
-  record.set_page_no(index->page);
+  record.set_page_no(index->page_no());
   record.set_index_id(index->id);
 
   {

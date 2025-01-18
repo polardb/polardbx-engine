@@ -36,7 +36,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 static inline ulint trx_undo_rec_get_type(
     const trx_undo_rec_t *undo_rec) /*!< in: undo log record */
 {
-  return (mach_read_from_1(undo_rec + 2) & (TRX_UNDO_CMPL_INFO_MULT - 1));
+  type_cmpl_t type_cmpl;
+  type_cmpl.read(undo_rec + 2);
+  return type_cmpl.type_info();
 }
 
 /** Reads from an undo log record the record compiler info.
@@ -44,7 +46,9 @@ static inline ulint trx_undo_rec_get_type(
 static inline ulint trx_undo_rec_get_cmpl_info(
     const trx_undo_rec_t *undo_rec) /*!< in: undo log record */
 {
-  return (mach_read_from_1(undo_rec + 2) / TRX_UNDO_CMPL_INFO_MULT);
+  type_cmpl_t type_cmpl;
+  type_cmpl.read(undo_rec + 2);
+  return type_cmpl.cmpl_info();
 }
 
 /** Returns true if an undo log record contains an extern storage field.
@@ -52,11 +56,9 @@ static inline ulint trx_undo_rec_get_cmpl_info(
 static inline bool trx_undo_rec_get_extern_storage(
     const trx_undo_rec_t *undo_rec) /*!< in: undo log record */
 {
-  if (mach_read_from_1(undo_rec + 2) & TRX_UNDO_UPD_EXTERN) {
-    return true;
-  }
-
-  return false;
+  type_cmpl_t type_cmpl;
+  type_cmpl.read(undo_rec + 2);
+  return type_cmpl.is_lob_updated();
 }
 
 /** Reads the undo log record number.
@@ -65,16 +67,13 @@ static inline undo_no_t trx_undo_rec_get_undo_no(
     const trx_undo_rec_t *undo_rec) /*!< in: undo log record */
 {
   const byte *ptr = undo_rec + 2;
-  uint8_t type_cmpl = mach_read_from_1(ptr);
+  type_cmpl_t type_cmpl;
+  ptr = type_cmpl.read(ptr);
 
-  const bool blob_undo = type_cmpl & TRX_UNDO_MODIFY_BLOB;
-
-  if (blob_undo) {
+  if (type_cmpl.is_lob_undo()) {
     /* The next record offset takes 2 bytes + 1 byte for
     type_cmpl flag + 1 byte for the new flag.  Total 4 bytes.*/
-    ptr = undo_rec + 4;
-  } else {
-    ptr = undo_rec + 3;
+    ptr++;
   }
   return (mach_u64_read_much_compressed(ptr));
 }

@@ -5235,7 +5235,6 @@ static void buf_page_monitor(
 
   const ulint page_type = fil_page_get_type(frame);
 
-  lizard::page_physical_io_stat(io_type, frame, page_type);
 
   bool is_leaf = false;
   bool is_ibuf = false;
@@ -5345,9 +5344,9 @@ void buf_read_page_handle_error(buf_page_t *bpage) {
   const auto uncompressed = (buf_page_get_state(bpage) == BUF_BLOCK_FILE_PAGE);
 
   /* First unfix and release lock on the bpage */
-  mutex_enter(&buf_pool->LRU_list_mutex);
-
   DEBUG_SYNC_C("gpp_ignore_missing_before_free_page");
+
+  mutex_enter(&buf_pool->LRU_list_mutex);
 
   rw_lock_t *hash_lock = buf_page_hash_lock_get(buf_pool, bpage->id);
 

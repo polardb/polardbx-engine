@@ -207,7 +207,7 @@ static void rtr_update_mbr_field_in_place(
   In the future, we may need to add a new log type for this. */
   const bool opened = mlog_open_and_write_index(
       mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
-      1 + REDO_SYS_FIELDS_LEN + REDO_LIZARD_FIELDS_LEN + 2 + MLOG_BUF_MARGIN,
+      1 + REDO_SYS_FIELDS_LEN + REDO_CLOVER_FIELDS_LEN + 2 + MLOG_BUF_MARGIN,
       log_ptr);
 
   if (!opened) {
@@ -393,9 +393,9 @@ bool rtr_update_mbr_field(
     /* Insert the new mbr rec. */
     old_pos = page_rec_get_n_recs_before(rec);
 
-    err = btr_cur_optimistic_insert(flags, cursor, &insert_offsets, &heap,
-                                    node_ptr, &insert_rec, &dummy_big_rec,
-                                    nullptr, mtr);
+    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
+                                    &heap, node_ptr, &insert_rec,
+                                    &dummy_big_rec, nullptr, mtr);
 
     ut_ad(err == DB_SUCCESS);
 
@@ -457,9 +457,9 @@ bool rtr_update_mbr_field(
                                &low_match, btr_cur_get_page_cur(cursor),
                                nullptr);
 
-    err = btr_cur_optimistic_insert(flags, cursor, &insert_offsets, &heap,
-                                    node_ptr, &insert_rec, &dummy_big_rec,
-                                    nullptr, mtr);
+    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
+                                    &heap, node_ptr, &insert_rec,
+                                    &dummy_big_rec, nullptr, mtr);
 
     if (!ins_suc && err == DB_SUCCESS) {
       ins_suc = true;
@@ -470,9 +470,9 @@ bool rtr_update_mbr_field(
     if (err != DB_SUCCESS && ins_suc) {
       btr_page_reorganize(btr_cur_get_page_cur(cursor), index, mtr);
 
-      err = btr_cur_optimistic_insert(flags, cursor, &insert_offsets, &heap,
-                                      node_ptr, &insert_rec, &dummy_big_rec,
-                                      nullptr, mtr);
+      err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
+                                      &heap, node_ptr, &insert_rec,
+                                      &dummy_big_rec, nullptr, mtr);
 
       /* Will do pessimistic insert */
       if (err != DB_SUCCESS) {
@@ -539,7 +539,7 @@ bool rtr_update_mbr_field(
     if (!ins_suc) {
       mem_heap_t *new_heap = nullptr;
 
-      err = btr_cur_pessimistic_insert(flags, cursor, &insert_offsets,
+      err = btr_cur_pessimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
                                        &new_heap, node_ptr, &insert_rec,
                                        &dummy_big_rec, nullptr, mtr);
 
@@ -656,8 +656,8 @@ static void rtr_adjust_upper_level(
 
   err = btr_cur_optimistic_insert(
       flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG,
-      &cursor, &offsets, &heap, node_ptr_upper, &rec, &dummy_big_rec, nullptr,
-      mtr);
+      TL_NONE, &cursor, &offsets, &heap, node_ptr_upper, &rec, &dummy_big_rec,
+      nullptr, mtr);
 
   if (err == DB_FAIL) {
     cursor.rtr_info = sea_cur->rtr_info;
@@ -670,8 +670,8 @@ static void rtr_adjust_upper_level(
 
     err = btr_cur_pessimistic_insert(
         flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG,
-        &cursor, &offsets, &new_heap, node_ptr_upper, &rec, &dummy_big_rec,
-        nullptr, mtr);
+        TL_NONE, &cursor, &offsets, &new_heap, node_ptr_upper, &rec,
+        &dummy_big_rec, nullptr, mtr);
 
     DBUG_EXECUTE_IF("rtr_page_need_first_split",
                     { DBUG_SET("-d,rtr_page_need_second_split"); });
@@ -913,7 +913,7 @@ rec_t *rtr_page_split_and_insert(
   page_no_t page_no;
   byte direction;
   page_no_t hint_page_no;
-  buf_block_t *new_block;
+  btr_alloc_t alloc;
   page_zip_des_t *page_zip;
   page_zip_des_t *new_page_zip;
   buf_block_t *insert_block;
@@ -1001,16 +1001,17 @@ func_start:
   /* Allocate a new page to the index */
   direction = FSP_UP;
   hint_page_no = page_no + 1;
-  new_block = btr_page_alloc(cursor->index, hint_page_no, direction, page_level,
-                             mtr, mtr);
-  new_page_zip = buf_block_get_page_zip(new_block);
-  btr_page_create(new_block, new_page_zip, cursor->index, page_level, mtr);
+  alloc = btr_page_alloc(cursor->index, hint_page_no, direction, page_level,
+                         mtr, mtr);
+  new_page_zip = buf_block_get_page_zip(alloc.new_block);
+  btr_page_create(alloc.new_block, new_page_zip, cursor->index, page_level,
+                  alloc.root_page_type, mtr);
 
-  new_page = buf_block_get_frame(new_block);
+  new_page = buf_block_get_frame(alloc.new_block);
   ut_ad(page_get_ssn_id(new_page) == 0);
 
   /* Set new ssn to the new page and page. */
-  page_set_ssn_id(new_block, new_page_zip, current_ssn, mtr);
+  page_set_ssn_id(alloc.new_block, new_page_zip, current_ssn, mtr);
   next_ssn = rtr_get_new_ssn_id(cursor->index);
 
   page_set_ssn_id(block, page_zip, next_ssn, mtr);
@@ -1022,7 +1023,7 @@ func_start:
       || page_zip
 #endif
       || !rtr_split_page_move_rec_list(rtr_split_node_array, first_rec_group,
-                                       new_block, block, first_rec,
+                                       alloc.new_block, block, first_rec,
                                        cursor->index, *heap, mtr)) {
     ulint n = 0;
     rec_t *rec;
@@ -1069,7 +1070,7 @@ func_start:
     }
 
     /* Update the lock table */
-    lock_rtr_move_rec_list(new_block, block, rec_move, moved);
+    lock_rtr_move_rec_list(alloc.new_block, block, rec_move, moved);
 
     /* Delete recs in first group from the new page. */
     for (cur_split_node = rtr_split_node_array;
@@ -1082,7 +1083,7 @@ func_start:
         rec_t *new_rec = page_rec_get_nth(new_page, pos - n);
 
         ut_a(new_rec && page_rec_is_user_rec(new_rec));
-        page_cur_position(new_rec, new_block, page_cursor);
+        page_cur_position(new_rec, alloc.new_block, page_cursor);
 
         *offsets =
             rec_get_offsets(page_cur_get_rec(page_cursor), cursor->index,
@@ -1114,7 +1115,7 @@ func_start:
   /* Insert the new rec to the proper page. */
   cur_split_node = end_split_node - 1;
   if (cur_split_node->n_node != first_rec_group) {
-    insert_block = new_block;
+    insert_block = alloc.new_block;
   } else {
     insert_block = block;
   }
@@ -1155,7 +1156,7 @@ after_insert:
   /* Calculate the mbr on the upper half-page, and the mbr on
   original page. */
   rtr_page_cal_mbr(cursor->index, block, &mbr, *heap);
-  rtr_page_cal_mbr(cursor->index, new_block, &new_mbr, *heap);
+  rtr_page_cal_mbr(cursor->index, alloc.new_block, &new_mbr, *heap);
   prdt.data = &mbr;
   new_prdt.data = &new_mbr;
 
@@ -1163,10 +1164,10 @@ after_insert:
   ut_ad(page_no == block->page.id.page_no());
   /* Check any predicate locks need to be moved/copied to the
   new page */
-  lock_prdt_update_split(block, new_block, &prdt, &new_prdt);
+  lock_prdt_update_split(block, alloc.new_block, &prdt, &new_prdt);
 
   /* Adjust the upper level. */
-  rtr_adjust_upper_level(cursor, flags, block, new_block, &mbr, &new_mbr, mtr);
+  rtr_adjust_upper_level(cursor, flags, block, alloc.new_block, &mbr, &new_mbr, mtr);
 
   /* Save the new ssn to the root page, since we need to reinit
   the first ssn value from it after restart server. */
@@ -1180,7 +1181,7 @@ after_insert:
   left and right pages in the same mtr */
 
   if (page_is_leaf(page)) {
-    ibuf_update_free_bits_for_two_pages_low(block, new_block, mtr);
+    ibuf_update_free_bits_for_two_pages_low(block, alloc.new_block, mtr);
   }
 
   /* If the new res insert fail, we need to do another split
@@ -1189,7 +1190,7 @@ after_insert:
     /* We play safe and reset the free bits for new_page */
     if (!cursor->index->is_clustered() &&
         !cursor->index->table->is_temporary()) {
-      ibuf_reset_free_bits(new_block);
+      ibuf_reset_free_bits(alloc.new_block);
       ibuf_reset_free_bits(block);
     }
 
@@ -1211,7 +1212,7 @@ after_insert:
 
 #ifdef UNIV_GIS_DEBUG
   ut_ad(page_validate(buf_block_get_frame(block), cursor->index));
-  ut_ad(page_validate(buf_block_get_frame(new_block), cursor->index));
+  ut_ad(page_validate(buf_block_get_frame(alloc.new_block), cursor->index));
 
   ut_ad(!rec || rec_offs_validate(rec, cursor->index, *offsets));
 #endif

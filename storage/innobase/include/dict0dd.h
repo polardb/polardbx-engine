@@ -262,6 +262,8 @@ enum dd_index_keys {
   DD_INDEX_SCN,
   /** GCN */
   DD_INDEX_GCN,
+  /** Root page type */
+  DD_INDEX_PAGE_TYPE,
   /** Sentinel */
   DD_INDEX__LAST
 };
@@ -269,7 +271,8 @@ enum dd_index_keys {
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
 const char *const dd_index_key_strings[DD_INDEX__LAST] = {
-    "id", "space_id", "table_id", "root", "trx_id", "uba", "scn", "gcn"};
+    "id",  "space_id", "table_id", "root",     "trx_id",
+    "uba", "scn",      "gcn",      "page_type"};
 
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
@@ -1020,7 +1023,8 @@ const rec_t *dd_getnext_system_rec(btr_pcur_t *pcur, mtr_t *mtr);
 bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
                                const dict_index_t **index, MDL_ticket **mdl,
                                dict_table_t **parent, MDL_ticket **parent_mdl,
-                               dict_table_t *dd_indexes, mtr_t *mtr);
+                               dict_table_t *dd_indexes, mtr_t *mtr,
+                               bool exclude_dd_table);
 
 /** Process one mysql.index_partitions record and get the dict_index_t
 @param[in]      heap            Temp memory heap

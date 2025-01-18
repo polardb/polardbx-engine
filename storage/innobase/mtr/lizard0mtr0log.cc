@@ -38,67 +38,91 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
-/** Get the sec_lfields_extra_flag from index.
-  @param[in]  index          B-tree index.
-  @param[out] sl_extra_flag  secondary index lizard fields extra flag
-  @param[out] n_sec_lfields  number of secondary index lizard fields
+/** Get the sec_extra_flag from index.
+  @param[in]  index           B-tree index.
+  @param[out] sec_extra_flag  secondary index lizard fields extra flag
+  @param[out] n_sec_fields    number of secondary index lizard fields
 */
-void get_sec_lfields_extra_flag(const dict_index_t *index,
-                                uint8_t &sl_extra_flag,
-                                uint8_t &n_sec_lfields) {
-  sl_extra_flag = 0;
-  n_sec_lfields = 0;
+void get_sec_extra_flag(const dict_index_t *index, uint8_t &sec_extra_flag,
+                        uint8_t &n_sec_fields) {
+  sec_extra_flag = 0;
+  n_sec_fields = 0;
   assert_lizard_dict_index_gstored_check(index);
 
   if (index->n_s_gfields > 0) {
     ut_ad(index->n_s_gfields == 1);
-    sl_extra_flag |= SEC_LFIELDS_EXTRA_GPP_FLAG;
-    n_sec_lfields++;
+    sec_extra_flag |= SEC_EXTRA_FLAG_MASK_GPP;
+    n_sec_fields++;
+  }
+
+  if (index->is_panda()) {
+    n_sec_fields += 4;
+    sec_extra_flag |= SEC_EXTRA_FLAG_PANDA;
   }
 }
 
-/** Log the sec_lfields_extra_flag.
-  @param[in]     flag           1 byte flag indicating whether to log
-                                sl_extra_flag or not
-  @param[in]     sl_extra_flag  1 byte secondary index lizard fields extra flag
-                                to be logged
-  @param[in,out] log_ptr        REDO LOG buffer pointer */
-void log_index_sec_lfields_extra_flag(uint8_t flag, uint8_t sl_extra_flag,
-                                      byte *&log_ptr) {
-  ut_ad(sl_extra_flag || !IS_SEC_LFIELDS(flag));
-  if (IS_SEC_LFIELDS(flag)) {
-    mach_write_to_1(log_ptr, sl_extra_flag);
+/** Log the sec_extra_flag.
+  @param[in]     flag            1 byte flag indicating whether to log
+                                 sec_extra_flag or not
+  @param[in]     sec_extra_flag  1 byte secondary index lizard fields extra flag
+                                 to be logged
+  @param[in,out] log_ptr         REDO LOG buffer pointer */
+void log_index_sec_extra_flag(uint8_t flag, uint8_t sec_extra_flag,
+                              byte *&log_ptr) {
+  ut_ad(sec_extra_flag || !IS_SEC_EXTRA(flag));
+  if (IS_SEC_EXTRA(flag)) {
+    mach_write_to_1(log_ptr, sec_extra_flag);
     log_ptr += 1;
   }
 }
 
-/** Parse the sec_lfields_extra_flag.
-  @param[in]  flag           1 byte flag indicating whether to parse
-                             sl_extra_flag or not
-  @param[in]  ptr            pointer to buffer
-  @param[in]  end_ptr        pointer to end of buffer
-  @param[out] sl_extra_flag  read 1 bytes sec_lfields_extra_flag
-  @param[out] n_sec_lfields  count number of secondary index lizard fields
+/** Parse the sec_extra_flag.
+  @param[in]  flag            1 byte flag indicating whether to parse
+                              sec_extra_flag or not
+  @param[in]  ptr             pointer to buffer
+  @param[in]  end_ptr         pointer to end of buffer
+  @param[out] sec_extra_flag  read 1 bytes sec_extra_flag
+  @param[out] n_sec_fields    count number of secondary index extra fields
+  @param[out] n_s_gfields     count number of secondary GPP fields
+  @param[out] page_type       page type of root
+  @param[out] layout          txn layout
   @return pointer to buffer. */
-byte *parse_index_lfields_extra_flag(uint8_t flag, byte *ptr,
-                                     const byte *end_ptr,
-                                     uint8_t &sl_extra_flag,
-                                     uint8_t &n_sec_lfields) {
-  sl_extra_flag = 0;
-  n_sec_lfields = 0;
-  if (!IS_SEC_LFIELDS(flag)) {
+byte *parse_index_sec_extra_flag(uint8_t flag, byte *ptr, const byte *end_ptr,
+                                 uint8_t &sec_extra_flag, uint8_t &n_sec_fields,
+                                 uint8_t &n_s_gfields, page_type_t &page_type,
+                                 txn_layout_t *layout) {
+  sec_extra_flag = 0;
+  n_sec_fields = 0;
+  n_s_gfields = 0;
+  page_type = FIL_PAGE_TYPE_UNUSED;
+  *layout = TL_CLOVER;
+  if (!IS_SEC_EXTRA(flag)) {
     return ptr;
   }
 
-  DBUG_EXECUTE_IF("crash_if_n_gfields_in_redo", DBUG_SUICIDE(););
   if (end_ptr < ptr + 1) {
     return (nullptr);
   }
 
-  sl_extra_flag = mach_read_from_1(ptr);
+  sec_extra_flag = mach_read_from_1(ptr);
   ptr += 1;
-  if (sl_extra_flag & SEC_LFIELDS_EXTRA_GPP_FLAG)
-    n_sec_lfields++;
+  if (sec_extra_flag & SEC_EXTRA_FLAG_MASK_GPP) {
+    n_sec_fields++;
+    n_s_gfields = 1;
+    DBUG_EXECUTE_IF("crash_if_gpp_in_redo", DBUG_SUICIDE(););
+  }
+
+  switch (sec_extra_flag & SEC_EXTRA_FLAG_MASK_ITL) {
+    case SEC_EXTRA_FLAG_PANDA:
+      DBUG_EXECUTE_IF("crash_if_panda_in_redo", DBUG_SUICIDE(););
+      n_sec_fields += 4;
+      page_type = FIL_PAGE_INDEX_PANDA;
+      *layout = TL_BAMBOO;
+      break;
+    default:
+      page_type = FIL_PAGE_INDEX;
+      break;
+  }
   return ptr;
 }
 } // namespace lizard

@@ -60,9 +60,22 @@ extern const Vision *row_vers_old_simulate_vision();
  * @param[in]		dict table
  *
  * @retval	true	maybe still usable by query or asof query. */
-extern bool row_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
+bool row_clust_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
                                               const dict_table_t *table);
 
+/** Jedge whether the panda delete marked record still was needed.
+ *
+ * Before, it judge through purge_sys view, it promise that will never older
+ * query to see it.
+ *
+ * after, we support asof query, so change dependency to txn slot.
+ *
+ *
+ * @param[in/out]	txn rec
+ * @param[in]		dict table
+ *
+ * @retval	true	maybe still usable by normal query or asof query. */
+bool row_panda_vers_must_preserve_del_marked(txn_rec_t *txn_rec);
 }  // namespace lizard
 
 #endif

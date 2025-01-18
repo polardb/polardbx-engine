@@ -270,6 +270,9 @@ static inline void page_create_write_log(buf_frame_t *frame, mtr_t *mtr,
     case FIL_PAGE_SDI:
       type = comp ? MLOG_COMP_PAGE_CREATE_SDI : MLOG_PAGE_CREATE_SDI;
       break;
+    case FIL_PAGE_INDEX_PANDA:
+      type = comp ? MLOG_COMP_PAGE_CREATE_PANDA : MLOG_PAGE_CREATE_PANDA;
+      break;
     default:
       ut_error;
   }
@@ -319,8 +322,7 @@ static page_t *page_create_low(buf_block_t *block, ulint comp,
 
   page = buf_block_get_frame(block);
 
-  ut_ad(page_type == FIL_PAGE_INDEX || page_type == FIL_PAGE_RTREE ||
-        page_type == FIL_PAGE_SDI);
+  ut_ad(fil_page_type_is_index(page_type));
 
   fil_page_set_type(page, page_type);
 
@@ -404,6 +406,8 @@ page_t *page_create_zip(buf_block_t *block, dict_index_t *index, ulint level,
     case FIL_PAGE_SDI:
       break;
     default:
+      /* TODO: panda+compress need more consideration. See
+       innodb_fts.misc_1 innodb_fts.ngram_1 innodb.virtual_debug */
       ut_d(ut_error);
   }
 #endif /* UNIV_DEBUG */

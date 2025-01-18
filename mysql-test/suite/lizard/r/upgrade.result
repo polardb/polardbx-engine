@@ -7,7 +7,7 @@
 ##############################################
 # Copy and unzip the datadir.
 # Restart the server against the unzipped datadir
-# restart: --datadir=DATADIR --innodb-page-size=16k
+# restart: --datadir=DATADIR --innodb-page-size=16k --opt-flashback-area=1 --debug=+d,skip_dd_table_access_check
 select * from t1;
 c1	c2
 1	100
@@ -44,16 +44,361 @@ c1	c2
 4	400
 5	500
 select * from information_schema.innodb_index_status;
-SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED
-mysql	consensus_info	PRIMARY	0
-mtr	test_suppressions	GEN_CLUST_INDEX	0
-mtr	global_suppressions	GEN_CLUST_INDEX	0
-test	t1	PRIMARY	0
-test	t2	PRIMARY	0
-test	t3	PRIMARY	0
-test	t4	PRIMARY	0
-test	t5	PRIMARY	0
-sys	sys_config	PRIMARY	0
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+mysql	dd_properties	GEN_CLUST_INDEX	0	INDEX
+mysql	innodb_dynamic_metadata	PRIMARY	0	INDEX
+mysql	innodb_table_stats	PRIMARY	0	INDEX
+mysql	innodb_index_stats	PRIMARY	0	INDEX
+mysql	innodb_ddl_log	PRIMARY	0	INDEX
+mysql	innodb_ddl_log	thread_id	0	INDEX
+mysql	innodb_flashback_snapshot	PRIMARY	0	INDEX
+mysql	innodb_flashback_snapshot	utc	0	INDEX
+mysql	column_type_elements	PRIMARY	0	INDEX
+mysql	index_column_usage	index_id	0	INDEX
+mysql	index_column_usage	index_id_2	0	INDEX
+mysql	index_column_usage	column_id	0	INDEX
+mysql	index_partitions	PRIMARY	0	INDEX
+mysql	index_partitions	index_id	0	INDEX
+mysql	index_partitions	tablespace_id	0	INDEX
+mysql	index_stats	schema_name	0	INDEX
+mysql	parameter_type_elements	PRIMARY	0	INDEX
+mysql	table_stats	PRIMARY	0	INDEX
+mysql	tablespace_files	tablespace_id	0	INDEX
+mysql	tablespace_files	file_name	0	INDEX
+mysql	concurrency_control	PRIMARY	0	INDEX
+mysql	outline	PRIMARY	0	INDEX
+mysql	consensus_info	PRIMARY	0	INDEX
+mtr	test_suppressions	GEN_CLUST_INDEX	0	INDEX
+mtr	global_suppressions	GEN_CLUST_INDEX	0	INDEX
+test	t1	PRIMARY	0	INDEX
+test	t2	PRIMARY	0	INDEX
+test	t3	PRIMARY	0	INDEX
+test	t4	PRIMARY	0	INDEX
+test	t5	PRIMARY	0	INDEX
+mysql	catalogs	PRIMARY	0	INDEX
+mysql	catalogs	name	0	INDEX
+mysql	character_sets	PRIMARY	0	INDEX
+mysql	character_sets	name	0	INDEX
+mysql	character_sets	default_collation_id	0	INDEX
+mysql	check_constraints	PRIMARY	0	INDEX
+mysql	check_constraints	schema_id	0	INDEX
+mysql	check_constraints	table_id	0	INDEX
+mysql	collations	PRIMARY	0	INDEX
+mysql	collations	name	0	INDEX
+mysql	collations	character_set_id	0	INDEX
+mysql	column_statistics	PRIMARY	0	INDEX
+mysql	column_statistics	catalog_id	0	INDEX
+mysql	column_statistics	catalog_id_2	0	INDEX
+mysql	columns	PRIMARY	0	INDEX
+mysql	columns	table_id	0	INDEX
+mysql	columns	table_id_2	0	INDEX
+mysql	columns	collation_id	0	INDEX
+mysql	columns	srs_id	0	INDEX
+mysql	events	PRIMARY	0	INDEX
+mysql	events	schema_id	0	INDEX
+mysql	events	client_collation_id	0	INDEX
+mysql	events	connection_collation_id	0	INDEX
+mysql	events	schema_collation_id	0	INDEX
+mysql	events	definer	0	INDEX
+mysql	foreign_key_column_usage	PRIMARY	0	INDEX
+mysql	foreign_key_column_usage	foreign_key_id	0	INDEX
+mysql	foreign_key_column_usage	column_id	0	INDEX
+mysql	foreign_keys	PRIMARY	0	INDEX
+mysql	foreign_keys	schema_id	0	INDEX
+mysql	foreign_keys	table_id	0	INDEX
+mysql	foreign_keys	referenced_table_catalog	0	INDEX
+mysql	indexes	PRIMARY	0	INDEX
+mysql	indexes	table_id	0	INDEX
+mysql	indexes	tablespace_id	0	INDEX
+mysql	parameters	PRIMARY	0	INDEX
+mysql	parameters	routine_id	0	INDEX
+mysql	parameters	collation_id	0	INDEX
+mysql	resource_groups	PRIMARY	0	INDEX
+mysql	resource_groups	resource_group_name	0	INDEX
+mysql	routines	PRIMARY	0	INDEX
+mysql	routines	schema_id	0	INDEX
+mysql	routines	result_collation_id	0	INDEX
+mysql	routines	client_collation_id	0	INDEX
+mysql	routines	connection_collation_id	0	INDEX
+mysql	routines	schema_collation_id	0	INDEX
+mysql	routines	definer	0	INDEX
+mysql	schemata	PRIMARY	0	INDEX
+mysql	schemata	catalog_id	0	INDEX
+mysql	schemata	default_collation_id	0	INDEX
+mysql	st_spatial_reference_systems	PRIMARY	0	INDEX
+mysql	st_spatial_reference_systems	SRS_NAME	0	INDEX
+mysql	st_spatial_reference_systems	ORGANIZATION_AND_ID	0	INDEX
+mysql	table_partition_values	PRIMARY	0	INDEX
+mysql	table_partitions	PRIMARY	0	INDEX
+mysql	table_partitions	table_id	0	INDEX
+mysql	table_partitions	table_id_2	0	INDEX
+mysql	table_partitions	engine	0	INDEX
+mysql	table_partitions	engine_2	0	INDEX
+mysql	table_partitions	tablespace_id	0	INDEX
+mysql	table_partitions	parent_partition_id	0	INDEX
+mysql	tables	PRIMARY	0	INDEX
+mysql	tables	schema_id	0	INDEX
+mysql	tables	engine	0	INDEX
+mysql	tables	engine_2	0	INDEX
+mysql	tables	collation_id	0	INDEX
+mysql	tables	tablespace_id	0	INDEX
+mysql	tables	type	0	INDEX
+mysql	tables	view_client_collation_id	0	INDEX
+mysql	tables	view_connection_collation_id	0	INDEX
+mysql	tables	type_2	0	INDEX
+mysql	tablespaces	PRIMARY	0	INDEX
+mysql	tablespaces	name	0	INDEX
+mysql	triggers	PRIMARY	0	INDEX
+mysql	triggers	schema_id	0	INDEX
+mysql	triggers	table_id	0	INDEX
+mysql	triggers	client_collation_id	0	INDEX
+mysql	triggers	connection_collation_id	0	INDEX
+mysql	triggers	schema_collation_id	0	INDEX
+mysql	triggers	definer	0	INDEX
+mysql	view_routine_usage	PRIMARY	0	INDEX
+mysql	view_routine_usage	routine_catalog	0	INDEX
+mysql	view_table_usage	PRIMARY	0	INDEX
+mysql	view_table_usage	table_catalog	0	INDEX
+mysql	replication_group_configuration_version	PRIMARY	0	INDEX
+mysql	component	PRIMARY	0	INDEX
+mysql	ndb_binlog_index	PRIMARY	0	INDEX
+mysql	default_roles	PRIMARY	0	INDEX
+mysql	engine_cost	PRIMARY	0	INDEX
+mysql	global_grants	PRIMARY	0	INDEX
+mysql	help_category	PRIMARY	0	INDEX
+mysql	help_category	name	0	INDEX
+mysql	help_keyword	PRIMARY	0	INDEX
+mysql	help_keyword	name	0	INDEX
+mysql	help_relation	PRIMARY	0	INDEX
+mysql	help_topic	PRIMARY	0	INDEX
+mysql	help_topic	name	0	INDEX
+mysql	plugin	PRIMARY	0	INDEX
+mysql	password_history	PRIMARY	0	INDEX
+mysql	proxies_priv	PRIMARY	0	INDEX
+mysql	proxies_priv	Grantor	0	INDEX
+mysql	role_edges	PRIMARY	0	INDEX
+mysql	servers	PRIMARY	0	INDEX
+mysql	server_cost	PRIMARY	0	INDEX
+mysql	replication_asynchronous_connection_failover	PRIMARY	0	INDEX
+mysql	replication_asynchronous_connection_failover	Channel_name	0	INDEX
+mysql	replication_asynchronous_connection_failover_managed	PRIMARY	0	INDEX
+mysql	replication_group_member_actions	PRIMARY	0	INDEX
+mysql	replication_group_member_actions	event	0	INDEX
+mysql	time_zone_name	PRIMARY	0	INDEX
+mysql	time_zone_leap_second	PRIMARY	0	INDEX
+mysql	time_zone_transition	PRIMARY	0	INDEX
+mysql	time_zone_transition_type	PRIMARY	0	INDEX
+mysql	func	PRIMARY	0	INDEX
+mysql	gtid_executed	PRIMARY	0	INDEX
+mysql	slave_master_info	PRIMARY	0	INDEX
+mysql	slave_worker_info	PRIMARY	0	INDEX
+mysql	slave_relay_log_info	PRIMARY	0	INDEX
+mysql	user	PRIMARY	0	INDEX
+mysql	time_zone	PRIMARY	0	INDEX
+mysql	db	PRIMARY	0	INDEX
+mysql	db	User	0	INDEX
+mysql	tables_priv	PRIMARY	0	INDEX
+mysql	tables_priv	Grantor	0	INDEX
+mysql	columns_priv	PRIMARY	0	INDEX
+mysql	procs_priv	PRIMARY	0	INDEX
+mysql	procs_priv	Grantor	0	INDEX
+sys	sys_config	PRIMARY	0	INDEX
+select * from information_schema.innodb_table_status;
+SCHEMA_NAME	TABLE_NAME	PARTITION_NAME	options
+mysql	dd_properties	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_dynamic_metadata	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_table_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_index_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_ddl_log	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_flashback_snapshot	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	column_type_elements	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_column_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_partitions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	parameter_type_elements	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tablespace_files	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	concurrency_control	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	outline	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	consensus_info	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mtr	test_suppressions	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mtr	global_suppressions	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+test	t1	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t2	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t3	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t4	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t5	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	catalogs	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	character_sets	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	check_constraints	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	collations	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	column_statistics	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	columns	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	events	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	foreign_key_column_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	foreign_keys	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	indexes	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	parameters	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	resource_groups	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	routines	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	schemata	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	st_spatial_reference_systems	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_partition_values	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_partitions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tables	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tablespaces	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	triggers	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	view_routine_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	view_table_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+performance_schema	cond_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	error_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_summary_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	host_cache	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	mutex_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	objects_summary_global_by_type	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	performance_timers	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	processlist	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	rwlock_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_actors	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_consumers	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_instruments	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_objects	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_threads	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_io_waits_summary_by_index_usage	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_io_waits_summary_by_table	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_lock_waits_summary_by_table	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	threads	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_digest	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_program	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_histogram_global	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_histogram_by_digest	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_user_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_host_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_account_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_thread_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_global_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	users	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	accounts	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	hosts	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_summary_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_connect_attrs	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_account_connect_attrs	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	keyring_keys	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_handles	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	metadata_locks	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	data_locks	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	data_lock_waits	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_connection_configuration	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_group_members	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_connection_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_configuration	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status_by_coordinator	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status_by_worker	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_group_member_stats	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_filters	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_global_filters	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_asynchronous_connection_failover	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_asynchronous_connection_failover_managed	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	log_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	prepared_statements_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	user_variables_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_account	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_host	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_user	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	global_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	variables_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	global_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	variables_info	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	persisted_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	user_defined_functions	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	binary_log_transaction_compression_stats	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	tls_channel_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	keyring_component_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_digest_supplement	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	replication_group_configuration_version	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	general_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	slow_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	component	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	ndb_binlog_index	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	default_roles	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	engine_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	global_grants	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_category	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_keyword	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_relation	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_topic	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	plugin	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	password_history	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	proxies_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	role_edges	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	servers	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	server_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_asynchronous_connection_failover	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_asynchronous_connection_failover_managed	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_group_member_actions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_name	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_leap_second	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_transition	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_transition_type	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	func	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	gtid_executed	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_master_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_worker_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_relay_log_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	user	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	db	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tables_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	columns_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	procs_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+sys	sys_config	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	innodb_redo_log_files	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 ###########
 # CLEANUP #
 ###########
@@ -65,11 +410,11 @@ drop table t5;
 # Shutdown server
 # Remove copied files
 ##############################################
-# Re-Test upgrade from 8018 to 8032 with dd allow to have gpp
+# Re-Test upgrade from 8018 to 8032 with dd allow to have gpp and panda
 ##############################################
 # Copy and unzip the datadir.
 # Restart the server against the unzipped datadir
-# restart: --datadir=DATADIR --innodb-page-size=16k --debug=+d,allow_dd_tables_have_gpp
+# restart: --datadir=DATADIR --innodb-page-size=16k --opt-flashback-area=1 --debug=+d,allow_dd_tables_have_gpp --debug=+d,skip_dd_table_access_check
 select * from t1;
 c1	c2
 1	100
@@ -106,16 +451,361 @@ c1	c2
 4	400
 5	500
 select * from information_schema.innodb_index_status;
-SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED
-mysql	consensus_info	PRIMARY	0
-mtr	test_suppressions	GEN_CLUST_INDEX	0
-mtr	global_suppressions	GEN_CLUST_INDEX	0
-test	t1	PRIMARY	0
-test	t2	PRIMARY	0
-test	t3	PRIMARY	0
-test	t4	PRIMARY	0
-test	t5	PRIMARY	0
-sys	sys_config	PRIMARY	0
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+mysql	dd_properties	GEN_CLUST_INDEX	0	INDEX
+mysql	innodb_dynamic_metadata	PRIMARY	0	INDEX
+mysql	innodb_table_stats	PRIMARY	0	INDEX
+mysql	innodb_index_stats	PRIMARY	0	INDEX
+mysql	innodb_ddl_log	PRIMARY	0	INDEX
+mysql	innodb_ddl_log	thread_id	0	INDEX
+mysql	innodb_flashback_snapshot	PRIMARY	0	INDEX
+mysql	innodb_flashback_snapshot	utc	0	INDEX
+mysql	column_type_elements	PRIMARY	0	INDEX
+mysql	index_column_usage	index_id	0	INDEX
+mysql	index_column_usage	index_id_2	0	INDEX
+mysql	index_column_usage	column_id	0	INDEX
+mysql	index_partitions	PRIMARY	0	INDEX
+mysql	index_partitions	index_id	0	INDEX
+mysql	index_partitions	tablespace_id	0	INDEX
+mysql	index_stats	schema_name	0	INDEX
+mysql	parameter_type_elements	PRIMARY	0	INDEX
+mysql	table_stats	PRIMARY	0	INDEX
+mysql	tablespace_files	tablespace_id	0	INDEX
+mysql	tablespace_files	file_name	0	INDEX
+mysql	concurrency_control	PRIMARY	0	INDEX
+mysql	outline	PRIMARY	0	INDEX
+mysql	consensus_info	PRIMARY	0	INDEX
+mtr	test_suppressions	GEN_CLUST_INDEX	0	INDEX
+mtr	global_suppressions	GEN_CLUST_INDEX	0	INDEX
+test	t1	PRIMARY	0	INDEX
+test	t2	PRIMARY	0	INDEX
+test	t3	PRIMARY	0	INDEX
+test	t4	PRIMARY	0	INDEX
+test	t5	PRIMARY	0	INDEX
+mysql	catalogs	PRIMARY	0	INDEX
+mysql	catalogs	name	1	INDEX
+mysql	character_sets	PRIMARY	0	INDEX
+mysql	character_sets	name	1	INDEX
+mysql	character_sets	default_collation_id	1	INDEX
+mysql	check_constraints	PRIMARY	0	INDEX
+mysql	check_constraints	schema_id	1	INDEX
+mysql	check_constraints	table_id	1	INDEX
+mysql	collations	PRIMARY	0	INDEX
+mysql	collations	name	1	INDEX
+mysql	collations	character_set_id	1	INDEX
+mysql	column_statistics	PRIMARY	0	INDEX
+mysql	column_statistics	catalog_id	1	INDEX
+mysql	column_statistics	catalog_id_2	1	INDEX
+mysql	columns	PRIMARY	0	INDEX
+mysql	columns	table_id	1	INDEX
+mysql	columns	table_id_2	1	INDEX
+mysql	columns	collation_id	1	INDEX
+mysql	columns	srs_id	1	INDEX
+mysql	events	PRIMARY	0	INDEX
+mysql	events	schema_id	1	INDEX
+mysql	events	client_collation_id	1	INDEX
+mysql	events	connection_collation_id	1	INDEX
+mysql	events	schema_collation_id	1	INDEX
+mysql	events	definer	1	INDEX
+mysql	foreign_key_column_usage	PRIMARY	0	INDEX
+mysql	foreign_key_column_usage	foreign_key_id	1	INDEX
+mysql	foreign_key_column_usage	column_id	1	INDEX
+mysql	foreign_keys	PRIMARY	0	INDEX
+mysql	foreign_keys	schema_id	1	INDEX
+mysql	foreign_keys	table_id	1	INDEX
+mysql	foreign_keys	referenced_table_catalog	1	INDEX
+mysql	indexes	PRIMARY	0	INDEX
+mysql	indexes	table_id	1	INDEX
+mysql	indexes	tablespace_id	1	INDEX
+mysql	parameters	PRIMARY	0	INDEX
+mysql	parameters	routine_id	1	INDEX
+mysql	parameters	collation_id	1	INDEX
+mysql	resource_groups	PRIMARY	0	INDEX
+mysql	resource_groups	resource_group_name	1	INDEX
+mysql	routines	PRIMARY	0	INDEX
+mysql	routines	schema_id	1	INDEX
+mysql	routines	result_collation_id	1	INDEX
+mysql	routines	client_collation_id	1	INDEX
+mysql	routines	connection_collation_id	1	INDEX
+mysql	routines	schema_collation_id	1	INDEX
+mysql	routines	definer	1	INDEX
+mysql	schemata	PRIMARY	0	INDEX
+mysql	schemata	catalog_id	1	INDEX
+mysql	schemata	default_collation_id	1	INDEX
+mysql	st_spatial_reference_systems	PRIMARY	0	INDEX
+mysql	st_spatial_reference_systems	SRS_NAME	1	INDEX
+mysql	st_spatial_reference_systems	ORGANIZATION_AND_ID	1	INDEX
+mysql	table_partition_values	PRIMARY	0	INDEX
+mysql	table_partitions	PRIMARY	0	INDEX
+mysql	table_partitions	table_id	1	INDEX
+mysql	table_partitions	table_id_2	1	INDEX
+mysql	table_partitions	engine	1	INDEX
+mysql	table_partitions	engine_2	1	INDEX
+mysql	table_partitions	tablespace_id	1	INDEX
+mysql	table_partitions	parent_partition_id	1	INDEX
+mysql	tables	PRIMARY	0	INDEX
+mysql	tables	schema_id	1	INDEX
+mysql	tables	engine	1	INDEX
+mysql	tables	engine_2	1	INDEX
+mysql	tables	collation_id	1	INDEX
+mysql	tables	tablespace_id	1	INDEX
+mysql	tables	type	1	INDEX
+mysql	tables	view_client_collation_id	1	INDEX
+mysql	tables	view_connection_collation_id	1	INDEX
+mysql	tables	type_2	1	INDEX
+mysql	tablespaces	PRIMARY	0	INDEX
+mysql	tablespaces	name	1	INDEX
+mysql	triggers	PRIMARY	0	INDEX
+mysql	triggers	schema_id	1	INDEX
+mysql	triggers	table_id	1	INDEX
+mysql	triggers	client_collation_id	1	INDEX
+mysql	triggers	connection_collation_id	1	INDEX
+mysql	triggers	schema_collation_id	1	INDEX
+mysql	triggers	definer	1	INDEX
+mysql	view_routine_usage	PRIMARY	0	INDEX
+mysql	view_routine_usage	routine_catalog	1	INDEX
+mysql	view_table_usage	PRIMARY	0	INDEX
+mysql	view_table_usage	table_catalog	1	INDEX
+mysql	replication_group_configuration_version	PRIMARY	0	INDEX
+mysql	component	PRIMARY	0	INDEX
+mysql	ndb_binlog_index	PRIMARY	0	INDEX
+mysql	default_roles	PRIMARY	0	INDEX
+mysql	engine_cost	PRIMARY	0	INDEX
+mysql	global_grants	PRIMARY	0	INDEX
+mysql	help_category	PRIMARY	0	INDEX
+mysql	help_category	name	1	INDEX
+mysql	help_keyword	PRIMARY	0	INDEX
+mysql	help_keyword	name	1	INDEX
+mysql	help_relation	PRIMARY	0	INDEX
+mysql	help_topic	PRIMARY	0	INDEX
+mysql	help_topic	name	1	INDEX
+mysql	plugin	PRIMARY	0	INDEX
+mysql	password_history	PRIMARY	0	INDEX
+mysql	proxies_priv	PRIMARY	0	INDEX
+mysql	proxies_priv	Grantor	1	INDEX
+mysql	role_edges	PRIMARY	0	INDEX
+mysql	servers	PRIMARY	0	INDEX
+mysql	server_cost	PRIMARY	0	INDEX
+mysql	replication_asynchronous_connection_failover	PRIMARY	0	INDEX
+mysql	replication_asynchronous_connection_failover	Channel_name	1	INDEX
+mysql	replication_asynchronous_connection_failover_managed	PRIMARY	0	INDEX
+mysql	replication_group_member_actions	PRIMARY	0	INDEX
+mysql	replication_group_member_actions	event	1	INDEX
+mysql	time_zone_name	PRIMARY	0	INDEX
+mysql	time_zone_leap_second	PRIMARY	0	INDEX
+mysql	time_zone_transition	PRIMARY	0	INDEX
+mysql	time_zone_transition_type	PRIMARY	0	INDEX
+mysql	func	PRIMARY	0	INDEX
+mysql	gtid_executed	PRIMARY	0	INDEX
+mysql	slave_master_info	PRIMARY	0	INDEX
+mysql	slave_worker_info	PRIMARY	0	INDEX
+mysql	slave_relay_log_info	PRIMARY	0	INDEX
+mysql	user	PRIMARY	0	INDEX
+mysql	time_zone	PRIMARY	0	INDEX
+mysql	db	PRIMARY	0	INDEX
+mysql	db	User	1	INDEX
+mysql	tables_priv	PRIMARY	0	INDEX
+mysql	tables_priv	Grantor	1	INDEX
+mysql	columns_priv	PRIMARY	0	INDEX
+mysql	procs_priv	PRIMARY	0	INDEX
+mysql	procs_priv	Grantor	1	INDEX
+sys	sys_config	PRIMARY	0	INDEX
+select * from information_schema.innodb_table_status;
+SCHEMA_NAME	TABLE_NAME	PARTITION_NAME	options
+mysql	dd_properties	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_dynamic_metadata	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_table_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_index_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_ddl_log	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	innodb_flashback_snapshot	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	column_type_elements	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_column_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_partitions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	index_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	parameter_type_elements	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_stats	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tablespace_files	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	concurrency_control	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	outline	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	consensus_info	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mtr	test_suppressions	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mtr	global_suppressions	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+test	t1	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t2	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t3	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t4	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+test	t5	NULL	avg_row_length=0;encrypt_type=N;key_block_size=0;keys_disabled=0;pack_record=0;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	catalogs	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	character_sets	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	check_constraints	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	collations	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	column_statistics	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	columns	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	events	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	foreign_key_column_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	foreign_keys	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	indexes	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	parameters	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	resource_groups	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	routines	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	schemata	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	st_spatial_reference_systems	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_partition_values	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	table_partitions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tables	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tablespaces	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	triggers	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	view_routine_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	view_table_usage	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+performance_schema	cond_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	error_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_waits_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_summary_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	file_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	host_cache	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	mutex_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	objects_summary_global_by_type	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	performance_timers	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	processlist	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	rwlock_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_actors	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_consumers	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_instruments	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_objects	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	setup_threads	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_io_waits_summary_by_index_usage	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_io_waits_summary_by_table	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_lock_waits_summary_by_table	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	threads	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_stages_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_digest	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_program	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_histogram_global	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_histogram_by_digest	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_current	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_history	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_history_long	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_transactions_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_user_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_host_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_account_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_by_thread_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_errors_summary_global_by_error	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	users	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	accounts	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	hosts	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_summary_by_instance	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	socket_summary_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_connect_attrs	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_account_connect_attrs	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	keyring_keys	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_global_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_account_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_host_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_thread_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	memory_summary_by_user_by_event_name	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	table_handles	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	metadata_locks	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	data_locks	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	data_lock_waits	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_connection_configuration	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_group_members	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_connection_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_configuration	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status_by_coordinator	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_status_by_worker	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_group_member_stats	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_filters	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_applier_global_filters	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_asynchronous_connection_failover	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=0;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	replication_asynchronous_connection_failover_managed	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	log_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	prepared_statements_instances	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	user_variables_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_account	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_host	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	status_by_user	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	global_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	variables_by_thread	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	global_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	session_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	variables_info	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	persisted_variables	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	user_defined_functions	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	binary_log_transaction_compression_stats	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	tls_channel_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	keyring_component_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	events_statements_summary_by_digest_supplement	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	replication_group_configuration_version	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	general_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	slow_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	component	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_sample_pages=0;
+mysql	ndb_binlog_index	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	default_roles	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	engine_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	global_grants	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_category	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_keyword	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_relation	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	help_topic	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	plugin	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	password_history	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	proxies_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	role_edges	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	servers	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	server_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_asynchronous_connection_failover	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_asynchronous_connection_failover_managed	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	replication_group_member_actions	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_name	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_leap_second	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_transition	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone_transition_type	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	func	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	gtid_executed	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_master_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_worker_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	slave_relay_log_info	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	user	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	time_zone	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	db	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	tables_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	columns_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	procs_priv	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+sys	sys_config	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
+performance_schema	innodb_redo_log_files	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 ###########
 # CLEANUP #
 ###########

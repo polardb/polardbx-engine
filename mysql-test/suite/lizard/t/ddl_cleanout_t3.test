@@ -1,6 +1,6 @@
 SET autocommit = 0;
 set global innodb_commit_cleanout_max_rows=0;
-
+set global innodb_lizard_stat_enabled=on;
 CREATE TABLE large_table (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50),
@@ -36,7 +36,7 @@ CALL insert_data();
 
 
 ALTER TABLE large_table ADD INDEX idx_name (name);
---let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clust_cleaned", Value, 1)
+--let $var_value=query_get_value(show status like "lizard_ddl_cleanout_clean", Value, 1)
 --let $assert_text= ddl_cleanout should make sense.
 --let $assert_cond= $var_value > 0
 --source include/assert.inc
@@ -44,6 +44,7 @@ ALTER TABLE large_table ADD INDEX idx_name (name);
 
 SET autocommit = 1;
 set global innodb_commit_cleanout_max_rows=3;
+set global innodb_lizard_stat_enabled=0;
 DROP PROCEDURE insert_data;
 DROP TABLE large_table;
 

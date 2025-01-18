@@ -697,8 +697,7 @@ class Parallel_reader::Ctx {
         m_range(range),
         m_scan_ctx(scan_ctx),
         m_ddl_cleanout(nullptr) {
-    if (!lizard::opt_ddl_cleanout_disable &&
-        m_scan_ctx->m_config.m_is_ddl_parallel_scan) {
+    if (m_scan_ctx->m_config.m_is_ddl_parallel_scan) {
       m_ddl_cleanout = ut::new_<lizard::DDL_cleanout>();
     }
   }

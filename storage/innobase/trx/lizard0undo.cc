@@ -1103,7 +1103,6 @@ static void txn_free_remove_page(trx_rsegf_t *rseg_hdr, page_t *undo_page,
                                  mtr_t *mtr) {
   flst_remove(rseg_hdr + TXN_RSEG_FREE_LIST,
               undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
-  gcs->txn_undo_log_free_list_len.fetch_sub(1);
 }
 
 static page_t *txn_free_get_next_page(trx_rseg_t *rseg, mtr_t *mtr) {
@@ -1217,8 +1216,7 @@ static void txn_add_node_to_cached_list(trx_rseg_t *rseg, page_t *undo_page,
   UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
 
   MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-  LIZARD_MONITOR_INC_TXN_CACHED(1);
-  lizard_stats.txn_undo_log_recycle.inc();
+  generic_stats.txn_undo_log_recycle.inc();
 }
 
 /* txn retention end */
@@ -1310,7 +1308,7 @@ static dberr_t txn_undo_get_free(trx_t *trx, trx_rseg_t *rseg, ulint type,
     err = DB_OUT_OF_MEMORY;
     goto func_exit;
   } else {
-    lizard_stats.txn_undo_log_free_list_get.inc();
+    generic_stats.txn_undo_log_free_list_get.inc();
   }
 
 func_exit:
@@ -1348,7 +1346,7 @@ static dberr_t txn_undo_assign_undo(trx_t *trx, txn_undo_ptr_t *undo_ptr,
 
   rseg = undo_ptr->rseg;
 
-  lizard_stats.txn_undo_log_request.inc();
+  generic_stats.txn_undo_log_request.inc();
 
   mtr_start(&mtr);
 
@@ -1614,7 +1612,6 @@ void trx_txn_undo_cleanup(trx_t *trx, txn_undo_ptr_t *undo_ptr,
     UT_LIST_ADD_FIRST(rseg->txn_undo_cached, undo);
 
     MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-    LIZARD_MONITOR_INC_TXN_CACHED(1);
   } else {
     ut_ad(undo->state == TRX_UNDO_TO_PURGE);
 
@@ -1780,15 +1777,13 @@ void txn_purge_segment_to_free_list(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   flst_add_first(rseg_hdr + TXN_RSEG_FREE_LIST,
                  undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_NODE, mtr);
 
-  gcs->txn_undo_log_free_list_len.fetch_add(1);
-
   if (rseg->last_free_ommt.is_null()) {
     rseg->last_free_ommt = trx_undo_hdr_read_cmmt(log_hdr, mtr);
   }
 
   txn_undo_free_list_validation(rseg_hdr, undo_page, mtr);
 
-  lizard_stats.txn_undo_log_free_list_put.inc();
+  generic_stats.txn_undo_log_free_list_put.inc();
 }
 
 /**
@@ -2050,7 +2045,6 @@ void trx_undo_mem_init_for_txn(trx_rseg_t *rseg, trx_undo_t *undo,
     } else {
       UT_LIST_ADD_LAST(rseg->txn_undo_cached, undo);
       MONITOR_INC(MONITOR_NUM_UNDO_SLOT_CACHED);
-      LIZARD_MONITOR_INC_TXN_CACHED(1);
     }
   } else {
     ut_ad(!(flag & TRX_UNDO_FLAG_TXN));
@@ -2234,19 +2228,19 @@ static void trx_undo_write_2pp(trx_undo_t *undo, mtr_t *mtr) {
 
 /** When report update undo, set 2pp flag if need.
  *
- * @param[in]		index	clust index
- * @param[in]		trx	transaction context
- * @param[in/out]	undo	update undo
- * @param[in/out]	mtr */
+ * @param[in]		    index	  clust index or panda idnex
+ * @param[in]		    trx	    transaction context
+ * @param[in/out]	  undo	  update undo
+ * @param[in/out]	  mtr     mini transaction */
 void trx_undo_set_2pp_at_report(const dict_index_t *index, trx_t *trx,
-                                      trx_undo_t *update_undo,
-                                      bool is_2pp) {
+                                trx_undo_t *update_undo, bool is_2pp) {
   trx_undo_t *txn_undo = nullptr;
   trx_rseg_t *txn_rseg = nullptr;
   trx_rseg_t *redo_rseg = nullptr;
   mtr_t mtr;
   ut_ad(trx && update_undo);
-  ut_ad(index && index->is_clustered() && index->table);
+  ut_ad(index && index->table);
+  ut_ad(index->is_clustered() || index->is_panda());
 
   if (update_undo->is_2pp() || !is_2pp) {
     return;
@@ -2273,9 +2267,15 @@ void trx_undo_set_2pp_at_report(const dict_index_t *index, trx_t *trx,
   trx_undo_write_2pp(txn_undo, &mtr);
   trx_undo_write_2pp(update_undo, &mtr);
 
-  txn_rseg->unlatch();
+  txn_rseg->unlatch(false);
   redo_rseg->unlatch();
   mtr.commit();
+
+#ifdef UNIV_DEBUG
+  /** Validate the txn size after the undo page latches have been released. */
+  txn_rseg->latch();
+  txn_rseg->unlatch();
+#endif /* UNIV_DEBUG */
 }
 
 /**
@@ -2394,7 +2394,7 @@ static commit_mark_t trx_purge_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
   log_hdr = undo_page + addr.boffset;
   cmmt = trx_undo_hdr_read_cmmt(log_hdr, &mtr);
 
-  rseg->unlatch(false);
+  rseg->unlatch();
   mtr_commit(&mtr);
   return cmmt;
 }
@@ -2416,7 +2416,7 @@ commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
 
   cmmt = txn_free_get_last_log(rseg, addr, &mtr, stat);
 
-  rseg->unlatch(false);
+  rseg->unlatch();
   mtr_commit(&mtr);
   return cmmt;
 }

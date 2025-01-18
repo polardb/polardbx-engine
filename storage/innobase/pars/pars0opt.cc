@@ -552,7 +552,8 @@ static void opt_search_plan_for_table(
     plan->unique_search = false;
   }
 
-  plan->old_vers_heap = nullptr;
+  plan->lizard_old_vers_heap = nullptr;
+  plan->panda_old_vers_heap = nullptr;
 
   plan->pcur.init();
   plan->clust_pcur.init();

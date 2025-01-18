@@ -348,7 +348,7 @@ commit_mark_t trx_erase_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
       flst_get_last(rseg_hdr + TRX_RSEG_SEMI_PURGE_LIST, &mtr));
 
   if (addr.page == FIL_NULL) {
-    rseg->unlatch(false);
+    rseg->unlatch();
     mtr_commit(&mtr);
     return cmmt;
   }
@@ -362,7 +362,7 @@ commit_mark_t trx_erase_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
 
   cmmt = lizard::trx_undo_hdr_read_cmmt(log_hdr, &mtr);
 
-  rseg->unlatch(false);
+  rseg->unlatch();
   mtr_commit(&mtr);
   return cmmt;
 }
@@ -1075,9 +1075,6 @@ ulint trx_erase(ulint n_purge_threads, /*!< in: number of purge tasks
 */
 bool txn_rec_is_erased_by_precheck(const txn_rec_t *txn_rec) {
   if (txn_rec->is_committed()) {
-    /** scn must allocated */
-    lizard_ut_ad(txn_rec->scn > 0 && txn_rec->scn < SCN_MAX);
-
     return (txn_rec->scn <= erase_sys->erased_scn);
   }
   return false;

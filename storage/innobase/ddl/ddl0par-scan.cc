@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ddl0impl-builder.h"
 #include "ddl0impl-cursor.h"
+#include "my_sys.h"
 #include "row0pread.h"
 #include "row0row.h"
 #include "ut0stage.h"
@@ -96,6 +97,8 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
 
   ut_a(!m_ctx.m_online || m_ctx.m_trx->isolation_level ==
                               trx_t::isolation_level_t::REPEATABLE_READ);
+
+  DEBUG_SYNC_C("before_ddl_par_scan");
 
   size_t n_threads{};
 

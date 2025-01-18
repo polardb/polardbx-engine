@@ -1,5 +1,6 @@
 SET autocommit = 0;
 set global innodb_commit_cleanout_max_rows=0;
+set global innodb_lizard_stat_enabled=on;
 CREATE TABLE large_table (
 id INT AUTO_INCREMENT PRIMARY KEY,
 name VARCHAR(50),
@@ -33,5 +34,6 @@ ALTER TABLE large_table ADD INDEX idx_name (name);
 include/assert.inc [ddl_cleanout should make sense.]
 SET autocommit = 1;
 set global innodb_commit_cleanout_max_rows=3;
+set global innodb_lizard_stat_enabled=0;
 DROP PROCEDURE insert_data;
 DROP TABLE large_table;

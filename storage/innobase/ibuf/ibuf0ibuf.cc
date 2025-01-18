@@ -73,6 +73,10 @@ constexpr uint32_t IBUF_BITMAP = PAGE_DATA;
 #include "srv0start.h"
 #include "trx0sys.h"
 
+#include "lizard0fil0types.h"
+#include "lizard0btr0btr.h"
+#include "lizard0dict.h"
+
 /*      STRUCTURE OF AN INSERT BUFFER RECORD
 
 In versions < 4.1.x:
@@ -461,6 +465,7 @@ void ibuf_init_at_db_start(void) {
   mtr_t mtr;
   ulint n_used;
   page_t *header_page;
+  page_mark_t root_page;
 
   ibuf = static_cast<ibuf_t *>(
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(ibuf_t)));
@@ -524,7 +529,11 @@ void ibuf_init_at_db_start(void) {
   rw_lock_create(index_tree_rw_lock_key, &ibuf->index->lock,
                  LATCH_ID_IBUF_INDEX_TREE);
   ibuf->index->search_info = btr_search_info_create(ibuf->index->heap);
-  ibuf->index->page = FSP_IBUF_TREE_ROOT_PAGE_NO;
+
+  root_page.page_no = FSP_IBUF_TREE_ROOT_PAGE_NO;
+  root_page.page_type = lizard::dict_index_legacy_ptype(ibuf->index);
+  ibuf->index->root = root_page;
+
   ut_d(ibuf->index->cached = true);
 }
 
@@ -1395,6 +1404,8 @@ static dtuple_t *ibuf_build_entry_from_ibuf_rec_func(IF_DEBUG(mtr_t *mtr, )
 
   for (i = 0; i < n_fields; i++) {
     field = dtuple_get_nth_field(tuple, i);
+    /* Records of normal secondary indexes never contain any system columns. */
+    ut_a(field->type.mtype != DATA_SYS);
 
     data =
         rec_get_nth_field_old(nullptr, ibuf_rec, i + IBUF_REC_FIELD_USER, &len);
@@ -3019,6 +3030,7 @@ unique or clustered
   mtr_t bitmap_mtr;
 
   ut_a(!index->is_clustered());
+  ut_ad(!lizard::dict_index_is_panda(index));
   ut_ad(!dict_index_is_spatial(index));
   ut_ad(dtuple_check_typed(entry));
   ut_ad(!no_counter || op == IBUF_OP_INSERT);
@@ -3204,9 +3216,9 @@ unique or clustered
   cursor = pcur.get_btr_cur();
 
   if (mode == BTR_MODIFY_PREV) {
-    err = btr_cur_optimistic_insert(BTR_NO_LOCKING_FLAG, cursor, &offsets,
-                                    &offsets_heap, ibuf_entry, &ins_rec,
-                                    &dummy_big_rec, thr, &mtr);
+    err = btr_cur_optimistic_insert(BTR_NO_LOCKING_FLAG, TL_NONE, cursor,
+                                    &offsets, &offsets_heap, ibuf_entry,
+                                    &ins_rec, &dummy_big_rec, thr, &mtr);
     block = btr_cur_get_block(cursor);
     ut_ad(block->page.id.space() == IBUF_SPACE_ID);
 
@@ -3230,12 +3242,13 @@ unique or clustered
     root = ibuf_tree_root_get(&mtr);
 
     err = btr_cur_optimistic_insert(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG,
-                                    cursor, &offsets, &offsets_heap, ibuf_entry,
-                                    &ins_rec, &dummy_big_rec, thr, &mtr);
+                                    TL_NONE, cursor, &offsets, &offsets_heap,
+                                    ibuf_entry, &ins_rec, &dummy_big_rec, thr,
+                                    &mtr);
 
     if (err == DB_FAIL) {
       err = btr_cur_pessimistic_insert(
-          BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG, cursor, &offsets,
+          BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG, TL_NONE, cursor, &offsets,
           &offsets_heap, ibuf_entry, &ins_rec, &dummy_big_rec, thr, &mtr);
     }
 
@@ -3317,6 +3330,7 @@ bool ibuf_insert(ibuf_op_t op, const dtuple_t *entry, dict_index_t *index,
   ut_ad(!fsp_is_system_temporary(page_id.space()));
 
   ut_a(!index->is_clustered());
+  ut_a(!lizard::dict_index_is_panda(index));
 
   auto no_counter = use <= IBUF_USE_INSERT;
 
@@ -3619,8 +3633,8 @@ static void ibuf_insert_to_index_page(
       expects trx_id, roll_ptr for secondary indexes. So we
       just write dummy trx_id(0), roll_ptr(0) */
       /* Also, just write dummy scn(0), roll_ptr(0) */
-      btr_cur_update_in_place_log(BTR_KEEP_SYS_FLAG, rec, index, update, 0, 0,
-                                  nullptr, mtr);
+      btr_cur_update_in_place_log(BTR_KEEP_SYS_FLAG, TL_NONE, rec, index,
+                                  update, 0, 0, nullptr, mtr);
 
       DBUG_EXECUTE_IF("crash_after_log_ibuf_upd_inplace",
                       log_buffer_flush_to_disk();

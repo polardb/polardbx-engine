@@ -1886,10 +1886,11 @@ std::ostream &operator<<(std::ostream &o, const rec_offsets_print &r) {
   return (o);
 }
 
-/** Reads the DB_TRX_ID of a clustered index record.
+/** Reads the DB_TRX_ID of an index record.
  @return the value of DB_TRX_ID */
-trx_id_t rec_get_trx_id(const rec_t *rec,          /*!< in: record */
-                        const dict_index_t *index) /*!< in: clustered index */
+trx_id_t rec_get_trx_id(
+    const rec_t *rec,          /*!< in: record */
+    const dict_index_t *index) /*!< in: clustered index or panda index */
 {
   ulint trx_id_col = index->get_sys_col_pos(DATA_TRX_ID);
   const byte *trx_id;
@@ -1899,7 +1900,7 @@ trx_id_t rec_get_trx_id(const rec_t *rec,          /*!< in: record */
   ulint *offsets = offsets_;
   rec_offs_init(offsets_);
 
-  ut_ad(index->is_clustered());
+  ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(trx_id_col > 0);
   ut_ad(trx_id_col != ULINT_UNDEFINED);
 

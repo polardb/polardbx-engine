@@ -171,6 +171,7 @@ let $DATADIR = $MYSQL_TMP_DIR/data;
 --let $NON_INDEX_COL=pad
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=0
+--let $IS_PARTITION=0
 --source suite/lizard/include/gpp_has_options.inc
 
 --let $INDEX_COL=c

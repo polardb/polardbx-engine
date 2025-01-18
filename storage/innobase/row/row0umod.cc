@@ -54,9 +54,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "debug_sync.h"
 
+#include "lizard0btr0cur.h"
 #include "lizard0dbg.h"
 #include "lizard0row.h"
+#include "lizard0row0umod.h"
+#include "lizard0row0undo.h"
 #include "lizard0row0vers.h"
+#include "lizard0trx0rec.h"
+#include "lizard0undo.h"
 
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of
@@ -110,6 +115,8 @@ introduced where a call to log_free_check() is bypassed. */
   btr_cur_t *btr_cur;
   dberr_t err;
   trx_t *trx = thr_get_trx(thr);
+  const txn_layout_t layout = node->layout;
+  ut_ad(layout == TL_CLOVER);
 
   pcur = &node->pcur;
   btr_cur = pcur->get_btr_cur();
@@ -141,7 +148,7 @@ introduced where a call to log_free_check() is bypassed. */
 
     err = btr_cur_optimistic_update(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
                                         BTR_KEEP_SYS_FLAG | BTR_KEEP_POS_FLAG,
-                                    btr_cur, offsets, offsets_heap,
+                                    layout, btr_cur, offsets, offsets_heap,
                                     node->update, node->cmpl_info, thr,
                                     thr_get_trx(thr)->id, mtr);
   } else {
@@ -150,8 +157,9 @@ introduced where a call to log_free_check() is bypassed. */
     err = btr_cur_pessimistic_update(
         BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG |
             BTR_KEEP_POS_FLAG,
-        btr_cur, offsets, offsets_heap, heap, &dummy_big_rec, node->update,
-        node->cmpl_info, thr, thr_get_trx(thr)->id, node->undo_no, mtr, pcur);
+        layout, btr_cur, offsets, offsets_heap, heap, &dummy_big_rec,
+        node->update, node->cmpl_info, thr, thr_get_trx(thr)->id, node->undo_no,
+        mtr, pcur);
 
     const rec_t *rec = btr_cur_get_rec(btr_cur);
     ut_a(!dummy_big_rec || materialize_instant_default(btr_cur->index, rec));
@@ -193,7 +201,7 @@ introduced where a call to log_free_check() is bypassed. */
 
   lizard_ut_ad(node->new_trx_id == node->txn_rec.trx_id);
   if (!node->pcur.restore_position(mode, mtr, UT_LOCATION_HERE) ||
-      lizard::row_vers_must_preserve_del_marked(&node->txn_rec, node->table)) {
+      lizard::row_clust_vers_must_preserve_del_marked(&node->txn_rec, node->table)) {
     return (DB_SUCCESS);
   }
 
@@ -376,6 +384,8 @@ introduced where a call to log_free_check() is bypassed. */
     pcur->commit_specify_mtr(&mtr);
   }
 
+  DEBUG_SYNC_C("ib_clust_after_undo_mod");
+
   node->state = UNDO_NODE_FETCH_NEXT;
 
   if (offsets_heap) {
@@ -496,8 +506,11 @@ introduced where a call to log_free_check() is bypassed. */
   old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers,
                                          index, entry, 0, 0);
   if (old_has) {
-    err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, true, thr,
-                                       &mtr);
+    const txn_layout_t layout = lizard::dict_index_txn_layout(index);
+    ut_ad(layout == TL_NONE);
+    err =
+        btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG,
+                                     layout, btr_cur, true, thr, &mtr);
     ut_ad(err == DB_SUCCESS);
   } else {
     /* Remove the index record */
@@ -584,7 +597,7 @@ func_exit_no_pcur:
     que_thr_t *thr,      /*!< in: query thread */
     dict_index_t *index, /*!< in: index */
     dtuple_t *entry,     /*!< in: index entry */
-    undo_no_t undo_no)
+    undo_no_t undo_no)   /*!< in: undo no */
 /*!< in: undo number up to which to rollback.*/
 {
   btr_pcur_t pcur;
@@ -595,6 +608,8 @@ func_exit_no_pcur:
   mtr_t mtr;
   trx_t *trx = thr_get_trx(thr);
   const ulint flags = BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG;
+  const txn_layout_t layout = lizard::dict_index_txn_layout(index);
+  ut_ad(layout == TL_NONE);
   row_search_result search_result;
   ulint orig_mode = mode;
 
@@ -683,13 +698,25 @@ try_again:
       }
 
       if ((btr_cur->up_match >= dict_index_get_n_unique(index) ||
-           btr_cur->low_match >= dict_index_get_n_unique(index)) &&
+           (btr_cur->low_match >= dict_index_get_n_unique(index) &&
+            !page_rec_is_infimum(btr_cur_get_rec(btr_cur)))) &&
           (!index->n_nullable || !dtuple_contains_null(entry))) {
         if (index->is_committed()) {
           ib::warn(ER_IB_MSG_1040) << "Record in index " << index->name
                                    << " was not found on rollback, and"
                                       " a duplicate exists";
         }
+        /*
+         * We are now in the phase after row log application but before MDL
+         * upgrade. During this phase:
+         * - DML transactions are not blocked by the DDL operation and can
+         * directly modify the B-tree.
+         * - Due to the lack of precise logic for iterative search and record
+         * locking (as implemented in `row_ins_scan_sec_index_for_duplicate`),
+         *   We must tolerate potential duplicate key errors.
+         */
+        lizard::btr_cur_print_duplicate_error_in_uk_online(
+            btr_cur, index, entry, UT_LOCATION_HERE);
         err = DB_DUPLICATE_KEY;
         break;
       }
@@ -701,14 +728,14 @@ try_again:
       offsets = nullptr;
       offsets_heap = nullptr;
 
-      err = btr_cur_optimistic_insert(flags, btr_cur, &offsets, &offsets_heap,
+      err = btr_cur_optimistic_insert(flags, layout, btr_cur, &offsets, &offsets_heap,
                                       entry, &insert_rec, &big_rec, thr, &mtr);
       ut_ad(!big_rec);
 
       if (err == DB_FAIL && mode == BTR_MODIFY_TREE) {
-        err =
-            btr_cur_pessimistic_insert(flags, btr_cur, &offsets, &offsets_heap,
-                                       entry, &insert_rec, &big_rec, thr, &mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, btr_cur, &offsets,
+                                         &offsets_heap, entry, &insert_rec,
+                                         &big_rec, thr, &mtr);
         /* There are no off-page columns in
         secondary indexes. */
         ut_ad(!big_rec);
@@ -725,8 +752,9 @@ try_again:
 
       break;
     case ROW_FOUND:
-      err = btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG, btr_cur, false,
-                                         thr, &mtr);
+      err = btr_cur_del_mark_set_sec_rec(
+          BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG, layout, btr_cur, false,
+          thr, &mtr);
 
       ut_a(err == DB_SUCCESS);
       heap = mem_heap_create(
@@ -746,9 +774,9 @@ try_again:
         changes within the page */
 
         /* TODO: pass offsets, not &offsets */
-        err = btr_cur_optimistic_update(flags, btr_cur, &offsets, &offsets_heap,
-                                        update, 0, thr, thr_get_trx(thr)->id,
-                                        &mtr);
+        err = btr_cur_optimistic_update(flags, layout, btr_cur, &offsets,
+                                        &offsets_heap, update, 0, thr,
+                                        thr_get_trx(thr)->id, &mtr);
         switch (err) {
           case DB_OVERFLOW:
           case DB_UNDERFLOW:
@@ -758,9 +786,10 @@ try_again:
             break;
         }
       } else {
-        err = btr_cur_pessimistic_update(
-            flags, btr_cur, &offsets, &offsets_heap, heap, &dummy_big_rec,
-            update, 0, thr, thr_get_trx(thr)->id, undo_no, &mtr);
+        err = btr_cur_pessimistic_update(flags, layout, btr_cur, &offsets,
+                                         &offsets_heap, heap, &dummy_big_rec,
+                                         update, 0, thr, thr_get_trx(thr)->id,
+                                         undo_no, &mtr);
         ut_a(!dummy_big_rec);
       }
 
@@ -794,6 +823,30 @@ static void row_undo_mod_sec_flag_corrupted(
       transaction. */
       dict_set_corrupted(index);
   }
+}
+
+/* Skip secondary indexes while undo-modifying the clustered undo logs. */
+static inline void row_undo_mod_skip_index(dict_index_t *&index) {
+  while (index) {
+    /* Skip corrupted index */
+    if (index->is_corrupted()) {
+      goto next_index;
+    }
+
+    /* Skip panda index */
+    if (index->is_panda()) {
+      goto next_index;
+    }
+    break;
+  next_index:
+    index = index->next();
+  }
+}
+
+/* Get the next suitable index while undo-modifying the clustered undo logs. */
+static inline void row_undo_mod_next_suitable_index(dict_index_t *&index) {
+  index = index->next();
+  row_undo_mod_skip_index(index);
 }
 
 /** Undoes a modify in secondary indexes when undo record type is UPD_DEL.
@@ -844,7 +897,7 @@ This is the specific function to handle the modify on multi-value indexes.
     dtuple_t *entry;
 
     if (index->type & DICT_FTS) {
-      dict_table_next_uncorrupted_index(node->index);
+      row_undo_mod_next_suitable_index(node->index);
       continue;
     }
 
@@ -855,7 +908,7 @@ This is the specific function to handle the modify on multi-value indexes.
       }
 
       mem_heap_empty(heap);
-      dict_table_next_uncorrupted_index(node->index);
+      row_undo_mod_next_suitable_index(node->index);
       continue;
     }
 
@@ -888,7 +941,7 @@ This is the specific function to handle the modify on multi-value indexes.
     }
 
     mem_heap_empty(heap);
-    dict_table_next_uncorrupted_index(node->index);
+    row_undo_mod_next_suitable_index(node->index);
   }
 
   mem_heap_free(heap);
@@ -956,7 +1009,7 @@ This is the specific function to handle the modify on multi-value indexes.
     dtuple_t *entry;
 
     if (index->type == DICT_FTS) {
-      dict_table_next_uncorrupted_index(node->index);
+      row_undo_mod_next_suitable_index(node->index);
       continue;
     }
 
@@ -967,7 +1020,7 @@ This is the specific function to handle the modify on multi-value indexes.
       }
 
       mem_heap_empty(heap);
-      dict_table_next_uncorrupted_index(node->index);
+      row_undo_mod_next_suitable_index(node->index);
       continue;
     }
 
@@ -1003,7 +1056,7 @@ This is the specific function to handle the modify on multi-value indexes.
     }
 
     mem_heap_empty(heap);
-    dict_table_next_uncorrupted_index(node->index);
+    row_undo_mod_next_suitable_index(node->index);
   }
 
   mem_heap_free(heap);
@@ -1093,7 +1146,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
       if (!row_upd_changes_ord_field_binary_func(
               index, node->update, IF_DEBUG(thr, ) node->row, node->ext,
               nullptr, ROW_BUILD_FOR_UNDO)) {
-        dict_table_next_uncorrupted_index(node->index);
+        row_undo_mod_next_suitable_index(node->index);
         continue;
       }
     } else {
@@ -1101,7 +1154,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
           !row_upd_changes_ord_field_binary(
               index, node->update, thr, node->row, node->ext,
               (index->is_multi_value() ? &non_mv_upd : nullptr))) {
-        dict_table_next_uncorrupted_index(node->index);
+        row_undo_mod_next_suitable_index(node->index);
         continue;
       }
     }
@@ -1110,7 +1163,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
       err =
           row_undo_mod_upd_exist_multi_sec(node, thr, index, non_mv_upd, heap);
       mem_heap_empty(heap);
-      dict_table_next_uncorrupted_index(node->index);
+      row_undo_mod_next_suitable_index(node->index);
       continue;
     }
 
@@ -1191,7 +1244,7 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
     }
 
     mem_heap_empty(heap);
-    dict_table_next_uncorrupted_index(node->index);
+    row_undo_mod_next_suitable_index(node->index);
   }
 
   mem_heap_free(heap);
@@ -1205,10 +1258,11 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
 @param[in,out]  mdl     MDL ticket or nullptr if unnecessary */
 static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
                                         MDL_ticket **mdl) {
-  dict_index_t *clust_index;
+  dict_index_t *index;
   byte *ptr;
   undo_no_t undo_no;
   table_id_t table_id;
+  space_index_t index_id;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   ulint info_bits;
@@ -1220,9 +1274,13 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
 
   txn_info_t txn_info;
 
-  ptr = trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, &dummy_extern,
-                              &undo_no, &table_id, &is_2pp, type_cmpl);
+  ptr =
+      trx_undo_rec_get_pars(node->undo_rec, &type, &cmpl_info, &dummy_extern,
+                            &undo_no, &table_id, &index_id, &is_2pp, type_cmpl);
   node->rec_type = type;
+  node->layout = type_cmpl.txn_layout();
+  node->is_rlog = type_cmpl.is_rlog();
+  ut_ad(!node->is_rlog || node->rec_type == TRX_UNDO_DEL_MARK_REC);
 
   /* Although table IX lock is held now, DROP TABLE could still be
   done concurrently. To prevent this, MDL for this table should be
@@ -1237,6 +1295,7 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
   }
 
   if (node->table->ibd_file_missing) {
+  close_table:
     dd_table_close(node->table, thd, mdl, false);
 
     /* We skip undo operations to missing .ibd files */
@@ -1247,17 +1306,32 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
 
   ut_ad(!node->table->skip_alter_undo);
 
-  clust_index = node->table->first_index();
+  index = lizard::trx_undo_rec_choose_index(node->table, type_cmpl, index_id);
+  if (!index) {
+    /* Ignore the undo log derived from row log when recovering. */
+    ut_ad(node->is_rlog);
+    ib::warn(ER_IB_MSG_1037)
+        << "Table " << node->table->name << " has no index_id = " << index_id
+        << ", ignoring the index";
+    goto close_table;
+  }
+  node->index_id = index_id;
+
+  if (node->is_rlog) {
+    ptr = lizard::trx_undo_rec_get_row_ref_derived_from_row_log(
+        ptr, index, &(node->ref), node->heap);
+    return;
+  }
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
 
-  ptr = lizard::trx_undo_update_rec_get_lizard_cols(ptr, &txn_info);
+  ptr = lizard::trx_undo_update_rec_get_txn_cols(ptr, &txn_info, node->layout);
 
-  ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &(node->ref), node->heap);
+  ptr = trx_undo_rec_get_row_ref(ptr, index, &(node->ref), node->heap);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr,
-                                       info_bits, node->heap, &(node->update),
-                                       nullptr, type_cmpl, txn_info);
+  ptr = trx_undo_update_rec_get_update(
+      ptr, index, type, trx_id, roll_ptr, info_bits, node->heap,
+      &(node->update), nullptr, type_cmpl, txn_info, node->layout);
 
   node->new_trx_id = trx_id;
   node->txn_rec.trx_id = trx_id;
@@ -1266,18 +1340,68 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
   node->txn_rec.gcn = txn_info.gcn;
   node->cmpl_info = cmpl_info;
 
-  if (!row_undo_search_clust_to_pcur(node)) {
-    dd_table_close(node->table, thd, mdl, false);
+  switch (node->layout) {
+    case TL_CLOVER:
+      if (!row_undo_search_clust_to_pcur(node)) {
+        dd_table_close(node->table, thd, mdl, false);
 
-    node->table = nullptr;
+        node->table = nullptr;
+      }
+
+      /* Extract indexed virtual columns from undo log */
+      if (node->table && node->table->n_v_cols) {
+        row_upd_replace_vcol(
+            node->row, node->table, node->update, false, node->undo_row,
+            (node->cmpl_info & UPD_NODE_NO_ORD_CHANGE) ? nullptr : ptr);
+      }
+      break;
+
+    case TL_BAMBOO:
+      ut_ad(!node->is_rlog);
+      if (!lizard::row_undo_search_panda_to_pcur(node, index)) {
+        goto close_table;
+      }
+      break;
+
+    default:
+      ut_error;
+  }
+}
+
+static dberr_t row_undo_mod_record(undo_node_t *node, que_thr_t *thr, THD *thd,
+                                   MDL_ticket *mdl) {
+  dberr_t err;
+  node->index = node->table->first_index();
+  ut_ad(node->index->is_clustered());
+  ut_ad(!node->is_rlog);
+  /* Skip the clustered index (the first index) */
+  node->index = node->index->next();
+
+  /* Skip secondary indexes */
+  row_undo_mod_skip_index(node->index);
+
+  switch (node->rec_type) {
+    case TRX_UNDO_UPD_EXIST_REC:
+      err = row_undo_mod_upd_exist_sec(node, thr);
+      break;
+    case TRX_UNDO_DEL_MARK_REC:
+      err = row_undo_mod_del_mark_sec(node, thr);
+      break;
+    case TRX_UNDO_UPD_DEL_REC:
+      err = row_undo_mod_upd_del_sec(node, thr);
+      break;
+    default:
+      ut_error;
   }
 
-  /* Extract indexed virtual columns from undo log */
-  if (node->table && node->table->n_v_cols) {
-    row_upd_replace_vcol(
-        node->row, node->table, node->update, false, node->undo_row,
-        (node->cmpl_info & UPD_NODE_NO_ORD_CHANGE) ? nullptr : ptr);
+  if (err == DB_SUCCESS) {
+    err = row_undo_mod_clust(node, thr);
   }
+
+  dd_table_close(node->table, thd, &mdl, false);
+
+  node->table = nullptr;
+  return err;
 }
 
 /** Undoes a modify operation on a row of a table.
@@ -1310,35 +1434,22 @@ dberr_t row_undo_mod(undo_node_t *node, /*!< in: row undo node */
     return (DB_SUCCESS);
   }
 
-  node->index = node->table->first_index();
-  ut_ad(node->index->is_clustered());
-  /* Skip the clustered index (the first index) */
-  node->index = node->index->next();
+  switch (node->layout) {
+    case TL_CLOVER:
+      err = row_undo_mod_record(node, thr, thd, mdl);
+      break;
+    case TL_BAMBOO:
+      if (node->is_rlog) {
+        err = lizard::row_undo_mod_record_for_rlog(node, thr, thd, mdl);
+      } else {
+        err = lizard::row_undo_mod_record_for_panda(node, thr, thd, mdl);
+      }
+      break;
 
-  /* Skip all corrupted secondary index */
-  dict_table_skip_corrupt_index(node->index);
-
-  switch (node->rec_type) {
-    case TRX_UNDO_UPD_EXIST_REC:
-      err = row_undo_mod_upd_exist_sec(node, thr);
-      break;
-    case TRX_UNDO_DEL_MARK_REC:
-      err = row_undo_mod_del_mark_sec(node, thr);
-      break;
-    case TRX_UNDO_UPD_DEL_REC:
-      err = row_undo_mod_upd_del_sec(node, thr);
-      break;
     default:
+      err = DB_ERROR;
       ut_error;
   }
-
-  if (err == DB_SUCCESS) {
-    err = row_undo_mod_clust(node, thr);
-  }
-
-  dd_table_close(node->table, thd, &mdl, false);
-
-  node->table = nullptr;
 
   return (err);
 }

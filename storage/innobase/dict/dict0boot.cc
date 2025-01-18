@@ -44,6 +44,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0srv.h"
 #include "trx0trx.h"
 
+#include "lizard0btr0btr.h"
+
 /** Gets a pointer to the dictionary header and x-latches its page.
  @return pointer to the dictionary header, page x-latched */
 dict_hdr_t *dict_hdr_get(mtr_t *mtr) /*!< in: mtr */
@@ -235,6 +237,7 @@ dberr_t dict_boot(void) {
     dict_table_t *table;
     dict_index_t *index;
     mem_heap_t *heap;
+    page_mark_t root;
 
     /* Be sure these constants do not ever change.  To avoid bloat,
     only check the *NUM_FIELDS* in each table */
@@ -291,10 +294,12 @@ dberr_t dict_boot(void) {
     index->add_field("NAME", 0, true);
 
     index->id = DICT_TABLES_ID;
+    root.page_no =
+        mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr);
+    root.page_type = lizard::dict_index_legacy_ptype(index);
 
-    err = dict_index_add_to_cache(
-        table, index,
-        mtr_read_ulint(dict_hdr + DICT_HDR_TABLES, MLOG_4BYTES, &mtr), false);
+    err = dict_index_add_to_cache(table, index, root, FIL_PAGE_TYPE_UNUSED,
+                                  false);
     ut_a(err == DB_SUCCESS);
 
     /*-------------------------*/
@@ -303,11 +308,12 @@ dberr_t dict_boot(void) {
     index->add_field("ID", 0, true);
 
     index->id = DICT_TABLE_IDS_ID;
+    root.page_no =
+        mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr);
+    root.page_type = lizard::dict_index_legacy_ptype(index);
 
-    err = dict_index_add_to_cache(
-        table, index,
-        mtr_read_ulint(dict_hdr + DICT_HDR_TABLE_IDS, MLOG_4BYTES, &mtr),
-        false);
+    err = dict_index_add_to_cache(table, index, root, FIL_PAGE_TYPE_UNUSED,
+                                  false);
     ut_a(err == DB_SUCCESS);
 
     /*-------------------------*/
@@ -337,10 +343,12 @@ dberr_t dict_boot(void) {
     index->add_field("POS", 0, true);
 
     index->id = DICT_COLUMNS_ID;
+    root.page_no =
+        mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr);
+    root.page_type = lizard::dict_index_legacy_ptype(index);
 
-    err = dict_index_add_to_cache(
-        table, index,
-        mtr_read_ulint(dict_hdr + DICT_HDR_COLUMNS, MLOG_4BYTES, &mtr), false);
+    err = dict_index_add_to_cache(table, index, root, FIL_PAGE_TYPE_UNUSED,
+                                  false);
     ut_a(err == DB_SUCCESS);
 
     /*-------------------------*/
@@ -373,10 +381,12 @@ dberr_t dict_boot(void) {
     index->add_field("ID", 0, true);
 
     index->id = DICT_INDEXES_ID;
+    root.page_no = 
+        mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr);
+    root.page_type = lizard::dict_index_legacy_ptype(index);
 
-    err = dict_index_add_to_cache(
-        table, index,
-        mtr_read_ulint(dict_hdr + DICT_HDR_INDEXES, MLOG_4BYTES, &mtr), false);
+    err = dict_index_add_to_cache(table, index, root, FIL_PAGE_TYPE_UNUSED,
+                                  false);
     ut_a(err == DB_SUCCESS);
 
     /*-------------------------*/
@@ -402,10 +412,12 @@ dberr_t dict_boot(void) {
     index->add_field("POS", 0, true);
 
     index->id = DICT_FIELDS_ID;
+    root.page_no =
+        mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr);
+    root.page_type = lizard::dict_index_legacy_ptype(index);
 
-    err = dict_index_add_to_cache(
-        table, index,
-        mtr_read_ulint(dict_hdr + DICT_HDR_FIELDS, MLOG_4BYTES, &mtr), false);
+    err = dict_index_add_to_cache(table, index, root, FIL_PAGE_TYPE_UNUSED,
+                                  false);
     ut_a(err == DB_SUCCESS);
 
     dict_sys_mutex_enter();

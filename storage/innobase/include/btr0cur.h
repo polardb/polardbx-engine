@@ -233,51 +233,54 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
  prevent trying to split a page with just one record.
  @return DB_SUCCESS, DB_WAIT_LOCK, DB_FAIL, or error number */
 [[nodiscard]] dberr_t btr_cur_optimistic_insert(
-    ulint flags,         /*!< in: undo logging and locking flags: if not
-                         zero, the parameters index and thr should be
-                         specified */
-    btr_cur_t *cursor,   /*!< in: cursor on page after which to insert;
-                         cursor stays valid */
-    ulint **offsets,     /*!< out: offsets on *rec */
-    mem_heap_t **heap,   /*!< in/out: pointer to memory heap, or NULL */
-    dtuple_t *entry,     /*!< in/out: entry to insert */
-    rec_t **rec,         /*!< out: pointer to inserted record if
-                         succeed */
-    big_rec_t **big_rec, /*!< out: big rec vector whose fields have to
-                         be stored externally by the caller, or
-                         NULL */
-    que_thr_t *thr,      /*!< in: query thread or NULL */
-    mtr_t *mtr);         /*!< in/out: mini-transaction;
-                        if this function returns DB_SUCCESS on
-                        a leaf page of a secondary index in a
-                        compressed tablespace, the caller must
-                        mtr_commit(mtr) before latching
-                        any further pages */
+    ulint flags,                /*!< in: undo logging and locking flags: if not
+                                zero, the parameters index and thr should be
+                                specified */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor on page after which to insert;
+                                cursor stays valid */
+    ulint **offsets,            /*!< out: offsets on *rec */
+    mem_heap_t **heap,          /*!< in/out: pointer to memory heap, or NULL */
+    dtuple_t *entry,            /*!< in/out: entry to insert */
+    rec_t **rec,                /*!< out: pointer to inserted record if
+                                succeed */
+    big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
+                                be stored externally by the caller, or
+                                NULL */
+    que_thr_t *thr,             /*!< in: query thread or NULL */
+    mtr_t *mtr);                /*!< in/out: mini-transaction;
+                              if this function returns DB_SUCCESS on
+                              a leaf page of a secondary index in a
+                              compressed tablespace, the caller must
+                              mtr_commit(mtr) before latching
+                              any further pages */
+
 /** Performs an insert on a page of an index tree. It is assumed that mtr
  holds an x-latch on the tree and on the cursor page. If the insert is
  made on the leaf level, to avoid deadlocks, mtr must also own x-latches
  to brothers of page, if those brothers exist.
  @return DB_SUCCESS or error number */
 [[nodiscard]] dberr_t btr_cur_pessimistic_insert(
-    uint32_t flags,      /*!< in: undo logging and locking flags: if not
-                         zero, the parameter thr should be
-                         specified; if no undo logging is specified,
-                         then the caller must have reserved enough
-                         free extents in the file space so that the
-                         insertion will certainly succeed */
-    btr_cur_t *cursor,   /*!< in: cursor after which to insert;
-                         cursor stays valid */
-    ulint **offsets,     /*!< out: offsets on *rec */
-    mem_heap_t **heap,   /*!< in/out: pointer to memory heap
-                         that can be emptied, or NULL */
-    dtuple_t *entry,     /*!< in/out: entry to insert */
-    rec_t **rec,         /*!< out: pointer to inserted record if
-                         succeed */
-    big_rec_t **big_rec, /*!< out: big rec vector whose fields have to
-                         be stored externally by the caller, or
-                         NULL */
-    que_thr_t *thr,      /*!< in: query thread or NULL */
-    mtr_t *mtr);         /*!< in/out: mini-transaction */
+    uint32_t flags,             /*!< in: undo logging and locking flags: if not
+                                zero, the parameter thr should be
+                                specified; if no undo logging is specified,
+                                then the caller must have reserved enough
+                                free extents in the file space so that the
+                                insertion will certainly succeed */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor after which to insert;
+                                cursor stays valid */
+    ulint **offsets,            /*!< out: offsets on *rec */
+    mem_heap_t **heap,          /*!< in/out: pointer to memory heap
+                                that can be emptied, or NULL */
+    dtuple_t *entry,            /*!< in/out: entry to insert */
+    rec_t **rec,                /*!< out: pointer to inserted record if
+                                succeed */
+    big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
+                                be stored externally by the caller, or
+                                NULL */
+    que_thr_t *thr,             /*!< in: query thread or NULL */
+    mtr_t *mtr);                /*!< in/out: mini-transaction */
 /** See if there is enough place in the page modification log to log
  an update-in-place.
 
@@ -310,6 +313,7 @@ inline bool btr_cur_update_alloc_zip(page_zip_des_t *page_zip,
 
 /** Updates a record when the update causes no size changes in its fields.
 @param[in] flags Undo logging and locking flags
+@param[in] layout Txn layout
 @param[in] cursor Cursor on the record to update; cursor stays valid and
 positioned on the same record
 @param[in,out] offsets Offsets on cursor->page_cur.rec
@@ -324,25 +328,29 @@ must mtr_commit(mtr) before latching any further pages
 @retval DB_SUCCESS on success
 @retval DB_ZIP_OVERFLOW if there is not enough space left
 on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
-[[nodiscard]] dberr_t btr_cur_update_in_place(ulint flags, btr_cur_t *cursor,
-                                              ulint *offsets,
+[[nodiscard]] dberr_t btr_cur_update_in_place(ulint flags,
+                                              const txn_layout_t &layout,
+                                              btr_cur_t *cursor, ulint *offsets,
                                               const upd_t *update,
                                               ulint cmpl_info, que_thr_t *thr,
                                               trx_id_t trx_id, mtr_t *mtr);
 
 /** Writes a redo log record of updating a record in-place.
 @param[in] flags Undo logging and locking flags
+@param[in] layout Txn layout
 @param[in] rec Record
 @param[in] index Index of the record
 @param[in] update Update vector
 @param[in] trx_id Transaction id
 @param[in] roll_ptr Roll ptr
 @param[in] txn_rec lizard info in the record
-@param[in] mtr Mini-transaction */
-void btr_cur_update_in_place_log(ulint flags, const rec_t *rec,
-                                 dict_index_t *index, const upd_t *update,
-                                 trx_id_t trx_id, roll_ptr_t roll_ptr,
-                                 const txn_rec_t *txn_rec, mtr_t *mtr);
+@param[in] mtr Mini-transaction
+*/
+void btr_cur_update_in_place_log(ulint flags, const txn_layout_t &layout,
+                                 const rec_t *rec, dict_index_t *index,
+                                 const upd_t *update, trx_id_t trx_id,
+                                 roll_ptr_t roll_ptr, const txn_rec_t *txn_rec,
+                                 mtr_t *mtr);
 
 /** Tries to update a record on a page in an index tree. It is assumed that mtr
 holds an x-latch on the page. The operation does not succeed if there is too
@@ -350,6 +358,7 @@ little space on the page or if the update would result in too empty a page,
 so that tree compression is recommended. We assume here that the ordering
 fields of the record do not change.
 @param[in]     flags     undo logging and locking flags
+@param[in]     layout    Txn layout
 @param[in]     cursor    cursor on the record to update; cursor stays valid and
 positioned on the same record
 @param[out]    offsets   offsets on cursor->page_cur.rec
@@ -369,12 +378,10 @@ caller must mtr_commit(mtr) before latching any further pages
 @retval DB_UNDERFLOW if the page would become too empty
 @retval DB_ZIP_OVERFLOW if there is not enough space left
 on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
-[[nodiscard]] dberr_t btr_cur_optimistic_update(ulint flags, btr_cur_t *cursor,
-                                                ulint **offsets,
-                                                mem_heap_t **heap,
-                                                const upd_t *update,
-                                                ulint cmpl_info, que_thr_t *thr,
-                                                trx_id_t trx_id, mtr_t *mtr);
+[[nodiscard]] dberr_t btr_cur_optimistic_update(
+    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, ulint **offsets,
+    mem_heap_t **heap, const upd_t *update, ulint cmpl_info, que_thr_t *thr,
+    trx_id_t trx_id, mtr_t *mtr);
 
 /** Performs an update of a record on a page of a tree. It is assumed
 that mtr holds an x-latch on the tree and on the cursor page. If the
@@ -405,13 +412,14 @@ this.
 LOB.
 @param[in,out] mtr           Mini-transaction; must be committed before
 latching any further pages
+@param[in]     layout        Txn layout
 @param[in]     pcur          The persistent cursor on the record to update.
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t btr_cur_pessimistic_update(
-    ulint flags, btr_cur_t *cursor, ulint **offsets, mem_heap_t **offsets_heap,
-    mem_heap_t *entry_heap, big_rec_t **big_rec, upd_t *update, ulint cmpl_info,
-    que_thr_t *thr, trx_id_t trx_id, undo_no_t undo_no, mtr_t *mtr,
-    btr_pcur_t *pcur = nullptr);
+    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, ulint **offsets,
+    mem_heap_t **offsets_heap, mem_heap_t *entry_heap, big_rec_t **big_rec,
+    upd_t *update, ulint cmpl_info, que_thr_t *thr, trx_id_t trx_id,
+    undo_no_t undo_no, mtr_t *mtr, btr_pcur_t *pcur = nullptr);
 
 /** Marks a clustered index record deleted. Writes an undo log record to
  undo log on this delete marking. Writes in the trx id field the id
@@ -419,22 +427,24 @@ latching any further pages
  undo log record created.
  @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
 [[nodiscard]] dberr_t btr_cur_del_mark_set_clust_rec(
-    ulint flags,           /*!< in: undo logging and locking flags */
-    buf_block_t *block,    /*!< in/out: buffer block of the record */
-    rec_t *rec,            /*!< in/out: record */
-    dict_index_t *index,   /*!< in: clustered index of the record */
-    const ulint *offsets,  /*!< in: rec_get_offsets(rec) */
-    que_thr_t *thr,        /*!< in: query thread */
-    const dtuple_t *entry, /*!< in: dtuple for the deleting record */
-    mtr_t *mtr);           /*!< in/out: mini-transaction */
+    ulint flags,                /*!< in: undo logging and locking flags */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    buf_block_t *block,         /*!< in/out: buffer block of the record */
+    rec_t *rec,                 /*!< in/out: record */
+    dict_index_t *index,        /*!< in: clustered index of the record */
+    const ulint *offsets,       /*!< in: rec_get_offsets(rec) */
+    que_thr_t *thr,             /*!< in: query thread */
+    const dtuple_t *entry,      /*!< in: dtuple for the deleting record */
+    mtr_t *mtr);                /*!< in/out: mini-transaction */
 /** Sets a secondary index record delete mark to true or false.
  @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
 [[nodiscard]] dberr_t btr_cur_del_mark_set_sec_rec(
-    ulint flags,       /*!< in: locking flag */
-    btr_cur_t *cursor, /*!< in: cursor */
-    bool val,          /*!< in: value to set */
-    que_thr_t *thr,    /*!< in: query thread */
-    mtr_t *mtr);       /*!< in/out: mini-transaction */
+    ulint flags,                /*!< in: locking flag */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor */
+    bool val,                   /*!< in: value to set */
+    que_thr_t *thr,             /*!< in: query thread */
+    mtr_t *mtr);                /*!< in/out: mini-transaction */
 /** Tries to compress a page of the tree if it seems useful. It is assumed
  that mtr holds an x-latch on the tree and on the cursor page. To avoid
  deadlocks, mtr must also own x-latches to brothers of page, if those
@@ -504,11 +514,12 @@ bool btr_cur_pessimistic_delete(dberr_t *err, bool has_reserved_extents,
 /** Parses a redo log record of updating a record in-place.
  @return end of log record or NULL */
 byte *btr_cur_parse_update_in_place(
-    byte *ptr,                /*!< in: buffer */
-    byte *end_ptr,            /*!< in: buffer end */
-    page_t *page,             /*!< in/out: page or NULL */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page, or NULL */
-    dict_index_t *index);     /*!< in: index corresponding to page */
+    byte *ptr,                   /*!< in: buffer */
+    byte *end_ptr,               /*!< in: buffer end */
+    page_t *page,                /*!< in/out: page or NULL */
+    page_zip_des_t *page_zip,    /*!< in/out: compressed page, or NULL */
+    dict_index_t *index,         /*!< in: index corresponding to page */
+    const txn_layout_t &layout); /*!< in: txn layout */
 /** Parses the redo log record for delete marking or unmarking of a
  clustered index record.
  @return end of log record or NULL */

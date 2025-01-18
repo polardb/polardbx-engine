@@ -64,6 +64,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 
 #include "lizard0row.h"
+#include "lizard0trx0rec.h"
+#include "lizard0undo.h"
 #include "lizard0undo0types.h"
 #include "lizard0row0gpp.h"
 
@@ -634,17 +636,30 @@ retry:
   ut_a(success);
 }
 
-/** Skip uncommitted virtual indexes on newly added virtual column.
-@param[in,out]  index   dict index object */
-static inline void row_purge_skip_uncommitted_virtual_index(
-    dict_index_t *&index) {
-  /* We need to skip virtual indexes which is not
-  committed yet. It's safe because these indexes are
-  newly created by alter table, and because we do
-  not support LOCK=NONE when adding an index on newly
-  added virtual column.*/
-  while (index != nullptr && dict_index_has_virtual(index) &&
-         !index->is_committed() && index->has_new_v_col) {
+/* Skip secondary indexes while purging the clustered undo logs. */
+static inline void row_purge_skip_index(purge_node_t *&node) {
+  dict_index_t *&index = node->index;
+  while (index) {
+    /* Skip corrupted index */
+    if (index->is_corrupted()) {
+      goto next_index;
+    }
+    /* Skip uncommitted virtual index on newly added virtual column */
+    if (dict_index_has_virtual(index) && !index->is_committed() &&
+        index->has_new_v_col) {
+      /* We need to skip virtual indexes which is not
+      committed yet. It's safe because these indexes are
+      newly created by alter table, and because we do
+      not support LOCK=NONE when adding an index on newly
+      added virtual column.*/
+      goto next_index;
+    }
+    /* Skip panda index */
+    if (index->is_panda()) {
+      goto next_index;
+    }
+    break;
+  next_index:
     index = index->next();
   }
 }
@@ -683,9 +698,7 @@ static inline void row_purge_remove_multi_sec_if_poss(purge_node_t *node,
 
   while (node->index != nullptr) {
     /* skip corrupted secondary index */
-    dict_table_skip_corrupt_index(node->index);
-
-    row_purge_skip_uncommitted_virtual_index(node->index);
+    row_purge_skip_index(node);
 
     if (!node->index) {
       break;
@@ -733,9 +746,7 @@ static void row_purge_upd_exist_or_extern_func(IF_DEBUG(const que_thr_t *thr, )
   while (node->index != nullptr) {
     bool non_mv_upd = false;
 
-    dict_table_skip_corrupt_index(node->index);
-
-    row_purge_skip_uncommitted_virtual_index(node->index);
+    row_purge_skip_index(node);
 
     if (!node->index) {
       break;
@@ -869,10 +880,11 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
                                      trx_undo_rec_t *undo_rec,
                                      bool *updated_extern, THD *thd,
                                      que_thr_t *thr) {
-  dict_index_t *clust_index;
+  dict_index_t *index;
   byte *ptr;
   undo_no_t undo_no;
   table_id_t table_id;
+  space_index_t index_id;
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   ulint info_bits;
@@ -885,7 +897,7 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
   ut_ad(thr != nullptr);
 
   ptr = trx_undo_rec_get_pars(undo_rec, &type, &node->cmpl_info, updated_extern,
-                              &undo_no, &table_id, &node->is_2pp,
+                              &undo_no, &table_id, &index_id, &node->is_2pp,
                               type_cmpl);
 
   node->rec_type = type;
@@ -894,11 +906,22 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
     return (false);
   }
 
+  if (type_cmpl.is_rlog()) {
+    return (false);
+  }
+
+  if (type_cmpl.txn_layout() == TL_BAMBOO && type != TRX_UNDO_DEL_MARK_REC) {
+    /* For panda undo records, only delete mark records are considered to be
+     * purged. */
+    return (false);
+  }
+
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
   node->table = nullptr;
   node->trx_id = trx_id;
-
-  ptr = lizard::trx_undo_update_rec_get_lizard_cols(ptr, &txn_info);
+  node->layout = type_cmpl.txn_layout();
+  node->is_rlog = type_cmpl.is_rlog();
+  ptr = lizard::trx_undo_update_rec_get_txn_cols(ptr, &txn_info, node->layout);
 
   /* TODO: Remove all INNODB_DD_VC_SUPPORT, nest opening
   table should never happen again after new DD */
@@ -1049,9 +1072,10 @@ try_again:
     goto err_exit;
   }
 
-  clust_index = node->table->first_index();
+  index = lizard::trx_undo_rec_choose_index(node->table, type_cmpl, index_id);
+  node->index_id = index_id;
 
-  if (clust_index == nullptr || clust_index->is_corrupted()) {
+  if (index == nullptr || index->is_corrupted()) {
     /* The table was corrupt in the data dictionary.
     dict_set_corrupted() works on an index, and
     we do not have an index to call it with. */
@@ -1081,17 +1105,18 @@ try_again:
     goto close_exit;
   }
 
-  ptr = trx_undo_rec_get_row_ref(ptr, clust_index, &(node->ref), node->heap);
+  ptr = trx_undo_rec_get_row_ref(ptr, index, &(node->ref), node->heap);
 
-  ptr = trx_undo_update_rec_get_update(ptr, clust_index, type, trx_id, roll_ptr,
-                                       info_bits, node->heap, &(node->update),
-                                       nullptr, type_cmpl, txn_info);
+  ptr = trx_undo_update_rec_get_update(
+      ptr, index, type, trx_id, roll_ptr, info_bits, node->heap,
+      &(node->update), nullptr, type_cmpl, txn_info, node->layout);
 
   /* Read to the partial row the fields that occur in indexes */
 
-  if (!(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE)) {
+  if (!(node->cmpl_info & UPD_NODE_NO_ORD_CHANGE) &&
+      node->layout == TL_CLOVER) {
     ptr = trx_undo_rec_get_partial_row(
-        ptr, clust_index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
+        ptr, index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
     lizard::row_purge_alloc_gpp_field(node);
   }
 
@@ -1111,6 +1136,7 @@ try_again:
   dict_index_t *clust_index;
   bool purged = true;
 
+  ut_ad(node->layout == TL_CLOVER);
   ut_ad(!node->found_clust);
   ut_ad(!node->table->skip_alter_undo);
 
@@ -1167,6 +1193,9 @@ try_again:
     }
   }
 
+  node->layout = TL_NONE;
+  node->is_rlog = false;
+
   return (purged);
 }
 
@@ -1195,8 +1224,19 @@ static void row_purge(purge_node_t *node,       /*!< in: row purge node */
 
   while (row_purge_parse_undo_rec(node, undo_rec, &updated_extern, thd, thr)) {
     bool purged;
+    ut_ad(!node->is_rlog);
 
-    purged = row_purge_record(node, undo_rec, thr, updated_extern, thd);
+    switch (node->layout) {
+      case TL_CLOVER:
+        purged = row_purge_record(node, undo_rec, thr, updated_extern, thd);
+        break;
+      case TL_BAMBOO:
+        purged = lizard::row_purge_record_for_panda(node, updated_extern, thd);
+        break;
+      default:
+        purged = 0;
+        ut_error;
+    }
 
     if (purged || srv_shutdown_state.load() >= SRV_SHUTDOWN_PURGE) {
       return;
@@ -1254,6 +1294,9 @@ que_thr_t *row_purge_step(que_thr_t *thr) {
   node->found_clust = false;
   node->rec_type = ULINT_UNDEFINED;
   node->cmpl_info = ULINT_UNDEFINED;
+  node->layout = TL_NONE;
+  node->is_rlog = false;
+  node->index_id = 0;
 
   ut_a(!node->done);
 
@@ -1406,7 +1449,7 @@ void purge_node_t::free_lob_pages() {
     const dict_index_t *idx = table->first_index();
 
     if (idx == nullptr || idx->id != index_id.m_index_id ||
-        idx->space != space_id || idx->page == FIL_NULL ||
+        idx->space != space_id || idx->page_no() == FIL_NULL ||
         idx->table->id != table_id) {
       dd_table_close(table, thd, &mdl, false);
       continue;

@@ -39,7 +39,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0chkp.h"
 
 #include "lizard0row.h"
-#include "lizard0btr0cur.h"
+#include "lizard0btr0btr.h"
 
 namespace ddl {
 /** Innodb B-tree index fill factor for bulk load. */
@@ -75,14 +75,16 @@ class Page_load : private ut::Non_copyable {
   @param[in]    level                     Page level
   @param[in]    observer                Flush observer */
   Page_load(dict_index_t *index, trx_id_t trx_id, page_no_t page_no,
-            size_t level, Flush_observer *observer) noexcept
+            size_t level, page_type_t root_page_type,
+            Flush_observer *observer) noexcept
       : m_index(index),
         m_trx_id(trx_id),
         m_page_no(page_no),
         m_level(level),
         m_is_comp(dict_table_is_comp(index->table)),
         m_flush_observer(observer),
-        m_n_blocks_buf_fixed(0) {
+        m_n_blocks_buf_fixed(0),
+        m_root_page_type(root_page_type) {
     ut_ad(!dict_index_is_spatial(m_index));
   }
 
@@ -293,14 +295,16 @@ class Page_load : private ut::Non_copyable {
   /** Number of blocks which are buffer fixed but not pushed to mtr memo */
   int32_t m_n_blocks_buf_fixed{};
 
+  page_type_t m_root_page_type;
+
   friend class Btree_load;
 };
 
 dberr_t Page_load::init() noexcept {
   page_t *new_page;
   page_no_t new_page_no;
-  buf_block_t *new_block;
   page_zip_des_t *new_page_zip;
+  btr_alloc_t alloc;
 
   ut_ad(m_heap == nullptr);
 
@@ -338,7 +342,7 @@ dberr_t Page_load::init() noexcept {
     }
 
     /* Allocate a new page. */
-    new_block = btr_page_alloc(m_index, 0, FSP_UP, m_level, &alloc_mtr, mtr);
+    alloc = btr_page_alloc(m_index, 0, FSP_UP, m_level, &alloc_mtr, mtr);
 
     if (n_reserved > 0) {
       fil_space_release_free_extents(m_index->space, n_reserved);
@@ -346,19 +350,22 @@ dberr_t Page_load::init() noexcept {
 
     alloc_mtr.commit();
 
-    new_page = buf_block_get_frame(new_block);
-    new_page_zip = buf_block_get_page_zip(new_block);
+    new_page = buf_block_get_frame(alloc.new_block);
+    new_page_zip = buf_block_get_page_zip(alloc.new_block);
     new_page_no = page_get_page_no(new_page);
 
     ut_ad(!dict_index_is_spatial(m_index));
     ut_ad(!dict_index_is_sdi(m_index));
+    page_type_t page_create_type =
+        lizard::btr_page_upgrade_not_root(m_root_page_type, FIL_PAGE_INDEX);
 
     if (new_page_zip) {
-      page_create_zip(new_block, m_index, m_level, 0, mtr, FIL_PAGE_INDEX);
+      page_create_zip(alloc.new_block, m_index, m_level, 0, mtr,
+                      page_create_type);
     } else {
       ut_ad(!dict_index_is_spatial(m_index));
-      page_create(new_block, mtr, dict_table_is_comp(m_index->table),
-                  FIL_PAGE_INDEX);
+      page_create(alloc.new_block, mtr, dict_table_is_comp(m_index->table),
+                  page_create_type);
       btr_page_set_level(new_page, nullptr, m_level, mtr);
     }
 
@@ -370,11 +377,11 @@ dberr_t Page_load::init() noexcept {
     page_id_t page_id(dict_index_get_space(m_index), m_page_no);
     page_size_t page_size(dict_table_page_size(m_index->table));
 
-    new_block = btr_block_get(page_id, page_size, RW_X_LATCH, UT_LOCATION_HERE,
-                              m_index, mtr);
+    alloc.new_block = btr_block_get(page_id, page_size, RW_X_LATCH,
+                                    UT_LOCATION_HERE, m_index, mtr);
 
-    new_page = buf_block_get_frame(new_block);
-    new_page_zip = buf_block_get_page_zip(new_block);
+    new_page = buf_block_get_frame(alloc.new_block);
+    new_page_zip = buf_block_get_page_zip(alloc.new_block);
     new_page_no = page_get_page_no(new_page);
     ut_ad(m_page_no == new_page_no);
 
@@ -385,11 +392,11 @@ dberr_t Page_load::init() noexcept {
 
   if (dict_index_is_sec_or_ibuf(m_index) && !m_index->table->is_temporary() &&
       page_is_leaf(new_page)) {
-    page_update_max_trx_id(new_block, nullptr, m_trx_id, mtr);
+    page_update_max_trx_id(alloc.new_block, nullptr, m_trx_id, mtr);
   }
 
   m_mtr = mtr;
-  m_block = new_block;
+  m_block = alloc.new_block;
   m_page = new_page;
   m_page_zip = new_page_zip;
   m_page_no = new_page_no;
@@ -438,9 +445,6 @@ dberr_t Page_load::insert(const rec_t *rec, Rec_offsets offsets) noexcept {
            cmp_rec_rec(rec, old_rec, offsets, old_offsets, m_index,
                        page_is_spatial_non_leaf(old_rec, m_index)) >= 0));
   }
-
-  /** All the bulk load need to validate LIZARD attrbutes. */
-  assert_row_lizard_valid(rec, m_index, offsets);
 
   m_total_data += rec_size;
 #endif /* UNIV_DEBUG */
@@ -909,7 +913,8 @@ dberr_t Btree_load::page_split(Page_load *page_loader,
 
   /* 2. create a new page. */
   Page_load new_page_loader(m_index, m_trx_id, FIL_NULL,
-                            page_loader->get_level(), m_flush_observer);
+                            page_loader->get_level(), m_root_page_type,
+                            m_flush_observer);
 
   err = new_page_loader.init();
 
@@ -1003,6 +1008,8 @@ Btree_load::Btree_load(dict_index_t *index, trx_id_t trx_id,
   ut_a(m_flush_observer != nullptr);
   ut_d(fil_space_inc_redo_skipped_count(m_index->space));
   ut_d(m_index_online = m_index->online_status);
+
+  m_root_page_type = lizard::btr_page_read_root_type(m_index);
 }
 
 Btree_load::~Btree_load() noexcept {
@@ -1035,9 +1042,9 @@ dberr_t Btree_load::prepare_space(Page_load *&page_loader, size_t level,
   IF_ENABLED("ddl_btree_build_oom", return DB_OUT_OF_MEMORY;)
 
   /* Create a sibling page_loader. */
-  auto sibling_page_loader =
-      ut::new_withkey<Page_load>(UT_NEW_THIS_FILE_PSI_KEY, m_index, m_trx_id,
-                                 FIL_NULL, level, m_flush_observer);
+  auto sibling_page_loader = ut::new_withkey<Page_load>(
+      UT_NEW_THIS_FILE_PSI_KEY, m_index, m_trx_id, FIL_NULL, level,
+      m_root_page_type, m_flush_observer);
 
   if (sibling_page_loader == nullptr) {
     return DB_OUT_OF_MEMORY;
@@ -1101,9 +1108,9 @@ dberr_t Btree_load::insert(dtuple_t *tuple, size_t level) noexcept {
 
   /* Check if we need to create a Page_load for the level. */
   if (level + 1 > m_page_loaders.size()) {
-    auto page_loader =
-        ut::new_withkey<Page_load>(UT_NEW_THIS_FILE_PSI_KEY, m_index, m_trx_id,
-                                   FIL_NULL, level, m_flush_observer);
+    auto page_loader = ut::new_withkey<Page_load>(
+        UT_NEW_THIS_FILE_PSI_KEY, m_index, m_trx_id, FIL_NULL, level,
+        m_root_page_type, m_flush_observer);
 
     if (page_loader == nullptr) {
       return DB_OUT_OF_MEMORY;
@@ -1233,7 +1240,7 @@ dberr_t Btree_load::load_root_page(page_no_t last_page_no) noexcept {
   page_no_t page_no = dict_index_get_page(m_index);
 
   Page_load page_loader(m_index, m_trx_id, page_no, m_root_level,
-                        m_flush_observer);
+                        m_root_page_type, m_flush_observer);
 
   mtr_t mtr;
 

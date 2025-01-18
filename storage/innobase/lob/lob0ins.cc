@@ -35,6 +35,7 @@ buf_block_t *BaseInserter::alloc_blob_page() {
   ulint r_extents;
   mtr_t mtr_bulk;
   mtr_t *alloc_mtr;
+  btr_alloc_t alloc;
 
   ut_ad(fsp_check_tablespace_size(m_ctx->space()));
 
@@ -54,8 +55,10 @@ buf_block_t *BaseInserter::alloc_blob_page() {
     return (nullptr);
   }
 
-  m_cur_blob_block = btr_page_alloc(m_ctx->index(), hint_page_no, FSP_NO_DIR, 0,
-                                    alloc_mtr, &m_blob_mtr);
+  alloc = btr_page_alloc(m_ctx->index(), hint_page_no, FSP_NO_DIR, 0, alloc_mtr,
+                         &m_blob_mtr);
+
+  m_cur_blob_block = alloc.new_block;
 
   fil_space_release_free_extents(m_ctx->space(), r_extents);
 

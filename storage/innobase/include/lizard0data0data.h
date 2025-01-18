@@ -26,13 +26,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** @file include/lizard0data0data.h
    Lizard SQL data field and tuple
-  
+
 
  Created 2024-03-26 by Jianwei.zhao
  *******************************************************/
 #ifndef lizard0data0data_h
 #define lizard0data0data_h
 
+#include "data0data.h"
 #include "data0types.h"
 #include "univ.i"
 
@@ -77,7 +78,7 @@ extern ulint row_search_dtuple_get_ordered_n_fields(const dtuple_t *entry,
   @param[in]      index     dict_index_t
   @retval ordered field number
 */
-extern ulint row_upd_dtuple_get_ordered_n_fields(const dtuple_t *entry,
+extern ulint row_upd_dtuple_get_user_n_fields(const dtuple_t *entry,
                                                  const dict_index_t *index);
 
 /**
@@ -97,6 +98,44 @@ extern ulint row_ver_dtuple_get_ordered_n_fields(const dtuple_t *entry,
 extern bool row_ver_sec_dtuple_coll_eq(const dtuple_t *tuple1,
                                        const dtuple_t *tuple2,
                                        const dict_index_t *sec_index);
+
+extern bool row_index_entry_contains_null_in_unique(const dict_index_t *index,
+                                                    const dtuple_t *tuple);
+
+extern void dtuple_set_n_fields_cmp_for_panda(dtuple_t *tuple, ulint n_fields_cmp);
+
+class DField_wrapper {
+ public:
+  DField_wrapper() : m_buf(), m_dfield() { m_dfield.reset(); }
+
+  dfield_t *dfield() { return &m_dfield; }
+
+  void copy_types_and_len(const dict_col_t *col);
+
+ private:
+  static constexpr uint16_t BUFFER_MAX_BYTES = 8;
+  byte m_buf[BUFFER_MAX_BYTES];
+  dfield_t m_dfield;
+};
+
+/**
+ * @brief Checks if n_fields_cmp in the given tuple is within
+ *        the limits defined by the associated index.
+ *
+ * This function specifically handles Panda indexes. For entries of
+ * Panda indexes that do not contain NULL values, the number of fields
+ * used for comparison in the B+ tree search (`n_fields_cmp`) must not
+ * exceed the length of the unique key. Notably, this means that the
+ * primary key must be excluded from the comparison for these index entries.
+ *
+ * @param index A pointer to the index definition being checked.
+ * @param tuple A pointer to the tuple whose fields are being compared.
+ *
+ * @return true if n_fields_cmp in the tuple is within the allowed
+ *         limits, false otherwise.
+ */
+extern bool row_index_entry_cmp_fields_check(const dict_index_t *index,
+                                             const dtuple_t *tuple);
 
 }  // namespace lizard
 #endif

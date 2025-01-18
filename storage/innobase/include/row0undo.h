@@ -43,6 +43,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 
+#include "lizard0undo0rec0types.h"
+
 /** Converts an implicit lock on the record to explicit in case of partial
  rollback.
 @param[in]      cursor          cursor to record
@@ -131,6 +133,12 @@ struct undo_node_t {
                             row; this must be emptied after undo is tried
                             on a row */
   bool partial;             /*!< true if partial rollback */
+  txn_layout_t layout;      /*!< TXN layout */
+  bool is_rlog;             /*!< undo of row log */
+  space_index_t index_id;   /*!< index_id parsed from the panda undo record */
+  bool found_panda;         /*!< true if the panda index record determined
+                            by ref was found in the panda index, and we
+                            were able to position pcur on it */
 };
 
 #endif

@@ -37,13 +37,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0zip.h"
 
 #include "lizard0row.h"
+#include "lizard0row0clover.h"
 
 extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
 
 namespace lizard {
 
 /**
-  Write the scn and uba of a record on a B-tree leaf node page.
+  Write Clover layout fields of a record on a B-tree leaf node page.
   @param[in/out]  page_zip    compressed page
   @param[in]      index       dict_index_t
   @param[in/out]  rec         record
@@ -52,11 +53,10 @@ namespace lizard {
   @param[in]      scn         transaction scn
   @param[in]      undo_ptr    undo_ptr
 */
-void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
-                                     const dict_index_t *index, byte *rec,
-                                     const ulint *offsets, ulint scn_col,
-                                     const scn_t scn, const undo_ptr_t undo_ptr,
-                                     const gcn_t gcn) {
+void page_zip_write_clover(page_zip_des_t *page_zip, const dict_index_t *index,
+                           byte *rec, const ulint *offsets, ulint scn_col,
+                           const scn_t scn, const undo_ptr_t undo_ptr,
+                           const gcn_t gcn) {
   byte *field;
   byte *storage;
 #ifdef UNIV_DEBUG
@@ -99,7 +99,7 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
   ut_a(!memcmp(storage, field, DATA_LIZARD_TOTAL_LEN));
 #endif /* UNIV_DEBUG || UNIV_ZIP_DEBUG */
 
-  row_upd_rec_write_scn_and_undo_ptr(field, scn, undo_ptr, gcn);
+  row_upd_rec_write_clover(field, scn, undo_ptr, gcn);
 
   /** Copy to compressed page */
   memcpy(storage, field, DATA_LIZARD_TOTAL_LEN);
@@ -118,34 +118,39 @@ void page_zip_write_scn_and_undo_ptr(page_zip_des_t *page_zip,
 
   @retval         true        Success
 */
-bool lizard_page_attributes(page_t *page, const dict_index_t *index) {
+bool page_txn_attributes(page_t *page, const dict_index_t *index) {
   rec_t *rec;
   mem_heap_t *heap;
   ulint *offsets = NULL;
-
   ut_ad(page);
 
-  if (!index->is_clustered() || index->table->is_intrinsic()) return true;
-
+  if (index->table->is_intrinsic()) return true;
   /** Didn't check other type except of compact and branch */
   if (!page_is_comp(page) || !page_is_leaf(page)) return true;
 
-  heap = mem_heap_create(UNIV_PAGE_SIZE + 200, UT_LOCATION_HERE);
+  const txn_layout_t layout = dict_index_txn_layout(index);
 
-  rec = page_rec_get_next(page_get_infimum_rec(page));
+  switch (layout) {
+    case TL_CLOVER:
+    case TL_BAMBOO:
+      heap = mem_heap_create(UNIV_PAGE_SIZE + 200, UT_LOCATION_HERE);
 
-  while (page_rec_is_user_rec(rec)) {
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+      rec = page_rec_get_next(page_get_infimum_rec(page));
+      while (page_rec_is_user_rec(rec)) {
+        offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+                                  UT_LOCATION_HERE, &heap);
+        /* Assert the validation */
+        ut_ad(page_rec_is_comp(rec));
+        assert_row_txn_is_valid(rec, index, offsets, layout);
 
-    /* Assert the validation */
-    ut_ad(page_rec_is_comp(rec));
-    assert_row_lizard_valid(rec, index, offsets);
+        rec = page_rec_get_next(rec);
+      }
+      mem_heap_free(heap);
+      return true;
 
-    rec = page_rec_get_next(rec);
+    case TL_NONE:
+      return true;
   }
-
-  mem_heap_free(heap);
 
   return true;
 }

@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 package transfer
 
 import "time"
@@ -98,6 +97,7 @@ type Config struct {
 	ReplicaStrongConsistency bool   `toml:"replica_strong_consistency" default:"false"`
 	CreateTableSuffix        string `toml:"create_table_suffix" default:""`
 	DbType                   string `toml:"db_type" default:"mysql"`
+	EnableUK                 bool   `toml:"enable_uk" default:"false"`
 
 	CheckBalance        basePluginConfig `toml:"check_balance"`
 	ReadSnapshot        basePluginConfig `toml:"read_snapshot"`
@@ -111,6 +111,8 @@ type Config struct {
 	TransferTwoXA    basePluginConfig          `toml:"transfer_two_xa"`
 	TransferSimple   basePluginConfig          `toml:"transfer_simple"`
 	TransferLarge    largeTransferPluginConfig `toml:"transfer_large"`
+
+	UserManage basePluginConfig `toml:"user_manage"`
 
 	RunEvict   backgroundTaskConfig `toml:"run_evict"`
 	RunPurge   backgroundTaskConfig `toml:"run_purge"`
