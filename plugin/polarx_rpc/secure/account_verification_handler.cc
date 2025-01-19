@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 /*
  * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  *
@@ -101,6 +100,33 @@ err_t Account_verification_handler::authenticate(
   return err;
 }
 
+err_t Account_verification_handler::get_account_record_for_sha2_start(
+    const std::string &user, Account_record &record) {
+  if (m_err) return m_err;
+  /// attach before authenticate
+  assert(m_attached == std::thread::id());
+  auto err = m_session.attach();
+  if (err) return err;
+  m_attached = std::this_thread::get_id();
+  auto error = m_session.switch_to_user(user.c_str(), m_tcp.host().c_str(),
+                                        m_tcp.ip().c_str(), "");
+  if (error) return err_t::SQLError_access_denied();
+  auto authenticated_user_name = m_session.get_authenticated_user_name();
+  auto authenticated_user_host = m_session.get_authenticated_user_host();
+
+  m_session.switch_to_sys_user();
+  err = this->get_account_record(authenticated_user_name,
+                                 authenticated_user_host, record);
+  error = m_session.switch_to_user(user.c_str(), m_tcp.host().c_str(),
+                                   m_tcp.ip().c_str(), "");
+  /// detach
+  m_session.detach();  /// ignore result
+  m_attached = std::thread::id();
+  if (UNLIKELY(!m_session.is_detach_and_tls_cleared()))
+    sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
+  return err;
+}
+
 bool Account_verification_handler::extract_last_sub_message(
     const std::string &message, std::size_t &element_position,
     std::string &sub_message) const {
@@ -147,6 +173,8 @@ Account_verification_handler::get_account_verificator_id(
     const std::string &name) {
   if (name == "mysql_native_password")
     return Account_verification_interface::Account_native;
+  if (name == "caching_sha2_password")
+    return Account_verification_interface::Account_SHA2;
   /// not support others
   return Account_verification_interface::Account_unsupported;
 }
