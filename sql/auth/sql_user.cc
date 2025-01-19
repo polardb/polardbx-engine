@@ -1626,7 +1626,8 @@ bool set_and_validate_user_attributes(
       generated_passwords.push_back(p);
     }
     if (im::internal_account_need_protected(Str->user.str) &&
-        !my_strcasecmp(&my_charset_latin1, Str->host.str, "localhost")) {
+        (!my_strcasecmp(&my_charset_latin1, Str->host.str, "127.0.0.1") ||
+         !my_strcasecmp(&my_charset_latin1, Str->host.str, "::1"))) {
       /** For internal accounts, we disable password validation temporarily */
       thd->m_disable_password_validation = true;
     }
