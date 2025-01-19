@@ -39,6 +39,18 @@ set global binlog_cache_size=default;
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
 [Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
+set global rds_audit_log_flush=1;
+set global diagnose_excluded_vars_list='binlog_cache_size';
+set global rds_audit_log_flush=1;
+[Diagnose] user:root host:localhost sql:set global rds_audit_log_flush=1.
+set global binlog_cache_size=default;
+[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
+[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*512.
+[Diagnose] user:root host:localhost sql:set global binlog_cache_size=1024*1024.
+[Diagnose] user:root host:localhost sql:set global binlog_cache_size=default.
+set global diagnose_excluded_vars_list=DEFAULT;
+set global rds_audit_log_flush=1;
+[Diagnose] user:root host:localhost sql:set global rds_audit_log_flush=1.
 reset master;
 [Diagnose] user:root host:localhost sql:reset master.
 include/rpl_end.inc

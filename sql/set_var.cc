@@ -74,6 +74,7 @@
 #include "sql/table.h"             // table
 #include "sql/thd_raii.h"          // Prepared_stmt_arena_holder
 #include "sql_string.h"
+#include "mutex_lock.h"  // MUTEX_LOCK
 
 using std::min;
 using std::string;
@@ -356,7 +357,17 @@ bool sys_var::update(THD *thd, set_var *var) {
       ret = global_update(thd, var) ||
           (on_update && on_update(this, thd, OPT_GLOBAL));
     }
-    if (!ret && thd->query().str)
+
+    bool need_diagnose = false;
+
+    if (!ret && thd->query().str) {
+      MUTEX_LOCK(lock, &LOCK_diagnose_excluded_vars_list);
+      need_diagnose = !opt_diagnose_excluded_vars_list
+        || !strstr(opt_diagnose_excluded_vars_list,
+                   var->m_var_tracker.get_var_name());
+    }
+
+    if (need_diagnose)
       LogErr(SYSTEM_LEVEL, ER_DIAGNOSE_CMD_LOG,
              thd->m_main_security_ctx.user().str,
              thd->m_main_security_ctx.host_or_ip().str, thd->query().str);

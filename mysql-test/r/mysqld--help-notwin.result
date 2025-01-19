@@ -549,6 +549,8 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again. This variable is deprecated
  along with INSERT DELAYED.
+ --diagnose-excluded-vars-list[=name] 
+ excluded sys vars list for diagnose log, split by ','
  --disable-binlog-savepoint 
  Determine whether to disable the binary log
  checkpointing.Default is True.
@@ -1096,6 +1098,8 @@ The following options may be given as the first argument:
  When this option is enabled,it will add gpp column on
  secondary index if suitable.
  (Defaults to on; use --skip-opt-index-format-gpp-enabled to disable.)
+ --opt-index-format-panda-enabled 
+ try to use panda format on unique key 
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
@@ -2345,6 +2349,7 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
+diagnose-excluded-vars-list rds_audit_log_flush
 disable-binlog-savepoint TRUE
 disable-default-collation-for-utf8mb4 FALSE
 disable-wait-commitindex FALSE
@@ -2513,6 +2518,7 @@ opt-enable-rds-priv-strategy FALSE
 opt-flashback-area FALSE
 opt-force-index-pct-cached FALSE
 opt-index-format-gpp-enabled TRUE
+opt-index-format-panda-enabled FALSE
 opt-indexstat TRUE
 opt-outline-enabled TRUE
 opt-tablestat TRUE
@@ -2676,7 +2682,7 @@ rds-audit-log-version MYSQL_V1
 rds-ic-reduce-hint-enable TRUE
 rds-kill-connections 0
 rds-kill-user-list (No default value)
-rds-version 41
+rds-version 32
 read-buffer-size 131072
 read-lsn 0
 read-only FALSE

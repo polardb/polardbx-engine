@@ -80,6 +80,7 @@ extern ulonglong opt_appliedindex_force_delay;
 extern char *opt_consensus_flow_control;
 extern char *opt_consensus_server_ip;
 extern ulonglong opt_consensus_server_port;
+extern char *opt_diagnose_excluded_vars_list;
 extern ulonglong opt_consensus_check_commit_index_interval;
 extern bool opt_enable_consensus_leader;
 extern ulonglong opt_truncate_consensus_log;

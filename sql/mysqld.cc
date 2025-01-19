@@ -1167,6 +1167,7 @@ static PSI_mutex_key key_LOCK_admin_tls_ctx_options;
 static PSI_mutex_key key_LOCK_rotate_binlog_master_key;
 static PSI_mutex_key key_LOCK_partial_revokes;
 static PSI_mutex_key key_LOCK_authentication_policy;
+static PSI_mutex_key key_LOCK_diagnose_excluded_vars_list;
 static PSI_mutex_key key_LOCK_global_conn_mem_limit;
 #endif /* HAVE_PSI_INTERFACE */
 
@@ -1696,6 +1697,12 @@ mysql_mutex_t LOCK_rotate_binlog_master_key;
   'SET @@GLOBAL.authentication_policy...' in parallel.
 */
 mysql_mutex_t LOCK_authentication_policy;
+
+/*
+  The below lock protects to
+  'SET @@GLOBAL.diagnose_excluded_vars_list...' in parallel.
+*/
+mysql_mutex_t LOCK_diagnose_excluded_vars_list;
 
 mysql_mutex_t LOCK_global_conn_mem_limit;
 
@@ -2868,6 +2875,7 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_admin_tls_ctx_options);
   mysql_mutex_destroy(&LOCK_partial_revokes);
   mysql_mutex_destroy(&LOCK_authentication_policy);
+  mysql_mutex_destroy(&LOCK_diagnose_excluded_vars_list);
   mysql_mutex_destroy(&LOCK_global_conn_mem_limit);
   mysql_mutex_destroy(&im::LOCK_internal_account_string);
 }
@@ -5499,6 +5507,8 @@ static int init_thread_environment() {
   mysql_mutex_init(key_LOCK_partial_revokes, &LOCK_partial_revokes,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_authentication_policy, &LOCK_authentication_policy,
+                   MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_diagnose_excluded_vars_list, &LOCK_diagnose_excluded_vars_list,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_global_conn_mem_limit, &LOCK_global_conn_mem_limit,
                    MY_MUTEX_INIT_FAST);
@@ -12309,6 +12319,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "ConsensusLogManager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_commit_pos, "ConsensusLogManager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
   { &key_fifo_cache_cleaner, "fifo_cache_cleaner", 0, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_diagnose_excluded_vars_list, "LOCK_diagnose_excluded_vars_list", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 

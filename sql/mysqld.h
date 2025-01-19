@@ -790,6 +790,7 @@ extern mysql_mutex_t LOCK_admin_tls_ctx_options;
 extern mysql_mutex_t LOCK_rotate_binlog_master_key;
 extern mysql_mutex_t LOCK_partial_revokes;
 extern mysql_mutex_t LOCK_authentication_policy;
+extern mysql_mutex_t LOCK_diagnose_excluded_vars_list;
 extern mysql_mutex_t LOCK_global_conn_mem_limit;
 
 extern mysql_cond_t COND_server_started;

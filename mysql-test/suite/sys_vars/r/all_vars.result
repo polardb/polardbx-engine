@@ -185,6 +185,8 @@ cte_max_recursion_depth
 cte_max_recursion_depth
 default_collation_for_utf8mb4
 default_collation_for_utf8mb4
+diagnose_excluded_vars_list
+diagnose_excluded_vars_list
 disable_binlog_savepoint
 disable_binlog_savepoint
 disable_default_collation_for_utf8mb4

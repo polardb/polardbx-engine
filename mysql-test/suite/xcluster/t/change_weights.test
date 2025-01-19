@@ -5,14 +5,16 @@
 
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 #CHANGE CONSENSUS_NODE 1 CONSENSUS_FORCE_SYNC true CONSENSUS_ELECTION_WEIGHT 9;
---replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 9, 1);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 9, 0, "127.0.0.1:$PAXOS_PORT_2", 7, 1);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 8, 1, "127.0.0.1:$PAXOS_PORT_2", 7, 1, "127.0.0.1:$PAXOS_PORT_3", 5, 0);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 
@@ -22,9 +24,11 @@ eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 9, 1, "1
 --error ER_SP_WRONG_NO_OF_ARGS
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 7, 1, "127.0.0.1:$PAXOS_PORT_2", 5, 1, "127.0.0.1:$PAXOS_PORT_3");
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 7, 1, "127.0.0.1:$PAXOS_PORT_2", 5, 1, "127.0.0.1:$PAXOS_PORT_1", 9, 1, "127.0.0.1:$PAXOS_PORT_2", 9, 1);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 7, 1, "127.0.0.1:$PAXOS_PORT_2", 5, 1, "127.0.0.1:$PAXOS_PORT_1", 9, 1, "127.0.0.1:$PAXOS_PORT_2", 9, 1,  "127.0.0.1:$PAXOS_PORT_3", 1, 0);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 

@@ -36,7 +36,7 @@ select SERVER_ID,ROLE,SERVER_IP,SERVER_PORT from information_schema.ALISQL_CLUST
 select @@super_read_only, @@read_only;
 
 
---replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_2
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
 eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
 --sleep 5
 --disconnect conn1

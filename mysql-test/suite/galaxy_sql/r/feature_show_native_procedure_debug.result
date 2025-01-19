@@ -13,6 +13,7 @@ dbms_consensus	add_follower	ADMIN_PROC	VARCHAR
 dbms_consensus	add_learner	ADMIN_PROC	VARCHAR
 dbms_consensus	change_leader	ADMIN_PROC	VARCHAR
 dbms_consensus	configure_follower	ADMIN_PROC	VARCHAR, LONGLONG, LONGLONG
+dbms_consensus	configure_followers	ADMIN_PROC	VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONGLONG, LONGLONG, VARCHAR, LONGLONG, LONGLONG
 dbms_consensus	configure_learner	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG
 dbms_consensus	downgrade_follower	ADMIN_PROC	VARCHAR
 dbms_consensus	drop_learner	ADMIN_PROC	VARCHAR
@@ -33,6 +34,8 @@ dbms_consensus	upgrade_learner	ADMIN_PROC	VARCHAR
 dbms_jemalloc	profile	ADMIN_PROC	NULL
 dbms_keyring	current_key_id	ADMIN_PROC	NULL
 dbms_keyring	generate_key	ADMIN_PROC	NULL
+dbms_license	check_license	TRANS_PROC	VARCHAR
+dbms_license	show_info	TRANS_PROC	NULL
 dbms_outln	add_index_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR, VARCHAR, VARCHAR
 dbms_outln	add_optimizer_outline	ADMIN_PROC	VARCHAR, VARCHAR, LONGLONG, VARCHAR, VARCHAR
 dbms_outln	del_outline	ADMIN_PROC	LONGLONG
@@ -46,6 +49,7 @@ dbms_proxy	switch_user	TRANS_PROC	VARCHAR, VARCHAR, VARCHAR
 dbms_recycle	purge_table	ADMIN_PROC	VARCHAR
 dbms_recycle	restore_table	ADMIN_PROC	VARCHAR, VARCHAR, VARCHAR / VARCHAR
 dbms_recycle	show_tables	ADMIN_PROC	NULL
+dbms_stat	flush_cleanout	ADMIN_PROC	NULL
 dbms_stat	flush_gpp	ADMIN_PROC	NULL
 dbms_trans	backfill	TRANS_PROC	VARCHAR, VARCHAR
 dbms_trans	returning	TRANS_PROC	VARCHAR, VARCHAR

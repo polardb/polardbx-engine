@@ -32,7 +32,7 @@ SERVER_ID	ROLE	SERVER_IP	SERVER_PORT
 select @@super_read_only, @@read_only;
 @@super_read_only	@@read_only
 1	1
-call dbms_consensus.change_leader("127.0.0.1:13042");
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
 select SERVER_ID,CURRENT_LEADER,ROLE,LEADER_IP,LEADER_PORT from information_schema.ALISQL_CLUSTER_LOCAL;
 SERVER_ID	CURRENT_LEADER	ROLE	LEADER_IP	LEADER_PORT
 1	127.0.0.1:MYPORT_CONSENSUS_2	Follower		0

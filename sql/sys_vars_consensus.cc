@@ -111,6 +111,7 @@ ulonglong opt_appliedindex_force_delay;
 char *opt_consensus_flow_control = NULL;
 char *opt_consensus_server_ip = NULL;
 ulonglong opt_consensus_server_port;
+char *opt_diagnose_excluded_vars_list = NULL;
 ulonglong opt_consensus_check_commit_index_interval = 0;
 bool opt_commit_pos_watcher = false;
 ulonglong opt_commit_pos_watcher_interval = 0;
@@ -1197,3 +1198,17 @@ static Sys_var_ulonglong Sys_consensus_server_port(
     VALID_RANGE(0, 65535), DEFAULT(0), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_server_port));
+
+/**
+  This is a mutex used to protect @@global.diagnose_excluded_vars_list variable.
+*/
+static PolyLock_mutex PLock_diagnose_excluded_vars_list(&LOCK_diagnose_excluded_vars_list);
+
+#define DEFAULT_DIAGNOSE_EXCLUDED_VARS_LIST  "rds_audit_log_flush"
+
+static Sys_var_charptr Sys_diagnose_excluded_vars_list(
+    "diagnose_excluded_vars_list",
+    "excluded sys vars list for diagnose log, split by ','",
+    GLOBAL_VAR(opt_diagnose_excluded_vars_list), CMD_LINE(OPT_ARG),
+    IN_FS_CHARSET, DEFAULT(DEFAULT_DIAGNOSE_EXCLUDED_VARS_LIST),
+    &PLock_diagnose_excluded_vars_list, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
