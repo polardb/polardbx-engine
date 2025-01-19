@@ -24,6 +24,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
+
 //
 // Created by zzy on 2022/7/6.
 //
@@ -484,21 +485,10 @@ class CtcpConnection final : public CepollCallback {
                 *msg.msg);
         Authentication_interface::Response r;
         if (LIKELY(!auth_handler_)) {
-          // try default mysql41 first
           auth_handler_ = Sasl_mysql41_auth::create(*this);
           r = auth_handler_->handle_start(authm.mech_name(), authm.auth_data(),
                                           authm.initial_response());
-          if (r.status == Authentication_interface::Error &&
-              r.error_code == ER_AUTHENTICATION_POLICY_MISMATCH) {
-            // try SHA2
-            auth_handler_.reset();
-            auth_handler_ = Sasl_sha2_auth::create(*this);
-            r = auth_handler_->handle_start("SHA2", authm.auth_data(),
-                                            authm.initial_response());
-            tcp_info(0, "start auth", "SHA2");
-          } else if (r.status != Authentication_interface::Error) {
-            tcp_info(0, "start auth", authm.mech_name().c_str());
-          }
+          tcp_info(0, "start auth", authm.mech_name().c_str());
         } else {
           r.status = Authentication_interface::Error,
           r.error_code = ER_NET_PACKETS_OUT_OF_ORDER;
@@ -713,7 +703,7 @@ class CtcpConnection final : public CepollCallback {
                     auto now = Ctime::steady_ns();
                     auto recv_time = now - start_time;
                     g_recv_all_hist->update(static_cast<double>(recv_time) /
-                                            1e9);
+                                           1e9);
                   }
                 }
 

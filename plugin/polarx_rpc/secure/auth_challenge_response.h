@@ -24,6 +24,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
+
 /*
  * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  *
@@ -57,7 +58,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "account_verification_handler.h"
 #include "authentication_interface.h"
 #include "native_verification.h"
-#include "sha2_verification.h"
 
 namespace polarx_rpc {
 class CtcpConnection;
@@ -65,10 +65,6 @@ class CtcpConnection;
 template <Account_verification_interface::Account_type Auth_type,
           typename Auth_verificator_t>
 class Sasl_challenge_response_auth;
-
-using Sasl_sha2_auth =
-    Sasl_challenge_response_auth<Account_verification_interface::Account_SHA2,
-                                 Sha2_verification>;
 
 using Sasl_mysql41_auth =
     Sasl_challenge_response_auth<Account_verification_interface::Account_native,
@@ -98,8 +94,7 @@ class Sasl_challenge_response_auth : public Authentication_interface {
 
   static Authentication_interface_ptr create(CtcpConnection &tcp);
 
-  Response handle_start(const std::string &mechanism,
-                        const std::string &auth_data,
+  Response handle_start(const std::string &, const std::string &,
                         const std::string &) override;
 
   Response handle_continue(const std::string &data) override;
@@ -149,8 +144,7 @@ template <Account_verification_interface::Account_type Account_type,
           typename Auth_verificator_t>
 Authentication_interface::Response
 Sasl_challenge_response_auth<Account_type, Auth_verificator_t>::handle_start(
-    const std::string &mechanism, const std::string &auth_data,
-    const std::string &) {
+    const std::string &, const std::string &, const std::string &) {
   m_auth_info.reset();
 
   if (m_state != S_starting) {
@@ -162,32 +156,7 @@ Sasl_challenge_response_auth<Account_type, Auth_verificator_t>::handle_start(
       m_verification_handler->get_account_verificator(Account_type);
   assert(verificator);
   m_state = S_waiting_response;
-
-  Account_verification_handler::Account_record record;
-  if (auto error = m_verification_handler->get_account_record_for_sha2_start(
-          auth_data, record))
-    return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
-  if (record.auth_plugin_name == "caching_sha2_password" &&
-      mechanism == "MYSQL41") {
-    // wrong auth plugin
-    return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
-  }
-
-  if (Account_type == Account_verification_interface::Account_SHA2) {
-    std::string data = verificator->get_salt();
-    // get iter and salt from authentication_string
-    data.append(((Sha2_verification *)verificator)
-                    ->extract_iter_and_salt_from_authentication_string(
-                        record.db_password_hash));
-    // 1 for sha2
-    data.append("1");
-    return {Ongoing, 0, data};
-  } else {
-    std::string data = verificator->get_salt();
-    // 0 for native
-    data.append("0");
-    return {Ongoing, 0, data};
-  }
+  return {Ongoing, 0, verificator->get_salt()};
 }
 
 /**

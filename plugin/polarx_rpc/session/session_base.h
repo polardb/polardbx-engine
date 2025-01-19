@@ -70,6 +70,9 @@ class CsessionBase {
   /// flow control
   CflowControl flow_control_;
 
+  /// hack account
+  void switch_to_sys_user();
+
   static void default_completion_handler(void *ctx, unsigned int sql_errno,
                                          const char *err_msg);
 
@@ -80,9 +83,6 @@ class CsessionBase {
   }
 
   virtual ~CsessionBase();
-
-  /// hack account
-  void switch_to_sys_user();
 
   err_t init(uint16_t port);
 
