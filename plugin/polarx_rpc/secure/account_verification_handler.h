@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 /*
  * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  *
@@ -50,6 +49,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
  */
 
 #pragma once
+
+#include <server/tcp_connection.h>
 
 #include <map>
 #include <memory>
@@ -107,11 +108,6 @@ class Account_verification_handler {
   virtual const Account_verification_interface *get_account_verificator(
       Account_verification_interface::Account_type account_type) const;
 
- private:
-  typedef std::map<Account_verification_interface::Account_type,
-                   Account_verification_interface_ptr>
-      Account_verificator_list;
-
   struct Account_record {
     bool require_secure_transport{true};
     std::string db_password_hash;
@@ -121,6 +117,17 @@ class Account_verification_handler {
     bool disconnect_on_expired_password{true};
     bool is_offline_mode_and_not_super_user{true};
   };
+
+  err_t get_account_record(const std::string &user, const std::string &host,
+                           Account_record &record);
+
+  err_t get_account_record_for_sha2_start(const std::string &user,
+                                          Account_record &record);
+
+ private:
+  typedef std::map<Account_verification_interface::Account_type,
+                   Account_verification_interface_ptr>
+      Account_verificator_list;
 
   static bool extract_sub_message(const std::string &message,
                                   std::size_t &element_position,
@@ -132,9 +139,6 @@ class Account_verification_handler {
 
   static Account_verification_interface::Account_type
   get_account_verificator_id(const std::string &plugin_name);
-
-  err_t get_account_record(const std::string &user, const std::string &host,
-                           Account_record &record);
 
   static std::string get_sql(const std::string &user, const std::string &host);
 

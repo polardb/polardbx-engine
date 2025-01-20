@@ -135,7 +135,8 @@ ELSE ()
             "sql_query/query_string_builder.cc"
             "sql_query/sql_statement_builder.cc"
             "secure/account_verification_handler.cc"
-            "secure/native_verification.cc")
+            "secure/native_verification.cc"
+            "secure/sha2_verification.cc")
 
     ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-shadow-field")
     ADD_COMPILE_FLAGS(${polarx_rpc_SRC} COMPILE_FLAGS "-Wno-unused-const-variable")

@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 /*
  * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  *
@@ -60,6 +59,7 @@ class Account_verification_interface {
  public:
   enum Account_type {
     Account_native = 1,
+    Account_SHA2 = 2,
     Account_unsupported = 99
   };
 
