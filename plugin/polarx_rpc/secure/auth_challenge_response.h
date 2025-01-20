@@ -162,15 +162,17 @@ Sasl_challenge_response_auth<Account_type, Auth_verificator_t>::handle_start(
       m_verification_handler->get_account_verificator(Account_type);
   assert(verificator);
   m_state = S_waiting_response;
-
   Account_verification_handler::Account_record record;
-  if (auto error = m_verification_handler->get_account_record_for_sha2_start(
-          auth_data, record))
-    return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
-  if (record.auth_plugin_name == "caching_sha2_password" &&
-      mechanism == "MYSQL41") {
-    // wrong auth plugin
-    return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
+  if (!auth_data.empty() && enable_xrpc_sha2) {
+    // user name not empty && support sha2
+    if (auto error = m_verification_handler->get_account_record_for_sha2_start(
+            auth_data, record))
+      return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
+    if (record.auth_plugin_name == "caching_sha2_password" &&
+        mechanism == "MYSQL41") {
+      // wrong auth plugin
+      return {Error, ER_AUTHENTICATION_POLICY_MISMATCH};
+    }
   }
 
   if (Account_type == Account_verification_interface::Account_SHA2) {
@@ -184,8 +186,10 @@ Sasl_challenge_response_auth<Account_type, Auth_verificator_t>::handle_start(
     return {Ongoing, 0, data};
   } else {
     std::string data = verificator->get_salt();
-    // 0 for native
-    data.append("0");
+    if (!auth_data.empty() && enable_xrpc_sha2) {
+      // 0 for native
+      data.append("0");
+    }
     return {Ongoing, 0, data};
   }
 }

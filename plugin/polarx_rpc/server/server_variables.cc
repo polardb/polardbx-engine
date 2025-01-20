@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 //
 // Created by zzy on 2022/7/6.
 //
@@ -123,6 +122,8 @@ static constexpr uint32_t request_cache_number = 1024;
 static constexpr uint32_t request_cache_instances = 16;
 /// only cache sql/plan smaller than 1MB
 static constexpr uint32_t request_cache_max_length = 1024 * 1024;
+
+static constexpr my_bool enable_xrpc_sha2 = true;
 }  // namespace defaults
 
 my_bool auto_cpu_affinity = defaults::auto_cpu_affinity;
@@ -186,6 +187,7 @@ uint32_t request_cache_number = defaults::request_cache_number;
 uint32_t request_cache_instances = defaults::request_cache_instances;
 uint32_t request_cache_max_length = defaults::request_cache_max_length;
 
+my_bool enable_xrpc_sha2 = defaults::enable_xrpc_sha2;
 /**
  * Global Variables
  */
@@ -407,6 +409,9 @@ static MYSQL_SYSVAR_BOOL(enable_epoll_in_tasker,
                          PLUGIN_VAR_OPCMDARG, "Enable tasker to do epoll(RW)",
                          nullptr, update_func_b,
                          defaults::enable_epoll_in_tasker);
+static MYSQL_SYSVAR_BOOL(enable_xrpc_sha2, ::polarx_rpc::enable_xrpc_sha2,
+                         PLUGIN_VAR_OPCMDARG, "Enable xrpc sha2(RW)", nullptr,
+                         update_func_b, defaults::enable_xrpc_sha2);
 
 struct SYS_VAR *polarx_rpc_system_variables[] = {
     MYSQL_SYSVAR(auto_cpu_affinity),
@@ -450,5 +455,6 @@ struct SYS_VAR *polarx_rpc_system_variables[] = {
     MYSQL_SYSVAR(epoll_group_tasker_multiply),
     MYSQL_SYSVAR(epoll_group_tasker_extend_step),
     MYSQL_SYSVAR(enable_epoll_in_tasker),
+    MYSQL_SYSVAR(enable_xrpc_sha2),
     nullptr};
 }  // namespace polarx_rpc

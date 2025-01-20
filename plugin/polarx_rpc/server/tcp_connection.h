@@ -488,7 +488,7 @@ class CtcpConnection final : public CepollCallback {
           auth_handler_ = Sasl_mysql41_auth::create(*this);
           r = auth_handler_->handle_start(authm.mech_name(), authm.auth_data(),
                                           authm.initial_response());
-          if (r.status == Authentication_interface::Error &&
+          if (enable_xrpc_sha2 && r.status == Authentication_interface::Error &&
               r.error_code == ER_AUTHENTICATION_POLICY_MISMATCH) {
             // try SHA2
             auth_handler_.reset();

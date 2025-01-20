@@ -107,6 +107,8 @@ extern uint32_t request_cache_number;
 extern uint32_t request_cache_instances;
 extern uint32_t request_cache_max_length;
 
+extern my_bool enable_xrpc_sha2;
+
 /**
  * Global Variables
  */
