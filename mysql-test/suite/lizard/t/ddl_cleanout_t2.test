@@ -24,6 +24,10 @@ DELIMITER ;|
 # ensure second call to Builder::insert_direct
 CALL populate_t1(0, 11000);
 
+set global innodb_inject_stress_test_for_panda=false;
+
+
+
 #CREATE TABLE t1 ( id int NOT NULL, k int NOT NULL, c int NOT NULL, pad varchar(8192), PRIMARY KEY (id), KEY (k)) engine=innodb;
 #INSERT INTO t1 (id, k, c, pad) VALUES (1, 1, 1, LEFT(REPEAT('A', 7000), CHAR_LENGTH(REPEAT('A', 7000))));
 #INSERT INTO t1 (id, k, c, pad) VALUES (100, 100, 100, LEFT(REPEAT('B', 7000), CHAR_LENGTH(REPEAT('B', 7000))));
@@ -44,7 +48,6 @@ ALTER TABLE t1 add index idx_c(c2);
 --let $assert_cond= $var_value > 0
 --source include/assert.inc
 
-#show status like '%cleaned%';
 
 #begin;
 #INSERT INTO t1 values (1, 1), (1+1, 1+1), (1+2, 1+2);
@@ -101,6 +104,7 @@ ALTER TABLE large_table ADD INDEX idx_name (name);
 set global innodb_commit_cleanout_max_rows=3;
 set global innodb_lizard_stat_enabled=false;
 
-SET autocommit = 1;
+set global innodb_inject_stress_test_for_panda=true;
+
 DROP PROCEDURE insert_data;
 DROP TABLE large_table;

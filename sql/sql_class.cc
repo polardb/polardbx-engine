@@ -748,7 +748,8 @@ THD::THD(bool enable_plugins)
       lex_returning(new im::Lex_returning(false, mem_root)),
       xpaxos_replication_channel(false),
       sqb_should_block(false),
-      m_trx_affected_rows(0) {
+      m_trx_affected_rows(0),
+      sqb_ret_error(Sqb_ret_error::SQB_RET_ERROR_NONE) {
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
@@ -2209,6 +2210,22 @@ Prepared_statement_map::~Prepared_statement_map() {
   assert(st_hash.empty());
 }
 
+void THD::sqb_send_kill_message(int err) const {
+  switch (sqb_ret_error) {
+    case Sqb_ret_error::SQB_RET_ERROR_NONE:
+      my_error(err, MYF(ME_FATALERROR));
+      break;
+    case Sqb_ret_error::SQB_RET_ERROR_TIME:
+      my_error(ER_SLOW_QUERY_EXCEED_TIME, MYF(ME_FATALERROR));
+      break;
+    case Sqb_ret_error::SQB_RET_ERROR_CPU_AND_TIME:
+      my_error(ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED, MYF(ME_FATALERROR));
+      break;
+    default:
+      my_error(err, MYF(ME_FATALERROR));
+  }
+}
+
 void THD::send_kill_message() const {
   int err = killed;
   if (m_mem_cnt.is_error()) {
@@ -2232,7 +2249,11 @@ void THD::send_kill_message() const {
       can look at the execution plan and statistics so far.
     */
     if (!running_explain_analyze) {
-      my_error(err, MYF(ME_FATALERROR));
+      if (sqb_is_enabled) {
+        sqb_send_kill_message(err);
+      } else {
+        my_error(err, MYF(ME_FATALERROR));
+      }
     }
   }
 }
@@ -3309,6 +3330,56 @@ void THD::pop_protocol() {
   m_protocol = m_protocol->pop_protocol();
   assert(m_protocol != nullptr);
 }
+/*----------------------------------------------------------------*/
+/* Functions used for GongHang slow query block.  */
+/*----------------------------------------------------------------*/
+bool THD::sqb_is_block_command() const {
+  return lex->sql_command == SQLCOM_SELECT ||
+         lex->sql_command == SQLCOM_UPDATE ||
+         lex->sql_command == SQLCOM_DELETE ||
+         lex->sql_command == SQLCOM_INSERT ||
+         lex->sql_command == SQLCOM_REPLACE ||
+         lex->sql_command == SQLCOM_INSERT_SELECT ||
+         lex->sql_command == SQLCOM_REPLACE_SELECT;
+}
+
+/** Used for GongHang slow query block get cpu start time. */
+void THD::sqb_set_cpu_start_time() {
+  if (!sqb_should_block) return;
+  using namespace std::chrono;
+  clockid_t cid;
+  if (pthread_getcpuclockid((pthread_t)real_id, &cid) == 0) {
+    struct timespec ts;
+    clock_gettime(cid, &ts);
+    auto start_s = seconds(ts.tv_sec);
+    auto start_ns = nanoseconds(ts.tv_nsec);
+    sqb_cpu_start_time = duration_cast<milliseconds>(start_s).count() +
+                         duration_cast<milliseconds>(start_ns).count();
+  }
+}
+
+/** Used for GongHang slow query block get cpu start time. */
+void THD::sqb_set_time_and_error() {
+  sqb_is_enabled = sqb_enable_slow_query_block;
+  sqb_ret_error = Sqb_ret_error::SQB_RET_ERROR_NONE;
+  if (sqb_is_enabled) {
+    /** Every new sql comes, reset sqb error status and get enable status. */
+    sqb_start_time = sqb_query_start_in_ms();
+    sqb_set_cpu_start_time();
+  }
+}
+
+ulonglong THD::sqb_query_start_in_ms() const {
+  using namespace std::chrono;
+  auto start_s = seconds(start_time.tv_sec);
+  auto start_usec = microseconds(start_time.tv_usec);
+  return duration_cast<milliseconds>(start_s).count() +
+         duration_cast<milliseconds>(start_usec).count();
+}
+
+/*----------------------------------------------------------------*/
+/* Functions used for GongHang slow query block.  */
+/*----------------------------------------------------------------*/
 
 void THD::set_time() {
   start_utime = my_micro_time();
@@ -3317,6 +3388,8 @@ void THD::set_time() {
     start_time = user_time;
   else
     my_micro_time_to_timeval(start_utime, &start_time);
+
+  sqb_set_time_and_error();
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
   PSI_THREAD_CALL(set_thread_start_time)(query_start_in_secs());
@@ -3339,6 +3412,7 @@ void THD::inc_lock_usec(ulonglong lock_usec) {
 }
 
 void THD::update_slow_query_status() {
+  sqb_reset_time_and_error();
   if (my_micro_time() > start_utime + variables.long_query_time)
     server_status |= SERVER_QUERY_WAS_SLOW;
 }
@@ -3401,13 +3475,14 @@ void Transactional_ddl_context::post_ddl() {
 bool set_my_ok(THD *thd, ulonglong affected_rows, ulonglong id,
                const char *message) {
   /** When trx_max_affected_rows unset, it will not be blocked */
-  if (sqb_max_trx_affected_rows == 0) {
+  ulonglong max_trx_affected_rows = sqb_max_trx_affected_rows;
+  if (max_trx_affected_rows == 0) {
     my_ok(thd, affected_rows, id, message);
     return false;
   }
 
   ulonglong trx_affected_rows = thd->m_trx_affected_rows + affected_rows;
-  if (thd->sqb_should_block && trx_affected_rows > sqb_max_trx_affected_rows) {
+  if (trx_affected_rows > max_trx_affected_rows) {
     my_error(ER_TRANSACTION_TOO_BIG, MYF(0), "");
     return true;
   }

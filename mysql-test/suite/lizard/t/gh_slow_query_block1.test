@@ -1,17 +1,20 @@
+--source include/have_debug.inc
 set global max_trx_affected_rows = 10;
-set global slow_query_user_pattern = 'root';
+
+connect (con1, localhost, root, , test);
+connection con1;
 create table test1(a int);
 begin;
 insert into test1 values(1);
 insert into test1 select * from test1 limit 1;
 insert into test1 select * from test1 limit 2;
 insert into test1 select * from test1 limit 3;
+--error ER_TRANSACTION_TOO_BIG
 insert into test1 select * from test1 limit 4;
-ERROR HY000: Transaction is too big, please split it into smaller transactions.
 commit;
+
 select count(*) from test1;
-count(*)
-7
+
 set global max_trx_affected_rows = 0;
 insert into test1 select * from test1;
 insert into test1 select * from test1;
@@ -27,10 +30,20 @@ insert into test1 select * from test1;
 insert into test1 select * from test1;
 insert into test1 select * from test1;
 insert into test1 select * from test1;
+
+
+set global polarx_slow_query_block_exec_timeout=5;
+set global polarx_slow_query_block_cpu_percent_threshold=60;
+set global polarx_slow_query_block_exec_timeout_for_cpu_exceed=2;
+
+--error ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
 insert into test1 select * from test1;
-set session max_execution_time=100;
-select count(*)from test1;
-ERROR 70100: Query execution was interrupted
+
 drop table test1;
-set global slow_query_user_pattern = '';
-set session max_execution_time=0;
+set global polarx_slow_query_block_exec_timeout=0;
+set global polarx_slow_query_block_cpu_percent_threshold=0;
+set global polarx_slow_query_block_exec_timeout_for_cpu_exceed=0;
+
+--disconnect con1
+
+

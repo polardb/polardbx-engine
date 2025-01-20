@@ -1,0 +1,90 @@
+call dbms_conn.show_client_error_code();
+ERROR_CODE_NUM	ERROR_CODE_MESSAGE
+7500	The %dth parameter didn't match for native procedure %s
+7501	Snapshot (as of) item must be a 'const for execution' expression
+7502	Snapshot (as of) 'timestamp' must be of type timestamp
+7503	Snapshot (as of) 'scn/gcn' must be of type integer
+7504	Snapshot (as of) expression not allowed for '%s', cause it is with LOCK clause
+7505	Snapshot (as of) expression not allowed for '%s', cause it is not a innodb base table
+7506	Snapshot (as of) expression can only be appear in select from list tables
+7507	The snapshot to find is out of range, please adjust scn history configuration
+7508	Flashback query encountered an internal error
+7509	The definition of the table required by the flashback query has changed
+7510	Snapshot too old
+7511	Sequence '%-.192s.%-.192s' has run out.
+7512	Sequence '%-.192s.%-.192s' structure or number is invalid.
+7513	Sequence '%-.192s.%-.192s' access failure.
+7514	Sequence requires binlog_format = row
+7515	Sequence '%-.192s.%-.192s' is not yet defined in current session
+7516	Table '%-.192s.%-.192s' should be sequence
+7517	Sequence '%-.192s.%-.192s' roll forward retry timeout
+7518	Failed to get timestamp value with timestamp service. %s
+7519	Batch size is not in a valid range in the call to native function '%-.192s'
+7520	Nextval skipped to is not valid in sequence '%-.192s.%-.192s'
+7521	Wrong GTRID for dbms_xa. Please check the format of the GTRID. For example, gtrid cannot exceed %d bytes.
+7522	Wrong XID for dbms_xa. Please check the format of the XID. For example, gtrid cannot exceed %d bytes, and bqual cannot exceed %d bytes.
+7523	This command is not allowed to be executed. Mightbe this XA transaction is a read-only transaction.
+7524	Failed to replay allocating the transaction slot on the slave.
+7525	Failed to register binlog when allocating transaction slot.
+7526	Cannot do the operation because no heartbeat has been received for a long time. If you want to do the operation, please call dbms_xa.send_heartbeat().
+7527	Prepare wait timeout exceeded; try restarting global query
+7528	User %-.64s already has more than %-.64s active conections
+7529	Rerserved user or privileges can't be modified
+7530	Lock instance %-.64s require read only or super read only
+7531	Statement didn't support RETURNING clause
+7532	Concurrency control : %s
+7533	The CCL table operation failed due to the following error from SE: errcode %d - %.256s
+7534	Concurrency control rule %d is not valid when %s
+7535	Concurrency control rule %d is duplicate when %s
+7536	Concurrency control rule %d is not found in %s
+7537	Concurrency control rule %d cann't acquire available slot"
+7538	Concurrency control waiting count exceed max waiting count
+7539	Concurrency control refuse to execute query
+7540	Didn't found suitable field condition when apply ccl queue
+7541	Recycle table failed : %s
+7542	The table operation failed due to the following error from SE: errcode %d - %.256s
+7543	Statement outline %d is not valid when %s since %s
+7544	Statement outline query parse error: %s
+7545	Statement outline digest compute error from %s
+7546	Statement outline digest didn't match between %s and %s
+7547	Statement outline %d is not found in %s
+7548	Statement outline optimizer hint parse error: %s
+7549	Statement outline sql text has been truncated when compute digest: %s
+7550	Failed to create implicit savepoint for current statement.
+7551	Sample hint syntax error. Not support WHERE, ORDER BY... or other clause. Not support special tables like temporary, view, spatial table or others.
+7552	Rotate command must be working on log table
+7553	It is not allowed to operate non-transaction tables in XA transactions when GTID enable.
+7554	Too many participants. At most 65536 participants, but %lu participants, %lu local participants.
+7555	Invalid GCN (%lu) for async commit.
+7556	Bad Consensus configuration, name:%s, value:%llu, reason:%s
+7557	The consensus follower is not allowed to to do current operation.
+7558	The cluster's leadership has already change, please relocate consensus leader and retry.
+7559	The consensus log is too large for cluster, please split the transcation to small ones.
+7560	Other consensus problem, retry.
+7561	The consensus membership change failed, error code is %d, error msg: %s
+7562	The consensus leader is not allowed to do current operation.
+7563	The server is not allowed to do current operation.
+7564	Cluster not support this operation.
+7565	The cluster has too many nodes.
+7566	The consensus node ip:port format is incorrect.
+7567	The consensus node is logger, which is not allowed to to do current operation.
+7568	Config file is missing for importing table %s
+7569	The parameter server_uuid (%-.256s) of ac_commit does not match the server_uuid (%-.256s) of this instance.
+7570	Invalid master parms when calling ac_commit. server_uuid: %-.256s, tid: %lu, slot_ptr: %lu.
+7571	Invalid xa branch parms. global branch: %d, local branch: %d.
+7572	The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry.
+7573	Transaction slots may be cleaned up immediately because the retention time of transaction slots is not set. It is recommended to adjust innodb_txn_retention to a large enough value.
+7574	Failed to allocate transaction slot when xa start.
+7575	Cannot start a new xa branch when enable transaction group, if there has been already one xa branch in prepared state.
+7576	Empty XA transactions not allowed from @@consensus_disable_empty_xa.
+7577	PING check(%llu) failed with %s.
+7578	Variable '%-.64s' cannot be enabled because '%-.64s' is enabled/disabled
+7579	The authentication of user is denied for entering the wrong password multiple times with the period.
+7580	License file not found. Please check the file path in the configuration file.
+7581	%s. Please check the license file or connect with support team.
+7582	License file is invalid(%s). Please check the license file or connect with support team.
+7583	Beyond the authorization limits(%s). Please check the license file or connect with support team.
+7584	DBMS_LICENSE is disabled for current version.
+7585	Transaction is too big, please split it into smaller transactions.
+7586	Slow query blocker, query killed bacause exceeding time limit, change variable polarx_slow_query_block_exec_timeout.
+7587	Slow query blocker, query killed bacause cpu usage high and exceeding time limit, change variable polarx_slow_query_block_cpu_percent_threshold and polarx_slow_query_block_exec_timeout_for_cpu_exceed.

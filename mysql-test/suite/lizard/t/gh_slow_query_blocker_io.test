@@ -1,0 +1,149 @@
+--source include/have_debug.inc
+
+# 保存全局变量
+SET @old_polarx_slow_query_block_exec_timeout = @@global.polarx_slow_query_block_exec_timeout;
+SET @old_polarx_slow_query_block_cpu_percent_threshold = @@global.polarx_slow_query_block_cpu_percent_threshold;
+SET @old_polarx_slow_query_block_exec_timeout_for_cpu_exceed = @@global.polarx_slow_query_block_exec_timeout_for_cpu_exceed;
+
+# 启用慢查询阻塞器
+
+
+--echo # 准备测试数据
+# 创建测试表
+CREATE TABLE t1 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(1000),
+    created_at TIMESTAMP,
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE t2 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    t1_id INT,
+    data TEXT,
+    created_at TIMESTAMP,
+    KEY idx_t1_id (t1_id),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB;
+
+--echo # 插入基础数据
+# 使用存储过程生成测试数据
+DELIMITER |;
+CREATE PROCEDURE generate_test_data()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    WHILE i <= 10000 DO
+        INSERT INTO t1 (data, created_at)
+        VALUES (
+            REPEAT(CONCAT('data-', i), 100),
+            DATE_ADD('2024-01-01', INTERVAL i HOUR)
+        );
+        SET i = i + 1;
+    END WHILE;
+
+    INSERT INTO t2 (t1_id, data, created_at)
+    SELECT 
+        id,
+        CONCAT(data, REPEAT(' extra data ', 100)),
+        created_at
+    FROM t1;
+END |
+DELIMITER ;|
+
+CALL generate_test_data();
+DROP PROCEDURE generate_test_data;
+
+SET GLOBAL polarx_slow_query_block_exec_timeout = 5;
+SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 60;
+SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 2;
+
+
+--echo # Test 1: IO密集型查询 - 大表JOIN + 文件排序
+SELECT 
+    t1.id,
+    t1.data,
+    t2.data,
+    COUNT(*) OVER (PARTITION BY DATE(t1.created_at))
+FROM t1
+JOIN t2 ON t1.id = t2.t1_id
+WHERE t1.created_at BETWEEN '2024-01-01' AND '2024-03-01'
+ORDER BY t2.data, t1.created_at;
+
+--echo # Test 2: IO密集型查询 - 大量数据排序和分组
+SELECT 
+    DATE(created_at) as date,
+    COUNT(*) as count,
+    GROUP_CONCAT(SUBSTRING(data, 1, 100) ORDER BY id DESC) as sample_data
+FROM t1
+GROUP BY DATE(created_at)
+ORDER BY date DESC
+LIMIT 10000;
+
+--echo # Test 3: IO密集型查询 - 大表自连接和临时表
+--ERROR ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
+#--ERROR ER_SLOW_QUERY_EXCEED_TIME
+WITH ranked_data AS (
+    SELECT 
+        t1.id,
+        t1.data,
+        t1.created_at,
+        ROW_NUMBER() OVER (PARTITION BY DATE(t1.created_at) ORDER BY t1.id) as rn
+    FROM t1
+)
+SELECT 
+    a.id as id1,
+    b.id as id2,
+    a.data as data1,
+    b.data as data2,
+    DATEDIFF(a.created_at, b.created_at) as date_diff
+FROM ranked_data a
+JOIN ranked_data b ON a.rn = b.rn
+WHERE a.id < b.id
+ORDER BY date_diff DESC
+LIMIT 1000;
+
+--echo # Test 4: IO密集型查询 - 复杂子查询和派生表
+--ERROR ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
+SELECT 
+    t1.id,
+    t1.data,
+    (
+        SELECT COUNT(*)
+        FROM t2
+        WHERE t2.t1_id = t1.id
+        AND t2.created_at > t1.created_at
+    ) as future_records,
+    (
+        SELECT AVG(LENGTH(t2.data))
+        FROM t2
+        WHERE t2.t1_id = t1.id
+    ) as avg_data_length
+FROM t1
+WHERE t1.id IN (
+    SELECT DISTINCT t1_id
+    FROM t2
+    WHERE LENGTH(data) > 1000
+)
+ORDER BY future_records DESC, avg_data_length DESC
+LIMIT 500;
+
+--echo # Test 5: IO密集型查询 - 大量数据聚合和窗口函数
+SELECT 
+    t1.id,
+    t1.data,
+    COUNT(*) OVER (ORDER BY t1.created_at ROWS BETWEEN 100 PRECEDING AND CURRENT ROW) as rolling_count,
+    AVG(LENGTH(t1.data)) OVER (ORDER BY t1.created_at ROWS BETWEEN 50 PRECEDING AND 50 FOLLOWING) as rolling_avg_length,
+    SUM(LENGTH(t1.data)) OVER (PARTITION BY DATE(t1.created_at)) as daily_total_length
+FROM t1
+WHERE t1.created_at BETWEEN '2024-01-01' AND '2024-02-01'
+ORDER BY rolling_count DESC
+LIMIT 1000;
+
+# 清理
+DROP TABLE t2;
+DROP TABLE t1;
+
+# 恢复全局变量
+SET GLOBAL polarx_slow_query_block_exec_timeout = @old_polarx_slow_query_block_exec_timeout;
+SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = @old_polarx_slow_query_block_cpu_percent_threshold;
+SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = @old_polarx_slow_query_block_exec_timeout_for_cpu_exceed; 

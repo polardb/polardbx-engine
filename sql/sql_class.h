@@ -222,6 +222,12 @@ extern char empty_c_string[1];
 */
 constexpr size_t PREALLOC_NUM_HA = 15;
 
+enum class Sqb_ret_error {
+  SQB_RET_ERROR_NONE,
+  SQB_RET_ERROR_TIME,
+  SQB_RET_ERROR_CPU_AND_TIME
+};
+
 #ifndef NDEBUG
 // Used to sample certain debug flags when a query is read but before the reply
 // is sent.
@@ -1664,6 +1670,13 @@ class THD : public MDL_context_owner,
   uint16 peer_port;
   struct timeval start_time;
   struct timeval user_time;
+
+  /** count in ms. */
+  ulonglong sqb_cpu_start_time;
+  ulonglong sqb_start_time;
+
+  bool sqb_is_enabled = false;
+
   /**
     Query start time, expressed in microseconds.
   */
@@ -2587,6 +2600,7 @@ class THD : public MDL_context_owner,
   ulong statement_id_counter;
   ulong rand_saved_seed1, rand_saved_seed2;
   my_thread_t real_id;
+
   /**
     This counter is 32 bit because of the client protocol.
 
@@ -3221,6 +3235,30 @@ class THD : public MDL_context_owner,
     return variables.time_zone;
   }
   time_t query_start_in_secs() const { return start_time.tv_sec; }
+  
+  /*----------------------------------------------------------------*/
+  /* Functions used for GongHang slow query block.  */
+  /*----------------------------------------------------------------*/
+  ulonglong sqb_query_start_in_ms() const;
+
+  bool sqb_is_block_command() const;
+
+  void sqb_set_cpu_start_time();
+
+  void sqb_set_time_and_error();
+
+  void sqb_send_kill_message(int err) const;
+
+  void sqb_reset_time_and_error() {
+    if (!sqb_is_enabled) return;
+    sqb_start_time = 0;
+    sqb_cpu_start_time = 0;
+  }
+
+  /*----------------------------------------------------------------*/
+  /* Functions used for GongHang slow query block.  */
+  /*----------------------------------------------------------------*/
+
   my_timeval query_start_timeval_trunc(uint decimals);
   void set_time();
   void set_time(const struct timeval *t) {
@@ -4906,10 +4944,12 @@ class THD : public MDL_context_owner,
   bool xpaxos_replication_channel;
 
   /** Used for slow query blocker to judge if need to block. */
-  bool sqb_should_block;
+  bool sqb_should_block = false;
 
   /** Total affected rows in the transaction. */
   longlong m_trx_affected_rows;
+
+  enum Sqb_ret_error sqb_ret_error;
 
 #ifndef NDEBUG
   /** Replaced m_cond_preempt. Protected by LOCK_tx_commit_pending_mutex. */

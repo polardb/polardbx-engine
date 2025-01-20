@@ -57,6 +57,7 @@
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
 #include "mysql_com.h"
+#include "sql/gh_slow_query_block/slow_query_block.h"
 #include "sql/protocol.h"
 #include "sql/rpl_trx_tracking.h"
 #ifdef HAVE_SYS_TIME_H
@@ -1180,13 +1181,6 @@ static bool fix_binlog_stmt_cache_size(sys_var *, THD *thd, enum_var_type) {
   check_binlog_stmt_cache_size(thd);
   return false;
 }
-
-static Sys_var_charptr Sys_slow_query_user_pattern(
-    "slow_query_user_pattern",
-    "match user pattern "
-    "match user pattern",
-    GLOBAL_VAR(sqb_user_pattern), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
-    DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 static Sys_var_ulong Sys_binlog_cache_size(
     "binlog_cache_size",

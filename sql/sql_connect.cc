@@ -35,6 +35,7 @@
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
 #include "pfs_thread_provider.h"
+#include "sql/gh_slow_query_block/slow_query_block.h"
 #include "sql/table.h"
 
 #ifndef _WIN32
@@ -650,17 +651,8 @@ static int check_connection(THD *thd) {
   }
 
   auth_rc = acl_authenticate(thd, COM_CONNECT);
-  
-  if (sqb_user_pattern) {
-    const std::string &user_pattern = sqb_user_pattern;
-    const char* user_name = thd->security_context()->priv_user().str;
-    if (user_pattern != "" && user_name != nullptr) {
-      std::regex pattern(user_pattern);
-      /** Only when set patern and match, block will be triggered */
-      thd->sqb_should_block =
-          std::regex_search(user_name, pattern);
-    }
-  }
+
+  polarx::check_sqb_user_pattern(thd);
 
   if (mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_CONNECT))) {
     if (thd->get_stmt_da()->mysql_errno() ==

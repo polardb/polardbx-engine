@@ -1,0 +1,35 @@
+--source include/have_debug.inc
+
+# 启用慢查询阻塞器
+
+--echo # Test 1: Test execution time limit
+CREATE TABLE t1 (id INT, val INT);
+INSERT INTO t1 VALUES (1,1);
+
+# 设置执行时间限制为2秒
+SET GLOBAL polarx_slow_query_block_exec_timeout = 2;
+
+# 创建一个会执行较长时间的查询
+--error ER_SLOW_QUERY_EXCEED_TIME
+SELECT SLEEP(5) FROM t1;
+
+--echo # Test 2: Test CPU and time limit combined
+SET GLOBAL polarx_slow_query_block_exec_timeout = 0;
+SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 60;
+SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 2;
+
+# 创建一个CPU密集型查询
+--error ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
+WITH RECURSIVE cte AS (
+  SELECT 1 AS n
+  UNION ALL
+  SELECT n + 1 FROM cte WHERE n < 1000000
+)
+SELECT /*+ SET_VAR(cte_max_recursion_depth = 1M) */ COUNT(*) FROM cte;
+
+
+# 清理
+DROP TABLE t1;
+SET GLOBAL polarx_slow_query_block_exec_timeout = 0;
+SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 0;
+SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 0; 

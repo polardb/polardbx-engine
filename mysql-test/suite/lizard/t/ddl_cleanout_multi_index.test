@@ -1,6 +1,8 @@
 SET autocommit = 0;
 set global innodb_commit_cleanout_max_rows=0;
 set global innodb_lizard_stat_enabled=true;
+set global innodb_inject_stress_test_for_panda=false;
+
 
 CREATE TABLE large_table4 (
     id INT  PRIMARY KEY,
@@ -75,6 +77,7 @@ ALTER TABLE large_table5 ADD INDEX idx_id(id), ADD INDEX idx_name(name);
 
 
 
+set global innodb_inject_stress_test_for_panda=true;
 
 set global innodb_commit_cleanout_max_rows=3;
 set global innodb_lizard_stat_enabled=false;

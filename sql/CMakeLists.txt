@@ -648,6 +648,7 @@ SET(SQL_SHARED_SOURCES
   polarx_proc/changeset_manager.cc
   polarx_proc/changeset_proc.cc
   polarx_proc/thread_pool.cc
+  gh_slow_query_block/slow_query_block.cc
   package/package.cc
   package/package_cache.cc
   package/package_common.cc

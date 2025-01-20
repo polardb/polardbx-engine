@@ -1003,6 +1003,8 @@ MySQL clients support the protocol:
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
 
+#include "sql/gh_slow_query_block/slow_query_block.h"
+
 #ifdef RDS_HAVE_JEMALLOC
 #include "sql/sql_jemalloc.h"
 #endif
@@ -1415,6 +1417,11 @@ bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
 ulonglong sqb_max_trx_affected_rows=0;
 char *sqb_user_pattern = nullptr;
+ulong sqb_exec_timeout = 0;
+ulong sqb_exec_timeout_for_cpu_exceed = 0;
+ulong sqb_cpu_percent_threshold = 0;
+bool sqb_enable_slow_query_block = false;
+ulong sqb_check_interval = 0;
 
 /* RDS Variables */
 bool ic_reduce_hint_enable = 0;
@@ -2821,6 +2828,7 @@ static void clean_up(bool print_message) {
 
   // exit changeset thread pool
   UninitChangesetThreadPool();
+  polarx::destory_background_poller();
 
   /*
     The following lines may never be executed as the main thread may have
@@ -2878,6 +2886,7 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_diagnose_excluded_vars_list);
   mysql_mutex_destroy(&LOCK_global_conn_mem_limit);
   mysql_mutex_destroy(&im::LOCK_internal_account_string);
+  mysql_mutex_destroy(&polarx::LOCK_slow_query_user_pattern);
 }
 
 /****************************************************************************
@@ -5514,6 +5523,8 @@ static int init_thread_environment() {
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(im::key_LOCK_internal_account_string,
                    &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(polarx::key_LOCK_slow_query_user_pattern,
+                   &polarx::LOCK_slow_query_user_pattern, MY_MUTEX_INIT_FAST);
   return 0;
 }
 
@@ -8493,6 +8504,8 @@ int mysqld_main(int argc, char **argv)
   create_compress_gtid_table_thread();
 
   InitChangesetThreadPool(opt_changeset_threads);
+
+  polarx::create_background_poller();
 
   if (!opt_initialize)  malloc_stats();
 
@@ -12304,6 +12317,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_tx_commit_pending_mutex, "LOCK_tx_commit_pending_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &polarx::key_LOCK_slow_query_user_pattern, "LOCK_slow_query_user_pattern", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 
   { &key_consensus_info_data_lock, "consensus_info::data_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_run_lock, "consensus_info::run_lock", 0, 0, PSI_DOCUMENT_ME},

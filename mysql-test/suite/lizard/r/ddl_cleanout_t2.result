@@ -12,6 +12,7 @@ SET i = i + 10;
 END WHILE;
 END|
 CALL populate_t1(0, 11000);
+set global innodb_inject_stress_test_for_panda=false;
 ALTER TABLE t1 add index idx_c(c2);
 include/assert.inc [ddl_cleanout should make sense.]
 DROP PROCEDURE populate_t1;
@@ -41,6 +42,6 @@ ALTER TABLE large_table ADD INDEX idx_name (name);
 include/assert.inc [ddl_cleanout should make sense.]
 set global innodb_commit_cleanout_max_rows=3;
 set global innodb_lizard_stat_enabled=false;
-SET autocommit = 1;
+set global innodb_inject_stress_test_for_panda=true;
 DROP PROCEDURE insert_data;
 DROP TABLE large_table;

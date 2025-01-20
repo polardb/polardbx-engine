@@ -1503,6 +1503,23 @@ The following options may be given as the first argument:
  TCP receive buffer size(not change if set to 0)(RW)
  --polarx-rpc-tcp-send-buf[=#] 
  TCP send buffer size(not change if set to 0)(RW)
+ --polarx-slow-query-block-check-interval=# 
+ The interval of polling the slow query block. unit:
+ seconds
+ --polarx-slow-query-block-cpu-percent-threshold=# 
+ cpu limit when execute statement, unit: %
+ --polarx-slow-query-block-enable 
+ Whether to enable slow query block. Only set this
+ othervariables will take effect.
+ --polarx-slow-query-block-exec-timeout=# 
+ Kill statement that takes over the specified number of
+ seconds
+ --polarx-slow-query-block-exec-timeout-for-cpu-exceed=# 
+ Kill statement that takes over the specified number of
+ seconds when cpu exceed
+ --polarx-slow-query-block-user-pattern[=name] 
+ This option is deprecated. Use slow_query_user_pattern
+ instead.
  --polarx-udf[=name] Enable or disable polarx_udf plugin. Possible values are
  ON, OFF, FORCE (don't start if the plugin fails to load).
  -P, --port=#        Port number to use for connection or 0 to default to,
@@ -2651,6 +2668,12 @@ polarx-rpc-tcp-keep-alive 30
 polarx-rpc-tcp-listen-queue 128
 polarx-rpc-tcp-recv-buf 0
 polarx-rpc-tcp-send-buf 0
+polarx-slow-query-block-check-interval 1
+polarx-slow-query-block-cpu-percent-threshold 0
+polarx-slow-query-block-enable FALSE
+polarx-slow-query-block-exec-timeout 0
+polarx-slow-query-block-exec-timeout-for-cpu-exceed 0
+polarx-slow-query-block-user-pattern 
 polarx-udf ON
 port ####
 port-open-timeout 0

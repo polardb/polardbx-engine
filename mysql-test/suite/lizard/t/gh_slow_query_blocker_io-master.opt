@@ -1,0 +1,1 @@
+--polarx_slow_query_block_enable=1 --polarx_slow_query_block_enable=1 --slow_query_user_pattern=root --innodb_buffer_pool_size=128M

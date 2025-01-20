@@ -1,6 +1,7 @@
 SET autocommit = 0;
 set global innodb_commit_cleanout_max_rows=0;
 set global innodb_lizard_stat_enabled=true;
+set global innodb_inject_stress_test_for_panda=false;
 CREATE TABLE large_table4 (
 id INT  PRIMARY KEY,
 name VARCHAR(50),
@@ -27,5 +28,6 @@ include/assert.inc [ddl_cleanout should make sense.]
 set global innodb_commit_cleanout_max_rows=3;
 set global innodb_lizard_stat_enabled=false;
 SET autocommit = 1;
+set global innodb_inject_stress_test_for_panda=true;
 DROP PROCEDURE insert_data1;
 DROP TABLE large_table4;

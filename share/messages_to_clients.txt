@@ -10224,6 +10224,12 @@ ER_LICENSE_PROC_DISABLE
 ER_TRANSACTION_TOO_BIG
   eng "Transaction is too big, please split it into smaller transactions."
 
+ER_SLOW_QUERY_EXCEED_TIME
+  eng "Slow query blocker, query killed bacause exceeding time limit, change variable polarx_slow_query_block_exec_timeout."
+
+ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
+  eng "Slow query blocker, query killed bacause cpu usage high and exceeding time limit, change variable polarx_slow_query_block_cpu_percent_threshold and polarx_slow_query_block_exec_timeout_for_cpu_exceed."
+
 #
 #  End of RDS error message.
 #

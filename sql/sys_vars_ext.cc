@@ -31,6 +31,7 @@
 #include "sql/ccl/ccl.h"
 #include "sql/ccl/ccl_bucket.h"
 #include "sql/ccl/ccl_interface.h"
+#include "sql/gh_slow_query_block/slow_query_block.h"
 #include "sql/log_table.h"
 #include "sql/outline/outline_interface.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
@@ -802,3 +803,69 @@ static Sys_var_bool Sys_hotspot_for_autocommit(
     "Update with autocommit can also use hotspot function.",
     GLOBAL_VAR(hotspot_for_autocommit), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
+
+/*----------------------------------------------------------------*/
+/* Variables used for GongHang slow query block.  */
+/*----------------------------------------------------------------*/
+
+static PolyLock_mutex plock_sys_slow_query_user_pattern(
+    &polarx::LOCK_slow_query_user_pattern);
+
+static bool check_sqb_user_pattern(sys_var *, THD *, set_var *var) {
+  const std::string &user_pattern = var->save_result.string_value.str;
+  if (user_pattern == "") return false;
+  try {
+    std::regex pattern(user_pattern);
+  } catch (const std::regex_error &e) {
+    return true;
+  }
+  return false;
+}
+
+static Sys_var_charptr Sys_slow_query_user_pattern(
+    "slow_query_user_pattern", 
+    "match user pattern for slow query block.",
+    GLOBAL_VAR(sqb_user_pattern), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT(""), &plock_sys_slow_query_user_pattern, NOT_IN_BINLOG,
+    ON_CHECK(check_sqb_user_pattern), ON_UPDATE(0));
+
+static Sys_var_deprecated_alias Sys_polarx_slow_query_block_user_pattern(
+    "polarx_slow_query_block_user_pattern", Sys_slow_query_user_pattern);
+
+static Sys_var_bool Sys_enable_slow_query_block(
+    "polarx_slow_query_block_enable",
+    "Whether to enable slow query block. Only set this other"
+    "variables will take effect.",
+    READ_ONLY GLOBAL_VAR(sqb_enable_slow_query_block), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_ulong Sys_polarx_slow_query_block_cpu_percent_threshold(
+    "polarx_slow_query_block_cpu_percent_threshold",
+    "cpu limit when execute statement, unit: %",
+    GLOBAL_VAR(sqb_cpu_percent_threshold), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 100), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_polarx_slow_query_block_exec_timeout(
+    "polarx_slow_query_block_exec_timeout",
+    "Kill statement that takes over the specified number of "
+    "seconds",
+    GLOBAL_VAR(sqb_exec_timeout), CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 10000),
+    DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_polarx_slow_query_block_exec_timeout_for_cpu_exceed(
+    "polarx_slow_query_block_exec_timeout_for_cpu_exceed",
+    "Kill statement that takes over the specified number of "
+    "seconds when cpu exceed",
+    GLOBAL_VAR(sqb_exec_timeout_for_cpu_exceed), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 10000), DEFAULT(0), BLOCK_SIZE(1));
+
+static Sys_var_ulong Sys_polarx_slow_query_block_check_interval(
+    "polarx_slow_query_block_check_interval",
+    "The interval of polling the slow query block. unit: seconds",
+    GLOBAL_VAR(sqb_check_interval), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(1, 10000), DEFAULT(1), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+/*----------------------------------------------------------------*/
+/* Variables used for GongHang slow query block.  */
+/*----------------------------------------------------------------*/

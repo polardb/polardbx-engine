@@ -381,6 +381,12 @@ extern std::atomic<ulonglong> group_update_group_same_count;
 extern ulonglong sqb_max_trx_affected_rows;
 extern char *sqb_user_pattern;
 
+extern ulong sqb_exec_timeout;
+extern ulong sqb_exec_timeout_for_cpu_exceed;
+extern ulong sqb_cpu_percent_threshold;
+extern bool sqb_enable_slow_query_block;
+extern ulong sqb_check_interval;
+
 enum enum_binlog_error_action {
   /// Ignore the error and let server continue without binlogging
   IGNORE_ERROR = 0,
