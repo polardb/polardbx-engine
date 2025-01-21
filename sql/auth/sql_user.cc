@@ -1625,12 +1625,33 @@ bool set_and_validate_user_attributes(
                              std::string(Str->host.str), gen_password, 1};
       generated_passwords.push_back(p);
     }
-    if (im::internal_account_need_protected(Str->user.str) &&
-        (!my_strcasecmp(&my_charset_latin1, Str->host.str, "127.0.0.1") ||
-         !my_strcasecmp(&my_charset_latin1, Str->host.str, "::1"))) {
-      /** For internal accounts, we disable password validation temporarily */
-      thd->m_disable_password_validation = true;
+    if (im::internal_account_need_protected(Str->user.str)) {
+      /** For internal accounts, we disable password validation temporarily if
+       * host is local loopback address */
+      struct in_addr addr4;
+      struct in6_addr addr6;
+      if (!my_strcasecmp(&my_charset_latin1, Str->host.str, "localhost")) {
+        thd->m_disable_password_validation = true;
+      } else if (inet_pton(AF_INET, Str->host.str, &addr4) == 1) {
+        /* IPV4 loopback address */
+        thd->m_disable_password_validation =
+            ((ntohl(addr4.s_addr) >> 24) == 127);
+      } else if (inet_pton(AF_INET6, Str->host.str, &addr6) == 1) {
+        if (IN6_IS_ADDR_LOOPBACK(&addr6)) {
+          /* IPV6 loopback address */
+          thd->m_disable_password_validation = true;
+        } else {
+          /* IPV4 mapped IPV6 address */
+          const uint8_t v4mapped_prefix[12] = {0, 0, 0, 0, 0,    0,
+                                               0, 0, 0, 0, 0xff, 0xff};
+          if (!memcmp(addr6.s6_addr, v4mapped_prefix, 12) &&
+              addr6.s6_addr[12] == 127) {
+            thd->m_disable_password_validation = true;
+          }
+        }
+      }
     }
+
     if (auth->generate_authentication_string(outbuf, &buflen, inbuf,
                                              inbuflen) ||
         auth_verify_password_history(thd, &Str->user, &Str->host,
