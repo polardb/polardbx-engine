@@ -14,7 +14,7 @@ void check_sqb_user_pattern(THD *thd) {
 
   MUTEX_LOCK(lock_slow_query_user_pattern, &LOCK_slow_query_user_pattern);
 
-  const std::string &user_pattern = sqb_user_pattern;
+  const std::string user_pattern = sqb_user_pattern;
   const char *user_name = thd->security_context()->priv_user().str;
 
   if (user_pattern == "" || user_name == nullptr) return;

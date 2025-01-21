@@ -816,7 +816,12 @@ static PolyLock_mutex plock_sys_slow_query_user_pattern(
     &polarx::LOCK_slow_query_user_pattern);
 
 static bool check_sqb_user_pattern(sys_var *, THD *, set_var *var) {
-  const std::string &user_pattern = var->save_result.string_value.str;
+  if (var->save_result.string_value.str == nullptr) {
+    var->save_result.string_value.str = const_cast<char *>("");
+    var->save_result.string_value.length = 0;
+    return false;
+  };
+  const std::string user_pattern = var->save_result.string_value.str;
   if (user_pattern == "") return false;
   try {
     std::regex pattern(user_pattern);
