@@ -326,6 +326,7 @@ class Item_func : public Item_result_field {
     args[0] = a;
     args[1] = b;
     m_accum_properties = 0;
+    reset_encrypted_type();
     add_accum_properties(a);
     add_accum_properties(b);
   }
@@ -341,6 +342,7 @@ class Item_func : public Item_result_field {
     args[1] = b;
     args[2] = c;
     m_accum_properties = 0;
+    reset_encrypted_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -361,6 +363,7 @@ class Item_func : public Item_result_field {
     args[2] = c;
     args[3] = d;
     m_accum_properties = 0;
+    reset_encrypted_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -383,6 +386,7 @@ class Item_func : public Item_result_field {
     args[3] = d;
     args[4] = e;
     m_accum_properties = 0;
+    reset_encrypted_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -407,6 +411,7 @@ class Item_func : public Item_result_field {
     args[4] = e;
     args[5] = f;
     m_accum_properties = 0;
+    reset_encrypted_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);

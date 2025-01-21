@@ -413,6 +413,7 @@ struct ST_CONN_ATTR {
 
 /* Global variables */
 extern Internal_account_config ia_config;
+extern bool opt_mask_internal_user;
 extern PSI_mutex_key key_LOCK_internal_account_string;
 extern mysql_mutex_t LOCK_internal_account_string;
 

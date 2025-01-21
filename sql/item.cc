@@ -146,11 +146,11 @@ Item::Item()
       null_value(false),
       unsigned_flag(false),
       m_is_window_function(false),
-      m_accum_properties(0) {
+      m_accum_properties(0),
+      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {
 #ifndef NDEBUG
   contextualized = true;
 #endif  // NDEBUG
-
   // Put item into global list so that we can free all items at end
   current_thd->add_item(this);
 }
@@ -173,7 +173,8 @@ Item::Item(THD *thd, const Item *item)
       null_value(item->null_value),
       unsigned_flag(item->unsigned_flag),
       m_is_window_function(item->m_is_window_function),
-      m_accum_properties(item->m_accum_properties) {
+      m_accum_properties(item->m_accum_properties),
+      m_encrypted_type(item->m_encrypted_type) {
 #ifndef NDEBUG
   assert(item->contextualized);
   contextualized = true;
@@ -201,7 +202,8 @@ Item::Item(const POS &)
       null_value(false),
       unsigned_flag(false),
       m_is_window_function(false),
-      m_accum_properties(0) {}
+      m_accum_properties(0),
+      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {}
 
 bool Item::may_eval_const_item(const THD *thd) const {
   return !thd->lex->is_view_context_analysis() || basic_const_item();
@@ -2854,6 +2856,15 @@ inline static uint32 adjust_max_effective_column_length(Field *field_par,
   return new_max_length > max_length ? new_max_length : max_length;
 }
 
+void Item_field::set_encrypted_type(Field *field) {
+  /** Copy the column encryption type from the field to the item. */
+  m_encrypted_type = field->encrypted_type();
+
+  if (has_encrypted_type(m_encrypted_type)) {
+    set_encrypted_column();
+  }
+}
+
 void Item_field::set_field(Field *field_par) {
   table_ref = field_par->table->pos_in_table_list;
   assert(table_ref == nullptr || table_ref->table == field_par->table);
@@ -2894,6 +2905,8 @@ void Item_field::set_field(Field *field_par) {
   if (field->table->s->tmp_table == SYSTEM_TMP_TABLE) any_privileges = false;
   if (!can_use_prefix_key)
     field->table->covering_keys.subtract(field->part_of_prefixkey);
+
+  set_encrypted_type(field);
 
   fixed = true;
 }

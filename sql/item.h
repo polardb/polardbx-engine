@@ -37,6 +37,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "column_encrypted_type.h"
 #include "decimal.h"
 #include "field_types.h"  // enum_field_types
 #include "lex_string.h"
@@ -3180,11 +3181,13 @@ class Item : public Parse_tree_node {
   /// Set accumulated properties for an Item
   void set_accum_properties(const Item *item) {
     m_accum_properties = item->m_accum_properties;
+    m_encrypted_type = item->m_encrypted_type;
   }
 
   /// Add more accumulated properties to an Item
   void add_accum_properties(const Item *item) {
     m_accum_properties |= item->m_accum_properties;
+    m_encrypted_type |= item->m_encrypted_type;
   }
 
   /// Set the "has subquery" property
@@ -3235,6 +3238,15 @@ class Item : public Parse_tree_node {
 
   /// Set the property: this item is a call to GROUPING
   void set_grouping_func() { m_accum_properties |= PROP_GROUPING_FUNC; }
+
+  ///@return true if this item or any of underlying items is a encrypted column.
+  bool has_encrypted_column() const {
+    return m_accum_properties & PROP_ENCRYPTED_COLUMN;
+  }
+
+  /// Set the property: this item or one of its underlying items is a encrypted
+  /// column.
+  void set_encrypted_column() { m_accum_properties |= PROP_ENCRYPTED_COLUMN; }
 
   /// Whether this Item was created by the IN->EXISTS subquery transformation
   virtual bool created_by_in2exists() const { return false; }
@@ -3448,21 +3460,35 @@ class Item : public Parse_tree_node {
     current item tree, except they are not accumulated across subqueries and
     functions.
   */
-  static constexpr uint8 PROP_SUBQUERY = 0x01;
-  static constexpr uint8 PROP_STORED_PROGRAM = 0x02;
-  static constexpr uint8 PROP_AGGREGATION = 0x04;
-  static constexpr uint8 PROP_WINDOW_FUNCTION = 0x08;
+  static constexpr uint16 PROP_SUBQUERY = 0x0001;
+  static constexpr uint16 PROP_STORED_PROGRAM = 0x0002;
+  static constexpr uint16 PROP_AGGREGATION = 0x0004;
+  static constexpr uint16 PROP_WINDOW_FUNCTION = 0x0008;
   /**
     Set if the item or one or more of the underlying items contains a
     ROLLUP expression. The rolled up expression itself is not so marked.
   */
-  static constexpr uint8 PROP_ROLLUP_EXPR = 0x10;
+  static constexpr uint16 PROP_ROLLUP_EXPR = 0x0010;
   /**
     Set if the item or one or more of the underlying items is a GROUPING
     function.
   */
-  static constexpr uint8 PROP_GROUPING_FUNC = 0x20;
-  uint8 m_accum_properties;
+  static constexpr uint16 PROP_GROUPING_FUNC = 0x0020;
+
+  /** Set if the item or one or more of the underlying items is a encrypted
+   * item. */
+  static constexpr uint16 PROP_ENCRYPTED_COLUMN = 0x8000;
+
+  uint16 m_accum_properties;
+
+  /** Encrypted type of the item if PROP_ENCRYPTED_COLUMN is set.*/
+  uint16 m_encrypted_type;
+
+ public:
+  uint16 encrypted_type() const { return m_encrypted_type; }
+  void reset_encrypted_type() {
+    m_encrypted_type = COULUMN_ENCRYPTED_TYPE_NONE;
+  }
 
  public:
   /**
@@ -4104,6 +4130,7 @@ class Item_field : public Item_ident {
   typedef Item_ident super;
 
  protected:
+  void set_encrypted_type(Field *field);
   void set_field(Field *field);
   void fix_after_pullout(Query_block *parent_query_block,
                          Query_block *removed_query_block) override {
@@ -5751,6 +5778,7 @@ class Item_ref : public Item_ident {
       itself.
     */
     m_accum_properties &= PROP_ROLLUP_EXPR;
+    reset_encrypted_type();
     add_accum_properties(ref_item());
   }
 

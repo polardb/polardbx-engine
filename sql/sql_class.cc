@@ -1887,6 +1887,8 @@ void THD::cleanup_after_query() {
   if (rli_slave) rli_slave->cleanup_after_query();
   // Set the default "cute" mode for the execution environment:
   check_for_truncated_fields = CHECK_FIELD_IGNORE;
+
+  enable_mask_internal_user = false;
 }
 
 /*

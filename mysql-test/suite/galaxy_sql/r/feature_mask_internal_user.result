@@ -1,0 +1,46 @@
+#
+# 1. Create all types of internal users and a normal user
+#
+CREATE USER 'u0'@'localhost' IDENTIFIED BY '';
+CREATE USER 'u1'@'localhost' IDENTIFIED BY '';
+CREATE USER 'u2'@'localhost' IDENTIFIED BY '';
+CREATE USER 'u3'@'localhost' IDENTIFIED BY '';
+CREATE USER 'normal'@'localhost' IDENTIFIED BY '';
+#
+# 2. Query all users, internal users should be masked, normal user should not be masked
+#
+SET GLOBAL mask_internal_user=ON;
+SELECT user, authentication_string FROM mysql.user;
+user	authentication_string
+mysql.infoschema	******
+mysql.session	******
+mysql.sys	******
+normal	******
+root	******
+******	******
+******	******
+******	******
+******	******
+#
+# 3. Query all users again, all users should show real username and password
+#
+SET GLOBAL mask_internal_user=OFF;
+SELECT user, authentication_string FROM mysql.user;
+user	authentication_string
+mysql.infoschema	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
+mysql.session	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
+mysql.sys	$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED
+normal	
+root	
+u0	
+u1	
+u2	
+u3	
+#
+# 4. Cleanup
+#
+DROP USER 'u0'@'localhost';
+DROP USER 'u1'@'localhost';
+DROP USER 'u2'@'localhost';
+DROP USER 'u3'@'localhost';
+DROP USER 'normal'@'localhost';

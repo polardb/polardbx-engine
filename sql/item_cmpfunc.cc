@@ -5876,6 +5876,7 @@ void Item_cond::update_used_tables() {
 
   used_tables_cache = 0;
   m_accum_properties = 0;
+  reset_encrypted_type();
 
   if (functype() == COND_AND_FUNC && ignore_unknown())
     not_null_tables_cache = 0;
@@ -7014,6 +7015,7 @@ void Item_equal::update_used_tables() {
   not_null_tables_cache = used_tables_cache = 0;
   if (cond_false) return;
   m_accum_properties = 0;
+  reset_encrypted_type();
   while ((item = li++)) {
     item->update_used_tables();
     used_tables_cache |= item->used_tables();

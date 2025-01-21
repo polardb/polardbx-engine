@@ -122,6 +122,8 @@
 #include "typelib.h"
 #include "unhex.h"
 
+#include "sql/auth/sql_internal_account.h"
+
 extern uint *my_aes_opmode_key_sizes;
 
 using std::max;
@@ -1082,6 +1084,78 @@ String *Item_func_statement_digest_text::val_str(String *buf) {
   compute_digest_text(&thd->m_digest->m_digest_storage, buf);
 
   return buf;
+}
+
+String *Item_func_mask_internal_user::val_str(String *str) {
+  assert(fixed);
+  THD *thd = current_thd;
+  null_value = false;
+  tmp_value.length(0);
+
+  String *res = eval_string_arg(collation.collation, args[0], str);
+  if (res == nullptr) {
+    assert(thd->is_error() || (args[0]->null_value && is_nullable()));
+    return error_str();
+  }
+
+  char user_name[USERNAME_LENGTH + 1];
+  size_t copy_len = std::min<size_t>(res->length(), USERNAME_LENGTH);
+  memcpy(user_name, res->ptr(), copy_len);
+  user_name[copy_len] = '\0';
+
+  if (im::internal_account_need_protected(user_name)) {
+    /** mask the username with mask_string. */
+    if (tmp_value.append(mask_string)) return error_str();
+  } else {
+    if (tmp_value.append(user_name)) return error_str();
+  }
+
+  if (tmp_value.length() > thd->variables.max_allowed_packet) {
+    return push_packet_overflow_warning(thd, func_name());
+  }
+
+  tmp_value.set_charset(collation.collation);
+  return &tmp_value;
+}
+
+bool Item_func_mask_internal_user::resolve_type(THD *thd) {
+  assert(arg_count == 1);
+
+  if (param_type_is_default(thd, 0, -1)) return true;
+
+  if (agg_arg_charsets_for_string_result(collation, args, arg_count))
+    return true;
+
+  set_data_type_string(args[0]->max_char_length(collation.collation));
+  set_nullable(is_nullable() || max_length > thd->variables.max_allowed_packet);
+  return false;
+}
+
+String *Item_func_mask_users_password::val_str(String *) {
+  assert(fixed);
+  THD *thd = current_thd;
+  null_value = false;
+  tmp_value.length(0);
+  /** Whatever the input is, we will return a mask string. */
+  if (tmp_value.append(mask_string)) return error_str();
+
+  if (tmp_value.length() > thd->variables.max_allowed_packet) {
+    return push_packet_overflow_warning(thd, func_name());
+  }
+  tmp_value.set_charset(collation.collation);
+  return &tmp_value;
+}
+
+bool Item_func_mask_users_password::resolve_type(THD *thd) {
+  assert(arg_count == 1);
+  if (param_type_is_default(thd, 0, -1)) return true;
+
+  if (agg_arg_charsets_for_string_result(collation, args, arg_count))
+    return true;
+
+  set_data_type_string(args[0]->max_char_length(collation.collation));
+  set_nullable(is_nullable() || max_length > thd->variables.max_allowed_packet);
+  return false;
 }
 
 /**

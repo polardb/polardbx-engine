@@ -1695,8 +1695,8 @@ Field::Field(uchar *ptr_arg, uint32 length_arg, uchar *null_ptr_arg,
       gcol_info(nullptr),
       stored_in_db(true),
       m_default_val_expr(nullptr),
-      m_is_implicit(false)
-{
+      m_is_implicit(false),
+      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {
   if (!is_nullable()) set_flag(NOT_NULL_FLAG);
   comment.str = "";
   comment.length = 0;

@@ -5490,6 +5490,8 @@ void THD::reset_for_next_command() {
 
   /* For some case, the query fail without reset the gu_ctx. for defense.*/
   if (thd->gu_ctx.is_gu()) thd->gu_ctx.reset();
+
+  thd->enable_mask_internal_user = im::opt_mask_internal_user;
 }
 
 /*

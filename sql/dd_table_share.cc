@@ -1096,6 +1096,17 @@ static bool fill_column_from_dd(THD *thd, TABLE_SHARE *share,
     reg_field->comment.length = comment.length();
   }
 
+  /** Here, for mysql.user table, we pretend to have encrypted_method. */
+  if (share->db.str != nullptr && share->table_name.str != nullptr &&
+      name != nullptr &&
+      !my_strcasecmp(&my_charset_latin1, share->db.str, "mysql") &&
+      !my_strcasecmp(&my_charset_latin1, share->table_name.str, "user")) {
+    if (!my_strcasecmp(&my_charset_latin1, name, "user"))
+      reg_field->set_encrypted_type(COLUMN_ENCRYPTED_TYPE_MASK_INTERNAL_USERS);
+    else if (!my_strcasecmp(&my_charset_latin1, name, "authentication_string"))
+      reg_field->set_encrypted_type(COLUMN_ENCRYPTED_TYPE_MASK_USERS_PASSWORD);
+  }
+
   // NOT SECONDARY column option.
   if (column_options->exists("not_secondary"))
     reg_field->set_flag(NOT_SECONDARY_FLAG);

@@ -13,6 +13,8 @@ where length(variable_name) > 50;
 There should be *no* long test name listed below:
 polarx_rpc_epoll_group_thread_deadlock_check_interval
 polarx_rpc_epoll_group_thread_deadlock_check_interval
+polarx_slow_query_block_exec_timeout_for_cpu_exceed
+polarx_slow_query_block_exec_timeout_for_cpu_exceed
 select variable_name as `There should be *no* variables listed below:` from t2
 left join t1 on variable_name=test_name where test_name is null ORDER BY variable_name;
 There should be *no* variables listed below:
@@ -211,8 +213,6 @@ enable_polarx_rpc
 enable_polarx_rpc
 enable_show_ipk_info
 enable_show_ipk_info
-polarx_slow_query_block_enable
-polarx_slow_query_block_enable
 enable_udf_bloomfilter_xxhash
 enable_udf_bloomfilter_xxhash
 enable_writeset_tracking_for_ipk
@@ -420,6 +420,8 @@ maintain_user_list
 maintain_user_list
 mandatory_roles
 mandatory_roles
+mask_internal_user
+mask_internal_user
 master_verify_checksum
 master_verify_checksum
 max_length_for_sort_data
@@ -490,6 +492,8 @@ polarx_rpc_enable_tasker
 polarx_rpc_enable_tasker
 polarx_rpc_enable_thread_pool_log
 polarx_rpc_enable_thread_pool_log
+polarx_rpc_enable_xrpc_sha2
+polarx_rpc_enable_xrpc_sha2
 polarx_rpc_epoll_events_per_thread
 polarx_rpc_epoll_events_per_thread
 polarx_rpc_epoll_extra_groups
@@ -558,6 +562,18 @@ polarx_rpc_tcp_recv_buf
 polarx_rpc_tcp_recv_buf
 polarx_rpc_tcp_send_buf
 polarx_rpc_tcp_send_buf
+polarx_slow_query_block_check_interval
+polarx_slow_query_block_check_interval
+polarx_slow_query_block_cpu_percent_threshold
+polarx_slow_query_block_cpu_percent_threshold
+polarx_slow_query_block_enable
+polarx_slow_query_block_enable
+polarx_slow_query_block_exec_timeout
+polarx_slow_query_block_exec_timeout
+polarx_slow_query_block_exec_timeout_for_cpu_exceed
+polarx_slow_query_block_exec_timeout_for_cpu_exceed
+polarx_slow_query_block_user_pattern
+polarx_slow_query_block_user_pattern
 polarx_udf_function_list
 polarx_udf_function_list
 print_malloc_stats
@@ -720,16 +736,8 @@ slave_transaction_retries
 slave_transaction_retries
 slave_type_conversions
 slave_type_conversions
-polarx_slow_query_block_enable
-polarx_slow_query_block_enable
-polarx_slow_query_block_exec_timeout
-polarx_slow_query_block_exec_timeout
-polarx_slow_query_block_exec_timeout_for_cpu_exceed
-polarx_slow_query_block_exec_timeout_for_cpu_exceed
 slow_query_user_pattern
 slow_query_user_pattern
-polarx_slow_query_block_cpu_percent_threshold
-polarx_slow_query_block_cpu_percent_threshold
 sql_require_primary_key
 sql_require_primary_key
 sql_slave_skip_counter

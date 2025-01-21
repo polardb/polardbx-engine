@@ -1,0 +1,33 @@
+
+--echo #
+--echo # 1. Create all types of internal users and a normal user
+--echo #
+# maintain user
+CREATE USER 'u0'@'localhost' IDENTIFIED BY '';  
+CREATE USER 'u1'@'localhost' IDENTIFIED BY '';  
+# inner user
+CREATE USER 'u2'@'localhost' IDENTIFIED BY ''; 
+CREATE USER 'u3'@'localhost' IDENTIFIED BY '';
+# normal user
+CREATE USER 'normal'@'localhost' IDENTIFIED BY '';
+
+--echo #
+--echo # 2. Query all users, internal users should be masked, normal user should not be masked
+--echo #
+SET GLOBAL mask_internal_user=ON;
+SELECT user, authentication_string FROM mysql.user;
+
+--echo #
+--echo # 3. Query all users again, all users should show real username and password
+--echo #
+SET GLOBAL mask_internal_user=OFF;
+SELECT user, authentication_string FROM mysql.user;
+
+--echo #
+--echo # 4. Cleanup
+--echo #
+DROP USER 'u0'@'localhost';
+DROP USER 'u1'@'localhost';
+DROP USER 'u2'@'localhost';
+DROP USER 'u3'@'localhost';
+DROP USER 'normal'@'localhost';

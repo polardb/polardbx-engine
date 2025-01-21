@@ -772,6 +772,7 @@ void Item_sum::update_used_tables() {
   // Re-accumulate all properties except three
   m_accum_properties &=
       (PROP_AGGREGATION | PROP_WINDOW_FUNCTION | PROP_ROLLUP_EXPR);
+  reset_encrypted_type();
 
   for (uint i = 0; i < arg_count; i++) {
     args[i]->update_used_tables();

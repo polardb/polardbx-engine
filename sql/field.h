@@ -1864,6 +1864,14 @@ class Field {
  public:
   void set_implicit() { m_is_implicit = true; }
   bool is_implicit() const { return m_is_implicit; }
+
+  /** Encrypted type of the field. @see sql/column_encrypted_type.h */
+ private:
+  uint16 m_encrypted_type;
+
+ public:
+  void set_encrypted_type(uint16 type) { m_encrypted_type = type; }
+  uint16 encrypted_type() const { return m_encrypted_type; }
 };
 
 /**

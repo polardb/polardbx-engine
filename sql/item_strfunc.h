@@ -333,6 +333,30 @@ class Item_func_random_bytes : public Item_str_func {
   const char *func_name() const override { return "random_bytes"; }
 };
 
+class Item_func_mask_internal_user final : public Item_str_func {
+  String tmp_value{"", 0, collation.collation};  // Initialize to empty
+  static constexpr char mask_string[] = "******";
+
+ public:
+  Item_func_mask_internal_user(const POS &pos, Item *a)
+      : Item_str_func(pos, a) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "mask_internal_user"; }
+};
+
+class Item_func_mask_users_password final : public Item_str_func {
+  String tmp_value{"", 0, collation.collation};  // Initialize to empty
+  static constexpr char mask_string[] = "******";
+
+ public:
+  Item_func_mask_users_password(const POS &pos, Item *a)
+      : Item_str_func(pos, a) {}
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "mask_users_password"; }
+};
+
 class Item_func_concat : public Item_str_func {
   String tmp_value{"", 0, collation.collation};  // Initialize to empty
  public:

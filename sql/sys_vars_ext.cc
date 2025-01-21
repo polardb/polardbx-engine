@@ -568,6 +568,10 @@ static Sys_var_charptr Sys_rds_inner_user_list(
     IN_FS_CHARSET, DEFAULT(0), &Plock_internal_account_string, NOT_IN_BINLOG,
     ON_CHECK(NULL), ON_UPDATE(update_inner_user));
 
+static Sys_var_bool Sys_mask_internal_user(
+    "mask_internal_user", "Mask the internal user",
+    GLOBAL_VAR(im::opt_mask_internal_user), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 #ifdef RDS_HAVE_JEMALLOC
 

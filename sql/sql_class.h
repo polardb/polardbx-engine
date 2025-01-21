@@ -1682,6 +1682,9 @@ class THD : public MDL_context_owner,
   */
   ulonglong start_utime;
 
+  /** Snapshot of mask_internal_user variable. */
+  bool enable_mask_internal_user = false;
+
  private:
   /**
     Time spent waiting for TABLE locks and DATA locks.

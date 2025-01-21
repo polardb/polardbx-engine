@@ -58,6 +58,9 @@ mysql_mutex_t LOCK_internal_account_string;
 /* Global Internal Account configuration object */
 Internal_account_config ia_config;
 
+/** Whether mask the internal user */
+bool opt_mask_internal_user = false;
+
 /* The static struct for looping and checking account type */
 /**
   Revision history:
