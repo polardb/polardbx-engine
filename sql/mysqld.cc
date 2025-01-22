@@ -9369,7 +9369,7 @@ struct my_option my_long_options[] = {
     {"consensus-reset-mts-info", OPT_CLUSTER, "reset mts info when force change meta",
      &opt_consensus_reset_mts_info, &opt_consensus_reset_mts_info, 0, GET_BOOL,
      REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-    {"cluster-dump-meta", OPT_CLUSTER, "Cluster dump meta",
+    {"cluster-dump-meta", OPT_CLUSTER, "Cluster dump meta, discard now",
      &opt_cluster_dump_meta, &opt_cluster_dump_meta, 0, GET_BOOL, REQUIRED_ARG,
      0, 0, 0, 0, 0, 0},
     {"cluster-force-single-mode", OPT_CLUSTER,

@@ -342,23 +342,22 @@ int ConsensusLogManager::init_service() {
 
   if (!opt_initialize) {
     Consensus_info *consensus_info = get_consensus_info();
-    if (opt_cluster_dump_meta) {
-      std::string meta_file_name = "consensus.meta";
-      std::ostringstream oss;
-      oss << "Consensus_apply_index: " << rli_info->get_consensus_apply_index() << "\n" 
-          << "Consensus_cluster_info: " << consensus_info->get_cluster_info() << "\n"
-          << "Consensus_learner_info: " << consensus_info->get_cluster_learner_info() << "\n"
-          << "Cluster_id: " << consensus_info->get_cluster_id() << "\n"
-          << "Current_term: " << consensus_info->get_current_term() << "\n"
-          << "Recover_status: " << consensus_info->get_recover_status() << "\n"
-          << "Last_leader_term: " << consensus_info->get_last_leader_term() << "\n"
-          << "Start_apply_index: " << consensus_info->get_start_apply_index() << "\n";
-
-      if (dump_cluster_info_to_file(meta_file_name, oss.str()) < 0) return -1;
-      xp::system(ER_XP_0) << "Dump meta file(" << meta_file_name 
-                        << ") successfully. " << oss.str();
-      return 1;
-    }
+    std::string meta_file_name = "consensus.meta";
+    std::ostringstream oss;
+    oss << "Consensus_apply_index: " << rli_info->get_consensus_apply_index() << "\n" 
+        << "Consensus_cluster_info: " << consensus_info->get_cluster_info() << "\n"
+        << "Consensus_learner_info: " << consensus_info->get_cluster_learner_info() << "\n"
+        << "Cluster_id: " << consensus_info->get_cluster_id() << "\n"
+        << "Current_term: " << consensus_info->get_current_term() << "\n"
+        << "Recover_status: " << consensus_info->get_recover_status() << "\n"
+        << "Last_leader_term: " << consensus_info->get_last_leader_term() << "\n"
+        << "Start_apply_index: " << consensus_info->get_start_apply_index() << "\n"
+        << "Binlog_sync_index: " << get_sync_index() << "\n"
+        << "Pid: " << getpid() << "\n";
+    const int dump_result =  dump_cluster_info_to_file(meta_file_name, oss.str());
+    xp::system(ER_XP_0) << "Dump meta file(" << meta_file_name 
+                        << ") " << (dump_result < 0 ? "failed" : "success")
+                        << " - " << oss.str();
 
     if (opt_cluster_force_change_meta) {
       consensus_info->set_cluster_id(opt_cluster_id);
