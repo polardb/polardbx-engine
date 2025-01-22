@@ -379,6 +379,9 @@ extern std::atomic<ulonglong> group_update_group_same_count;
 /* END: Variables for RDS */
 
 extern ulonglong sqb_max_trx_affected_rows;
+extern bool polarx_long_trans_external_check;
+extern ulonglong polarx_long_trans_external_threshold;
+
 extern char *sqb_user_pattern;
 
 extern ulong sqb_exec_timeout;

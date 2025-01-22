@@ -1422,6 +1422,8 @@ ulong sqb_exec_timeout_for_cpu_exceed = 0;
 ulong sqb_cpu_percent_threshold = 0;
 bool sqb_enable_slow_query_block = false;
 ulong sqb_check_interval = 0;
+bool polarx_long_trans_external_check = true;
+ulonglong polarx_long_trans_external_threshold = 3000;
 
 /* RDS Variables */
 bool ic_reduce_hint_enable = 0;
