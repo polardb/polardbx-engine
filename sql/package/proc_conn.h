@@ -154,6 +154,58 @@ class Conn_proc_show : public Conn_proc_base {
 };
 
 
+/**
+3) dbms_conn.show_client_error_code(...)
+
+It will show the client error code of jdbc connection in thd.
+*/
+class Sql_cmd_conn_show_client_error_code : public Sql_cmd_conn_proc_base {
+ public:
+  explicit Sql_cmd_conn_show_client_error_code(THD *thd, mem_root_deque<Item *> *list,
+                             const Proc *proc)
+      : Sql_cmd_conn_proc_base(thd, list, proc) {}
+
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Override default send_result */
+  virtual void send_result(THD *thd, bool error) override;
+
+  static constexpr int errmsg_section_index = 3;
+};
+
+class Conn_proc_show_client_error_code : public Conn_proc_base {
+  using Sql_cmd_type = Sql_cmd_conn_show_client_error_code;
+  static constexpr int COLUMN_LAST = 2;
+
+ public:
+  explicit Conn_proc_show_client_error_code(PSI_memory_key key) : Conn_proc_base(key) {
+    m_result_type = Result_type::RESULT_SET;
+
+    Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("ERROR_CODE_NUM"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("ERROR_CODE_MESSAGE"), 256}
+    };
+
+    for (size_t i = 0; i < COLUMN_LAST; i++) {
+      m_columns.assign_at(i, elements[i]);
+    }
+
+  }
+
+  static Proc *instance();
+
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                              mem_root_deque<Item *> *list) const override;
+
+  ~Conn_proc_show_client_error_code() override {}
+  virtual const std::string str() const override {
+    return std::string("show_client_error_code");
+  }
+
+};
+
+
+
 } /* namespace im */
 
 #endif

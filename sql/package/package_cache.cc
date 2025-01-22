@@ -304,6 +304,8 @@ void package_context_init() {
   register_package<Proc, Conn_proc_comment>(PROC_CONN_SCHEMA);
   /* dbms_conn.show_connection(...) */
   register_package<Proc, Conn_proc_show>(PROC_CONN_SCHEMA);
+  /* dbms_conn.show_client_error_code(...) */
+  register_package<Proc, Conn_proc_show_client_error_code>(PROC_CONN_SCHEMA);
 }
 
 } /* namespace im */

@@ -21,6 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/package/proc_conn.h"
+#include "sql/derror.h"
 
 namespace im {
 
@@ -101,6 +102,57 @@ void Sql_cmd_conn_show::send_result(THD *thd, bool error) {
   mysql_mutex_unlock(&thd->LOCK_thd_query);
 
   if (protocol->end_row()) DBUG_VOID_RETURN;
+  my_eof(thd);
+  DBUG_VOID_RETURN;
+}
+
+
+Proc *Conn_proc_show_client_error_code::instance() {
+  static Proc *proc = new Conn_proc_show_client_error_code(key_memory_package);
+
+  return proc;
+}
+
+Sql_cmd *Conn_proc_show_client_error_code::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+/**
+  Show the client error code in cache
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
+*/
+bool Sql_cmd_conn_show_client_error_code::pc_execute(THD *) {
+  DBUG_ENTER("Sql_cmd_conn_show_client_error_code::pc_execute");
+  DBUG_RETURN(false);
+}
+
+void Sql_cmd_conn_show_client_error_code::send_result(THD *thd, bool error) {
+  Protocol *protocol = thd->get_protocol();
+  DBUG_ENTER("Sql_cmd_conn_show_client_error_code::send_result");
+  if (error) {
+    assert(thd->is_error());
+    DBUG_VOID_RETURN;
+  }
+
+  if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
+
+  int index_start = errmsg_section_start[errmsg_section_index];
+  for (int i = 0; i < errmsg_section_size[errmsg_section_index]; i++) {
+    protocol->start_row();
+
+    ulonglong error_code = index_start + i;
+    protocol->store(error_code);
+    const char *error_message = ER_DEFAULT(error_code);
+    protocol->store_string(error_message, strlen(error_message), system_charset_info);
+    if (protocol->end_row()) DBUG_VOID_RETURN;
+
+  }
+
   my_eof(thd);
   DBUG_VOID_RETURN;
 }

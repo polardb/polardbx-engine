@@ -8,6 +8,7 @@ dbms_ccl	flush_ccl_rule	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_queue	ADMIN_PROC	NULL
 dbms_ccl	show_ccl_rule	ADMIN_PROC	NULL
 dbms_conn	comment_connection	ADMIN_PROC	VARCHAR
+dbms_conn	show_client_error_code	ADMIN_PROC	NULL
 dbms_conn	show_connection	ADMIN_PROC	NULL
 dbms_consensus	add_follower	ADMIN_PROC	VARCHAR
 dbms_consensus	add_learner	ADMIN_PROC	VARCHAR
