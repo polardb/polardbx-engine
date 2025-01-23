@@ -36,6 +36,7 @@
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "sql/mysqld.h"  // innodb_hton
 #include "sql/bl_consensus_log.h"
+#include "sql/consensus_admin.h"
 
 namespace {
 /**
@@ -65,26 +66,7 @@ enum_sql_command Sql_cmd_xa_commit::sql_command_code() const {
 enum xa_option_words Sql_cmd_xa_commit::get_xa_opt() const { return m_xa_opt; }
 
 bool Sql_cmd_xa_commit::execute(THD *thd) {
-  if (opt_consensus_disable_commit_before_change_leader
-      && ((m_xa_opt != XA_ONE_PHASE && consensus_log_manager.is_in_limit_xa_finish())
-          || consensus_log_manager.is_in_limit_all())) {
-    XID empty_xid;
-    xp::warn(ER_XP_COMMIT) << "Cannot do xa commit, because leadership changing"
-                          << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state()
-                          << ", xa_finishing_count: " << xa_finishing_count.load()
-                          << ", xid " 
-                          << ((thd->get_transaction()->xid_state() 
-                              && thd->get_transaction()->xid_state()->get_xid()) 
-                            ? *thd->get_transaction()->xid_state()->get_xid()
-                            : empty_xid)
-                          << ", one_phase " << (m_xa_opt == XA_ONE_PHASE)
-                          << ", status "
-                          << (thd->get_transaction()->xid_state()
-                            ? thd->get_transaction()->xid_state()->state_name()
-                            : "null");
-    my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
-    return 1;
-  }
+  if (check_limit_xa(thd, m_xa_opt == XA_ONE_PHASE)) return true;
 
   xa_finishing_count++;
 

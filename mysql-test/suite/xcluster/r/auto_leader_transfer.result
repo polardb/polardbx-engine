@@ -1,26 +1,52 @@
 set global consensus_auto_leader_transfer=ON;
+set global consensus_auto_leader_transfer=ON;
+create table test.t1(id int);
+insert into test.t1 values(1);
+xa start 'x1';
+insert into test.t1 values(1);
+xa end 'x1';
+xa prepare 'x1';
+select count(*) from test.t1;
+count(*)
+1
+select count(*) from test.t1;
+count(*)
+1
 stop xpaxos_replication;
-call dbms_consensus.configure_follower("127.0.0.1:MYPORT_CONSENSUS_3", 1, 0);
-use test;
-create table t1(id int);
-insert into t1 values(1);
+stop xpaxos_replication;
+select count(*) from test.t1;
+count(*)
+1
+xa commit 'x1';
+"# case 1 ha to Follower2 succ"
 call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+select role from information_schema.alisql_cluster_local;
+role
+Prepared
+insert into test.t1 values(1);
+ERROR HY000: The consensus leader is not allowed to do current operation.
+select count(*) from test.t1;
+count(*)
+1
+start xpaxos_replication;
+select role from information_schema.alisql_cluster_local;
+role
+Leader
+select count(*) from test.t1;
+count(*)
+2
+"# case 1 ha to Follower3 failed"
+call dbms_consensus.configure_follower("127.0.0.1:MYPORT_CONSENSUS_2", 1, 0);
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_3");
 select role from information_schema.alisql_cluster_local;
 role
 Prepared
 select role from information_schema.alisql_cluster_local;
 role
 Follower
-call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+start xpaxos_replication;
 select role from information_schema.alisql_cluster_local;
 role
-Prepared
-select role from information_schema.alisql_cluster_local;
-role
-Prepared
-# restart
-select role from information_schema.alisql_cluster_local;
-role
-Follower
-call dbms_consensus.configure_follower("127.0.0.1:MYPORT_CONSENSUS_3", 5, 0);
+Leader
+call dbms_consensus.configure_follower("127.0.0.1:MYPORT_CONSENSUS_2", 5, 0);
 drop table test.t1;

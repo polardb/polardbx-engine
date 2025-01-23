@@ -46,4 +46,7 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
                                         bool is_xpaxos_channel);
 
 void update_applied_index(const unsigned long long commitIndex);
+
+int check_limit_xa(THD *thd, const bool is_commit_one_phase);
+
 #endif

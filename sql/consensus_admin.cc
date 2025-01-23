@@ -988,3 +988,29 @@ void update_applied_index(const unsigned long long commitIndex)
   consensus_ptr->updateAppliedIndex(tmpi);
   replica_read_manager.update_lsn(tmpi);
 }
+
+int check_limit_xa(THD *thd, const bool is_commit_one_phase)
+{
+  if (!thd->slave_thread
+      && opt_consensus_disable_commit_before_change_leader
+      && ((!is_commit_one_phase && consensus_log_manager.is_in_limit_xa_finish())
+          || (is_commit_one_phase && consensus_log_manager.is_in_limit_all()))) {
+    XID empty_xid;
+    xp::warn(ER_XP_COMMIT) << "Cannot do xa finish because leadership changing"
+        << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state()
+        << ", xa_finishing_count: " << xa_finishing_count.load()
+        << ", xid " 
+        << ((thd->get_transaction()->xid_state() 
+            && thd->get_transaction()->xid_state()->get_xid()) 
+          ? *thd->get_transaction()->xid_state()->get_xid()
+          : empty_xid)
+        << ", one_phase " << is_commit_one_phase
+        << ", status "
+        << (thd->get_transaction()->xid_state()
+          ? thd->get_transaction()->xid_state()->state_name()
+          : "null");
+    my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
+    return 1;
+  }
+  return 0;
+}
