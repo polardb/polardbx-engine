@@ -98,7 +98,11 @@ void Sql_cmd_conn_show::send_result(THD *thd, bool error) {
   protocol->start_row();
 
   mysql_mutex_lock(&thd->LOCK_thd_query);
-  protocol->store_string(thd->conn_comment, strlen(thd->conn_comment), system_charset_info);
+  if (thd->conn_comment != nullptr) {
+    protocol->store_string(thd->conn_comment, strlen(thd->conn_comment), system_charset_info);
+  } else {
+    protocol->store_string("", 0, system_charset_info);
+  }
   mysql_mutex_unlock(&thd->LOCK_thd_query);
 
   if (protocol->end_row()) DBUG_VOID_RETURN;

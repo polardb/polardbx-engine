@@ -1,2 +1,3 @@
+call dbms_conn.show_connection();
 call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8');
 call dbms_conn.show_connection();
