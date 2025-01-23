@@ -41,6 +41,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_table.h>
 #include <sql_thd_internal_api.h>
 #include <sys/types.h>
+#include "dd/lizard_policy_types.h"
 #include "ha_prototypes.h"
 
 #include "dd/cache/dictionary_client.h"
@@ -1375,8 +1376,7 @@ the metadata which would not result in failure
 template <typename Table>
 static void dd_commit_inplace_alter_table(
     const alter_table_old_info_t &old_info, dict_table_t *new_table,
-    const Table *old_dd_tab, Table *new_dd_tab,
-    const lizard::Ha_ddl_policy *ddl_policy);
+    const Table *old_dd_tab, Table *new_dd_tab);
 
 /** Update metadata in commit phase when the alter table does
 no change to the table
@@ -1631,8 +1631,7 @@ bool ha_innobase::commit_inplace_alter_table(TABLE *altered_table,
     }
 
     dd_commit_inplace_alter_table<dd::Table>(old_info, ctx->new_table,
-                                             old_dd_tab, new_dd_tab,
-                                             ha_alter_info->ddl_policy);
+                                             old_dd_tab, new_dd_tab);
     if (!ctx->need_rebuild()) {
       dd_commit_inplace_update_instant_meta(ctx->new_table, old_dd_tab,
                                             new_dd_tab);
@@ -2644,6 +2643,7 @@ static void innobase_create_index_def(const TABLE *altered_table,
           ? const_cast<const Table *>(new_dd_tab)->indexes()[dd_key_num]
           : nullptr;
   const dd::Index *dd_index = get_dd_index(dd_index_auto);
+  index_def->m_se_attr_hint = key->se_attr_hint;
 
   /* If this is a spatial index, we need to fetch the SRID */
   if (key->flags & HA_SPATIAL) {
@@ -3050,6 +3050,7 @@ index for FTS index */
       index_def->m_rebuild = true;
       index_def->m_key_number = std::numeric_limits<size_t>::max();
       index_def->m_is_ngram = false;
+      index_def->m_se_attr_hint = lizard::Ha_se_attr_hint{NULL_CSTR};
       primary_key_number = ULINT_UNDEFINED;
       goto created_clustered;
     } else {
@@ -3142,6 +3143,7 @@ index for FTS index */
     index_def->m_name = FTS_DOC_ID_INDEX_NAME;
     index_def->m_is_ngram = false;
     index_def->m_rebuild = rebuild;
+    index_def->m_se_attr_hint = lizard::Ha_se_attr_hint{NULL_CSTR};
 
     /* TODO: assign a real MySQL key number for this */
     index_def->m_key_number = ULINT_UNDEFINED;
@@ -4268,8 +4270,7 @@ the metadata which would not result in failure
 template <typename Table>
 static void dd_commit_inplace_alter_table(
     const alter_table_old_info_t &old_info, dict_table_t *new_table,
-    const Table *old_dd_tab, Table *new_dd_tab,
-    const lizard::Ha_ddl_policy *ddl_policy) {
+    const Table *old_dd_tab, Table *new_dd_tab) {
   if (new_table->is_temporary()) {
     /* No need to fill in metadata for temporary tables,
     which would not be stored in Global DD */
@@ -4317,7 +4318,7 @@ static void dd_commit_inplace_alter_table(
 
   new_table->dd_space_id = dd_space_id;
 
-  dd_write_table(dd_space_id, new_dd_tab, new_table, ddl_policy);
+  dd_write_table(dd_space_id, new_dd_tab, new_table);
 
   /* If this table is discarded, we need to set this to both dd::Table
   and dd::Tablespace. */
@@ -4420,6 +4421,7 @@ template <typename Table>
   MDL_ticket *mdl = nullptr;
   THD *thd = current_thd;
   bool build_fts_common = false;
+  lizard::Ha_table_hint table_hint{ha_alter_info->var_hint};
 
   ha_innobase_inplace_ctx *ctx;
 
@@ -4815,7 +4817,7 @@ template <typename Table>
 
     error = row_create_table_for_mysql(
         ctx->new_table, compression, ha_alter_info->create_info, ctx->trx,
-        nullptr, ha_alter_info->ddl_policy, &old_dd_tab->table());
+        nullptr, &table_hint, &old_dd_tab->table());
 
     dict_sys_mutex_enter();
 
@@ -4927,9 +4929,10 @@ template <typename Table>
                               &index_defs[a]);
     }
 
-    ctx->add_index[a] =
-        ddl::create_index(ctx->trx, ctx->new_table, &index_defs[a], add_v,
-                          ha_alter_info->ddl_policy);
+    lizard::Ha_index_hint index_hint{&index_defs[a].m_se_attr_hint,
+                                     ha_alter_info->var_hint};
+    ctx->add_index[a] = ddl::create_index(ctx->trx, ctx->new_table,
+                                          &index_defs[a], add_v, &index_hint);
 
     add_key_nums[a] = index_defs[a].m_key_number;
 
@@ -5035,8 +5038,8 @@ template <typename Table>
     the trx_t::dict_operation flag on success. */
 
     dict_sys_mutex_exit();
-    error =
-        fts_create_index_tables(ctx->trx, fts_index, ha_alter_info->ddl_policy);
+    lizard::Ha_table_hint table_hint{ha_alter_info->var_hint};
+    error = fts_create_index_tables(ctx->trx, fts_index, &table_hint);
     dict_sys_mutex_enter();
 
     DBUG_EXECUTE_IF("innodb_test_fail_after_fts_index_table",
@@ -5057,7 +5060,7 @@ template <typename Table>
       if (!exist_fts_common) {
         error = fts_create_common_tables(ctx->trx, ctx->new_table,
                                          user_table->name.m_name, true,
-                                         ha_alter_info->ddl_policy);
+                                         &table_hint);
 
         DBUG_EXECUTE_IF("innodb_test_fail_after_fts_common_table",
                         error = DB_LOCK_WAIT_TIMEOUT;);
@@ -8326,12 +8329,12 @@ class alter_part {
   @param[in]    file_per_table  Current value of innodb_file_per_table
   @param[in]    autoinc         Next AUTOINC value to use
   @param[in]    autoextend_size Value of AUTOEXTEND_SIZE for this tablespace
-  @param[in]    ddl_policy      DDL policy from handler
+  @param[in]    var_hint      DDL variables hint from handler
   @return 0 or error number */
   int create(const dd::Table *part_table, const char *part_name,
              dd::Partition *dd_part, TABLE *table, const char *tablespace,
              bool file_per_table, uint64_t autoinc, uint64_t autoextend_size,
-             lizard::Ha_ddl_policy *ddl_policy);
+             const lizard::Ha_var_hint *var_hint);
 
  protected:
   /** InnoDB transaction, nullptr if not used */
@@ -8388,7 +8391,7 @@ int alter_part::create(const dd::Table *old_part_table, const char *part_name,
                        dd::Partition *dd_part, TABLE *table,
                        const char *tablespace, bool file_per_table,
                        uint64_t autoinc, uint64_t autoextend_size,
-                       lizard::Ha_ddl_policy *ddl_policy) {
+                       const lizard::Ha_var_hint *var_hint) {
   ut_ad(m_state == PART_TO_BE_ADDED || m_state == PART_CHANGED);
 
   dd::Table &dd_table = dd_part->table();
@@ -8436,7 +8439,7 @@ int alter_part::create(const dd::Table *old_part_table, const char *part_name,
 
   return (innobase_basic_ddl::create_impl<dd::Partition>(
       current_thd, part_name, table, &create_info, dd_part, file_per_table,
-      false, false, 0, 0, old_part_table, ddl_policy));
+      false, false, 0, 0, old_part_table, var_hint));
 }
 
 typedef std::vector<alter_part *, ut::allocator<alter_part *>> alter_part_array;
@@ -8803,10 +8806,10 @@ class alter_part_add : public alter_part {
                                         &autoextend_size);
 
     bool inherit_metadata = dd_table_has_instant_cols(part_table) ||
-                            m_ha_alter_info->ddl_policy->should_inherit();
+                            m_ha_alter_info->var_hint->should_inherit();
     int error = create(inherit_metadata ? &part_table : nullptr, part_name,
                        new_part, altered_table, m_tablespace, m_file_per_table,
-                       m_autoinc, autoextend_size, m_ha_alter_info->ddl_policy);
+                       m_autoinc, autoextend_size, m_ha_alter_info->var_hint);
 
     if (error == 0 && alter_parts::need_copy(m_ha_alter_info)) {
       /* If partition belongs to table with instant columns, copy instant
@@ -9220,11 +9223,11 @@ int alter_part_change::prepare(TABLE *altered_table,
                                       &autoextend_size);
 
   bool inherit_metadata = dd_table_has_instant_cols(part_table) ||
-                          m_ha_alter_info->ddl_policy->should_inherit();
+                          m_ha_alter_info->var_hint->should_inherit();
 
   int error = create(inherit_metadata ? &part_table : nullptr, part_name,
                      new_part, altered_table, m_tablespace, m_file_per_table,
-                     m_autoinc, autoextend_size, m_ha_alter_info->ddl_policy);
+                     m_autoinc, autoextend_size, m_ha_alter_info->var_hint);
 
   if (error == 0) {
     dict_sys_mutex_enter();
@@ -10601,8 +10604,7 @@ end:
         }
 
         dd_commit_inplace_alter_table(ctx_parts->m_old_info[i], ctx->new_table,
-                                      old_part, new_part,
-                                      ha_alter_info->ddl_policy);
+                                      old_part, new_part);
       }
 
       ++i;

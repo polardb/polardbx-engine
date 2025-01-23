@@ -237,8 +237,7 @@ extern void dd_fill_dict_index_format(const Index_policy &index_policy,
   @param[in]      index           InnoDB index object
 */
 extern void dd_write_index_format(dd::Properties *dd_options,
-                                  const dict_index_t *index,
-                                  const Ha_ddl_policy *ddl_policy);
+                                  const dict_index_t *index);
 
 /**
   Copy lizard metadata of a index to dd::Index for regular table or

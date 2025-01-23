@@ -43,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "btr0sea.h"
+#include "dd/lizard_policy_types.h"
 #include "ddl0ddl.h"
 #include "dict0boot.h"
 #include "dict0crea.h"
@@ -2537,7 +2538,7 @@ void row_delete_all_rows(dict_table_t *table) {
 
     mtr.start();
     mtr.set_log_mode(MTR_LOG_NO_REDO);
-    /* TODO: ddl_policy */
+    /* TODO: var_hint */
     page_type_t expected_page_type = index->page_type() == FIL_PAGE_INDEX_PANDA
                                          ? FIL_PAGE_INDEX_PANDA
                                          : FIL_PAGE_TYPE_UNUSED;
@@ -2789,7 +2790,7 @@ dberr_t row_create_table_for_mysql(dict_table_t *&table,
                                    const char *compression,
                                    const HA_CREATE_INFO *create_info,
                                    trx_t *trx, mem_heap_t *heap,
-                                   const lizard::Ha_ddl_policy *ddl_policy,
+                                   const lizard::Ha_table_hint *table_hint,
                                    const dd::Table *old_dd_tab) {
   dberr_t err;
 
@@ -2830,7 +2831,7 @@ dberr_t row_create_table_for_mysql(dict_table_t *&table,
   }
 
   lizard::dd_fill_dict_table_fba(
-      lizard::ha_ddl_create_table_policy(ddl_policy, table, old_dd_tab), table);
+      lizard::ha_ddl_create_table_policy(table_hint, table, old_dd_tab), table);
 
   bool free_heap = false;
   if (heap == nullptr) {
@@ -2941,18 +2942,18 @@ dberr_t row_create_table_for_mysql(dict_table_t *&table,
  currently as all indexes must be created at the same time as the table.
  @return error number or DB_SUCCESS */
 dberr_t row_create_index_for_mysql(
-    dict_index_t *index,        /*!< in, own: index definition
-                                (will be freed) */
-    trx_t *trx,                 /*!< in: transaction handle */
-    const ulint *field_lengths, /*!< in: if not NULL, must contain
-                                dict_index_get_n_fields(index)
-                                actual field lengths for the
-                                index columns, which are
-                                then checked for not being too
-                                large. */
-    dict_table_t *handler,      /*!< in/out: table handler. */
-    lizard::Ha_ddl_policy *ddl_policy)
-{
+    dict_index_t *index,                     /*!< in, own: index definition
+                                             (will be freed) */
+    trx_t *trx,                              /*!< in: transaction handle */
+    const ulint *field_lengths,              /*!< in: if not NULL, must contain
+                                             dict_index_get_n_fields(index)
+                                             actual field lengths for the
+                                             index columns, which are
+                                             then checked for not being too
+                                             large. */
+    const lizard::Ha_index_hint *index_hint, /*!< in: ddl index hints */
+    const lizard::Ha_table_hint *table_hint, /*!< in: ddl table hints */
+    dict_table_t *handler /*!< in/out: table handler. */) {
   dberr_t err;
   ulint i;
   ulint len;
@@ -3007,7 +3008,7 @@ dberr_t row_create_index_for_mysql(
 
   page_type_t expected_page_type;
   lizard::dd_fill_dict_index_format(
-      lizard::ha_ddl_create_index_policy(ddl_policy, table, index), table,
+      lizard::ha_ddl_create_index_policy(index_hint, table, index), table,
       index, &expected_page_type);
 
   /* For temp-table we avoid insertion into SYSTEM TABLES to
@@ -3081,7 +3082,7 @@ dberr_t row_create_index_for_mysql(
 
     ut_ad(idx);
     err = fts_create_index_tables_low(trx, idx, table->name.m_name, table->id,
-                                      ddl_policy);
+                                      table_hint);
   }
 
 error_handling:

@@ -1,0 +1,549 @@
+# Test the new ddl hint secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+# whose priority is higher than the variable opt_index_format_gpp_enabled and opt_index_format_panda_enabled.
+#
+SET opt_index_format_gpp_enabled=false;
+SET opt_index_format_panda_enabled=false;
+CREATE TABLE t1 (
+a int DEFAULT NULL,
+b int DEFAULT NULL,
+c int DEFAULT NULL,
+d int DEFAULT NULL,
+UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"0","panda index":"1"}',
+UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"1","panda index":"0"}',
+UNIQUE KEY `d` (d) secondary_engine_attribute '{"gpp":"0","panda index":"0"}',
+UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"1","foo":"bar"}',
+UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"1"}',
+UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
+UNIQUE KEY `d_a` (d, a)
+);
+INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	GEN_CLUST_INDEX	0	INDEX
+test	t1	a	1	PANDA_INDEX
+test	t1	b	0	PANDA_INDEX
+test	t1	c	1	INDEX
+test	t1	d	0	INDEX
+test	t1	a_b	1	INDEX
+test	t1	b_c	0	PANDA_INDEX
+test	t1	c_d	0	INDEX
+test	t1	d_a	0	INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	GEN_CLUST_INDEX	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	a	1	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	b	0	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	c	1	INDEX
+ddl_se_attr_hint_test_db_1	t1	d	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	a_b	1	INDEX
+ddl_se_attr_hint_test_db_1	t1	b_c	0	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	c_d	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	d_a	0	INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=1;
+SET opt_index_format_panda_enabled=1;
+CREATE TABLE t1 (
+a int DEFAULT NULL,
+b int DEFAULT NULL,
+c int DEFAULT NULL,
+d int DEFAULT NULL,
+UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"True","panda index":"true"}',
+UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"FALSE","panda index":"TRUE"}',
+UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"True","panda index":"FALSE"}',
+UNIQUE KEY `d` (d) secondary_engine_attribute '{"gpp":"false","panda index":"false"}',
+UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"tRue","panda index":"foo"}',
+UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"true","gpp":""}',
+UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
+UNIQUE KEY `d_a` (d, a)
+);
+INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	GEN_CLUST_INDEX	0	INDEX
+test	t1	a	1	PANDA_INDEX
+test	t1	b	0	PANDA_INDEX
+test	t1	c	1	INDEX
+test	t1	d	0	INDEX
+test	t1	a_b	1	PANDA_INDEX
+test	t1	b_c	1	PANDA_INDEX
+test	t1	c_d	1	PANDA_INDEX
+test	t1	d_a	1	PANDA_INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int DEFAULT NULL,
+  `b` int DEFAULT NULL,
+  `c` int DEFAULT NULL,
+  `d` int DEFAULT NULL,
+  UNIQUE KEY `a` (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */,
+  UNIQUE KEY `c` (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "false"}' */,
+  UNIQUE KEY `d` (`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `a_b` (`a`,`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `b_c` (`b`,`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `c_d` (`c`,`d`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */,
+  UNIQUE KEY `d_a` (`d`,`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "true", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	GEN_CLUST_INDEX	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	a	1	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	b	0	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	c	1	INDEX
+ddl_se_attr_hint_test_db_1	t1	d	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	a_b	1	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	b_c	1	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	c_d	1	PANDA_INDEX
+ddl_se_attr_hint_test_db_1	t1	d_a	1	PANDA_INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int NOT NULL,
+c int NOT NULL,
+PRIMARY KEY (a),
+UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	PRIMARY	0	INDEX
+test	t1	b	0	INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`a`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	PRIMARY	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	b	0	INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int NOT NULL,
+c int NOT NULL,
+PRIMARY KEY (a),
+UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP PRIMARY KEY;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	b	0	INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	b	0	INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=1;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int NOT NULL,
+c int NOT NULL,
+PRIMARY KEY (a),
+UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (c), DROP KEY b, ADD UNIQUE KEY `b_2` (b) secondary_engine_attribute '{"gpp":"0"}';
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b_2` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	PRIMARY	0	INDEX
+test	t1	b_2	0	INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b_2` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  PRIMARY KEY (`c`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */,
+  UNIQUE KEY `b_2` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "false"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	PRIMARY	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	b_2	0	INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=1;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int DEFAULT NULL,
+c int NOT NULL,
+PRIMARY KEY (a),
+UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP COLUMN a;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+CREATE DATABASE ddl_se_attr_hint_test_db_1;
+# Step 1: Get 'SHOW CREATE TABLE test.t1 FOR EXPORT'
+# Show captured CREATE statement for test.t1 ---
+CREATE TABLE `t1` (
+  `b` int DEFAULT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='test' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1	GEN_CLUST_INDEX	0	INDEX
+test	t1	b	0	PANDA_INDEX
+# Step 2: Switch to new database and create t1 using the DDL from test.t1
+USE ddl_se_attr_hint_test_db_1;
+CREATE TABLE `t1` (
+  `b` int DEFAULT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci  # This creates t1 in ddl_se_attr_hint_test_db_1;
+# Step 3: Discard tablespace of t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Step 4: Flush test.t1 for export
+FLUSH TABLE test.t1 FOR EXPORT # This also locks test.t1.;
+# Step 5: Prepare file paths and copy test.t1's data files to a temporary location
+# Copy test.t1.ibd from datadir to temporary location
+# Step 6: Unlock tables (for test.t1)
+UNLOCK TABLES;
+# Step 7: Place test.t1's files (from temporary location) as ddl_se_attr_hint_test_db_1.t1's files
+# Step 8: Import tablespace for t1 (in ddl_se_attr_hint_test_db_1)
+ALTER TABLE t1 IMPORT TABLESPACE;
+# Step 9: Verify t1 (in ddl_se_attr_hint_test_db_1)
+# Performing CHECK TABLE t1 (in ddl_se_attr_hint_test_db_1)
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+ddl_se_attr_hint_test_db_1.t1	check	status	OK
+# Verifying row counts between test.t1 and ddl_se_attr_hint_test_db_1.t1
+# Show create table t1 (in ddl_se_attr_hint_test_db_1)
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `b` int DEFAULT NULL,
+  `c` int NOT NULL,
+  UNIQUE KEY `b` (`b`) /*!80021 SECONDARY_ENGINE_ATTRIBUTE '{"gpp": "false", "panda index": "true"}' */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE SCHEMA_NAME='ddl_se_attr_hint_test_db_1' AND TABLE_NAME='t1';;
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+ddl_se_attr_hint_test_db_1	t1	GEN_CLUST_INDEX	0	INDEX
+ddl_se_attr_hint_test_db_1	t1	b	0	PANDA_INDEX
+# Step 10: Cleanup
+USE test # Switch back to original DB before dropping the new one;
+DROP DATABASE IF EXISTS ddl_se_attr_hint_test_db_1;
+USE test;
+# End of ddl_se_attr_hint_export_import.inc 
+# Not support for partition table
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+a int NOT NULL,
+b int NOT NULL,
+c int NOT NULL,
+pad varchar(8192),
+primary key (a),
+UNIQUE KEY b (b,a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+) ENGINE=InnoDB AUTO_INCREMENT=0
+PARTITION BY RANGE(a) (
+PARTITION p0 VALUES LESS THAN (3),
+PARTITION p1 VALUES LESS THAN (5),
+PARTITION p2 VALUES LESS THAN (20)
+);
+SHOW CREATE TABLE t1 FOR EXPORT;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int NOT NULL,
+  `c` int NOT NULL,
+  `pad` varchar(8192) DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  UNIQUE KEY `b` (`b`,`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY RANGE (`a`)
+(PARTITION p0 VALUES LESS THAN (3) ENGINE = InnoDB,
+ PARTITION p1 VALUES LESS THAN (5) ENGINE = InnoDB,
+ PARTITION p2 VALUES LESS THAN (20) ENGINE = InnoDB) */
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE TABLE_NAME like 't1%';
+SCHEMA_NAME	TABLE_NAME	INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+test	t1#p#p0	PRIMARY	0	INDEX
+test	t1#p#p0	b	1	PANDA_INDEX
+test	t1#p#p1	PRIMARY	0	INDEX
+test	t1#p#p1	b	1	PANDA_INDEX
+test	t1#p#p2	PRIMARY	0	INDEX
+test	t1#p#p2	b	1	PANDA_INDEX
+# Cleanup
+DROP TABLE t1;

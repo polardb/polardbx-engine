@@ -37,8 +37,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "include/my_inttypes.h"
 
+#include "lex_string.h"
 #include "sql/dd/properties.h"
-#include "sql/dd/types/table.h"
 
 class THD;
 struct dict_table_t;
@@ -50,7 +50,8 @@ class Index;
 
 namespace lizard {
 
-class Ha_ddl_policy;
+class Ha_index_hint;
+class Ha_table_hint;
 
 /** Lizard Index Format:
  *
@@ -95,13 +96,13 @@ class Index_policy {
   uint16_t page_type() const { return m_page_type; }
 
   /**
-   * Initializes the Index_policy with options based on the ddl policy and the
+   * Initializes the Index_policy with options based on the ddl hint and the
    * table/index information.
-   * @param[in]     ddl_policy DDL policy.
-   * @param[in]     table dict table.
-   * @param[in]     index dict index.
+   * @param[in]     index_hint   DDL index hint.
+   * @param[in]     table         dict table.
+   * @param[in]     index         dict index.
    */
-  void create(Ha_ddl_policy *ddl_policy, const dict_table_t *table,
+  void create(const Ha_index_hint *index_hint, const dict_table_t *table,
               const dict_index_t *index);
 
   void restore(const dd::Properties &options,
@@ -128,7 +129,7 @@ class Table_policy {
 
   bool has_fba() const { return m_flashback_area; }
 
-  void create(const Ha_ddl_policy *ddl_policy, const dict_table_t *table,
+  void create(const Ha_table_hint *table_hint, const dict_table_t *table,
               const dd::Table *old_part_table = nullptr);
 
   void restore(const dd::Properties &options);
@@ -140,17 +141,39 @@ class Table_policy {
   unsigned int m_flashback_area : 1;
 };
 
-class Ha_ddl_policy {
+class Ha_se_attr_hint {
  public:
-  Ha_ddl_policy(const THD *thd, bool inherit = false);
+  enum Hint_type { HINT_NOT_FOUND = -1, HINT_FALSE = 0, HINT_TRUE = 1 };
+
+  Ha_se_attr_hint(LEX_CSTRING se_attr);
+  Ha_se_attr_hint() = default;
+
+  Hint_type hint_gpp() const { return m_hint_gpp; }
+
+  Hint_type hint_panda() const { return m_hint_panda; }
+
+  bool not_found() const {
+    return m_hint_gpp == HINT_NOT_FOUND && m_hint_panda == HINT_NOT_FOUND;
+  }
+
+  std::string to_string() const;
+
+ private:
+  Hint_type m_hint_gpp{HINT_NOT_FOUND};
+  Hint_type m_hint_panda{HINT_NOT_FOUND};
+};
+
+class Ha_var_hint {
+ public:
+  Ha_var_hint(const THD *thd, bool inherit = false);
 
   bool hint_fba() const { return m_hint_fba; }
 
   bool hint_gpp() const { return m_hint_gpp; }
 
-  bool should_inherit() const { return m_inherit; }
+  bool hint_panda() const { return m_hint_panda; }
 
-  bool hint_panda() const;
+  bool should_inherit() const { return m_inherit; }
 
  private:
   /** ------Table options------- */
@@ -166,6 +189,41 @@ class Ha_ddl_policy {
   /** Indicates whether a partitioned table should inherit table options from
    * the parent table */
   bool m_inherit;
+};
+
+class Ha_index_hint {
+ public:
+  Ha_index_hint(const Ha_se_attr_hint *se_attr_hint,
+                const Ha_var_hint *var_hint);
+
+  Ha_index_hint() = default;
+
+  bool hint_gpp() const { return m_hint_gpp; }
+
+  bool hint_panda() const { return m_hint_panda; }
+
+ private:
+  bool m_hint_gpp{false};
+  bool m_hint_panda{false};
+};
+
+class Ha_table_hint {
+ public:
+  Ha_table_hint(const Ha_var_hint *var_hint)
+      : m_hint_fba(var_hint->hint_fba()),
+        m_inherit(var_hint->should_inherit()) {}
+  Ha_table_hint() = default;
+
+  bool hint_fba() const { return m_hint_fba; }
+
+  bool should_inherit() const { return m_inherit; }
+
+ private:
+  /** Hint flashback area. */
+  bool m_hint_fba{false};
+  /** Indicates whether a partitioned table should inherit table options
+   * from the parent table */
+  bool m_inherit{false};
 };
 
 }  // namespace lizard

@@ -26,6 +26,7 @@
 #include "lex_string.h"
 #include "my_inttypes.h"
 #include "sql/dd/collection.h"           // dd::Collection
+#include "sql/dd/lizard_policy_types.h"  // dd::lizard::Ha_se_attr_hint
 #include "sql/dd/sdi_fwd.h"              // dd::Sdi_rcontext
 #include "sql/dd/sdi_fwd.h"              // dd::Sdi_wcontext
 #include "sql/dd/types/entity_object.h"  // dd::Entity_object
@@ -171,6 +172,10 @@ class Index : virtual public Entity_object {
 
   virtual LEX_CSTRING secondary_engine_attribute() const = 0;
   virtual void set_secondary_engine_attribute(LEX_CSTRING) = 0;
+
+  virtual lizard::Ha_se_attr_hint se_attr_hint() const = 0;
+  virtual void set_se_attr_hint(
+      const lizard::Ha_se_attr_hint &se_attr_hint) = 0;
 
   /////////////////////////////////////////////////////////////////////////
   // Index-element collection.

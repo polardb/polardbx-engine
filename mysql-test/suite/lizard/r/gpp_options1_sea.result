@@ -23,8 +23,8 @@ insert into gpp_options.t1 values (7,7,7,'77777');
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
 # create new index b_c within gpp_opt =false, b_c gpp option stays false, b's gpp option stays true.
-set opt_index_format_gpp_enabled=false;
-CREATE INDEX b_c ON gpp_options.t1(b,c) ;;
+set opt_index_format_gpp_enabled=true;
+CREATE INDEX b_c ON gpp_options.t1(b,c) secondary_engine_attribute '{"gpp":"0"}';;
 include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
@@ -55,17 +55,17 @@ ERROR HY000: Schema mismatch (Index field count 4 doesn't match tablespace metad
 ALTER TABLE gpp_tmp.t1 DROP INDEX b, DROP INDEX b_c;
 Warnings:
 Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-set opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_tmp.t1 ADD INDEX b_c (b,c) , ADD INDEX b (b) ;;
+set opt_index_format_gpp_enabled=true;
+ALTER TABLE gpp_tmp.t1 ADD INDEX b_c (b,c) secondary_engine_attribute '{"gpp":"0"}', ADD INDEX b (b) secondary_engine_attribute '{"gpp":"0"}';;
 Warnings:
 Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
 ALTER TABLE gpp_tmp.t1 IMPORT TABLESPACE;
 ERROR HY000: Schema mismatch (Index field count 2 doesn't match tablespace metadata file value 3)
-set opt_index_format_gpp_enabled=true;
+set opt_index_format_gpp_enabled=false;
 ALTER TABLE gpp_tmp.t1 DROP INDEX b;
 Warnings:
 Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
-ALTER TABLE gpp_tmp.t1 ADD INDEX b (b) ;;
+ALTER TABLE gpp_tmp.t1 ADD INDEX b (b) secondary_engine_attribute '{"gpp":"1"}';;
 Warnings:
 Warning	1814	InnoDB: Tablespace has been discarded for table 't1'
 ALTER TABLE gpp_tmp.t1 IMPORT TABLESPACE;
@@ -134,8 +134,8 @@ include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match 
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
 # Add unique index b_unique, index b and b_c stay stable.
-set opt_index_format_gpp_enabled=true;
-ALTER TABLE gpp_options.t1 ADD UNIQUE INDEX b_unique (b) ;;
+set opt_index_format_gpp_enabled=false;
+ALTER TABLE gpp_options.t1 ADD UNIQUE INDEX b_unique (b) secondary_engine_attribute '{"gpp":"1"}';;
 include/assert.inc [The options for gpp_options.t1.b_unique should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_unique should match the expected IFT=1 condition]
 include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
@@ -222,8 +222,8 @@ SET opt_index_format_gpp_enabled=true;
 ALTER TABLE gpp_options.t1 ADD COLUMN tmp_geo GEOMETRY SRID 4326;
 UPDATE gpp_options.t1 SET tmp_geo = ST_GeomFromText('POINT(0 0)', 4326) WHERE tmp_geo IS NULL;
 ALTER TABLE gpp_options.t1 MODIFY tmp_geo GEOMETRY NOT NULL SRID 4326;
-set opt_index_format_gpp_enabled=false;
-ALTER TABLE gpp_options.t1 ADD INDEX b_c(b,c) ;;
+set opt_index_format_gpp_enabled=true;
+ALTER TABLE gpp_options.t1 ADD INDEX b_c(b,c) secondary_engine_attribute '{"gpp":"0"}';;
 SET opt_index_format_gpp_enabled=true;
 ALTER TABLE gpp_options.t1 ADD SPATIAL INDEX tmp_spatial (tmp_geo);
 include/assert.inc [The options for gpp_options.t1.tmp_spatial should match the expected IFT=0 condition]

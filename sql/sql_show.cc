@@ -188,7 +188,8 @@ TYPELIB grant_types = {sizeof(grant_names) / sizeof(char **), "grant_types",
                        grant_names, nullptr};
 
 static void store_key_options(THD *thd, String *packet, TABLE *table,
-                              KEY *key_info);
+                              KEY *key_info,
+                              bool for_show_secondary_engine_attribute);
 
 static void get_cs_converted_string_value(THD *thd, String *input_str,
                                           String *output_str,
@@ -386,6 +387,13 @@ bool Sql_cmd_show_create_table::execute_inner(THD *thd) {
     return true;
   Table_ref *tbl = lex->query_tables;
 
+  if (m_is_view && m_for_export) {
+    my_error(ER_SYNTAX_ERROR, MYF(0),
+             "FOR EXPORT is not supported for SHOW CREATE VIEW");
+    return true;
+  }
+  bool for_show_secondary_engine_attribute = m_for_export;
+
   /*
     Access check:
     SHOW CREATE TABLE require any privileges on the table level (ie
@@ -429,7 +437,8 @@ bool Sql_cmd_show_create_table::execute_inner(THD *thd) {
     }
   }
 
-  if (mysqld_show_create(thd, tbl)) return true;
+  if (mysqld_show_create(thd, tbl, for_show_secondary_engine_attribute))
+    return true;
 
   return false;
 }
@@ -1115,7 +1124,8 @@ class Show_create_error_handler : public Internal_error_handler {
   }
 };
 
-bool mysqld_show_create(THD *thd, Table_ref *table_list) {
+bool mysqld_show_create(THD *thd, Table_ref *table_list,
+                        bool for_show_secondary_engine_attribute) {
   Protocol *protocol = thd->get_protocol();
   char buff[2048];
   mem_root_deque<Item *> field_list(thd->mem_root);
@@ -1208,7 +1218,8 @@ bool mysqld_show_create(THD *thd, Table_ref *table_list) {
     view_store_create_info(thd, table_list, &buffer);
   else if (store_create_info(thd, table_list, &buffer, nullptr,
                              false /* show_database */,
-                             true /* SHOW CREATE TABLE */))
+                             true /* SHOW CREATE TABLE */,
+                             for_show_secondary_engine_attribute))
     goto exit;
 
   if (table_list->is_view()) {
@@ -1892,14 +1903,16 @@ static void print_foreign_key_info(THD *thd, const LEX_CSTRING *db,
                                SHOW CREATE TABLE statement. If false, then
                                store_create_info() is invoked to build CREATE
                                TABLE statement while logging event to binlog.
-
+  @param for_show_secondary_engine_attribute  If true, then print secondary
+                                              engine attribute.
 
   @returns true if error, false otherwise.
 */
 
 bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
                        HA_CREATE_INFO *create_info_arg, bool show_database,
-                       bool for_show_create_stmt) {
+                       bool for_show_create_stmt,
+                       bool for_show_secondary_engine_attribute) {
   char tmp[MAX_FIELD_WIDTH], buff[128], def_value_buf[MAX_FIELD_WIDTH];
   const char *alias;
   String type(tmp, sizeof(tmp), system_charset_info);
@@ -2241,7 +2254,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         packet->append(STRING_WITH_LEN(" DESC"));
     }
     packet->append(')');
-    store_key_options(thd, packet, table, key_info);
+    store_key_options(thd, packet, table, key_info,
+                      for_show_secondary_engine_attribute);
     if (key_info->parser) {
       LEX_CSTRING *parser_name = plugin_name(key_info->parser);
       packet->append(STRING_WITH_LEN(" /*!50100 WITH PARSER "));
@@ -2560,7 +2574,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 }
 
 static void store_key_options(THD *thd, String *packet, TABLE *table,
-                              KEY *key_info) {
+                              KEY *key_info,
+                              bool for_show_secondary_engine_attribute) {
   bool foreign_db_mode = (thd->variables.sql_mode & MODE_ANSI) != 0;
   char *end, buff[32];
 
@@ -2605,9 +2620,10 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
       packet->append(STRING_WITH_LEN("' */"));
     }
 
-    if (key_info->secondary_engine_attribute.length > 0) {
+    if (for_show_secondary_engine_attribute &&
+        !key_info->se_attr_hint.not_found()) {
       packet->append(STRING_WITH_LEN(" /*!80021 SECONDARY_ENGINE_ATTRIBUTE '"));
-      packet->append(key_info->secondary_engine_attribute);
+      packet->append(key_info->se_attr_hint.to_string());
       packet->append(STRING_WITH_LEN("' */"));
     }
   }

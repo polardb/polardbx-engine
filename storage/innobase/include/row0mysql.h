@@ -319,14 +319,14 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 @param[in]      create_info     HA_CREATE_INFO object
 @param[in,out]  trx             transaction
 @param[in]      heap            temp memory heap or nullptr
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @param[in]      old_dd_tab      dd::Table from an old partition for partitioned
                                 table, NULL otherwise.
 @return error code or DB_SUCCESS */
 [[nodiscard]] dberr_t row_create_table_for_mysql(
     dict_table_t *&table, const char *compression,
     const HA_CREATE_INFO *create_info, trx_t *trx, mem_heap_t *heap,
-    const lizard::Ha_ddl_policy *ddl_policy,
+    const lizard::Ha_table_hint *table_hint,
     const dd::Table *old_dd_tab = nullptr);
 
 /** Does an index creation operation for MySQL. TODO: currently failure
@@ -334,17 +334,18 @@ kept in non-LRU list while on failure the 'table' object will be freed.
  currently as all indexes must be created at the same time as the table.
  @return error number or DB_SUCCESS */
 [[nodiscard]] dberr_t row_create_index_for_mysql(
-    dict_index_t *index,        /*!< in, own: index definition
-                                (will be freed) */
-    trx_t *trx,                 /*!< in: transaction handle */
-    const ulint *field_lengths, /*!< in: if not NULL, must contain
-                                dict_index_get_n_fields(index)
-                                actual field lengths for the
-                                index columns, which are
-                                then checked for not being too
-                                large. */
-    dict_table_t *handler,      /* ! in/out: table handler. */
-    lizard::Ha_ddl_policy *ddl_policy);
+    dict_index_t *index,                     /*!< in, own: index definition
+                                             (will be freed) */
+    trx_t *trx,                              /*!< in: transaction handle */
+    const ulint *field_lengths,              /*!< in: if not NULL, must contain
+                                             dict_index_get_n_fields(index)
+                                             actual field lengths for the
+                                             index columns, which are
+                                             then checked for not being too
+                                             large. */
+    const lizard::Ha_index_hint *index_hint, /*!< in: ddl index hints */
+    const lizard::Ha_table_hint *table_hint, /*!< in: ddl table hints */
+    dict_table_t *handler /*!< in/out: table handler. */);
 
 /** Loads foreign key constraints for the table being created. This
  function should be called after the indexes for a table have been

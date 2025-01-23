@@ -365,11 +365,8 @@ ulint row_log_dict_index_get_ordered_n_fields(const dict_index_t *index) {
          dict_index_n_sec_functional_fields(index);
 }
 
-void dd_write_index_format(dd::Properties *options, const dict_index_t *index,
-                           const Ha_ddl_policy *ddl_policy) {
+void dd_write_index_format(dd::Properties *options, const dict_index_t *index) {
   ulonglong format = 0;
-
-  ut_a(validate_dd_index_policy(options, index, ddl_policy));
 
   /* ut_a(!dd_index_options_has_ift(options)); */
 

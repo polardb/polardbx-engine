@@ -23,8 +23,8 @@ insert into gpp_options.t1 values (7,7,7,'77777');
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
 # create new index b_c within gpp_opt =false, b_c gpp option stays false, b's gpp option stays true.
-set opt_index_format_gpp_enabled=false;
-CREATE INDEX b_c ON gpp_options.t1(b,c) ;;
+set opt_index_format_gpp_enabled=true;
+CREATE INDEX b_c ON gpp_options.t1(b,c) secondary_engine_attribute '{"gpp":"0"}';;
 include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]

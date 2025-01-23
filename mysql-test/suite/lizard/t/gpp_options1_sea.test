@@ -1,2 +1,2 @@
---let $var_or_sea=var
+--let $var_or_sea=sea
 --source suite/lizard/include/gpp_options1.inc

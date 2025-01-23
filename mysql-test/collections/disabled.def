@@ -555,3 +555,5 @@ rpl_gtid_no_xpaxos.rpl_async_conn_auto_failover_highest_weight           : WL#00
 rpl_gtid_no_xpaxos.rpl_gtid_while_super_read_only                        : WL#002 encryption
 rpl_gtid_no_xpaxos.rpl_mts_spco_commands_nobinlog                        : WL#002 disable binlog
 rpl_gtid_no_xpaxos.rpl_gtids_table_disable_binlog_on_slave               : WL#002 disable binlog
+main.engine_attribute          : WL#002 Lizard uses secondary engine attribute
+main.engine_attribute_debug    : WL#002 Lizard uses secondary engine attribute

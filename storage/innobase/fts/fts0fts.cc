@@ -1797,12 +1797,12 @@ static dict_table_t *fts_create_in_mem_aux_table(const char *aux_table_name,
 @param[in]      fts_table_name  FTS AUX table name
 @param[in]      fts_suffix      FTS AUX table suffix
 @param[in]      heap            heap
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return table object if created, else NULL */
 static dict_table_t *fts_create_one_common_table(
     trx_t *trx, const dict_table_t *table, const char *fts_table_name,
     const char *fts_suffix, mem_heap_t *heap,
-    const lizard::Ha_ddl_policy *ddl_policy) {
+    const lizard::Ha_table_hint *table_hint) {
   dict_table_t *new_table = nullptr;
   dberr_t error;
   bool is_config = fts_suffix == FTS_SUFFIX_CONFIG;
@@ -1826,7 +1826,7 @@ static dict_table_t *fts_create_one_common_table(
   }
 
   error = row_create_table_for_mysql(new_table, nullptr, nullptr, trx, nullptr,
-                                     ddl_policy);
+                                     table_hint);
 
   if (error == DB_SUCCESS) {
     dict_index_t *index = dict_mem_index_create(
@@ -1844,7 +1844,8 @@ static dict_table_t *fts_create_one_common_table(
     TRX_DICT_OP_TABLE. */
     trx_dict_op_t op = trx_get_dict_operation(trx);
 
-    error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr);
+    error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr,
+                                       nullptr);
 
     trx->dict_operation = op;
   }
@@ -1909,11 +1910,11 @@ CREATE TABLE $FTS_PREFIX_CONFIG
 @param[in]      table                   table with FTS index
 @param[in]      name                    table name normalized
 @param[in]      skip_doc_id_index       Skip index on doc id
-@param[in]      ddl_policy              ddl policy from handler
+@param[in]      table_hint              ddl table hint from handler
 @return DB_SUCCESS if succeed */
 dberr_t fts_create_common_tables(trx_t *trx, const dict_table_t *table,
                                  const char *name, bool skip_doc_id_index,
-                                 const lizard::Ha_ddl_policy *ddl_policy) {
+                                 const lizard::Ha_table_hint *table_hint) {
   dberr_t error;
   fts_table_t fts_table;
   char full_name[sizeof(fts_common_tables) / sizeof(char *)][MAX_FULL_NAME_LEN];
@@ -1932,7 +1933,7 @@ dberr_t fts_create_common_tables(trx_t *trx, const dict_table_t *table,
     fts_table.suffix = fts_common_tables[i];
     fts_get_table_name(&fts_table, full_name[i]);
     dict_table_t *common_table = fts_create_one_common_table(
-        trx, table, full_name[i], fts_table.suffix, heap, ddl_policy);
+        trx, table, full_name[i], fts_table.suffix, heap, table_hint);
 
     if (common_table == nullptr) {
       error = DB_ERROR;
@@ -1961,7 +1962,8 @@ dberr_t fts_create_common_tables(trx_t *trx, const dict_table_t *table,
 
   op = trx_get_dict_operation(trx);
 
-  error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr);
+  error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr,
+                                     nullptr);
 
   trx->dict_operation = op;
 
@@ -1976,11 +1978,11 @@ func_exit:
 @param[in]      index           the index instance
 @param[in]      fts_table       fts_table structure
 @param[in]      heap            memory heap
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 static dict_table_t *fts_create_one_index_table(
     trx_t *trx, const dict_index_t *index, fts_table_t *fts_table,
-    mem_heap_t *heap, const lizard::Ha_ddl_policy *ddl_policy) {
+    mem_heap_t *heap, const lizard::Ha_table_hint *table_hint) {
   dict_field_t *field;
   dict_table_t *new_table = nullptr;
   char table_name[MAX_FULL_NAME_LEN];
@@ -2024,7 +2026,7 @@ static dict_table_t *fts_create_one_index_table(
                          FTS_INDEX_ILIST_LEN, true);
 
   error = row_create_table_for_mysql(new_table, nullptr, nullptr, trx, nullptr,
-                                     ddl_policy);
+                                     table_hint);
 
   if (error == DB_SUCCESS) {
     dict_index_t *index = dict_mem_index_create(
@@ -2035,7 +2037,8 @@ static dict_table_t *fts_create_one_index_table(
 
     trx_dict_op_t op = trx_get_dict_operation(trx);
 
-    error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr);
+    error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr,
+                                       nullptr);
 
     trx->dict_operation = op;
   }
@@ -2267,11 +2270,11 @@ dberr_t fts_create_index_dd_tables(dict_table_t *table) {
 @param[in]      index           the index instance
 @param[in]      table_name      table name
 @param[in]      table_id        the table id
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 dberr_t fts_create_index_tables_low(trx_t *trx, dict_index_t *index,
                                     const char *table_name, table_id_t table_id,
-                                    lizard::Ha_ddl_policy *ddl_policy) {
+                                    const lizard::Ha_table_hint *table_hint) {
   ulint i;
   fts_table_t fts_table;
   dberr_t error = DB_SUCCESS;
@@ -2292,7 +2295,7 @@ dberr_t fts_create_index_tables_low(trx_t *trx, dict_index_t *index,
     fts_table.suffix = fts_get_suffix(i);
 
     new_table =
-        fts_create_one_index_table(trx, index, &fts_table, heap, ddl_policy);
+        fts_create_one_index_table(trx, index, &fts_table, heap, table_hint);
 
     if (new_table == nullptr) {
       error = DB_FAIL;
@@ -2332,10 +2335,10 @@ CREATE TABLE $FTS_PREFIX_INDEX_[1-6](
         UNIQUE CLUSTERED INDEX ON (word, first_doc_id))
 @param[in,out]  trx     transaction
 @param[in]      index   index instance
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 dberr_t fts_create_index_tables(trx_t *trx, dict_index_t *index,
-                                lizard::Ha_ddl_policy *ddl_policy) {
+                                const lizard::Ha_table_hint *table_hint) {
   dberr_t err;
   dict_table_t *table;
 
@@ -2348,7 +2351,7 @@ dberr_t fts_create_index_tables(trx_t *trx, dict_index_t *index,
   ut_d(dict_sys_mutex_exit());
 
   err = fts_create_index_tables_low(trx, index, table->name.m_name, table->id,
-                                    ddl_policy);
+                                    table_hint);
 
   dd_table_close(table, nullptr, nullptr, false);
 

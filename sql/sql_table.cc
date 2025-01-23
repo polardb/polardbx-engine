@@ -7288,10 +7288,12 @@ static bool prepare_key(
   key_info->engine_attribute = key->key_create_info.m_engine_attribute;
   if (key_info->engine_attribute.length > 0)
     key_info->flags |= HA_INDEX_USES_ENGINE_ATTRIBUTE;
-  key_info->secondary_engine_attribute =
-      key->key_create_info.m_secondary_engine_attribute;
-  if (key_info->secondary_engine_attribute.length > 0)
-    key_info->flags |= HA_INDEX_USES_SECONDARY_ENGINE_ATTRIBUTE;
+
+  /* Lizard: we convert se_attr to hint, and clear se_attr. */
+  key_info->secondary_engine_attribute = NULL_CSTR;
+  key_info->se_attr_hint = lizard::Ha_se_attr_hint(
+      key->key_create_info.m_secondary_engine_attribute);
+
 #ifndef NDEBUG
   decltype(key_info->flags) flags_before_switch = key_info->flags;
 #endif /* NDEBUG */
@@ -10248,9 +10250,10 @@ bool mysql_create_table(THD *thd, Table_ref *create_table,
           char buf[2048];
           String query(buf, sizeof(buf), system_charset_info);
           query.length(0);
-          result = store_create_info(thd, create_table, &query, create_info,
-                                     true /* show_database */,
-                                     false /* SHOW CREATE TABLE */);
+          result = store_create_info(
+              thd, create_table, &query, create_info, true /* show_database */,
+              false /* SHOW CREATE TABLE */,
+              false /* for_show_secondary_engine_attribute */);
           assert(result == 0);  // store_create_info() always return 0
 
           // Write generated CREATE TABLE statement to binlog.
@@ -11177,7 +11180,8 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
 
           bool result [[maybe_unused]] = store_create_info(
               thd, table, &query, create_info, true /* show_database */,
-              false /* SHOW CREATE TABLE */);
+              false /* SHOW CREATE TABLE */,
+              true /* for_show_secondary_engine_attribute */);
 
           assert(result == 0);  // store_create_info() always return 0
 
@@ -13296,13 +13300,13 @@ static bool mysql_inplace_alter_table(
 
   DBUG_TRACE;
 
-  lizard::Ha_ddl_policy ddl_policy(thd,
-                                   ha_alter_info->is_inplace_alter_partition());
+  lizard::Ha_var_hint var_hint(thd,
+                               ha_alter_info->is_inplace_alter_partition());
 
-  raii::Sentry alter_ddl_policy_guard(
-      [&ha_alter_info] { ha_alter_info->ddl_policy = nullptr; });
-  assert(ha_alter_info->ddl_policy == nullptr);
-  ha_alter_info->ddl_policy = &ddl_policy;
+  raii::Sentry alter_var_hint_guard(
+      [&ha_alter_info] { ha_alter_info->var_hint = nullptr; });
+  assert(ha_alter_info->var_hint == nullptr);
+  ha_alter_info->var_hint = &var_hint;
 
   /*
     Upgrade to EXCLUSIVE lock if:

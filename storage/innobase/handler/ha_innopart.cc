@@ -2464,7 +2464,7 @@ int ha_innopart::create(const char *name, TABLE *form,
     return HA_ERR_INTERNAL_ERROR;
   }
 
-  lizard::Ha_ddl_policy ddl_policy(thd, false);
+  lizard::Ha_var_hint var_hint(thd, false);
 
   create_table_info_t info(thd, form, create_info, table_name, remote_path,
                            tablespace_name, srv_file_per_table, false, 0, 0,
@@ -2617,13 +2617,13 @@ int ha_innopart::create(const char *name, TABLE *form,
 
     info.set_remote_path_flags();
 
-    if ((error = info.create_table(&dd_part->table(), nullptr, &ddl_policy)) !=
+    if ((error = info.create_table(&dd_part->table(), nullptr, &var_hint)) !=
         0) {
       break;
     }
 
     if ((error = info.create_table_update_global_dd<dd::Partition>(
-             const_cast<dd::Partition *>(dd_part), &ddl_policy)) != 0) {
+             const_cast<dd::Partition *>(dd_part))) != 0) {
       break;
     }
 

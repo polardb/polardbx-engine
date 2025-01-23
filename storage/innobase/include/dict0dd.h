@@ -853,8 +853,7 @@ void dd_import_instant_add_columns(const dict_table_t *table,
 @param[in]      table           InnoDB table object */
 template <typename Table>
 void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
-                    const dict_table_t *table,
-                    const lizard::Ha_ddl_policy *ddl_policy);
+                    const dict_table_t *table);
 
 /** Set options of dd::Table according to InnoDB table object
 @tparam         Table           dd::Table or dd::Partition

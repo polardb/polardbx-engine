@@ -220,10 +220,19 @@ class Index_impl : public Entity_object_impl, public Index {
     m_engine_attribute.assign(a.str, a.length);
   }
   LEX_CSTRING secondary_engine_attribute() const override {
+    assert(m_secondary_engine_attribute.length() == 0);
     return lex_cstring_handle(m_secondary_engine_attribute);
   }
   void set_secondary_engine_attribute(LEX_CSTRING a) override {
+    assert(a.length == 0);
     m_secondary_engine_attribute.assign(a.str, a.length);
+  }
+
+  lizard::Ha_se_attr_hint se_attr_hint() const override {
+    return m_se_attr_hint;
+  }
+  void set_se_attr_hint(const lizard::Ha_se_attr_hint &se_attr_hint) override {
+    m_se_attr_hint = se_attr_hint;
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -282,6 +291,7 @@ class Index_impl : public Entity_object_impl, public Index {
 
   String_type m_engine_attribute;
   String_type m_secondary_engine_attribute;
+  lizard::Ha_se_attr_hint m_se_attr_hint;
 
   // References to tightly-coupled objects.
 

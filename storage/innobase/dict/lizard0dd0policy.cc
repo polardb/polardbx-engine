@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-07-11 by Jiyang.Zhang
  *******************************************************/
 
+#include <sstream>
 #include "sql/dd/types/partition.h"
 #include "sql/dd/types/partition_index.h"
 #include "sql/dd/types/table.h"
@@ -43,6 +44,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0dd0policy.h"
 #include "dict0dd.h"
 #include "lizard0dict.h"
+
+#include "my_rapidjson_size_t.h"
+#include "rapidjson/document.h"
 
 namespace lizard {
 
@@ -59,14 +63,14 @@ static bool can_gpp(const dict_table_t *table, const dict_index_t *index) {
 /**
  * Detemines whether the root page type of the index should be upgraded to
  * PANDA.
- * @param[in]     table dict table.
- * @param[in]     index dict index.
- * @param[in]     ddl_policy DDL policy.
+ * @param[in]     table         dict table.
+ * @param[in]     index         dict index.
+ * @param[in]     index_hint    DDL index hint.
  * @return The upgraded root page type.
  */
 static page_type_t upgrade_root_page_type(const dict_table_t *table,
                                           const dict_index_t *index,
-                                          const Ha_ddl_policy *ddl_policy) {
+                                          const Ha_index_hint *index_hint) {
   page_type_t index_type;
   if (dict_index_is_spatial(index)) {
     index_type = FIL_PAGE_RTREE;
@@ -78,7 +82,7 @@ static page_type_t upgrade_root_page_type(const dict_table_t *table,
 
   /* For normal b-tree index creation. */
   if (index_type == FIL_PAGE_INDEX && dict_index_is_unique(index) &&
-      !index->is_clustered() && ddl_policy && ddl_policy->hint_panda() &&
+      !index->is_clustered() && index_hint && index_hint->hint_panda() &&
       !dict_index_has_virtual(index) && !table->is_temporary() &&
       !table->is_compressed() && !dict_sys_t::is_dd_table_id(table->id) &&
       !table->is_system_table && !dict_sys->is_permanent_table(table) &&
@@ -96,26 +100,27 @@ static bool can_fba(const dict_table_t *table) {
 }
 
 /**
- * Initializes the Index_policy with options based on the ddl policy and the
+ * Initializes the Index_policy with options based on the ddl hint and the
  * table/index information.
- * @param[in]     ddl_policy DDL policy.
- * @param[in]     table dict table.
- * @param[in]     index dict index.
+ * @param[in]     index_hint    DDL index hint.
+ * @param[in]     table         dict table.
+ * @param[in]     index         dict index.
  */
-void Index_policy::create(Ha_ddl_policy *ddl_policy, const dict_table_t *table,
+void Index_policy::create(const Ha_index_hint *index_hint,
+                          const dict_table_t *table,
                           const dict_index_t *index) {
   ut_ad(!m_gpp);
   ut_ad(m_page_type == FIL_PAGE_TYPE_UNUSED);
   ut_a(m_inited == false);
   m_inited = true;
 
-  if (ddl_policy && ddl_policy->hint_gpp()) {
+  if (index_hint && index_hint->hint_gpp()) {
     ut_ad(!(index->type & DICT_SDI));
     ut_ad(!(index->type & DICT_IBUF));
 
     m_gpp = can_gpp(table, index);
   }
-  m_page_type = upgrade_root_page_type(table, index, ddl_policy);
+  m_page_type = upgrade_root_page_type(table, index, index_hint);
 }
 
 void Index_policy::restore(const dd::Properties &options,
@@ -141,32 +146,32 @@ void Index_policy::restore(const dd::Properties &options,
 }
 
 /**
-  Initializes the Table_policy with options based on the ddl policy and the
+  Initializes the Table_policy with options based on the ddl hint and the
   table information.
 
-  @param[in]    ddl_policy      ddl policy from handler
+  @param[in]    var_hint      ddl hint from handler
   @param[in]    table           dict_t table
   @param[in]    dd_table        The old parent table of a partitioned table.
-  Must be provided if the ddl policy requires inheritance.
+  Must be provided if the ddl hint requires inheritance.
 */
-void Table_policy::create(const Ha_ddl_policy *ddl_policy,
+void Table_policy::create(const Ha_table_hint *table_hint,
                           const dict_table_t *table,
                           const dd::Table *dd_table) {
   ut_a(m_inited == false);
   m_inited = true;
 
-  if (!ddl_policy) {
+  if (!table_hint) {
     return;
   }
 
-  if (ddl_policy->should_inherit()) {
+  if (table_hint->should_inherit()) {
     /** Inherit table options from the parent table of partition. */
     ut_ad(dd_table && dd_table_is_partitioned(*dd_table));
 
     m_flashback_area = lizard::dd_table_options_has_fba(&dd_table->options());
     ut_ad(!m_flashback_area || can_fba(table));
   } else {
-    m_flashback_area = (ddl_policy->hint_fba() && can_fba(table));
+    m_flashback_area = (table_hint->hint_fba() && can_fba(table));
   }
 }
 
@@ -182,12 +187,12 @@ void Table_policy::restore(const dd::Properties &options) {
   m_inited = true;
 }
 
-const Index_policy ha_ddl_create_index_policy(Ha_ddl_policy *ddl_policy,
+const Index_policy ha_ddl_create_index_policy(const Ha_index_hint *index_hint,
                                               const dict_table_t *table,
                                               const dict_index_t *index) {
   Index_policy index_policy;
 
-  index_policy.create(ddl_policy, table, index);
+  index_policy.create(index_hint, table, index);
 
   return index_policy;
 }
@@ -195,21 +200,92 @@ const Index_policy ha_ddl_create_index_policy(Ha_ddl_policy *ddl_policy,
 /**
   Create the Table_policy.
 
-  @param[in]    ddl_policy      ddl policy from handler
+  @param[in]    table_hint      ddl table hint from handler
   @param[in]    table           dict_t table
   @param[in]    dd_table        The old parent table of a partitioned table.
-  Must be provided if the ddl policy requires inheritance.
+  Must be provided if the ddl hint requires inheritance.
 */
-const Table_policy ha_ddl_create_table_policy(const Ha_ddl_policy *ddl_policy,
+const Table_policy ha_ddl_create_table_policy(const Ha_table_hint *table_hint,
                                               const dict_table_t *table,
                                               const dd::Table *dd_table) {
   Table_policy table_policy;
 
-  table_policy.create(ddl_policy, table, dd_table);
+  table_policy.create(table_hint, table, dd_table);
   return table_policy;
 }
 
-Ha_ddl_policy::Ha_ddl_policy(const THD *thd, bool inherit)
+/**
+ * Parse attribute value from secondary engine attribute
+ * @param[in] secondary_engine_attribute Secondary engine attribute string
+ * @param[in] attr_name Attribute name to parse
+ * @return Hint type
+ */
+static Ha_se_attr_hint::Hint_type parse_se_attr(
+    LEX_CSTRING secondary_engine_attribute, const char *attr_name) {
+  if (secondary_engine_attribute.length == 0 ||
+      secondary_engine_attribute.str == nullptr) {
+    return Ha_se_attr_hint::HINT_NOT_FOUND;
+  }
+
+  rapidjson::Document doc;
+  doc.Parse(secondary_engine_attribute.str, secondary_engine_attribute.length);
+
+  if (doc.HasParseError() || !doc.IsObject()) {
+    return Ha_se_attr_hint::HINT_NOT_FOUND;
+  }
+
+  std::string target_key = attr_name;
+  std::transform(target_key.begin(), target_key.end(), target_key.begin(),
+                 ::tolower);
+
+  for (auto const &member : doc.GetObject()) {
+    if (!member.name.IsString()) {
+      continue;
+    }
+
+    std::string current_key_str = member.name.GetString();
+    std::transform(current_key_str.begin(), current_key_str.end(),
+                   current_key_str.begin(), ::tolower);
+
+    if (current_key_str == target_key) {
+      if (member.value.IsString()) {
+        std::string val_str = member.value.GetString();
+        std::transform(val_str.begin(), val_str.end(), val_str.begin(),
+                       ::tolower);
+
+        if (val_str == "true" || val_str == "1") {
+          return Ha_se_attr_hint::HINT_TRUE;
+        } else if (val_str == "false" || val_str == "0") {
+          return Ha_se_attr_hint::HINT_FALSE;
+        }
+      }
+    }
+  }
+  return Ha_se_attr_hint::HINT_NOT_FOUND;
+}
+
+Ha_se_attr_hint::Ha_se_attr_hint(LEX_CSTRING se_attr) {
+  m_hint_gpp = parse_se_attr(se_attr, "gpp");
+  m_hint_panda = parse_se_attr(se_attr, "panda index");
+}
+
+std::string Ha_se_attr_hint::to_string() const {
+  std::ostringstream oss;
+  oss << "{";
+  if (m_hint_gpp != HINT_NOT_FOUND) {
+    oss << "\"gpp\": ";
+    oss << (m_hint_gpp ? "\"true\"" : "\"false\"");
+    oss << ", ";
+  }
+  if (m_hint_panda != HINT_NOT_FOUND) {
+    oss << "\"panda index\": ";
+    oss << (m_hint_panda ? "\"true\"" : "\"false\"");
+  }
+  oss << "}";
+  return oss.str();
+}
+
+Ha_var_hint::Ha_var_hint(const THD *thd, bool inherit)
     : m_hint_fba(0), m_hint_gpp(0), m_hint_panda(false), m_inherit(inherit) {
   if (thd->variables.opt_flashback_area) {
     ut_a(!m_hint_fba);
@@ -226,16 +302,21 @@ Ha_ddl_policy::Ha_ddl_policy(const THD *thd, bool inherit)
   }
 }
 
-bool Ha_ddl_policy::hint_panda() const { return m_hint_panda; }
+Ha_index_hint::Ha_index_hint(const Ha_se_attr_hint *se_attr_hint,
+                             const Ha_var_hint *var_hint) {
+  if (se_attr_hint &&
+      se_attr_hint->hint_gpp() != Ha_se_attr_hint::HINT_NOT_FOUND) {
+    m_hint_gpp = se_attr_hint->hint_gpp();
+  } else {
+    m_hint_gpp = var_hint && var_hint->hint_gpp();
+  }
 
-// static bool dd_index_options_has_ift(const dd::Properties *options) {
-//   return (options->exists(OPTION_IFT));
-// }
-
-bool validate_dd_index_policy(dd::Properties *options,
-                              const dict_index_t *index,
-                              const lizard::Ha_ddl_policy *ddl_policy) {
-  return true;
+  if (se_attr_hint &&
+      se_attr_hint->hint_panda() != Ha_se_attr_hint::HINT_NOT_FOUND) {
+    m_hint_panda = se_attr_hint->hint_panda();
+  } else {
+    m_hint_panda = var_hint && var_hint->hint_panda();
+  }
 }
 
 template <typename Table>

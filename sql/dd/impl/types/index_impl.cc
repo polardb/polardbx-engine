@@ -155,6 +155,40 @@ bool Index_impl::drop_children(Open_dictionary_tables_ctx *otx) const {
 }
 
 ///////////////////////////////////////////////////////////////////////////
+/** Lizard: Get real se_attr hint from options and se_private_data of dd::Index
+ * We have repurposed the secondary_engine_attribute field to express the
+ * properties of gpp and panda indexes. We don't care about the actually
+ * stored value; we only care that the value derived from OPTION_IFT
+ * and PAGE_TYPE.
+ * Not Supported for partitioned tables.
+ * @param[in] idx_obj: The index object to get the real se_attr for.
+ * @return Real se_attr hint for the index.
+ */
+static lizard::Ha_se_attr_hint get_real_se_attr_hint(const dd::Index *idx_obj) {
+  if (idx_obj->table().partition_type() != dd::Table::PT_NONE) {
+    return lizard::Ha_se_attr_hint();
+  }
+  int has_gpp = 0;
+  int has_panda = 0;
+  if (idx_obj->options().exists(lizard::OPTION_IFT)) {
+    ulonglong format;
+    idx_obj->options().Properties::get(lizard::OPTION_IFT, &format);
+    has_gpp = (format & lizard::IFT_GPP) ? 1 : 0;
+  }
+  if (idx_obj->se_private_data().exists(lizard::PAGE_TYPE_STR)) {
+    uint16_t page_type;
+    idx_obj->se_private_data().Properties::get(lizard::PAGE_TYPE_STR,
+                                               &page_type);
+    has_panda = (page_type == lizard::PANDA_PAGE_TYPE) ? 1 : 0;
+  }
+
+  char buffer[64];
+  size_t written =
+      snprintf(buffer, sizeof(buffer), R"({"gpp": "%d", "panda index": "%d"})",
+               has_gpp, has_panda);
+  assert(written < sizeof(buffer));
+  return lizard::Ha_se_attr_hint({buffer, written});
+}
 
 bool Index_impl::restore_attributes(const Raw_record &r) {
   if (check_parent_consistency(m_table, r.read_ref_id(Indexes::FIELD_TABLE_ID)))
@@ -187,6 +221,8 @@ bool Index_impl::restore_attributes(const Raw_record &r) {
     m_secondary_engine_attribute =
         r.read_str(Indexes::FIELD_SECONDARY_ENGINE_ATTRIBUTE, "");
   }
+  assert(m_secondary_engine_attribute.length() == 0);
+  m_se_attr_hint = get_real_se_attr_hint(this);
 
   return false;
 }
@@ -316,6 +352,7 @@ void Index_impl::debug_print(String_type &outb) const {
      << "m_engine: " << m_engine << "; "
      << "m_engine_attribute: " << m_engine_attribute << "; "
      << "m_secondary_engine_attribute: " << m_secondary_engine_attribute << "; "
+     << "m_se_attr_hint: " << m_se_attr_hint.to_string() << "; "
      << "m_elements: " << m_elements.size() << " [ ";
 
   {
@@ -401,6 +438,7 @@ Index_impl::Index_impl(const Index_impl &src, Table_impl *parent)
       m_engine(src.m_engine),
       m_engine_attribute(src.m_engine_attribute),
       m_secondary_engine_attribute(src.m_secondary_engine_attribute),
+      m_se_attr_hint(src.m_se_attr_hint),
       m_table(parent),
       m_elements(),
       m_tablespace_id(src.m_tablespace_id) {

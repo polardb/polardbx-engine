@@ -1,0 +1,122 @@
+--echo # Test the new ddl hint secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+--echo # whose priority is higher than the variable opt_index_format_gpp_enabled and opt_index_format_panda_enabled.
+--echo #
+
+
+SET opt_index_format_gpp_enabled=false;
+SET opt_index_format_panda_enabled=false;
+CREATE TABLE t1 (
+  a int DEFAULT NULL,
+  b int DEFAULT NULL,
+  c int DEFAULT NULL,
+  d int DEFAULT NULL,
+  UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"0","panda index":"1"}',
+  UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"1","panda index":"0"}',
+  UNIQUE KEY `d` (d) secondary_engine_attribute '{"gpp":"0","panda index":"0"}',
+  UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"1","foo":"bar"}',
+  UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"1"}',
+  UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
+  UNIQUE KEY `d_a` (d, a)
+);
+INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=1;
+SET opt_index_format_panda_enabled=1;
+CREATE TABLE t1 (
+  a int DEFAULT NULL,
+  b int DEFAULT NULL,
+  c int DEFAULT NULL,
+  d int DEFAULT NULL,
+  UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"True","panda index":"true"}',
+  UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"FALSE","panda index":"TRUE"}',
+  UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"True","panda index":"FALSE"}',
+  UNIQUE KEY `d` (d) secondary_engine_attribute '{"gpp":"false","panda index":"false"}',
+  UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"tRue","panda index":"foo"}',
+  UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"true","gpp":""}',
+  UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
+  UNIQUE KEY `d_a` (d, a)
+);
+INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+OPTIMIZE TABLE t1;
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP PRIMARY KEY;
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=1;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (c), DROP KEY b, ADD UNIQUE KEY `b_2` (b) secondary_engine_attribute '{"gpp":"0"}';
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=1;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int DEFAULT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+ALTER TABLE t1 DROP COLUMN a;
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+--echo # Not support for partition table
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  pad varchar(8192),
+  primary key (a),
+  UNIQUE KEY b (b,a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+) ENGINE=InnoDB AUTO_INCREMENT=0
+PARTITION BY RANGE(a) (
+    PARTITION p0 VALUES LESS THAN (3),
+    PARTITION p1 VALUES LESS THAN (5),
+    PARTITION p2 VALUES LESS THAN (20)
+);
+SHOW CREATE TABLE t1 FOR EXPORT;
+SELECT * FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS WHERE TABLE_NAME like 't1%';
+
+--echo # Cleanup
+DROP TABLE t1;

@@ -1447,8 +1447,8 @@ static bool fill_index_from_dd(THD *thd, TABLE_SHARE *share,
 
   keyinfo->secondary_engine_attribute = LexStringDupRootUnlessEmpty(
       &share->mem_root, idx_obj->secondary_engine_attribute());
-  if (keyinfo->secondary_engine_attribute.length > 0)
-    keyinfo->flags |= HA_INDEX_USES_SECONDARY_ENGINE_ATTRIBUTE;
+  assert(keyinfo->secondary_engine_attribute.length == 0);
+  keyinfo->se_attr_hint = idx_obj->se_attr_hint();
   return (false);
 }
 

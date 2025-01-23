@@ -3286,15 +3286,25 @@ class PT_show_create_procedure final : public PT_show_base {
 
 /// Parse tree node for SHOW CREATE TABLE and VIEW statements
 
-class PT_show_create_table final : public PT_show_base {
+class PT_show_create_table : public PT_show_base {
  public:
-  PT_show_create_table(const POS &pos, Table_ident *table_ident)
-      : PT_show_base(pos, SQLCOM_SHOW_CREATE), m_sql_cmd(false, table_ident) {}
+  PT_show_create_table(const POS &pos, Table_ident *table_ident,
+                       bool for_export = false)
+      : PT_show_base(pos, SQLCOM_SHOW_CREATE),
+        m_sql_cmd(false, table_ident, for_export) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 
  private:
   Sql_cmd_show_create_table m_sql_cmd;
+};
+
+/// Parse tree node for SHOW CREATE TABLE FOR EXPORT statement
+
+class PT_show_create_table_for_export final : public PT_show_create_table {
+ public:
+  PT_show_create_table_for_export(const POS &pos, Table_ident *table_ident)
+      : PT_show_create_table(pos, table_ident, true) {}
 };
 
 /// Parse tree node for SHOW CREATE TRIGGER statement
@@ -3332,7 +3342,8 @@ class PT_show_create_user final : public PT_show_base {
 class PT_show_create_view final : public PT_show_base {
  public:
   PT_show_create_view(const POS &pos, Table_ident *table_ident)
-      : PT_show_base(pos, SQLCOM_SHOW_CREATE), m_sql_cmd(true, table_ident) {}
+      : PT_show_base(pos, SQLCOM_SHOW_CREATE),
+        m_sql_cmd(true, table_ident, false) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 

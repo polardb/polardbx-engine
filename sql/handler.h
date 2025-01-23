@@ -119,7 +119,7 @@ class Tablespace;
 }  // namespace dd
 
 namespace lizard {
-class Ha_ddl_policy;
+class Ha_var_hint;
 }
 
 constexpr const ha_rows EXTRA_RECORDS{10};
@@ -3527,7 +3527,7 @@ class Alter_inplace_info {
   */
   const char *unsupported_reason;
 
-  lizard::Ha_ddl_policy *ddl_policy;
+  lizard::Ha_var_hint *var_hint;
 
   Alter_inplace_info(HA_CREATE_INFO *create_info_arg,
                      Alter_info *alter_info_arg, bool error_if_not_empty_arg,
@@ -3554,7 +3554,7 @@ class Alter_inplace_info {
         online(false),
         handler_trivial_ctx(0),
         unsupported_reason(nullptr),
-        ddl_policy(nullptr) {}
+        var_hint(nullptr) {}
 
   ~Alter_inplace_info() { destroy(handler_ctx); }
 
@@ -4912,8 +4912,7 @@ class handler {
     @retval false               Success - no errors.
    */
 
-  bool ha_get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
-                              dd::Table *dd_table, bool reset);
+  bool ha_get_se_private_data(dd::Table *dd_table, bool reset);
 
   void adjust_next_insert_id_after_explicit_value(ulonglong nr);
   int update_auto_increment();
@@ -6835,9 +6834,7 @@ class handler {
   virtual int create(const char *name, TABLE *form, HA_CREATE_INFO *info,
                      dd::Table *table_def) = 0;
 
-  virtual bool get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy
-                                   [[maybe_unused]],
-                                   dd::Table *dd_table [[maybe_unused]],
+  virtual bool get_se_private_data(dd::Table *dd_table [[maybe_unused]],
                                    bool reset [[maybe_unused]]) {
     return false;
   }

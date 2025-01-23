@@ -1070,6 +1070,8 @@ static void fill_dd_indexes_from_keyinfo(
 
     idx_obj->set_engine_attribute(key->engine_attribute);
     idx_obj->set_secondary_engine_attribute(key->secondary_engine_attribute);
+    assert(key->secondary_engine_attribute.length == 0);
+    idx_obj->set_se_attr_hint(key->se_attr_hint);
     //
     // Set options
     //
@@ -2376,11 +2378,9 @@ static std::unique_ptr<dd::Table> create_dd_system_table(
       System_tables::instance()->find_type(system_schema.name(), table_name);
   if (opt_initialize ||
       (table_type != nullptr && *table_type == System_tables::Types::INERT)) {
-    lizard::Ha_ddl_policy ddl_policy(thd);
     if (file->ha_get_se_private_data(
-            &ddl_policy, tab_obj.get(),
-            (table_type != nullptr &&
-             *table_type == System_tables::Types::INERT)))
+            tab_obj.get(), (table_type != nullptr &&
+                            *table_type == System_tables::Types::INERT)))
       return nullptr;
   } else {
     if (get_se_private_data(thd, tab_obj.get())) return nullptr;

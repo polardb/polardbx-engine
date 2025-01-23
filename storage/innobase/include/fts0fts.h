@@ -516,11 +516,11 @@ CREATE TABLE $FTS_PREFIX_CONFIG
 @param[in]      table                   table with FTS index
 @param[in]      name                    table name normalized
 @param[in]      skip_doc_id_index       Skip index on doc id
-@param[in]      ddl_policy              ddl policy from handler
+@param[in]      table_hint              ddl table hint from handler
 @return DB_SUCCESS if succeed */
 [[nodiscard]] dberr_t fts_create_common_tables(
     trx_t *trx, const dict_table_t *table, const char *name,
-    bool skip_doc_id_index, const lizard::Ha_ddl_policy *ddl_policy);
+    bool skip_doc_id_index, const lizard::Ha_table_hint *table_hint);
 
 /** Creates the column specific ancillary tables needed for supporting an
 FTS index on the given table. row_mysql_lock_data_dictionary must have
@@ -536,21 +536,21 @@ CREATE TABLE $FTS_PREFIX_INDEX_[1-6](
         UNIQUE CLUSTERED INDEX ON (word, first_doc_id))
 @param[in,out]  trx             transaction
 @param[in]      index           index instance
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t fts_create_index_tables(
-    trx_t *trx, dict_index_t *index, lizard::Ha_ddl_policy *ddl_policy);
+    trx_t *trx, dict_index_t *index, const lizard::Ha_table_hint *table_hint);
 
 /** Create auxiliary index tables for an FTS index.
 @param[in,out]  trx             transaction
 @param[in]      index           the index instance
 @param[in]      table_name      table name
 @param[in]      table_id        the table id
-@param[in]      ddl_policy      ddl policy from handler
+@param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t fts_create_index_tables_low(
     trx_t *trx, dict_index_t *index, const char *table_name,
-    table_id_t table_id, lizard::Ha_ddl_policy *ddl_policy);
+    table_id_t table_id, const lizard::Ha_table_hint *table_hint);
 
 /** Add the FTS document id hidden column.
 @param[in,out] table Table with FTS index

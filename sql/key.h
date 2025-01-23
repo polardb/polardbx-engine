@@ -27,6 +27,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include "dd/lizard_policy_types.h"
 #include "lex_string.h"
 #include "my_base.h" /* ha_rows, ha_key_alg */
 
@@ -169,6 +170,7 @@ class KEY {
   // the struct
   LEX_CSTRING engine_attribute{nullptr, 0};
   LEX_CSTRING secondary_engine_attribute{nullptr, 0};
+  lizard::Ha_se_attr_hint se_attr_hint;
 
  private:
   /**

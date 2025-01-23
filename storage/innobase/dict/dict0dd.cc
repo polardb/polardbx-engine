@@ -2513,8 +2513,7 @@ void dd_import_instant_add_columns(const dict_table_t *table,
 @param[in]      index           InnoDB index object */
 template <typename Index>
 static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
-                           const dict_index_t *index,
-                           const lizard::Ha_ddl_policy *ddl_policy) {
+                           const dict_index_t *index) {
   ut_ad(index->id != 0);
   ut_ad(index->page_no() >= FSP_FIRST_INODE_PAGE_NO);
   ut_ad(index->page_no() != FIL_NULL || index->type & DICT_FTS ||
@@ -2533,20 +2532,18 @@ static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
   p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], index->page_type());
 
   dd::Properties &options = dd_index->options();
-  lizard::dd_write_index_format(&options, index, ddl_policy);
+  lizard::dd_write_index_format(&options, index);
 }
 
 template void dd_write_index<dd::Index>(dd::Object_id, dd::Index *,
-                                        const dict_index_t *,
-                                        const lizard::Ha_ddl_policy *ddl_policy);
-template void dd_write_index<dd::Partition_index>(
-    dd::Object_id, dd::Partition_index *, const dict_index_t *,
-    const lizard::Ha_ddl_policy *ddl_policy);
+                                        const dict_index_t *);
+template void dd_write_index<dd::Partition_index>(dd::Object_id,
+                                                  dd::Partition_index *,
+                                                  const dict_index_t *);
 
 template <typename Table>
 void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
-                    const dict_table_t *table,
-                    const lizard::Ha_ddl_policy *ddl_policy) {
+                    const dict_table_t *table) {
   /* Only set the tablespace id for tables in innodb_system tablespace */
   if (dd_space_id == dict_sys_t::s_dd_sys_space_id) {
     dd_table->set_tablespace_id(dd_space_id);
@@ -2569,7 +2566,7 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
     the out-of-sync order */
     const dict_index_t *index = dd_find_index(table, dd_index);
     ut_ad(index != nullptr);
-    dd_write_index(dd_space_id, dd_index, index, ddl_policy);
+    dd_write_index(dd_space_id, dd_index, index);
   }
 
   bool has_row_versions = table->has_row_versions();
@@ -2642,11 +2639,9 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
 }
 
 template void dd_write_table<dd::Table>(dd::Object_id, dd::Table *,
-                                        const dict_table_t *,
-                                        const lizard::Ha_ddl_policy *ddl_policy);
+                                        const dict_table_t *);
 template void dd_write_table<dd::Partition>(dd::Object_id, dd::Partition *,
-                                            const dict_table_t *,
-                                            const lizard::Ha_ddl_policy *ddl_policy);
+                                            const dict_table_t *);
 
 template <typename Table>
 void dd_set_table_options(Table *dd_table, const dict_table_t *table) {
@@ -6659,7 +6654,7 @@ bool dd_create_fts_index_table(const dict_table_t *parent_table,
 
   table->dd_space_id = dd_space_id;
 
-  dd_write_table(dd_space_id, dd_table, table, nullptr);
+  dd_write_table(dd_space_id, dd_table, table);
 
   MDL_ticket *mdl_ticket = nullptr;
   if (dd::acquire_exclusive_table_mdl(thd, db_name.c_str(), table_name.c_str(),
@@ -6800,7 +6795,7 @@ bool dd_create_fts_common_table(const dict_table_t *parent_table,
 
   table->dd_space_id = dd_space_id;
 
-  dd_write_table(dd_space_id, dd_table, table, nullptr);
+  dd_write_table(dd_space_id, dd_table, table);
 
   MDL_ticket *mdl_ticket = nullptr;
   if (dd::acquire_exclusive_table_mdl(thd, db_name.c_str(), table_name.c_str(),

@@ -1932,6 +1932,7 @@ void warn_about_deprecated_binary(THD *thd)
         show_create_function_stmt
         show_create_procedure_stmt
         show_create_table_stmt
+        show_create_table_for_export_stmt
         show_create_trigger_stmt
         show_create_user_stmt
         show_create_view_stmt
@@ -2433,6 +2434,7 @@ simple_statement:
         | show_create_function_stmt
         | show_create_procedure_stmt
         | show_create_table_stmt
+        | show_create_table_for_export_stmt
         | show_create_trigger_stmt
         | show_create_user_stmt
         | show_create_view_stmt
@@ -13976,6 +13978,13 @@ show_create_table_stmt:
           SHOW CREATE TABLE_SYM table_ident
           {
             $$ = NEW_PTN PT_show_create_table(@$, $4);
+          }
+        ;
+
+show_create_table_for_export_stmt:
+          SHOW CREATE TABLE_SYM table_ident FOR_SYM EXPORT_SYM
+          {
+            $$ = NEW_PTN PT_show_create_table_for_export(@$, $4);
           }
         ;
 

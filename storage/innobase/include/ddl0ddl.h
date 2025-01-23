@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef ddl0ddl_h
 #define ddl0ddl_h
 
+#include "dd/lizard_policy_types.h"
 #include "fts0fts.h"
 #include "lock0types.h"
 #include "os0file.h"
@@ -127,6 +128,9 @@ struct Index_defn {
 
   /** SRID obtained from dd column */
   uint32_t m_srid{};
+
+  /** Secondary engine attribute from dd index */
+  lizard::Ha_se_attr_hint m_se_attr_hint;
 };
 
 /** Structure for reporting duplicate records. */
@@ -247,11 +251,12 @@ UNIV_PFS_IO defined, register the file descriptor with Performance Schema.
 @param[in,out] index_def        The index definition
 @param[in] add_v                New virtual columns added along with add
                                 index call
+@param[in] index_hint           Index hint
 @return index, or nullptr on error */
 [[nodiscard]] dict_index_t *create_index(
     trx_t *trx, dict_table_t *tableconst, Index_defn *index_def,
     const dict_add_v_col_t *add_v,
-    lizard::Ha_ddl_policy *ddl_policy) noexcept;
+    const lizard::Ha_index_hint *index_hint) noexcept;
 
 /** Drop a table. The caller must have ensured that the background stats
 thread is not processing the table. This can be done by calling

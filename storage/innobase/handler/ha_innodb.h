@@ -41,7 +41,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 namespace lizard {
-class Ha_ddl_policy;
+class Ha_var_hint;
 }
 
 /** "GEN_CLUST_INDEX" is the name reserved for InnoDB default
@@ -280,8 +280,7 @@ class ha_innobase : public handler {
   @param                reset           reset counters
   @retval               true            an error occurred
   @retval               false           success */
-  bool get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
-                           dd::Table *dd_table, bool reset) override;
+  bool get_se_private_data(dd::Table *dd_table, bool reset) override;
 
   /** Add hidden columns and indexes to an InnoDB table definition.
   @param[in,out]        dd_table        data dictionary cache object
@@ -894,7 +893,7 @@ class create_table_info_t {
                                 table, NULL otherwise.
   @return 0 or error number */
   int create_table(const dd::Table *dd_table, const dd::Table *old_part_table,
-                   lizard::Ha_ddl_policy *ddl_policy);
+                   const lizard::Ha_var_hint *var_hint);
 
   /** Update the internal data dictionary. */
   int create_table_update_dict();
@@ -904,8 +903,7 @@ class create_table_info_t {
   @retval       0               On success
   @retval       error number    On failure */
   template <typename Table>
-  int create_table_update_global_dd(Table *dd_table,
-                                    const lizard::Ha_ddl_policy *ddl_policy);
+  int create_table_update_global_dd(Table *dd_table);
 
   /** Validates the create options. Checks that the options
   KEY_BLOCK_SIZE, ROW_FORMAT, DATA DIRECTORY, TEMPORARY & TABLESPACE
@@ -1001,11 +999,11 @@ class create_table_info_t {
   @param[in]    dd_table        dd::Table or nullptr for intrinsic table
   @param[in]    old_part_table  dd::Table from an old partition for partitioned
                                 table, NULL otherwise.
-  @param[in]    ddl_policy      ddl policy from handler
+  @param[in]    table_hint      ddl table hint from handler
   @return HA_* level error */
   int create_table_def(const dd::Table *dd_table,
                        const dd::Table *old_part_table,
-                       lizard::Ha_ddl_policy *ddl_policy);
+                       const lizard::Ha_table_hint *table_hint);
 
   /** Initialize the autoinc of this table if necessary, which should
   be called before we flush logs, so autoinc counter can be persisted. */
@@ -1088,7 +1086,7 @@ class innobase_basic_ddl {
   @param[in]    old_flags2      old Table flags2
   @param[in]    old_dd_table    Table def for old table. Used in truncate or
                                 while adding a new partition
-  @param[in]    ddl_policy      ddl policy from handler.
+  @param[in]    var_hint        ddl hint from handler.
   @return       error number
   @retval       0 on success */
   template <typename Table>
@@ -1097,7 +1095,7 @@ class innobase_basic_ddl {
                          bool file_per_table, bool evictable, bool skip_strict,
                          uint32_t old_flags, uint32_t old_flags2,
                          const dd::Table *old_dd_table,
-                         lizard::Ha_ddl_policy *ddl_policy);
+                         const lizard::Ha_var_hint *var_hint);
 
   /** Drop an InnoDB table.
   @tparam               Table           dd::Table or dd::Partition

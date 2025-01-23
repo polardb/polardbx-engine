@@ -60,7 +60,8 @@ constexpr const size_t PROCESS_LIST_INFO_WIDTH{65535};
 
 bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
                        HA_CREATE_INFO *create_info_arg, bool show_database,
-                       bool for_show_create_stmt);
+                       bool for_show_create_stmt,
+                       bool for_show_secondary_engine_attribute);
 
 void append_identifier(const THD *thd, String *packet, const char *name,
                        size_t length, const CHARSET_INFO *from_cs,
@@ -70,7 +71,8 @@ void append_identifier(const THD *thd, String *packet, const char *name,
                        size_t length);
 
 void mysqld_list_fields(THD *thd, Table_ref *table, const char *wild);
-bool mysqld_show_create(THD *thd, Table_ref *table_list);
+bool mysqld_show_create(THD *thd, Table_ref *table_list,
+                        bool for_show_secondary_engine_attribute);
 bool mysqld_show_create_db(THD *thd, char *dbname, HA_CREATE_INFO *create);
 
 void mysqld_list_processes(THD *thd, const char *user, bool verbose,
@@ -338,16 +340,19 @@ class Sql_cmd_show_create_procedure : public Sql_cmd_show_noplan {
 
 class Sql_cmd_show_create_table : public Sql_cmd_show_noplan {
  public:
-  Sql_cmd_show_create_table(bool is_view, Table_ident *table_ident)
+  Sql_cmd_show_create_table(bool is_view, Table_ident *table_ident,
+                            bool for_export)
       : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE),
         m_is_view(is_view),
-        m_table_ident(table_ident) {}
+        m_table_ident(table_ident),
+        m_for_export(for_export) {}
   bool check_privileges(THD *thd) override;
   bool execute_inner(THD *thd) override;
 
  private:
   const bool m_is_view;
   Table_ident *const m_table_ident;
+  const bool m_for_export;
 };
 
 /// Represents SHOW CREATE TRIGGER statement.

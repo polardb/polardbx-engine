@@ -11637,11 +11637,11 @@ void innodb_base_col_setup_for_stored(const dict_table_t *table,
 @param[in]      dd_table        dd::Table or nullptr for intrinsic table
 @param[in]      old_part_table  dd::Table from an old partition for partitioned
                                 table, NULL otherwise.
-@param[in]      ddl_policy      ddl policy from handler.
+@param[in]      table_hint      ddl table hint from handler.
 @return HA_* level error */
 [[nodiscard]] inline int create_table_info_t::create_table_def(
     const dd::Table *dd_table, const dd::Table *old_part_table,
-    lizard::Ha_ddl_policy *ddl_policy) {
+    const lizard::Ha_table_hint *table_hint) {
   dict_table_t *table;
   ulint n_cols;
   dberr_t err;
@@ -12122,7 +12122,7 @@ void innodb_base_col_setup_for_stored(const dict_table_t *table,
 
     if (err == DB_SUCCESS) {
       err = row_create_table_for_mysql(table, algorithm, m_create_info, m_trx,
-                                       heap, ddl_policy, old_part_table);
+                                       heap, table_hint, old_part_table);
 
       if (err == DB_IO_NO_PUNCH_HOLE_FS) {
         ut_ad(!dict_table_in_shared_tablespace(table));
@@ -12230,8 +12230,7 @@ inline int create_index(
     const char *table_name,    /*!< in: table name */
     uint key_num,              /*!< in: index number */
     const dd::Table *dd_table, /*!< in: dd::Table for the table*/
-    lizard::Ha_ddl_policy *ddl_policy)
-{
+    const lizard::Ha_var_hint *var_hint /*!< in: ddl variables policy */) {
   dict_index_t *index;
   int error;
   const KEY *key;
@@ -12302,8 +12301,11 @@ inline int create_index(
       index->rtr_srs.reset(fetch_srs(index->srid));
     }
 
+    lizard::Ha_index_hint index_hint{&key->se_attr_hint, var_hint};
+    lizard::Ha_table_hint table_hint{var_hint};
     return convert_error_code_to_mysql(
-        row_create_index_for_mysql(index, trx, nullptr, nullptr, ddl_policy),
+        row_create_index_for_mysql(index, trx, nullptr, &index_hint,
+                                   &table_hint, nullptr),
         flags, nullptr);
   }
 
@@ -12426,8 +12428,11 @@ inline int create_index(
   still do our own checking using field_lengths to be absolutely
   sure we don't create too long indexes. */
 
+  lizard::Ha_index_hint index_hint{&key->se_attr_hint, var_hint};
+  lizard::Ha_table_hint table_hint{var_hint};
   error = convert_error_code_to_mysql(
-      row_create_index_for_mysql(index, trx, field_lengths, handler, ddl_policy),
+      row_create_index_for_mysql(index, trx, field_lengths, &index_hint,
+                                 &table_hint, handler),
       flags, nullptr);
 
   /* For multi-value virtual index, we need to adjust indexed col length */
@@ -12484,7 +12489,8 @@ inline int create_clustered_index_when_no_primary(
     index->disable_ahi = true;
   }
 
-  error = row_create_index_for_mysql(index, trx, nullptr, handler, nullptr);
+  error = row_create_index_for_mysql(index, trx, nullptr, nullptr, nullptr,
+                                     handler);
 
   if (error != DB_SUCCESS && handler != nullptr) {
     priv->unregister_table_handler(table_name);
@@ -14073,7 +14079,7 @@ static dberr_t innobase_check_fk_base_col(const dd::Table *dd_table,
 @return 0 or error number */
 int create_table_info_t::create_table(const dd::Table *dd_table,
                                       const dd::Table *old_part_table,
-                                      lizard::Ha_ddl_policy *ddl_policy) {
+                                      const lizard::Ha_var_hint *var_hint) {
   int error;
   uint primary_key_no;
   uint i;
@@ -14111,7 +14117,8 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
   the primary key is always number 0, if it exists */
   ut_a(primary_key_no == MAX_KEY || primary_key_no == 0);
 
-  error = create_table_def(dd_table, old_part_table, ddl_policy);
+  lizard::Ha_table_hint table_hint{var_hint};
+  error = create_table_def(dd_table, old_part_table, &table_hint);
   if (error) {
     return error;
   }
@@ -14138,7 +14145,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
     /* In InnoDB the clustered index must always be created
     first */
     error = create_index(m_trx, m_form, m_flags, m_table_name, primary_key_no,
-                         dd_table, ddl_policy);
+                         dd_table, var_hint);
     if (error) {
       return error;
     }
@@ -14179,9 +14186,10 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
         break;
     }
 
+    lizard::Ha_table_hint table_hint{var_hint};
     dberr_t err =
         fts_create_common_tables(m_trx, m_table, m_table_name,
-                                 (ret == FTS_EXIST_DOC_ID_INDEX), ddl_policy);
+                                 (ret == FTS_EXIST_DOC_ID_INDEX), &table_hint);
 
     error = convert_error_code_to_mysql(err, 0, nullptr);
 
@@ -14195,7 +14203,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
   for (i = 0; i < m_form->s->keys; i++) {
     if (i != primary_key_no) {
       error = create_index(m_trx, m_form, m_flags, m_table_name, i, dd_table,
-                           ddl_policy);
+                           var_hint);
       if (error) {
         return error;
       }
@@ -14335,8 +14343,7 @@ int create_table_info_t::create_table_update_dict() {
 @retval 0               On success
 @retval error number    On failure */
 template <typename Table>
-int create_table_info_t::create_table_update_global_dd(
-    Table *dd_table, const lizard::Ha_ddl_policy *ddl_policy) {
+int create_table_info_t::create_table_update_global_dd(Table *dd_table) {
   DBUG_TRACE;
 
   if (dd_table == nullptr || (m_flags2 & DICT_TF2_TEMPORARY)) {
@@ -14405,7 +14412,7 @@ int create_table_info_t::create_table_update_global_dd(
 
   dd_set_table_options(dd_table, m_table);
 
-  dd_write_table(dd_space_id, dd_table, m_table, ddl_policy);
+  dd_write_table(dd_space_id, dd_table, m_table);
 
   if (m_flags2 & (DICT_TF2_FTS | DICT_TF2_FTS_ADD_DOC_ID)) {
     ut_d(bool ret =) fts_create_common_dd_tables(m_table);
@@ -14419,10 +14426,10 @@ int create_table_info_t::create_table_update_global_dd(
 }
 
 template int create_table_info_t::create_table_update_global_dd<dd::Table>(
-    dd::Table *, const lizard::Ha_ddl_policy *ddl_policy);
+    dd::Table *);
 
 template int create_table_info_t::create_table_update_global_dd<dd::Partition>(
-    dd::Partition *, const lizard::Ha_ddl_policy *ddl_policy);
+    dd::Partition *);
 
 template <typename Table>
 int innobase_basic_ddl::create_impl(THD *thd, const char *name, TABLE *form,
@@ -14431,7 +14438,7 @@ int innobase_basic_ddl::create_impl(THD *thd, const char *name, TABLE *form,
                                     bool skip_strict, uint32_t old_flags,
                                     uint32_t old_flags2,
                                     const dd::Table *old_part_table,
-                                    lizard::Ha_ddl_policy *ddl_policy) {
+                                    const lizard::Ha_var_hint *var_hint) {
   char norm_name[FN_REFLEN] = {'\0'};   /* {database}/{tablename} */
   char remote_path[FN_REFLEN] = {'\0'}; /* Absolute path of table */
   char tablespace[NAME_LEN] = {'\0'};   /* Tablespace name identifier */
@@ -14469,12 +14476,12 @@ int innobase_basic_ddl::create_impl(THD *thd, const char *name, TABLE *form,
   }
 
   error = info.create_table(dd_tab != nullptr ? &dd_tab->table() : nullptr,
-                            old_part_table, ddl_policy);
+                            old_part_table, var_hint);
   if (error) {
     goto cleanup;
   }
 
-  error = info.create_table_update_global_dd(dd_tab, ddl_policy);
+  error = info.create_table_update_global_dd(dd_tab);
   if (error) {
     goto cleanup;
   }
@@ -14534,11 +14541,11 @@ cleanup:
 
 template int innobase_basic_ddl::create_impl<dd::Table>(
     THD *, const char *, TABLE *, HA_CREATE_INFO *, dd::Table *, bool, bool,
-    bool, uint32_t, uint32_t, const dd::Table *, lizard::Ha_ddl_policy *);
+    bool, uint32_t, uint32_t, const dd::Table *, const lizard::Ha_var_hint *);
 
 template int innobase_basic_ddl::create_impl<dd::Partition>(
     THD *, const char *, TABLE *, HA_CREATE_INFO *, dd::Partition *, bool, bool,
-    bool, uint32_t, uint32_t, const dd::Table *, lizard::Ha_ddl_policy *);
+    bool, uint32_t, uint32_t, const dd::Table *, const lizard::Ha_var_hint *);
 
 template <typename Table>
 int innobase_basic_ddl::delete_impl(THD *thd, const char *name,
@@ -14936,11 +14943,11 @@ int innobase_truncate<Table>::truncate() {
     inherit_metadata = true;
   }
 
-  lizard::Ha_ddl_policy ddl_policy(m_thd, inherit_metadata);
+  lizard::Ha_var_hint var_hint(m_thd, inherit_metadata);
   error = innobase_basic_ddl::create_impl(
       m_thd, m_name, m_form, &m_create_info, m_dd_table, m_file_per_table,
       false, true, m_flags, m_flags2,
-      inherit_metadata ? &m_dd_table->table() : nullptr, &ddl_policy);
+      inherit_metadata ? &m_dd_table->table() : nullptr, &var_hint);
   m_trx->in_truncate = false;
 
   if (reset) {
@@ -15341,8 +15348,7 @@ bool ha_innobase::upgrade_table(THD *thd, const char *db_name,
 @param          reset           reset counters
 @retval         true            an error occurred
 @retval         false           success */
-bool ha_innobase::get_se_private_data(const lizard::Ha_ddl_policy *ddl_policy,
-                                      dd::Table *dd_table, bool reset) {
+bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
   static uint n_tables = 0;
   static uint n_indexes = 0;
   static uint n_pages = 4;
@@ -15455,7 +15461,7 @@ int ha_innobase::create(const char *name, TABLE *form,
     innobase_register_trx(ht, thd, trx);
   }
 
-  lizard::Ha_ddl_policy ddl_policy(thd, false);
+  lizard::Ha_var_hint var_hint(thd, false);
 
   /* Determine if this CREATE TABLE will be making a file-per-table
   tablespace.  Note that "srv_file_per_table" is not under
@@ -15464,7 +15470,7 @@ int ha_innobase::create(const char *name, TABLE *form,
   decisions based on this. */
   return (innobase_basic_ddl::create_impl(ha_thd(), name, form, create_info,
                                           table_def, srv_file_per_table, true,
-                                          false, 0, 0, nullptr, &ddl_policy));
+                                          false, 0, 0, nullptr, &var_hint));
 }
 
 /** Discards or imports an InnoDB tablespace.

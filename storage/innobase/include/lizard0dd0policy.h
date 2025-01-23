@@ -37,9 +37,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
-extern bool validate_dd_index_policy(dd::Properties *options,
-                                     const dict_index_t *index,
-                                     const lizard::Ha_ddl_policy *ddl_policy);
 /**
   Fill Indexes_policy from dd::Table or dd::Partition object.
   Which should be called when open a table.
@@ -60,18 +57,18 @@ extern void dd_fill_table_policy(Table_policy &table_policy,
 /**
   Create the Table_policy.
 
-  @param[in]    ddl_policy      ddl policy from handler
+  @param[in]    table_hint      ddl table hint from handler
   @param[in]    table           dict_t table
   @param[in]    dd_table        The old parent table of a partitioned table.
-  Must be provided if the ddl policy requires inheritance.
+  Must be provided if the ddl hint requires inheritance.
 */
 extern const Table_policy ha_ddl_create_table_policy(
-    const Ha_ddl_policy *ddl_policy, const dict_table_t *table,
+    const Ha_table_hint *table_hint, const dict_table_t *table,
     const dd::Table *dd_table = nullptr);
 
-extern const Index_policy ha_ddl_create_index_policy(Ha_ddl_policy *ddl_policy,
-                                                     const dict_table_t *table,
-                                                     const dict_index_t *index);
+extern const Index_policy ha_ddl_create_index_policy(
+    const Ha_index_hint *index_hint, const dict_table_t *table,
+    const dict_index_t *index);
 }  // namespace lizard
 
 #endif

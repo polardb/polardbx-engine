@@ -3140,7 +3140,8 @@ int Query_result_create::binlog_show_create_table(THD *thd) {
 
   result = store_create_info(thd, &tmp_table_list, &query, create_info,
                              /* show_database */ true,
-                             /* SHOW CREATE TABLE */ false);
+                             /* SHOW CREATE TABLE */ false,
+                             /* for_show_secondary_engine_attribute */ false);
   assert(result == 0); /* store_create_info() always return 0 */
 
   if (mysql_bin_log.is_open()) {

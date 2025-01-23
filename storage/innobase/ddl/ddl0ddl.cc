@@ -34,6 +34,7 @@ Created 2020-11-01 by Sunny Bains. */
 #include "ddl0impl-merge.h"
 #include "dict0dd.h"
 #include "handler0alter.h"
+#include "lex_string.h"
 #include "lock0lock.h"
 #include "row0log.h"
 
@@ -184,7 +185,7 @@ bool file_create(ddl::file_t *file, const char *path) noexcept {
 
 dict_index_t *create_index(trx_t *trx, dict_table_t *table,
                            Index_defn *index_def, const dict_add_v_col_t *add_v,
-                           lizard::Ha_ddl_policy *ddl_policy) noexcept {
+                           const lizard::Ha_index_hint *index_hint) noexcept {
   const size_t n_fields = index_def->m_n_fields;
 
   ut_ad(!srv_read_only_mode);
@@ -230,7 +231,7 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
 
   page_type_t expected_page_type;
   lizard::dd_fill_dict_index_format(
-      lizard::ha_ddl_create_index_policy(ddl_policy, table, index), table,
+      lizard::ha_ddl_create_index_policy(index_hint, table, index), table,
       index, &expected_page_type);
 
   ut_ad(index->page_no() == FIL_NULL);
