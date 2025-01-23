@@ -1,0 +1,3 @@
+--source include/check-testcase.test
+
+CALL mtr.check_testcase_xcluster();

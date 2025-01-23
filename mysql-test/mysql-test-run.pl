@@ -7346,6 +7346,13 @@ sub start_check_testcase ($$$) {
   my $mode   = shift;
   my $mysqld = shift;
 
+  #only xcluster. case use check-testcase_xcluster
+  mtr_report("start_check_testcase case $tinfo->{name}");
+  our $check_testcase_name = "include/check-testcase.test"; 
+  if (index($tinfo->{name}, 'xcluster.') != -1) {
+    $check_testcase_name = "include/check-testcase_xcluster.test";
+  }
+
   my $name = "check-" . $mysqld->name();
   # Replace dots in name with underscore to avoid that mysqltest
   # misinterpret's what the filename extension is :(
@@ -7357,7 +7364,7 @@ sub start_check_testcase ($$$) {
   mtr_add_arg($args, "--defaults-file=%s",         $path_config_file);
   mtr_add_arg($args, "--defaults-group-suffix=%s", $mysqld->after('mysqld'));
   mtr_add_arg($args, "--result-file=%s", "$opt_vardir/tmp/$name.result");
-  mtr_add_arg($args, "--test-file=%s",   "include/check-testcase.test");
+  mtr_add_arg($args, "--test-file=%s",   "$check_testcase_name");
   mtr_add_arg($args, "--verbose");
   mtr_add_arg($args, "--logdir=%s/tmp",  $opt_vardir);
 
