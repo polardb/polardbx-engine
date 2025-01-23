@@ -16,3 +16,4 @@ select role from information_schema.alisql_cluster_local;
 insert into t1 values (1);
 select * from t1;
 drop table t1;
+--source include/wait_follower_catchup.inc

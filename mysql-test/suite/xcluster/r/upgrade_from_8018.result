@@ -12,13 +12,15 @@ insert into test.t1 values (4, 100);
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	x1
+select * from test.t1;
+c1	c2
+1	100
+2	200
+4	100
 # connect follower2
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	x1
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	3175	1
 # Test upgrade from 8018 to 8032 
 # Copy and unzip the datadir.
 # restart 1
@@ -27,9 +29,25 @@ master-bin.000001	3175	1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 1	2	0	x1
-show consensus logs;
-Log_name	File_size	Start_log_index
-master-bin.000001	3175	1
-xa rollback 'x1';
+select * from test.t1;
+c1	c2
+1	100
+2	200
+4	100
+xa commit 'x1';
+select * from test.t1;
+c1	c2
+1	100
+2	200
+3	100
+4	100
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select * from test.t1;
+c1	c2
+1	100
+2	200
+3	100
+4	100
 drop table test.t1;
 # Remove copied files

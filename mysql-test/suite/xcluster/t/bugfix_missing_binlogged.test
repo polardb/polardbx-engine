@@ -54,6 +54,7 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 xa recover;
 select * from test.t1;
 drop table t1;
+--source include/wait_follower_catchup.inc
 
 disconnect con1;
 disconnect con2;

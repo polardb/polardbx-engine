@@ -169,3 +169,7 @@ eval call dbms_consensus.configure_learner("127.0.0.1:20000", "127.0.0.1:$PAXOS_
 --error ER_CONSENSUS_COMMAND_ERROR 
 #eval add consensus_learner "127.0.0.1:$MYPORT_CONSENSUS_2";
 eval call dbms_consensus.add_learner("127.0.0.1:$MYPORT_CONSENSUS_2");
+
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.upgrade_learner("127.0.0.1:$MYPORT_CONSENSUS_2");
+--source include/wait_follower_catchup.inc

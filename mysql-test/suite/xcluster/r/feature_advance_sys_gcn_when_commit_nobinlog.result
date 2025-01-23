@@ -180,7 +180,8 @@ set xa_detach_on_prepare = default;
 ############################
 disconnect conn1;
 connection default;
+set sql_log_bin = 0;
+drop table t1;
 set xa_detach_on_prepare = default;
 set sql_log_bin = on;
 SET GLOBAL INNODB_TXN_RETENTION = default;
-drop table t1;

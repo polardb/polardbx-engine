@@ -594,6 +594,6 @@ SET debug_sync = "now SIGNAL continue";
 --connection conn1
 drop table t1;
 
-set global debug="";
+--source include/wait_follower_catchup.inc
 
---sleep 30
+set global debug="";

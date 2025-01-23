@@ -116,3 +116,4 @@ truncate table test.t1;
 
 connection default;
 drop table t1, t2;
+--source include/wait_follower_catchup.inc

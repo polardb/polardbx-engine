@@ -13,3 +13,4 @@ while ($counter)
 --sleep 5
 select count(distinct(match_index)) from information_schema.alisql_cluster_global;
 drop table t1;
+--source include/wait_follower_catchup.inc

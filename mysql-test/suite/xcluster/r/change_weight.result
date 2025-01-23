@@ -23,6 +23,8 @@ Follower
 select role from information_schema.alisql_cluster_local;
 role
 Follower
+call dbms_consensus.configure_follower("127.0.0.1:PAXOS_PORT_1", 5, 0);
+call dbms_consensus.configure_follower("127.0.0.1:PAXOS_PORT_3", 5, 0);
 select role from information_schema.alisql_cluster_local;
 role
 Leader

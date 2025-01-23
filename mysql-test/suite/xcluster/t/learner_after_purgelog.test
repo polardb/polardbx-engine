@@ -47,4 +47,5 @@ select ROLE from information_schema.alisql_cluster_global where role='LEARNER';
 # cleanup
 let $check_connection=0;
 --source include/stop_new_learner.inc
+--source include/wait_follower_catchup.inc
 

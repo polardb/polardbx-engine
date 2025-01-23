@@ -39,3 +39,4 @@ disconnect conn2;
 
 connection default;
 drop table t1;
+--source include/wait_follower_catchup.inc

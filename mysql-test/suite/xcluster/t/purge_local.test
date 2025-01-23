@@ -92,3 +92,4 @@ call dbms_consensus.local_purge_log(100000000);
 #drop consensus_learner "127.0.0.1:24000";
 call dbms_consensus.drop_learner("127.0.0.1:24000");
 drop table t1;
+--source include/wait_follower_catchup.inc

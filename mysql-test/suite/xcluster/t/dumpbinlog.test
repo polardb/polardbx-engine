@@ -26,10 +26,12 @@ call dbms_consensus.drop_learner("127.0.0.1:22345");
 # not always pass, WTF?
 
 # from leader
---exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_1 $master_binlog1 | wc -l
+--exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_1 $master_binlog1 | grep "Consensus flag=" | wc -l
 
 # from follower
---exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_2 $master_binlog2 | wc -l
+--exec $MYSQL_BINLOG --read-from-remote-server --user=root --host=127.0.0.1 --port=$MYPORT_1 $master_binlog1 | grep "Consensus flag=" | wc -l
 
 --connection default
 drop table t1;
+
+--source include/wait_follower_catchup.inc

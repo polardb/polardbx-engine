@@ -316,6 +316,5 @@ set global debug="";
 set global consensus_force_promote=1;
 
 --source include/wait_follower_catchup.inc
---source include/wait_apply_catchup.inc
 
 

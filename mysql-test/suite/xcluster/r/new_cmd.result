@@ -50,3 +50,4 @@ call dbms_consensus.configure_learner("127.0.0.1:20000", "127.0.0.1:PAXOS_PORT_1
 ERROR HY000: The consensus membership change failed, error code is 3, error msg: Target node not exists.
 call dbms_consensus.add_learner("127.0.0.1:MYPORT_CONSENSUS_2");
 ERROR HY000: The consensus membership change failed, error code is 4, error msg: Target node already exists.
+call dbms_consensus.upgrade_learner("127.0.0.1:MYPORT_CONSENSUS_2");

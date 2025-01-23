@@ -35,3 +35,4 @@ select role, connected, log_delay_num, apply_delay_num from information_schema.a
 
 --connection default
 drop table t;
+--source include/wait_follower_catchup.inc

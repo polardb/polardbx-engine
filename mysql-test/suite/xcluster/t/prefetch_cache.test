@@ -20,3 +20,4 @@ while ($counter)
 
 drop table t1;
 
+--source include/wait_follower_catchup.inc

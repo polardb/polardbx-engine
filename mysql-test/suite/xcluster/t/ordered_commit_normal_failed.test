@@ -72,5 +72,6 @@ set global binlog_order_commits=1;
 --connection conn1
 drop table t1;
 --source include/gtid_utils_end.inc
+--source include/wait_follower_catchup.inc
 
 --disconnect conn1

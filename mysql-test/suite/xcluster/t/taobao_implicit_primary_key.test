@@ -391,3 +391,5 @@ connection conn1;
 SET show_ipk_info=1;
 DROP DATABASE test;
 CREATE DATABASE test;
+
+--source include/wait_follower_catchup.inc

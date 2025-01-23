@@ -92,3 +92,4 @@ if ($value_old != $value_new)
 }
 
 drop table t;
+--source include/wait_follower_catchup.inc

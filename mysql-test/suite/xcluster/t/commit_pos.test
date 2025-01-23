@@ -47,3 +47,4 @@ select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
 drop table t;
+--source include/wait_follower_catchup.inc

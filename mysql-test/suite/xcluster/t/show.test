@@ -21,3 +21,4 @@ insert into t values(5);
 --replace_column 1 # 2 #
 show binary logs;
 drop table t;
+--source include/wait_follower_catchup.inc

@@ -43,5 +43,6 @@ show global status like "consensus_fifo_cache%";
 select count(distinct(match_index)) from information_schema.alisql_cluster_global;
 
 drop table t1;
+--source include/wait_follower_catchup.inc
 
 set global consensus_log_cache_size = 64 * 1024 * 1024; # 64M

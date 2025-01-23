@@ -19,3 +19,4 @@ let $restart_parameters = restart: --consensus_large_trx_split_size=256 --consen
 insert into t1 values ("test");
 --error ER_CONSENSUS_LOG_TOO_LARGE 
 insert into t1 values (REPEAT('test',100));
+--source include/wait_follower_catchup.inc

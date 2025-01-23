@@ -156,7 +156,9 @@ drop table t;
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
 --source include/wait_until_connected_again.inc
+--source include/wait_follower_catchup.inc
 --disable_reconnect
 
 #bug23162444 gtid error before the cluster has elected a leader
 --exec cat $MYSQLTEST_VARDIR/log/mysqld.1.err | grep "Can't find the log has the commit index 0" | wc -l
+

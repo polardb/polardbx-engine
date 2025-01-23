@@ -53,5 +53,6 @@ if ($cnt1 == $cnt2)
 
 --connection conn1
 drop table t1;
+--source include/wait_follower_catchup.inc
 
 set global debug="";

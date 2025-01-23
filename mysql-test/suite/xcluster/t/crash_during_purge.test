@@ -100,3 +100,5 @@ SET GLOBAL debug="";
 drop table db_crash_9.t;
 drop table db_crash_9.t2;
 drop database db_crash_9;
+--source include/wait_follower_catchup.inc
+

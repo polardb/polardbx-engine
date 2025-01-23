@@ -236,5 +236,6 @@ set global consensus_weak_read_refresh_timeout=DEFAULT;
 set global consensus_optimistic_heartbeat=DEFAULT;
 drop database d1;
 
+--source include/wait_follower_catchup.inc
 
 

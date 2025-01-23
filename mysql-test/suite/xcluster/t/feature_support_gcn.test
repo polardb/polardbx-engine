@@ -127,6 +127,7 @@ select * from t2;
 connection c1;
 drop table t1, t2;
 
+--source include/wait_follower_catchup.inc
 
 
 

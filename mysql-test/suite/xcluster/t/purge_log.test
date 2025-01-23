@@ -61,3 +61,5 @@ call dbms_consensus.force_purge_log(100);
 --sleep 5
 show consensus logs;
 drop table t1;
+
+--source include/wait_follower_catchup.inc

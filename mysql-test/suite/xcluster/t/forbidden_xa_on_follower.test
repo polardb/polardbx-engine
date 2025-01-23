@@ -37,3 +37,4 @@ XA ROLLBACK 'xid1';
 --connection conn1_a
 XA COMMIT 'xid1';
 drop table xa_test_table;
+--source include/wait_follower_catchup.inc

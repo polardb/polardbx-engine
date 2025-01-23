@@ -123,3 +123,4 @@ sleep 1;
 --enable_reconnect
 drop table t1;
 drop table t2;
+--source include/wait_follower_catchup.inc

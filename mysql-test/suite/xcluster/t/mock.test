@@ -46,9 +46,9 @@ let $restart_parameters = restart: --cluster-start-index=$logindex;
 
 # start conn2
 --connection conn2
-#--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --enable_reconnect
---exec $MYSQLD --defaults-file=$MYSQLTEST_VARDIR/my.cnf --defaults-group-suffix=.2 --loose-debug-sync-timeout=600 --core-file >$MYSQLTEST_VARDIR/log/mysqld_err2.log 2>&1 &
+--sleep 5
 
 --connection conn3
 let $wait_condition= select role='Leader' from information_schema.alisql_cluster_local;
@@ -57,7 +57,7 @@ let $wait_condition= select role='Leader' from information_schema.alisql_cluster
 --connection conn1
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --enable_reconnect
---sleep 1
+--sleep 5
 --source include/wait_until_connected_again_old.inc
 
 
@@ -65,3 +65,4 @@ let $wait_condition= select role='Leader' from information_schema.alisql_cluster
 --connection conn1
 select count(distinct(match_index)) from information_schema.alisql_cluster_global where server_id <= 3;
 drop table t1;
+--source include/wait_follower_catchup.inc

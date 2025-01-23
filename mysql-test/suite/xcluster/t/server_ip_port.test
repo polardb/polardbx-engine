@@ -257,4 +257,5 @@ select SERVER_ID,ROLE,SERVER_IP,SERVER_PORT from information_schema.ALISQL_CLUST
 
 --connection conn1
 set global consensus_force_promote=1;
+--source include/wait_follower_catchup.inc
 --sleep 10

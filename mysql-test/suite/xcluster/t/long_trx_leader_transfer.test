@@ -53,3 +53,4 @@ select * from t1;
 
 --connection conn5
 drop table t1;
+--source include/wait_follower_catchup.inc

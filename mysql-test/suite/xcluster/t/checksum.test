@@ -51,6 +51,7 @@ insert into t1 values (repeat('a', 2*1024*1024));
 insert into t1 select * from t1 limit 5;
 insert into t1 values (repeat('a', 8*1024*1024));
 drop table t1;
+--source include/wait_follower_catchup.inc
 
 set global consensus_log_cache_size=64*1024*1024;
 --disconnect conn1

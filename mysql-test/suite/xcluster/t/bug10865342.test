@@ -33,3 +33,4 @@ insert into ttt values(3);
 flush local logs;
 --connection conn1
 drop table ttt;
+--source include/wait_follower_catchup.inc

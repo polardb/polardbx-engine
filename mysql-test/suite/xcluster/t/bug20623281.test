@@ -57,3 +57,5 @@ drop database test1;
 eval show consensus_log events from $idx2 limit 1;
 --replace_result $idx3 idx3
 eval show consensus_log events from $idx3 limit 1;
+
+--source include/wait_follower_catchup.inc

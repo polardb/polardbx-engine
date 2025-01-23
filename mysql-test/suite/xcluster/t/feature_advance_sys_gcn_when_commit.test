@@ -444,3 +444,4 @@ connection default;
 SET GLOBAL INNODB_TXN_RETENTION = default;
 set xa_detach_on_prepare = default;
 drop table t1;
+--source include/wait_follower_catchup.inc

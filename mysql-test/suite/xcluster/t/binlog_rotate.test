@@ -84,3 +84,4 @@ eval SHOW CONSENSUS_LOG EVENTS from $check_index;
 
 connection conn_leader;
 DROP TABLE t1;
+--source include/wait_follower_catchup.inc

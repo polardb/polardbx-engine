@@ -55,6 +55,7 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 --source include/wait_condition.inc
 select server_id, role from information_schema.alisql_cluster_local;
 
+--source include/wait_follower_catchup.inc
 
 
 

@@ -131,4 +131,5 @@ let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 let $learner_base_port = query_get_value("select $MYPORT_1+51 as c1", c1, 1);
 --source include/stop_new_learner.inc
 
+--source include/wait_follower_catchup.inc
 

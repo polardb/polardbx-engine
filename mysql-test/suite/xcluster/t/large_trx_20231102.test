@@ -409,5 +409,7 @@ xa recover;
 xa commit 'x1';
 drop table t;
 
+--source include/wait_follower_catchup.inc
+
 --echo # ---------- cleanup -----------
 set global debug="";

@@ -41,6 +41,7 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 --source include/wait_condition.inc
 --source include/wait_leader_apply_catchup.inc
 drop table t;
+--source include/wait_follower_catchup.inc
 
 --disconnect con1
 --disconnect con2

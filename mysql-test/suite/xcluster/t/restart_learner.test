@@ -52,6 +52,7 @@ show databases like '%aaa%';
 # drop consensus_learner $learner_cluster_info;
 --replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.drop_learner($learner_cluster_info);
+--source include/wait_follower_catchup.inc
 
 # cleanup
 --source include/stop_new_learner.inc

@@ -42,12 +42,15 @@ xa start 'x1';
 insert into test.t1 values (3, 100);
 xa end 'x1';
 xa prepare 'x1';
+--source include/wait_follower_catchup.inc
 --disconnect leader
 
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 insert into test.t1 values (4, 100);
 xa recover;
+select * from test.t1;
+--source include/wait_follower_catchup.inc
 --disconnect leader
 
 --sleep 5
@@ -59,7 +62,7 @@ let $cluster_id = query_get_value("select cluster_id from mysql.consensus_info",
 let $current_term = query_get_value("select current_term from mysql.consensus_info", current_term, 1);
 let $old_datadir = query_get_value("select @@datadir as datadir", datadir, 1);
 xa recover;
-show consensus logs;
+--source include/wait_apply_catchup.inc
 
 --echo # Test upgrade from 8018 to 8032 
 
@@ -79,9 +82,7 @@ let $DATADIR = $old_datadir/data;
 
 --echo # restart 1
 --exec echo "restart:--datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term  --log_error=$MYSQLTEST_VARDIR/tmp/force-change-meta.log " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
---enable_reconnect
 --sleep 10
-
 
 --echo # restart 2
 --exec echo "restart:--datadir=$DATADIR " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
@@ -96,14 +97,28 @@ let $DATADIR = $old_datadir/data;
 --connection follower21
 --source include/wait_apply_catchup.inc
 xa recover;
-show consensus logs;
+select * from test.t1;
 --disconnect follower21
 
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
-xa rollback 'x1';
-drop table test.t1;
+xa commit 'x1';
+select * from test.t1;
+--source include/wait_follower_catchup.inc
+--disconnect leader
+
+--connect (follower21,127.0.0.1,root,,test,$MYPORT_2)
+--connection follower21
 --source include/wait_apply_catchup.inc
+xa recover;
+select * from test.t1;
+--disconnect follower21
+
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+drop table test.t1;
+--source include/wait_follower_catchup.inc
 --disconnect leader
 
 --echo # Remove copied files

@@ -18,3 +18,4 @@ flush logs;
 drop table ttt;
 --replace_column 1 # 2 # 3 #
 show consensus logs;
+--source include/wait_follower_catchup.inc

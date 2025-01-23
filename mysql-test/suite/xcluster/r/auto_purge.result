@@ -129,4 +129,5 @@ master-bin.000003	#	#
 master-bin.000004	#	#
 SET @@global.binlog_expire_logs_seconds=default;
 ############ cleanup
+call dbms_consensus.drop_learner(learner_cluster_info);
 drop table t1;

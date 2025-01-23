@@ -26,3 +26,4 @@ drop table t;
 
 disconnect follower;
 connection default;
+--source include/wait_follower_catchup.inc

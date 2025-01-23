@@ -197,5 +197,8 @@ SET @@global.binlog_expire_logs_seconds=default;
 --source include/stop_new_learner.inc
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
 drop table t1;
+--source include/wait_follower_catchup.inc
 --disconnect leader

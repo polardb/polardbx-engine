@@ -27,6 +27,5 @@ insert into t values (5);
 xa end '2';
 xa rollback '2';
 
---source include/wait_follower_catchup.inc
-
 drop table t;
+--source include/wait_follower_catchup.inc

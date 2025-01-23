@@ -21,3 +21,4 @@ while ($learner_counter)
   dec $learner_counter;
 }
 --enable_query_log
+--source include/wait_follower_catchup.inc

@@ -18,9 +18,11 @@ select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 8, 1, "127.0.0.1:$PAXOS_PORT_2", 7, 1, "127.0.0.1:$PAXOS_PORT_3", 5, 0);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 --error ER_SP_WRONG_NO_OF_ARGS
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 9, 1, "127.0.0.1:$PAXOS_PORT_1", 9, 1, "127.0.0.1:$PAXOS_PORT_3", 4);
 
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
 --error ER_SP_WRONG_NO_OF_ARGS
 eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 7, 1, "127.0.0.1:$PAXOS_PORT_2", 5, 1, "127.0.0.1:$PAXOS_PORT_3");
 
@@ -65,3 +67,8 @@ let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_lo
 --source include/wait_condition.inc
 --sleep 1
 select role from information_schema.alisql_cluster_local;
+
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1 $PAXOS_PORT_2 PAXOS_PORT_2 $PAXOS_PORT_3 PAXOS_PORT_3
+eval call dbms_consensus.configure_followers("127.0.0.1:$PAXOS_PORT_1", 5, 0, "127.0.0.1:$PAXOS_PORT_2", 5, 0, "127.0.0.1:$PAXOS_PORT_3", 5, 0);
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;

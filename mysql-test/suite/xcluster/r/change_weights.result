@@ -21,9 +21,9 @@ SERVER_ID	ROLE	FORCE_SYNC	ELECTION_WEIGHT
 1	Leader	Yes	8
 2	Follower	Yes	7
 3	Follower	No	5
-call dbms_consensus.configure_followers("127.0.0.1:13140", 9, 1, "127.0.0.1:13140", 9, 1, "127.0.0.1:13144", 4);
+call dbms_consensus.configure_followers("127.0.0.1:PAXOS_PORT_1", 9, 1, "127.0.0.1:PAXOS_PORT_1", 9, 1, "127.0.0.1:PAXOS_PORT_3", 4);
 ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.configure_followers; expected 15, got 8
-call dbms_consensus.configure_followers("127.0.0.1:13140", 7, 1, "127.0.0.1:13142", 5, 1, "127.0.0.1:13144");
+call dbms_consensus.configure_followers("127.0.0.1:PAXOS_PORT_1", 7, 1, "127.0.0.1:PAXOS_PORT_2", 5, 1, "127.0.0.1:PAXOS_PORT_3");
 ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_consensus.configure_followers; expected 15, got 7
 call dbms_consensus.configure_followers("127.0.0.1:PAXOS_PORT_1", 7, 1, "127.0.0.1:PAXOS_PORT_2", 5, 1, "127.0.0.1:PAXOS_PORT_1", 9, 1, "127.0.0.1:PAXOS_PORT_2", 9, 1);
 select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
@@ -53,3 +53,9 @@ Follower
 select role from information_schema.alisql_cluster_local;
 role
 Leader
+call dbms_consensus.configure_followers("127.0.0.1:PAXOS_PORT_1", 5, 0, "127.0.0.1:PAXOS_PORT_2", 5, 0, "127.0.0.1:PAXOS_PORT_3", 5, 0);
+select SERVER_ID,ROLE,FORCE_SYNC,ELECTION_WEIGHT from information_schema.alisql_cluster_global;
+SERVER_ID	ROLE	FORCE_SYNC	ELECTION_WEIGHT
+1	Leader	No	5
+2	Follower	No	5
+3	Follower	No	5

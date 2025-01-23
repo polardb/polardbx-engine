@@ -73,3 +73,4 @@ set global super_read_only=0;
 set global read_only=0;
 select @@super_read_only, @@read_only;
 DROP DATABASE db2;
+--source include/wait_follower_catchup.inc

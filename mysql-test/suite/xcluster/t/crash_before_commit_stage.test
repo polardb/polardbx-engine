@@ -166,3 +166,4 @@ while ($iter <= 2)
 connection default;
 drop table db_crash_5.t;
 drop database db_crash_5;
+--source include/wait_follower_catchup.inc

@@ -109,6 +109,7 @@ ALTER TABLE gpp_options.t1 DROP COLUMN e;
 --eval SET opt_index_format_gpp_enabled= $orig_opt_index_format_gpp_enabled
 --eval SET GLOBAL innodb_lizard_stat_enabled= $orig_innodb_lizard_stat_enabled
 drop database gpp_options;
+--source include/wait_follower_catchup.inc
 
 --connection conn2
 --eval SET opt_index_format_gpp_enabled= $orig_opt_index_format_gpp_enabled

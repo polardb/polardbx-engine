@@ -39,4 +39,5 @@ show replica status;
 --enable_reconnect
 let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
 --source include/wait_condition.inc
+--source include/wait_follower_catchup.inc
 

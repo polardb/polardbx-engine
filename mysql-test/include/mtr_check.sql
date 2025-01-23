@@ -241,6 +241,9 @@ BEGIN
   -- and after the test run, which is not running.
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM performance_schema.threads WHERE NAME="thread/sql/replica_monitor";
 
+  select SERVER_ID, ROLE, FORCE_SYNC, ELECTION_WEIGHT, LEARNER_SOURCE, PIPELINING, SEND_APPLIED, INSTANCE_TYPE, DISABLE_ELECTION FROM INFORMATION_SCHEMA.ALISQL_CLUSTER_GLOBAL order by SERVER_ID;
+  select SERVER_ID, ROLE, CONNECTED, LOG_DELAY_NUM, APPLY_DELAY_NUM, APPLY_RUNNING, APPLY_DELAY_SECONDS FROM INFORMATION_SCHEMA.ALISQL_CLUSTER_HEALTH order by SERVER_ID;
+
 END$$
 
 -- Procedure used by test case used to force all

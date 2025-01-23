@@ -33,4 +33,5 @@ eval call dbms_consensus.drop_learner($learner_cluster_info);
 --sleep 5
 
 --source include/stop_new_learner.inc
+--source include/wait_follower_catchup.inc
 

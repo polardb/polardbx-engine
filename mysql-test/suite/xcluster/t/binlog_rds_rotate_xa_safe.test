@@ -438,6 +438,7 @@ XA COMMIT "2301";
 
 --source include/show_binlog_events.inc
 drop table t1;
+--source include/wait_follower_catchup.inc
 
 SET GLOBAL max_binlog_size = 1073741824;
 

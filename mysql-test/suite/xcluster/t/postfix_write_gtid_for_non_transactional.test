@@ -155,3 +155,4 @@ drop table replicated;
 drop procedure p;
 drop function f;
 drop database test1;
+--source include/wait_follower_catchup.inc

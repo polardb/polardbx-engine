@@ -133,6 +133,8 @@ select * from employees;
 
 DROP TABLE IF EXISTS t1;
 DROP TABLE IF EXISTS employees;
+--source include/wait_follower_catchup.inc
+
 --disconnect conn1
 #--connect (conn2,127.0.0.1,root,test,$MYPORT_2)
 --connection conn2
