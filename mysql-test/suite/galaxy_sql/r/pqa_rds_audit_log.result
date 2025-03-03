@@ -2,6 +2,7 @@ CREATE USER test@localhost;
 GRANT SELECT ON *.* to test@localhost;
 show variables like '%rds_audit%';
 Variable_name	Value
+rds_audit_flush_thread_enabled	#
 rds_audit_log_buffer_size	#
 rds_audit_log_connection_policy	#
 rds_audit_log_dir	#
@@ -17,6 +18,7 @@ rds_audit_log_strategy	#
 rds_audit_log_version	#
 show variables like '%rds_audit%';
 Variable_name	Value
+rds_audit_flush_thread_enabled	#
 rds_audit_log_buffer_size	#
 rds_audit_log_connection_policy	#
 rds_audit_log_dir	#

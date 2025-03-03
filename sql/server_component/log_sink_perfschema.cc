@@ -56,6 +56,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysqld_error.h"
 #include "mysys_err.h"
 #include "sql/log.h"
+#include "sql/mysqld.h"
 
 /**
   In the interest of not adding more settings to confuse the using,
@@ -69,7 +70,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
   writing.  That lead us to expect a yield of 4-6 events per KB,
   and thus about 25,000 for a buffer of 5 MB.
 */
-static const size_t ring_buffer_size = 5 * 1024 * 1024;
+//static const size_t opt_error_log_ring_buffer_size = opt_error_log_ring_buffer_size;
 
 static char *ring_buffer_start = nullptr;  ///< buffer start
 static char *ring_buffer_end = nullptr;    ///< buffer end (for convenience)
@@ -295,7 +296,7 @@ static inline void log_sink_pfs_event_expire(void) {
 static inline int log_sink_pfs_write_wrap(size_t s) {
   int ret = 0;
 
-  assert(s <= ring_buffer_size);
+  assert(s <= opt_error_log_ring_buffer_size);
 
   // Writing the event would go past the end of the buffer. Wrap around!
   if ((ring_buffer_write + s) > ring_buffer_end) {
@@ -318,7 +319,7 @@ static inline int log_sink_pfs_write_wrap(size_t s) {
         If the tail didn't wrap (so we ran out of events before the read pointer
         would wrap, resulting in ring_buffer_read == NULL), something's strange.
         (It is implied here that (ring_buffer_write > ring_buffer_start) --
-        otherwise, (s<=ring_buffer_size) would be false --, so wrapping around
+        otherwise, (s<=opt_error_log_ring_buffer_size) would be false --, so wrapping around
         (ring_buffer_read = ring_buffer_start) and immediately satisfying
         ring_buffer_read == ring_buffer_write (with the resulting setting
         of ring_buffer_read to NULL) should not happen.
@@ -406,7 +407,7 @@ log_service_error log_sink_pfs_event_add(log_sink_pfs_event *e,
   if (s > log_sink_pfs_longest_event) log_sink_pfs_longest_event = s;
 
   // Let's not process events that are larger than the buffer.
-  if (s >= ring_buffer_size) goto done;
+  if (s >= opt_error_log_ring_buffer_size) goto done;
 
   /*
     We've made sure the event will fit in the ring-buffer,
@@ -580,10 +581,10 @@ static log_service_error log_error_read_loop(const char *log_file,
     Otherwise, we start reading from a point in the file where about
     the size of the ring-buffer remains as input.
   */
-  if (size <= ring_buffer_size)
+  if (size <= opt_error_log_ring_buffer_size)
     pos = 0;
   else {
-    pos = size - ring_buffer_size;
+    pos = size - opt_error_log_ring_buffer_size;
 
     // seek to the approximate position of the row to start reading at
     if (fseek(fh, (long)pos, SEEK_SET)) { /* purecov: begin inspected */
@@ -776,8 +777,7 @@ int log_error_read_log_init() {
   assert(ring_buffer_start == nullptr);
 
   char *b;
-
-  if ((b = (char *)my_malloc(key_memory_log_sink_pfs, ring_buffer_size,
+  if ((b = (char *)my_malloc(key_memory_log_sink_pfs, opt_error_log_ring_buffer_size,
                              MYF(0))) == nullptr)
     return -1; /* purecov: inspected */
 
@@ -793,7 +793,7 @@ int log_error_read_log_init() {
   ring_buffer_start = b;
   ring_buffer_read = ring_buffer_start;
   ring_buffer_write = ring_buffer_start;
-  ring_buffer_end = ring_buffer_start + ring_buffer_size;  // convenience
+  ring_buffer_end = ring_buffer_start + opt_error_log_ring_buffer_size;  // convenience
 
   return 0;
 }

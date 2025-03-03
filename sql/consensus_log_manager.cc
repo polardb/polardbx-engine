@@ -51,8 +51,9 @@ uint64 show_fifo_cache_size(THD *, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
   long *value = reinterpret_cast<long *>(buff);
-  uint64 size =
-      consensus_log_manager.get_fifo_cache_manager()->get_fifo_cache_size();
+  uint64 size = 0;
+  if (consensus_log_manager.get_fifo_cache_manager())
+    size = consensus_log_manager.get_fifo_cache_manager()->get_fifo_cache_size();
   *value = static_cast<long long>(size);
   return 0;
 }
@@ -61,7 +62,9 @@ uint64 show_first_index_in_fifo_cache(THD *, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
   long *value = reinterpret_cast<long *>(buff);
-  uint64 size = consensus_log_manager.get_fifo_cache_manager()
+  uint64 size = 0;
+  if (consensus_log_manager.get_fifo_cache_manager())
+    size = consensus_log_manager.get_fifo_cache_manager()
                     ->get_first_index_of_fifo_cache();
   *value = static_cast<long long>(size);
   return 0;
@@ -71,7 +74,9 @@ uint64 show_log_count_in_fifo_cache(THD *, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
   long *value = reinterpret_cast<long *>(buff);
-  uint64 size = consensus_log_manager.get_fifo_cache_manager()
+  uint64 size = 0;
+  if (consensus_log_manager.get_fifo_cache_manager())
+    size = consensus_log_manager.get_fifo_cache_manager()
                     ->get_fifo_cache_log_count();
   *value = static_cast<long long>(size);
   return 0;
@@ -214,6 +219,15 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
   mysql_cond_init(key_COND_consensuslog_catchup, &COND_consensuslog_catchup);
   mysql_cond_init(key_COND_consensus_state_change,
                   &COND_consensus_state_change);
+
+  log_file_index = new ConsensusLogIndex();
+  log_file_index->init();
+
+  if (!ConsensusLogManager::enable_consensus()) {
+    inited = true;
+    return 0;
+  }
+
   recovery_manager = new Consensus_recovery_manager();
   recovery_manager->init();
 
@@ -222,9 +236,6 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
 
   prefetch_manager = new ConsensusPreFetchManager();
   prefetch_manager->init(max_prefetch_cache_size_arg);
-
-  log_file_index = new ConsensusLogIndex();
-  log_file_index->init();
 
   Rpl_info_factory::init_consensus_repo_metadata();
   consensus_info = Rpl_info_factory::create_consensus_info();
@@ -245,7 +256,7 @@ int ConsensusLogManager::init(uint64 max_fifo_cache_size_arg,
 int ConsensusLogManager::init_consensus_info() {
   // init sys info
   Consensus_info *consensus_info = get_consensus_info();
-  if (!opt_consensus_force_recovery) {
+  if (!opt_consensus_force_recovery && ConsensusLogManager::enable_consensus()) {
     if (consensus_info->consensus_init_info()) {
       xp::error(ER_XP_0) << "Fail to init consensus_info.";
       return -1;
@@ -318,6 +329,8 @@ int ConsensusLogManager::dump_cluster_info_to_file(std::string meta_file_name,
 }
 
 int ConsensusLogManager::init_service() {
+  if (!ConsensusLogManager::enable_consensus()) return 0;
+
   if (!opt_initialize) {
     Consensus_info *consensus_info = get_consensus_info();
     if (opt_cluster_dump_meta) {
@@ -519,15 +532,16 @@ int ConsensusLogManager::cleanup() {
     mysql_mutex_unlock(&LOCK_consensus_state_change);
     mysql_cond_broadcast(&COND_consensus_state_change);
     mysql_cond_broadcast(&COND_server_started);
-    my_thread_join(&consensus_state_change_thread_handle, NULL);
-    recovery_manager->cleanup();
-    fifo_cache_manager->cleanup();
-    prefetch_manager->cleanup();
-    log_file_index->cleanup();
+    if (consensus_state_change_is_running)
+      my_thread_join(&consensus_state_change_thread_handle, NULL);
+    if (recovery_manager) recovery_manager->cleanup();
+    if (fifo_cache_manager) fifo_cache_manager->cleanup();
+    if (prefetch_manager) prefetch_manager->cleanup();
+    if (log_file_index) log_file_index->cleanup();
 
     close_cached_file(cache_log->get_io_cache());
 
-    consensus_info->end_info();
+    if (consensus_info) consensus_info->end_info();
     delete fifo_cache_manager;
     delete consensus_info;
     delete prefetch_manager;
@@ -1477,15 +1491,6 @@ void *run_consensus_commit_pos_watcher(void *arg) {
 bool ConsensusLogManager::is_state_machine_ready() {
   return status == Consensus_Log_System_Status::BINLOG_WORKING &&
          consensus_ptr->getTerm() == get_current_term();
-}
-
-bool ConsensusLogManager::option_invalid(bool log_bin) {
-  if (!log_bin) {
-    xp::error(ER_XP_0) << "PolarDB-X Engine log_bin must be set to ON";
-    return true;
-  }
-
-  return false;
 }
 
 IO_CACHE *ConsensusLogManager::get_cache() { return cache_log->get_io_cache(); }

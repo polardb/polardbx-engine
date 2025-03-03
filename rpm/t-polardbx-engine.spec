@@ -125,7 +125,8 @@ $CMAKE_BIN .                            \
 
 %install
 cd $OLDPWD/../
-make DESTDIR=$RPM_BUILD_ROOT install -j `cat /proc/cpuinfo | grep processor| wc -l`
+MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
+make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
 
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 

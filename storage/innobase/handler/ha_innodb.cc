@@ -5179,7 +5179,7 @@ static int innodb_init_params() {
   maximum number of threads that can wait in the 'srv_conc array' for
   their time to enter InnoDB. */
 
-  srv_max_n_threads = 100 * 1024;
+  srv_max_n_threads = opt_server_max_threads;
 
   /* This is the first time univ_page_size is used.
   It was initialized to 16k pages before srv_page_size was set */
@@ -5560,10 +5560,13 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
-  lizard::global_tcn_cache = ut::new_withkey<lizard::Global_tcn>(
-      ut::make_psi_memory_key(mem_key_tcn), lizard::tcn_cache_size_align(),
-      mem_key_tcn);
-
+  lizard::global_tcn_cache = nullptr;
+  
+  if (lizard::srv_tcn_cache_level != NONE_LEVEL) {
+    lizard::global_tcn_cache = ut::new_withkey<lizard::Global_tcn>(
+        ut::make_psi_memory_key(mem_key_tcn), lizard::tcn_cache_size_align(),
+        mem_key_tcn);
+  }
   my_key_is_keyring_rds(&is_keyring_rds);
 
   return 0;
@@ -23718,7 +23721,7 @@ static TYPELIB innodb_tcn_cache_level_typelib = {
     "innodb_tcn_cache_level_typelib", innodb_tcn_cache_level_names, NULL};
 
 static MYSQL_SYSVAR_ENUM(tcn_cache_level, lizard::srv_tcn_cache_level,
-                         PLUGIN_VAR_OPCMDARG,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
                          "transaction commit number cache level.", NULL, NULL,
                          GLOBAL_LEVEL, &innodb_tcn_cache_level_typelib);
 

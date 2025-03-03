@@ -425,6 +425,7 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
   if (update_timestamp) {
     mysql_mutex_lock(&data_lock);
     last_master_timestamp = new_ts;
+
     mysql_mutex_unlock(&data_lock);
   }
 }
@@ -2338,7 +2339,8 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   //    ->create_slave_info_objects->load_mi_and_rli_from_repositories
   //    ->rli_init_info->read_info->set_privilege_checks_user
   //move set_privilege_checks_user into xpaxos_set_privilege_checks_user()
-  if (consensus_ptr == nullptr
+  if (ConsensusLogManager::enable_consensus()
+      && consensus_ptr == nullptr
       && username != nullptr
       && hostname != nullptr
       && (strlen(username) > 0 || strlen(hostname) > 0)) {

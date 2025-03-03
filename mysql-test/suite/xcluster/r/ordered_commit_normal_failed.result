@@ -1,0 +1,443 @@
+include/gtid_utils.inc
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+call mtr.add_suppression('Binary logging not possible.*');
+init"
+create table t1(id int);
+insert into t1 values(0);
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+set global xa_detach_on_prepare=0;
+set global binlog_order_commits=0;
+**** test xa_detach=0, binlog_order_commits=0
+=================================
+**** test xa commit in_leader_transfer failed
+delete from t1;
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_in_leader_transfer";
+select @@debug;
+@@debug
+d,force_in_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test xa commit after_leader_transfer failed
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test commit after_leader_transfer failed
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+SET SESSION debug="";
+select @@debug;
+@@debug
+
+=================================
+**** test commit force_in_wait_commit failed
+xa recover;
+formatID	gtrid_length	bqual_length	data
+SET SESSION debug="+d,force_in_wait_commit";
+select @@debug;
+@@debug
+d,force_in_wait_commit
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
+select count(*) from t1;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+set global xa_detach_on_prepare=1;
+set global binlog_order_commits=0;
+**** test xa_detach=1, binlog_order_commits=0
+=================================
+**** test xa commit in_leader_transfer failed
+delete from t1;
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_in_leader_transfer";
+select @@debug;
+@@debug
+d,force_in_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test xa commit after_leader_transfer failed
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test commit after_leader_transfer failed
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+SET SESSION debug="";
+select @@debug;
+@@debug
+
+=================================
+**** test commit force_in_wait_commit failed
+xa recover;
+formatID	gtrid_length	bqual_length	data
+SET SESSION debug="+d,force_in_wait_commit";
+select @@debug;
+@@debug
+d,force_in_wait_commit
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
+select count(*) from t1;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+set global xa_detach_on_prepare=1;
+set global binlog_order_commits=1;
+**** test xa_detach=1, binlog_order_commits=1
+=================================
+**** test xa commit in_leader_transfer failed
+delete from t1;
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_in_leader_transfer";
+select @@debug;
+@@debug
+d,force_in_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test xa commit after_leader_transfer failed
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test commit after_leader_transfer failed
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+SET SESSION debug="";
+select @@debug;
+@@debug
+
+=================================
+**** test commit force_in_wait_commit failed
+xa recover;
+formatID	gtrid_length	bqual_length	data
+SET SESSION debug="+d,force_in_wait_commit";
+select @@debug;
+@@debug
+d,force_in_wait_commit
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
+select count(*) from t1;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+set global xa_detach_on_prepare=0;
+set global binlog_order_commits=1;
+**** test xa_detach=0, binlog_order_commits=1
+=================================
+**** test xa commit in_leader_transfer failed
+delete from t1;
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_in_leader_transfer";
+select @@debug;
+@@debug
+d,force_in_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+1
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test xa commit after_leader_transfer failed
+xa start 'x1';
+insert into t1 values(0);
+xa end 'x1';
+xa prepare 'x1';
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+xa recover;
+formatID	gtrid_length	bqual_length	data
+1	2	0	x1
+xa commit 'x1';
+ERROR HY000: Binary logging not possible. Message: xa commit/rollback fail, restart to deal with it
+xa recover;
+ERROR HY000: Lost connection to MySQL server during query
+xa commit 'x1';
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+**** test commit after_leader_transfer failed
+SET SESSION debug="+d,force_after_leader_transfer";
+select @@debug;
+@@debug
+d,force_after_leader_transfer
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: The cluster's leadership is changing with waiting from @@consensus_wait_milliseconds_before_change_leader, please relocate consensus leader and retry.
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select count(*) from t1;
+count(*)
+2
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+SET SESSION debug="";
+select @@debug;
+@@debug
+
+=================================
+**** test commit force_in_wait_commit failed
+xa recover;
+formatID	gtrid_length	bqual_length	data
+SET SESSION debug="+d,force_in_wait_commit";
+select @@debug;
+@@debug
+d,force_in_wait_commit
+begin;
+insert into t1 values(0);
+commit;
+ERROR HY000: Binary logging not possible. Message: Waiting for consensus majority commit failed, restart to deal with it
+select count(*) from t1;
+ERROR HY000: Lost connection to MySQL server during query
+xa recover;
+formatID	gtrid_length	bqual_length	data
+select ROLE from information_schema.ALISQL_CLUSTER_local;
+ROLE
+Leader
+=================================
+end"
+drop table t1;
+include/gtid_utils_end.inc

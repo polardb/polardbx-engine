@@ -1133,6 +1133,7 @@ bool MYSQL_RDS_AUDIT_LOG::create_flush_thread() {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::create_flush_thread");
   assert(!flush_thread_running);
 
+  if (!opt_rds_audit_flush_thread_enabled) DBUG_RETURN(false);
   /* Create background thread to handle logs flushing task. */
   mysql_thread_create(key_thread_audit_flush, &th, &connection_attrib,
                       audit_log_flush_thread, NULL);

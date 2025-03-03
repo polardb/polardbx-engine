@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 
 CREATE TABLE t1 ( id int NOT NULL, k int NOT NULL, c int NOT NULL, pad varchar(8192), PRIMARY KEY (id), KEY (k)) engine=innodb;
 INSERT INTO t1 (id, k, c, pad) VALUES (1, 1, 1, LEFT(REPEAT('A', 7000), CHAR_LENGTH(REPEAT('A', 7000))));

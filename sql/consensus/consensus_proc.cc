@@ -66,6 +66,7 @@ Sql_cmd *Consensus_proc_refresh_learner_meta::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_refresh_learner_meta::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   std::vector<std::string> info_vector;
   res = consensus_ptr->changeLearners(alisql::Paxos::CCSyncLearnerAll,
                                       info_vector);
@@ -92,6 +93,7 @@ Sql_cmd *Consensus_proc_force_single_mode::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_force_single_mode::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   res = consensus_ptr->forceSingleLeader();
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
@@ -116,6 +118,7 @@ Sql_cmd *Consensus_proc_force_learner_node::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_force_learner_node::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   res = consensus_ptr->forceSingleLearner();
   LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
@@ -370,6 +373,7 @@ Sql_cmd *Consensus_proc_change_leader::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
   assert(m_consensus_proc->consensus_proc_params().size() == 1);
+  if (!consensus_ptr) return false;
   int res = 0;
 
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
@@ -404,6 +408,7 @@ Sql_cmd *Consensus_proc_add_learner::evoke_cmd(
 bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
   assert(m_consensus_proc->consensus_proc_params().size() == 1);
   int res = 0;
+  if (!consensus_ptr) return false;
 
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
@@ -425,6 +430,7 @@ bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
 }
 
 bool Sql_cmd_consensus_proc_add_learner::prepare(THD *thd) {
+  if (!consensus_ptr) return false;
   if (Sql_cmd_proc::prepare(thd)) return true;
   /* check max node number */
   if (consensus_ptr->getClusterSize() > CONSENSUS_MAX_NODE_NUMBER) {
@@ -449,6 +455,7 @@ Sql_cmd *Consensus_proc_add_follower::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_add_follower::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -466,6 +473,7 @@ bool Sql_cmd_consensus_proc_add_follower::pc_execute(THD *thd) {
 }
 
 bool Sql_cmd_consensus_proc_add_follower::prepare(THD *thd) {
+  if (!consensus_ptr) return false;
   if (Sql_cmd_proc::prepare(thd)) return true;
   /* check max node number */
   if (consensus_ptr->getClusterSize() > CONSENSUS_MAX_NODE_NUMBER) {
@@ -490,6 +498,7 @@ Sql_cmd *Consensus_proc_drop_learner::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_drop_learner::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -524,6 +533,7 @@ Sql_cmd *Consensus_proc_upgrade_learner::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_upgrade_learner::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -554,6 +564,7 @@ Sql_cmd *Consensus_proc_downgrade_follower::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_downgrade_follower::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -585,6 +596,7 @@ Sql_cmd *Consensus_proc_configure_follower::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
 
@@ -624,6 +636,7 @@ Sql_cmd *Consensus_proc_configure_learner::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_configure_learner::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
   int consensus_proc_params_idx = 0;
@@ -663,6 +676,7 @@ Sql_cmd *Consensus_proc_fix_cluster_id::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_fix_cluster_id::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -695,6 +709,7 @@ Sql_cmd *Consensus_proc_fix_matchindex::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_fix_matchindex::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
   int consensus_proc_params_idx = 0;
@@ -728,6 +743,7 @@ Sql_cmd *Consensus_proc_purge_log::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_purge_log::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -760,6 +776,7 @@ Sql_cmd *Consensus_proc_local_purge_log::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_local_purge_log::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -792,6 +809,7 @@ Sql_cmd *Consensus_proc_force_purge_log::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -825,6 +843,7 @@ Sql_cmd *Consensus_proc_drop_prefetch_channel::evoke_cmd(
 
 bool Sql_cmd_consensus_proc_drop_prefetch_channel::pc_execute(THD *thd) {
   int res = 0;
+  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 

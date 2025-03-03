@@ -13,13 +13,13 @@ select @@global.binlog_format, @@session.binlog_format;
 [on slave]
 set @old_global_binlog_format=  @@global.binlog_format;
 set @old_session_binlog_format=  @@session.binlog_format;
-include/stop_slave.inc
+include/stop_slave.inc [FOR CHANNEL 'test']
 SET GLOBAL binlog_format = 'ROW';
 SET SESSION binlog_format = 'ROW';
 select @@global.binlog_format, @@session.binlog_format;
 @@global.binlog_format	ROW
 @@session.binlog_format	ROW
-include/start_slave.inc
+include/start_slave.inc [FOR CHANNEL 'test']
 [on master]
 CREATE TABLE t1(id MEDIUMINT NOT NULL AUTO_INCREMENT,
 dt TIMESTAMP, user CHAR(255), uuidf LONGBLOB,
@@ -144,7 +144,7 @@ SUBPARTITIONS 2
  PARTITION pa9 VALUES LESS THAN (90) ENGINE = InnoDB,
  PARTITION pa10 VALUES LESS THAN (100) ENGINE = InnoDB,
  PARTITION pa11 VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
-include/check_slave_is_running.inc
+include/check_slave_is_running.inc [FOR CHANNEL 'test']
 SELECT count(*) "Slave norm" FROM t1;
 Slave norm	500
 SELECT count(*) "Slave bykey" FROM t2;
@@ -158,7 +158,7 @@ DROP PROCEDURE p1;
 DROP PROCEDURE p2;
 DROP PROCEDURE p3;
 [on slave]
-include/stop_slave_sql.inc
+include/stop_slave_sql.inc [FOR CHANNEL 'test']
 set @@global.binlog_format=  @old_global_binlog_format;
 set @@session.binlog_format=  @old_session_binlog_format;
 include/rpl_end.inc

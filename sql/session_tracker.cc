@@ -1788,7 +1788,7 @@ bool Session_index_tracker::store(THD *thd, String &buf) {
     DBUG_EXECUTE_IF(
         "ok_packet_return_index",
         sql_print_warning("Sent index in ok packet: (%lld)", ret_index););
-  } else if (is_enabled()) {
+  } else if (is_enabled() && consensus_ptr) {
     ret_index = consensus_ptr->getAppliedIndex();
     DBUG_EXECUTE_IF("ok_packet_return_index",
                     sql_print_warning("Sent lastest index in ok packet: (%lld)",

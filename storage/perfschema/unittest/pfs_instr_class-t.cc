@@ -789,6 +789,8 @@ static void do_all_tests() {
 int main(int, char **) {
   plan(209);
   MY_INIT("pfs_instr_info-t");
+  pfs_param.m_enabled = 1;
+
   do_all_tests();
   my_end(0);
   return (exit_status());

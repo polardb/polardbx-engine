@@ -28,7 +28,7 @@
 #include "sql/consensus_log_manager.h"
 #include "sql/consensus_recovery_manager.h"
 #include "sql/handler.h"
-#include "sql/mysqld.h"  // tc_heuristic_recover
+#include "sql/mysqld.h"
 
 namespace {  // Compilation unit local types and functions
 /**
@@ -191,8 +191,11 @@ bool xa::recovery::recover_prepared_in_tc_one_ht(THD *, plugin_ref plugin,
     ret = ht->recover_prepared_in_tc(ht, *info->xa_list);
     if (ret) return ret;
 
-    xp::info(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list_in_ht ";
-    ret = ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
+    if (ConsensusLogManager::enable_consensus()) {
+      xp::info(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list_in_ht ";
+      ret = ht->recover_prepared_in_tc(ht, *info->xa_list_in_ht);
+    }
+
   }
   return ret;
 }
@@ -259,14 +262,12 @@ void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
                        : tc_heuristic_recover == TC_HEURISTIC_RECOVER_COMMIT) {
     enum xa_status_code exec_status;
 
-    if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
+    if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false)) {
       exec_status = ::generate_xa_recovery_error();
-    // else
-    //   exec_status =
-    //       ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
-    else {
+    } else if (!ConsensusLogManager::enable_consensus()) {
+      exec_status = ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+    } else {
       exec_status = XA_OK;
-      // exec_status = ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
       consensus_log_manager.get_recovery_manager()
           ->add_pending_recovering_trx<
               Pending_recovering_trx::xid_type::INTERNAL>(
@@ -318,27 +319,35 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
 
   bool collect_pending_recovering_trx = false;
   auto state_in_ht{enum_ha_recover_xa_state::NOT_FOUND};
-  if (info.xa_list_in_ht != nullptr) {
-    state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
-  }
+  if (ConsensusLogManager::enable_consensus()) {
+    if (info.xa_list_in_ht != nullptr) {
+      state_in_ht = info.xa_list_in_ht->find(xa_trx.id);
+    }
 
-  xp::system(ER_XP_RECOVERY)
-      << "recover_one_external_trx "
-      << ", state: " << (int)state << ", state_in_ht: " << (int)state_in_ht
-      << ", xid: " << xa_trx.id;
+    auto iter = consensus_log_manager.get_recovery_manager()->external_xids_in_binlog.find(xa_trx.id);
+    uint64 consensus_index = 0;
+    if (iter != consensus_log_manager.get_recovery_manager()->external_xids_in_binlog.end())
+      consensus_index = iter->second;
+
+    xp::system(ER_XP_RECOVERY)
+        << "recover_one_external_trx "
+        << ", state: " << (int)state << ", state_in_ht: " << (int)state_in_ht
+        << ", xid: " << xa_trx.id
+        << ", consensus_index: " << consensus_index;
+  }
 
   switch (state) {
     case enum_ha_recover_xa_state::COMMITTED_WITH_ONEPHASE:
     case enum_ha_recover_xa_state::COMMITTED: {
       if (ht.commit_by_xid != nullptr) {
         enum xa_status_code exec_status;
-        if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
+        if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false)) {
           exec_status = ::generate_xa_recovery_error();
-        // exec_status =
-        //     ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
-        else {
+        } else if (!ConsensusLogManager::enable_consensus()) {
+          exec_status =
+              ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+        } else {
           exec_status = XA_OK;
-          // exec_status = ht.commit_by_xid(&ht, const_cast<XID *>(&xa_trx.id));
           collect_pending_recovering_trx = true;
         }
 
@@ -358,17 +367,19 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     case enum_ha_recover_xa_state::ROLLEDBACK: {
       if (ht.rollback_by_xid != nullptr) {
         enum xa_status_code exec_status;
-        if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
+        if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false)) {
           exec_status = ::generate_xa_recovery_error();
-        // else
-        // exec_status =
-        //     ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
-        else if (state == enum_ha_recover_xa_state::ROLLEDBACK) {
-          exec_status = XA_OK;
-          collect_pending_recovering_trx = true;
-        } else {
+        } else if (!ConsensusLogManager::enable_consensus()) {
           exec_status =
               ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+        } else {
+          if (state == enum_ha_recover_xa_state::ROLLEDBACK) {
+            exec_status = XA_OK;
+            collect_pending_recovering_trx = true;
+          } else {
+            exec_status =
+                ht.rollback_by_xid(&ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+          }
         }
         if (exec_status == XA_OK) {
           ::add_to_stats<STATS_SUCCESS, STATS_ROLLEDBACK>(stats);
@@ -382,18 +393,18 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
       break;
     }
     case enum_ha_recover_xa_state::PREPARED_IN_TC: {
-      //      if
-      //      (!Recovered_xa_transactions::instance().add_prepared_xa_transaction(
-      //              &xa_trx))
+      if (ConsensusLogManager::enable_consensus()
+          || !Recovered_xa_transactions::instance().add_prepared_xa_transaction(&xa_trx))
       {
         if (ht.set_prepared_in_tc_by_xid != nullptr) {
           enum xa_status_code exec_status;
-          if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false))
+          if (DBUG_EVALUATE_IF("xa_recovery_error_reporting", true, false)) {
             exec_status = ::generate_xa_recovery_error();
-          else {
+          } else if (!ConsensusLogManager::enable_consensus()) {
+            exec_status = ht.set_prepared_in_tc_by_xid(
+                &ht, const_cast<XID *>(&xa_trx.id), xa_spec);
+          } else {
             exec_status = XA_OK;
-            //            exec_status = ht.set_prepared_in_tc_by_xid(
-            //                &ht, const_cast<XID *>(&xa_trx.id), xa_spec);
             if (state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_SE) {
               collect_pending_recovering_trx = true;
             }
@@ -413,18 +424,20 @@ void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
     }
   }
 
-  // some trx in engine should forward it status by tc_log,
-  // so we need to collect it and forward it after consensus log recovery
-  if (collect_pending_recovering_trx) {
-    consensus_log_manager.get_recovery_manager()
-        ->add_pending_recovering_trx<
-            Pending_recovering_trx::xid_type::EXTERNAL>(
-            ht, state_in_ht, state, &xa_trx, *info.spec_list->find(xa_trx.id));
-  } else if (state == state_in_ht &&
-             state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_TC) {
-    if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(
-            &xa_trx)) {
-      xp::fatal(ER_XP_RECOVERY) << "add prepared xa trx failed in collecting";
+  if (ConsensusLogManager::enable_consensus()) {
+    // some trx in engine should forward it status by tc_log,
+    // so we need to collect it and forward it after consensus log recovery
+    if (collect_pending_recovering_trx) {
+      consensus_log_manager.get_recovery_manager()
+          ->add_pending_recovering_trx<
+              Pending_recovering_trx::xid_type::EXTERNAL>(
+              ht, state_in_ht, state, &xa_trx, *info.spec_list->find(xa_trx.id));
+    } else if (state == state_in_ht &&
+              state_in_ht == enum_ha_recover_xa_state::PREPARED_IN_TC) {
+      if (Recovered_xa_transactions::instance().add_prepared_xa_transaction(
+              &xa_trx)) {
+        xp::fatal(ER_XP_RECOVERY) << "add prepared xa trx failed in collecting";
+      }
     }
   }
 }

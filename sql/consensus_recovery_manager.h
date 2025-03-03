@@ -141,11 +141,11 @@ static inline bool operator<(
 class Consensus_recovery_manager {
  public:
   Consensus_recovery_manager()
-      : inited(false),
+      : external_xids_in_binlog(),
+        inited(false),
         key_LOCK_consensus_log_recover_hash(),
         last_leader_term_index(0),
         internal_xids_in_binlog(),
-        external_xids_in_binlog(),
         Pending_recovering_trxs() {}
   ~Consensus_recovery_manager() = default;
 
@@ -183,6 +183,9 @@ class Consensus_recovery_manager {
   uint64 get_max_consensus_index_from_pending_recovering_trxs();
   bool is_pending_recovering_trx_empty();
 
+ public:
+  std::map<XID, uint64> external_xids_in_binlog;
+
  private:
   bool inited;
   PSI_mutex_key key_LOCK_consensus_log_recover_hash;
@@ -190,7 +193,6 @@ class Consensus_recovery_manager {
 
   uint64 last_leader_term_index;
   std::map<uint64, uint64> internal_xids_in_binlog;
-  std::map<XID, uint64> external_xids_in_binlog;
   std::set<std::unique_ptr<Pending_recovering_trx>> Pending_recovering_trxs;
 
  private:

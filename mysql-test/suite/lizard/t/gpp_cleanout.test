@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 --echo #
 --echo # Test online gpp cleanout.
 --echo #

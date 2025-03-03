@@ -167,9 +167,6 @@ class ThreadPool {
 };
 
 extern ThreadPool *thread_pool;
-
-extern int InitThreadPool(uint32_t count);
-
 }  // namespace im
 
 #endif  // MYSQL_THREAD_POOL_H

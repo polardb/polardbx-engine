@@ -1169,8 +1169,8 @@ bool Rpl_info_factory::create_slave_info_objects(
   for (std::vector<std::string>::iterator it = channel_list.begin();
        it != channel_list.end(); ++it) {
     const char *cname = (*it).c_str();
-    // bool is_default_channel =
-    //     !strcmp(cname, pchannel_map->get_default_channel());
+    bool is_default_channel =
+        !strcmp(cname, pchannel_map->get_default_channel());
     channel_error =
         !(mi = create_mi_and_rli_objects(
               mi_option, rli_option, cname,
@@ -1179,11 +1179,9 @@ bool Rpl_info_factory::create_slave_info_objects(
       Read the channel configuration from the repository if the channel name
       was read from the repository.
     */
-    if (!channel_error) /*&&
-        (!is_default_channel || default_channel_existed_previously)) {
-      bool ignore_if_no_info = (channel_list.size() == 1) ? true : false; */
-    {
-      bool ignore_if_no_info = false;
+    if ((!channel_error) &&
+        (Multisource_info::is_xpaxos_channel(mi) || !is_default_channel || default_channel_existed_previously)) {
+      bool ignore_if_no_info = (!Multisource_info::is_xpaxos_channel(mi) && channel_list.size() == 1) ? true : false;
       channel_error = load_mi_and_rli_from_repositories(
           mi, ignore_if_no_info, thread_mask, false, true);
     }

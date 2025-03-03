@@ -214,8 +214,12 @@ void Changeset::memory_check_and_flush() {
     imm_memory_size.store(memory_size);
     memory_size.store(0);
 
-    sql_print_information("add background flush task");
-    thread_pool->Schedule(&flush_imm_table, this);
+    if (thread_pool) {
+      sql_print_information("add background flush task");
+      thread_pool->Schedule(&flush_imm_table, this);
+    } else {
+      sql_print_error("failed to add background flush because @@changeset_threads was zero");
+    }
   }
 }
 

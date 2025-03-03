@@ -150,7 +150,7 @@ void trx_cache_tcn(const trx_t *trx, bool serialised) {
 
       tcn_t value(trx->id, trx->txn_desc.cmmt, trx->txn_desc.undo_ptr,
                   txn_status_t::COMMITTED);
-      global_tcn_cache->insert(value);
+      cont->insert(value);
       TCN_CACHE_AGGR(srv_tcn_cache_level, EVICT);
     }
   }

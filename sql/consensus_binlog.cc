@@ -123,7 +123,7 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
                                                 log_content.length());
     }
-    if (!error)
+    if (!error && consensus_log_manager.get_fifo_cache_manager())
       error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
           thd->consensus_term, thd->consensus_index, blen, buffer, false, flag,
           crc32);
@@ -132,14 +132,15 @@ int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
       if (end_pos == ev->buf_len) {
         error = mysql_bin_log.write_buf_to_log_file((uchar *)ev->temp_buf,
                                                     ev->buf_len);
-        consensus_log_manager.get_fifo_cache_manager()->set_lock_blob_index(0);
+        if (consensus_log_manager.get_fifo_cache_manager())
+          consensus_log_manager.get_fifo_cache_manager()->set_lock_blob_index(0);
       } else
         error = mysql_bin_log.write_buf_to_log_file((uchar *)log_content.data(),
                                                     log_content.length());
       if (!error) {
         error = mysql_bin_log.flush_and_sync(false);
-        consensus_log_manager.set_sync_index_if_greater(thd->consensus_index);
-        alisql_server->writeLogDoneInternal(thd->consensus_index, true);
+          consensus_log_manager.set_sync_index_if_greater(thd->consensus_index);
+        if (alisql_server) alisql_server->writeLogDoneInternal(thd->consensus_index, true);
       }
     }
     DBUG_EXECUTE_IF("crash_during_large_event_binlog_flush", {
@@ -222,7 +223,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size) {
           opt_consensus_checksum ? checksum_crc32(0, buffer, batch_size) : 0;
       error = mysql_bin_log.write_consensus_log(
           flag, thd->consensus_term, batch_size); /* inc current index inside */
-      if (!error)
+      if (!error && consensus_log_manager.get_fifo_cache_manager())
         error =
             consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
                 thd->consensus_term, thd->consensus_index, batch_size, buffer,
@@ -245,7 +246,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size) {
           error = mysql_bin_log.flush_and_sync(false);
           consensus_log_manager.set_sync_index_if_greater(thd->consensus_index);
           /* use lockless writeLogDone */
-          alisql_server->writeLogDoneInternal(thd->consensus_index, true);
+          if (alisql_server) alisql_server->writeLogDoneInternal(thd->consensus_index, true);
         }
       }
       batch_size = 0;
@@ -291,7 +292,7 @@ int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size) {
     crc32 = opt_consensus_checksum ? checksum_crc32(0, buffer, batch_size) : 0;
     error = mysql_bin_log.write_consensus_log(
         flag, thd->consensus_term, batch_size); /* inc current index inside */
-    if (!error)
+    if (!error && consensus_log_manager.get_fifo_cache_manager())
       error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
           thd->consensus_term, thd->consensus_index, batch_size, buffer, false,
           flag, crc32);
@@ -1448,7 +1449,7 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
   update_binlog_end_pos(m_binlog_file->get_binlog_name(), end_pos);
   if (end_pos >= (my_off_t)max_size) *rotate_var = true;
 
-  if (opt_cluster_log_type_instance) {
+  if (opt_cluster_log_type_instance && consensus_ptr) {
     consensus_ptr->updateAppliedIndex(*index);
     replica_read_manager.update_lsn(*index);
   }
@@ -1607,7 +1608,7 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
   update_binlog_end_pos(m_binlog_file->get_binlog_name(), end_pos);
   if (end_pos >= (my_off_t)max_size) *rotate_var = true;
 
-  if (opt_cluster_log_type_instance) {
+  if (opt_cluster_log_type_instance && consensus_ptr) {
     consensus_ptr->updateAppliedIndex(*max_index);
     replica_read_manager.update_lsn(*max_index);
   }
@@ -1644,6 +1645,7 @@ int MYSQL_BIN_LOG::rotate_consensus_log() {
 
 void MYSQL_BIN_LOG::consensus_before_commit(THD *thd) {
   if (opt_initialize) return;
+  if (!consensus_ptr) return;
   if (thd->commit_error != THD::CE_NONE ||
       ((consensus_ptr->waitCommitIndexUpdate(thd->consensus_index - 1,
                                              thd->consensus_term) <
@@ -1807,7 +1809,7 @@ bool MYSQL_BIN_LOG::write_consensus_log(uint flag, uint64 term, uint64 length) {
   rev.common_footer->checksum_alg =
       static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
   if (!(rev.get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX))
-    alisql_server->setLastNonCommitDepIndex(rev.get_index());
+    if (alisql_server) alisql_server->setLastNonCommitDepIndex(rev.get_index());
   if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
     rev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
   if (write_event_to_binlog(&rev)) return true;
@@ -1965,7 +1967,9 @@ int flush_consensus_log(THD *thd, binlog_cache_data *, Binlog_event_writer *,
   // error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
   buf_size = my_b_tell(consensus_log_manager.get_cache());
   // determine whether log is too large
-  if (buf_size > opt_consensus_max_log_size) is_large_trx = true;
+  if (consensus_log_manager.get_fifo_cache_manager()
+      && buf_size > opt_consensus_max_log_size)
+    is_large_trx = true;
   // group update do not support large trx
   DBUG_EXECUTE_IF("simulate_trx_cache_error", {
     if (thd->consensus_index != 0) mark_as_rollback = true;
@@ -2006,12 +2010,15 @@ int flush_consensus_log(THD *thd, binlog_cache_data *, Binlog_event_writer *,
     if (!error) {
       uint64 crc32 =
           opt_consensus_checksum ? checksum_crc32(0, buffer, buf_size) : 0;
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-          thd->consensus_term, thd->consensus_index, buf_size, buffer, false,
-          flag, crc32, true);
+      if (consensus_log_manager.get_fifo_cache_manager())
+        error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
+            thd->consensus_term, thd->consensus_index, buf_size, buffer, false,
+            flag, crc32, true);
       if (!error) error = mysql_bin_log.write_buf_to_log_file(buffer, buf_size);
 
-      if (opt_consensus_disable_fifo_cache && buffer) my_free(buffer);
+      if ((opt_consensus_disable_fifo_cache || !consensus_log_manager.get_fifo_cache_manager())
+          && buffer)
+        my_free(buffer);
       buffer = NULL; /* fifo cache reuse the buffer */
     }
   } else {

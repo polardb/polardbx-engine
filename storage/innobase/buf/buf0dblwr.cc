@@ -3440,7 +3440,9 @@ dberr_t dblwr::recv::load(recv::Pages *pages) noexcept {
         ids.push_back(id);
       } else {
         ib::info(ER_IB_MSG_DBLWR_1310)
-            << "Ignoring " << file << " - page size doesn't match";
+            << "Ignoring " << file << " - page size doesn't match"
+            << ", " << page_size
+            << ":" << srv_page_size;
       }
     } else {
       ib::warn(ER_IB_MSG_DBLWR_1311)
@@ -3550,7 +3552,9 @@ dberr_t dblwr::recv::reduced_load(recv::Pages *pages) noexcept {
         ids.push_back(id);
       } else {
         ib::info(ER_IB_MSG_DBLWR_1310)
-            << "Ignoring " << file << " - page size doesn't match";
+            << "Ignoring " << file << " - page size doesn't match"
+            << ", " << page_size
+            << ":" << srv_page_size;
       }
     } else {
       ib::warn(ER_IB_MSG_DBLWR_1311)

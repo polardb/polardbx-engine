@@ -134,6 +134,21 @@ class Cserver final {
                                     : rpc_port;
     if (port > 0 && port < 65536 && new_rpc && !xcluster_standalone) {
 #endif
+      constexpr auto HIST_GRANULARITY = 1024;
+      constexpr auto HIST_MIN_VALUE = 1e-9;  /// 1ns
+      constexpr auto HIST_MAX_VALUE = 99.;   /// 99s
+
+      g_work_queue_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_recv_first_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_recv_all_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_decode_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_schedule_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_run_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_timer_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_cleanup_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_fin_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+      g_auth_hist = new Chistogram(HIST_GRANULARITY, HIST_MIN_VALUE, HIST_MAX_VALUE);
+
       /// init server and bind port
       Clistener::start(static_cast<uint16_t>(port));
       /// init watch dog

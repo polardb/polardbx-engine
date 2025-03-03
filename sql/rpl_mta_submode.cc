@@ -27,6 +27,7 @@
 #include <time.h>
 #include <memory>
 
+#include "consensus_log_manager.h"
 #include "lex_string.h"
 #include "libbinlogevents/include/compression/iterator.h"
 #include "m_string.h"
@@ -645,7 +646,8 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
 
       // GalaxyEngine slave does not rotated as leader, so need decided
       // logically
-      if (sequence_number == 1 || last_sequence_number == 0) {
+      if (ConsensusLogManager::enable_consensus()
+          && (sequence_number == 1 || last_sequence_number == 0)) {
         first_event = true;
         force_new_group = true;
       }

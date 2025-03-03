@@ -380,7 +380,7 @@ static bool invalid_on_consensus_force_recovery_limited(enum_sql_command cmd) {
 int consensus_command_limit(THD *thd) {
   /* rw check: leader read-write, others read-only */
   bool reject_query = false;
-  bool is_leader = false;
+  bool is_leader = !ConsensusLogManager::enable_consensus();
   DBUG_ENTER("consensus_command_limit");
   // dd_upgrade execute inner sql before consensus module startup
   if (!opt_initialize && consensus_ptr != NULL) {
@@ -505,8 +505,7 @@ int start_consensus_apply_threads() {
 
       // Todo: mi must be itself
       /* If server id is not set, start_slave_thread() will say it */
-      if (mi &&
-          channel_map.is_xpaxos_replication_channel_name(mi->get_channel())) {
+      if (mi && channel_map.is_xpaxos_channel(mi)) {
         /* same as in start_slave() cache the global var values into rli's
          * members */
         mi->rli->opt_replica_parallel_workers =

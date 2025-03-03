@@ -3669,6 +3669,21 @@ uint64_t Paxos::collectMinMatchIndex(std::vector<ClusterInfoType> &cis,
   return ret;
 }
 
+uint64_t Paxos::getSafetyIndexForPurge() {
+  if (state_ == CANDIDATE || state_ == NOROLE)
+    return 0;
+
+  if (state_ != LEADER)
+    return getAppliedIndex();
+
+  std::vector<Paxos::ClusterInfoType> cis;
+  getClusterInfo(cis);
+  if (cis.size() == 0)
+    return 0;
+
+  return collectMinMatchIndex(cis, false, getAppliedIndex());
+}
+
 int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
   if (local == false && state_ != LEADER) {
     return -1;

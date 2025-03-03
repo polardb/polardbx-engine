@@ -74,12 +74,10 @@ cd $OLDPWD/../
 
 cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
 
-mach_type=`uname -m`;
-
-if [ x"$mach_type" = x"aarch64" ]; then
-    CFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
-    CXXFLAGS="-O3 -g -fexceptions -fno-strict-aliasing -Wl,-Bsymbolic"
-else
+%if "%{?_arch}" == "aarch64"
+    CFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
+    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
+%else
     CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
     CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
 fi
@@ -131,9 +129,8 @@ $CMAKE_BIN .                            \
 
 %install
 cd $OLDPWD/../
-make DESTDIR=$RPM_BUILD_ROOT install -j `cat /proc/cpuinfo | grep processor| wc -l`
-# releaseNote.txt
-# cp releaseNote.txt $RPM_BUILD_ROOT%{prefix}
+MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
+make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 # mkdir -p $RPM_BUILD_ROOT%{prefix}/mysqlmisc

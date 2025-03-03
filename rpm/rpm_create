@@ -1,0 +1,164 @@
+#!/bin/sh
+
+TOP_DIR=".rpm_create"
+CRON_DIR="/etc/cron.d"
+DFT_PREFIX="/home/a"
+DFT_RELEASE=1
+DFT_VERSION=0.0.1
+
+LANG=C
+export LANG
+
+usage()
+{
+  echo "Usage:"
+  echo "  rpm_create -p <\$PREFIX> -v <version number> -r <release number> -t <target> -k"
+  echo "Default prefix is: /home/a"
+  echo "Default version number is: 0.0.1"
+  echo "Default release number is: 1"
+  echo "Default target is: 'uname -p', and target maybe: i686-redhat-linux"
+  echo "-k: keep the dir of arch"
+  echo "-s: create both binnary rpm and src.rpm and can buld rpm from src.rpm"
+  exit 0
+}
+
+svn_path="Unknown_path"
+svn_revision="Unknown_revision"
+svn_info()
+{
+  str=`svn info 2>/dev/null |
+  awk -F': ' '{if($1=="URL") print $2}'`
+
+  if [ -z "$str" ]; then return; fi
+
+  svn_path=$str
+  str=`svn info  2>/dev/null |
+  awk -F': ' '{if($1=="Revision") print $2}'`
+
+  if [ -z "$str" ]; then
+    echo "!! Please upgrade your subversion: sudo yum install subversion"
+    return;
+  fi
+
+  svn_revision=$str
+}
+
+prefix=${PREFIX:-${DFT_PREFIX}}
+release=${RELEASE:-${DFT_RELEASE}}
+version=${VERSION:-${DFT_VERSION}}
+
+TEMP=`getopt -o p:v:r:t:hks -- "$@"`
+eval set -- "$TEMP"
+
+keep=0
+while true ; do
+  case "$1" in
+    -k) keep=1; shift ;;
+    -s) NEED_SRC=1;shift;;
+    -h) usage; shift ;;
+    -p) prefix=$2; shift 2 ;;
+    -v) version=$2; shift 2 ;;
+    -r) release=$2; shift 2 ;;
+    -t) target=$2; shift 2 ;;
+    --) shift; break;;
+    *) echo "Internal error!"; exit 1;;
+  esac
+done
+
+
+RPM_MACROS=$HOME/.rpmmacros
+if [ -e $RPM_MACROS ]; then
+  mv -f $RPM_MACROS $RPM_MACROS.bak
+fi
+
+svn_info
+ABS_PATH=`pwd`
+
+echo "%_topdir $ABS_PATH/$TOP_DIR" > $RPM_MACROS
+echo "%_prefix $prefix" >> $RPM_MACROS
+if [ -n "$CALLER" ];then
+    echo "%packager $CALLER"  >> $RPM_MACROS
+else
+    echo "%packager " `whoami` >> $RPM_MACROS
+fi
+echo "%vendor TaoBao Inc." >> $RPM_MACROS
+echo "%_svn_path $svn_path" >> $RPM_MACROS
+echo "%_svn_revision $svn_revision" >> $RPM_MACROS
+echo "%_version $version" >> $RPM_MACROS
+echo "%_release $release" >> $RPM_MACROS
+echo "%_crondir $CRON_DIR" >> $RPM_MACROS
+echo "%_crontab ./$CRON_DIR/%{name}" >> $RPM_MACROS
+# Disable the checking of missing package files
+# For detail: http://www.oldrpm.org/hintskinks/unpackaged/
+echo "%_unpackaged_files_terminate_build 0" >> $RPM_MACROS
+if [ -n "$target" ]; then
+  echo $target | grep "64" 2>&1 >/dev/null
+  if [ $? -ne 0 ]; then
+    echo "%_lib lib" >> $RPM_MACROS
+  fi
+fi
+
+if [ $# -gt 0 ]; then
+  specs=$@
+else
+  specs=`ls *.spec 2>/dev/null`
+fi
+
+if [ -n "$target" ]; then
+  target="--target $target"
+fi
+
+for i in $specs; do
+#trap "rm -rf $TOP_DIR" 0
+  rm -rf $TOP_DIR
+  mkdir -p $TOP_DIR/RPMS
+  mkdir -p $TOP_DIR/SRPMS
+  mkdir -p $TOP_DIR/SOURCES
+  mkdir -p $TOP_DIR/BUILD/$prefix
+  mkdir -p $TOP_DIR/BUILD/$CRON_DIR
+  grep -i -q -P  "^source\d*:" $i
+  if [ $? = 0 ];then
+      rpmname=`grep -i -E "^Name:" $i|sed  "s/Name\s*:\s*//" `
+      rpmv=`grep -i -E "^Version:" $i|sed  "s/Version\s*:\s*//" `
+      rpmname=`echo $rpmname|sed "s/^ //g"`
+      rpmv=`echo $rpmv|sed "s/^ //g"`
+      for s in `grep -i -P  "^source\d*:" $i|awk -F':' '{print $NF}'`
+      do
+     s=`echo $s|awk -F'/' '{print $NF}'`
+     s=${s//\{/}
+     s=${s//\}/}
+     s=${s/\%name/$rpmname}
+     s=${s/\%version/$rpmv}
+     find ../ -name "$s" -exec cp {} $TOP_DIR/SOURCES 2>/dev/null \;
+      done
+      for s in `grep -i -P  "^patch\d*:" $i|awk -F':' '{print $2}'`
+      do
+     s=${s//\{/}
+     s=${s//\}/}
+     s=${s/\%name/$rpmname}
+     s=${s/\%version/$rpmv}
+     find ../ -name "$s" -exec cp {} $TOP_DIR/SOURCES 2>/dev/null \;
+      done
+  fi
+  if [ "$NEED_SRC" = 1 ];then
+     echo "$i" |grep -q ".src.rpm$"
+         if test $? = 0;then
+            echo "info:build rpm from src.rpm"
+        VERSION=$version RELEASE=$release rpmbuild --rebuild --buildroot $ABS_PATH/$TOP_DIR/BUILD $i
+     else
+        VERSION=$version RELEASE=$release rpmbuild -ba $target --buildroot $ABS_PATH/$TOP_DIR/BUILD $i
+     fi
+  else
+      VERSION=$version RELEASE=$release rpmbuild -bb $target --buildroot $ABS_PATH/$TOP_DIR/BUILD $i
+  fi
+  if [ $keep -eq 0 ];then
+    find $TOP_DIR/ -name "*.rpm"  -exec mv {} . \;
+  else
+    cp -rf $TOP_DIR/{RPMS,SRPMS}/* .
+  fi
+done
+
+rm -rf $TOP_DIR $RPM_MACROS
+if [ -e $RPM_MACROS.bak ]; then
+  mv -f $RPM_MACROS.bak $RPM_MACROS
+fi

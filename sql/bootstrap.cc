@@ -70,15 +70,28 @@
 
 namespace bootstrap {
 
+File_command_iterator::File_command_iterator(
+  const char *file_name, MYSQL_FILE *input, fgets_fn_t fgets_fn)
+    : m_input(input), m_fgets_fn(fgets_fn)
+{
+  m_parser_state.init(file_name);
+  m_query_buffer = new char[MAX_BOOTSTRAP_QUERY_SIZE];
+}
+
+File_command_iterator::~File_command_iterator()
+{
+  delete[] m_query_buffer;
+}
+
 int File_command_iterator::next(std::string &query) {
-  static char query_buffer[MAX_BOOTSTRAP_QUERY_SIZE];
+  // static char query_buffer[MAX_BOOTSTRAP_QUERY_SIZE];
   size_t length = 0;
   int rc;
 
-  rc = read_bootstrap_query(query_buffer, &length, m_input, m_fgets_fn,
+  rc = read_bootstrap_query(m_query_buffer, &length, m_input, m_fgets_fn,
                             &m_parser_state);
   if (rc == READ_BOOTSTRAP_SUCCESS) {
-    query.assign(query_buffer, length);
+    query.assign(m_query_buffer, length);
   }
   return rc;
 }
@@ -95,8 +108,6 @@ static char *mysql_file_fgets_fn(char *buffer, size_t size, MYSQL_FILE *input,
   }
   return line;
 }
-
-File_command_iterator::~File_command_iterator() = default;
 
 static void bootstrap_log_error(const char *message) {
   my_printf_error(ER_UNKNOWN_ERROR, "%s", MYF(0), message);
@@ -285,9 +296,11 @@ static int process_iterator(THD *thd, Command_iterator *it,
   }
 
   // bootstrap set consensus info meta info
-  Consensus_info *consensus_info = consensus_log_manager.get_consensus_info();
-  if (consensus_info->consensus_init_info()) abort();
-  consensus_info->flush_info(true, true);
+  if (ConsensusLogManager::enable_consensus()) {
+    Consensus_info *consensus_info = consensus_log_manager.get_consensus_info();
+    if (consensus_info->consensus_init_info()) abort();
+    consensus_info->flush_info(true, true);
+  }
 
   it->end();
 

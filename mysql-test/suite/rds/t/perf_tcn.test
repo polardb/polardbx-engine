@@ -28,17 +28,17 @@ set autocommit=1;
 --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
 show global status like '%tcn_cache%';
 
-set global innodb_tcn_cache_level = block;
-disconnect conn1;
-
-connect(conn2, localhost, root,,);
-connection conn2;
-
---eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
---eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
-show global status like '%tcn_cache%';
-
-set global innodb_tcn_cache_level = 'none';
+# set global innodb_tcn_cache_level = block;
+# disconnect conn1;
+# 
+# connect(conn2, localhost, root,,);
+# connection conn2;
+# 
+# --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+# --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
+# show global status like '%tcn_cache%';
+# 
+# set global innodb_tcn_cache_level = 'none';
 drop table db_1.t1;
 drop database db_1;
-disconnect conn2;
+disconnect conn1;

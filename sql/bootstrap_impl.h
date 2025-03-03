@@ -62,10 +62,7 @@ class Command_iterator {
 class File_command_iterator : public Command_iterator {
  public:
   File_command_iterator(const char *file_name, MYSQL_FILE *input,
-                        fgets_fn_t fgets_fn)
-      : m_input(input), m_fgets_fn(fgets_fn) {
-    m_parser_state.init(file_name);
-  }
+                        fgets_fn_t fgets_fn);
   virtual ~File_command_iterator();
 
   int next(std::string &query) override;
@@ -76,6 +73,7 @@ class File_command_iterator : public Command_iterator {
   bootstrap_parser_state m_parser_state;
   MYSQL_FILE *m_input;
   fgets_fn_t m_fgets_fn;
+  char *m_query_buffer{nullptr};
 };
 
 }  // namespace bootstrap
