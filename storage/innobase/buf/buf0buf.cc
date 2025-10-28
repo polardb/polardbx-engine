@@ -551,7 +551,8 @@ void buf_page_print(const byte *read_buf, const page_size_t &page_size,
     ib::info(ER_IB_MSG_51) << "Page dump in ascii and hex ("
                            << page_size.physical() << " bytes):";
 
-    ut_print_buf(stderr, read_buf, page_size.physical());
+    const auto print_size = std::min(page_size.physical(), size_t(256));
+    ut_print_buf(stderr, read_buf, print_size);
     fputs("\nInnoDB: End of page dump\n", stderr);
   }
 
