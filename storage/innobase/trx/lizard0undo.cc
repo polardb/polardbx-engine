@@ -1603,17 +1603,13 @@ commit_mark_t txn_free_get_last_log(trx_rseg_t *rseg, fil_addr_t &addr,
 bool txn_retention_satisfied(utc_t utc) {
   ut_ad(utc > 0);
 
-  auto cur_utc = ut_time_system_us();
-  std::chrono::microseconds elapsed_time(cur_utc - utc);
+  ib_time_system_us_t cur_utc = ut_time_system_us();
   std::chrono::microseconds retention_time =
       std::chrono::seconds(txn_retention_time);
-  ut_a(elapsed_time.count() > 0);
-
-  if (elapsed_time > retention_time) {
-    return true;
+  if (cur_utc < static_cast<int64_t>(utc) + retention_time.count()) {
+    return false;
   }
-
-  return false;
+  return true;
 }
 
 static void txn_free_remove_page(trx_rsegf_t *rseg_hdr, page_t *undo_page,
