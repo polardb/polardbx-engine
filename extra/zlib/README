@@ -1,0 +1,231 @@
+The zlib sources in "zlib-1.2.13/" are the upstream release, plus one addition:
+an x86_64 PCLMULQDQ / VPCLMULQDQ implementation of "crc32_z()", which takes
+over from zlib's own table driven code at run time when the CPU supports it.
+
+"zlib-1.2.13/README" is the upstream zlib README and has nothing to do with
+this file.
+
+Scope of the modification
+-------------------------
+
+New files, added by this fork (see the Origin section for authorship). None of
+them shadows or rewrites an upstream zlib file, and together the five are 817
+lines:
+
+    zlib-1.2.13/arch_x86.c                CPU feature detection (CPUID/XGETBV)
+    zlib-1.2.13/arch_x86.h
+    zlib-1.2.13/crc32_x86.h               PCLMULQDQ/VPCLMULQDQ folding kernels
+    zlib-1.2.13/crc32_x86_pclmul.c        AVX (128 bit) translation unit
+    zlib-1.2.13/crc32_x86_vpclmulqdq.c    AVX-512/VPCLMULQDQ translation unit
+
+Modified upstream files, 48 added lines in "crc32.c" and 15 in "CMakeLists.txt".
+The delta is small enough to list in full. It is guarded by one of two
+conditions: the architecture macros "__x86_64__" and "__amd64__", which decide
+whether the addition exists at all, and "ZLIB_X86_64_CRC32_PCLMUL", which
+"arch_x86.h" defines and which guards the code that actually uses the kernels.
+
+    "zlib-1.2.13/crc32.c", five hunks
+
+      - after the "#include \"zutil.h\"" line, the header of the addition,
+        guarded by "__x86_64__" / "__amd64__" so that
+        "ZLIB_X86_64_CRC32_PCLMUL" stays undefined on every other target:
+
+            #if defined(__x86_64__) || defined(__amd64__)
+            #include "arch_x86.h"
+            #endif
+
+      - the "DYNAMIC_CRC_TABLE" declaration block, moved from just after
+        "#define POLY 0xedb88320" to just after the "#endif" that closes
+        "once()". A pure relocation, not one line changed, so it carries no
+        guard. The Re-applying section below says why the move is needed.
+
+      - after the closing brace of "get_crc_table()", guarded by
+        "ZLIB_X86_64_CRC32_PCLMUL", the dispatch state:
+
+            #ifdef ZLIB_X86_64_CRC32_PCLMUL
+            static unsigned long (*crc32_x86_fp)(unsigned long crc, const unsigned char FAR* buf,
+                                                 z_size_t len) = NULL;
+            local once_t crc32_x86_once = ONCE_INIT;
+
+            static void crc32_x86_init(void) {
+                crc32_x86_fp = NULL;
+            #ifdef HAVE_VPCLMULQDQ_ATTRIBUTE
+                if (has_crc32_x86_avx512())
+                    crc32_x86_fp = crc32_z_impl_x86_avx512;
+                else
+            #endif
+                if (has_crc32_x86_avx())
+                    crc32_x86_fp = crc32_z_impl_x86_avx;
+            }
+
+            static void crc32_x86_setup_native(void) {
+                once(&crc32_x86_once, crc32_x86_init);
+            }
+            #endif /* ZLIB_X86_64_CRC32_PCLMUL */
+
+      - in "crc32_z()", after the "if (buf == Z_NULL) return 0;" early return:
+
+            #ifdef ZLIB_X86_64_CRC32_PCLMUL
+                crc32_x86_setup_native();
+                if (crc32_x86_fp != NULL)
+                    return crc32_x86_fp(crc, buf, len);
+            #endif
+
+        It is the only call site, and when "crc32_x86_fp" is still NULL the
+        function falls through to the table driven code below it.
+
+    "zlib-1.2.13/CMakeLists.txt", one hunk, 15 lines
+
+      - after the "set(ZLIB_SRCS ...)" list and before "if(NOT MINGW)":
+
+            check_c_source_compiles("
+                #if !defined(__x86_64__) && !defined(__amd64__)
+                #  error not an x86_64 target
+                #endif
+                int main(void) { return 0; }" ZLIB_TARGET_X86_64)
+
+            if(ZLIB_TARGET_X86_64)
+                LIST(APPEND ZLIB_PRIVATE_HDRS arch_x86.h
+                                              crc32_x86.h)
+
+                LIST(APPEND ZLIB_SRCS arch_x86.c
+                                      crc32_x86_pclmul.c
+                                      crc32_x86_vpclmulqdq.c)
+            endif()
+
+The same anchors appear in the Re-applying section below, with the number of
+lines each hunk adds.
+
+The addition is covered by "unittest/gunit/mysys_my_checksum-t.cc", the only
+file outside "extra/zlib/" that names the added symbols. It declares
+"has_crc32_x86_avx()", "has_crc32_x86_avx512()" and "crc32_z_impl_x86_avx",
+declares "crc32_z_impl_x86_avx512" weak, and calls the two implementations
+directly next to "crc32_z()", so it exercises the kernels and the dispatch
+both. That file lies outside "extra/zlib/", so no grep over that directory
+shows its delta, which is three architecture guards and three compiler guards:
+
+    #if defined(__x86_64__) || defined(__amd64__)
+        the extern "C" block declaring those four symbols
+        VerifyAgainstTableAndZlib()
+        the six SIMD tests: Crc32ZMatchesAvxImplementationWhenSupported,
+        Crc32ZDispatchesToAvxImplementationWhenSupported,
+        ShortLengthWithNonZeroSeedMatchesReference,
+        SixteenByteBoundaryWithVariousOffsets, and, under the compiler guard
+        below, Crc32ZDispatchesToAvx512ImplementationWhenSupported and
+        Crc32ZMatchesAvx512ImplementationWhenSupported
+
+    #if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ >= 8))
+        the weak declaration of crc32_z_impl_x86_avx512
+        the skip inside Crc32ZDispatchesToAvxImplementationWhenSupported, for
+        the case where crc32_z already takes the AVX-512 path
+        Crc32ZDispatchesToAvx512ImplementationWhenSupported
+        Crc32ZMatchesAvx512ImplementationWhenSupported
+
+Those two compiler guards name "crc32_z_impl_x86_avx512", which exists only
+where "HAVE_VPCLMULQDQ_ATTRIBUTE" in "arch_x86.h" is set, so they carry the
+same condition as that macro. Because the declaration is weak, a build that
+leaves the AVX-512 kernel out still links: the symbol resolves to NULL, both
+AVX-512 tests skip on it, and the AVX (128 bit) tests keep running against
+"crc32_z_impl_x86_avx".
+
+Re-applying after a zlib upgrade
+--------------------------------
+
+The five new files listed above are the ones to carry over; they do not depend
+on the zlib version. They include only "zutil.h", the generated "crc32.h"
+tables and standard or compiler intrinsic headers, so they can be copied
+unchanged next to a newer zlib. The same addition has already been applied on
+top of zlib 1.3.1, where none of the five needed a change for the version. The
+two upstream files, "crc32.c" and "CMakeLists.txt", have to be patched again at
+the anchors below; locate them by the upstream text they attach to, never by
+line number.
+
+    file            anchor                                             lines
+    ---------------------------------------------------------------------------
+    crc32.c         after  #include "zutil.h" ... FAR definitions */      4
+    crc32.c         move the DYNAMIC_CRC_TABLE declaration block that
+                    follows  #define POLY 0xedb88320  down to just after
+                    the #endif that closes the once() definition        17
+    crc32.c         after the closing brace of get_crc_table()          21
+    crc32.c         in crc32_z(), after  if (buf == Z_NULL) return 0;    6
+    CMakeLists.txt  after the set(ZLIB_SRCS ...) list, before
+                    if(NOT MINGW)                                      15
+
+"lines" is the number of lines the hunk adds. The relocation counts twice, 17
+lines removed where the block used to be and 17 added where it goes.
+
+The relocation in "crc32.c" needs a note, since it is the only hunk that
+touches code it does not add. In zlib 1.2.13 the "once()" helper is compiled
+only when "DYNAMIC_CRC_TABLE" is defined, and the default bundled build does
+not define it, because the CRC tables come from the checked in "crc32.h". The
+dispatch state needs the same one time, thread safe initialisation, so instead
+of adding a second once mechanism the declaration block was moved below
+"once()", which makes the existing helper compile unconditionally. It is a pure
+move: nothing inside the block changed, the "DYNAMIC_CRC_TABLE" build keeps the
+same helper, the same declarations and the same state object, and only the
+point at which that region opens has moved 17 lines down.
+
+Platforms
+---------
+
+The SIMD code is used only when three things hold at once: the target is
+x86_64, the compiler can build the code, and the CPU and the operating system
+support the instructions. The first two are settled at build time, by whoever
+can answer them, and the third at run time.
+
+At build time, the target. "crc32.c" includes "arch_x86.h" when "__x86_64__" or
+"__amd64__" is defined, and "zlib-1.2.13/CMakeLists.txt" asks the compiler the
+same question through "check_c_source_compiles", caching the answer in
+"ZLIB_TARGET_X86_64"; only when that is true are the three sources and the two
+headers appended to "ZLIB_SRCS" and "ZLIB_PRIVATE_HDRS". Both tests read the
+compiler's target rather than the machine CMake runs on, which is what makes a
+cross build or an "-m32" build come out right, and it is also why the source
+test and the CMake test cannot disagree with each other. On any other target
+none of the added sources are compiled, and "crc32.c" is the upstream file, the
+bundled build defines neither "DYNAMIC_CRC_TABLE" nor "ARMCRC32" and takes its
+CRC from the checked in tables.
+
+At build time, the compiler. gcc and clang both work: they define the macros
+above, they accept the "__attribute__ ((target (...)))" that "crc32_x86.h" puts
+on each kernel, and they accept the GNU style inline asm that "arch_x86.c" uses
+for cpuid and xgetbv. clang defines "__x86_64__" for every x86-64 target, a
+Windows one included, so the tests above admit it. cl.exe is not supported: it
+defines "_M_X64" rather than "__x86_64__", so the tests above already leave it
+out, and it provides neither of those extensions. Within gcc and clang, one
+kernel asks for more than the other. The AVX (128 bit) translation unit needs
+only the "avx,pclmul" target attribute, while "crc32_x86_vpclmulqdq.c" needs
+"avx,pclmul,avx512f,vpclmulqdq", which "arch_x86.h" tests as
+"HAVE_VPCLMULQDQ_ATTRIBUTE" (gcc 8 or later, or clang); that macro is the only
+compiler version floor in the addition. Without it that file compiles to a
+placeholder instead of a kernel, "crc32_z_impl_x86_avx512" does not exist, and
+only the AVX path is registered.
+
+At run time, the CPU and the operating system. The check runs once per process,
+out of the first "crc32_z()" call. "has_crc32_x86_avx()" reads CPUID leaf 1 for
+PCLMULQDQ, AVX and OSXSAVE, then XCR0 for the YMM state;
+"has_crc32_x86_avx512()" reads CPUID leaf 1 for OSXSAVE, XCR0 for the YMM and
+ZMM states, and CPUID leaf 7 for AVX512F, AVX512VL and VPCLMULQDQ. When neither
+holds, "crc32_x86_fp" stays NULL and "crc32_z()" falls through to the code
+below its dispatch, which is the upstream behaviour.
+
+Origin
+------
+
+The SIMD kernels implement the folding CRC32 algorithm of the Intel
+implementation, whose notices "crc32_x86.h" carries: copyright (C) 2013 Intel
+Corporation, copyright (C) 2016 Marian Beermann (support for the initial
+value), copyright Wangyang Guo (wangyang.guo@intel.com), plus "Modifications
+Copyright (C) 2024-2025, Advanced Micro Devices" for the changes made here.
+"crc32_x86_pclmul.c" and "crc32_x86_vpclmulqdq.c" carry copyright (C) 2022-2025,
+Advanced Micro Devices, with the three clause BSD text. "arch_x86.c" and
+"arch_x86.h" were written for this fork and carry copyright (c) 2026, Chengdu
+Haiguang IC Design Co., Ltd.
+
+Removing the modification
+-------------------------
+
+The addition is self contained and can be dropped at any time: revert the
+commit that introduced it, which also removes the guards and the six tests it
+adds to "unittest/gunit/mysys_my_checksum-t.cc". No file outside "extra/zlib/"
+includes the added headers, and that unit test is the only file elsewhere that
+names the added symbols.
