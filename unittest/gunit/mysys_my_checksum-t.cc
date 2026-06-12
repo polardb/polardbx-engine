@@ -21,6 +21,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <algorithm>
+#include <array>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -33,6 +35,21 @@
 using namespace mycrc32;
 
 namespace mysys_my_checksum {
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
+extern "C" {
+int has_crc32_x86_avx(void);
+int has_crc32_x86_avx512(void);
+unsigned long crc32_z_impl_x86_avx(unsigned long crc,
+                                   const unsigned char FAR *buf, z_size_t len);
+#if defined(__GNUC__) && (__GNUC__ >= 8)
+unsigned long crc32_z_impl_x86_avx512(unsigned long crc,
+                                      const unsigned char FAR *buf, z_size_t len)
+    __attribute__((weak));
+#endif
+}
+#endif
+
 std::uint32_t VerifyChecksumFuncs(const unsigned char *buf,
                                   std::size_t length) {
   std::uint32_t crc_seed = 0xbadcafe;
@@ -42,6 +59,34 @@ std::uint32_t VerifyChecksumFuncs(const unsigned char *buf,
   EXPECT_EQ(expected_crc, PunnedCrc32<std::uint64_t>(crc_seed, buf, length));
   return expected_crc;
 }
+
+std::uint32_t TableCrc32Reference(std::uint32_t crc_seed,
+                                  const unsigned char *buf,
+                                  std::size_t length) {
+  const z_crc_t FAR *table = get_crc_table();
+  std::uint32_t crc = (~crc_seed) & 0xffffffffU;
+  for (std::size_t i = 0; i < length; ++i) {
+    crc = (crc >> 8) ^ static_cast<std::uint32_t>(table[(crc ^ buf[i]) & 0xffU]);
+  }
+  return crc ^ 0xffffffffU;
+}
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
+void VerifyAgainstTableAndZlib(
+    const std::vector<unsigned char> &data, std::size_t offset, std::size_t len,
+    std::uint32_t seed,
+    unsigned long (*impl)(unsigned long, const unsigned char FAR *, z_size_t)) {
+  const unsigned char *ptr = data.data() + offset;
+  const std::uint32_t table_crc = TableCrc32Reference(seed, ptr, len);
+  const std::uint32_t z_crc = crc32_z(seed, ptr, len);
+  const std::uint32_t simd_crc = impl(seed, ptr, len);
+
+  EXPECT_EQ(table_crc, z_crc)
+      << "offset=" << offset << " seed=" << seed << " len=" << len;
+  EXPECT_EQ(table_crc, simd_crc)
+      << "offset=" << offset << " seed=" << seed << " len=" << len;
+}
+#endif
 
 TEST(MysysMyChecksum, EmptyBuffer) {
   unsigned char b[1] = {'0'};
@@ -120,6 +165,176 @@ TEST(MysysMyChecksum, IntegerCrc32_64bit) {
   std::uint32_t zres = crc32_z(~crc, value_bytes, sizeof(value_bytes));
   EXPECT_EQ(IntegerCrc32(crc, value), ~zres);
 }
+
+#if defined(__x86_64__) || defined(__amd64__) || defined(_M_X64)
+TEST(MysysMyChecksum, Crc32ZMatchesAvxImplementationWhenSupported) {
+  if (!has_crc32_x86_avx()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX+PCLMUL CRC32";
+  }
+
+  std::vector<unsigned char> data(8192 + 257);
+  unsigned char v = 0x5a;
+  std::generate(data.begin(), data.end(), [&] { return ++v; });
+
+  const std::array<std::size_t, 22> lengths = {
+      0,    1,    2,    3,    7,    8,    9,    15,   16,   31,   32,
+      63,   64,   65,   127,  128,  255,  256,  511,  4096, 7777, 8192};
+  const std::array<std::uint32_t, 4> seeds = {0u, 1u, 0xbadcafeu, 0xdeadcafeu};
+  const std::array<std::size_t, 4> offsets = {0, 1, 3, 7};
+
+  for (std::uint32_t seed : seeds) {
+    for (std::size_t offset : offsets) {
+      for (std::size_t len : lengths) {
+        VerifyAgainstTableAndZlib(data, offset, len, seed, crc32_z_impl_x86_avx);
+      }
+    }
+  }
+}
+
+TEST(MysysMyChecksum, Crc32ZDispatchesToAvxImplementationWhenSupported) {
+  if (!has_crc32_x86_avx()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX+PCLMUL CRC32";
+  }
+#if defined(__GNUC__) && (__GNUC__ >= 8)
+  if (crc32_z_impl_x86_avx512 != nullptr && has_crc32_x86_avx512()) {
+    GTEST_SKIP() << "crc32_z uses AVX512 path on this CPU";
+  }
+#endif
+
+  alignas(alignof(std::uint64_t)) unsigned char buf[256];
+  unsigned char v = 0x3c;
+  std::generate(buf, buf + sizeof(buf), [&] { return v += 0x11; });
+
+  const std::array<std::size_t, 6> lengths = {0, 16, 64, 127, 255, 256};
+  const std::array<std::uint32_t, 3> seeds = {0u, 0xbadcafeu, 0xffffffffu};
+  const std::array<std::size_t, 3> offsets = {0, 3, 7};
+
+  for (std::uint32_t seed : seeds) {
+    for (std::size_t offset : offsets) {
+      for (std::size_t len : lengths) {
+        const unsigned char *ptr = buf + offset;
+        const std::uint32_t z_crc = crc32_z(seed, ptr, len);
+        const std::uint32_t avx_crc =
+            crc32_z_impl_x86_avx(seed, ptr, len);
+        EXPECT_EQ(avx_crc, z_crc)
+            << "offset=" << offset << " seed=" << seed << " len=" << len;
+      }
+    }
+  }
+}
+
+TEST(MysysMyChecksum, ShortLengthWithNonZeroSeedMatchesReference) {
+  if (!has_crc32_x86_avx()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX+PCLMUL CRC32";
+  }
+
+  std::vector<unsigned char> data(32);
+  unsigned char v = 0xa0;
+  std::generate(data.begin(), data.end(), [&] { return ++v; });
+
+  const std::array<std::size_t, 4> lengths = {12, 13, 14, 15};
+  const std::uint32_t seed = 0xbadcafeu;
+  const std::array<std::size_t, 4> offsets = {0, 1, 3, 7};
+
+  for (std::size_t offset : offsets) {
+    for (std::size_t len : lengths) {
+      const unsigned char *ptr = data.data() + offset;
+      VerifyAgainstTableAndZlib(data, offset, len, seed,
+                                crc32_z_impl_x86_avx);
+      EXPECT_EQ(crc32_z(seed, ptr, len),
+                crc32_z_impl_x86_avx(seed, ptr, len))
+          << "offset=" << offset << " len=" << len;
+    }
+  }
+}
+
+TEST(MysysMyChecksum, SixteenByteBoundaryWithVariousOffsets) {
+  if (!has_crc32_x86_avx()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX+PCLMUL CRC32";
+  }
+
+  std::vector<unsigned char> data(48);
+  unsigned char v = 0x11;
+  std::generate(data.begin(), data.end(), [&] { return v += 7; });
+
+  constexpr std::size_t len = 16;
+  const std::array<std::uint32_t, 3> seeds = {0u, 0xbadcafeu, 0xffffffffu};
+  const std::array<std::size_t, 5> offsets = {0, 1, 5, 11, 15};
+
+  for (std::uint32_t seed : seeds) {
+    for (std::size_t offset : offsets) {
+      VerifyAgainstTableAndZlib(data, offset, len, seed,
+                                crc32_z_impl_x86_avx);
+      const unsigned char *ptr = data.data() + offset;
+      EXPECT_EQ(crc32_z(seed, ptr, len),
+                crc32_z_impl_x86_avx(seed, ptr, len))
+          << "offset=" << offset << " seed=" << seed;
+    }
+  }
+}
+
+#if defined(__GNUC__) && (__GNUC__ >= 8)
+TEST(MysysMyChecksum, Crc32ZDispatchesToAvx512ImplementationWhenSupported) {
+  if (crc32_z_impl_x86_avx512 == nullptr) {
+    GTEST_SKIP() << "AVX512 crc32 implementation is not linked in this build";
+  }
+  if (!has_crc32_x86_avx512()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX-512 VPCLMUL CRC32";
+  }
+
+  std::vector<unsigned char> data(4096 + 16);
+  unsigned char v = 0x7e;
+  std::generate(data.begin(), data.end(), [&] { return v += 0x09; });
+
+  const std::array<std::size_t, 6> lengths = {0, 16, 256, 512, 1024, 4096};
+  const std::array<std::uint32_t, 3> seeds = {0u, 0x10203040u, 0xffffffffu};
+  const std::array<std::size_t, 3> offsets = {0, 5, 11};
+
+  for (std::uint32_t seed : seeds) {
+    for (std::size_t offset : offsets) {
+      for (std::size_t len : lengths) {
+        if (offset + len > data.size()) continue;
+        const unsigned char *ptr = data.data() + offset;
+        const std::uint32_t z_crc = crc32_z(seed, ptr, len);
+        const std::uint32_t avx512_crc =
+            crc32_z_impl_x86_avx512(seed, ptr, len);
+        EXPECT_EQ(avx512_crc, z_crc)
+            << "offset=" << offset << " seed=" << seed << " len=" << len;
+      }
+    }
+  }
+}
+
+TEST(MysysMyChecksum, Crc32ZMatchesAvx512ImplementationWhenSupported) {
+  if (crc32_z_impl_x86_avx512 == nullptr) {
+    GTEST_SKIP() << "AVX512 crc32 implementation is not linked in this build";
+  }
+  if (!has_crc32_x86_avx512()) {
+    GTEST_SKIP() << "CPU/OS does not support AVX-512 VPCLMUL CRC32";
+  }
+
+  std::vector<unsigned char> data(16384 + 129);
+  unsigned char v = 0xa5;
+  std::generate(data.begin(), data.end(), [&] { return v += 17; });
+
+  const std::array<std::size_t, 23> lengths = {
+      0,    1,     2,    3,    7,    8,    9,    15,   16,   31,   32,  63,
+      64,   65,    127,  128,  255,  256,  511,  512,  4095, 8192, 16384};
+  const std::array<std::uint32_t, 4> seeds = {0u, 0x10203040u, 0xbadcafeu,
+                                              0xffffffffu};
+  const std::array<std::size_t, 4> offsets = {0, 1, 5, 11};
+
+  for (std::uint32_t seed : seeds) {
+    for (std::size_t offset : offsets) {
+      for (std::size_t len : lengths) {
+        VerifyAgainstTableAndZlib(data, offset, len, seed,
+                                  crc32_z_impl_x86_avx512);
+      }
+    }
+  }
+}
+#endif
+#endif
 
 static volatile std::uint32_t do_not_optimize = 0;
 // 50k buffer, 8-byte using crc32_z directly
