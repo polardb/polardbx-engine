@@ -1,0 +1,382 @@
+########################################################
+# Test EF_CONSTRUCTION parameter for VECTOR INDEX     #
+########################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+SET @saved_vidx_disabled = @@GLOBAL.vidx_disabled;
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+--echo ########################################
+--echo # 1. EF_CONSTRUCTION keyword is non-reserved
+--echo ########################################
+
+CREATE TABLE t1 (ef_construction INT);
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 2. Basic syntax: CREATE with EF_CONSTRUCTION
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Verify the value is persisted
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 3. Different parameter orderings
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=100 M=10 DISTANCE=COSINE
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) DISTANCE=EUCLIDEAN EF_CONSTRUCTION=30 M=8
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 4. Default value when not specified
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+--echo # Should show EF_CONSTRUCTION=10 (default)
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 5. THDVAR default override
+--echo ########################################
+
+SET @@vidx_hnsw_default_ef_construction = 30;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+--echo # Should show EF_CONSTRUCTION=30
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+SET @@vidx_hnsw_default_ef_construction = DEFAULT;
+
+--echo ########################################
+--echo # 6. Boundary values
+--echo ########################################
+
+--echo # MIN boundary (5) - should succeed
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=5
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # MAX boundary (1000) - should succeed
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=1000
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Below MIN (4) - should fail
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=4
+) ENGINE=InnoDB;
+
+--echo # Above MAX (1001) - should fail
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=1001
+) ENGINE=InnoDB;
+
+--echo # Zero - should fail
+--error ER_VECTOR_INDEX_USAGE
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=0
+) ENGINE=InnoDB;
+
+--echo ########################################
+--echo # 7. THDVAR boundaries
+--echo ########################################
+
+SET @@vidx_hnsw_default_ef_construction = 5;
+SELECT @@vidx_hnsw_default_ef_construction;
+
+SET @@vidx_hnsw_default_ef_construction = 1000;
+SELECT @@vidx_hnsw_default_ef_construction;
+
+--echo # Below MIN: truncated to MIN with warning
+SET @@vidx_hnsw_default_ef_construction = 4;
+SELECT @@vidx_hnsw_default_ef_construction;
+
+--echo # Above MAX: truncated to MAX with warning
+SET @@vidx_hnsw_default_ef_construction = 1001;
+SELECT @@vidx_hnsw_default_ef_construction;
+
+SET @@vidx_hnsw_default_ef_construction = DEFAULT;
+
+--echo ########################################
+--echo # 8. ALTER TABLE preserves EF_CONSTRUCTION
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  extra INT,
+  VECTOR INDEX vi(v) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # ADD COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 ADD COLUMN new_col VARCHAR(100);
+SHOW CREATE TABLE t1;
+
+--echo # DROP COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 DROP COLUMN new_col;
+SHOW CREATE TABLE t1;
+
+--echo # MODIFY COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 MODIFY COLUMN extra BIGINT;
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 9. SHOW CREATE TABLE idempotency
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=16 DISTANCE=COSINE EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+
+--echo # Save SHOW CREATE output
+let $create_stmt = query_get_value(SHOW CREATE TABLE t1, Create Table, 1);
+
+DROP TABLE t1;
+
+--echo # Recreate from saved DDL
+eval $create_stmt;
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 10. CREATE INDEX on existing table
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4)
+) ENGINE=InnoDB;
+
+CREATE VECTOR INDEX vi ON t1(v) EF_CONSTRUCTION=120 M=8 DISTANCE=EUCLIDEAN;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 11. INSERT works with custom ef_construction
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+
+INSERT INTO t1 (v) VALUES
+  (TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')),
+  (TO_VECTOR('[0.0, 1.0, 0.0, 0.0]')),
+  (TO_VECTOR('[0.0, 0.0, 1.0, 0.0]')),
+  (TO_VECTOR('[0.0, 0.0, 0.0, 1.0]')),
+  (TO_VECTOR('[1.0, 1.0, 0.0, 0.0]')),
+  (TO_VECTOR('[0.0, 1.0, 1.0, 0.0]')),
+  (TO_VECTOR('[0.0, 0.0, 1.0, 1.0]')),
+  (TO_VECTOR('[1.0, 0.0, 0.0, 1.0]')),
+  (TO_VECTOR('[1.0, 1.0, 1.0, 0.0]')),
+  (TO_VECTOR('[0.0, 1.0, 1.0, 1.0]'));
+
+--echo # ANN search should work
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')) LIMIT 3;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 12. High ef_construction with data
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+
+INSERT INTO t1 (v) VALUES
+  (TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')),
+  (TO_VECTOR('[0.0, 1.0, 0.0, 0.0]')),
+  (TO_VECTOR('[0.0, 0.0, 1.0, 0.0]')),
+  (TO_VECTOR('[0.0, 0.0, 0.0, 1.0]')),
+  (TO_VECTOR('[0.5, 0.5, 0.0, 0.0]'));
+
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, TO_VECTOR('[0.5, 0.5, 0.0, 0.0]')) LIMIT 2;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 13. opt_equal syntax variants
+--echo ########################################
+
+--echo # With '='
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo # Without '=' (space separated)
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION 50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 14. DROP and re-CREATE with different ef_construction
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 DROP INDEX vi;
+--echo # Should have no VECTOR INDEX
+SHOW CREATE TABLE t1;
+
+CREATE VECTOR INDEX vi ON t1(v) EF_CONSTRUCTION=200 M=10;
+--echo # Should show EF_CONSTRUCTION=200
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 15. Multiple tables with different ef_construction
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=10
+) ENGINE=InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+
+--echo # t1: EF_CONSTRUCTION=10
+SHOW CREATE TABLE t1;
+--echo # t2: EF_CONSTRUCTION=200
+SHOW CREATE TABLE t2;
+
+DROP TABLE t1, t2;
+
+--echo ########################################
+--echo # 16. TRUNCATE TABLE preserves index
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=75
+) ENGINE=InnoDB;
+
+INSERT INTO t1 (v) VALUES (TO_VECTOR('[1.0, 0.0, 0.0, 0.0]'));
+
+TRUNCATE TABLE t1;
+--echo # Should preserve EF_CONSTRUCTION=75
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # 17. SHOW VARIABLES for ef_construction
+--echo ########################################
+
+SHOW VARIABLES LIKE 'vidx_hnsw_default_ef_construction';
+
+--echo ########################################
+--echo # 18. ALTER INDEX cannot modify EF_CONSTRUCTION
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+
+--echo # ALTER INDEX only supports visibility, not vector index options
+--error ER_PARSE_ERROR
+ALTER TABLE t1 ALTER INDEX vi EF_CONSTRUCTION=200;
+
+--echo # Must use DROP + re-CREATE to change EF_CONSTRUCTION
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+SET GLOBAL vidx_disabled = @saved_vidx_disabled;

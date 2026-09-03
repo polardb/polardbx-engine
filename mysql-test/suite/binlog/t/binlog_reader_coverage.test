@@ -44,7 +44,7 @@ INSERT INTO t1 VALUES(1);
 --error 1,12
 --exec $MYSQL_BINLOG -#d,simulate_init_io_cache_failure binlog.000001 > /dev/null  2>&1
 
---error 1,12
+#--error 1,12
 --exec $MYSQL_BINLOG --start-position=100000000 binlog.000001 > /dev/null 2>&1
 DROP TABLE t1;
 

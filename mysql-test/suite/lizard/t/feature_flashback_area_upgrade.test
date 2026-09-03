@@ -81,8 +81,6 @@ let $DATADIR = $MYSQL_TMP_DIR/data;
 use test;
 select * from t1;
 
-call dbms_undo.purge_status();
-
 set global innodb_undo_retention = 0;
 --source include/wait_innodb_all_purged.inc
 

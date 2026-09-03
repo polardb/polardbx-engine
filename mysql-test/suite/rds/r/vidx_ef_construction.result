@@ -1,0 +1,477 @@
+SET @saved_vidx_disabled = @@GLOBAL.vidx_disabled;
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2;
+########################################
+# 1. EF_CONSTRUCTION keyword is non-reserved
+########################################
+CREATE TABLE t1 (ef_construction INT);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `ef_construction` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 2. Basic syntax: CREATE with EF_CONSTRUCTION
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify the value is persisted
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+DROP TABLE t1;
+########################################
+# 3. Different parameter orderings
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=100 M=10 DISTANCE=COSINE
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=COSINE EF_CONSTRUCTION=100
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) DISTANCE=EUCLIDEAN EF_CONSTRUCTION=30 M=8
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=30
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 4. Default value when not specified
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Should show EF_CONSTRUCTION=10 (default)
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 5. THDVAR default override
+########################################
+SET @@vidx_hnsw_default_ef_construction = 30;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Should show EF_CONSTRUCTION=30
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=30
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+SET @@vidx_hnsw_default_ef_construction = DEFAULT;
+########################################
+# 6. Boundary values
+########################################
+# MIN boundary (5) - should succeed
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=5
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=5
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# MAX boundary (1000) - should succeed
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=1000
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=1000
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# Below MIN (4) - should fail
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=4
+) ENGINE=InnoDB;
+ERROR HY000: EF_CONSTRUCTION=4 is out of valid range [5, 1000].
+# Above MAX (1001) - should fail
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=1001
+) ENGINE=InnoDB;
+ERROR HY000: EF_CONSTRUCTION=1001 is out of valid range [5, 1000].
+# Zero - should fail
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=0
+) ENGINE=InnoDB;
+ERROR HY000: EF_CONSTRUCTION=0 is out of valid range [5, 1000].
+########################################
+# 7. THDVAR boundaries
+########################################
+SET @@vidx_hnsw_default_ef_construction = 5;
+SELECT @@vidx_hnsw_default_ef_construction;
+@@vidx_hnsw_default_ef_construction
+5
+SET @@vidx_hnsw_default_ef_construction = 1000;
+SELECT @@vidx_hnsw_default_ef_construction;
+@@vidx_hnsw_default_ef_construction
+1000
+# Below MIN: truncated to MIN with warning
+SET @@vidx_hnsw_default_ef_construction = 4;
+Warnings:
+Warning	1292	Truncated incorrect vidx_hnsw_default_ef_construction value: '4'
+SELECT @@vidx_hnsw_default_ef_construction;
+@@vidx_hnsw_default_ef_construction
+5
+# Above MAX: truncated to MAX with warning
+SET @@vidx_hnsw_default_ef_construction = 1001;
+Warnings:
+Warning	1292	Truncated incorrect vidx_hnsw_default_ef_construction value: '1001'
+SELECT @@vidx_hnsw_default_ef_construction;
+@@vidx_hnsw_default_ef_construction
+1000
+SET @@vidx_hnsw_default_ef_construction = DEFAULT;
+########################################
+# 8. ALTER TABLE preserves EF_CONSTRUCTION
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+extra INT,
+VECTOR INDEX vi(v) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ADD COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 ADD COLUMN new_col VARCHAR(100);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `new_col` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# DROP COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 DROP COLUMN new_col;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# MODIFY COLUMN should preserve EF_CONSTRUCTION
+ALTER TABLE t1 MODIFY COLUMN extra BIGINT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=80
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 9. SHOW CREATE TABLE idempotency
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) M=16 DISTANCE=COSINE EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+# Save SHOW CREATE output
+DROP TABLE t1;
+# Recreate from saved DDL
+CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=200
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=200
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 10. CREATE INDEX on existing table
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4)
+) ENGINE=InnoDB;
+CREATE VECTOR INDEX vi ON t1(v) EF_CONSTRUCTION=120 M=8 DISTANCE=EUCLIDEAN;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=120
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 11. INSERT works with custom ef_construction
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+INSERT INTO t1 (v) VALUES
+(TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')),
+(TO_VECTOR('[0.0, 1.0, 0.0, 0.0]')),
+(TO_VECTOR('[0.0, 0.0, 1.0, 0.0]')),
+(TO_VECTOR('[0.0, 0.0, 0.0, 1.0]')),
+(TO_VECTOR('[1.0, 1.0, 0.0, 0.0]')),
+(TO_VECTOR('[0.0, 1.0, 1.0, 0.0]')),
+(TO_VECTOR('[0.0, 0.0, 1.0, 1.0]')),
+(TO_VECTOR('[1.0, 0.0, 0.0, 1.0]')),
+(TO_VECTOR('[1.0, 1.0, 1.0, 0.0]')),
+(TO_VECTOR('[0.0, 1.0, 1.0, 1.0]'));
+# ANN search should work
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')) LIMIT 3;
+id
+1
+8
+5
+DROP TABLE t1;
+########################################
+# 12. High ef_construction with data
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+INSERT INTO t1 (v) VALUES
+(TO_VECTOR('[1.0, 0.0, 0.0, 0.0]')),
+(TO_VECTOR('[0.0, 1.0, 0.0, 0.0]')),
+(TO_VECTOR('[0.0, 0.0, 1.0, 0.0]')),
+(TO_VECTOR('[0.0, 0.0, 0.0, 1.0]')),
+(TO_VECTOR('[0.5, 0.5, 0.0, 0.0]'));
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, TO_VECTOR('[0.5, 0.5, 0.0, 0.0]')) LIMIT 2;
+id
+5
+1
+DROP TABLE t1;
+########################################
+# 13. opt_equal syntax variants
+########################################
+# With '='
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# Without '=' (space separated)
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION 50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 14. DROP and re-CREATE with different ef_construction
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 DROP INDEX vi;
+# Should have no VECTOR INDEX
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+CREATE VECTOR INDEX vi ON t1(v) EF_CONSTRUCTION=200 M=10;
+# Should show EF_CONSTRUCTION=200
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=200
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 15. Multiple tables with different ef_construction
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=10
+) ENGINE=InnoDB;
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=200
+) ENGINE=InnoDB;
+# t1: EF_CONSTRUCTION=10
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# t2: EF_CONSTRUCTION=200
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=200
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1, t2;
+########################################
+# 16. TRUNCATE TABLE preserves index
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=75
+) ENGINE=InnoDB;
+INSERT INTO t1 (v) VALUES (TO_VECTOR('[1.0, 0.0, 0.0, 0.0]'));
+TRUNCATE TABLE t1;
+# Should preserve EF_CONSTRUCTION=75
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=75
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# 17. SHOW VARIABLES for ef_construction
+########################################
+SHOW VARIABLES LIKE 'vidx_hnsw_default_ef_construction';
+Variable_name	Value
+vidx_hnsw_default_ef_construction	10
+########################################
+# 18. ALTER INDEX cannot modify EF_CONSTRUCTION
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+# ALTER INDEX only supports visibility, not vector index options
+ALTER TABLE t1 ALTER INDEX vi EF_CONSTRUCTION=200;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EF_CONSTRUCTION=200' at line 1
+# Must use DROP + re-CREATE to change EF_CONSTRUCTION
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=50
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+########################################
+# Cleanup
+########################################
+SET GLOBAL vidx_disabled = @saved_vidx_disabled;

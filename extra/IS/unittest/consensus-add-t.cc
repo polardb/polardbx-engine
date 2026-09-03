@@ -11,7 +11,7 @@
  * @author yingqiang.zyq(yingqiang.zyq@alibaba-inc.com)
  * @date 07/30/2016 02:41:21 PM
  * @version 1.0
- * @brief unit test for alisql::Consensus
+ * @brief unit test for alisql::Protocol
  *
  **/
 
@@ -40,7 +40,7 @@ TEST(consensus, Paxos_add_node2) {
   std::string strTmp3("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -96,7 +96,7 @@ TEST(consensus, Paxos_add_node3) {
   std::string strTmp4("127.0.0.1:11005");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -188,7 +188,7 @@ TEST(consensus, Paxos_readd_node) {
   std::string strTmp3("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -280,7 +280,7 @@ TEST(consensus, Paxos_add_delay_node) {
   std::string strTmp4("127.0.0.1:11004");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -342,7 +342,7 @@ TEST(consensus, Paxos_add_follower) {
   std::string strTmp3("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -424,7 +424,7 @@ TEST(consensus, Paxos_add_follower2) {
   std::string strTmp3("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -513,7 +513,7 @@ TEST(consensus, Paxos_add_follower3) {
   std::string strTmp3("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);

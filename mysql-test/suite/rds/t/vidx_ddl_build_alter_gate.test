@@ -1,0 +1,216 @@
+##############################################################
+# ALTER TABLE combinations around a vector index: the gate in #
+# vidx::check_vector_ddl() plus the resulting index metadata.  #
+#                                                            #
+# The gate keys on the exact Alter_info flag set: adding a    #
+# vector index is only allowed when the whole ALTER is        #
+# ALTER_ADD_INDEX, dropping one only when it is               #
+# ALTER_DROP_INDEX, and renaming one only when it is a single #
+# RENAME INDEX.  Every accepted combination then goes through #
+# the COPY rebuild and must come out with a complete graph    #
+# for EVERY vector slot, because a rebuild re-creates them    #
+# all -- that is the premise the prebuild cache check relies  #
+# on.                                                        #
+#                                                            #
+# Phase A  vector index + plain index in one ALTER: accepted  #
+#          (both clauses are ALTER_ADD_INDEX) and both        #
+#          indexes are usable afterwards.                     #
+# Phase B  adding a second vector index rebuilds ALL slots:   #
+#          both auxiliary graphs must be complete.            #
+# Phase C  explicit ALGORITHM=COPY on ADD VECTOR INDEX.       #
+# Phase D  single RENAME INDEX keeps the graph searchable.    #
+# Phase E  rejected combinations: every one leaves the table  #
+#          untouched, spawns no auxiliary table and is never  #
+#          accounted as a build error.                        #
+# Phase F  dropping a vector index together with a plain one  #
+#          is accepted by the flag-set gate; the rebuild must  #
+#          still leave no orphan graph behind.                 #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_build_alter_gate;
+USE vidx_ddl_build_alter_gate;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  a INT NOT NULL,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t1 VALUES ($i, $i * 10, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SET SESSION vidx_ddl_threads = 4;
+let $err_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+
+--echo
+--echo ############################################
+--echo # Phase A: ADD VECTOR INDEX + ADD INDEX   #
+--echo # in a single ALTER                       #
+--echo ############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), ADD INDEX ka(a);
+SHOW CREATE TABLE t1;
+--replace_column 5 HLINDEX_TABLE_NAME
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_alter_gate/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Phase A: live nodes != 40 base rows after a mixed ADD INDEX ALTER
+}
+--echo VERDICT A live==base after vector+plain ADD: PASS
+--echo # Both indexes must be usable
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(ka) WHERE a = 70;
+
+--echo
+--echo ############################################
+--echo # Phase B: second vector index rebuilds    #
+--echo # every slot                               #
+--echo ############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v) M=8;
+--replace_column 5 HLINDEX_TABLE_NAME
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+
+# The COPY rebuild assigns a fresh table id and rebuilds both slots.
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_alter_gate/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live0 FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live1 FROM \`vidx_', $tid, '_1\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live0 <> 40 OR @live1 <> 40`) {
+  --echo FATAL: slot0 live nodes and slot1 live nodes below 40 base rows
+  --die Phase B: adding a slot left another slot's graph incomplete
+}
+--echo VERDICT B every slot rebuilt to live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[31,32,33,34,35]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase C: explicit ALGORITHM=COPY         #
+--echo ############################################
+ALTER TABLE t1 DROP INDEX vi2;
+ALTER TABLE t1 DROP INDEX vi;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), ALGORITHM=COPY;
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_alter_gate/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Phase C: live nodes != 40 under an explicit ALGORITHM=COPY
+}
+--echo VERDICT C live==base under explicit COPY: PASS
+
+--echo
+--echo ############################################
+--echo # Phase D: single RENAME INDEX             #
+--echo ############################################
+ALTER TABLE t1 RENAME INDEX vi TO vi_renamed;
+SHOW INDEX FROM t1 WHERE Index_type = 'VECTOR';
+--echo # A rename touches metadata only: the graph stays searchable
+SELECT id FROM t1 FORCE INDEX(vi_renamed) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+ALTER TABLE t1 RENAME INDEX vi_renamed TO vi;
+
+--echo
+--echo ############################################
+--echo # Phase E: rejected combinations           #
+--echo ############################################
+let $aux_before = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_alter_gate/vidx_%', c, 1);
+
+--echo # E1 adding a vector index while dropping another index
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), DROP INDEX ka;
+
+--echo # E2 dropping the vector index while adding another index
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 DROP INDEX vi, ADD INDEX kb(a);
+
+--echo # E3 two RENAME INDEX clauses at once
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 RENAME INDEX vi TO vi_x, RENAME INDEX ka TO ka_x;
+
+--echo # E4 ADD VECTOR INDEX with ALGORITHM=INPLACE
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), ALGORITHM=INPLACE;
+
+--echo # E5 ADD VECTOR INDEX with LOCK=NONE
+--error ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), LOCK=NONE;
+
+--echo # E6 ADD VECTOR INDEX on a temporary table
+CREATE TEMPORARY TABLE t_tmp (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t_tmp ADD VECTOR INDEX vi(v);
+DROP TEMPORARY TABLE t_tmp;
+
+--echo # Assert: the table and its single graph survived every rejection
+SHOW CREATE TABLE t1;
+let $aux_after = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_alter_gate/vidx_%', c, 1);
+if ($aux_after != $aux_before) {
+  --echo FATAL: auxiliary table count moved $aux_before -> $aux_after across the rejections
+  --die a rejected ALTER left an auxiliary graph table behind
+}
+--echo VERDICT E rejections leave no auxiliary table: PASS
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_alter_gate/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Phase E: a rejected ALTER damaged the existing graph
+}
+--echo VERDICT E existing graph intact after rejections: PASS
+
+--echo
+--echo ############################################
+--echo # Phase F: DROP vector + DROP plain index  #
+--echo ############################################
+# Both clauses are ALTER_DROP_INDEX, so the flag-set gate accepts this
+# combination even though it is not a vector-only ALTER; the rebuild must
+# then drop the graph with the index.
+ALTER TABLE t1 DROP INDEX vi, DROP INDEX ka;
+SHOW CREATE TABLE t1;
+let $aux_left = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_alter_gate/vidx_%', c, 1);
+if ($aux_left != 0) {
+  --echo FATAL: $aux_left auxiliary tables survived the vector index DROP
+  --die Phase F: dropping the vector index left its graph table behind
+}
+--echo VERDICT F graph dropped with the index: PASS
+
+--echo
+--echo # No rejected or accepted combination may be reported as a build error
+let $err_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+if ($err_after != $err_before) {
+  --echo FATAL: build error counter moved $err_before -> $err_after
+  --die an ALTER combination was accounted as a direct-build error
+}
+--echo VERDICT build-error-count unchanged: PASS
+
+DROP TABLE t1;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_build_alter_gate;

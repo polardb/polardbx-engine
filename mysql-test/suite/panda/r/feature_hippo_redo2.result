@@ -1,0 +1,236 @@
+########################################################################
+# Test 1: delete-unmark (in-place Lotus update redo)
+# Delete a row then re-insert the SAME (pk,value) in one transaction so
+# the delete-marked secondary entry is revived in place, exercising the
+# MLOG_REC_UPDATE_IN_PLACE redo path with Lotus tid fields.
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_unmark (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_unmark VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_unmark WHERE id = 2; INSERT INTO t_hippo_unmark VALUES (2, 200); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_unmark ORDER BY id; SELECT * FROM t_hippo_unmark USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_unmark;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_unmark (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_unmark VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_unmark WHERE id = 2; INSERT INTO t_hippo_unmark VALUES (2, 200); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_unmark ORDER BY id; SELECT * FROM t_hippo_unmark USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_unmark;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_unmark (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_unmark VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_unmark WHERE id = 2; INSERT INTO t_hippo_unmark VALUES (2, 200); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_unmark ORDER BY id; SELECT * FROM t_hippo_unmark USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_unmark;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+########################################################################
+# Test 2: crash recovery with MULTIPLE hippo indexes
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_multi (id INT PRIMARY KEY, a INT, b INT, INDEX idx_a(a), INDEX idx_b(b)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_multi VALUES (1,10,20),(2,10,30),(3,20,40),(4,30,50);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; UPDATE t_hippo_multi SET a=15, b=25 WHERE id=1; DELETE FROM t_hippo_multi WHERE id=3; INSERT INTO t_hippo_multi VALUES (5,10,20); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_multi ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_a) WHERE a=10 ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_b) WHERE b=20 ORDER BY id; DROP TABLE IF EXISTS t_hippo_multi;;
+id	a	b
+1	15	25
+2	10	30
+4	30	50
+5	10	20
+id
+2
+5
+id
+5
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_multi (id INT PRIMARY KEY, a INT, b INT, INDEX idx_a(a), INDEX idx_b(b)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_multi VALUES (1,10,20),(2,10,30),(3,20,40),(4,30,50);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; UPDATE t_hippo_multi SET a=15, b=25 WHERE id=1; DELETE FROM t_hippo_multi WHERE id=3; INSERT INTO t_hippo_multi VALUES (5,10,20); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_multi ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_a) WHERE a=10 ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_b) WHERE b=20 ORDER BY id; DROP TABLE IF EXISTS t_hippo_multi;;
+id	a	b
+1	15	25
+2	10	30
+4	30	50
+5	10	20
+id
+2
+5
+id
+5
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_multi (id INT PRIMARY KEY, a INT, b INT, INDEX idx_a(a), INDEX idx_b(b)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_multi VALUES (1,10,20),(2,10,30),(3,20,40),(4,30,50);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; UPDATE t_hippo_multi SET a=15, b=25 WHERE id=1; DELETE FROM t_hippo_multi WHERE id=3; INSERT INTO t_hippo_multi VALUES (5,10,20); COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_multi ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_a) WHERE a=10 ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_b) WHERE b=20 ORDER BY id; DROP TABLE IF EXISTS t_hippo_multi;;
+id	a	b
+1	15	25
+2	10	30
+4	30	50
+5	10	20
+id
+2
+5
+id
+5
+########################################################################
+# Test 3: uncommitted indexed UPDATE rolled back during recovery
+# The committed DELETE must survive; the uncommitted UPDATE of the
+# indexed column must be undone (secondary entry restored, tid reset).
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_urb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_urb VALUES (1,100),(2,200),(3,300),(4,400);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_urb WHERE id=4; COMMIT; BEGIN; UPDATE t_hippo_urb SET val=999 WHERE id=1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_urb ORDER BY id; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=100; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=999; DROP TABLE IF EXISTS t_hippo_urb;;
+id	val
+1	100
+2	200
+3	300
+id
+1
+id
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_urb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_urb VALUES (1,100),(2,200),(3,300),(4,400);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_urb WHERE id=4; COMMIT; BEGIN; UPDATE t_hippo_urb SET val=999 WHERE id=1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_urb ORDER BY id; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=100; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=999; DROP TABLE IF EXISTS t_hippo_urb;;
+id	val
+1	100
+2	200
+3	300
+id
+1
+id
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_urb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_urb VALUES (1,100),(2,200),(3,300),(4,400);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; DELETE FROM t_hippo_urb WHERE id=4; COMMIT; BEGIN; UPDATE t_hippo_urb SET val=999 WHERE id=1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_urb ORDER BY id; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=100; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=999; DROP TABLE IF EXISTS t_hippo_urb;;
+id	val
+1	100
+2	200
+3	300
+id
+1
+id
+########################################################################
+# Test completed successfully
+########################################################################

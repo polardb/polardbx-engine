@@ -33,11 +33,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0undo0rec0types_h
 #define lizard0undo0rec0types_h
 
-#include "lizard0gcs0service.h"
-#include "lizard0trx.h"
-#include "lizard0txn0service.h"
-#include "lizard0undo0types.h"
 #include "trx0types.h"
+
+#include "lizard0gcs0service.h"
+#include "lizard0txn0service.h"
+#include "lizard0txn0slot0uba0types.h"
+
+constexpr static trx_id_t TRX_ID_FAKE_FOR_RLOG_INS = 1;
 
 /** Undo record transactional fields for reporting undo logs derived from row
  * log. */
@@ -55,7 +57,7 @@ struct urec_trx_t {
   gcn_t gcn{GCN_NULL};
 
   void build_for_rlog_ins() {
-    trx_id = lizard::TRX_ID_FAKE_FOR_RLOG_INS;
+    trx_id = TRX_ID_FAKE_FOR_RLOG_INS;
     roll_ptr = 0;
     scn = SCN_NULL;
     undo_ptr = UNDO_PTR_NULL;

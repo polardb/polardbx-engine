@@ -1,0 +1,171 @@
+CALL mtr.add_suppression("'innodb-scn-history-interval': unsigned value 0 adjusted to 1");
+SET GLOBAL innodb_undo_retention = 9000;
+################################################################
+# Scenario A: RANGE partition, ORDER BY id - merge scan
+################################################################
+CREATE TABLE t_range (
+id   INT,
+name VARCHAR(64),
+PRIMARY KEY (id)
+) PARTITION BY RANGE (id) (
+PARTITION p_low  VALUES LESS THAN (10),
+PARTITION p_mid  VALUES LESS THAN (20),
+PARTITION p_high VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t_range VALUES (1, 'Alice'), (11, 'Bob'), (21, 'Charlie');
+SET @ts_t1 = NOW(6);
+INSERT INTO t_range VALUES (5, 'Dave');
+# Baseline: non-AS-OF sees 4 rows including Dave
+SELECT id, name FROM t_range ORDER BY id;
+id	name
+1	Alice
+5	Dave
+11	Bob
+21	Charlie
+
+# --- Point lookup of Dave AS OF T1: must be empty (single-partition path) ---
+SELECT id, name FROM t_range AS OF TIMESTAMP @ts_t1 WHERE id = 5;
+id	name
+
+# --- COUNT(*) AS OF T1 WHERE id < 10: must be 1 (only Alice) ---
+SELECT COUNT(*) AS cnt FROM t_range AS OF TIMESTAMP @ts_t1 WHERE id < 10;
+cnt
+1
+
+# --- Range scan p_low only AS OF T1: must be 1 row (Alice) ---
+# With the bug: returns 2 rows (Alice + Dave)
+SELECT id, name FROM t_range AS OF TIMESTAMP @ts_t1 WHERE id < 10;
+id	name
+1	Alice
+
+# --- Full ORDER BY id AS OF T1: must be 3 rows (Alice/Bob/Charlie) ---
+# With the bug: returns 4 rows (Dave leaks in on 2nd visit to p_low)
+SELECT id, name FROM t_range AS OF TIMESTAMP @ts_t1 ORDER BY id;
+id	name
+1	Alice
+11	Bob
+21	Charlie
+
+# --- Full table scan AS OF T1: must be 3 rows ---
+# With the bug: returns 4 rows (Dave leaks via multi-partition iteration)
+SELECT id, name FROM t_range AS OF TIMESTAMP @ts_t1;
+id	name
+1	Alice
+11	Bob
+21	Charlie
+
+# --- Cross-partition BETWEEN AS OF T1: must be 3 rows ---
+# Forces merge scan across p_low/p_mid/p_high
+SELECT id, name FROM t_range AS OF TIMESTAMP @ts_t1
+WHERE id BETWEEN 1 AND 25 ORDER BY id;
+id	name
+1	Alice
+11	Bob
+21	Charlie
+DROP TABLE t_range;
+
+################################################################
+# Scenario B: HASH partition, ORDER BY id
+#   HASH distributes rows across partitions; ORDER BY always
+#   triggers multi-partition merge.
+################################################################
+CREATE TABLE t_hash (
+id INT,
+v  INT,
+PRIMARY KEY (id)
+) PARTITION BY HASH(id) PARTITIONS 4;
+INSERT INTO t_hash VALUES (1, 100), (2, 200), (3, 300), (4, 400);
+SET @ts_t1 = NOW(6);
+INSERT INTO t_hash VALUES (5, 500), (6, 600), (7, 700), (8, 800);
+# Baseline: 8 rows
+SELECT id, v FROM t_hash ORDER BY id;
+id	v
+1	100
+2	200
+3	300
+4	400
+5	500
+6	600
+7	700
+8	800
+
+# --- AS OF T1 ORDER BY: must be 4 rows (id 1..4) ---
+# With the bug: may return rows 5..8 as well
+SELECT id, v FROM t_hash AS OF TIMESTAMP @ts_t1 ORDER BY id;
+id	v
+1	100
+2	200
+3	300
+4	400
+
+# --- AS OF T1 COUNT(*): must be 4 ---
+SELECT COUNT(*) AS cnt FROM t_hash AS OF TIMESTAMP @ts_t1;
+cnt
+4
+DROP TABLE t_hash;
+
+################################################################
+# Scenario C: AS OF SCN (to rule out any timestamp-to-SCN
+# precision artefact)
+################################################################
+CREATE TABLE t_scn (
+id INT,
+PRIMARY KEY (id)
+) PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t_scn VALUES (1), (11);
+SELECT scn INTO @scn_t1 FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+INSERT INTO t_scn VALUES (5);
+# --- AS OF SCN @scn_t1 ORDER BY id: must be 2 rows (1, 11) ---
+# With the bug: returns 3 rows (id=5 leaks in on 2nd visit to p0)
+SELECT id FROM t_scn AS OF SCN @scn_t1 ORDER BY id;
+id
+1
+11
+
+# --- AS OF SCN @scn_t1 with WHERE id < 10: must be 1 row (id=1) ---
+SELECT id FROM t_scn AS OF SCN @scn_t1 WHERE id < 10;
+id
+1
+DROP TABLE t_scn;
+
+################################################################
+# Scenario D: Secondary index scan AS OF T1
+#   A row that is updated after T1 should appear in idx_v ONLY
+#   with its pre-update value. After the bug, both pre- and
+#   post-update index entries become visible for the partition
+#   that is revisited.
+################################################################
+CREATE TABLE t_sec (
+id INT,
+v  INT,
+PRIMARY KEY (id),
+INDEX idx_v (v)
+) PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t_sec VALUES (1, 10), (11, 20), (21, 30);
+SET @ts_t1 = NOW(6);
+UPDATE t_sec SET v = 99 WHERE id = 1;
+# Baseline
+SELECT id, v FROM t_sec FORCE INDEX(idx_v) ORDER BY v;
+id	v
+11	20
+21	30
+1	99
+
+# --- AS OF T1 via idx_v ORDER BY v: must be 10,20,30 ---
+# With the bug: p0 is revisited during merge scan; scans that
+# exercise the idx_v entries for p0 can expose v=99 or duplicate
+# rows for id=1.
+SELECT id, v FROM t_sec AS OF TIMESTAMP @ts_t1 FORCE INDEX(idx_v) ORDER BY v;
+id	v
+1	10
+11	20
+21	30
+DROP TABLE t_sec;
+SET GLOBAL innodb_undo_retention = DEFAULT;

@@ -18,6 +18,7 @@ ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
 0
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 # 11. xa prepare + crash_before_writing_xid
@@ -30,10 +31,13 @@ ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
 0
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
+1	2	0	xx
 xa prepare 'xx';
 ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+xa commit 'xx';
 # 21. xa commit one phase + crash_before_writing_xid
 SET SESSION debug="+d,crash_before_writing_xid";
 xa start 'xx';
@@ -44,6 +48,9 @@ ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
 0
+1
+1
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 # 31. xa commit + crash_before_writing_xid
@@ -57,10 +64,12 @@ ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
 0
+1
+1
+1
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-xa commit 'xx';
 # 41. xa rollback + crash_before_writing_xid
 xa start 'xx';
 insert into db_crash_11.t values(1);
@@ -73,10 +82,11 @@ select * from db_crash_11.t order by id;
 id
 0
 1
+1
+1
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-xa rollback 'xx';
 delete from db_crash_11.t;
 insert into db_crash_11.t values(0);
 # 01. normal commit + half_binlogged_transaction
@@ -185,7 +195,7 @@ commit;
 ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
-0
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
 # 12. xa prepare + crash_before_writing_xid
@@ -197,11 +207,13 @@ xa prepare 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
-0
+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
+1	2	0	xx
 xa prepare 'xx';
 ERROR XAE07: XAER_RMFAIL: The command cannot be executed when global transaction is in the  NON-EXISTING state
+xa commit 'xx';
 # 22. xa commit one phase + crash_before_writing_xid
 SET SESSION debug="+d,crash_before_writing_xid";
 xa start 'xx';
@@ -211,7 +223,7 @@ xa commit 'xx' one phase;
 ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
-0
+3
 xa recover;
 formatID	gtrid_length	bqual_length	data
 # 32. xa commit + crash_before_writing_xid
@@ -224,11 +236,9 @@ xa commit 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
-0
+4
 xa recover;
 formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-xa commit 'xx';
 # 42. xa rollback + crash_before_writing_xid
 xa start 'xx';
 update db_crash_11.t set id = id+1;
@@ -239,11 +249,9 @@ xa rollback 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 select * from db_crash_11.t order by id;
 id
-1
+4
 xa recover;
 formatID	gtrid_length	bqual_length	data
-1	2	0	xx
-xa rollback 'xx';
 delete from db_crash_11.t;
 insert into db_crash_11.t values(0);
 # 02. normal commit + half_binlogged_transaction

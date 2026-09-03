@@ -231,7 +231,7 @@ ERROR HY000: Tablespace has been discarded for table 't1'
 SET SESSION debug="+d,ib_import_io_read_error_2";
 restore: t1 .cfg file
 ALTER TABLE test_wl5522.t1 IMPORT TABLESPACE;
-ERROR HY000: IO Read error: while reading index meta-data, expected to read 44 bytes but read only 0 bytes
+ERROR HY000: IO Read error: while reading index meta-data, expected to read 48 bytes but read only 0 bytes
 SET SESSION debug="-d,ib_import_io_read_error_2";
 DROP TABLE test_wl5522.t1;
 CREATE TABLE test_wl5522.t1 (c1 INT) ENGINE = Innodb;

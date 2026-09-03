@@ -34,11 +34,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define PLI_PLI_H_INCLUDED
 
 #include "pli/pli_base.h"
-namespace xlicense {
+namespace komodo {
 
 #define POLARX_LICENSE_CALL(M) PLI_service->M
 
 extern void PLI_register_service(PLI_service_t *service);
 
-}  // namespace xlicense
+}  // namespace komodo
 #endif

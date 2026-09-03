@@ -1,0 +1,342 @@
+#
+# Test case for net buffer shrink optimization
+# This test verifies that the network buffer can automatically shrink
+# after consecutive small packets, both in compressed and uncompressed scenarios.
+#
+# Reference: mysql-test/extra/rpl_tests/rpl_row_event_max_size.inc
+#            for how to generate large data packets using repeat() function
+#
+ 
+--source include/load_sysvars.inc
+ 
+--let $old_shrink_enabled = `SELECT @@global.net_buff_shrink_enabled`
+--let $old_shrink_threshold = `SELECT @@global.net_buff_shrink_thresh`
+--let $old_compression_algorithms = `SELECT @@global.protocol_compression_algorithms`
+--let $old_net_buffer_length = `SELECT @@global.net_buffer_length`
+
+--echo # Set net_buffer_length to initial value 16384
+SET @@global.net_buffer_length = 16384;
+
+--echo #
+--echo # Test 1: Buffer expansion and shrink
+--echo #
+
+--echo # Enable buffer shrink feature
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+ 
+CREATE DATABASE IF NOT EXISTS buf_test;
+USE buf_test;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, data1 LONGBLOB, data2 LONGBLOB);
+ 
+--echo # Check initial buffer size and statistics for current connection
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Generate large data string (32KB) and send it to server via INSERT
+--echo # Note: net_buffer only expands when server RECEIVES data from client
+--perl
+  my $large_data = 'A' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (1, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert.sql
+--enable_query_log
+ 
+--echo # Verify buffer expanded - check buffer size increased and expand count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Send multiple small packets to trigger buffer shrink
+--echo # Send 10 small queries (threshold is 5, so should shrink after 5th consecutive small packet)
+SELECT 'small query 1' AS test_query;
+SELECT 'small query 2' AS test_query;
+SELECT 'small query 3' AS test_query;
+SELECT 'small query 4' AS test_query;
+SELECT 'small query 5' AS test_query;
+ 
+--echo # Verify buffer shrunk after consecutive small packets - check buffer size decreased and shrink count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo #
+--echo # Test 2: Verify buffer shrink is disabled when feature is off
+--echo #
+ 
+SET @@global.net_buff_shrink_enabled = 0;
+ 
+--echo # Generate and send large data (32KB) to expand buffer
+--perl
+  my $large_data = 'C' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (3, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert2.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert2.sql
+--enable_query_log
+ 
+--echo # Check buffer state before sending small packets
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Send small packets (should NOT trigger shrink when feature is disabled)
+SELECT 'small query disabled 1' AS test_query;
+SELECT 'small query disabled 2' AS test_query;
+SELECT 'small query disabled 3' AS test_query;
+SELECT 'small query disabled 4' AS test_query;
+SELECT 'small query disabled 5' AS test_query;
+ 
+--echo # Verify no shrink happened when feature is disabled - shrink count should not increase
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo #
+--echo # Test 3: Buffer expansion and shrink with compression enabled
+--echo #
+ 
+--echo # Enable compression and buffer shrink feature
+SET @@global.protocol_compression_algorithms = 'zlib';
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+ 
+--echo # Reconnect with compression enabled
+--disconnect default
+--connect (compressed_conn, localhost, root,,,,,COMPRESS)
+connection compressed_conn;
+ 
+USE buf_test;
+ 
+--echo # Check initial buffer size and statistics for compressed connection
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Generate large data string (32KB) and send it to server via INSERT
+--echo # Note: net_buffer only expands when server RECEIVES data from client
+--perl
+  my $large_data = 'D' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (4, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert_compressed.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert_compressed.sql
+--enable_query_log
+ 
+--echo # Verify buffer expanded - check buffer size increased and expand count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Send multiple small packets to trigger buffer shrink
+--echo # Send 10 small queries (threshold is 5, so should shrink after 5th consecutive small packet)
+SELECT 'small query compressed 1' AS test_query;
+SELECT 'small query compressed 2' AS test_query;
+SELECT 'small query compressed 3' AS test_query;
+SELECT 'small query compressed 4' AS test_query;
+SELECT 'small query compressed 5' AS test_query;
+ 
+--echo # Verify buffer shrunk after consecutive small packets - check buffer size decreased and shrink count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo #
+--echo # Test 4: Verify buffer shrink is disabled when feature is off (compressed connection)
+--echo #
+ 
+SET @@global.net_buff_shrink_enabled = 0;
+ 
+--echo # Reconnect with compression enabled
+--connect (compressed_conn2, localhost, root,,,,,COMPRESS)
+connection compressed_conn2;
+ 
+USE buf_test;
+ 
+--echo # Generate and send large data (32KB) to expand buffer
+--perl
+  my $large_data = 'E' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (5, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert_compressed2.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert_compressed2.sql
+--enable_query_log
+ 
+--echo # Check buffer state before sending small packets
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+ 
+--echo # Send small packets (should NOT trigger shrink when feature is disabled)
+SELECT 'small query disabled compressed 1' AS test_query;
+SELECT 'small query disabled compressed 2' AS test_query;
+SELECT 'small query disabled compressed 3' AS test_query;
+SELECT 'small query disabled compressed 4' AS test_query;
+SELECT 'small query disabled compressed 5' AS test_query;
+ 
+--echo # Verify no shrink happened when feature is disabled - shrink count should not increase
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+
+SHOW GLOBAL STATUS LIKE 'net_buff_stat_shrink_count';
+
+--echo #
+--echo # Test 5: Verify no repeated shrink when net_buffer_length is not 4KB aligned
+--echo #
+
+--echo # Reset compression algorithms to allow uncompressed connection
+SET @@global.protocol_compression_algorithms = 'zlib,zstd,uncompressed';
+
+--echo # Set net_buffer_length to 3KB (3072), which is not 4KB aligned
+SET @@global.net_buffer_length = 3072;
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+
+--echo # Reconnect to apply new net_buffer_length setting
+--disconnect compressed_conn2
+--connect (unaligned_conn, localhost, root,,,,,)
+connection unaligned_conn;
+
+USE buf_test;
+
+--echo # Check initial buffer size
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+
+--echo # Send large packet to expand buffer
+--perl
+  my $large_data = 'F' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (6, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert_unaligned.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert_unaligned.sql
+--enable_query_log
+
+--echo # Verify buffer expanded
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+
+--echo # Send multiple small packets to trigger shrink
+SELECT 'small query unaligned 1' AS test_query;
+SELECT 'small query unaligned 2' AS test_query;
+SELECT 'small query unaligned 3' AS test_query;
+SELECT 'small query unaligned 4' AS test_query;
+SELECT 'small query unaligned 5' AS test_query;
+
+--echo # Verify buffer shrunk once
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+
+--echo # Send more small packets - should NOT trigger repeated shrink
+SELECT 'small query unaligned 6' AS test_query;
+SELECT 'small query unaligned 7' AS test_query;
+SELECT 'small query unaligned 8' AS test_query;
+SELECT 'small query unaligned 9' AS test_query;
+SELECT 'small query unaligned 10' AS test_query;
+
+--echo # Verify shrink count and buffer size did not change (no repeated shrink)
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+
+--disconnect unaligned_conn
+--connect (default, localhost, root,,,,,)
+connection default;
+
+USE buf_test;
+
+--echo #
+--echo # Test 6: Verify shrink_thresh=0 - shrink immediately without waiting for consecutive small packets
+--echo #
+
+--echo # Reset compression algorithms to allow uncompressed connection
+SET @@global.protocol_compression_algorithms = 'zlib,zstd,uncompressed';
+
+--echo # Set net_buffer_length to initial value 16384
+SET @@global.net_buffer_length = 16384;
+
+--echo # Enable buffer shrink with immediate mode (thresh=0)
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 0;
+
+--echo # Reconnect to apply new settings
+--connect (immediate_conn, localhost, root,,,,,)
+connection immediate_conn;
+
+USE buf_test;
+
+--echo # Check initial buffer size and statistics
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST
+WHERE ID = CONNECTION_ID();
+
+--echo # Send large packet to expand buffer
+--perl
+  my $large_data = 'G' x 32768;
+  $large_data =~ s/'/''/g;
+  my $sql = "INSERT INTO t1 (id, data1, data2) VALUES (7, '$large_data', '$large_data');";
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . "/tmp/large_insert_immediate.sql";
+  open(FH, '>', $file) or die;
+  print FH $sql . "\n";
+  close(FH);
+EOF
+--disable_query_log
+--source $MYSQLTEST_VARDIR/tmp/large_insert_immediate.sql
+--enable_query_log
+
+--echo # Verify buffer shrunk immediately
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST
+WHERE ID = CONNECTION_ID();
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+DROP DATABASE buf_test;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert2.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert_compressed.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert_compressed2.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert_unaligned.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/large_insert_immediate.sql
+
+--echo # Restore original settings
+eval SET @@global.net_buff_shrink_enabled = $old_shrink_enabled;
+eval SET @@global.net_buff_shrink_thresh = $old_shrink_threshold;
+eval SET @@global.protocol_compression_algorithms = '$old_compression_algorithms';
+eval SET @@global.net_buffer_length = $old_net_buffer_length;

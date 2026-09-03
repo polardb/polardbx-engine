@@ -140,7 +140,10 @@
    1 /* type, default_table_encryption */ + 1U +                              \
    1 /* opt_flashback_area */  + 1U +                                         \
    1 /* type, opt_index_format_gpp_enabled */                                 \
-   + 1U + 1 /* type, opt_index_format_panda_enabled */)
+   + 1U + 1 /* type, opt_index_format_panda_enabled */                        \
+   + 1U + 1 + NAME_LEN /* type, length, recycle_bin_table_name */             \
+   + 1U + 1 /* type, opt_index_format_hippo_enabled */\
+   + 1U + 1 /* type, opt_index_format_spc_enabled */)
 
 /**
    Uninitialized timestamp value (for either last committed or sequence number).
@@ -373,11 +376,12 @@ enum Log_event_type {
 
   GCN_LOG_EVENT = 105,
 
+  /* if add new event, need check Log_event::is_polarx_event() */
+
   /**
     Add new events here - right above this comment!
     Existing events (except ENUM_END_EVENT) should never change their numbers
   */
-
   ENUM_END_EVENT /* end marker */
 };
 

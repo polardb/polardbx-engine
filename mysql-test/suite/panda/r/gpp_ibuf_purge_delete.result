@@ -1,0 +1,33 @@
+# Reproduce GPP purge delete merge using change buffer
+SELECT COUNT(*) AS initial_rows FROM t1 FORCE INDEX(PRIMARY);
+initial_rows
+1024
+SELECT i.N_FIELDS AS idx_val_fields
+FROM INFORMATION_SCHEMA.INNODB_TABLES t
+JOIN INFORMATION_SCHEMA.INNODB_INDEXES i ON i.TABLE_ID = t.TABLE_ID
+WHERE t.NAME = 'test/t1' AND i.NAME = 'idx_val';
+idx_val_fields
+4
+SELECT COUNT_RESET = 0 AS delete_mark_not_merged_before_purge
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_merges_delete_mark';
+delete_mark_not_merged_before_purge
+1
+SELECT COUNT > 1 AS change_buffer_not_empty_before_purge
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_size';
+change_buffer_not_empty_before_purge
+1
+SELECT COUNT(*) AS final_rows FROM t1 FORCE INDEX(idx_val);
+final_rows
+512
+SELECT COALESCE(SUM(ROWS_READ_DELETE_MARK), 0) = 0 AS final_scan_saw_no_delete_mark
+FROM performance_schema.events_statements_summary_by_digest_supplement
+WHERE DIGEST_TEXT LIKE 'SELECT COUNT%FROM `t1` FORCE INDEX%';
+final_scan_saw_no_delete_mark
+1
+SELECT COUNT_RESET > 0 AS ibuf_delete_merged
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_merges_delete';
+ibuf_delete_merged
+1

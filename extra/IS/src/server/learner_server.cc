@@ -67,7 +67,7 @@ void LearnerServer::onConnectCb() {
 
 void LearnerServer::sendMsg(void *ptr) {
   PaxosMsg *msg = (PaxosMsg *)ptr;
-  assert(msg->msgtype() == Consensus::AppendLog);
+  assert(msg->msgtype() == Protocol::AppendLog);
 
   msg->set_msgid(msgId.fetch_add(1));
   if (addr.port == 0) {

@@ -42,8 +42,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0xa.h"
 #include "univ.i"
 
-#include "lizard0undo0types.h"
-
 #ifndef UNIV_HOTBACKUP
 /** Returns true if the roll pointer is of the insert type.
  @return true if insert undo log */
@@ -518,6 +516,11 @@ struct trx_undo_t {
 
   /** Master branch info */
   xa_addr_t maddr;
+
+  /** Confirm the consistent of scn, undo type, undo state. */
+  bool is_cmmt_validate() const;
+/** Confirm the consistent of proposal mark. */
+  bool is_pmmt_validate() const;
 };
 
 UT_LIST_NODE_GETTER_DEFINITION(trx_undo_t, undo_list)
@@ -663,16 +666,16 @@ constexpr uint32_t TRX_UNDO_HISTORY_NODE = 34;
 constexpr uint32_t TRX_UNDO_SCN =
     (TRX_UNDO_HISTORY_NODE + FLST_NODE_SIZE);  // = 46
 /** Lizard: Offset of the utc */
-constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + TRX_UNDO_SCN_LEN);  // = 54
+constexpr uint32_t TRX_UNDO_UTC = (TRX_UNDO_SCN + 8);  // = 54
 /** Lizard: Offset of the Slot */
-constexpr uint32_t TRX_UNDO_SLOT = (TRX_UNDO_UTC + TRX_UNDO_UTC_LEN);
+constexpr uint32_t TRX_UNDO_SLOT = (TRX_UNDO_UTC + 8);
 
 /** Lizard: offset of the GCN, reuse TRX_NO position */
 constexpr uint32_t TRX_UNDO_GCN = TRX_UNDO_TRX_NO_DUP;
 
 /*-------------------------------------------------------------*/
 /** Size of the undo log header without XID information */
-constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = TRX_UNDO_SLOT + TRX_UNDO_UBA_LEN;
+constexpr uint32_t TRX_UNDO_LOG_OLD_HDR_SIZE = TRX_UNDO_SLOT + 8;
 
 /* Note: the writing of the undo log old header is coded by a log record
 MLOG_UNDO_HDR_CREATE or MLOG_UNDO_HDR_REUSE. The appending of an XID to the
@@ -725,7 +728,6 @@ to store both prepare and commit GTID. */
 constexpr uint32_t TRX_UNDO_LOG_GTID_XA_HDR_SIZE =
     TRX_UNDO_LOG_GTID_HDR_SIZE + TRX_UNDO_LOG_GTID_LEN;
 
-
 /**************************************************************************/
 // Lizard: Allocate Segment Tailer special for txn/update undo log segment.
 /**************************************************************************/
@@ -761,5 +763,7 @@ constexpr uint8_t TRX_USEG_END_FLAG_MASK = TRX_USEG_FLAG_EXIST_2PP;
 /** Only bit_0 ~ bit_6 can be used. */
 static_assert(!(TRX_USEG_END_FLAG_MASK & 0x70));
 
+#ifndef INNODB_TRX0UNDO_IC_STANDALONE
 #include "trx0undo.ic"
+#endif /* !INNODB_TRX0UNDO_IC_STANDALONE */
 #endif

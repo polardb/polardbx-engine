@@ -1,0 +1,59 @@
+CREATE PROCEDURE populate_spc_table()
+BEGIN
+DECLARE i int DEFAULT 1;
+START TRANSACTION;
+WHILE (i <= 10000) DO
+INSERT INTO spc_table VALUES (i, CONCAT('name', i), CONCAT('address', i));
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+CREATE TABLE spc_table(
+id	INT,
+name	VARCHAR(100),
+address	VARCHAR(100)
+) ENGINE=InnoDB;
+SELECT COUNT(*) FROM spc_table;
+COUNT(*)
+10000
+SET SESSION debug="+d,ib_index_build_fail_before_flush";
+CREATE INDEX idx_id ON spc_table(id) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR HY000: Got error 1000 - 'InnoDB error' from storage engine
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+CREATE INDEX idx_name ON spc_table(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR HY000: Got error 1000 - 'InnoDB error' from storage engine
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+CREATE INDEX idx_address ON spc_table(address) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR HY000: Got error 1000 - 'InnoDB error' from storage engine
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+CREATE FULLTEXT INDEX fidx_name ON spc_table(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR HY000: Got error 1000 - 'InnoDB error' from storage engine
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+ALTER TABLE spc_table ADD COLUMN content TEXT, ALGORITHM=INPLACE;
+ERROR HY000: Got error 1000 - 'InnoDB error' from storage engine
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+SET SESSION debug="-d,ib_index_build_fail_before_flush";
+INSERT INTO spc_table VALUES (10001, CONCAT('name', 10000), CONCAT('address', 10000));
+ALTER TABLE spc_table ADD UNIQUE INDEX idx_name(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR 23000: Duplicate entry 'name10000' for key 'spc_table.idx_name'
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+ALTER TABLE spc_table ADD UNIQUE INDEX idx_id(id) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}', 
+ADD UNIQUE INDEX idx_name(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+ERROR 23000: Duplicate entry 'name10000' for key 'spc_table.idx_name'
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+DROP TABLE spc_table;
+DROP PROCEDURE populate_spc_table;

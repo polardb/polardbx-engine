@@ -22,6 +22,7 @@
 
 #ifndef CONNECTION_DELAY_API_H
 #define CONNECTION_DELAY_API_H
+#include "connection_common_api.h"
 
 /* Structures/Functions required for information schema table */
 
@@ -31,22 +32,10 @@ int connection_control_failed_attempts_view_init(void *ptr);
 
 namespace connection_control {
 
-/* constants/variables defined in connection_delay.cc */
-
-extern int64 DEFAULT_THRESHOLD;
-extern int64 MIN_THRESHOLD;
-extern int64 DISABLE_THRESHOLD;
-extern int64 MAX_THRESHOLD;
-
-extern int64 DEFAULT_MAX_DELAY;
-extern int64 DEFAULT_MIN_DELAY;
-extern int64 MIN_DELAY;
-extern int64 MAX_DELAY;
-
-extern int64 DEFAULT_REFUSE_PERIOD;
-extern int64 DISABLE_REFUSE_PERIOD;
-extern int64 MIN_REFUSE_PERIOD;
-extern int64 MAX_REFUSE_PERIOD;
+constexpr int64 DEFAULT_MAX_DELAY = INT_MAX32;
+constexpr int64 DEFAULT_MIN_DELAY = 1000;
+constexpr int64 MIN_DELAY = 1000;
+constexpr int64 MAX_DELAY = INT_MAX32;
 
 /** Functions being used by connection_control.cc */
 

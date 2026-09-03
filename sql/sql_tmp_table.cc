@@ -51,6 +51,7 @@
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "scope_guard.h"
+#include "sql/column_encryption/column_encryption.h"
 #include "sql/create_field.h"
 #include "sql/current_thd.h"
 #include "sql/dd/types/column.h"
@@ -502,6 +503,14 @@ Field *create_tmp_field(THD *thd, TABLE *table, Item *item, Item::Type type,
       assert(false);
       break;
   }
+
+  /**
+   * When create the temporary field, the corresponding item might have
+   * encryption type, we need to set it to the temporary field. We don't care
+   * about how the item calculate and write the data to temporary table.
+   */
+  result->set_encryption_type(item->encryption_type());
+
   return result;
 }
 
@@ -916,6 +925,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
   MEM_ROOT own_root(key_memory_TABLE, 4096);
 
   param->keyinfo = static_cast<KEY *>(own_root.Alloc(sizeof(*param->keyinfo)));
+  param->keyinfo->se_attrs = komodo::dd_se_attrs_t();
 
   const uint field_count = param->func_count + param->sum_func_count;
   try {
@@ -1245,7 +1255,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
   if (group) {
     DBUG_PRINT("info", ("Creating group key in temporary table"));
     table->group = group; /* Table is grouped by key */
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     // Let each group expression know the column which materializes its value
     for (ORDER *cur_group = group; cur_group; cur_group = cur_group->next) {
       Field *field = (*cur_group->item)->get_tmp_table_field();
@@ -1313,7 +1323,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
       in the first 'hidden_null_pack_length' bytes of the row.
     */
     DBUG_PRINT("info", ("hidden_field_count: %d", param->hidden_field_count));
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     share->is_distinct =
         distinct || param->m_operation == Temp_table_param::TTP_INTERSECT ||
         param->m_operation == Temp_table_param::TTP_EXCEPT;
@@ -1425,7 +1435,7 @@ TABLE *create_tmp_table(THD *thd, Temp_table_param *param,
                               param->schema_table))
     return nullptr; /* purecov: inspected */
 
-  if (table->s->keys == 1 && table->key_info)
+  if (table->s->total_keys == 1 && table->key_info)
     table->key_info->algorithm = table->file->get_default_index_algorithm();
 
   table->hidden_field_count = param->hidden_field_count;
@@ -1808,7 +1818,7 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
     KEY *hash_key = keyinfo;
     KEY_PART_INFO *hash_kpi = key_part_info;
 
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     table->key_info = share->key_info = hash_key;
     hash_key->table = table;
     hash_key->key_part = hash_kpi;
@@ -1817,7 +1827,7 @@ TABLE *create_duplicate_weedout_tmp_table(THD *thd, uint uniq_tuple_length_arg,
     hash_key->key_length = hash_kpi->store_length;
   } else {
     DBUG_PRINT("info", ("Creating group key in temporary table"));
-    share->keys = 1;
+    share->total_keys = share->keys = 1;
     table->key_info = table->s->key_info = keyinfo;
     keyinfo->key_part = key_part_info;
     keyinfo->actual_flags = keyinfo->flags = HA_NOSAME;
@@ -2318,7 +2328,8 @@ static void trace_tmp_table(Opt_trace_context *trace, const TABLE *table) {
     trace_tmp.add("in_plan_at_position", tab->idx());
   trace_tmp.add("columns", s->fields)
       .add("row_length", s->reclength)
-      .add("key_length", table->s->keys > 0 ? table->key_info->key_length : 0)
+      .add("key_length",
+           table->s->total_keys > 0 ? table->key_info->key_length : 0)
       .add("unique_constraint", table->hash_field ? true : false)
       .add("makes_grouped_rows", table->group != nullptr)
       .add("cannot_insert_duplicates", s->is_distinct);
@@ -2389,7 +2400,7 @@ bool instantiate_tmp_table(THD *thd, TABLE *table) {
     return true;
   }
 
-  if (share->first_unused_tmp_key < share->keys) {
+  if (share->first_unused_tmp_key < share->total_keys) {
     /*
       Some other clone of this materialized temporary table has defined
       "possible" keys; as we are here creating the table in the engine, we must
@@ -2397,7 +2408,7 @@ bool instantiate_tmp_table(THD *thd, TABLE *table) {
       now. As the other clone assumes they will be available if the Optimizer
       chooses them, we make them existing.
     */
-    share->find_first_unused_tmp_key(Key_map(share->keys));
+    share->find_first_unused_tmp_key(Key_map(share->total_keys));
   }
 
   Opt_trace_context *const trace = &thd->opt_trace;
@@ -2911,7 +2922,8 @@ bool reposition_innodb_cursor(TABLE *table, ha_rows row_num) {
     the same row as before the engine conversion, so that rnd_next() will
     read the (row_num+1)th row.
   */
-  return table->file->ha_rnd_pos(table->record[0], rowid_bytes);
+  return table->file->ha_rnd_pos(table->record[0], rowid_bytes,
+                                 komodo::GM_NONE);
 }
 
 // Computes Func_ptr::m_func_bits.

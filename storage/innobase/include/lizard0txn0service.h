@@ -33,10 +33,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn0service_h
 #define lizard0txn0service_h
 
-#include <tuple>
-
-#include "my_inttypes.h"
-
 #include "lizard0trx0service.h"
 #include "ut0dbg.h"
 

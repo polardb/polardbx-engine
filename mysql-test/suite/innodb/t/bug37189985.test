@@ -1,0 +1,80 @@
+# Bug#37189985 Crashing and widespread corruption of spatial indexes
+#              after INPLACE alter table
+#
+# When a rebuild INPLACE ALTER adds an AUTO_INCREMENT column to a table
+# with a SPATIAL INDEX, the R-tree batch inserter caches tuples whose
+# auto-inc field pointed into a per-thread reused buffer. Subsequent
+# rows overwrote the same memory, so batched R-tree entries referenced
+# wrong clustered keys, leaving latent index corruption.
+#
+# Fix: handle_autoinc() deep-copies the auto-inc field onto the row
+# heap before writing the sequence value.
+
+--echo #
+--echo # Setup: table with spatial column and SPATIAL INDEX, enough rows
+--echo # to force multiple R-tree batch inserts
+--echo #
+
+CREATE TABLE geo (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  loc GEOMETRY NOT NULL SRID 0,
+  SPATIAL INDEX idx_loc (loc)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO geo VALUES ($i, CONCAT('point_', $i),
+    ST_GeomFromText(CONCAT('POINT(', $i, ' ', $i * 2, ')')));
+  inc $i;
+}
+--enable_query_log
+
+--echo #
+--echo # Verify spatial index works before ALTER
+--echo #
+
+SELECT COUNT(*) FROM geo;
+SELECT id FROM geo WHERE MBRContains(
+  ST_GeomFromText('POLYGON((10 10, 10 100, 50 100, 50 10, 10 10))'), loc)
+  ORDER BY id LIMIT 5;
+
+CHECK TABLE geo;
+
+--echo #
+--echo # INPLACE ALTER: add AUTO_INCREMENT column (triggers rebuild with
+--echo # new auto-inc field in the dtuple that R-tree batch caches)
+--echo #
+
+ALTER TABLE geo ADD COLUMN seq BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  DROP PRIMARY KEY, ADD PRIMARY KEY (seq), ALGORITHM=INPLACE;
+
+--echo #
+--echo # Verify spatial index integrity after ALTER
+--echo #
+
+CHECK TABLE geo;
+
+SELECT COUNT(*) FROM geo;
+
+SELECT id, seq FROM geo WHERE MBRContains(
+  ST_GeomFromText('POLYGON((10 10, 10 100, 50 100, 50 10, 10 10))'), loc)
+  ORDER BY id LIMIT 5;
+
+--echo #
+--echo # Verify we can delete and re-insert without index corruption
+--echo #
+
+DELETE FROM geo WHERE id <= 10;
+INSERT INTO geo (id, name, loc) VALUES
+  (1001, 'new1', ST_GeomFromText('POINT(5 5)')),
+  (1002, 'new2', ST_GeomFromText('POINT(15 25)'));
+
+SELECT id, name FROM geo WHERE MBRContains(
+  ST_GeomFromText('POLYGON((0 0, 0 30, 20 30, 20 0, 0 0))'), loc)
+  ORDER BY id;
+
+CHECK TABLE geo;
+
+DROP TABLE geo;

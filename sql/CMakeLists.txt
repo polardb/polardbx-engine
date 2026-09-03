@@ -21,6 +21,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+INCLUDE_DIRECTORIES(SYSTEM ${CMAKE_SOURCE_DIR}/extra/fast_float/include)
 
 MY_INCLUDE_SYSTEM_DIRECTORIES(ICU)
 
@@ -201,6 +202,7 @@ SET(DD_SOURCES
   dd/impl/system_views/view_table_usage.cc
   dd/impl/system_views/views.cc
   dd/impl/system_views/user_attributes.cc
+  dd/impl/system_views/vector_indexes.cc
 
   dd/impl/tables/character_sets.cc
   dd/impl/tables/check_constraints.cc
@@ -402,6 +404,11 @@ SET(SQL_SHARED_SOURCES
   item_cmpfunc.cc
   item_create.cc
   item_func.cc
+  item_ai_func.cc
+  ai/ai_table.cc
+  ai/ai_cache.cc
+  ai/ai_reload.cc
+  ai/proc_ai.cc
   item_gtid_func.cc
   item_pfs_func.cc
   item_json_func.cc
@@ -533,6 +540,7 @@ SET(SQL_SHARED_SOURCES
   sql_alter.cc
   sql_alter_instance.cc
   sql_backup_lock.cc
+  sql_ftrunc_lock.cc
   sql_base.cc
   sql_bootstrap.cc
   sql_initialize.cc
@@ -570,6 +578,7 @@ SET(SQL_SHARED_SOURCES
   sql_locale.cc
   sql_manager.cc
   sql_optimizer.cc
+  komodo0sql0optimizer.cc
   sql_parse.cc
   sql_partition.cc
   sql_partition_admin.cc
@@ -613,7 +622,6 @@ SET(SQL_SHARED_SOURCES
   stateless_allocator.cc
   strfunc.cc
   sys_vars.cc
-  sys_vars_ext.cc
   sys_vars_resource_mgr.cc
   system_variables.cc
   table.cc
@@ -641,8 +649,9 @@ SET(SQL_SHARED_SOURCES
   xa/sql_xa_start.cc
   xa/transaction_cache.cc
   xa/xid_extract.cc
-  xa/lizard_xa_trx.cc
-  xa/lizard_xa_proc.cc
+  xa/komodo0xa0trx.cc
+  xa/komodo0xa0proc.cc
+  xa/komodo0xa.cc
   common/component.cc
   polarx_proc/changeset.cc
   polarx_proc/changeset_manager.cc
@@ -661,6 +670,9 @@ SET(SQL_SHARED_SOURCES
   trans_proc/returning_parse.cc
   package/proc_gpp.cc
   package/proc_conn.cc
+  package/proc_checkpoint.cc
+  package/proc_ftrunc_lock.cc
+  package/proc_spc_analyze.cc
   trans_proc/implicit_savepoint.cc
   ccl/ccl_cache.cc
   ccl/ccl.cc
@@ -675,6 +687,7 @@ SET(SQL_SHARED_SOURCES
   ccl/ccl_bucket.cc
   daemon_proxy_keyring/daemon_proxy_keyring.cc
   sql_statistics.cc
+  common/secondary_engine_attrs.cc
   ppi/ppi.cc
   ppi/ppi_noop.cc
   ppi/ppi_table_iostat.cc
@@ -704,10 +717,11 @@ SET(SQL_SHARED_SOURCES
   outline/outline_reload.cc
   timestamp_service.cc
   tso/tso_proc.cc
-  lizard/lizard_snapshot.cc
-  lizard/lizard_hb_freezer.cc
-  lizard_rpl_binlog_sender.cc
-  lizard_rpl_rli.cc
+  transaction/komodo0snapshot.cc
+  transaction/komodo0hb0freezer.cc
+  komodo0rpl0binlog0sender.cc
+  komodo0rpl0rli.cc
+  komodo0xlog0recovery.cc
   sql_common_ext.cc
   sql_jemalloc.cc
   consensus/consensus_err.cc
@@ -715,12 +729,13 @@ SET(SQL_SHARED_SOURCES
   consensus/consensus_rpl_info_factory.cc
   consensus/consensus_rpl_info_handler.cc
   consensus/consensus_rpl_rli.cc
-  consensus/consensus_recovery.cc
   consensus/consensus_common.cc
   consensus/consensus_proc.cc
-  consensus_log_index.cc
+  consensus/komodo0buffer.cc
+  consensus/komodo0fifo0cache.cc
+  consensus/komodo0mem0pool.cc
+  consensus_logindex_manager.cc
   consensus_recovery_manager.cc
-
   sql_implicit_common.cc
   sql_implicit_element.cc
   xrpc/xrpc_proc.cc
@@ -728,14 +743,23 @@ SET(SQL_SHARED_SOURCES
   keyring/keyring_common.cc
   keyring/keyring_generate_key.cc
   keyring/keyring_current_key_id.cc
+  enc_checksum/enc_checksum.cc
+  enc_checksum/enc_checksum_noop.cc
   inventory/inventory_hint_parse.cc
   inventory/inventory_hint.cc
-  lizard/undo_proc.cc
-  lizard_sql_class.cc
+  transaction/komodo0undo0proc.cc
+  komodo0sql0class.cc
   pli/license_proc.cc
   pli/pli.cc
   pli/pli_noop.cc
   package/proc_cleanout.cc
+  komodo0sql0guess0clust.cc
+  komodo0handler0types.cc
+  komodo0mon.cc
+  komodo0assert.cc
+  column_encryption/column_encryption.cc
+  column_encryption/item_encryption.cc
+  column_encryption/column_encryption_ctx.cc
 )
 
 IF(BUILD_IS_SINGLE_CONFIG)
@@ -904,6 +928,19 @@ SET(SQL_SOURCE
   srv_session.cc
   srv_session_info_service.cc
   srv_session_service.cc
+  murmurhash/murmurhash3.cc
+  vidx/vidx_func.cc
+  vidx/vidx_field.cc
+  vidx/vidx_index.cc
+  vidx/vidx_ddl.cc
+  vidx/vidx_ddl_build.cc
+  vidx/vidx_hnsw.cc
+  vidx/vidx_hnsw_ops.cc
+  vidx/vidx_log.cc
+  vidx/vidx_aux_dml.cc
+  vidx/vidx_stats.cc
+  vidx/vidx_proc.cc
+  vidx/vidx_text_parser.cc
   )
 
 IF(NOT HAVE_SETNS)
@@ -1035,6 +1072,14 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
   )
 ENDIF()
 
+# For vidx
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 7
+   AND (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64"))
+  IF(NOT HAVE_IMMINTRIN_H)
+    MESSAGE(FATAL_ERROR "HAVE_IMMINTRIN_H is not set to 1. SIMD optimizations may not be available.")
+  ENDIF()
+ENDIF()
+
 ADD_LIBRARY(sql_main STATIC ${SQL_SOURCE})
 ADD_DEPENDENCIES(sql_main GenServerSource)
 ADD_DEPENDENCIES(sql_main GenDigestServerSource)
@@ -1106,6 +1151,7 @@ SET(BINLOG_SOURCE
   binlog_istream.cc
   binlog_ostream.cc
   binlog_reader.cc
+  komodo0binlog0reader.cc
   changestreams/misc/replicated_columns_view.cc
   changestreams/misc/replicated_columns_view_with_gipk_on_source.cc
   changestreams/misc/column_filters/column_filter_inbound_func_indexes.cc
@@ -1132,15 +1178,22 @@ SET(BINLOG_SOURCE
   rpl_utility.cc
   sql_binlog.cc
   stream_cipher.cc
-  binlog/lizard0recovery.cc
   gcn_log_event.cc
   consensus_info.cc
-  bl_consensus_log.cc
-  appliedindex_checker.cc
+  binlog/komodo0recovery.cc
+  komodo0consensus0xlog.cc
+  komodo0xlog0engine.cc
+  komodo0xlog0meta.cc
+  komodo0xlog.cc
+  applied_index_checker.cc
   replica_read_manager.cc
   consensus_admin.cc
-  consensus_fifo_cache_manager.cc
+  # consensus_cache_manager.cc
   consensus_prefetch_manager.cc
+  disk_sentinel.cc
+  komodo0state0change0manager.cc
+  consensus_logindex_manager.cc
+  serverless/komodo0switchover0manager.cc
   )
 ADD_LIBRARY(binlog STATIC ${BINLOG_SOURCE})
 TARGET_LINK_LIBRARIES(binlog binlogevents_static)
@@ -1198,7 +1251,7 @@ SET (SLAVE_SOURCE
   udf_service_impl.cc
   udf_service_util.cc
   consensus_info.cc
-  appliedindex_checker.cc
+  applied_index_checker.cc
   replica_read_manager.cc
   consensus_admin.cc
   )
@@ -1236,6 +1289,11 @@ ADD_CONVENIENCE_LIBRARY(ppi ${PPI_SOURCE})
 # build as static library
 SET (PLI_SOURCE pli/pli.cc pli/pli_noop.cc)
 ADD_CONVENIENCE_LIBRARY(pli ${PLI_SOURCE})
+
+# build as static library
+SET (ENC_CHECKSUM_SOURCE enc_checksum/enc_checksum.cc
+     enc_checksum/enc_checksum_noop.cc)
+ADD_CONVENIENCE_LIBRARY(sql_enc_checksum ${ENC_CHECKSUM_SOURCE})
 
 IF(WIN32)
   SET(MYSQLD_SOURCE

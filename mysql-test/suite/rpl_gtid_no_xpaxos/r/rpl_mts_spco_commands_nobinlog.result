@@ -72,7 +72,7 @@ include/rpl_connect.inc [creating master]
 # Setup
 
 [connection master]
-CREATE TABLE t3(a INT PRIMARY KEY)Engine=MyISAM; INSERT INTO t3 VALUES(1),(2),(3);
+DROP TABLE IF EXISTS t31; CREATE TABLE t3(a INT PRIMARY KEY)Engine=MyISAM; INSERT INTO t3 VALUES(1),(2),(3);
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 # Block slave sql applier threads
@@ -110,13 +110,57 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 include/rpl_connect.inc [creating master]
 
 #################################################################
-# 3. Check for OPTIMIZE TABLE
+# 3. Check for REPAIR TABLE
 #################################################################
 
 # Setup
 
 [connection master]
-CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = InnoDB; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB;
+DROP TABLE IF EXISTS t31; CREATE TABLE t3(a INT PRIMARY KEY)Engine=InnoDB; INSERT INTO t3 VALUES(1),(2),(3);
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+
+# Block slave sql applier threads
+
+[connection slave]
+BEGIN; INSERT INTO t2 VALUES (1);
+[connection slave]
+[connection slave]
+
+# Generate the transactions which can be applied in parallel on slave
+
+[connection master]
+# Adding debug point 'set_commit_parent_100' to @@GLOBAL.debug
+BEGIN; INSERT INTO t2 VALUES (1); COMMIT; BEGIN; INSERT INTO t2 VALUES (2); COMMIT; SET TIMESTAMP = 100; REPAIR TABLE t3;
+Table	Op	Msg_type	Msg_text
+test.t3	repair	note	The storage engine for the table doesn't support repair
+[connection server_1]
+BEGIN; INSERT INTO t2 VALUES (3); COMMIT; BEGIN; INSERT INTO t2 VALUES (4); COMMIT; BEGIN; INSERT INTO t2 VALUES (5); COMMIT;
+# Removing debug point 'set_commit_parent_100' from @@GLOBAL.debug
+
+# Verify the transactions are ordered correctly on slave
+
+[connection server_2]
+include/assert.inc [Verify table t2 has 0 rows]
+[connection slave]
+include/assert.inc [Exactly 0 GTIDs should have been committed since last invocation]
+
+# Rollback the first insert so that slave applier threads can
+# unblock and proceed. Verify the transactions are applied.
+
+[connection slave]
+ROLLBACK;
+TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP TABLE t3;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+include/rpl_connect.inc [creating master]
+
+#################################################################
+# 4. Check for OPTIMIZE TABLE
+#################################################################
+
+# Setup
+
+[connection master]
+DROP TABLE IF EXISTS t31; CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = InnoDB; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 # Block slave sql applier threads
@@ -155,10 +199,54 @@ include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 include/rpl_connect.inc [creating master]
 
 #################################################################
-# 4. Check for RENAME TABLE
+# 5. Check for OPTIMIZE TABLE
 #################################################################
 
-# 4.1 Check for RENAME single table
+# Setup
+
+[connection master]
+DROP TABLE IF EXISTS t31; CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = MyISAM; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+
+# Block slave sql applier threads
+
+[connection slave]
+BEGIN; INSERT INTO t4 VALUES (1);
+[connection slave]
+[connection slave]
+
+# Generate the transactions which can be applied in parallel on slave
+
+[connection master]
+# Adding debug point 'set_commit_parent_100' to @@GLOBAL.debug
+BEGIN; INSERT INTO t4 VALUES (1); COMMIT; BEGIN; INSERT INTO t4 VALUES (2); COMMIT; OPTIMIZE TABLE t3;
+Table	Op	Msg_type	Msg_text
+test.t3	optimize	status	Table is already up to date
+[connection server_1]
+BEGIN; INSERT INTO t4 VALUES (3); COMMIT; BEGIN; INSERT INTO t4 VALUES (4); COMMIT; BEGIN; INSERT INTO t4 VALUES (5); COMMIT;
+# Removing debug point 'set_commit_parent_100' from @@GLOBAL.debug
+
+# Verify the transactions are ordered correctly on slave
+
+[connection server_2]
+include/assert.inc [Verify table t4 is empty]
+[connection slave]
+include/assert.inc [Exactly 0 GTIDs should have been committed since last invocation]
+
+# Rollback the first insert so that slave applier threads can
+# unblock and proceed. Verify the transactions are applied.
+
+[connection slave]
+ROLLBACK;
+DROP TABLE t3; DROP TABLE t4;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+include/rpl_connect.inc [creating master]
+
+#################################################################
+# 6. Check for RENAME TABLE
+#################################################################
+
+# 6.1 Check for RENAME single table
 
 # Setup
 
@@ -199,7 +287,7 @@ ROLLBACK;
 RENAME TABLE t10 to t1; TRUNCATE TABLE t1; TRUNCATE TABLE t2;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
-# 4.2 Check for RENAME multiple tables
+# 6.2 Check for RENAME multiple tables
 
 # Setup
 
@@ -241,7 +329,7 @@ DROP TABLE t10, t2, t30;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 5. CREATE TABLE and CREATE TABLE IF NOT EXISTS
+# 7. CREATE TABLE and CREATE TABLE IF NOT EXISTS
 ####################################################################
 
 # Setup
@@ -284,7 +372,7 @@ DROP TABLE t10, t20; TRUNCATE TABLE t1; TRUNCATE TABLE t2;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 6. DROP TABLE and DROP TABLE IF EXISTS
+# 8. DROP TABLE and DROP TABLE IF EXISTS
 ####################################################################
 
 # Setup
@@ -329,7 +417,7 @@ TRUNCATE TABLE t1; CREATE TABLE t2 (c1 INT PRIMARY KEY) ENGINE = InnoDB;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 7. Check for CREATE DATABASE and CREATE DATABASE IF NOT EXISTS
+# 9. Check for CREATE DATABASE and CREATE DATABASE IF NOT EXISTS
 ####################################################################
 
 # Setup
@@ -373,7 +461,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP DATABASE db1; DROP DATABASE db10; DRO
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 8. Check for DROP DATABASE and DROP DATABASE IF EXISTS
+# 10. Check for DROP DATABASE and DROP DATABASE IF EXISTS
 #################################################################
 
 # Setup
@@ -419,7 +507,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 9. Check for CREATE TABLESPACE
+# 11. Check for CREATE TABLESPACE
 #################################################################
 
 # Setup
@@ -462,7 +550,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP TABLESPACE ts1;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 10. Check for ALTER TABLESPACE
+# 12. Check for ALTER TABLESPACE
 #################################################################
 
 # Setup
@@ -505,7 +593,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP TABLE t11; DROP TABLESPACE ts11;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 11. Check for DROP TABLESPACE
+# 13. Check for DROP TABLESPACE
 #################################################################
 
 # Setup
@@ -548,7 +636,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 12. Check for CREATE INDEX
+# 14. Check for CREATE INDEX
 #################################################################
 
 # Setup
@@ -591,7 +679,7 @@ TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP INDEX idx1 ON t3; DROP TABLE t3;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 #################################################################
-# 13. Check for DROP INDEX
+# 15. Check for DROP INDEX
 #################################################################
 
 # Setup
@@ -634,7 +722,7 @@ TRUNCATE TABLE t1; DROP TABLE t2, t3;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 13. DROP FUNCTION and DROP FUNCTION IF EXISTS
+# 15. DROP FUNCTION and DROP FUNCTION IF EXISTS
 ####################################################################
 
 # Setup
@@ -678,7 +766,7 @@ DROP TABLE t1;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 14. DROP PROCEDURE and DROP PROCEDURE IF EXISTS
+# 16. DROP PROCEDURE and DROP PROCEDURE IF EXISTS
 ####################################################################
 
 # Setup
@@ -723,7 +811,7 @@ TRUNCATE TABLE t1;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 15. DROP VIEW and DROP VIEW IF EXISTS
+# 17. DROP VIEW and DROP VIEW IF EXISTS
 ####################################################################
 
 # Setup
@@ -767,7 +855,7 @@ DROP TABLE t1;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 16. DROP EVENT and DROP EVENT IF EXISTS
+# 18. DROP EVENT and DROP EVENT IF EXISTS
 ####################################################################
 
 # Setup
@@ -812,7 +900,7 @@ TRUNCATE TABLE t1;
 include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
 
 ####################################################################
-# 17. DROP TRIGGER and DROP TRIGGER IF EXISTS
+# 19. DROP TRIGGER and DROP TRIGGER IF EXISTS
 ####################################################################
 
 # Setup

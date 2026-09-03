@@ -58,6 +58,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0new.h"
 #include "ut0rnd.h"
 
+#include "lizard0rem0types.h"
+
 namespace lizard {
 class Index_policy;
 }
@@ -290,6 +292,10 @@ in constraints which reference it */
 @param[in,out]  index   index to remove, this object is destroyed and must not
 be accessed by the caller afterwards */
 void dict_index_remove_from_cache(dict_table_t *table, dict_index_t *index);
+
+/** Gathers ids of all tables in cache at the moment.
+@return ids of all tables */
+std::vector<table_id_t> dict_get_all_table_ids();
 
 /** Change the id of a table object in the dictionary cache. This is used in
  DISCARD TABLESPACE. */
@@ -810,8 +816,8 @@ inline bool dict_table_is_compressed_temporary(const dict_table_t *table);
  @return own: node pointer */
 [[nodiscard]] dtuple_t *dict_index_build_node_ptr(
     const dict_index_t *index, /*!< in: index */
-    const rec_t *rec,          /*!< in: record for which
-                               to build node  pointer */
+    creg_t reg,                /*!< in: record for which
+                                     to build node  pointer */
     page_no_t page_no,         /*!< in: page number to
                                put in node pointer */
     mem_heap_t *heap,          /*!< in: memory heap where
@@ -827,16 +833,16 @@ store the prefix, the new buffer will be allocated.
 @param[in,out]  buf      memory buffer for the copied prefix, or nullptr
 @param[in,out]  buf_size        buffer size, size of allocated buffer
 @return pointer to the prefix record */
-[[nodiscard]] rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
-                                                      const rec_t *rec,
-                                                      ulint *n_fields,
-                                                      byte **buf,
-                                                      size_t *buf_size);
+[[nodiscard]] reg_t dict_index_copy_rec_order_prefix(const dict_index_t *index,
+                                                     creg_t reg,
+                                                     ulint *n_fields,
+                                                     boc_t *boc,
+                                                     size_t *buf_size);
 /** Builds a typed data tuple out of a physical record.
  @return own: data tuple */
 [[nodiscard]] dtuple_t *dict_index_build_data_tuple(
     const dict_index_t *index, /*!< in: index */
-    const rec_t *rec,          /*!< in: record for which to build data tuple */
+    creg_t reg,                /*!< in: record for which to build data tuple */
     ulint n_fields,            /*!< in: number of data fields */
     mem_heap_t *heap);         /*!< in: memory heap where tuple created */
 /** Gets the space id of the root of the index tree.
@@ -1339,7 +1345,7 @@ class DDTableBuffer {
   @param[in]    rec     clustered index record
   @return update vector of differing fields without system columns,
   or NULL if there isn't any different field */
-  upd_t *update_set_metadata(const dtuple_t *entry, const rec_t *rec);
+  upd_t *update_set_metadata(const dtuple_t *entry, const btr_pcur_t *pcur);
 
  private:
   /** The clustered index of this system table */
@@ -1744,13 +1750,15 @@ void get_permissible_max_size(const dict_table_t *table,
 @param[in]  page_rec_max maximum size of possible record on leaf page
 @param[in]  page_ptr_max maximum size of possible record on non-leaf page
 @param[out] rec_max_size maximum size of record on page
-@return true if max record size is within limit, false otherwise. */
+@return true if max record size exceeds limit, false otherwise. */
 bool dict_index_validate_max_rec_size(const dict_table_t *table,
                                       const dict_index_t *index, bool strict,
                                       const size_t page_rec_max,
                                       const size_t page_ptr_max,
                                       size_t &rec_max_size);
 
+#ifndef INNODB_DICT0DICT_IC_STANDALONE
 #include "dict0dict.ic"
+#endif /* !INNODB_DICT0DICT_IC_STANDALONE */
 
 #endif

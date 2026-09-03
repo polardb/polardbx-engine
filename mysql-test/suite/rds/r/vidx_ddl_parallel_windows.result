@@ -1,0 +1,7 @@
+VERDICT window 1 published parallel batches: PASS
+VERDICT window 2 added parallel batches: PASS
+VERDICT continuation window read-through loaded historical nodes: PASS
+VERDICT work-completed advanced across window 2: PASS
+VERDICT final stage progress 600/600: PASS
+VERDICT live==600 across windows: PASS
+VERDICT ANN self-probes across windows: PASS

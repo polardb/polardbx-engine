@@ -29,6 +29,7 @@
 #include "sql/sql_class.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "vidx/vidx_index.h"  // vidx::feature_disabled
 
 #include <cmath>
 #include <optional>
@@ -66,6 +67,7 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
       auto_flags(old_field->auto_flags),
       charset(old_field->charset()),  // May be NULL ptr
       is_explicit_collation(false),
+      is_vector(old_field->is_vector()),
       geom_type(Field::GEOM_GEOMETRY),
       field(old_field),
       is_nullable(old_field->is_nullable()),
@@ -198,7 +200,7 @@ bool Create_field::init(
     bool has_explicit_collation, uint fld_geom_type,
     Value_generator *fld_gcol_info, Value_generator *fld_default_val_expr,
     std::optional<gis::srid_t> srid, dd::Column::enum_hidden_type hidden,
-    bool is_array_arg) {
+    bool is_array_arg, bool is_vector_type) {
   uint sign_len, allowed_type_modifier = 0;
   ulong max_field_charlength = MAX_FIELD_CHARLENGTH;
 
@@ -210,6 +212,12 @@ bool Create_field::init(
   field_name = fld_name;
   flags = fld_type_modifier;
   is_explicit_collation = (fld_charset != nullptr);
+  is_vector = (is_vector_type && fld_type == MYSQL_TYPE_VARCHAR);
+
+  if (is_vector && vidx::feature_disabled) {
+    my_error(ER_VECTOR_DISABLED, MYF(0));
+    return true;
+  }
 
   if (!has_explicit_collation && fld_charset == &my_charset_utf8mb4_0900_ai_ci)
     charset = thd->variables.default_collation_for_utf8mb4;
@@ -326,6 +334,24 @@ bool Create_field::init(
 
     if (m_max_display_width_in_codepoints == 0)
       display_width_in_codepoints = nullptr; /* purecov: inspected */
+  }
+
+  /*
+    Enforce the VECTOR dimension upper bound on the plain column-definition
+    path (v VECTOR(N)). Unlike CAST AS VECTOR(N) (see item_create.cc), this
+    path has no other MAX_DIMENSIONS check: an N > MAX_DIMENSIONS pushes the
+    byte length past the VARCHAR limit and, in non-strict mode, the column is
+    silently converted to BLOB while is_vector stays set, which then trips an
+    assert in the data-dictionary layer. At this point
+    m_max_display_width_in_codepoints holds the byte length (N *
+    VECTOR_PRECISION); reject N == 0 and N > MAX_DIMENSIONS.
+  */
+  if (is_vector &&
+      (m_max_display_width_in_codepoints == 0 ||
+       m_max_display_width_in_codepoints >
+           static_cast<size_t>(vidx::MAX_DIMENSIONS) * vidx::VECTOR_PRECISION)) {
+    my_error(ER_WRONG_ARGUMENTS, MYF(0), "VECTOR");
+    return true;
   }
 
   sign_len = fld_type_modifier & UNSIGNED_FLAG ? 0 : 1;

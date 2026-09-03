@@ -35,7 +35,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "dict0mem.h"
 
-#include "lizard0data0types.h"
 #include "lizard0txn0rec0types.h"
 
 /** Whether Btree Index Record has transactional capability or not, its totally
@@ -70,6 +69,19 @@ extern bool inject_stress_test_for_panda;
 inline bool dict_index_is_panda(const dict_index_t *index) {
   return index->is_panda();
 }
+
+/**
+ * Whether btree index has tid column
+ *
+ * @param[in]	index secondary index
+ *
+ * @retval	true	has tid column
+ * @retval	false
+ * */
+inline bool dict_index_is_hippo(const dict_index_t *index) {
+  return index->is_hippo();
+}
+
 inline bool dict_index_is_clust(const dict_index_t *index) {
   return index->is_clustered();
 }
@@ -85,6 +97,8 @@ inline txn_layout_t dict_index_txn_layout(const dict_index_t *index) {
     return txn_layout_t::TL_CLOVER;
   else if (index->is_panda())
     return txn_layout_t::TL_BAMBOO;
+  else if (index->is_hippo())
+    return txn_layout_t::TL_LOTUS;
   else
     return txn_layout_t::TL_NONE;
 }
@@ -97,7 +111,7 @@ inline ulint dict_index_n_sec_functional_fields(const dict_index_t *index) {
     return 0;
   }
   return txn_layout_get_n_transactional_fields(dict_index_txn_layout(index)) +
-         index->n_s_gfields;
+         index->n_s_gfields + index->n_s_tfields;
 }
 
 /**

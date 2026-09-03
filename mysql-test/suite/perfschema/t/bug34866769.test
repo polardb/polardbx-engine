@@ -1,0 +1,44 @@
+# Created 2026-08-04 by kaiwu.zfy
+#
+# Bug#34866769 : performance_schema.innodb_redo_log_files 的所有 open_table()
+# 共用同一个静态扫描游标。
+#
+# Log_files_pfs_table::open_table() 无条件返回 s_instance 的地址作为 table handle,
+# 并把 PSI_pos 指向 s_instance.m_position, 于是任意两个同时打开的扫描 handle 共享
+# m_position / m_rows_n / m_rows_array。
+#
+# 不需要并发: 同一条 SQL 里把这张表打开两次就够了。内层扫描推进共享位置, 外层
+# rnd_next() 越过末尾, 命中 log0pfs.cc 中的 ut_a(m_position == m_rows_n + 1)。
+#
+# 这是标准回归用例:
+#   缺陷存在 -> mysqld abort(signal 6), MTR 判定 server crash, 保留 core 与 stack
+#   修复后   -> 查询正常返回 joined_ok = 1, 用例 PASS
+#
+# 刻意不做任何崩溃兜底: 不写 mysqld.N.expect, 不用 --error 2013, 不加 suppression,
+# 崩溃必须以 MTR 原生失败的形式暴露出来。
+#
+# 注意: 存活 redo 文件数每次运行都不同, 只判非空, 不把行数写进 result。
+
+--source include/not_valgrind.inc
+
+--echo #### precondition: performance_schema must be ON and the table non-empty
+let $pfs= query_get_value(SELECT @@performance_schema AS c, c, 1);
+--echo # performance_schema: $pfs
+if ($pfs == 0) {
+  die Precondition broken: performance_schema is OFF so the table reports zero rows and the shared cursor never advances;
+}
+
+SELECT COUNT(*) INTO @n FROM performance_schema.innodb_redo_log_files;
+let $n= query_get_value(SELECT @n AS c, c, 1);
+if ($n == 0) {
+  die Precondition broken: innodb_redo_log_files is empty;
+}
+
+--echo #### a single scan is harmless
+SELECT COUNT(*) > 0 AS single_scan_ok FROM performance_schema.innodb_redo_log_files;
+
+--echo #### two scan handles inside ONE statement must not share the cursor
+SELECT /*+ NO_BNL(a, b) */ COUNT(*) > 0 AS joined_ok
+FROM performance_schema.innodb_redo_log_files a
+STRAIGHT_JOIN performance_schema.innodb_redo_log_files b
+ON b.file_id >= a.file_id;

@@ -1,0 +1,145 @@
+#
+# Test recover xa specification.
+#
+source include/have_log_bin.inc;
+--source include/have_binlog_format_row.inc
+--source include/not_valgrind.inc
+source include/have_debug.inc;
+--source include/not_crashrep.inc
+
+call mtr.add_suppression('Unsafe statement written .*');
+call mtr.add_suppression('Found .*');
+
+connection default;
+
+create database db_crash_3;
+create table db_crash_3.t(id int);
+insert into db_crash_3.t values(0);
+
+
+--let $iter=1
+while ($iter <= 2)
+{
+	if ($iter == 1)
+	{
+	--let $sql=insert into db_crash_3.t values(1)
+	}
+	if ($iter == 2)
+	{
+	--let $sql=update db_crash_3.t set id = id+1
+	}
+
+	--echo # run cmd: $sql
+	connection default;
+	xa recover;
+
+
+	--echo # 0$iter. normal commit + simulate_crash_after_sync_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,simulate_crash_after_sync_binlog";
+	begin;
+	--eval $sql
+	--error 2013
+	commit;
+
+	--source suite/binlog_gtid/t/common_restart_and_force_promote_leader.inc
+
+	xa recover;
+	select count(*) from db_crash_3.t order by id;
+	--eval $sql
+	--source include/wait_leader_apply_catchup.inc
+
+
+	--echo # 1$iter. xa prepare + simulate_crash_after_sync_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,simulate_crash_after_sync_binlog";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa prepare 'xx';
+
+	--source suite/binlog_gtid/t/common_restart_and_force_promote_leader.inc
+
+	xa recover;
+	select count(*) from db_crash_3.t order by id;
+	xa commit 'xx';
+	--eval $sql
+	--source include/wait_leader_apply_catchup.inc
+
+
+	--echo # 2$iter. xa commit one phase + simulate_crash_after_sync_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	SET SESSION debug="+d,simulate_crash_after_sync_binlog";
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+
+	--error 2013
+	xa commit 'xx' one phase;
+
+	--source suite/binlog_gtid/t/common_restart_and_force_promote_leader.inc
+
+	xa recover;
+	select count(*) from db_crash_3.t order by id;
+	--error ER_XAER_NOTA
+	xa commit 'xx' one phase;
+	--eval $sql
+	--source include/wait_leader_apply_catchup.inc
+
+
+
+	--echo # 3$iter. xa commit + simulate_crash_after_sync_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,simulate_crash_after_sync_binlog";
+	--error 2013
+	xa commit 'xx';
+
+	--source suite/binlog_gtid/t/common_restart_and_force_promote_leader.inc
+
+	xa recover;
+	select count(*) from db_crash_3.t order by id;
+	--error ER_XAER_NOTA
+	xa commit 'xx';
+	--eval $sql
+	--source include/wait_leader_apply_catchup.inc
+
+
+	--echo # 4$iter. xa rollback + simulate_crash_after_sync_binlog
+	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+
+	xa start 'xx';
+	--eval $sql
+	xa end 'xx';
+	xa prepare 'xx';
+
+	SET SESSION debug="+d,simulate_crash_after_sync_binlog";
+	--error 2013
+	xa rollback 'xx';
+
+	--source suite/binlog_gtid/t/common_restart_and_force_promote_leader.inc
+
+	xa recover;
+	select count(*) from db_crash_3.t order by id;
+	--error ER_XAER_NOTA
+	xa rollback 'xx';
+	--eval $sql
+	--source include/wait_leader_apply_catchup.inc
+
+	--inc $iter
+}
+
+connection default;
+drop table db_crash_3.t;
+drop database db_crash_3;
+--source include/wait_follower_catchup.inc

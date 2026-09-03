@@ -232,6 +232,8 @@ class Binlog_cache_storage : public Basic_ostream {
   */
   bool is_empty() const { return length() == 0; }
 
+  IO_CACHE *get_io_cache() { return m_file.get_io_cache(); }
+
  private:
   Truncatable_ostream *m_pipeline_head = nullptr;
   IO_CACHE_binlog_cache_storage m_file;

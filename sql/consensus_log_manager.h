@@ -34,13 +34,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include "basic_ostream.h"
 #include "binlog.h"
-#include "consensus_fifo_cache_manager.h"
+#include "consensus_cache_manager.h"
 #include "consensus_info.h"
-#include "consensus_log_index.h"
+#include "consensus_logindex_manager.h"
 #include "consensus_prefetch_manager.h"
 #include "my_macros.h"
+#include "sql/applied_index_checker.h"
 #include "sql/rpl_rli.h"
 #include <include/scope_guard.h>
+#include "sql/consensus/komodo0fifo0cache.h"
+
 
 #define CACHE_BUFFER_SIZE (IO_SIZE * 16)
 
@@ -48,29 +51,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
   27  // LOG_EVENT_HEADER_LEN + POST_HEADER_LENGTH + BINLOG_CHECKSUM_LEN
 
 class MYSQL_BIN_LOG;
+
+namespace komodo {
+
 class Consensus_recovery_manager;
 
-enum Consensus_Log_System_Status { RELAY_LOG_WORKING = 0, BINLOG_WORKING = 1 };
-
-enum Consensus_log_event_flag {
-  FLAG_GU1 = 1,
-  FLAG_GU2 = 1 << 1, /* FLAG_GU2 = 3 - FLAG_GU1 */
-  FLAG_LARGE_TRX = 1 << 2,
-  FLAG_LARGE_TRX_END = 1 << 3,
-  FLAG_CONFIG_CHANGE = 1 << 4,
-  FLAG_BLOB = 1 << 5,
-  FLAG_BLOB_END = 1 << 6,
-  FLAG_BLOB_START = 1 << 7 /* we should mark the start for SDK */
-};
-
-enum Consensus_Leader_Transfer_State {
-  CLTS_LIMIT_NONE = 0,
-  CLTS_LIMIT_NEW_TRX = 1,
-  CLTS_LIMIT_XA_FINISH = 2,
-  CLTS_LIMIT_ALL = 3,
-};
-
-struct ConsensusStateChange;
+enum Consensus_Log_State { RELAY_LOG_WORKING = 0, BINLOG_WORKING = 1 };
 
 class ConsensusCommitPos {
  public:
@@ -81,24 +67,23 @@ class ConsensusCommitPos {
   uint64_t pos;
   uint64_t index;
 
-  friend class ConsensusLogManager;
+  friend class Consensus_log_manager;
 };
 
-class ConsensusLogManager {
+class Consensus_log_manager {
  public:
-  ConsensusLogManager();
-  ~ConsensusLogManager();
-  int init(uint64 max_fifo_cache_size_arg, uint64 max_prefetch_cache_size_arg,
-           uint64 fake_current_index = 0);
-  int init_consensus_info();
-  int init_service();
+  Consensus_log_manager();
+  ~Consensus_log_manager();
+  int init(uint64 fake_current_index = 0);
+  int create_rpl_info();
+  int check_force_change_meta(const bool force_learner);
   int cleanup();
 
   // class args
   Relay_log_info *get_relay_log_info() { return rli_info; }
   IO_CACHE *get_cache();
   MYSQL_BIN_LOG::Binlog_ofile *get_log_file() { return cache_log.get(); }
-  Consensus_Log_System_Status get_status() { return status; }
+  Consensus_Log_State get_status() { return status; }
   uint64 get_current_index() { return current_index; }
   uint64 get_apply_index() { return apply_index; }
   uint64 get_real_apply_index() { return real_apply_index; }
@@ -114,17 +99,11 @@ class ConsensusLogManager {
   bool get_in_large_event_appending() { return in_large_event_appending; }
   bool get_enable_rotate() { return enable_rotate; }
 
-  Consensus_info *get_consensus_info() { return consensus_info; }
-  Consensus_recovery_manager *get_recovery_manager() {
-    return recovery_manager;
+  Consensus_logindex_manager *get_log_file_index() { return log_file_index; }
+  uint64_t get_mock_start_index(const uint64_t consensus_start_index) const {
+    return std::max(log_file_index->get_first_index(), consensus_start_index);
   }
-  ConsensusFifoCacheManager *get_fifo_cache_manager() {
-    return fifo_cache_manager;
-  }
-  ConsensusPreFetchManager *get_prefetch_manager() { return prefetch_manager; }
-  ConsensusLogIndex *get_log_file_index() { return log_file_index; }
   mysql_mutex_t *get_sequence_stage1_lock() {
-    //TODD::@yanhua remove it better
     return &LOCK_consensuslog_sequence_stage1;
   }
   mysql_mutex_t *get_term_lock() { return &LOCK_consensuslog_term; }
@@ -141,7 +120,7 @@ class ConsensusLogManager {
   void set_relay_log_info(Relay_log_info *rli_info_arg) {
     rli_info = rli_info_arg;
   }
-  void set_consensus_system_status(Consensus_Log_System_Status status_arg) {
+  void set_consensus_system_status(Consensus_Log_State status_arg) {
     status = status_arg;
   }
   void set_current_index(uint64 current_index_arg) {
@@ -180,7 +159,8 @@ class ConsensusLogManager {
   void set_current_term(uint64 current_term_arg) {
     current_term = current_term_arg;
   }
-  void incr_current_index() { current_index++; }
+
+  uint64 fetch_and_inc_current_index() { return current_index++; }
   void incr_apply_ev_sequence() { apply_ev_seq++; }
   void incr_apply_ev_finish_count() { apply_ev_finish_count++; }
   uint64 get_cache_index();
@@ -188,13 +168,35 @@ class ConsensusLogManager {
   uint64 get_sync_index(bool serious = false);
   uint64 get_final_sync_index();
   uint64 get_final_sync_index_no_lock();
-  uint64 get_wait_milliseconds_for_old_trx_finish();
-  void wait_old_trx_finish();
-  void wait_old_xa_finish();
-  uint64 wait_old_bgc_finish();
+
   void set_sync_index(uint64 sync_index_arg);
   void set_sync_index_if_greater(uint64 sync_index_arg);
   void set_enable_rotate(bool arg) { enable_rotate = arg; }
+  Consensus_info *get_consensus_info() { return consensus_info; }
+
+  void set_consensus_info(Consensus_info *ptr) {
+    consensus_info = ptr;
+  }
+  Consensus_recovery_manager *get_recovery_manager() {
+    return recovery_manager;
+  }
+  void set_recovery_manager(Consensus_recovery_manager *ptr) {
+    recovery_manager = ptr;
+  }
+  Consensus_cache_manager *get_fifo_cache() {
+    return cache_manager;
+  }
+  void set_fifo_cache_manager(Consensus_cache_manager *arg) {
+    cache_manager = arg;
+  }
+
+  void set_prefetch_manager(Consensus_prefetch_manager *arg) {
+    prefetch_manager = arg;
+  }
+
+  void set_applied_index_checker(Applied_index_checker *checker) {
+    m_applied_index_checker = checker;
+  }
 
   // for concurrency
   inline void rdlock_consensus_status() { mysql_rwlock_rdlock(&LOCK_consensuslog_status); }
@@ -210,10 +212,10 @@ class ConsensusLogManager {
                         uint64 *max_index);
   int get_log_entry(uint64 channel_id, uint64 consensus_index,
                     uint64 *consensus_term, std::string &log_content,
-                    bool *outer, uint *flag, uint64 *checksum, bool fast_fail);
+                    bool *outer, uint *flag, bool fast_fail);
   int get_log_directly(uint64 consensus_index, uint64 *consensus_term,
                        std::string &log_content, bool *outer, uint *flag,
-                       uint64 *checksum, bool need_content = true);
+                       bool need_content = true);
   uint64_t get_left_log_size(uint64 start_log_index, uint64 max_packet_size);
   int prefetch_log_directly(THD *thd, uint64 channel_id,
                             uint64 consensus_index);
@@ -232,15 +234,6 @@ class ConsensusLogManager {
   }
 
   void force_update_applied_index(const uint64_t index);
-  void lock_consensus_state_change();
-  void unlock_consensus_state_change();
-  void wait_state_change_cond();
-
-  bool is_state_change_queue_empty() {
-    return consensus_state_change_queue.empty();
-  }
-  void add_state_change_request(ConsensusStateChange &state_change);
-  ConsensusStateChange get_stage_change_from_queue();
 
   int wait_leader_degraded(uint64 term, uint64 index);
   int wait_follower_upgraded(uint64 term, uint64 index);
@@ -258,18 +251,11 @@ class ConsensusLogManager {
   void set_event_timestamp(uint32 t) { ev_tt_.store(t); }
   uint32 get_event_timestamp() { return ev_tt_.load(); }
 
-  void set_limit_none() { leader_transfer_state.store(CLTS_LIMIT_NONE); }
-  void set_limit_new_trx() { leader_transfer_state.store(CLTS_LIMIT_NEW_TRX); }
-  void set_limit_xa_finish() { leader_transfer_state.store(CLTS_LIMIT_XA_FINISH); }
-  void set_limit_all() { leader_transfer_state.store(CLTS_LIMIT_ALL); }
-  bool is_in_leader_transfer() const { return leader_transfer_state.load() != CLTS_LIMIT_NONE; }
-  bool is_in_limit_all() const { return leader_transfer_state.load() == CLTS_LIMIT_ALL; }
-  bool is_in_limit_xa_finish() const { return leader_transfer_state.load() >= CLTS_LIMIT_XA_FINISH; }
-  uint64_t get_leader_transfer_state() const { return leader_transfer_state.load(); }
-  uint64_t get_limit_new_trx_state() const { return CLTS_LIMIT_NEW_TRX; }
-  uint64_t get_limit_none_state() const { return CLTS_LIMIT_NONE; }
+  int check_empty_binlog();
+  int dump_consensus_info();
 
-  static bool enable_consensus() { return opt_enable_consensus; }
+  /** TODO: refactor later */
+  void set_consensus_logger(bool is_logger) { m_is_logger = is_logger; }
 
  private:
   void wait_replay_log_finished();
@@ -284,10 +270,10 @@ class ConsensusLogManager {
   PSI_mutex_key key_LOCK_consensuslog_sequence_stage1;
   PSI_mutex_key key_LOCK_consensuslog_term;
   PSI_mutex_key key_LOCK_consensuslog_apply_thread;
-  PSI_mutex_key key_LOCK_consensus_state_change;
+//  PSI_mutex_key key_LOCK_log_state_change;
   PSI_thread_key consensus_thread_key;
   PSI_cond_key key_COND_consensuslog_catchup;
-  PSI_cond_key key_COND_consensus_state_change;
+//  PSI_cond_key key_COND_log_state_change;
   mysql_rwlock_t LOCK_consensuslog_status;  // used to protect the status of
                                             // consensus log module
   mysql_mutex_t
@@ -320,12 +306,7 @@ class ConsensusLogManager {
   std::atomic<bool> in_large_trx_appending;
   std::atomic<bool> in_large_event_appending;
 
-  Consensus_recovery_manager *recovery_manager;   // recovery module
-  ConsensusPreFetchManager *prefetch_manager;     // prefetch module
-  ConsensusFifoCacheManager *fifo_cache_manager;  // fifo cache module
-
-  ConsensusLogIndex *log_file_index;  // consensus log file index
-  Consensus_info *consensus_info;     // consensus system info
+  Consensus_logindex_manager *log_file_index;              // consensus log file index
 
   std::map<uint64, uint64>
       consensus_pos_index;  // <consensusIndex, pos> used to search log
@@ -333,7 +314,7 @@ class ConsensusLogManager {
   std::unique_ptr<MYSQL_BIN_LOG::Binlog_ofile>
       cache_log;  // used to cache a ConsensusLogEntry, and communicate with
                   // algorithm layer
-  Consensus_Log_System_Status
+  Consensus_Log_State
       status;  // leader: binlog system is working,
                // follower or candidator: relaylog system is working
 
@@ -348,49 +329,43 @@ class ConsensusLogManager {
 
   std::string empty_log_event_content;
 
-  bool consensus_state_change_is_running;
-  std::deque<ConsensusStateChange> consensus_state_change_queue;
-  my_thread_handle consensus_state_change_thread_handle;
-  mysql_cond_t COND_consensus_state_change;
-  mysql_mutex_t LOCK_consensus_state_change;
+  // bool log_state_change_is_running;
+  // std::deque<ConsensusStateChange> log_state_change_queue;
+  // my_thread_handle log_state_change_thread_handle;
+  // mysql_cond_t COND_log_state_change;
+  // mysql_mutex_t LOCK_log_state_change;
 
   /*
     commit position watcher part
   */
-  bool consensus_commit_pos_watcher_is_running;
+  bool consensus_commit_pos_watcher_is_running{false};
   my_thread_handle consensus_commit_pos_watcher_thread_handle;
   mysql_mutex_t LOCK_consensus_commit_pos;
   ConsensusCommitPos commit_pos;
 
   std::atomic<uint32>
       ev_tt_;  // store last log event timestamp received from leader
-  std::atomic<uint32> leader_transfer_state{CLTS_LIMIT_NONE};
+  // std::atomic<uint32> m_switchover_state{CSS_LIMIT_NONE};
 
   MYSQL_BIN_LOG *binlog;  // point to the MySQL binlog object
   Relay_log_info
       *rli_info;  // point to the MySQL relay log info object, include relay_log
+
+ private:
+  Consensus_info *consensus_info{nullptr};                 // consensus system info
+  Consensus_recovery_manager *recovery_manager{nullptr};   // recovery module
+  Consensus_prefetch_manager *prefetch_manager{nullptr};     // prefetch module
+  Consensus_cache_manager *cache_manager{nullptr};        // fifo cache module
+  Applied_index_checker *m_applied_index_checker{nullptr};
+
+  bool m_is_logger{false};
 };
 
-extern ConsensusLogManager consensus_log_manager;
+static inline uchar *get_uchar_str(std::string &str) {
+  return (uchar *)const_cast<char *>(str.c_str());
+}
 
-void *run_consensus_stage_change(void *arg);
+void *run_consensus_state_change(void *arg);
 void *run_consensus_commit_pos_watcher(void *arg);
-int cluster_force_purge_gtid();
-uint64 show_fifo_cache_size(THD *, SHOW_VAR *var, char *buff);
-uint64 show_fifo_cache_first_index(THD *, SHOW_VAR *var, char *buff);
-uint64 show_log_count_in_fifo_cache(THD *, SHOW_VAR *var, char *buff);
-int show_appliedindex_checker_queue(THD *, SHOW_VAR *var, char *);
-uint64 show_consensus_in_leader_transfer(THD *, SHOW_VAR *var, char *buff);
-
-
-#define GUARDED_READ_CONSENSUS_LOG()                                        \
-  auto consensus_guard = create_lock_guard(                         \
-    [&] { consensus_log_manager.rdlock_consensus_status(); },            \
-    [&] { consensus_log_manager.unlock_consensus_status(); }               \
-  );                                                                \
-  MYSQL_BIN_LOG *consensus_log =                                    \
-      consensus_log_manager.get_status() == BINLOG_WORKING          \
-          ? &mysql_bin_log                                          \
-          : &consensus_log_manager.get_relay_log_info()->relay_log;
-
+}  // namespace komodo
 #endif

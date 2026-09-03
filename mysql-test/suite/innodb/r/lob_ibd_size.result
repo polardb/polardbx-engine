@@ -16,6 +16,7 @@ INSERT INTO t(id,b) VALUES(1,@b);
 START TRANSACTION;
 CALL p(20);
 COMMIT;
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;
 SET @fs1 = (SELECT file_size FROM information_schema.innodb_tablespaces
@@ -23,6 +24,7 @@ WHERE name = 'test/t');
 START TRANSACTION;
 CALL p(20);
 COMMIT;
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;
 SET @fs2 = (SELECT file_size FROM information_schema.innodb_tablespaces
@@ -34,6 +36,7 @@ SELECT @growing;
 START TRANSACTION;
 CALL p(20);
 ROLLBACK;
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;
 SET @fs3 = (SELECT file_size FROM information_schema.innodb_tablespaces

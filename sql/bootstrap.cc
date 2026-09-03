@@ -31,8 +31,6 @@
 #include <sys/types.h>
 #include <string>
 
-#include "consensus_info.h"
-#include "consensus_log_manager.h"
 #include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
@@ -295,15 +293,7 @@ static int process_iterator(THD *thd, Command_iterator *it,
            (saved_sql_log_bin == thd->variables.sql_log_bin));
   }
 
-  // bootstrap set consensus info meta info
-  if (ConsensusLogManager::enable_consensus()) {
-    Consensus_info *consensus_info = consensus_log_manager.get_consensus_info();
-    if (consensus_info->consensus_init_info()) abort();
-    consensus_info->flush_info(true, true);
-  }
-
   it->end();
-
   return (error ? 1 : 0);
 }
 

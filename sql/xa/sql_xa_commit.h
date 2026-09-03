@@ -72,7 +72,10 @@ class Sql_cmd_xa_commit : public Sql_cmd_xa_second_phase {
    */
   enum xa_option_words get_xa_opt() const;
 
- private:
+  /** Lizard: Delay my_ok because we want to send result set. */
+  void set_delay_ok() { m_delay_ok = true; }
+
+ protected:
   /** Options associated with the underlying `XA COMMIT`  */
   enum xa_option_words m_xa_opt;
 
@@ -117,13 +120,21 @@ class Sql_cmd_xa_commit : public Sql_cmd_xa_second_phase {
   */
   bool process_detached_xa_commit(THD *thd);
 
- public:
-  /** Lizard: Delay my_ok because we want to send result set. */
-  void set_delay_ok() { m_delay_ok = true; }
-
- private:
   /** Lizard: True if we want to delay OK. */
   bool m_delay_ok;
+};
+
+class Sql_cmd_ac_commit : public Sql_cmd_xa_commit {
+ public:
+  Sql_cmd_ac_commit(xid_t *xid_arg, enum xa_option_words xa_option,
+                    gcn_t commit_gcn_arg, xa_addr_t *master_addr_arg);
+  virtual ~Sql_cmd_ac_commit() override = default;
+
+  bool execute(THD *thd) override;
+
+ private:
+  gcn_t m_commit_gcn;
+  xa_addr_t *m_master_addr;
 };
 
 #endif  // XA_SQL_CMD_XA_COMMIT

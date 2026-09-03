@@ -1070,3 +1070,31 @@ SELECT (WITH cte1 AS
 FROM t1 AS table1;
 
 DROP TABLE t1;
+
+
+--echo # Bug#35284734: mysqld crash from (m_ref_item != nullptr ? ref_item()->walk(processor, walk, arg
+
+CREATE TABLE t1 (
+    f1 INT,
+    f2 INT
+);
+
+INSERT INTO t1 (f1, f2) VALUES (1, 10), (2, 20), (3, 30);
+
+SELECT f2, MAX(t1.f1)
+FROM (
+    WITH cte1 AS (
+        SELECT * FROM t1
+    )
+    SELECT * FROM cte1
+) AS t1
+WHERE FALSE
+  AND (t1.f1 + 1 <> SOME (
+    WITH cte2 AS (
+        SELECT 1
+    )
+    SELECT * FROM cte2
+  ))
+GROUP BY f2;
+
+DROP TABLE t1;

@@ -140,6 +140,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
+#include "vidx/vidx_index.h"
 
 #include "sql/consensus_admin.h"
 #include "sql/ppi/ppi_table_iostat.h"
@@ -2191,7 +2192,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
   file->update_create_info(&create_info);
   primary_key = share->primary_key;
 
-  for (uint i = skip_gipk ? 1 : 0; i < share->keys; i++, key_info++) {
+  for (uint i = skip_gipk ? 1 : 0; i < share->total_keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     bool found_primary = false;
 
@@ -2212,6 +2213,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       packet->append(STRING_WITH_LEN("UNIQUE KEY "));
     else if (key_info->flags & HA_FULLTEXT)
       packet->append(STRING_WITH_LEN("FULLTEXT KEY "));
+    else if (key_info->flags & HA_VECTOR)
+      packet->append(STRING_WITH_LEN("VECTOR KEY "));
     else if (key_info->flags & HA_SPATIAL)
       packet->append(STRING_WITH_LEN("SPATIAL KEY "));
     else
@@ -2246,7 +2249,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
       if (key_part->field &&
           (key_part->length !=
                table->field[key_part->fieldnr - 1]->key_length() &&
-           !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL)))) {
+           !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR)))) {
         packet->append_parenthesized((long)key_part->length /
                                      key_part->field->charset()->mbmaxlen);
       }
@@ -2577,7 +2580,7 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
                               KEY *key_info,
                               bool for_show_secondary_engine_attribute) {
   bool foreign_db_mode = (thd->variables.sql_mode & MODE_ANSI) != 0;
-  char *end, buff[32];
+  char *end, buff[64];
 
   if (!foreign_db_mode) {
     /*
@@ -2596,6 +2599,14 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
         assert(!(key_info->flags & HA_SPATIAL));
         packet->append(STRING_WITH_LEN(" USING RTREE"));
       }
+    }
+
+    if (key_info->flags & HA_VECTOR) {
+      uint len = vidx::hnsw::index_options_print(
+          key_info->vector_distance, key_info->vector_m,
+          key_info->vector_ef_construction, buff, sizeof(buff));
+
+      packet->append(buff, len);
     }
 
     if ((key_info->flags & HA_USES_BLOCK_SIZE) &&
@@ -2621,9 +2632,9 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
     }
 
     if (for_show_secondary_engine_attribute &&
-        !key_info->se_attr_hint.not_found()) {
+        !key_info->se_attrs.not_found()) {
       packet->append(STRING_WITH_LEN(" /*!80021 SECONDARY_ENGINE_ATTRIBUTE '"));
-      packet->append(key_info->se_attr_hint.to_string());
+      packet->append(key_info->se_attrs.to_string());
       packet->append(STRING_WITH_LEN("' */"));
     }
   }
@@ -2946,7 +2957,6 @@ class List_process_list : public Do_THD_Impl {
 
     /* MYSQL_TIME */
     thd_info->start_time_in_secs = inspect_thd->query_start_in_secs();
-
     m_thread_infos->push_back(thd_info);
   }
 };
@@ -3046,10 +3056,14 @@ class Fill_process_list : public Do_THD_Impl {
   THD *m_client_thd;
   /* Information of each process is added as records into this table. */
   Table_ref *m_tables;
+  /* Whether to use millisecond precision for TIME column. */
+  bool m_use_millisec_precision;
 
  public:
-  Fill_process_list(THD *thd_value, Table_ref *tables_value)
-      : m_client_thd(thd_value), m_tables(tables_value) {}
+  Fill_process_list(THD *thd_value, Table_ref *tables_value,
+                    bool use_millisecond_precision)
+      : m_client_thd(thd_value), m_tables(tables_value),
+        m_use_millisec_precision(use_millisecond_precision) {}
 
   ~Fill_process_list() override {
     DBUG_EXECUTE_IF("test_fill_proc_with_x_root",
@@ -3162,6 +3176,28 @@ class Fill_process_list : public Do_THD_Impl {
       table->field[6]->set_notnull();
     }
 
+    if (m_use_millisec_precision) {
+      /* Network buffer information */
+      /* Only fill network buffer fields for milli_processlist (which has 10 fields) */
+      /* processlist table only has 8 fields, so field[8], field[9] don't exist */
+      if (inspect_thd->is_classic_protocol()) {
+        NET *net = inspect_thd->get_protocol_classic()->get_net();
+        if (net && net->buff) {
+          // Use max_packet (data part) + headers for total buffer size
+          ulong net_buff_size = net->max_packet;
+          table->field[8]->store((ulonglong)net_buff_size, true);
+          table->field[8]->set_notnull();
+        } else {
+          table->field[8]->set_null();
+        }
+        table->field[9]->store((ulonglong)inspect_thd->status_var.net_buff_stat_shrink_count, true);
+      } else {
+        // For milli_processlist but not classic protocol
+        table->field[8]->set_null();
+        table->field[9]->store(0, true);
+      }
+    }
+
     mysql_mutex_unlock(&inspect_thd->LOCK_thd_data);
 
     /* INFO */
@@ -3207,13 +3243,25 @@ class Fill_process_list : public Do_THD_Impl {
     }
     mysql_mutex_unlock(&inspect_thd->LOCK_thd_query);
 
-    /* MYSQL_TIME */
-    if (inspect_thd->query_start_in_secs())
-      table->field[5]->store((longlong)(my_micro_time() / 1000000 -
-                                        inspect_thd->query_start_in_secs()),
-                             false);
-    else
+    /* TIME */
+    if (inspect_thd->query_start_in_secs()) {
+      if (m_use_millisec_precision) {
+        /* TIME with millisecond precision */
+        my_timeval tv = inspect_thd->query_start_timeval_trunc(3);
+        long long start_time_in_millisecs =
+            static_cast<long long>(tv.m_tv_sec) * 1000 + tv.m_tv_usec / 1000;
+        long long current_milli_time = static_cast<long long>(my_milli_time());
+        table->field[5]->store((longlong)(current_milli_time - start_time_in_millisecs),
+                               false);
+      } else {
+        /* TIME with second precision */
+        table->field[5]->store((longlong)(my_micro_time() / 1000000 -
+                                          inspect_thd->query_start_in_secs()),
+                               false);
+      }
+    } else {
       table->field[5]->store(0, false);
+    }
 
     schema_table_store_record(m_client_thd, table);
   }
@@ -3222,7 +3270,17 @@ class Fill_process_list : public Do_THD_Impl {
 static int fill_schema_processlist(THD *thd, Table_ref *tables, Item *) {
   DBUG_TRACE;
 
-  Fill_process_list fill_process_list(thd, tables);
+  Fill_process_list fill_process_list(thd, tables, false);
+  if (!thd->killed) {
+    Global_THD_manager::get_instance()->do_for_all_thd_copy(&fill_process_list);
+  }
+  return 0;
+}
+
+static int fill_schema_milli_processlist(THD *thd, Table_ref *tables, Item *) {
+  DBUG_TRACE;
+
+  Fill_process_list fill_process_list(thd, tables, true);
   if (!thd->killed) {
     Global_THD_manager::get_instance()->do_for_all_thd_copy(&fill_process_list);
   }
@@ -4270,7 +4328,7 @@ static int get_schema_tmp_table_keys_record(THD *thd, Table_ref *tables,
     key_info++;
   }
 
-  for (; i < show_table->s->keys; i++, key_info++) {
+  for (; i < show_table->s->total_keys; i++, key_info++) {
     KEY_PART_INFO *key_part = key_info->key_part;
     const char *str;
 
@@ -4355,7 +4413,7 @@ static int get_schema_tmp_table_keys_record(THD *thd, Table_ref *tables,
       table->field[TMP_TABLE_KEYS_INDEX_TYPE]->store(str, strlen(str), cs);
 
       // SUB_PART
-      if (!(key_info->flags & HA_FULLTEXT) &&
+      if (!(key_info->flags & (HA_FULLTEXT | HA_VECTOR)) &&
           (key_part->field &&
            key_part->length !=
                show_table->s->field[key_part->fieldnr - 1]->key_length())) {
@@ -5060,6 +5118,19 @@ ST_FIELD_INFO processlist_fields_info[] = {
     {"INFO", PROCESS_LIST_INFO_WIDTH, MYSQL_TYPE_STRING, 0, 1, "Info", 0},
     {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
 
+ST_FIELD_INFO milli_processlist_fields_info[] = {
+    {"ID", 21, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "Id", 0},
+    {"USER", USERNAME_CHAR_LENGTH, MYSQL_TYPE_STRING, 0, 0, "User", 0},
+    {"HOST", HOST_AND_PORT_LENGTH, MYSQL_TYPE_STRING, 0, 0, "Host", 0},
+    {"DB", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 1, "Db", 0},
+    {"COMMAND", 16, MYSQL_TYPE_STRING, 0, 0, "Command", 0},
+    {"TIME", 10, MYSQL_TYPE_LONGLONG, 0, 0, "Time", 0},
+    {"STATE", 64, MYSQL_TYPE_STRING, 0, 1, "State", 0},
+    {"INFO", PROCESS_LIST_INFO_WIDTH, MYSQL_TYPE_STRING, 0, 1, "Info", 0},
+    {"NET_BUFF_SIZE", 10, MYSQL_TYPE_LONGLONG, 0, MY_I_S_MAYBE_NULL | MY_I_S_UNSIGNED, "Net_buff_size", 0},
+    {"BUFF_SHRINK_COUNT", 10, MYSQL_TYPE_LONGLONG, 0, MY_I_S_UNSIGNED, "Buff_shrink_count", 0},
+    {nullptr, 0, MYSQL_TYPE_STRING, 0, 0, nullptr, 0}};
+
 ST_FIELD_INFO plugin_fields_info[] = {
     {"PLUGIN_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Name", 0},
     {"PLUGIN_VERSION", 20, MYSQL_TYPE_STRING, 0, 0, nullptr, 0},
@@ -5172,6 +5243,10 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_alisql_cluster_consensus_membership_change, nullptr, nullptr, false},
     {"CONSENSUS_COMMIT_POSITION", consensus_commit_pos_info,
      fill_consensus_commit_pos, nullptr, nullptr, false},
+    {"CONSENSUS_HA_HISTORY", consensus_ha_history_fields_info,
+     fill_consensus_ha_history, nullptr, nullptr, false},
+    {"MILLI_PROCESSLIST", milli_processlist_fields_info,
+     fill_schema_milli_processlist, make_old_format, nullptr, false},
     {nullptr, nullptr, nullptr, nullptr, nullptr, false}};
 
 int initialize_schema_table(st_plugin_int *plugin) {

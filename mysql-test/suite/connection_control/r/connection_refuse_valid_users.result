@@ -6,6 +6,7 @@
 # Install connection_control plugin
 INSTALL PLUGIN connection_control SONAME 'CONNECTION_CONTROL_LIB';
 INSTALL PLUGIN connection_control_failed_login_attempts SONAME 'CONNECTION_CONTROL_LIB';
+INSTALL PLUGIN connection_control_refuse_statistic SONAME 'CONNECTION_CONTROL_LIB';
 # Create user accounts for testing
 CREATE USER u1 IDENTIFIED BY 'abcd';
 CREATE USER u2 IDENTIFIED BY 'abcd';
@@ -17,7 +18,7 @@ SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
 SET @@global.connection_control_failed_connections_threshold = 3;
 SET @@global.connection_control_refuse_connection_period = 10000;
 
-# ----------------------------------------------------------------------
+# --------------------------Test 1 : test only one Ip ---------------------------------------
 
 # Make enough failed attempts to trigger refuse
 connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
@@ -57,7 +58,9 @@ Connection_control_refuse_generated should be 6
 Variable_name	Value
 Connection_control_refuse_generated	6
 
-# Wait until the refuse period(10 s) is over, authentication willl be enabled 
+# Wait until the refuse period(10 s) is over, authentication will be enabled 
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS
 # Connection attempt should fail.
 Connection_control_refuse_generated should be 6
 Variable_name	Value
@@ -82,9 +85,33 @@ Connection_control_refuse_generated	6
 Connection_control_refuse_generated should be 6
 Variable_name	Value
 Connection_control_refuse_generated	6
+# --------------------------Test 2 : test multiple Ip ---------------------------------------
 
-# ----------------------------------------------------------------------
-
+# Make enough failed attempts to trigger refuse
+# This time we will simulate the ip address 
+Set GLOBAL debug ='+d, simulate_connection_refuse_event_ip';
+connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
+connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
+connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
+Set GLOBAL debug ='-d, simulate_connection_refuse_event_ip';
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS
+'u1'@'%'	192.168.1.1	3
+# Connection attempt should fail.
+Connection_control_refuse_generated should be 6
+Variable_name	Value
+Connection_control_refuse_generated	6
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS
+'u1'@'%'		1
+'u1'@'%'	192.168.1.1	3
+# Connection attempt should succeed.
+Connection_control_refuse_generated should be 6
+Variable_name	Value
+Connection_control_refuse_generated	6
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS
+'u1'@'%'	192.168.1.1	3
 # Cleanup
 # Restore original values of conenction_control variables
 SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
@@ -96,5 +123,6 @@ DROP USER u3;
 # Uninstall connection_control plugin
 UNINSTALL PLUGIN connection_control;
 UNINSTALL PLUGIN connection_control_failed_login_attempts;
+UNINSTALL PLUGIN connection_control_refuse_statistic;
 
 # ----------------------------------------------------------------------

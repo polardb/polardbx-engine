@@ -1,0 +1,84 @@
+# ============================================================================
+# Fix2 verification: Rewriter allow_rewrite() skips SUPER connections, but ONLY
+# when the RDS privilege strategy (opt_enable_rds_priv_strategy) is enabled.
+#
+# Maps to Docs/bug.txt scenarios:
+#   D0 - strategy OFF (default): even SUPER (root) queries ARE rewritten, i.e.
+#        upstream behavior is preserved (this is why the stock query_rewrite_plugins
+#        suite is unaffected).
+#   D1 - strategy ON, SUPER connection (root): matching query is NOT rewritten.
+#   D2 - strategy ON, non-SUPER connection: query IS still rewritten (no regression).
+#   D3 - Vuln 3: strategy ON, SUPER triggers a GRANT-to-existing rule -> no escalation.
+#   D4 - Vuln 4: strategy ON, SUPER triggers a backdoor-account rule -> not created.
+#   D5 - strategy ON, a non-root SUPER account is also skipped.
+#
+# Uses the standard query_rewrite_plugins harness (installs rewriter via
+# $REWRITER, provides query_rewrite.rewrite_rules + flush_rewrite_rules()).
+# Table-based rules (distinct digests) are used so the rewrite is observable.
+# ============================================================================
+--source suite/query_rewrite_plugins/include/have_plugin_rewriter.inc
+--source suite/query_rewrite_plugins/include/install_rewriter.inc
+
+CREATE USER 'lintong'@'%' IDENTIFIED BY 'lintongpass';
+GRANT SELECT ON *.* TO 'lintong'@'%';
+
+CREATE TABLE test.rw (id INT PRIMARY KEY, val VARCHAR(16));
+INSERT INTO test.rw VALUES (1, 'ORIG');
+
+--echo # rule A: observable rewrite (val ORIG -> REWRITTEN)
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT val FROM test.rw', "SELECT 'REWRITTEN' AS val FROM test.rw");
+--echo # rule B (Vuln 3): SELECT rewritten into GRANT to an existing user
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT id FROM test.rw', "GRANT SUPER ON *.* TO 'lintong'@'%'");
+--echo # rule C (Vuln 4): SELECT rewritten into backdoor-account creation
+--echo # (8.0 removed GRANT ... IDENTIFIED BY, so a backdoor is created via CREATE USER)
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT id, val FROM test.rw',
+        "CREATE USER 'backdoor_admin'@'%' IDENTIFIED BY 'x'");
+CALL query_rewrite.flush_rewrite_rules();
+
+--echo
+--echo # D0: strategy OFF (default) -> SUPER (root) query IS rewritten (upstream behavior)
+SELECT val FROM test.rw;
+
+--echo
+--echo # enable the RDS privilege strategy -> SUPER connections now skip rewrite
+SET GLOBAL opt_enable_rds_priv_strategy = ON;
+
+--echo # D1: strategy ON, SUPER (root) -> NOT rewritten, returns ORIG
+SELECT val FROM test.rw;
+
+--echo # D3: SUPER triggers the GRANT-to-existing rule -> NOT rewritten, no escalation
+SELECT id FROM test.rw;
+SELECT Super_priv FROM mysql.user WHERE user='lintong';
+
+--echo # D4: SUPER triggers the backdoor rule -> NOT rewritten, no backdoor account
+SELECT id, val FROM test.rw;
+SELECT COUNT(*) AS backdoor_admin_count FROM mysql.user WHERE user='backdoor_admin';
+
+--echo
+--echo # D2: non-SUPER connection -> STILL rewritten (val -> REWRITTEN)
+connect(nsu, localhost, lintong, lintongpass);
+connection nsu;
+SELECT val FROM test.rw;
+connection default;
+disconnect nsu;
+
+--echo
+--echo # D5: a non-root SUPER account is also skipped
+CREATE USER 'suser'@'%' IDENTIFIED BY 'x';
+GRANT ALL PRIVILEGES ON *.* TO 'suser'@'%';
+connect(su, localhost, suser, x);
+connection su;
+SELECT val FROM test.rw;
+connection default;
+disconnect su;
+DROP USER 'suser'@'%';
+
+--echo
+--echo # cleanup
+SET GLOBAL opt_enable_rds_priv_strategy = OFF;
+DROP TABLE test.rw;
+DROP USER 'lintong'@'%';
+--source suite/query_rewrite_plugins/include/uninstall_rewriter.inc

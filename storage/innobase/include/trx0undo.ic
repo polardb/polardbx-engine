@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 3/26/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef trx0undo_h
+#define INNODB_TRX0UNDO_IC_STANDALONE
+#include "trx0undo.h"
+#undef INNODB_TRX0UNDO_IC_STANDALONE
+#endif /* !trx0undo_h */
 #include "data0type.h"
 #include "page0page.h"
 #include "trx0purge.h"

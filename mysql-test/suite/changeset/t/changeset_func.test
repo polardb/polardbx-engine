@@ -33,7 +33,7 @@ select * from c1;
 call polarx.changeset_stats('c1');
 call polarx.changeset_fetch('c1');
 call polarx.changeset_stats('c1');
-call polarx.changeset_stop('c1');
+call polarx.changeset_backpressure('c1', 10, 1000, 10000);
 
 insert into c1 values (6, "2022-09-10 12:33:16", "f");
 

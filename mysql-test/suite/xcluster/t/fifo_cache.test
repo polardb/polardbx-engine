@@ -1,3 +1,4 @@
+call dbms_consensus.force_purge_cache(4611686018427387904);
 set global consensus_log_cache_size = 20 * 1024 * 1024; # 20M
 use test;
 create table t1 (data longblob);
@@ -23,7 +24,7 @@ while ($counter)
 --enable_query_log
 
 --sleep 1 # wait cleaner
-show global status like "consensus_fifo_cache%";
+show global status like "Consensus_fifo_cache_log_count";
 
 set global consensus_log_cache_size = 1024*1024*1024; # 1G
 # in debug mode, reserve_list_size is 1024
@@ -36,7 +37,7 @@ while ($counter)
 }
 --enable_query_log
 --sleep 1 # wait cleaner
-show global status like "consensus_fifo_cache%";
+show global status like "Consensus_fifo_cache_log_count";
 
 # check replicate log success
 --sleep 5

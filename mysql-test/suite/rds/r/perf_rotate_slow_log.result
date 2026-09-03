@@ -1,0 +1,17 @@
+SELECT @@global.log_output INTO @saved_log_output;
+SELECT @@global.slow_query_log INTO @saved_slow_query_log;
+SET GLOBAL log_output = 'TABLE';
+SET GLOBAL slow_query_log = ON;
+record_count1=N
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+record_count2=N
+include/assert.inc [Record count before and after rotate should be the same]
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+record_count3=N
+include/assert.inc [Record count should be the same]
+SET GLOBAL log_output = @saved_log_output;
+SET GLOBAL slow_query_log = @saved_slow_query_log;

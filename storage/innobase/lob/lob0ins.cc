@@ -32,43 +32,18 @@ namespace lob {
 /** Allocate one BLOB page.
 @return the allocated block of the BLOB page. */
 buf_block_t *BaseInserter::alloc_blob_page() {
-  ulint r_extents;
-  mtr_t mtr_bulk;
-  mtr_t *alloc_mtr;
-  btr_alloc_t alloc;
+  const page_no_t hint_page_no = m_prev_page_no + 1;
 
-  ut_ad(fsp_check_tablespace_size(m_ctx->space()));
+  m_cur_blob_block = m_ctx->alloc_lob_page(hint_page_no, &m_blob_mtr);
 
-  if (m_ctx->is_bulk()) {
-    mtr_start(&mtr_bulk);
-    alloc_mtr = &mtr_bulk;
-  } else {
-    alloc_mtr = &m_blob_mtr;
-  }
-
-  page_no_t hint_page_no = m_prev_page_no + 1;
-
-  if (!fsp_reserve_free_extents(&r_extents, m_ctx->space(), 1, FSP_BLOB,
-                                alloc_mtr, 1)) {
-    alloc_mtr->commit();
+  if (m_cur_blob_block == nullptr) {
     m_err = DB_OUT_OF_FILE_SPACE;
-    return (nullptr);
-  }
-
-  alloc = btr_page_alloc(m_ctx->index(), hint_page_no, FSP_NO_DIR, 0, alloc_mtr,
-                         &m_blob_mtr);
-
-  m_cur_blob_block = alloc.new_block;
-
-  fil_space_release_free_extents(m_ctx->space(), r_extents);
-
-  if (m_ctx->is_bulk()) {
-    alloc_mtr->commit();
+    return nullptr;
   }
 
   m_cur_blob_page_no = page_get_page_no(buf_block_get_frame(m_cur_blob_block));
 
-  return (m_cur_blob_block);
+  return m_cur_blob_block;
 }
 
 /** Get the previous BLOB page block.  This will return a BLOB block.
@@ -196,8 +171,9 @@ dberr_t Inserter::write_first_page(big_rec_field_t &field) {
   write_into_single_page(field);
 
   const ulint field_no = field.field_no;
-  byte *field_ref = btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(),
-                                          m_ctx->get_offsets(), field_no);
+  DSlice *dslc = dynamic_cast<DSlice *>(m_ctx->slc());
+  ut_a(dslc);
+  byte *field_ref = dslc->get_lob_field_ref(field_no);
   ref_t blobref(field_ref);
 
   blobref.set_length(field.len - m_remaining, mtr);
@@ -224,8 +200,9 @@ dberr_t Inserter::write_single_blob_page(big_rec_field_t &field,
   log_page_type();
   write_into_single_page(field);
   const ulint field_no = field.field_no;
-  byte *field_ref = btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(),
-                                          m_ctx->get_offsets(), field_no);
+  DSlice *dslc = dynamic_cast<DSlice *>(m_ctx->slc());
+  ut_a(dslc);
+  byte *field_ref = dslc->get_lob_field_ref(field_no);
   ref_t blobref(field_ref);
   blobref.set_length(field.len - m_remaining, mtr);
   m_prev_page_no = m_cur_blob_page_no;

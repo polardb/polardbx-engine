@@ -873,6 +873,9 @@ static void parse_page(const byte *page, FILE *file) {
 
   switch (mach_read_from_2(page + FIL_PAGE_TYPE)) {
     case FIL_PAGE_INDEX:
+    case FIL_PAGE_INDEX_PANDA:
+    case FIL_PAGE_INDEX_HIPPO:
+    case FIL_PAGE_INDEX_SPC:
       page_type.n_fil_page_index++;
       id = mach_read_from_8(page + PAGE_HEADER + PAGE_INDEX_ID);
       if (page_type_dump) {

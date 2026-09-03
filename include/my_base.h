@@ -519,7 +519,8 @@ enum ha_base_keytype {
 /* The combination of the above can be used for key type comparison. */
 #define HA_KEYFLAG_MASK                                                       \
   (HA_NOSAME | HA_PACK_KEY | HA_AUTO_KEY | HA_BINARY_PACK_KEY | HA_FULLTEXT | \
-   HA_UNIQUE_CHECK | HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY)
+   HA_UNIQUE_CHECK | HA_SPATIAL | HA_NULL_ARE_EQUAL | HA_GENERATED_KEY |      \
+   HA_VECTOR)
 
 /** Fulltext index uses [pre]parser */
 #define HA_USES_PARSER (1 << 14)
@@ -554,6 +555,7 @@ enum ha_base_keytype {
 
 constexpr const ulong HA_INDEX_USES_ENGINE_ATTRIBUTE{1UL << 20};
 constexpr const ulong HA_INDEX_USES_SECONDARY_ENGINE_ATTRIBUTE{1UL << 21};
+constexpr const ulong HA_VECTOR{1UL << 22};
 
 /* These flags can be added to key-seg-flag */
 
@@ -1027,8 +1029,11 @@ Information in the data-dictionary needs to be updated. */
 #define HA_ERR_SAMPLE_WRONG_SEMANTIC 222
 /* lizard errors end */
 
+/* InnoDB participate operation failed */
+#define HA_ERR_INNODB_PARTICIPATE_FAILED 223 
+
 /** Copy of last error number */
-#define HA_ERR_LAST 223
+#define HA_ERR_LAST 224
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)

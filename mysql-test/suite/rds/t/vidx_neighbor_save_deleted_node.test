@@ -1,0 +1,87 @@
+--source include/have_debug.inc
+
+# save_neighbors_only regression: deleted nodes survive as graph members and may still
+# be selected as neighbors during construction (skip_deleted=false path).
+# save_neighbors_only must NOT touch FIELD_TREF, so a deleted node's
+# tref stays NULL after second-degree neighbor update.
+#           Vidx_save_retry_dup_key delta = 0, no resurrect of deleted base rows.
+# Related: save_neighbors_only commit dd578613c1c.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# Phase 1: seed 50 rows in a tight cluster.
+--disable_query_log
+let $i = 1;
+while ($i <= 50)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+# Phase 2: delete every other row → graph still keeps deleted nodes, base
+# table has 25 rows.  These deleted nodes can be selected as construction
+# neighbors for new inserts.
+DELETE FROM t1 WHERE id % 2 = 0;
+SELECT COUNT(*) AS rows_after_delete FROM t1;
+
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_skip  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_skip_not_found'`;
+
+# Phase 3: insert 200 new rows close to the deleted nodes' positions, so
+# search() during construction is likely to pick them.
+--disable_query_log
+let $k = 0;
+while ($k < 200)
+{
+  let $val = `SELECT (($k % 50) + 100)`;
+  eval INSERT INTO t1(id, v) VALUES (1000 + $k, VEC_FROMTEXT(CONCAT("[", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, ",", ($k%50)+1, "]")));
+  inc $k;
+}
+--enable_query_log
+
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_skip  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_skip_not_found'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_skip  = `SELECT $a_skip - $b_skip`;
+
+let $ok_nbr  = `SELECT $d_nbr > 0`;
+let $ok_dup  = `SELECT $d_dup = 0`;
+# $d_skip is ulonglong so >=0 is structurally true — drop the echo.
+--echo == save_neighbors_only deleted-neighbor deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 even with deleted-node neighbors
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+# Deleted rows must not reappear in base table.
+let $deleted_back = `SELECT COUNT(*) FROM t1 WHERE id BETWEEN 1 AND 50 AND id % 2 = 0`;
+--echo deleted_rows_resurrected=$deleted_back
+if ($deleted_back != 0) {
+  --die Deleted base rows reappeared — graph row resurrection through save_neighbors_only
+}
+
+# Sanity: total live rows = 25 seeded odd + 200 new.
+let $total = `SELECT COUNT(*) FROM t1`;
+--echo total_live_rows=$total
+
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

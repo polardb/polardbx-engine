@@ -62,6 +62,7 @@
 #include "sql-common/json_dom.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // *_ACL
+#include "sql/auth/sql_internal_account.h"  // im::IA_type::MAINTENACE_USER
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
@@ -556,6 +557,21 @@ bool Sql_cmd_dml::execute(THD *thd) {
     }
   }
 
+  if (thd->variables.forbid_execute_dml_all && !lex->is_explain()) {
+    enum_sql_command cmd = lex->sql_command;
+    if (cmd == SQLCOM_UPDATE || cmd == SQLCOM_UPDATE_MULTI ||
+        cmd == SQLCOM_DELETE || cmd == SQLCOM_DELETE_MULTI) {
+      if (thd->security_context()->account_attr.get_type() !=
+          im::IA_type::MAINTENACE_USER) {
+        Item *where = lex->query_block->where_cond();
+        if (where == nullptr || (where->const_item() && where->val_bool())) {
+          my_error(ER_HIGH_RISK_SQL_BLOCKED, MYF(0));
+          goto err;
+        }
+      }
+    }
+  }
+
   if (validate_use_secondary_engine(lex)) goto err;
 
   lex->set_exec_started();
@@ -585,7 +601,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
   }
 
   /* Evaluate snapshot expressions */
-  if (lizard::evaluate_snapshot(thd, lex)) goto err;
+  if (komodo::evaluate_snapshot(thd, lex)) goto err;
 
   // Perform statement-specific execution
   if (execute_inner(thd)) goto err;
@@ -2877,6 +2893,10 @@ void QEP_TAB::push_index_cond(const JOIN_TAB *join_tab, uint keyno,
         and_conditions(&row_cond, idx_remainder_cond);
         idx_remainder_cond = row_cond;
       }
+      if (idx_remainder_cond && range_scan()) {
+          // disable pushdown range limit where there are remaining index conditions
+          DisablePushdownRangeLimit(range_scan());
+      }
       set_condition(idx_remainder_cond);
       trace_obj->add("table_condition_attached", idx_remainder_cond);
     }
@@ -3505,6 +3525,10 @@ void JOIN::join_free() {
 }
 
 static void cleanup_table(TABLE *table) {
+  if (table->hlindex_active && table->hlindex_active->context) {
+    table->hlindex_read_end();
+  }
+
   if (table->is_created()) {
     table->file->ha_index_or_rnd_end();
   }
@@ -4700,7 +4724,7 @@ bool JOIN::make_tmp_tables_info() {
                                    /*sort_before_group=*/false))
             return true;
         }
-        if (!tab->filesort && !tab->table()->s->keys &&
+        if (!tab->filesort && !tab->table()->s->total_keys &&
             (!(query_block->active_options() & OPTION_BUFFER_RESULT) ||
              need_tmp_before_win || wno >= 1)) {
           /*
@@ -4958,7 +4982,7 @@ bool test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER_with_src *order,
     assert(refkey_rows_estimate >= 1.0);
   }
 
-  for (nr = 0; nr < table->s->keys; nr++) {
+  for (nr = 0; nr < table->s->total_keys; nr++) {
     int direction = 0;
     uint used_key_parts;
     bool skip_quick;

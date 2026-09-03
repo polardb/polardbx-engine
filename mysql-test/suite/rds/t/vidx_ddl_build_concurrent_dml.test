@@ -1,0 +1,193 @@
+##############################################################
+# Concurrency around the DDL direct build.                   #
+#                                                            #
+# ADD VECTOR INDEX always takes the COPY path, so while the  #
+# graph is being built the ALTER holds a shared-no-write MDL  #
+# on the base table: concurrent reads (including ANN reads    #
+# through an already existing vector index) must pass, and    #
+# concurrent writes must block until the ALTER commits and    #
+# then land in the freshly built graph.                       #
+#                                                            #
+# Phase A  a plain read during the parked build succeeds.     #
+# Phase B  an INSERT during the parked build blocks on the    #
+#          metadata lock, then commits into the new graph --   #
+#          live nodes must count it.                          #
+# Phase C  with a vector index already in place, an ANN read  #
+#          during the next build still answers from the old   #
+#          graph, while a second ALTER queues behind the MDL  #
+#          and, once it runs, rebuilds every slot completely.  #
+# Phase D  DML after the concurrent window keeps every slot   #
+#          in step with the base table.                       #
+##############################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_build_concurrent_dml;
+USE vidx_ddl_build_concurrent_dml;
+--source include/count_sessions.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t1 VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SET SESSION vidx_ddl_threads = 4;
+
+connect (reader, localhost, root,,);
+USE vidx_ddl_build_concurrent_dml;
+connect (writer, localhost, root,,);
+USE vidx_ddl_build_concurrent_dml;
+connect (ddl2, localhost, root,,);
+USE vidx_ddl_build_concurrent_dml;
+
+--echo
+--echo ############################################
+--echo # Phase A/B: read passes, write queues     #
+--echo # while the build is parked                #
+--echo ############################################
+connection default;
+SET DEBUG_SYNC = 'vidx_ddl_direct_build_start SIGNAL build_reached WAIT_FOR build_go';
+--send ALTER TABLE t1 ADD VECTOR INDEX vi(v)
+
+connection reader;
+SET DEBUG_SYNC = 'now WAIT_FOR build_reached';
+--echo # Phase A: the COPY ALTER lets concurrent readers through
+SELECT COUNT(*) AS rows_visible_during_build FROM t1;
+
+connection writer;
+--send INSERT INTO t1 VALUES (41, VEC_FROMTEXT('[41,42,43,44,45]'))
+
+connection reader;
+--echo # Phase B: the INSERT must wait for the ALTER's metadata lock
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE STATE = 'Waiting for table metadata lock'
+    AND INFO LIKE 'INSERT INTO t1 VALUES (41%';
+--source include/wait_condition.inc
+--echo VERDICT B concurrent INSERT blocks on the build: PASS
+SET DEBUG_SYNC = 'now SIGNAL build_go';
+
+connection default;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection writer;
+--reap
+
+connection default;
+--echo # The queued row must be in the graph the ALTER just built
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_concurrent_dml/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 41`) {
+  --die Phase B: the row inserted right after the build is missing from the graph
+}
+--echo VERDICT B live==41 (40 copied + 1 queued): PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[41,42,43,44,45]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase C: ANN read and a second ALTER     #
+--echo # against a parked build                   #
+--echo ############################################
+connection default;
+SET DEBUG_SYNC = 'vidx_ddl_direct_build_start SIGNAL build2_reached WAIT_FOR build2_go';
+--send ALTER TABLE t1 ADD VECTOR INDEX vi2(v) M=8
+
+connection reader;
+SET DEBUG_SYNC = 'now WAIT_FOR build2_reached';
+--echo # The existing graph still answers while the next one is being built
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+
+connection ddl2;
+--send ALTER TABLE t1 ADD VECTOR INDEX vi3(v)
+
+connection reader;
+let $wait_condition =
+  SELECT COUNT(*) = 1 FROM information_schema.processlist
+  WHERE STATE = 'Waiting for table metadata lock'
+    AND INFO LIKE 'ALTER TABLE t1 ADD VECTOR INDEX vi3%';
+--source include/wait_condition.inc
+--echo VERDICT C second ALTER queues behind the build: PASS
+SET DEBUG_SYNC = 'now SIGNAL build2_go';
+
+connection default;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+connection ddl2;
+--reap
+
+connection default;
+--replace_column 5 HLINDEX_TABLE_NAME
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+
+--echo # The last ALTER rebuilt all three slots: each must hold every row
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_concurrent_dml/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live0 FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live1 FROM \`vidx_', $tid, '_1\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live2 FROM \`vidx_', $tid, '_2\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live0 <> 41 OR @live1 <> 41 OR @live2 <> 41`) {
+  --echo FATAL: slot live counts differ from the 41 base rows
+  --die Phase C: a serialized second ALTER left a slot incomplete
+}
+--echo VERDICT C all three slots live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi3) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase D: DML after the concurrent window #
+--echo ############################################
+INSERT INTO t1 VALUES (42, VEC_FROMTEXT('[42,43,44,45,46]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[70,71,72,73,74]') WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+SELECT COUNT(*) AS base_rows FROM t1;
+
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live0 FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live1 FROM \`vidx_', $tid, '_1\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live2 FROM \`vidx_', $tid, '_2\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+# 41 rows + 1 insert - 1 delete = 41 live nodes per slot.
+if (`SELECT @live0 <> 41 OR @live1 <> 41 OR @live2 <> 41`) {
+  --echo FATAL: slot live counts drifted from the base table after DML
+  --die Phase D: post-build DML did not keep every slot in step
+}
+--echo VERDICT D all slots track the base table after DML: PASS
+--echo # The moved vector must be found at its new position, not the old one
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[70,71,72,73,74]')) LIMIT 1;
+
+DROP TABLE t1;
+disconnect reader;
+disconnect writer;
+disconnect ddl2;
+--source include/wait_until_count_sessions.inc
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_build_concurrent_dml;

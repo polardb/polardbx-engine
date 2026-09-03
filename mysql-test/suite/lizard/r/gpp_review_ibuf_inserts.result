@@ -1,0 +1,16 @@
+#
+# P1-4: innodb_change_buffering=inserts writes the legacy ibuf record
+# format (no_counter=true) which cannot carry the functional-field
+# flags. At merge time the rebuilt dummy index treats the stored GPP
+# column as an ordered field, so re-inserting an ordered key whose
+# delete-marked record carries a stale GPP inserts a second physical
+# record instead of reviving the old one.
+#
+# Expected (fixed) behaviour: the merge revives the delete-marked
+# record, so a subsequent index scan reads no delete-marked rows.
+#
+SELECT COUNT(*) AS visible_rows FROM t1 FORCE INDEX (idx_k) WHERE k = 1;
+visible_rows
+1
+include/assert.inc [the re-insert must have gone through the change buffer]
+include/assert.inc [ibuf insert merge must revive the delete-marked secondary record]

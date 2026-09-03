@@ -40,13 +40,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0types.h"
 #include "rem0types.h"
 
+#include "lizard0rem0types.h"
+
 /** Looks for an element in a hash table.
 @param[in]      table       hash table
 @param[in]      hash_value  hashed value of the searched data
 @return pointer to the data of the first hash table node in chain
 having the hash number, NULL if not found */
-static inline const rec_t *ha_search_and_get_data(hash_table_t *table,
-                                                  uint64_t hash_value);
+static inline creg_t ha_search_and_get_data(hash_table_t *table,
+                                            uint64_t hash_value);
 
 /** Looks for an element when we know the pointer to the data and updates
  the pointer to data if found.
@@ -57,9 +59,9 @@ static inline const rec_t *ha_search_and_get_data(hash_table_t *table,
  @param[in] new_data new pointer to the data
  @return true if found */
 bool ha_search_and_update_if_found_func(hash_table_t *table,
-                                        uint64_t hash_value, const rec_t *data,
+                                        uint64_t hash_value, creg_t data,
                                         IF_AHI_DEBUG(buf_block_t *new_block, )
-                                            const rec_t *new_data);
+                                            creg_t new_data);
 
 /** Looks for an element when we know the pointer to the data and
 updates the pointer to data if found.
@@ -70,9 +72,9 @@ updates the pointer to data if found.
 @param new_data in: new pointer to the data */
 static inline bool ha_search_and_update_if_found(hash_table_t *table,
                                                  uint64_t hash_value,
-                                                 const rec_t *data,
+                                                 creg_t data,
                                                  buf_block_t *new_block,
-                                                 const rec_t *new_data) {
+                                                 creg_t new_data) {
   return ha_search_and_update_if_found_func(table, hash_value, data,
                                             IF_AHI_DEBUG(new_block, ) new_data);
 }
@@ -105,8 +107,7 @@ void ha_clear(hash_table_t *table); /*!< in, own: hash table */
  @param[in] data data, must not be NULL
  @return true if succeeded, false if no more memory could be allocated */
 bool ha_insert_for_hash_func(hash_table_t *table, uint64_t hash_value,
-                             IF_AHI_DEBUG(buf_block_t *block, )
-                                 const rec_t *data);
+                             IF_AHI_DEBUG(buf_block_t *block, ) creg_t data);
 
 /**
 Inserts an entry into a hash table. If an entry with the same hash number
@@ -117,7 +118,7 @@ is inserted.
 @param[in] b  buffer block containing the data
 @param[in] d  data, must not be NULL */
 static inline void ha_insert_for_hash(hash_table_t *t, uint64_t f,
-                                      buf_block_t *b, const rec_t *d) {
+                                      buf_block_t *b, creg_t d) {
   ha_insert_for_hash_func(t, f, IF_AHI_DEBUG(b, ) d);
   MONITOR_ATOMIC_INC(MONITOR_ADAPTIVE_HASH_ROW_ADDED);
 }
@@ -130,7 +131,7 @@ from the hash table if found.
 @return true if found */
 static inline bool ha_search_and_delete_if_found(hash_table_t *table,
                                                  uint64_t hash_value,
-                                                 const rec_t *data);
+                                                 creg_t data);
 
 #ifndef UNIV_HOTBACKUP
 
@@ -170,9 +171,11 @@ struct ha_node_t {
   buf_block_t *block;
 #endif
   /** pointer to the data */
-  const rec_t *data;
+  creg_t data;
 };
 
+#ifndef INNODB_HA0HA_IC_STANDALONE
 #include "ha0ha.ic"
+#endif /* !INNODB_HA0HA_IC_STANDALONE */
 
 #endif

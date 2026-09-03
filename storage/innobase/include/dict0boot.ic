@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 4/18/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef UNIV_HOTBACKUP
+#ifndef dict0boot_h
+#define INNODB_DICT0BOOT_IC_STANDALONE
+#include "dict0boot.h"
+#undef INNODB_DICT0BOOT_IC_STANDALONE
+#endif /* !dict0boot_h */
 /** Returns a new row id.
  @return the new id */
 static inline row_id_t dict_sys_get_new_row_id(void) {
@@ -78,3 +84,4 @@ static inline bool dict_is_old_sys_table(table_id_t id) {
   }
   return (false);
 }
+#endif /* !UNIV_HOTBACKUP */

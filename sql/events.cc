@@ -84,7 +84,7 @@
 #include "sql/transaction.h"
 #include "sql/tztime.h"  // Time_zone
 #include "sql_string.h"  // String
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0xlog.h"
 
 /**
   @addtogroup Event_Scheduler
@@ -963,10 +963,7 @@ bool Events::init(bool opt_noacl_or_bootstrap) {
 
   /* Leader will set opt_event_scheduler to ON later if
    * opt_configured_event_scheduler is ON */
-  if (ConsensusLogManager::enable_consensus()) {
-    opt_configured_event_scheduler = opt_event_scheduler;
-    opt_event_scheduler = EVENTS_OFF;
-  }
+  komodo::xlog_engine_reset_event_scheduler();
 
   if (event_queue->init_queue() || load_events_from_db(thd, event_queue) ||
       (opt_event_scheduler == EVENTS_ON && scheduler->start(&err_no))) {

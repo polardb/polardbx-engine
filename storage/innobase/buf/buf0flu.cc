@@ -64,6 +64,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0start.h"
 #include "trx0sys.h"
 #include "ut0byte.h"
+#include "ut0math.h"
 #include "ut0stage.h"
 
 #ifdef UNIV_LINUX
@@ -1042,6 +1043,10 @@ void buf_flush_init_for_writing(const buf_block_t *block, byte *page,
                                       skip_lsn_check);
 
         return;
+      case FIL_PAGE_INDEX_PANDA:
+      case FIL_PAGE_INDEX_HIPPO:
+      case FIL_PAGE_INDEX_SPC:
+        ut_error;
     }
 
     ib::error(ER_IB_MSG_124) << "The compressed page to be written"
@@ -1105,6 +1110,8 @@ void buf_flush_init_for_writing(const buf_block_t *block, byte *page,
             case FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY:
             case FIL_PAGE_TYPE_RSEG_ARRAY:
             case FIL_PAGE_INDEX_PANDA:
+            case FIL_PAGE_INDEX_HIPPO:
+            case FIL_PAGE_INDEX_SPC:
               break;
             case FIL_PAGE_TYPE_FSP_HDR:
             case FIL_PAGE_TYPE_XDES:
@@ -2105,7 +2112,7 @@ bool buf_flush_lists(ulint min_n, lsn_t lsn_limit, ulint *n_processed) {
     buffer pool instances. When min_n is ULINT_MAX
     we need to flush everything up to the lsn limit
     so no limit here. */
-    min_n = (min_n + srv_buf_pool_instances - 1) / srv_buf_pool_instances;
+    min_n = ut::div_ceil(min_n, ulint{srv_buf_pool_instances});
   }
 
   /* Flush to lsn_limit in all buffer pool instances */
@@ -2887,7 +2894,7 @@ static void pc_request(ulint min_n, lsn_t lsn_limit) {
     buffer pool instances. When min_n is ULINT_MAX
     we need to flush everything up to the lsn limit
     so no limit here. */
-    min_n = (min_n + srv_buf_pool_instances - 1) / srv_buf_pool_instances;
+    min_n = ut::div_ceil(min_n, ulint{srv_buf_pool_instances});
   }
 
   mutex_enter(&page_cleaner->mutex);

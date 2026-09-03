@@ -228,11 +228,11 @@ class Index_impl : public Entity_object_impl, public Index {
     m_secondary_engine_attribute.assign(a.str, a.length);
   }
 
-  lizard::Ha_se_attr_hint se_attr_hint() const override {
-    return m_se_attr_hint;
+  komodo::dd_se_attrs_t se_attrs() const override {
+    return m_se_attrs;
   }
-  void set_se_attr_hint(const lizard::Ha_se_attr_hint &se_attr_hint) override {
-    m_se_attr_hint = se_attr_hint;
+  void set_se_attrs(const komodo::dd_se_attrs_t &se_attrs) override {
+    m_se_attrs = se_attrs;
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -291,7 +291,7 @@ class Index_impl : public Entity_object_impl, public Index {
 
   String_type m_engine_attribute;
   String_type m_secondary_engine_attribute;
-  lizard::Ha_se_attr_hint m_se_attr_hint;
+  komodo::dd_se_attrs_t m_se_attrs;
 
   // References to tightly-coupled objects.
 

@@ -1,0 +1,228 @@
+### Purpose ###
+#
+# Verify SPC index page type is correctly recorded in DD and that
+# can_spc() restrictions are enforced:
+#   - Non-unique secondary index on COMPACT/DYNAMIC/REDUNDANT table -> SPC
+#   - Unique index                                                   -> NOT SPC
+#   - ROW_FORMAT=COMPRESSED table                                    -> NOT SPC
+#   - Virtual column index                                           -> NOT SPC
+#   - opt_index_format_spc_enabled=OFF                               -> NOT SPC
+#   - ADD INDEX after creation                                        -> SPC
+#   - Restart preserves DD page type                                  -> SPC
+#   - SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}' overrides var      -> SPC
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+# Default table name for spc_dd_consistent.inc helper
+--let $TABLE_NAME = t1
+
+select @@innodb_page_size;
+select @@opt_index_format_spc_enabled;
+
+--echo #
+--echo # PART 1: Non-unique index on DYNAMIC table -> SPC_PAGE
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  a   INT,
+  b   VARCHAR(100),
+  KEY idx_a  (a),
+  KEY idx_ab (a, b)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+--let $INDEX_NAME = idx_ab
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: Unique index -> NOT SPC; Non-unique sibling -> SPC
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  a   INT,
+  UNIQUE KEY uk_a  (a),
+  KEY        idx_a (a)
+) ENGINE=InnoDB;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--echo # uk_a is unique -> NOT SPC
+--let $INDEX_NAME = uk_a
+--let $IS_SPC = 0
+--source suite/spc/include/spc_dd_consistent.inc
+
+--echo # idx_a is non-unique -> SPC
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: ROW_FORMAT=COMPRESSED -> NOT SPC
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a  INT,
+  KEY idx_a (a)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 0
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Virtual column index -> NOT SPC; Normal sibling -> SPC
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  a   INT,
+  v   INT GENERATED ALWAYS AS (a + 1) VIRTUAL,
+  KEY idx_v (v),
+  KEY idx_a (a)
+) ENGINE=InnoDB;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--echo # idx_v has virtual column -> NOT SPC
+--let $INDEX_NAME = idx_v
+--let $IS_SPC = 0
+--source suite/spc/include/spc_dd_consistent.inc
+
+--echo # idx_a is normal -> SPC
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 5: opt_index_format_spc_enabled=OFF -> NOT SPC
+--echo #
+
+SET opt_index_format_spc_enabled = OFF;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a  INT,
+  KEY idx_a (a)
+) ENGINE=InnoDB;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 0
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+SET opt_index_format_spc_enabled = ON;
+
+--echo #
+--echo # PART 6: ADD INDEX after table creation -> SPC; survives restart
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a  VARCHAR(200),
+  b  VARCHAR(200)
+) ENGINE=InnoDB;
+
+ALTER TABLE t1 ADD INDEX idx_a  (a);
+ALTER TABLE t1 ADD INDEX idx_ab (a, b);
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+--let $INDEX_NAME = idx_ab
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+--echo # Restart: DD page type must survive
+--source include/restart_mysqld.inc
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+--let $INDEX_NAME = idx_ab
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 7: SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}' overrides OFF variable
+--echo #
+
+SET opt_index_format_spc_enabled = OFF;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a  VARCHAR(200)
+) ENGINE=InnoDB;
+
+ALTER TABLE t1 ADD INDEX idx_a (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--echo # Explicit spc attribute overrides the session variable
+--let $INDEX_NAME = idx_a
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+DROP TABLE t1;
+SET opt_index_format_spc_enabled = ON;

@@ -25,6 +25,7 @@
 
 #include <stddef.h>
 #include <sys/types.h>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -45,6 +46,7 @@
 class COPY_INFO;
 class Field;
 class Item;
+class Item_func_mod_onupd;
 class Item_ident;
 class Open_table_context;
 class Open_tables_backup;
@@ -220,10 +222,12 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
                   const mem_root_deque<Item *> *typed_items,
                   mem_root_deque<Item *> *fields,
                   Ref_item_array ref_item_array);
-bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
-                 const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
-                 MY_BITMAP *insert_into_fields_bitmap,
-                 bool raise_autoinc_has_expl_non_null_val);
+bool fill_record(
+    THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
+    const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
+    MY_BITMAP *insert_into_fields_bitmap,
+    bool raise_autoinc_has_expl_non_null_val,
+    std::map<uint, Item_func_mod_onupd *> *mod_onupd_items);
 bool fill_record(THD *thd, TABLE *table, Field **field,
                  const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
                  MY_BITMAP *insert_into_fields_bitmap,

@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 7/19/1997 Heikki Tuuri
  *******************************************************/
 
+#ifndef ibuf0ibuf_h
+#define INNODB_IBUF0IBUF_IC_STANDALONE
+#include "ibuf0ibuf.h"
+#undef INNODB_IBUF0IBUF_IC_STANDALONE
+#endif /* !ibuf0ibuf_h */
 #include "fsp0types.h"
 #include "page0page.h"
 #include "page0zip.h"

@@ -40,6 +40,21 @@ int main(int argc, char **argv) {
       return 1;
     }
 
+    /*
+      Behave like the real KMS agent (verified on production):
+      only serve known master key ids (InnoDB master keys start with
+      "INNODBKey"). For anything else, print the same ERROR line the
+      real agent prints and exit 0 -- the kernel only looks at stdout,
+      the exit code is never read.
+    */
+    if (strncmp(argv[3], "INNODBKey", 9) != 0) {
+      printf(
+          "ERROR:tde key file:/home/mysql/data%s/tde/%s.ciphertext "
+          "is not exists\n",
+          argv[1], argv[3]);
+      return 0;
+    }
+
     printf("b4fPuji+uxQieo8uKScgzWxV1DphwMxPGcxsFv64ywfKUd86ucWoI8SqF2ALB+vN6KLZk8sc3ZTbLzgI3KcbfSfPJqKX6cV8UPf7uOA3ZMfVJB7k9jSG516lJ97Aifkxss4ItgFNvHVkhCTMDQsT2wVkzAyyeLmDqcCqYzbWyGkVKXVZreWa5fcc2CJYHsbdAHmuCVW78fQMMecep7Mo72DN9y0zlcj8SSd2DL5J6F420dipwF2fGgfNhH7hiP8iHvHzVFzKM8V4gq9R5DzqJVvlguQwEEm1PJHtIge/2m8Yx/fVDT2kSWTCdSxp16YeUgQeMOK3LKI0YTXxTrhqUg==\n");
   } else {
     if (argc != 3) {

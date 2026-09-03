@@ -220,7 +220,7 @@ insert into gpp_upgrade.t2 values (9,9,9,'99999');
 --let $FULL_TABLE_NAME=t2#p#p2
 --let $INDEX_COL_MIN_VAL=5
 --let $INDEX_COL_MAX_VAL=19
---let $CONTAIN_GPP=1
+--let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
 
 --let $FULL_TABLE_NAME=t2#p#p0

@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2012-10-18 Marko Makela
  *******************************************************/
 
+#ifndef row0log_h
+#define INNODB_ROW0LOG_IC_STANDALONE
+#include "row0log.h"
+#undef INNODB_ROW0LOG_IC_STANDALONE
+#endif /* !row0log_h */
 #include "dict0dict.h"
 
 #ifndef UNIV_HOTBACKUP

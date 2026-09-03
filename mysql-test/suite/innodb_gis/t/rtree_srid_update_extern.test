@@ -1,0 +1,90 @@
+###############################################################################
+# Reproduce: spurious ER_CANT_CREATE_GEOMETRY_OBJECT on UPDATE when the
+# SRID-restricted geometry column of a spatial index is stored off-page.
+#
+# row_upd_sec_index_entry_low() pre-checks the SRID of the geometry column
+# by reading the first 4 bytes of the dfield taken from node->upd_row:
+#
+#     dptr = dfield_get_data(dfield);
+#     srid = uint4korr(dptr);
+#
+# If the UPDATE does not change the geometry column itself but the spatial
+# index entries still have to be rebuilt (PK update -> delete + insert of
+# the clustered index record -> UPD_NODE_UPDATE_ALL_SEC), the dfield keeps
+# whatever row_build(ROW_COPY_DATA, ...) copied from the clustered index
+# record:
+#  - ROW_FORMAT=DYNAMIC/COMPRESSED store an off-page column as a bare
+#    20-byte extern field reference. Its first 4 bytes are the LOB
+#    space_id, not the SRID, so the pre-check reads garbage and the
+#    UPDATE fails although neither the geometry value nor its SRID is
+#    touched.
+#  - ROW_FORMAT=REDUNDANT/COMPACT keep a 768-byte prefix in the record
+#    and the prefix starts with the real SRID, so they are unaffected.
+#
+# NOTE: This .result file encodes the intended behaviour AFTER the fix.
+# While the bug is present, the test is expected to fail at
+#     UPDATE t_dyn SET pk = pk + 10 WHERE pk = 2
+# with ERROR 1416 (SQLSTATE 22003): "Cannot get geometry object from data
+# you send to the GEOMETRY field".
+###############################################################################
+
+--echo #
+--echo # PK UPDATE of rows whose SRID-restricted geometry is stored
+--echo # off-page must not fail the SRID pre-check in
+--echo # row_upd_sec_index_entry_low().
+--echo #
+
+CREATE TABLE t_dyn (
+pk INT NOT NULL PRIMARY KEY,
+c INT NOT NULL,
+g GEOMETRY NOT NULL SRID 0,
+SPATIAL INDEX g_idx(g)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+CREATE TABLE t_com (
+pk INT NOT NULL PRIMARY KEY,
+c INT NOT NULL,
+g GEOMETRY NOT NULL SRID 0,
+SPATIAL INDEX g_idx(g)
+) ENGINE=InnoDB ROW_FORMAT=COMPACT;
+
+# A 3000-point LINESTRING: 4 (SRID) + 9 (WKB header) + 3000 * 16 = 48013
+# bytes, so the column is moved off-page in every row format.
+SET @big_wkt = CONCAT('LINESTRING(0 0', REPEAT(',7 7', 2999), ')');
+
+INSERT INTO t_dyn VALUES (1, 1, ST_GeomFromText('LINESTRING(0 0,1 1)', 0));
+INSERT INTO t_dyn VALUES (2, 2, ST_GeomFromText(@big_wkt, 0));
+INSERT INTO t_com VALUES (2, 2, ST_GeomFromText(@big_wkt, 0));
+
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_dyn ORDER BY pk;
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_com ORDER BY pk;
+
+--echo # Control 1: updating a non-indexed column does not rebuild the
+--echo # spatial index entry, so it works even with the bug present.
+UPDATE t_dyn SET c = c + 100 WHERE pk = 2;
+
+--echo # Control 2: PK update of a row whose geometry is stored in-page
+--echo # works: the pre-check reads the real SRID from the inline value.
+UPDATE t_dyn SET pk = pk + 10 WHERE pk = 1;
+
+--echo # Control 3: PK update of an off-page row in COMPACT format works:
+--echo # the record keeps a 768-byte prefix starting with the real SRID.
+UPDATE t_com SET pk = pk + 10 WHERE pk = 2;
+
+--echo # Bug scenario: PK update of an off-page row in DYNAMIC format.
+--echo # The dfield holds only the 20-byte extern field reference whose
+--echo # first 4 bytes are the LOB space_id; with the bug present this
+--echo # statement spuriously fails with ER_CANT_CREATE_GEOMETRY_OBJECT.
+UPDATE t_dyn SET pk = pk + 10 WHERE pk = 2;
+
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_dyn ORDER BY pk;
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_com ORDER BY pk;
+
+--echo # The R-tree entries must carry the new PK values.
+SELECT pk FROM t_dyn FORCE INDEX(g_idx) WHERE MBRContains(ST_GeomFromText('POLYGON((-1 -1,-1 8,8 8,8 -1,-1 -1))', 0), g) ORDER BY pk;
+SELECT pk FROM t_com FORCE INDEX(g_idx) WHERE MBRContains(ST_GeomFromText('POLYGON((-1 -1,-1 8,8 8,8 -1,-1 -1))', 0), g) ORDER BY pk;
+
+CHECK TABLE t_dyn;
+CHECK TABLE t_com;
+
+DROP TABLE t_dyn, t_com;

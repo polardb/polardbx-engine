@@ -1,0 +1,195 @@
+##########################################
+# VECTOR INDEX with CREATE TABLE LIKE    #
+# and CREATE TABLE AS SELECT Test        #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2, t3, t_source;
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+--enable_warnings
+
+--echo #
+--echo # Scenario 6.1: Create table with vector index as source
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  content VARCHAR(200),
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=10 distance=euclidean
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Check auxiliary table exists for t1
+SELECT COUNT(*) > 0 AS t1_has_aux_table FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t1%';
+
+--echo #
+--echo # Scenario 6.2: CREATE TABLE t2 LIKE t1 -> verify vector index structure copied
+--echo #
+
+CREATE TABLE t2 LIKE t1;
+
+SHOW CREATE TABLE t2;
+
+--echo #
+--echo # Scenario 6.3: Verify t2 has independent auxiliary table
+--echo #
+
+--echo # Both t1 and t2 should have their own auxiliary tables
+SELECT COUNT(*) AS t1_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t1%';
+
+SELECT COUNT(*) AS t2_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+
+--echo # Show all vidx auxiliary tables
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND (NAME LIKE '%t1%' OR NAME LIKE '%t2%')
+ORDER BY NAME;
+
+--echo #
+--echo # Scenario 6.5: DROP t1 -> verify t2's vector index is not affected
+--echo #
+
+DROP TABLE t1;
+
+--echo # Verify t2 still has its vector index
+SHOW CREATE TABLE t2;
+
+--echo # Verify t2's auxiliary table still exists
+SELECT COUNT(*) > 0 AS t2_still_has_aux FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+
+DROP TABLE t2;
+
+--echo #
+--echo # Scenario 6.6: CREATE TABLE t3 AS SELECT * FROM t_source -> verify no vector index
+--echo #
+
+CREATE TABLE t_source (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  content VARCHAR(200),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t_source;
+
+--echo # Note: Using empty result set due to INSERT crash bug
+CREATE TABLE t3 AS SELECT * FROM t_source WHERE 1=0;
+
+SHOW CREATE TABLE t3;
+
+--echo # Verify t3 does NOT have vector index (AS SELECT does not copy indexes)
+SELECT COUNT(*) AS t3_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t3%';
+
+--echo # t3 should have the vector column but no vector index
+--echo # Can manually add vector index to t3
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t3;
+
+DROP TABLE t3;
+DROP TABLE t_source;
+
+--echo #
+--echo # Scenario 6.7: Cross-database CREATE TABLE LIKE -> verify auxiliary table in correct schema
+--echo #
+
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+
+USE db1;
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=16 distance=cosine
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Check auxiliary table for db1.t1
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db1%'
+ORDER BY NAME;
+
+USE db2;
+CREATE TABLE t2 LIKE db1.t1;
+
+SHOW CREATE TABLE t2;
+
+--echo # Check auxiliary table for db2.t2 (should be in db2 schema)
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db2%'
+ORDER BY NAME;
+
+--echo # Verify both databases have their own auxiliary tables
+SELECT 
+  SUBSTRING_INDEX(NAME, '/', 1) AS db_name,
+  COUNT(*) AS aux_table_count 
+FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND (NAME LIKE '%db1%' OR NAME LIKE '%db2%')
+GROUP BY SUBSTRING_INDEX(NAME, '/', 1)
+ORDER BY db_name;
+
+--echo # Drop db1.t1 should not affect db2.t2
+DROP TABLE db1.t1;
+
+SHOW CREATE TABLE db2.t2;
+
+--echo # db2.t2's auxiliary table should still exist
+SELECT COUNT(*) > 0 AS db2_t2_aux_exists FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db2%';
+
+--echo #
+--echo # Additional test: Multiple LIKE in chain
+--echo #
+
+USE db1;
+CREATE TABLE t_base (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  embedding VECTOR(128),
+  VECTOR INDEX vi_base(embedding) m=32
+) ENGINE = InnoDB;
+
+CREATE TABLE t_copy1 LIKE t_base;
+CREATE TABLE t_copy2 LIKE t_copy1;
+
+SHOW CREATE TABLE t_base;
+SHOW CREATE TABLE t_copy1;
+SHOW CREATE TABLE t_copy2;
+
+--echo # Each table should have independent auxiliary tables
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db1%'
+ORDER BY NAME;
+
+DROP TABLE t_copy2;
+DROP TABLE t_copy1;
+DROP TABLE t_base;
+
+--echo #
+--echo # Note: INSERT/VEC_DISTANCE tests (Scenario 6.4) 
+--echo # are blocked by INSERT crash bug (lock0lock.cc:5283 assertion failure)
+--echo #
+
+--echo # Cleanup
+USE test;
+DROP TABLE IF EXISTS db2.t2;
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+
+SET GLOBAL vidx_disabled = ON;

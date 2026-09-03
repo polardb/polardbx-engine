@@ -1,0 +1,312 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Create table with STORED generated column and vector index
+CREATE TABLE t1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `v_dim` int GENERATED ALWAYS AS (vector_dim(`v`)) STORED,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+SELECT id, VEC_TOTEXT(v), v_dim FROM t1;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+# Verify vector index works with generated column present
+SELECT id, VEC_TOTEXT(v), v_dim FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+DROP TABLE t1;
+
+# 2. Create table with VIRTUAL generated column and vector index
+CREATE TABLE t2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) VIRTUAL,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `v_dim` int GENERATED ALWAYS AS (vector_dim(`v`)) VIRTUAL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+SELECT id, VEC_TOTEXT(v), v_dim FROM t2;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+# Verify vector index works with virtual generated column present
+SELECT id, VEC_TOTEXT(v), v_dim FROM t2 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+DROP TABLE t2;
+
+# 3. Attempt to create vector index on virtual generated column (should fail)
+# Vector index does not support generated VECTOR column
+CREATE TABLE t3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+raw_data BLOB,
+v VECTOR(5) GENERATED ALWAYS AS (VEC_FROMTEXT(raw_data)) VIRTUAL,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+ERROR HY000: Incorrect usage of vector index: Only support one visible VECTOR column
+
+# 4. Table with multiple generated columns and vector index
+CREATE TABLE t4 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED,
+is_valid BOOL GENERATED ALWAYS AS (VECTOR_DIM(v) = 5) STORED,
+double_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v) * 2) VIRTUAL,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `dim` int GENERATED ALWAYS AS (vector_dim(`v`)) STORED,
+  `is_valid` tinyint(1) GENERATED ALWAYS AS ((vector_dim(`v`) = 5)) STORED,
+  `double_dim` int GENERATED ALWAYS AS ((vector_dim(`v`) * 2)) VIRTUAL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t4(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t4(v) VALUES (VEC_FROMTEXT('[10,20,30,40,50]'));
+INSERT INTO t4(v) VALUES (NULL);
+SELECT id, VEC_TOTEXT(v), dim, is_valid, double_dim FROM t4;
+id	VEC_TOTEXT(v)	dim	is_valid	double_dim
+1	[1,2,3,4,5]	5	1	10
+2	[10,20,30,40,50]	5	1	10
+3	NULL	NULL	NULL	NULL
+# ANN query with filter on generated column
+SELECT id, VEC_TOTEXT(v), dim, is_valid FROM t4 
+WHERE is_valid = 1 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	dim	is_valid
+1	[1,2,3,4,5]	5	1
+2	[10,20,30,40,50]	5	1
+DROP TABLE t4;
+
+# 5. DML operations on table with generated columns and vector index
+CREATE TABLE t5 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# INSERT
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[2,2,2,2,2]'));
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[3,3,3,3,3]'));
+SELECT id, VEC_TOTEXT(v), v_dim FROM t5;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,1,1,1,1]	5
+2	[2,2,2,2,2]	5
+3	[3,3,3,3,3]	5
+# UPDATE vector column
+UPDATE t5 SET v = VEC_FROMTEXT('[10,10,10,10,10]') WHERE id = 1;
+SELECT id, VEC_TOTEXT(v), v_dim FROM t5;
+id	VEC_TOTEXT(v)	v_dim
+1	[10,10,10,10,10]	5
+2	[2,2,2,2,2]	5
+3	[3,3,3,3,3]	5
+# Verify generated column is updated
+SELECT id, v_dim FROM t5 WHERE id = 1;
+id	v_dim
+1	5
+# DELETE
+DELETE FROM t5 WHERE id = 2;
+SELECT id, VEC_TOTEXT(v), v_dim FROM t5;
+id	VEC_TOTEXT(v)	v_dim
+1	[10,10,10,10,10]	5
+3	[3,3,3,3,3]	5
+# Verify vector index consistency after DML
+SELECT id, VEC_TOTEXT(v), v_dim FROM t5 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3,3]')) LIMIT 3;
+id	VEC_TOTEXT(v)	v_dim
+3	[3,3,3,3,3]	5
+1	[10,10,10,10,10]	5
+DROP TABLE t5;
+
+# 6. Generated column with complex expression involving vector
+CREATE TABLE t6 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+has_data BOOL GENERATED ALWAYS AS (v IS NOT NULL) STORED,
+description VARCHAR(100) GENERATED ALWAYS AS (
+CASE 
+WHEN v IS NULL THEN 'No vector'
+      ELSE CONCAT('Vector with dim=', VECTOR_DIM(v))
+END
+) STORED,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `has_data` tinyint(1) GENERATED ALWAYS AS ((`v` is not null)) STORED,
+  `description` varchar(100) GENERATED ALWAYS AS ((case when (`v` is null) then _utf8mb4'No vector' else concat(_utf8mb4'Vector with dim=',vector_dim(`v`)) end)) STORED,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t6(v) VALUES (NULL);
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+SELECT id, VEC_TOTEXT(v), has_data, description FROM t6;
+id	VEC_TOTEXT(v)	has_data	description
+1	[1,2,3,4,5]	1	Vector with dim=5
+2	NULL	0	No vector
+3	[5,4,3,2,1]	1	Vector with dim=5
+DROP TABLE t6;
+
+# 7. ALTER TABLE to add generated column on table with vector index
+CREATE TABLE t7 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t7(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t7(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+SHOW CREATE TABLE t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t7 ADD COLUMN v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED;
+SHOW CREATE TABLE t7;
+Table	Create Table
+t7	CREATE TABLE `t7` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `v_dim` int GENERATED ALWAYS AS (vector_dim(`v`)) STORED,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT id, VEC_TOTEXT(v), v_dim FROM t7;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+# Verify vector index still works after ALTER
+SELECT id, VEC_TOTEXT(v), v_dim FROM t7 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+DROP TABLE t7;
+
+# 8. Index on generated column alongside vector index
+CREATE TABLE t8 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED,
+INDEX idx_dim(v_dim),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t8(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t8(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t8(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+SHOW CREATE TABLE t8;
+Table	Create Table
+t8	CREATE TABLE `t8` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `v_dim` int GENERATED ALWAYS AS (vector_dim(`v`)) STORED,
+  PRIMARY KEY (`id`),
+  KEY `idx_dim` (`v_dim`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Query using generated column index
+EXPLAIN SELECT id, VEC_TOTEXT(v), v_dim FROM t8 WHERE v_dim = 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	ref	idx_dim	idx_dim	5	const	3	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t8`.`id` AS `id`,VEC_ToText(`test`.`t8`.`v`) AS `VEC_TOTEXT(v)`,`test`.`t8`.`v_dim` AS `v_dim` from `test`.`t8` where (`test`.`t8`.`v_dim` = 5)
+SELECT id, VEC_TOTEXT(v), v_dim FROM t8 WHERE v_dim = 5;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+# Query using vector index
+EXPLAIN SELECT id, VEC_TOTEXT(v), v_dim FROM t8 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	index	NULL	vi	23	NULL	3	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=3; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t8`.`id` AS `id`,VEC_ToText(`test`.`t8`.`v`) AS `VEC_TOTEXT(v)`,`test`.`t8`.`v_dim` AS `v_dim` from `test`.`t8` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t8`.`v`,VEC_FromText('[1,2,3,4,5]')) limit 3
+SELECT id, VEC_TOTEXT(v), v_dim FROM t8 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	v_dim
+1	[1,2,3,4,5]	5
+2	[2,3,4,5,6]	5
+3	[3,4,5,6,7]	5
+DROP TABLE t8;
+
+# 9. Test with NULL vector and generated columns
+CREATE TABLE t9 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+v_dim INT GENERATED ALWAYS AS (VECTOR_DIM(v)) STORED,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t9(v) VALUES (NULL);
+INSERT INTO t9(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t9(v) VALUES (NULL);
+INSERT INTO t9(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+SELECT id, VEC_TOTEXT(v), v_dim FROM t9;
+id	VEC_TOTEXT(v)	v_dim
+1	NULL	NULL
+2	[1,2,3,4,5]	5
+3	NULL	NULL
+4	[5,4,3,2,1]	5
+# Update NULL to vector
+UPDATE t9 SET v = VEC_FROMTEXT('[9,9,9,9,9]') WHERE id = 1;
+SELECT id, VEC_TOTEXT(v), v_dim FROM t9;
+id	VEC_TOTEXT(v)	v_dim
+1	[9,9,9,9,9]	5
+2	[1,2,3,4,5]	5
+3	NULL	NULL
+4	[5,4,3,2,1]	5
+# Update vector to NULL
+UPDATE t9 SET v = NULL WHERE id = 2;
+SELECT id, VEC_TOTEXT(v), v_dim FROM t9;
+id	VEC_TOTEXT(v)	v_dim
+1	[9,9,9,9,9]	5
+2	NULL	NULL
+3	NULL	NULL
+4	[5,4,3,2,1]	5
+DROP TABLE t9;
+
+# 10. Cleanup
+SET GLOBAL vidx_disabled = ON;

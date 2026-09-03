@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "rem0types.h"
 #include "trx0types.h"
 #include "univ.i"
+
+#include "lizard0rem0types.h"
 #include "lizard0txn0rec0types.h"
 
 // Forward declaration
@@ -50,6 +52,7 @@ struct txn_rec_t;
 namespace lizard {
 class Vision;
 }  // namespace lizard
+class Slice_ctx;
 
 /** Finds out if an active transaction has inserted or modified a secondary
  index record.
@@ -61,8 +64,7 @@ class Vision;
  negatives. The caller must confirm all positive results by checking if the trx
  is still active.
 */
-txn_rw_t row_vers_impl_x_locked(const rec_t *rec, const dict_index_t *index,
-                                const ulint *offsets);
+txn_rw_t row_vers_impl_x_locked(const Slice *slc, const dict_index_t *index);
 
 /** Finds out if we must preserve a delete marked earlier version of a clustered
  index record, because it is >= the purge view.
@@ -85,8 +87,8 @@ bool row_vers_old_has_index_entry(
     bool also_curr,         /*!< in: true if also rec is included in the
                            versions to search; otherwise only versions
                            prior to it are searched */
-    const rec_t *rec,       /*!< in: record in the clustered index; the
-                            caller must have a latch on the page */
+    creg_t reg,             /*!< in: record in the clustered index; the
+                                  caller must have a latch on the page */
     mtr_t *mtr,             /*!< in: mtr holding the latch on rec; it will
                             also hold the latch on purge_view */
     dict_index_t *index,    /*!< in: the secondary index */
@@ -118,9 +120,9 @@ bool row_vers_old_has_index_entry(
  @param[in]   layout   txn layout
  @return DB_SUCCESS or DB_MISSING_HISTORY */
 dberr_t row_vers_build_for_consistent_read(
-    const rec_t *rec, mtr_t *mtr, dict_index_t *index, ulint **offsets,
-    const lizard::Vision *vision, mem_heap_t **offset_heap, mem_heap_t *in_heap,
-    rec_t **old_vers, const dtuple_t **vrow, lob::undo_vers_t *lob_undo,
+    creg_t rec, mtr_t *mtr, dict_index_t *index, Slice **slc,
+    Slice_ctx *slc_ctx, const lizard::Vision *vision, mem_heap_t *in_heap,
+    reg_t *old_vers, const dtuple_t **vrow, lob::undo_vers_t *lob_undo,
     const txn_layout_t &layout);
 
 /** Constructs the last committed version of a clustered index record,
@@ -138,11 +140,15 @@ the function
 the view, that is, it was freshly inserted afterwards
 @param[out] vrow Virtual row, old version, or null if it is not updated in the
 view */
-void row_vers_build_for_semi_consistent_read(
-    const rec_t *rec, mtr_t *mtr, dict_index_t *index, ulint **offsets,
-    mem_heap_t **offset_heap, mem_heap_t *in_heap, const rec_t **old_vers,
-    const dtuple_t **vrow);
+void row_vers_build_for_semi_consistent_read(creg_t reg, mtr_t *mtr,
+                                             dict_index_t *index, Slice **slc,
+                                             Slice_ctx *slc_ctx,
+                                             mem_heap_t *in_heap,
+                                             creg_t *old_vers_reg,
+                                             const dtuple_t **vrow);
 
+#ifndef INNODB_ROW0VERS_IC_STANDALONE
 #include "row0vers.ic"
+#endif /* !INNODB_ROW0VERS_IC_STANDALONE */
 
 #endif

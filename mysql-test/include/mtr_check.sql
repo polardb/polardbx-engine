@@ -183,7 +183,7 @@ BEGIN
   SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ * FROM INFORMATION_SCHEMA.PLUGINS;
 
   -- Leave InnoDB metrics in the same state
-  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ name, status FROM INFORMATION_SCHEMA.INNODB_METRICS
+  SELECT /*+SET_VAR(use_secondary_engine=OFF)*/ name, status FROM INFORMATION_SCHEMA.INNODB_METRICS where name != 'buffer_pool_dirty_ratio'
     ORDER BY name;
 
   SHOW GLOBAL STATUS LIKE 'replica_open_temp_tables';

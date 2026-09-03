@@ -62,6 +62,11 @@ typedef struct NET_SERVER {
   struct compression_attributes compression;
   mysql_compress_context compress_ctx;
   bool timeout_on_full_packet;
+  /** Buffer shrink related fields */
+  unsigned int small_packet_counter;
+  size_t last_buff_usage;
+  /** Buffer size before alignment from last net_realloc call */
+  size_t unaligned_buff_size;
 } NET_SERVER;
 
 inline void net_server_ext_init(NET_SERVER *ns) {
@@ -70,6 +75,9 @@ inline void net_server_ext_init(NET_SERVER *ns) {
   ns->m_after_header = nullptr;
   ns->compress_ctx.algorithm = MYSQL_UNCOMPRESSED;
   ns->timeout_on_full_packet = false;
+  ns->small_packet_counter = 0;
+  ns->last_buff_usage = 0;
+  ns->unaligned_buff_size = 0;
 }
 
 #endif

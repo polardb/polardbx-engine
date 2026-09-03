@@ -1,0 +1,216 @@
+################################################################################
+# HIPPO Index Implicit Lock and MVCC Test
+#
+# This test verifies HIPPO-specific optimizations:
+# 1. lock_sec_rec_some_has_impl_fast() - Implicit lock detection on HIPPO index
+# 2. lock_sec_rec_cons_read_sees_fast() - MVCC visibility on HIPPO index
+#
+# Key scenarios:
+# - rec_tid > 0: Normal case, use tid for lock/visibility check
+# - rec_tid == 0: Rollback case, fallback to other mechanisms
+################################################################################
+
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+--echo ########################################################################
+--echo # Setup
+--echo ########################################################################
+
+--echo # Enable HIPPO index explicitly
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t_hippo (
+  id INT PRIMARY KEY,
+  val INT,
+  data VARCHAR(100),
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+INSERT INTO t_hippo VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');
+
+--echo ########################################################################
+--echo # Test 1: Implicit Lock Detection (rec_tid > 0)
+--echo # Verify lock_sec_rec_some_has_impl_fast correctly detects active trx
+--echo ########################################################################
+
+--echo # Connection 1: Start transaction, update indexed column (holds implicit lock)
+--connect(con1, localhost, root,,)
+BEGIN;
+UPDATE t_hippo SET val = 999 WHERE id = 2;
+--echo # Row with id=2 now has implicit lock with rec_tid = con1's trx_id
+
+--echo # Connection 2: Try to read/update the same row, should detect implicit lock
+--connect(con2, localhost, root,,)
+SET innodb_lock_wait_timeout = 1;
+
+--echo # This should wait (implicit lock converted to explicit)
+--error ER_LOCK_WAIT_TIMEOUT
+UPDATE t_hippo SET val = 888 WHERE id = 2;
+
+--connection con1
+COMMIT;
+
+--connection con2
+--echo # Now update should succeed
+UPDATE t_hippo SET val = 777 WHERE id = 2;
+SELECT * FROM t_hippo WHERE id = 2;
+ROLLBACK;
+
+--echo ########################################################################
+--echo # Test 2: MVCC Visibility (rec_tid > 0)
+--echo # Verify lock_sec_rec_cons_read_sees_fast correctly determines visibility
+--echo ########################################################################
+
+--echo # Reset data
+--connection default
+UPDATE t_hippo SET val = 200 WHERE id = 2;
+
+--echo # Connection 1: Start RR transaction, read data
+--connection con1
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 200;
+
+--echo # Connection 2: Update the same row and commit
+--connection con2
+BEGIN;
+UPDATE t_hippo SET val = 2000 WHERE id = 2;
+COMMIT;
+
+--echo # Connection 1: RR should NOT see the committed change (vision check)
+--connection con1
+--echo # Primary key access
+SELECT * FROM t_hippo WHERE id = 2;
+--echo # Secondary index access - uses lock_sec_rec_cons_read_sees_fast
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 200;
+--echo # Should NOT find val=2000 (not visible in this snapshot)
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 2000;
+COMMIT;
+
+--echo # After commit, new transaction sees the change
+BEGIN;
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 2000;
+COMMIT;
+
+--echo ########################################################################
+--echo # Test 3: Implicit Lock with rec_tid = 0 (Rollback scenario)
+--echo # When transaction rolls back, rec_tid becomes 0, test fallback
+--echo ########################################################################
+
+--echo # Reset data
+--connection default
+UPDATE t_hippo SET val = 200 WHERE id = 2;
+
+--echo # Connection 1: Start transaction, update, then rollback
+--connection con1
+BEGIN;
+UPDATE t_hippo SET val = 555 WHERE id = 2;
+--echo # At this point, secondary index record has rec_tid = con1's trx_id
+
+--echo # Now rollback - rec_tid on secondary index becomes 0
+ROLLBACK;
+
+--echo # Connection 2: Should be able to update immediately (no lock)
+--connection con2
+BEGIN;
+UPDATE t_hippo SET val = 666 WHERE id = 2;
+COMMIT;
+
+SELECT * FROM t_hippo WHERE id = 2;
+
+--echo ########################################################################
+--echo # Test 4: MVCC with rec_tid = 0 (Rollback scenario)
+--echo # Verify visibility is correct when rec_tid = 0
+--echo ########################################################################
+
+--echo # Reset
+--connection default
+UPDATE t_hippo SET val = 200 WHERE id = 2;
+
+--echo # Connection 1: Start RR transaction
+--connection con1
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 200;
+
+--echo # Connection 2: Insert, then rollback (creates rec_tid=0 scenario)
+--connection con2
+BEGIN;
+INSERT INTO t_hippo VALUES (10, 1000, 'new');
+--echo # Now rollback - the record with val=1000 should be gone
+ROLLBACK;
+
+--echo # Connection 1: Should NOT see the rolled-back record
+--connection con1
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 1000;
+COMMIT;
+
+--echo ########################################################################
+--echo # Test 5: Concurrent INSERT with implicit lock
+--echo ########################################################################
+
+--echo # Connection 1: Insert a new row, don't commit
+--connection con1
+BEGIN;
+INSERT INTO t_hippo VALUES (20, 2000, 'insert_test');
+
+--echo # Connection 2: Try to insert duplicate on secondary index value
+--connection con2
+SET innodb_lock_wait_timeout = 1;
+BEGIN;
+--echo # This should detect implicit lock and wait
+--error ER_LOCK_WAIT_TIMEOUT
+select * from t_hippo where val = 2000 for share;
+ROLLBACK;
+
+--connection con1
+COMMIT;
+
+--echo ########################################################################
+--echo # Test 6: DELETE with implicit lock and MVCC
+--echo ########################################################################
+
+--echo # Connection 1: Start RR, read data
+--connection con1
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 2000;
+
+--echo # Connection 2: Delete the row
+--connection con2
+BEGIN;
+DELETE FROM t_hippo WHERE id = 20;
+COMMIT;
+
+--echo # Connection 1: RR should still see the deleted row
+--connection con1
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 2000;
+COMMIT;
+
+--echo # New transaction should NOT see it
+BEGIN;
+SELECT * FROM t_hippo USE INDEX(idx_val) WHERE val = 2000;
+COMMIT;
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+--connection con1
+--disconnect con1
+--connection con2
+--disconnect con2
+--connection default
+
+DROP TABLE t_hippo;
+
+--echo # Restore default HIPPO setting
+SET opt_index_format_hippo_enabled=default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################
+

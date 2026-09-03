@@ -78,8 +78,10 @@
 #include "prealloced_array.h"
 #include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
+#include "sql/auth/auth_common.h"  // check_drop_db_priv
 #include "sql/auth/sql_internal_account.h"  // IA_type::KILL_USER
 #include "sql/auth/sql_security_ctx.h"
+#include "sql/conn_handler/channel_info.h"
 #include "sql/binlog.h"  // purge_source_logs
 #include "sql/ccl/ccl_interface.h"
 #include "sql/clone_handler.h"
@@ -186,8 +188,8 @@
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
 #endif /* WITH_LOCK_ORDER */
-#include "bl_consensus_log.h"
-#include "consensus_log_manager.h"
+#include "komodo0consensus0xlog.h"
+#include "komodo0xlog.h"
 #include "ppi/ppi_statement.h"
 #include "sql/ccl/ccl.h"
 #include "sql/group_update.h"
@@ -196,12 +198,13 @@
 #include "sql/outline/outline_interface.h"
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_parse.h"
-#include "sql/xa/lizard_xa_trx.h"
+#include "sql/xa/komodo0xa0trx.h"
 
+#include "sql/column_encryption/column_encryption.h"
+#include "sql/column_encryption/encdb_service.h"
 #include "sql/inventory/inventory_hint.h"
-#include "sql/lizard/lizard_hb_freezer.h"
-#include "sql/lizard_sql_class.h"
-
+#include "sql/komodo0sql0class.h"
+#include "sql/transaction/komodo0hb0freezer.h"
 namespace resourcegroups {
 class Resource_group;
 }  // namespace resourcegroups
@@ -1412,6 +1415,7 @@ void bind_fields(Item *first) {
 
 bool do_command(THD *thd) {
   bool return_value;
+  bool buff_shrunk = false;
   int rc;
   NET *net = nullptr;
   enum enum_server_command command = COM_SLEEP;
@@ -1548,6 +1552,14 @@ bool do_command(THD *thd) {
   return_value = dispatch_command(thd, &com_data, command);
   thd->get_protocol_classic()->get_output_packet()->shrink(
       thd->variables.net_buffer_length);
+
+  /* Check if input buffer should be shrunk based on actual buffer usage */
+  buff_shrunk =
+      net_maybe_shrink_buffer(net, thd->variables.net_buffer_length,
+                              net_buff_shrink_enabled, net_buff_shrink_thresh);
+  if (buff_shrunk) {
+    thd->status_var.net_buff_stat_shrink_count++;
+  }
 
 out:
   /* The statement instrumentation must be closed in all cases. */
@@ -3218,7 +3230,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
     push_warning(thd, ER_WARN_DEPRECATED_CLIENT_NO_SCHEMA_OPTION);
   }
 
-  if (consensus_command_limit(thd)) {
+  if (komodo::xlog_need_block_command(thd)) {
     xp::error()
         << "command could not be executed because of consensus command limit";
     return 1;
@@ -3250,8 +3262,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
           Returning success without producing any errors in this case.
         */
         binlog_gtid_end_transaction(thd);
-        /* Lizard: DROP TRIGGER IF EXISTS might forget to reset it. */
-        thd->reset_trans_policy();
+        /** Commit policy must have been reset */
+        KOMODO_ASSERT_CPOLICY_CLEAN(thd);
         return 0;
       }
 
@@ -3392,7 +3404,7 @@ int mysql_execute_command(THD *thd, bool first_level) {
   */
   if (stmt_causes_implicit_commit(thd, CF_IMPLICIT_COMMIT_BEGIN)) {
     /** Implicit Commit might reset all lizard THD vars. Backup and restore it. */
-    lizard::Implicit_trans_policy_guard guard(thd);
+    komodo::Implicit_trans_policy_guard guard(thd);
     /*
       Note that this should never happen inside of stored functions
       or triggers as all such statements prohibited there.
@@ -3536,9 +3548,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
     until we have the MDL, and LOCK TABLE could massively delay this.
   */
 
-  lizard::simulate_snapshot_clause(thd, all_tables);
+  komodo::simulate_snapshot_clause(thd, all_tables);
 
-  if (lizard::cn_heartbeat_timeout_freeze_updating(lex)) {
+  if (komodo::cn_heartbeat_timeout_freeze_updating(lex)) {
     goto error;
   }
 
@@ -3612,9 +3624,8 @@ int mysql_execute_command(THD *thd, bool first_level) {
         goto error;
       }
       auto consensus_guard = create_lock_guard(
-        [&] { consensus_log_manager.rdlock_consensus_status(); },
-        [&] { consensus_log_manager.unlock_consensus_status(); }
-      );
+          [&] { komodo::xlog_log_manager_rdlock_consensus_status(); },
+          [&] { komodo::xlog_log_manager_unlock_consensus_status(); });
       res = change_master_cmd(thd);
       break;
     }
@@ -3779,11 +3790,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
 
     case SQLCOM_START_XPAXOS_REPLICATION: {
       auto consensus_guard = create_lock_guard(
-        [&] { consensus_log_manager.rdlock_consensus_status(); },
-        [&] { consensus_log_manager.unlock_consensus_status(); }
-      );
-      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
-          !opt_cluster_log_type_instance)
+          [&] { komodo::xlog_log_manager_rdlock_consensus_status(); },
+          [&] { komodo::xlog_log_manager_unlock_consensus_status(); });
+      if (!komodo::xlog_engine_binlog_working())
         res = start_slave_cmd(thd);
       else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
@@ -3811,11 +3820,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
       }
 
       auto consensus_guard = create_lock_guard(
-        [&] { consensus_log_manager.rdlock_consensus_status(); },
-        [&] { consensus_log_manager.unlock_consensus_status(); }
-      );
-      if (consensus_log_manager.get_status() == RELAY_LOG_WORKING &&
-          !opt_cluster_log_type_instance) {
+          [&] { komodo::xlog_log_manager_rdlock_consensus_status(); },
+          [&] { komodo::xlog_log_manager_unlock_consensus_status(); });
+      if (!komodo::xlog_engine_binlog_working()) {
         res = stop_slave_cmd(thd);
       } else
         my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
@@ -4102,6 +4109,10 @@ int mysql_execute_command(THD *thd, bool first_level) {
       if (check_access(thd, DROP_ACL, lex->name.str, nullptr, nullptr, true,
                        false))
         break;
+
+      if (check_drop_db_priv(thd)) 
+        break;
+
       res = mysql_rm_db(thd, to_lex_cstring(lex->name), lex->drop_if_exists);
       break;
     }
@@ -4435,12 +4446,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
       if (!handle_reload_request(thd, lex->type, first_table,
                                  &write_to_binlog)) {
         {
-          //append empty log for crash recover
-          if (thd->variables.opt_consensus_safe_for_reset_master &&
-              consensus_ptr && consensus_ptr->getLog()) {
-            alisql::LogEntry entry1;
-            consensus_ptr->getLog()->getEmptyEntry(entry1);
-            consensus_ptr->replicateLog(entry1);
+          // append empty log for crash recover
+          if (thd->variables.opt_consensus_safe_for_reset_master) {
+            komodo::xlog_replicate_empty_log();
           }
         }
 
@@ -4468,6 +4476,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
         if (!res) my_ok(thd);
       }
 
+      if (thd->enable_column_encryption && (lex->type & REFRESH_GRANT)) {
+        RUN_HOOK(encdb, reload_encdb_rule, ());
+      }
       break;
     }
     case SQLCOM_KILL: {
@@ -4520,7 +4531,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
       thd->mdl_context.release_transactional_locks();
       /* Begin transaction with the same isolation level. */
       if (tx_chain) {
-        thd->reset_trans_policy();
         if (trans_begin(thd)) goto error;
       } else {
         /* Reset the isolation level and access mode if no chaining
@@ -5486,12 +5496,16 @@ void THD::reset_for_next_command() {
   thd->security_context()->checkout_access_maps();
 #ifndef NDEBUG
   thd->set_tmp_table_seq_id(1);
+  thd->set_dml_readonly_checked(false);
 #endif
 
   /* For some case, the query fail without reset the gu_ctx. for defense.*/
   if (thd->gu_ctx.is_gu()) thd->gu_ctx.reset();
 
   thd->enable_mask_internal_user = im::opt_mask_internal_user;
+  thd->enable_mask_ai_model_config_api_key =
+      komodo::opt_mask_ai_model_config_api_key;
+  thd->enable_column_encryption = komodo::opt_enable_column_encryption;
 }
 
 /*
@@ -5767,6 +5781,7 @@ bool mysql_test_parse_for_slave(THD *thd) {
   @param col_check_const_spec_list List of column check constraints.
   @param hidden                    Column hidden type.
   @param is_array                  Whether it's a typed array field
+  @param is_vector                 Whether it's a typed vector field
 
   @return
     Return 0 if ok
@@ -5780,7 +5795,7 @@ bool Alter_info::add_field(
     Value_generator *gcol_info, Value_generator *default_val_expr,
     const char *opt_after, std::optional<gis::srid_t> srid,
     Sql_check_constraint_spec_list *col_check_const_spec_list,
-    dd::Column::enum_hidden_type hidden, bool is_array) {
+    dd::Column::enum_hidden_type hidden, bool is_array, bool is_vector) {
   uint8 datetime_precision = decimals ? atoi(decimals) : 0;
   DBUG_TRACE;
   assert(!is_array || hidden == dd::Column::enum_hidden_type::HT_HIDDEN_SQL);
@@ -5881,7 +5896,7 @@ bool Alter_info::add_field(
                       type_modifier, default_value, on_update_value, comment,
                       change, interval_list, cs, has_explicit_collation,
                       uint_geom_type, gcol_info, default_val_expr, srid, hidden,
-                      is_array))
+                      is_array, is_vector))
     return true;
 
   for (const auto &a : cf_appliers) {

@@ -1,0 +1,155 @@
+DROP TABLE IF EXISTS c3;
+CREATE TABLE c3 (
+id INT NOT NULL AUTO_INCREMENT,
+str VARCHAR(40) NOT NULL,
+value VARCHAR(40) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+insert into c3(str, value) values
+("changeset", "test"),
+("changeset1", "test1"),
+("changeset12", "test2"),
+("changeset123", "test3");
+insert into c3(str, value) select str, value from c3;
+insert into c3(str, value) select str, value from c3;
+insert into c3(str, value) select str, value from c3;
+call polarx.changeset_start('c3', 1024);
+TABLE
+c3
+call polarx.changeset_backpressure('c3', 10, 100, 10000);
+SEQ	ROW
+insert into c3(str, value) select str, value from c3 order by id limit 32;
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	32	0	0	0	2288	32	10	100.000000	10000.000000
+insert into c3(str, value) values ("changeset4", "test4");
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	3	33
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	33	0	0	1	71	33	10	100.000000	10000.000000
+insert into c3(str, value) select str, value from c3 order by id limit 32;
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	3	65
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	65	0	0	1	2359	65	10	100.000000	10000.000000
+insert into c3(str, value) values ("changeset5", "test5");
+call polarx.changeset_backpressure('c3', 10, 0, 10000);
+SEQ	ROW
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	66
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	2	71	66	10	0.000000	10000.000000
+call polarx.changeset_backpressure('c3', 0, 0, 10000);
+SEQ	ROW
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	66
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	2	71	66	-	-	-
+call polarx.changeset_backpressure('c3', 10, 0, 0);
+SEQ	ROW
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	66
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	2	71	66	-	-	-
+call polarx.changeset_backpressure('c3', 10, 0, 20000);
+SEQ	ROW
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	66
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	2	71	66	10	0.000000	20000.000000
+call polarx.changeset_fetch('c3');
+OP	id	str
+INSERT	58	changeset
+INSERT	59	changeset1
+INSERT	60	changeset12
+INSERT	61	changeset123
+INSERT	62	changeset
+INSERT	63	changeset1
+INSERT	64	changeset12
+INSERT	65	changeset123
+INSERT	66	changeset
+INSERT	67	changeset1
+INSERT	68	changeset12
+INSERT	69	changeset123
+INSERT	70	changeset
+INSERT	71	changeset1
+INSERT	72	changeset12
+INSERT	73	changeset123
+INSERT	74	changeset
+INSERT	75	changeset1
+INSERT	76	changeset12
+INSERT	77	changeset123
+INSERT	78	changeset
+INSERT	79	changeset1
+INSERT	80	changeset12
+INSERT	81	changeset123
+INSERT	82	changeset
+INSERT	83	changeset1
+INSERT	84	changeset12
+INSERT	85	changeset123
+INSERT	86	changeset
+INSERT	87	changeset1
+INSERT	88	changeset12
+INSERT	89	changeset123
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	34
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	2	71	34	10	0.000000	20000.000000
+call polarx.changeset_fetch('c3');
+OP	id	str
+INSERT	121	changeset4
+INSERT	122	changeset
+INSERT	123	changeset1
+INSERT	124	changeset12
+INSERT	125	changeset123
+INSERT	126	changeset
+INSERT	127	changeset1
+INSERT	128	changeset12
+INSERT	129	changeset123
+INSERT	130	changeset
+INSERT	131	changeset1
+INSERT	132	changeset12
+INSERT	133	changeset123
+INSERT	134	changeset
+INSERT	135	changeset1
+INSERT	136	changeset12
+INSERT	137	changeset123
+INSERT	138	changeset
+INSERT	139	changeset1
+INSERT	140	changeset12
+INSERT	141	changeset123
+INSERT	142	changeset
+INSERT	143	changeset1
+INSERT	144	changeset12
+INSERT	145	changeset123
+INSERT	146	changeset
+INSERT	147	changeset1
+INSERT	148	changeset12
+INSERT	149	changeset123
+INSERT	150	changeset
+INSERT	151	changeset1
+INSERT	152	changeset12
+INSERT	153	changeset123
+call polarx.changeset_times('c3');
+TABLE	FETCH_TIMES_NUM	CURRENT_PRIMARY_KEY_NUM
+c3	<FETCH_TIMES>	1
+call polarx.changeset_stats('c3');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c3	66	0	0	1	71	1	10	0.000000	20000.000000
+call polarx.changeset_finish('c3');
+SEQ	ROW
+DROP TABLE c3;

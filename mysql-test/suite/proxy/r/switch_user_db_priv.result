@@ -1,0 +1,107 @@
+#
+# Test: switch_user should properly refresh db-level privilege cache
+# for the current database. This verifies the fix for intermittent
+# permission errors after user switching when the connection already
+# has an active database.
+#
+#
+# Setup: create test database, table, and users with db-level privileges
+#
+CREATE DATABASE proxy_test_db;
+CREATE TABLE proxy_test_db.t1 (id INT PRIMARY KEY, val VARCHAR(64));
+INSERT INTO proxy_test_db.t1 VALUES (1, 'row1'), (2, 'row2');
+CREATE USER 'proxy_db_user'@'%' IDENTIFIED WITH mysql_native_password BY 'pass1';
+GRANT SELECT ON proxy_test_db.* TO 'proxy_db_user'@'%';
+CREATE USER 'proxy_rw_user'@'%' IDENTIFIED WITH mysql_native_password BY 'pass2';
+GRANT SELECT, INSERT ON proxy_test_db.* TO 'proxy_rw_user'@'%';
+CREATE USER 'proxy_no_priv'@'%' IDENTIFIED WITH mysql_native_password BY 'pass3';
+FLUSH PRIVILEGES;
+#
+# Test 1: switch_user with active database - db-level SELECT privilege
+# The connection uses proxy_test_db before switching, so
+# cache_current_db_access must be refreshed for the new user.
+#
+USE proxy_test_db;
+SELECT DATABASE();
+DATABASE()
+proxy_test_db
+SELECT user();
+user()
+proxy_db_user@%
+# Should succeed: proxy_db_user has SELECT on proxy_test_db
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	row1
+2	row2
+# Should fail: proxy_db_user does NOT have INSERT on proxy_test_db
+INSERT INTO t1 VALUES (3, 'row3');
+ERROR 42000: INSERT command denied to user 'proxy_db_user'@'%' for table 't1'
+#
+# Test 2: switch to a user with more privileges (SELECT + INSERT)
+#
+SELECT user();
+user()
+proxy_rw_user@%
+# Should succeed: proxy_rw_user has SELECT on proxy_test_db
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	row1
+2	row2
+# Should succeed: proxy_rw_user has INSERT on proxy_test_db
+INSERT INTO t1 VALUES (3, 'row3');
+# Verify the insert worked
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	row1
+2	row2
+3	row3
+#
+# Test 3: switch to a user with NO privilege on the current db
+#
+SELECT user();
+user()
+proxy_no_priv@%
+# Should fail: proxy_no_priv has no privileges on proxy_test_db
+SELECT * FROM t1;
+ERROR 42000: SELECT command denied to user 'proxy_no_priv'@'%' for table 't1'
+#
+# Test 4: switch back and forth - ensures no stale privilege cache
+#
+# Switch to read-only user
+# Should succeed
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+# Should fail
+INSERT INTO t1 VALUES (4, 'row4');
+ERROR 42000: INSERT command denied to user 'proxy_db_user'@'%' for table 't1'
+# Switch to read-write user
+# Should succeed
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+# Should succeed now
+INSERT INTO t1 VALUES (4, 'row4');
+# Switch back to read-only user again
+# Should succeed
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+# Should fail again
+INSERT INTO t1 VALUES (5, 'row5');
+ERROR 42000: INSERT command denied to user 'proxy_db_user'@'%' for table 't1'
+#
+# Test 5: switch_user with cross-database query
+# Even though current db is proxy_test_db, query a different db explicitly
+#
+# Should fail: proxy_db_user has no privilege on mysql schema
+SELECT COUNT(*) FROM mysql.user;
+ERROR 42000: SELECT command denied to user 'proxy_db_user'@'%' for table 'user'
+#
+# Cleanup
+#
+DROP TABLE proxy_test_db.t1;
+DROP DATABASE proxy_test_db;
+DROP USER 'proxy_db_user'@'%';
+DROP USER 'proxy_rw_user'@'%';
+DROP USER 'proxy_no_priv'@'%';

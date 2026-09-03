@@ -1,0 +1,26 @@
+SET SESSION innodb_ddl_threads = 1;
+SET SESSION innodb_ddl_buffer_size = 65536;
+CREATE TABLE t1 (
+a INT NOT NULL,
+b INT NOT NULL,
+c CHAR(200) NOT NULL,
+PRIMARY KEY (a, b)
+) ENGINE=InnoDB;
+# The duplicate value of the new PRIMARY KEY(a) is scanned last
+INSERT INTO t1 VALUES (2000, 2, REPEAT('y', 200));
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2001
+# ALTER is expected to fail inside Builder::bulk_add_row()
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (a), ALGORITHM=INPLACE;
+ERROR 23000: Duplicate entry '2000' for key 't1.PRIMARY'
+# Restart to run the final buffer pool validation
+# restart
+# A leftover buffer-fixed page makes buf_must_be_all_freed() fatal during
+# shutdown, so the pattern below must not be present once the follow-up
+# fix (Bug#37391519) is applied.
+Pattern "still fixed or dirty" not found
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2001
+DROP TABLE t1;

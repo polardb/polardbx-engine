@@ -105,18 +105,16 @@ introduced where a call to log_free_check() is bypassed. */
 
   btr_cur = node->pcur.get_btr_cur();
 
-  ut_ad(rec_get_trx_id(btr_cur_get_rec(btr_cur), btr_cur->index) ==
+  ut_ad(rec_get_trx_id(btr_cur_get_reg(btr_cur), btr_cur->index) ==
         node->trx->id);
   ut_ad(!rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
                               dict_table_is_comp(btr_cur->index->table)));
 
   if (online && dict_index_is_online_ddl(index)) {
-    const rec_t *rec = btr_cur_get_rec(btr_cur);
-    mem_heap_t *heap = nullptr;
-    const ulint *offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                                           UT_LOCATION_HERE, &heap);
-    row_log_table_delete(rec, node->row, index, offsets, nullptr);
-    mem_heap_free(heap);
+    Slice_ctx sctx;
+    const Slice *slc = nullptr;
+    slc = sctx.get_offsets(btr_cur_get_reg(btr_cur), index, ULINT_UNDEFINED);
+    row_log_table_delete(slc, node->row, index, nullptr);
   }
 
   row_convert_impl_to_expl_if_needed(btr_cur, node);
@@ -344,6 +342,9 @@ static void row_undo_ins_parse_undo_rec(undo_node_t *node, THD *thd,
 
   /* Skip the UNDO if we can't find the table or the .ibd file. */
   if (node->table == nullptr) {
+    lizard_info(ER_LIZARD) << "Ignore insert undo log for dropped table "
+                           << table_id << " in transaction " << node->trx->id
+                           << " when rollback";
   } else if (node->table->ibd_file_missing) {
   close_table:
     dd_table_close(node->table, thd, mdl, false);

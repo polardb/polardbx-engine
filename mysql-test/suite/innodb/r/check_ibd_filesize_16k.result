@@ -29,7 +29,7 @@ The size of file 'test/t2.ibd' is 491520 bytes.
 Rows inserted: 16
 The size of file 'test/t2.ibd' is 622592 bytes.
 Rows inserted: 20
-The size of file 'test/t2.ibd' is 4194304 bytes.
+The size of file 'test/t2.ibd' is 8388608 bytes.
 DROP TABLE t2;
 CREATE TABLE t3 (a INT PRIMARY KEY, b BLOB)
 ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1;

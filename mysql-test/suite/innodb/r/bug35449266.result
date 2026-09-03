@@ -1,0 +1,85 @@
+DROP TABLE IF EXISTS t1;
+# Step 1: create table and INSTANT ADD a column (creates row version)
+CREATE TABLE t1 (id INT PRIMARY KEY, c1 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 1);
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 100, ALGORITHM=INSTANT;
+INSERT INTO t1 VALUES (2, 2, 200);
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2
+1	1	100
+2	2	200
+# Step 2: inplace ALTER renames c2 but refers to it as C2 (case
+#         mismatch); ADD INDEX kicks the statement out of INSTANT
+ALTER TABLE t1 ADD INDEX i1(c1), CHANGE COLUMN C2 c2x INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2x
+1	1	100
+2	2	200
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+# Step 3: further INSTANT ADD on the renamed table (multi version)
+ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 7, ALGORITHM=INSTANT;
+INSERT INTO t1 VALUES (3, 3, 300, 30);
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2x	c3
+1	1	100	7
+2	2	200	7
+3	3	300	30
+# Step 4: case-mismatched rename again on the multi-version table
+ALTER TABLE t1 ADD INDEX i2(id), CHANGE COLUMN C2X c2y INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2y	c3
+1	1	100	7
+2	2	200	7
+3	3	300	30
+# Step 5: case-only rename (c3 -> C3) combined with an index op
+ALTER TABLE t1 ADD INDEX i3(c3), RENAME COLUMN c3 TO C3;
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2y	C3
+1	1	100	7
+2	2	200	7
+3	3	300	30
+# Step 6: INSTANT DROP then case-mismatched rename
+ALTER TABLE t1 DROP INDEX i1;
+ALTER TABLE t1 DROP COLUMN c1, ALGORITHM=INSTANT;
+ALTER TABLE t1 DROP INDEX i2, CHANGE COLUMN C2Y c2z INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+id	c2z	C3
+1	100	7
+2	200	7
+3	300	30
+# Step 7: control - genuine drop/add pair must not be seen as rename
+ALTER TABLE t1 DROP COLUMN c2z, ADD COLUMN d1 INT, ALGORITHM=INSTANT;
+SELECT * FROM t1 ORDER BY id;
+id	C3	d1
+1	7	NULL
+2	7	NULL
+3	30	NULL
+# Step 8: restart and verify reads and writes on all row versions
+# restart
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `C3` int DEFAULT '7',
+  `d1` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `i3` (`C3`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY id;
+id	C3	d1
+1	7	NULL
+2	7	NULL
+3	30	NULL
+INSERT INTO t1 VALUES (4, 40, 4);
+SELECT * FROM t1 ORDER BY id;
+id	C3	d1
+1	7	NULL
+2	7	NULL
+3	30	NULL
+4	40	4
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+DROP TABLE t1;

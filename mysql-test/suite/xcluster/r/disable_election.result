@@ -1,0 +1,601 @@
+create table test.t1(id int);
+insert into test.t1 values(1);
+xa start 'x1';
+insert into test.t1 values(1);
+xa end 'x1';
+xa prepare 'x1';
+xa commit 'x1';
+select count(*) from test.t1;
+count(*)
+2
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	No
+3	Follower	5	Normal	No
+###################### CASE 1: only leader(node1) disable_election=1
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+3
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	Yes
+2	Follower	5	Normal	No
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+###################### CASE 1.1: change_leader  node1(leader,disable_election=1) -> node2(follower)
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+#### check target: node2 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+4
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	No
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	No
+#### check self:   node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+###################### CASE 1.1 rollback: restore node1 as leader for case 1.2
+set global consensus_disable_election=0;
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+#### check self:   node2 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+#### check target: node1 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+5
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	No
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+set global consensus_disable_election=1;
+###################### CASE 1.2: force_promote  node3(follower) -> leader,  node1 has disable_election=1
+set global consensus_force_promote=1;
+#### check self:   node3 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+6
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Follower	5	Normal	No
+3	Leader	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_3	Leader	Yes	No
+#### check other:  node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+#### check other:  node2 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	No
+###################### CASE 1.2 rollback: restore node1 as leader, reset disable_election
+set global consensus_disable_election=0;
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+#### check target: node1 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+7
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	No
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+#### check self:   node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+#### check other:  node2 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+###################### CASE 2: only follower(node2) disable_election=1
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+8
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+###################### CASE 2.1: change_leader  node1(leader) -> node2(follower,disable_election=1),  expected: node2 becomes leader (operator-initiated bypasses disableElection)
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+#### check target: node2 -> leader(disable_election=1)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+9
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check self:   node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+###################### CASE 2.1 rollback: restore node1 as leader for case 2.2
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+10
+###################### CASE 2.2: change_leader  node1(leader) -> node3(follower),  node2 has disable_election=1
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_3");
+#### check target: node3 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+11
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Leader	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_3	Leader	Yes	No
+#### check self:   node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	No
+#### check other:  node2 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+###################### CASE 2.2 rollback: change_leader  node3(leader) -> node1(follower)
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+#### check target: node1 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+12
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+#### check self:   node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+#### check other:  node2 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+###################### CASE 2.3: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader (force bypasses disableElection)
+set global consensus_force_promote=1;
+#### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+13
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check other:  node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+###################### CASE 2.3 rollback: restore node1 as leader for case 2.4
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+14
+###################### CASE 2.4: force_promote  node3(follower) -> leader,  node2 has disable_election=1
+set global consensus_force_promote=1;
+#### check self:   node3 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+15
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Leader	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_3	Leader	Yes	No
+#### check other:  node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	No
+#### check other:  node2 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+###################### CASE 2.4 rollback: restore node1 as leader, reset disable_election
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+#### check target: node1 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+16
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+#### check self:   node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+#### check other:  node2 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+set global consensus_disable_election=0;
+###################### CASE 3: both followers(node2, node3) disable_election=1
+set global consensus_disable_election=1;
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+17
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+###################### CASE 3.1: change_leader  node1(leader) -> node2(follower,disable_election=1),  expected: succeeds (operator-initiated bypasses disableElection)
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+#### check target: node2 -> leader(disable_election=1)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+18
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check self:   node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+#### check other:  node3 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+###################### CASE 3.1 rollback: restore node1 as leader for case 3.2
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+19
+###################### CASE 3.2: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader (force bypasses disableElection)
+set global consensus_force_promote=1;
+#### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+20
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check other:  node1 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+#### check other:  node3 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+###################### CASE 3.2 rollback: restore node1 as leader, reset disable_election
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+21
+set global consensus_disable_election=0;
+set global consensus_disable_election=0;
+###################### CASE 4: leader(node1) + follower(node2) disable_election=1
+set global consensus_disable_election=1;
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+22
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	No
+###################### CASE 4.1: change_leader  node1(leader,disable_election=1) -> node2(follower,disable_election=1),  expected: succeeds
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+#### check target: node2 -> leader(disable_election=1)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+23
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check self:   node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+###################### CASE 4.1 rollback: restore node1 as leader for case 4.2
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+24
+###################### CASE 4.2: change_leader  node1(leader,disable_election=1) -> node3(follower),  expected: succeeds (voters bypass disableElection for force request)
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_3");
+#### check target: node3 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+25
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Leader	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_3	Leader	Yes	No
+#### check self:   node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+#### check other:  node2 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+###################### CASE 4.2 rollback: restore node1 as leader for case 4.3
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+26
+###################### CASE 4.3: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader
+set global consensus_force_promote=1;
+#### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+27
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check other:  node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+#### check other:  node3 -> follower
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	No
+###################### CASE 4.3 rollback: restore node1 as leader for case 4.4
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+28
+###################### CASE 4.4: force_promote  node3(follower),  expected: succeeds (voters with disableElection grant vote for force request)
+set global consensus_force_promote=1;
+#### check self:   node3 -> leader
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+29
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Leader	5	Normal	No
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_3	Leader	Yes	No
+#### check other:  node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+#### check other:  node2 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_3	Follower	No	Yes
+###################### CASE 4.4 rollback: restore node1 as leader, reset disable_election
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+30
+set global consensus_disable_election=0;
+set global consensus_disable_election=0;
+###################### CASE 5: all nodes(node1, node2, node3) disable_election=1
+set global consensus_disable_election=1;
+set global consensus_disable_election=1;
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+31
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_1	Leader	Yes	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_1	Follower	No	Yes
+###################### CASE 5.1: change_leader  node1(leader,disable_election=1) -> node2(follower,disable_election=1),  expected: succeeds
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+#### check target: node2 -> leader(disable_election=1)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+32
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check self:   node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+#### check other:  node3 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+###################### CASE 5.1 rollback: restore node1 as leader for case 5.2
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+33
+###################### CASE 5.2: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader
+set global consensus_force_promote=1;
+#### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+34
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	Yes
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+2	127.0.0.1:MYPORT_CONSENSUS_2	Leader	Yes	Yes
+#### check other:  node1 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+1	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+#### check other:  node3 -> follower(disable_election=1)
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+SERVER_ID	CURRENT_LEADER	ROLE	SERVER_READY_FOR_RW	DISABLE_ELECTION
+3	127.0.0.1:MYPORT_CONSENSUS_2	Follower	No	Yes
+###################### CASE 5.2 rollback: restore node1 as leader
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+set global consensus_disable_election=0;
+set global consensus_disable_election=0;
+set global consensus_disable_election=0;
+drop table test.t1;

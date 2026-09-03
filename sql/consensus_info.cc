@@ -81,9 +81,9 @@ Consensus_info::Consensus_info(
 }
 
 /**
-Creates or reads information from the repository, initializing the
-Consensus_info.
-*/
+ * Reads information from the repository, and initialize the consensus_info
+ * object.
+ */
 int Consensus_info::consensus_init_info() {
   DBUG_ENTER("Consensus_info::consensus_init_info");
   enum_return_check check_return = ERROR_CHECKING_REPOSITORY;
@@ -102,14 +102,13 @@ int Consensus_info::consensus_init_info() {
   }
 
   inited = 1;
-  if (flush_info(true, true)) goto err;
 
   DBUG_RETURN(0);
 
 err:
   handler->end_info();
   inited = false;
-  abort();
+  _exit(2);  // Using _exit(), since exit() is not async signal safe
   DBUG_RETURN(1);
 }
 
@@ -129,7 +128,7 @@ void Consensus_info::end_info() {
 int Consensus_info::flush_info(bool force, bool force_new_thd) {
   DBUG_ENTER("Consensus_info::flush_info");
 
-  if (!inited || opt_consensus_force_recovery) DBUG_RETURN(0);
+  if (!inited) DBUG_RETURN(0);
   /*
   We update the sync_period at this point because only here we
   now that we are handling a master info. This needs to be
@@ -152,7 +151,7 @@ int Consensus_info::flush_info(bool force, bool force_new_thd) {
 err:
   xp::error(ER_XP_0, "Consensus info flush failed.");
   mysql_mutex_unlock(&LOCK_consensus_info);
-  abort();
+  _exit(2);  // Using _exit(), since exit() is not async signal safe
   DBUG_RETURN(1);
 }
 
@@ -211,7 +210,7 @@ bool Consensus_info::read_info(Rpl_info_handler *from) {
 }
 
 bool Consensus_info::write_info(Rpl_info_handler *to) {
-  DBUG_ENTER("ConsensusLogManager::write_info");
+  DBUG_ENTER("Consensus_log_manager::write_info");
 
   if (to->prepare_info_for_write() ||
       to->set_info((int)get_number_info_consensus_fields()) ||
@@ -235,4 +234,24 @@ void Consensus_info::set_nullable_fields(MY_BITMAP *nullable_fields) {
   bitmap_init(nullable_fields, nullptr,
               Consensus_info::get_number_info_consensus_fields());
   bitmap_clear_all(nullable_fields);
+}
+
+int Consensus_info::reinit_cluster_info(bool force_learner) {
+  set_cluster_id(opt_cluster_id);
+  // reuse opt_cluster, if normal stands for cluster info, else stands for
+  // learner info
+  if (!opt_cluster_info) {
+    xp::error(ER_XP_0) << "PolarDB-X Engine cluster_info must be set when "
+                          "the server enable consensus";
+    return -1;
+  }
+
+  if (!force_learner) {
+    set_cluster_learner_info("");
+    set_cluster_info(std::string(opt_cluster_info));
+  } else {
+    set_cluster_learner_info(std::string(opt_cluster_info));
+    set_cluster_info("");
+  }
+  return 0;
 }

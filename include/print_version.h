@@ -71,7 +71,6 @@ void print_explicit_version(const char *version);
 */
 
 void build_version(const std::string &progname, std::string *destination);
-
 } /* extern "C" */
 #endif /* __cplusplus */
 #endif /* _print_version_h_  */

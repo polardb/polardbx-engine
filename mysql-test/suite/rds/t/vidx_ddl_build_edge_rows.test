@@ -1,0 +1,290 @@
+##############################################################
+# DDL direct build on degenerate row sets.                   #
+#                                                            #
+# The build orchestrator seeds the empty graph from the first #
+# non-NULL row on the serial path and dispatches the rest in  #
+# W*8 micro-batches (W = vidx_ddl_threads), so with N         #
+# non-NULL rows Vidx_ddl_parallel_batches must advance by     #
+# exactly ceil((N-1)/(W*8)) and Vidx_ddl_build_windows only   #
+# when a window actually held nodes.  The degenerate inputs   #
+# below all collapse those formulas to zero and are the ones  #
+# no existing test exercises.                                 #
+#                                                            #
+# Phase A  0 rows: build is a no-op -- aux table exists, live  #
+#          == 0, no batch and no window accounted.            #
+# Phase B  all-NULL rows: same no-op, and a later UPDATE that  #
+#          fills one vector still reaches the empty graph.     #
+# Phase C  exactly one non-NULL row: the seed alone, no        #
+#          parallel slot used even at W=8.                     #
+# Phase D  leading NULLs + N-1 an exact multiple of the batch  #
+#          size: no partial tail batch (all existing tests     #
+#          have a tail).                                       #
+# Phase E  build on an empty table, then grow it to 40 rows    #
+#          through plain DML: the empty graph published by the  #
+#          DDL must be a valid starting point for the DML       #
+#          insert path, full self-probe.                        #
+#                                                            #
+# Degenerate tables are deliberately probed through the        #
+# auxiliary-table live count instead of ORDER BY vec_distance: #
+# with n_rows near zero the optimizer may legitimately reject  #
+# the vector index, which would make an id-level assertion     #
+# test the optimizer instead of the build.                     #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_build_edge_rows;
+USE vidx_ddl_build_edge_rows;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+let $err_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+
+--echo
+--echo ############################################
+--echo # Phase A: ADD VECTOR INDEX on 0 rows     #
+--echo ############################################
+CREATE TABLE t_empty (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+SET SESSION vidx_ddl_threads = 4;
+let $pb_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $win_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+
+ALTER TABLE t_empty ADD VECTOR INDEX vi(v);
+
+SHOW CREATE TABLE t_empty;
+let $pb_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+if ($pb_after != $pb_before) {
+  --echo FATAL: batch counter moved $pb_before -> $pb_after on an empty table
+  --die Phase A: an empty table must not dispatch a micro-batch
+}
+--echo VERDICT A no micro-batch on 0 rows: PASS
+let $win_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+if ($win_after != $win_before) {
+  --echo FATAL: window counter moved $win_before -> $win_after on an empty table
+  --die Phase A: an empty table must not persist a build window
+}
+--echo VERDICT A no build window on 0 rows: PASS
+
+--echo # Assert: the auxiliary graph table exists and is empty
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_edge_rows/t_empty', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 0`) {
+  --die Phase A: empty base table produced live graph nodes
+}
+--echo VERDICT A live==0: PASS
+
+--echo # A single INSERT after the empty build must reach the DML path
+INSERT INTO t_empty VALUES (1, VEC_FROMTEXT('[1,2,3,4,5]'));
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 1`) {
+  --die Phase A: DML into the empty DDL-built graph did not publish a node
+}
+--echo VERDICT A DML after empty build publishes a node: PASS
+
+--echo
+--echo ############################################
+--echo # Phase B: ADD VECTOR INDEX on all-NULL   #
+--echo ############################################
+CREATE TABLE t_null (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_null VALUES (1, NULL), (2, NULL), (3, NULL), (4, NULL);
+SELECT COUNT(*) AS total_rows, COUNT(v) AS non_null_rows FROM t_null;
+
+let $pb_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $win_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+
+ALTER TABLE t_null ADD VECTOR INDEX vi(v);
+
+let $pb_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+if ($pb_after != $pb_before) {
+  --echo FATAL: batch counter moved $pb_before -> $pb_after with no non-NULL row
+  --die Phase B: NULL-only rows must not consume a parallel slot
+}
+--echo VERDICT B no micro-batch on NULL-only rows: PASS
+let $win_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+if ($win_after != $win_before) {
+  --die Phase B: NULL-only rows must not persist a build window
+}
+--echo VERDICT B no build window on NULL-only rows: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_edge_rows/t_null', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 0`) {
+  --die Phase B: NULL vectors were indexed as live nodes
+}
+--echo VERDICT B live==0: PASS
+
+--echo # Filling one vector afterwards must seed the still-empty graph
+UPDATE t_null SET v = VEC_FROMTEXT('[9,9,9,9,9]') WHERE id = 2;
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 1`) {
+  --die Phase B: UPDATE NULL -> vector did not seed the empty graph
+}
+--echo VERDICT B UPDATE seeds the empty graph: PASS
+
+--echo
+--echo ############################################
+--echo # Phase C: exactly one non-NULL row, W=8  #
+--echo ############################################
+CREATE TABLE t_one (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_one VALUES (1, NULL), (2, VEC_FROMTEXT('[4,5,6,7,8]')), (3, NULL);
+
+SET SESSION vidx_ddl_threads = 8;
+let $pb_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $win_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+
+ALTER TABLE t_one ADD VECTOR INDEX vi(v);
+
+let $pb_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+if ($pb_after != $pb_before) {
+  --echo FATAL: batch counter moved $pb_before -> $pb_after for a lone seed row
+  --die Phase C: the seed row must not occupy a parallel slot
+}
+--echo VERDICT C seed row uses no parallel slot: PASS
+let $win_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+if (`SELECT $win_after - $win_before <> 1`) {
+  --echo FATAL: window counter moved $win_before -> $win_after for one seeded node
+  --die Phase C: the seeded node must be persisted by exactly one window
+}
+--echo VERDICT C one window persists the seed: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_edge_rows/t_one', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 1`) {
+  --die Phase C: live nodes != 1 non-NULL base row
+}
+--echo VERDICT C live==1: PASS
+
+--echo
+--echo ############################################
+--echo # Phase D: no partial tail batch          #
+--echo # 4 leading NULLs + 17 vectors, W=2 ->    #
+--echo # 16 parallel rows / batch 16 = 2 batches #
+--echo # of which none is partial                #
+--echo ############################################
+CREATE TABLE t_exact (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+INSERT INTO t_exact VALUES (1, NULL), (2, NULL), (3, NULL), (4, NULL);
+let $i = 5;
+while ($i <= 21) {
+  eval INSERT INTO t_exact VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SELECT COUNT(*) AS total_rows, COUNT(v) AS non_null_rows FROM t_exact;
+
+SET SESSION vidx_ddl_threads = 2;
+let $pb_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+
+ALTER TABLE t_exact ADD VECTOR INDEX vi(v);
+
+let $pb_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $delta = `SELECT $pb_after - $pb_before`;
+# The 4 leading NULLs are skipped, row 5 seeds the graph serially: exactly
+# 16 rows remain for the workers, which is one full batch and no tail.
+if ($delta != 1) {
+  --echo FATAL: batch delta $delta, expected 1 (16 rows / batch 16)
+  --die Phase D: an exact batch multiple produced a spurious tail batch
+}
+--echo VERDICT D batch-count 16/16==1 exactly: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_edge_rows/t_exact', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 17`) {
+  --die Phase D: live nodes != 17 non-NULL base rows
+}
+--echo VERDICT D live==non-null-base: PASS
+
+--echo
+--echo ############################################
+--echo # Phase E: empty build then DML-only growth #
+--echo ############################################
+CREATE TABLE t_grow (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t_grow ADD VECTOR INDEX vi(v);
+
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t_grow VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_edge_rows/t_grow', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Phase E: DML growth on an empty DDL-built graph lost nodes
+}
+--echo VERDICT E live==40 after DML-only growth: PASS
+
+--echo # Every DML-inserted row must be reachable in the graph the DDL seeded
+--disable_query_log
+let $i = 1;
+let $bad = 0;
+while ($i <= 40) {
+  SET @nn = NULL;
+  eval SELECT id INTO @nn FROM t_grow FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']'))) LIMIT 1;
+  if (`SELECT @nn IS NULL OR @nn <> $i`) {
+    --echo self-probe MISS: row $i got another id
+    inc $bad;
+  }
+  inc $i;
+}
+--enable_query_log
+if ($bad) {
+  --die Phase E: $bad/40 self-probes missed after DML-only growth
+}
+--echo VERDICT E full self-probe 40/40: PASS
+
+--echo
+--echo # No degenerate input may be reported as a build error
+let $err_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+if ($err_after != $err_before) {
+  --echo FATAL: build error counter moved $err_before -> $err_after
+  --die a degenerate row set was accounted as a direct-build error
+}
+--echo VERDICT build-error-count unchanged: PASS
+
+DROP TABLE t_empty, t_null, t_one, t_exact, t_grow;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_build_edge_rows;

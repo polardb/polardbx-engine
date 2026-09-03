@@ -1,0 +1,801 @@
+#
+# Test for PolarDB-X readonly feature via SECONDARY_ENGINE_ATTRIBUTE
+#
+#
+# Test 1: Create table with polarx.readonly = false (default behavior)
+#
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t1 VALUES (1, 'test data');
+UPDATE t1 SET data = 'updated data' WHERE id = 1;
+DELETE FROM t1 WHERE id = 1;
+SELECT * FROM t1;
+id	data
+DROP TABLE t1;
+#
+# Test 2: Create table with polarx.readonly = true (DML should fail)
+#
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+# Test INSERT should fail
+INSERT INTO t2 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+# Test UPDATE should fail
+UPDATE t2 SET data = 'updated data' WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+# Test DELETE should fail
+DELETE FROM t2 WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+# Test SELECT should work
+SELECT * FROM t2;
+id	data
+# Test DDL operations should work
+ALTER TABLE t2 ADD COLUMN new_col VARCHAR(50);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  `new_col` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci /*!80021 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}' */
+DROP TABLE t2;
+#
+# Test 3: Modify SECONDARY_ENGINE_ATTRIBUTE from readonly=false to readonly=true
+#
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Should work initially
+INSERT INTO t3 VALUES (1, 'test data');
+SELECT * FROM t3;
+id	data
+1	test data
+Modify to readonly
+ALTER TABLE t3 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Now DML should fail
+INSERT INTO t3 VALUES (2, 'test data 2');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+UPDATE t3 SET data = 'updated data' WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DELETE FROM t3 WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+But SELECT and DDL should still work
+SELECT * FROM t3;
+id	data
+1	test data
+ALTER TABLE t3 ADD COLUMN new_col2 VARCHAR(50);
+DROP TABLE t3;
+#
+# Test 4: Modify SECONDARY_ENGINE_ATTRIBUTE from readonly=true to readonly=false
+#
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+DML should fail initially
+INSERT INTO t4 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Modify to writable
+ALTER TABLE t4 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Now DML should work
+INSERT INTO t4 VALUES (1, 'test data');
+UPDATE t4 SET data = 'updated data' WHERE id = 1;
+DELETE FROM t4 WHERE id = 1;
+SELECT * FROM t4;
+id	data
+DROP TABLE t4;
+#
+# Test 5: Test with different data types
+#
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+age INT,
+salary DECIMAL(10,2),
+created_at TIMESTAMP
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+DML should fail
+INSERT INTO t5 VALUES (1, 'John Doe', 30, 50000.00, NOW());
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DDL should work
+ALTER TABLE t5 ADD INDEX idx_name (name);
+SHOW CREATE TABLE t5;
+Table	Create Table
+t5	CREATE TABLE `t5` (
+  `id` int NOT NULL,
+  `name` varchar(50) DEFAULT NULL,
+  `age` int DEFAULT NULL,
+  `salary` decimal(10,2) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci /*!80021 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}' */
+SELECT should work
+SELECT * FROM t5;
+id	name	age	salary	created_at
+DROP TABLE t5;
+#
+# Test 6: Test edge cases with malformed JSON
+#
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true, "other_key": "value"}';
+Should still be readonly
+INSERT INTO t6 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP TABLE t6;
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": "invalid"}';
+Should not be readonly (invalid value should be ignored)
+INSERT INTO t7 VALUES (1, 'test data');
+SELECT * FROM t7;
+id	data
+1	test data
+DROP TABLE t7;
+#
+# Test 7: Test with transactions
+#
+CREATE TABLE t8 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Start transaction
+BEGIN;
+DML should fail even in transaction
+INSERT INTO t8 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+SELECT should work
+SELECT * FROM t8;
+id	data
+COMMIT;
+DROP TABLE t8;
+#
+# Test 8: Test with multi-table operations
+#
+CREATE TABLE t9_readonly (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+CREATE TABLE t9_writable (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t9_writable VALUES (1, 'writable data');
+INSERT should fail if table is readonly
+INSERT INTO t9_readonly VALUES (1, 'readonly data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Multi-table UPDATE should fail if any table is readonly
+UPDATE t9_readonly r, t9_writable w SET r.data = 'updated', w.data = 'also updated' WHERE r.id = 1 AND w.id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Multi-table DELETE should fail if any table is readonly
+DELETE r, w FROM t9_readonly r, t9_writable w WHERE r.id = 1 AND w.id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+But SELECT from both tables should work
+SELECT * FROM t9_readonly r, t9_writable w WHERE r.id = 1 AND w.id = 1;
+id	data	id	data
+DROP TABLE t9_readonly, t9_writable;
+#
+# Test 9: Test with REPLACE and INSERT IGNORE
+#
+CREATE TABLE t10 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+REPLACE should fail
+REPLACE INTO t10 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+INSERT IGNORE should fail
+INSERT IGNORE INTO t10 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP TABLE t10;
+#
+# Test 10: Test with LOAD DATA
+#
+CREATE TABLE t11 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Create a sample data file
+LOAD DATA should fail
+LOAD DATA INFILE '$MYSQL_TMP_DIR/sample_data.csv' INTO TABLE t11 FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n';
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP TABLE t11;
+#
+# Test 11: Additional ALTER TABLE SECONDARY_ENGINE_ATTRIBUTE scenarios
+#
+CREATE TABLE t12 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+);
+Initially should be writable
+INSERT INTO t12 VALUES (1, 'initial data');
+SELECT * FROM t12;
+id	data
+1	initial data
+Alter to make it readonly
+ALTER TABLE t12 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Show the table structure to confirm the change
+SHOW CREATE TABLE t12;
+Table	Create Table
+t12	CREATE TABLE `t12` (
+  `id` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci /*!80021 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}' */
+DML should now fail
+INSERT INTO t12 VALUES (2, 'new data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+UPDATE t12 SET data = 'updated data' WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DELETE FROM t12 WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+SELECT should still work
+SELECT * FROM t12;
+id	data
+1	initial data
+DDL should still work
+ALTER TABLE t12 ADD COLUMN new_col VARCHAR(50);
+Alter back to make it writable
+ALTER TABLE t12 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Show the table structure to confirm the change
+SHOW CREATE TABLE t12;
+Table	Create Table
+t12	CREATE TABLE `t12` (
+  `id` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  `new_col` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci /*!80021 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}' */
+DML should now work again
+INSERT INTO t12 VALUES (2, 'new data after writable', 'new col data');
+UPDATE t12 SET data = 'updated data after writable' WHERE id = 1;
+SELECT * FROM t12;
+id	data	new_col
+1	updated data after writable	NULL
+2	new data after writable	new col data
+DROP TABLE t12;
+#
+# Test 12: Test ALTER TABLE with complex JSON attributes
+#
+CREATE TABLE t13 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+);
+Add multiple attributes including readonly
+ALTER TABLE t13 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true, "other_attr": "value"}';
+DML should fail
+INSERT INTO t13 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+SELECT should work
+SELECT * FROM t13;
+id	data
+Alter to remove readonly attribute (set to false)
+ALTER TABLE t13 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false, "other_attr": "value"}';
+DML should now work
+INSERT INTO t13 VALUES (1, 'test data after alter');
+SELECT * FROM t13;
+id	data
+1	test data after alter
+DROP TABLE t13;
+#
+# Test 13: Test consecutive ALTER TABLE operations
+#
+CREATE TABLE t14 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+);
+CREATE TABLE t15 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+);
+Multiple consecutive alters
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+DML should fail as the last alter set it to readonly
+INSERT INTO t14 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+SELECT should work
+SELECT * FROM t14;
+id	data
+One more alter to make it writable
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+DML should now work
+INSERT INTO t14 VALUES (1, 'test data after final alter');
+SELECT * FROM t14;
+id	data
+1	test data after final alter
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+INSERT INTO t15 SELECT * FROM t14;
+do copy readonly attribute
+CREATE TABLE t16 LIKE t14;
+SHOW CREATE TABLE t16;
+Table	Create Table
+t16	CREATE TABLE `t16` (
+  `id` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci /*!80021 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}' */
+DML should fail as the last alter set it to readonly
+INSERT INTO t16 VALUES (1, 'test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+do not copy readonly attribute
+CREATE TABLE t17 as select * from t14;
+INSERT INTO t17 VALUES (10, 'test data');
+SHOW CREATE TABLE t17;
+Table	Create Table
+t17	CREATE TABLE `t17` (
+  `id` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t14;
+DROP TABLE t15;
+DROP TABLE t16;
+DROP TABLE t17;
+#
+# Test 14: Test with Views - Basic View Creation and DML Operations
+#
+CREATE TABLE t18_base (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t18_base VALUES (1, 'base data 1'), (2, 'base data 2');
+Create a simple view
+CREATE VIEW v1_simple AS SELECT * FROM t18_base;
+Test SELECT on view (should work)
+SELECT * FROM v1_simple;
+id	data
+1	base data 1
+2	base data 2
+Test INSERT on simple view (should work as base table is not readonly)
+INSERT INTO v1_simple VALUES (3, 'view data 3');
+Test UPDATE on simple view (should work as base table is not readonly)
+UPDATE v1_simple SET data = 'updated view data' WHERE id = 3;
+Test DELETE on simple view (should work as base table is not readonly)
+DELETE FROM v1_simple WHERE id = 3;
+Make base table readonly
+ALTER TABLE t18_base SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on view (should still work)
+SELECT * FROM v1_simple;
+id	data
+1	base data 1
+2	base data 2
+Test INSERT on simple view (should fail as base table is readonly)
+INSERT INTO v1_simple VALUES (4, 'view data 4');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test UPDATE on simple view (should fail as base table is readonly)
+UPDATE v1_simple SET data = 'updated view data 4' WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test DELETE on simple view (should fail as base table is readonly)
+DELETE FROM v1_simple WHERE id = 1;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP VIEW v1_simple;
+DROP TABLE t18_base;
+#
+# Test 15: Test with Views - Complex Views with Joins
+#
+CREATE TABLE t19_base1 (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+CREATE TABLE t19_base2 (
+id INT PRIMARY KEY,
+t19_base1_id INT,
+description VARCHAR(100),
+FOREIGN KEY (t19_base1_id) REFERENCES t19_base1(id)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t19_base1 VALUES (1, 'Product A'), (2, 'Product B');
+INSERT INTO t19_base2 VALUES (1, 1, 'Description for Product A'), (2, 2, 'Description for Product B');
+Create a complex view with join
+CREATE VIEW v2_complex AS
+SELECT b1.id, b1.name, b2.description
+FROM t19_base1 b1
+JOIN t19_base2 b2 ON b1.id = b2.t19_base1_id;
+Test SELECT on complex view (should work)
+SELECT * FROM v2_complex;
+id	name	description
+1	Product A	Description for Product A
+2	Product B	Description for Product B
+Make one base table readonly
+ALTER TABLE t19_base1 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on complex view (should still work)
+SELECT * FROM v2_complex;
+id	name	description
+1	Product A	Description for Product A
+2	Product B	Description for Product B
+Test INSERT on complex view (should fail with ER_VIEW_MULTIUPDATE as it's a join view)
+INSERT INTO v2_complex (id, name, description) VALUES (3, 'Product C', 'Description for Product C');
+ERROR HY000: Can not modify more than one base table through a join view 'test.v2_complex'
+Test UPDATE on complex view (should fail with ER_TABLE_READONLY_ERROR)
+UPDATE v2_complex SET name = 'Updated Product A' WHERE id = 3;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test DELETE on complex view (should fail with ER_VIEW_DELETE_MERGE_VIEW as it's a join view)
+DELETE FROM v2_complex WHERE id = 1;
+ERROR HY000: Can not delete from join view 'test.v2_complex'
+Test direct INSERT on base tables (should fail for readonly table)
+INSERT INTO t19_base1 (id, name) VALUES (3, 'Product C');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test direct INSERT on base tables (should work for writable table)
+INSERT INTO t19_base2 (id, t19_base1_id, description) VALUES (3, 2, 'Description for Product C');
+DROP VIEW v2_complex;
+DROP TABLE t19_base2;
+DROP TABLE t19_base1;
+#
+# Test 16: Test with Views - Updatable Views with Conditions
+#
+CREATE TABLE t20_products (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+price DECIMAL(10,2),
+category VARCHAR(30)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t20_products VALUES
+(1, 'Laptop', 1200.00, 'Electronics'),
+(2, 'Mouse', 25.00, 'Electronics'),
+(3, 'Book', 15.00, 'Education');
+Create an updatable view with condition
+CREATE VIEW v3_electronics AS
+SELECT id, name, price
+FROM t20_products
+WHERE category = 'Electronics';
+Test SELECT on conditional view (should work)
+SELECT * FROM v3_electronics;
+id	name	price
+1	Laptop	1200.00
+2	Mouse	25.00
+Make base table readonly
+ALTER TABLE t20_products SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on conditional view (should still work)
+SELECT * FROM v3_electronics;
+id	name	price
+1	Laptop	1200.00
+2	Mouse	25.00
+Test INSERT on conditional view (should fail as base table is readonly)
+INSERT INTO v3_electronics (id, name, price) VALUES (4, 'Keyboard', 50.00);
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test UPDATE on conditional view (should fail as base table is readonly)
+UPDATE v3_electronics SET price = 30.00 WHERE id = 2;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test DELETE on conditional view (should fail as base table is readonly)
+DELETE FROM v3_electronics WHERE id = 2;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP VIEW v3_electronics;
+DROP TABLE t20_products;
+#
+# Test 17: Test with Views - CREATE VIEW AS SELECT from readonly table
+#
+CREATE TABLE t21_source (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+INSERT INTO t21_source VALUES (1, 'source data 1'), (2, 'source data 2');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Try to create view as select from readonly table (should work for CREATE VIEW)
+CREATE VIEW v4_from_readonly AS SELECT * FROM t21_source;
+Test SELECT on view created from readonly table (should work)
+SELECT * FROM v4_from_readonly;
+id	data
+Test attempting to insert into view created from readonly table (should fail)
+INSERT INTO v4_from_readonly VALUES (3, 'new data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP VIEW v4_from_readonly;
+DROP TABLE t21_source;
+#
+# Test 18: Test with Views - Nested Views
+#
+CREATE TABLE t22_base (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t22_base VALUES (1, 'base data'), (2, 'more base data');
+Create base view
+CREATE VIEW v5_base AS SELECT * FROM t22_base;
+Create nested view
+CREATE VIEW v6_nested AS SELECT * FROM v5_base WHERE id > 1;
+Test SELECT on nested view (should work)
+SELECT * FROM v6_nested;
+id	data
+2	more base data
+Make base table readonly
+ALTER TABLE t22_base SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on nested view (should still work)
+SELECT * FROM v6_nested;
+id	data
+2	more base data
+Test INSERT on nested view (should fail as base table is readonly)
+INSERT INTO v6_nested VALUES (3, 'nested view data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test UPDATE on nested view (should fail as base table is readonly)
+UPDATE v6_nested SET data = 'updated nested data' WHERE id = 2;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Test DELETE on nested view (should fail as base table is readonly)
+DELETE FROM v6_nested WHERE id = 2;
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+DROP VIEW v6_nested;
+DROP VIEW v5_base;
+DROP TABLE t22_base;
+#
+# Test 19: Test with Views - Views with Aggregation (Non-updatable)
+#
+CREATE TABLE t23_sales (
+id INT PRIMARY KEY,
+product_id INT,
+amount DECIMAL(10,2),
+sale_date DATE
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t23_sales VALUES
+(1, 1, 100.00, '2023-01-01'),
+(2, 1, 150.00, '2023-01-02'),
+(3, 2, 200.00, '2023-01-03');
+Create view with aggregation (non-updatable)
+CREATE VIEW v7_summary AS
+SELECT product_id, SUM(amount) as total_sales, COUNT(*) as num_sales
+FROM t23_sales
+GROUP BY product_id;
+Test SELECT on aggregated view (should work)
+SELECT * FROM v7_summary;
+product_id	total_sales	num_sales
+1	250.00	2
+2	200.00	1
+Make base table readonly
+ALTER TABLE t23_sales SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on aggregated view (should still work)
+SELECT * FROM v7_summary;
+product_id	total_sales	num_sales
+1	250.00	2
+2	200.00	1
+Test attempting INSERT on aggregated view (should fail - not updatable)
+INSERT INTO v7_summary (product_id, total_sales, num_sales) VALUES (3, 300.00, 1);
+ERROR HY000: The target table v7_summary of the INSERT is not insertable-into
+DROP VIEW v7_summary;
+DROP TABLE t23_sales;
+#
+# Test 20: Test with Views - UNION Views
+#
+CREATE TABLE t24_customers (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+CREATE TABLE t25_suppliers (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t24_customers VALUES (1, 'Customer A'), (2, 'Customer B');
+INSERT INTO t25_suppliers VALUES (1, 'Supplier X'), (2, 'Supplier Y');
+Create UNION view
+CREATE VIEW v8_parties AS
+SELECT id, name, 'customer' as party_type FROM t24_customers
+UNION
+SELECT id, name, 'supplier' as party_type FROM t25_suppliers;
+Test SELECT on UNION view (should work)
+SELECT * FROM v8_parties ORDER BY id, party_type;
+id	name	party_type
+1	Customer A	customer
+1	Supplier X	supplier
+2	Customer B	customer
+2	Supplier Y	supplier
+Make one base table readonly
+ALTER TABLE t24_customers SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test SELECT on UNION view (should still work)
+SELECT * FROM v8_parties ORDER BY id, party_type;
+id	name	party_type
+1	Customer A	customer
+1	Supplier X	supplier
+2	Customer B	customer
+2	Supplier Y	supplier
+Test attempting INSERT on UNION view (should fail - not updatable)
+INSERT INTO v8_parties (id, name, party_type) VALUES (3, 'Party Z', 'customer');
+ERROR HY000: The target table v8_parties of the INSERT is not insertable-into
+DROP VIEW v8_parties;
+DROP TABLE t25_suppliers;
+DROP TABLE t24_customers;
+#
+# Test 21: Test with Stored Procedures - Basic Procedure with DML Operations
+#
+CREATE TABLE t26_procedure_test (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Insert initial data
+INSERT INTO t26_procedure_test VALUES (1, 'initial data');
+Create a stored procedure that performs DML operations
+CREATE PROCEDURE proc_insert_data(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+INSERT INTO t26_procedure_test VALUES (p_id, p_data);
+END |
+Test procedure execution (should work as table is not readonly)
+CALL proc_insert_data(2, 'data from procedure');
+Verify data was inserted
+SELECT * FROM t26_procedure_test;
+id	data
+1	initial data
+2	data from procedure
+Make table readonly
+ALTER TABLE t26_procedure_test SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test procedure execution (should fail as table is now readonly)
+CALL proc_insert_data(3, 'data from procedure readonly');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Verify no new data was inserted
+SELECT * FROM t26_procedure_test;
+id	data
+1	initial data
+2	data from procedure
+DROP PROCEDURE proc_insert_data;
+DROP TABLE t26_procedure_test;
+#
+# Test 22: Test with Stored Procedures - Procedure with Multiple DML Operations
+#
+CREATE TABLE t27_proc_multi1 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+CREATE TABLE t27_proc_multi2 (
+id INT PRIMARY KEY,
+description VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Insert initial data
+INSERT INTO t27_proc_multi1 VALUES (1, 'multi table data 1'), (2, 'multi table data 2');
+INSERT INTO t27_proc_multi2 VALUES (1, 'description 1'), (2, 'description 2');
+Create a stored procedure that performs operations on multiple tables
+CREATE PROCEDURE proc_multi_table_ops(IN p_id INT, IN p_data VARCHAR(100), IN p_desc VARCHAR(100))
+BEGIN
+INSERT INTO t27_proc_multi1 VALUES (p_id, p_data);
+INSERT INTO t27_proc_multi2 VALUES (p_id, p_desc);
+UPDATE t27_proc_multi1 SET data = CONCAT(data, ' - updated') WHERE id = 1;
+DELETE FROM t27_proc_multi2 WHERE id = 2;
+END |
+Test procedure execution (should work as tables are not readonly)
+CALL proc_multi_table_ops(3, 'new data', 'new description');
+Verify operations were successful
+SELECT * FROM t27_proc_multi1;
+id	data
+1	multi table data 1 - updated
+2	multi table data 2
+3	new data
+SELECT * FROM t27_proc_multi2;
+id	description
+1	description 1
+3	new description
+Make one table readonly
+ALTER TABLE t27_proc_multi1 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test procedure execution (should fail as one table is now readonly)
+CALL proc_multi_table_ops(4, 'new data readonly', 'new description readonly');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Verify no changes were made due to rollback
+SELECT * FROM t27_proc_multi1;
+id	data
+1	multi table data 1 - updated
+2	multi table data 2
+3	new data
+SELECT * FROM t27_proc_multi2;
+id	description
+1	description 1
+3	new description
+DROP PROCEDURE proc_multi_table_ops;
+DROP TABLE t27_proc_multi2;
+DROP TABLE t27_proc_multi1;
+#
+# Test 23: Test with Stored Procedures - Procedure with SELECT Operations Only
+#
+CREATE TABLE t28_proc_select (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Insert initial data (directly, as we're testing procedure SELECTs)
+INSERT INTO t28_proc_select VALUES (1, 'select test data');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Actually insert data by temporarily making it writable
+ALTER TABLE t28_proc_select SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t28_proc_select VALUES (1, 'select test data');
+ALTER TABLE t28_proc_select SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Create a stored procedure that only performs SELECT operations
+CREATE PROCEDURE proc_select_only()
+BEGIN
+SELECT * FROM t28_proc_select;
+SELECT COUNT(*) as total_rows FROM t28_proc_select;
+END |
+Test procedure execution (should work as it only does SELECT operations)
+CALL proc_select_only();
+id	data
+1	select test data
+total_rows
+1
+DROP PROCEDURE proc_select_only;
+DROP TABLE t28_proc_select;
+#
+# Test 24: Test with Stored Procedures - Procedure with Conditional Logic Based on Table State
+#
+CREATE TABLE t29_conditional (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Insert initial data
+INSERT INTO t29_conditional VALUES (1, 'conditional test data');
+Create a stored procedure with conditional logic
+CREATE PROCEDURE proc_conditional_insert(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+DECLARE table_readonly INT DEFAULT 0;
+-- Simple procedure that tries to insert data
+INSERT INTO t29_conditional VALUES (p_id, p_data);
+-- Return success message
+SELECT CONCAT('Successfully inserted row with id ', p_id) as result;
+END |
+Test procedure execution (should work as table is not readonly)
+CALL proc_conditional_insert(2, 'conditional data 2');
+result
+Successfully inserted row with id 2
+Make table readonly
+ALTER TABLE t29_conditional SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test procedure execution (should fail as table is now readonly)
+CALL proc_conditional_insert(3, 'conditional data 3');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Verify data
+SELECT * FROM t29_conditional;
+id	data
+1	conditional test data
+2	conditional data 2
+DROP PROCEDURE proc_conditional_insert;
+DROP TABLE t29_conditional;
+#
+# Test 25: Test with Stored Procedures - Procedure with Transaction Control
+#
+CREATE TABLE t30_transaction (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+Insert initial data
+INSERT INTO t30_transaction VALUES (1, 'transaction test data');
+Create a stored procedure that uses transactions
+CREATE PROCEDURE proc_with_transaction(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+DECLARE EXIT HANDLER FOR SQLEXCEPTION
+BEGIN
+ROLLBACK;
+RESIGNAL;
+END;
+START TRANSACTION;
+INSERT INTO t30_transaction VALUES (p_id, p_data);
+UPDATE t30_transaction SET data = CONCAT(data, ' - transaction updated') WHERE id = 1;
+COMMIT;
+SELECT 'Transaction completed successfully' as result;
+END |
+Test procedure execution (should work as table is not readonly)
+CALL proc_with_transaction(2, 'transaction data 2');
+result
+Transaction completed successfully
+Verify transaction was successful
+SELECT * FROM t30_transaction;
+id	data
+1	transaction test data - transaction updated
+2	transaction data 2
+Make table readonly
+ALTER TABLE t30_transaction SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+Test procedure execution (should fail as table is now readonly)
+CALL proc_with_transaction(3, 'transaction data 3');
+ERROR HY000: Table is in readonly status : operation DML is not allowed
+Verify no changes were made
+SELECT * FROM t30_transaction;
+id	data
+1	transaction test data - transaction updated
+2	transaction data 2
+DROP PROCEDURE proc_with_transaction;
+DROP TABLE t30_transaction;
+create table t31_test(a int) engine=MyISAM;
+insert into t31_test values(1),(2),(3),(4),(5),(6);
+alter table t31_test add column b int;
+drop table t31_test;
+create table t32_test(a int);
+insert into t32_test values(1),(2),(3),(4),(5),(6);
+alter table t32_test add column b int, ALGORITHM=COPY;
+drop table t32_test;
+CREATE TEMPORARY TABLE t33_test AS SELECT 1 AS f1;
+ALTER TABLE t33_test ADD COLUMN b INT;

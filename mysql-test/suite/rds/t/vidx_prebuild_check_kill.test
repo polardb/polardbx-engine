@@ -1,0 +1,56 @@
+####################################################################
+# KILL during the prebuild_check row-count scan: the procedure     #
+# must fail with the interrupted error itself (not the             #
+# ER_VECTOR_INDEX_USAGE wrap) and leave nothing behind -- the same #
+# CALL succeeds right afterwards.                                  #
+# The scan parks on the vidx_prebuild_scan_row sync point after    #
+# fetching the first row, so the KILL lands mid-scan by            #
+# construction, not by racing the scan.                            #
+####################################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+CREATE DATABASE vidx_prebuild_check_kill;
+USE vidx_prebuild_check_kill;
+SET GLOBAL vidx_disabled = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(8)
+) ENGINE = InnoDB;
+INSERT INTO t1 VALUES
+  (1, VEC_FROMTEXT('[1,2,3,4,5,6,7,8]')),
+  (2, VEC_FROMTEXT('[2,3,4,5,6,7,8,9]')),
+  (3, NULL);
+
+connect (killer, localhost, root,,);
+connection default;
+let $conn_id = `SELECT CONNECTION_ID()`;
+
+SET DEBUG_SYNC = 'vidx_prebuild_scan_row SIGNAL scan_hit WAIT_FOR scan_go';
+--send CALL dbms_vidx.prebuild_check('vidx_prebuild_check_kill', 't1')
+
+connection killer;
+SET DEBUG_SYNC = 'now WAIT_FOR scan_hit';
+--disable_query_log
+eval KILL QUERY $conn_id;
+--enable_query_log
+SET DEBUG_SYNC = 'now SIGNAL scan_go';
+
+connection default;
+--error ER_QUERY_INTERRUPTED
+--reap
+SET DEBUG_SYNC = 'RESET';
+--echo VERDICT 1 mid-scan KILL surfaces ER_QUERY_INTERRUPTED: PASS
+
+--echo # The interrupted scan left no residue: the same CALL runs clean.
+--replace_column 6 EST 7 SUGGESTED
+CALL dbms_vidx.prebuild_check('vidx_prebuild_check_kill', 't1');
+--echo VERDICT 2 retry after KILL succeeds: PASS
+
+DROP TABLE t1;
+disconnect killer;
+--source include/wait_until_count_sessions.inc
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_prebuild_check_kill;

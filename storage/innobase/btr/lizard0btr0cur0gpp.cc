@@ -102,6 +102,9 @@ byte *btr_cur_parse_gpp_no_upd_sec_rec(
   ptr += 2;
 
   ut_a(rec_offset <= UNIV_PAGE_SIZE);
+  /* The write target is rec + gpp_offset, validate it stays within the
+  page frame in case of a corrupted redo record. */
+  ut_a(rec_offset + gpp_offset + DATA_GPP_NO_LEN <= UNIV_PAGE_SIZE);
 
   if (page) {
     rec = page + rec_offset;

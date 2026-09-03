@@ -1,0 +1,27 @@
+DROP TABLE IF EXISTS t1, t2;
+SET @old_innodb_stats_persistent = @@GLOBAL.innodb_stats_persistent;
+SET GLOBAL innodb_stats_persistent = OFF;
+# Step 1: build a clustered index of height >= 1.
+CREATE TABLE t1 (id INT PRIMARY KEY, pad CHAR(255) CHARACTER SET latin1)
+ENGINE = InnoDB;
+CREATE TABLE t2 (id INT PRIMARY KEY) ENGINE = InnoDB;
+INSERT INTO t2 VALUES (1);
+ANALYZE TABLE t1;
+include/assert.inc [root of t1 PRIMARY must be a non-leaf page before sampling]
+# Step 2: park the sampler at the top of fetch_next_leaf_node().
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SET SESSION debug = "+d,polarx_sample_force_block_mode";
+SET DEBUG_SYNC = "polarx_sample_before_fetch_next_leaf_node SIGNAL sampler_parked WAIT_FOR sampler_go";
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t1;
+SET DEBUG_SYNC = "now WAIT_FOR sampler_parked";
+# Step 3: collapse the tree to height 0 behind the parked sampler.
+DELETE FROM t1 WHERE id > 15;
+# Step 4: release the sampler; it must not touch the stale cursor.
+SET DEBUG_SYNC = "now SIGNAL sampler_go";
+COUNT(*)
+0
+ANALYZE TABLE t1;
+include/assert.inc [t1 PRIMARY must have collapsed to a single leaf root page]
+SET DEBUG_SYNC = "RESET";
+DROP TABLE t1, t2;
+SET GLOBAL innodb_stats_persistent = @old_innodb_stats_persistent;

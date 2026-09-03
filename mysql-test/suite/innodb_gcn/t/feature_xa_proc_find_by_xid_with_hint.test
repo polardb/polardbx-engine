@@ -25,14 +25,14 @@ xa start 'fbx_t1';
 update t1 set balance = balance - 10 where id = 1;
 update t1 set balance = balance + 10 where id = 2;
 xa end 'fbx_t1';
---echo set innodb_commit_seq = #commit_gcn
---disable_query_log
---eval set innodb_commit_seq = $commit_gcn
---enable_query_log
 --let $my_xid= 'fbx_t1', '', 1
 --let $xa_conn=con1
 --source suite/innodb_gcn/include/xa_proc_prepare_with_trx_slot.inc
 --let $m_uba= $xa_prepare_uba
+--echo set innodb_commit_seq = #commit_gcn
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
 xa commit 'fbx_t1';
 
 --let $expect_gcn= $commit_gcn

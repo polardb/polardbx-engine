@@ -1,0 +1,222 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Create table with vector index
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(20),
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(20) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+# 2. Insert initial test data
+INSERT INTO t1(name, v) VALUES 
+('vec1', VEC_FROMTEXT("[1,2,3,4,5]")),
+('vec2', VEC_FROMTEXT("[5,4,3,2,1]")),
+('vec3', VEC_FROMTEXT("[1,1,1,1,1]"));
+
+# 3. Verify initial data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	name	VEC_TOTEXT(v)
+1	vec1	[1,2,3,4,5]
+2	vec2	[5,4,3,2,1]
+3	vec3	[1,1,1,1,1]
+
+# ============================================
+# Test LOCK TABLES WRITE
+# ============================================
+# 4. LOCK TABLES WRITE - INSERT should succeed
+LOCK TABLES t1 WRITE;
+INSERT INTO t1(name, v) VALUES ('vec4', VEC_FROMTEXT("[2,2,2,2,2]"));
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE name = 'vec4';
+id	name	VEC_TOTEXT(v)
+4	vec4	[2,2,2,2,2]
+UNLOCK TABLES;
+
+# 5. LOCK TABLES WRITE - UPDATE should succeed
+LOCK TABLES t1 WRITE;
+UPDATE t1 SET v = VEC_FROMTEXT("[9,8,7,6,5]") WHERE name = 'vec4';
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE name = 'vec4';
+id	name	VEC_TOTEXT(v)
+4	vec4	[9,8,7,6,5]
+UNLOCK TABLES;
+
+# 6. LOCK TABLES WRITE - DELETE should succeed
+LOCK TABLES t1 WRITE;
+DELETE FROM t1 WHERE name = 'vec4';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+UNLOCK TABLES;
+
+# 7. LOCK TABLES WRITE - ANN query should succeed
+INSERT INTO t1(name, v) VALUES ('vec4', VEC_FROMTEXT("[2,2,2,2,2]"));
+LOCK TABLES t1 WRITE;
+SELECT id, name, VEC_TOTEXT(v) 
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+id	name	VEC_TOTEXT(v)
+1	vec1	[1,2,3,4,5]
+5	vec4	[2,2,2,2,2]
+3	vec3	[1,1,1,1,1]
+UNLOCK TABLES;
+
+# ============================================
+# Test LOCK TABLES READ
+# ============================================
+# 8. LOCK TABLES READ - SELECT should succeed
+LOCK TABLES t1 READ;
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	name	VEC_TOTEXT(v)
+1	vec1	[1,2,3,4,5]
+2	vec2	[5,4,3,2,1]
+3	vec3	[1,1,1,1,1]
+5	vec4	[2,2,2,2,2]
+UNLOCK TABLES;
+
+# 9. LOCK TABLES READ - ANN query should succeed
+LOCK TABLES t1 READ;
+SELECT id, name, VEC_TOTEXT(v) 
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+id	name	VEC_TOTEXT(v)
+1	vec1	[1,2,3,4,5]
+5	vec4	[2,2,2,2,2]
+3	vec3	[1,1,1,1,1]
+UNLOCK TABLES;
+
+# 10. LOCK TABLES READ - INSERT should fail
+LOCK TABLES t1 READ;
+INSERT INTO t1(name, v) VALUES ('should_fail', VEC_FROMTEXT("[9,9,9,9,9]"));
+ERROR HY000: Table 't1' was locked with a READ lock and can't be updated
+UNLOCK TABLES;
+
+# 11. LOCK TABLES READ - UPDATE should fail
+LOCK TABLES t1 READ;
+UPDATE t1 SET name = 'updated' WHERE id = 1;
+ERROR HY000: Table 't1' was locked with a READ lock and can't be updated
+UNLOCK TABLES;
+
+# 12. LOCK TABLES READ - DELETE should fail
+LOCK TABLES t1 READ;
+DELETE FROM t1 WHERE id = 1;
+ERROR HY000: Table 't1' was locked with a READ lock and can't be updated
+UNLOCK TABLES;
+
+# ============================================
+# Test Multi-table LOCK
+# ============================================
+# 13. Create second table without vector index
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(20),
+value INT
+) ENGINE=InnoDB;
+INSERT INTO t2(name, value) VALUES ('item1', 100), ('item2', 200);
+
+# ============================================
+# Test LOCK with transactions
+# ============================================
+# 17. LOCK TABLES WRITE with transaction operations
+LOCK TABLES t1 WRITE;
+START TRANSACTION;
+INSERT INTO t1(name, v) VALUES ('trx_vec', VEC_FROMTEXT("[7,7,7,7,7]"));
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE name = 'trx_vec';
+id	name	VEC_TOTEXT(v)
+6	trx_vec	[7,7,7,7,7]
+COMMIT;
+UNLOCK TABLES;
+# Verify committed data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE name = 'trx_vec';
+id	name	VEC_TOTEXT(v)
+6	trx_vec	[7,7,7,7,7]
+
+# 18. LOCK TABLES WRITE with ROLLBACK
+LOCK TABLES t1 WRITE;
+START TRANSACTION;
+INSERT INTO t1(name, v) VALUES ('rollback_vec', VEC_FROMTEXT("[8,8,8,8,8]"));
+ROLLBACK;
+UNLOCK TABLES;
+# Verify rollback (should not exist)
+SELECT COUNT(*) FROM t1 WHERE name = 'rollback_vec';
+COUNT(*)
+0
+
+# ============================================
+# Test LOCK with DDL-like operations
+# ============================================
+# 19. LOCK then TRUNCATE (PolarDB-X allows this with WRITE lock)
+LOCK TABLES t1 WRITE;
+TRUNCATE TABLE t1;
+# Table is now empty
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+0
+UNLOCK TABLES;
+# Re-insert data for remaining tests
+INSERT INTO t1(name, v) VALUES 
+('vec1', VEC_FROMTEXT("[1,2,3,4,5]")),
+('vec2', VEC_FROMTEXT("[5,4,3,2,1]")),
+('vec3', VEC_FROMTEXT("[1,1,1,1,1]")),
+('vec4', VEC_FROMTEXT("[2,2,2,2,2]"));
+
+# ============================================
+# Test edge cases
+# ============================================
+# 20. Multiple LOCK/UNLOCK cycles
+LOCK TABLES t1 WRITE;
+INSERT INTO t1(name, v) VALUES ('cycle1', VEC_FROMTEXT("[1,0,0,0,0]"));
+UNLOCK TABLES;
+LOCK TABLES t1 READ;
+SELECT COUNT(*) FROM t1 WHERE name = 'cycle1';
+COUNT(*)
+1
+UNLOCK TABLES;
+LOCK TABLES t1 WRITE;
+DELETE FROM t1 WHERE name = 'cycle1';
+UNLOCK TABLES;
+
+# 21. LOCK with FORCE INDEX ANN query
+LOCK TABLES t1 WRITE;
+EXPLAIN SELECT id, name
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	4	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=4; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`name` AS `name` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[1,2,3,4,5]')) limit 5
+SELECT id, name
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 5;
+id	name
+1	vec1
+4	vec4
+3	vec3
+2	vec2
+UNLOCK TABLES;
+
+# 22. Verify all data after lock tests
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	name	VEC_TOTEXT(v)
+1	vec1	[1,2,3,4,5]
+2	vec2	[5,4,3,2,1]
+3	vec3	[1,1,1,1,1]
+4	vec4	[2,2,2,2,2]
+
+# 23. Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+SET GLOBAL vidx_disabled = ON;

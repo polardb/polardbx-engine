@@ -1,0 +1,44 @@
+############################################
+# Arm K: 2 MiB budget, keep-structures     #
+# holds -- topology never reloads          #
+############################################
+SET GLOBAL vidx_hnsw_cache_size = 2097152;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+Warnings:
+Warning	7599	Vector index build reached the soft graph-window threshold (vidx_hnsw_cache_size); continuing in bounded windows with on-demand node reloads. In-flight work may temporarily exceed the threshold
+VERDICT K1 multi-window build exercised: PASS
+VERDICT K2 payloads reloaded across windows: PASS
+VERDICT K3 topology reloads stay below payload decodes: PASS
+
+############################################
+# Arm C: 1 MiB budget, skeleton outgrows   #
+# the budget -> full window rebuilds       #
+############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+Warnings:
+Warning	7599	Vector index build reached the soft graph-window threshold (vidx_hnsw_cache_size); continuing in bounded windows with on-demand node reloads. In-flight work may temporarily exceed the threshold
+VERDICT C1 multi-window build exercised: PASS
+VERDICT C2 full-rebuild topology reloads: PASS
+VERDICT C2b cliff separated from keep by topology reloads: PASS
+# Disk truth: the cliff build lost no graph rows.
+VERDICT C3 live==3000: PASS
+# ANN self-probes from the beginning, middle, and end of the scan.
+SET @nn1 = NULL;
+SET @nn1500 = NULL;
+SET @nn3000 = NULL;
+VERDICT C4 ANN self-probes on the cliff-built graph: PASS
+
+############################################
+# Arm F: keep-capable budget, injected     #
+# cliff -- the branch itself stays live    #
+############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET GLOBAL vidx_hnsw_cache_size = 2097152;
+SET SESSION debug = '+d,vidx_ddl_force_full_handover';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+Warnings:
+Warning	7599	Vector index build reached the soft graph-window threshold (vidx_hnsw_cache_size); continuing in bounded windows with on-demand node reloads. In-flight work may temporarily exceed the threshold
+SET SESSION debug = '-d,vidx_ddl_force_full_handover';
+VERDICT F1 injected cliff reloads topology under a keep-capable budget: PASS

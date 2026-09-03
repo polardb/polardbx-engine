@@ -1,0 +1,66 @@
+# Verify the fix for the NULL-pointer dereference in
+# Page_encoder::merge_mountains(), via a realistic extreme schema and
+# WITHOUT any debug injection.
+#
+# Root cause: the FIRST mountain has no left neighbor. When its peak alone
+# exceeds the page dict capacity, merge_mountains() force-merged it with a
+# null left mountain -> SIGSEGV.
+#
+# Fix: Page_encoder::build() detects "first mountain alone exceeds the
+# dict capacity" right after build_mountains() and returns 0, i.e. gives
+# up encoding this page. Both callers (optimistic insert, bulk load) then
+# take their existing fallback path (reorganize/split / skip encode), and
+# the page simply stays unencoded.
+#
+# Schema math (16K page):
+#   - secondary index record R = sec key VARBINARY(3000) + PK VARBINARY(2500)
+#     => rec_max_size ~= 5.5KB > (free_empty - 500) / 3
+#   - pd_capacity = free_empty - 2 * R - 500  => roughly 4.6K ~ 4.8K
+#   - adjacent rows share a 5400-byte common prefix
+#     (3000 of c + 2400 of id) => first mountain peak 5400 > capacity - 2
+#   - a 16K page holds only two ~5.5KB records, so the third insert forces
+#     Page_encoder::build() with the huge mountain at the page head.
+#
+# Before the fix the third insert crashed the server; now it must succeed
+# via the split fallback, and further inserts keep retrying and giving up
+# the encode gracefully.
+
+CREATE TABLE t1 (id VARBINARY(2500) NOT NULL,
+  c VARBINARY(3000) NOT NULL,
+  PRIMARY KEY (id),
+  KEY c (c)) ENGINE=InnoDB DEFAULT CHARSET=binary;
+
+# Use session vars to keep the result file free of multi-KB literals.
+SET @c_shared = REPEAT('a', 3000);
+SET @id1 = CONCAT(REPEAT('b', 2400), '0001');
+SET @id2 = CONCAT(REPEAT('b', 2400), '0002');
+SET @id3 = CONCAT(REPEAT('b', 2400), '0003');
+SET @id4 = CONCAT(REPEAT('b', 2400), '0004');
+SET @id5 = CONCAT(REPEAT('b', 2400), '0005');
+
+# Two rows fill the leaf page (~5.5KB each in the secondary index).
+INSERT INTO t1 VALUES (@id1, @c_shared);
+INSERT INTO t1 VALUES (@id2, @c_shared);
+
+# The encode attempt for this insert gives up (first mountain peak exceeds
+# the dict capacity) and the insert completes via page split.
+INSERT INTO t1 VALUES (@id3, @c_shared);
+
+# Keep growing the tree: every full page retries the encode and gives up.
+INSERT INTO t1 VALUES (@id4, @c_shared);
+INSERT INTO t1 VALUES (@id5, @c_shared);
+
+CHECK TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+# Restart and validate the data survives and the index is consistent.
+--source include/restart_mysqld.inc
+
+# User variables do not survive the restart; recreate them.
+SET @c_shared = REPEAT('a', 3000);
+
+CHECK TABLE t1;
+SELECT COUNT(*) FROM t1;
+SELECT COUNT(*) FROM t1 WHERE c >= @c_shared;
+
+DROP TABLE t1;

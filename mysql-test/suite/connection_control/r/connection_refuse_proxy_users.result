@@ -3,6 +3,7 @@
 # Install connection_control plugin
 INSTALL PLUGIN connection_control SONAME 'CONNECTION_CONTROL_LIB';
 INSTALL PLUGIN connection_control_failed_login_attempts SONAME 'CONNECTION_CONTROL_LIB';
+INSTALL PLUGIN connection_control_refuse_statistic SONAME 'CONNECTION_CONTROL_LIB';
 # Do proxy setup
 CALL mtr.add_suppression("Plugin test_plugin_server reported: 'Wrong password supplied for proxied'");
 SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
@@ -35,6 +36,11 @@ Connection_control_refuse_generated	2
 Connection_control_refuse_generated should be 3
 Variable_name	Value
 Connection_control_refuse_generated	3
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u3'@'localhost'		3	LOCKED
+'u2'@'localhost'		3	LOCKED
+'u1'@'localhost'		3	LOCKED
 # Refuse to authenticate the password
 Connection_control_refuse_generated should be 4
 Variable_name	Value
@@ -81,4 +87,5 @@ SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
 # Uninstall connection_control plugin
 UNINSTALL PLUGIN connection_control;
 UNINSTALL PLUGIN connection_control_failed_login_attempts;
+UNINSTALL PLUGIN connection_control_refuse_statistic;
 #-----------------------------------------------------------------------

@@ -72,6 +72,7 @@
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
 #include "sql/item_row.h"
+#include "sql/item_strfunc.h"  // vidx::Item_func_vec_distance
 #include "sql/item_subselect.h"
 #include "sql/item_sum.h"  // Item_sum
 #include "sql/iterators/basic_row_iterators.h"
@@ -112,6 +113,7 @@
 #include "sql/window.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "vidx/vidx_index.h"  // vidx::test_if_cheaper_vector_ordering
 
 using std::ceil;
 using std::max;
@@ -151,7 +153,7 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
                                     ha_rows select_limit, const bool no_changes,
                                     const Key_map *map, int *best_idx);
 
-static void try_pushdown_range_limit(TABLE *const table, u_int sk_n,
+static void try_pushdown_range_limit(JOIN_TAB *tab, u_int sk_n,
                                      AccessPath *const save_range_scan,
                                      ORDER_with_src &order,
                                      ha_rows select_limit);
@@ -170,6 +172,7 @@ JOIN::JOIN(THD *thd_arg, Query_block *select)
       thd(thd_arg),
       // @todo Can this be substituted with select->is_explicitly_grouped()?
       grouped(select->is_explicitly_grouped()),
+      is_fast_path_using_primary(false),
       // Inner tables may always be considered to be constant:
       const_table_map(INNER_TABLE_BIT),
       found_const_table_map(INNER_TABLE_BIT),
@@ -396,6 +399,10 @@ bool JOIN::optimize(bool finalize_access_paths) {
 
   // The base ref items from query block are assigned as JOIN's ref items
   ref_items[REF_SLICE_ACTIVE] = query_block->base_ref_items;
+
+  int fl_ret = rbo_optimize();
+  if (fl_ret != -1)
+    return fl_ret;
 
   /* dump_TABLE_LIST_graph(query_block, query_block->leaf_tables); */
   /*
@@ -1219,7 +1226,7 @@ bool substitute_gc(THD *thd, Query_block *query_block, Item *where_cond,
 
   // Collect all GCs that are a part of a key
   for (Table_ref *tl = query_block->leaf_tables; tl; tl = tl->next_leaf) {
-    if (tl->table->s->keys == 0) continue;
+    if (tl->table->s->total_keys == 0) continue;
     for (uint i = 0; i < tl->table->s->fields; i++) {
       Field *fld = tl->table->field[i];
       if (fld->is_gcol() &&
@@ -1783,7 +1790,7 @@ bool is_prefix_index(TABLE *table, uint idx) {
     if (key_part->field &&
         !(table->field[key_part->fieldnr - 1]
               ->part_of_prefixkey.is_clear_all()) &&
-        !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL))) {
+        !(key_info->flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR))) {
       return true;
     }
   }
@@ -1979,7 +1986,7 @@ uint find_shortest_key(TABLE *table, const Key_map *usable_keys) {
                                  : MAX_KEY;
   if (!usable_keys->is_clear_all()) {
     uint min_length = (uint)~0;
-    for (uint nr = 0; nr < table->s->keys; nr++) {
+    for (uint nr = 0; nr < table->s->total_keys; nr++) {
       if (nr == usable_clustered_pk) continue;
       if (usable_keys->is_set(nr)) {
         /*
@@ -2086,7 +2093,7 @@ static uint test_if_subkey(ORDER_with_src *order, JOIN_TAB *tab, uint ref,
   KEY_PART_INFO *ref_key_part = table->key_info[ref].key_part;
   KEY_PART_INFO *ref_key_part_end = ref_key_part + ref_key_parts;
 
-  for (nr = 0; nr < table->s->keys; nr++) {
+  for (nr = 0; nr < table->s->total_keys; nr++) {
     bool skip_quick;
     if (usable_keys->is_set(nr) &&
         table->key_info[nr].key_length < min_length &&
@@ -2282,6 +2289,12 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
         return true;
       }
     }
+
+    if (!ft_func && vidx::test_if_cheaper_vector_ordering(
+                        tab, order.order, select_limit, no_changes,
+                        order_idx)) {
+      return true;
+    }
   }
 
   /*
@@ -2454,11 +2467,12 @@ static bool test_if_skip_sort_order(JOIN_TAB *tab, ORDER_with_src &order,
         table->force_index ||
         (is_group_by ? table->force_index_group : table->force_index_order);
 
-    // Find an ordering index alternative over the chosen plan iff
-    // prefer_ordering_index switch is on. This switch is overridden only when
-    // force index for order/group is specified.
+    // We try to find an ordering_index alternative over the chosen plan, if:
+    // 1. "prefer_ordering_index" switch is on or
+    // 2. Force index for order/group is specified or
+    // 3. Optimizer has chosen to do table scan currently.
     if (thd->optimizer_switch_flag(OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX) ||
-        is_force_index)
+        is_force_index || ref_key == -1)
       test_if_cheaper_ordering(tab, &order, table, usable_keys, ref_key_hint,
                                select_limit, &best_key, &best_key_direction,
                                &select_limit, &best_key_parts,
@@ -2744,7 +2758,7 @@ fix_ICP:
         && thd->variables.pushdown_range_limit
         && tab->type() == JT_RANGE
         && select_limit != HA_POS_ERROR) {
-      try_pushdown_range_limit(table, (uint) ref_key, save_range_scan,
+      try_pushdown_range_limit(tab, (uint) ref_key, save_range_scan,
         order, select_limit);
     }
 
@@ -2787,19 +2801,34 @@ fix_ICP:
   Push down limit to each range, when the rows are locally ordered
   according to the ORDER BY arguments and range conditions.
 
-  @param table            Table to scan
+  @param tab              JOIN_TAB of the accessed table
   @param sk_n             Secondary index number in use
   @param save_range_scan  Table range access path
   @param order            Linked list of ORDER BY arguments
   @param select_limit     LIMIT value
 
 */
-static void try_pushdown_range_limit(TABLE *const table, u_int sk_n,
+static void try_pushdown_range_limit(JOIN_TAB *tab, u_int sk_n,
                                      AccessPath *const save_range_scan,
                                      ORDER_with_src &order,
                                      ha_rows select_limit) {
+
+  TABLE *const table = tab->table();
+  JOIN *const join = tab->join();
+
   if (table->part_info) {
     // disable on partition tables
+    return;
+  }
+  if (table->vfield && table->index_contains_some_virtual_gcol(sk_n)) {
+    // disable on virtual generated columns which doesn't support ICP
+    return;
+  }
+  if (!(table->file->index_flags(sk_n, 0, true) & HA_DO_INDEX_COND_PUSHDOWN)
+    || !hint_key_state(join->thd, tab->table_ref, sk_n, ICP_HINT_ENUM,
+                   OPTIMIZER_SWITCH_INDEX_CONDITION_PUSHDOWN)) {
+    // disable on storage engine which doesn't support ICP, or ICP hint is disabled,
+    // since range limit is pushdown to storage engine layer
     return;
   }
 
@@ -2810,99 +2839,102 @@ static void try_pushdown_range_limit(TABLE *const table, u_int sk_n,
           table->s->primary_key != MAX_KEY && table->s->primary_key != sk_n;
   for (unsigned range_idx = 0; range_idx < num_ranges; ++range_idx) {
     // only eq range which matches order by condition, can push down limit
-    bool can_push_limit = false;
     QUICK_RANGE *cur_range = ranges[range_idx];
     bool has_extended_pk_suffix = false;
-    if ((cur_range->flag & EQ_RANGE)
-      || (cur_range->flag & NEAR_MIN)
-      || (cur_range->flag & NEAR_MAX) ) {
-      KEY_PART_INFO *key_part = table->key_info[sk_n].key_part;
-      KEY_PART_INFO *key_part_end = key_part + table->key_info[sk_n].user_defined_key_parts;
-      key_part_map keypart_map = cur_range->min_keypart_map;
-      if (cur_range->flag & NEAR_MIN) {
-        keypart_map = cur_range->max_keypart_map;
-      }
 
-      ORDER *order_col = order.order;
-      // it is possible to contain order by columns at the end of index conditions
-      bool cond_matching_orderby = false;
-      while (keypart_map & 1 && key_part < key_part_end) {
-        if (order_col != nullptr) {
-          Item *order_real_item = (*order_col->item)->real_item();
-          if (order_real_item->type() != Item::FIELD_ITEM) {
-            goto range_limit_match_ends;
-          }
-          const Field *order_col_field = down_cast<const Item_field *>(order_real_item)->field;
-          if (key_part->field == order_col_field) {
-            cond_matching_orderby = true;
-            order_col = order_col->next;
-          } else {
-            if (cond_matching_orderby) {
-              goto range_limit_match_ends;
-            }
-          }
-        } else {
-          if (cond_matching_orderby) {
-            // there is no order column left, but still got remaining conditions
-            goto range_limit_match_ends;
-          }
-        }
-        // skip eq range conditions
-        key_part++;
-        keypart_map >>= 1;
-      }
-      // now key_part should match order by
-      for (; order_col; order_col = order_col->next) {
-        if (key_part == key_part_end) {
-          /*
-            We are at the end of the key. Check if the engine has the primary
-            key as a suffix to the secondary keys (which is likely)
-            and continue to check the primary key as a suffix.
-          */
-          if (!has_extended_pk_suffix && support_pk_suffix) {
-            // follows test_if_order_by_key
-            uint pk_key_parts = table->key_info[table->s->primary_key].user_defined_key_parts;
-            if (pk_key_parts == 0) {
-              goto range_limit_match_ends;
-            }
-            key_part = table->key_info[table->s->primary_key].key_part;
-            key_part_end = key_part + pk_key_parts;
-            has_extended_pk_suffix = true;
-          } else {
-            // no key for order by
-            goto range_limit_match_ends;
-          }
-        }
+    const uchar *min_key = cur_range->min_key;
+    const uchar *max_key = cur_range->max_key;
+    KEY_PART_INFO *key_part = table->key_info[sk_n].key_part;
+    KEY_PART_INFO *key_part_end = key_part + table->key_info[sk_n].user_defined_key_parts;
+
+    // Since we are looking for the equal range condition,
+    // the common part of min_keypart_map and max_keypart_map should be used
+    key_part_map keypart_map = cur_range->min_keypart_map & cur_range->max_keypart_map;
+
+    ORDER *order_col = order.order;
+    // it is possible to contain order by columns at the end of index conditions
+    bool cond_matching_orderby = false;
+    while (keypart_map & 1 && key_part < key_part_end) {
+      if (order_col != nullptr) {
         Item *order_real_item = (*order_col->item)->real_item();
         if (order_real_item->type() != Item::FIELD_ITEM) {
-            goto range_limit_match_ends;
+          return;
         }
-        // do not need to skip constant condition
         const Field *order_col_field = down_cast<const Item_field *>(order_real_item)->field;
-        if (key_part->field != order_col_field) {
-          goto range_limit_match_ends;
-        }
-        if (!order_col_field->part_of_sortkey.is_set(sk_n)) {
-          goto range_limit_match_ends;
-        }
-        if (order_col->direction != ORDER_NOT_RELEVANT) {
-          const enum_order keypart_order =(key_part->key_part_flag & HA_REVERSE_SORT) ?
-            ORDER_DESC : ORDER_ASC;
-          if (order_col->direction != keypart_order) {
-            // didn't consider backwards scan here
-            goto range_limit_match_ends;
+        if (key_part->field == order_col_field) {
+          cond_matching_orderby = true;
+          order_col = order_col->next;
+        } else {
+          if (cond_matching_orderby) {
+            return;
           }
         }
-        key_part++;
+      } else {
+        if (cond_matching_orderby) {
+          // there is no order column left, but still got remaining conditions
+          return;
+        }
       }
-      can_push_limit = true;
+      // skip eq range conditions
+      if (!cond_matching_orderby && !range_is_equality(min_key, max_key, key_part->store_length,
+                           key_part->field->is_nullable())) {
+        // skip equal range check when condition matches order by column
+        return;
+      }
+      // continue to check the next used key
+      min_key += key_part->store_length;
+      max_key += key_part->store_length;
+      key_part++;
+      keypart_map >>= 1;
     }
-    range_limit_match_ends:
-    if (can_push_limit) {
-      cur_range->limit = select_limit;
-      DBUG_PRINT("range_limit", ("push limit(%llu) to range(%p) on (%s)",
-        select_limit, cur_range->min_key, (table->key_info + param.index)->name));
+    // now key_part should match order by
+    for (; order_col; order_col = order_col->next) {
+      if (key_part == key_part_end) {
+        /*
+          We are at the end of the key. Check if the engine has the primary
+          key as a suffix to the secondary keys (which is likely)
+          and continue to check the primary key as a suffix.
+        */
+        if (!has_extended_pk_suffix && support_pk_suffix) {
+          // follows test_if_order_by_key
+          uint pk_key_parts = table->key_info[table->s->primary_key].user_defined_key_parts;
+          if (pk_key_parts == 0) {
+            return;
+          }
+          key_part = table->key_info[table->s->primary_key].key_part;
+          key_part_end = key_part + pk_key_parts;
+          has_extended_pk_suffix = true;
+        } else {
+          // no key for order by
+          return;
+        }
+      }
+      Item *order_real_item = (*order_col->item)->real_item();
+      if (order_real_item->type() != Item::FIELD_ITEM) {
+        return;
+      }
+      // do not need to skip constant condition
+      const Field *order_col_field = down_cast<const Item_field *>(order_real_item)->field;
+      if (key_part->field != order_col_field) {
+        return;
+      }
+      if (!order_col_field->part_of_sortkey.is_set(sk_n)) {
+        return;
+      }
+      if (order_col->direction != ORDER_NOT_RELEVANT) {
+        const enum_order keypart_order =(key_part->key_part_flag & HA_REVERSE_SORT) ?
+          ORDER_DESC : ORDER_ASC;
+        if (order_col->direction != keypart_order) {
+          // didn't consider backwards scan here
+          return;
+        }
+      }
+      key_part++;
     }
+    // passed all checks, pushing limit down to QUICK_RANGE
+    cur_range->limit = select_limit;
+    DBUG_PRINT("range_limit", ("push limit(%llu) to range(%p) on (%s)",
+      select_limit, cur_range->min_key, (table->key_info + param.index)->name));
   }
 }
 
@@ -5984,6 +6016,8 @@ double find_worst_seeks(const TABLE *table, double num_rows,
 /**
   Estimate the number of matched rows for each joined table.
   Set up range scan for tables that have proper predicates.
+  Eliminate tables that have filter conditions that are always false based on
+  analyzing range scan predicates.
 
   @returns false if success, true if error
 */
@@ -6026,21 +6060,12 @@ bool JOIN::estimate_rowcount() {
     */
     add_loose_index_scan_and_skip_scan_keys(this, tab);
 
-    /*
-      Perform range analysis if there are keys it could use (1).
-      Don't do range analysis if on the inner side of an outer join (2).
-      Do range analysis if on the inner side of a semi-join (3).
-      Do range analysis if embedding a derived table (4).
-    */
+    // Perform range analysis if the table has keys that can be used.
+
     Table_ref *const tl = tab->table_ref;
-    if ((!tab->const_keys.is_clear_all() ||
-         !tab->skip_scan_keys.is_clear_all()) &&  // (1)
-        (tl->embedding == nullptr ||              // (2)
-         tl->embedding->is_sj_or_aj_nest() ||     // (3)
-         tl->embedding->is_derived()))            // (4)
-    {
+    if (!tab->const_keys.is_clear_all() ||
+        !tab->skip_scan_keys.is_clear_all()) {
       Item *condition = nullptr;
-      bool embedding_derived_range = false;
       /*
         For an inner table of an outer join, the join condition is either
         attached to the actual table, or to the embedding join nest.
@@ -6051,8 +6076,6 @@ bool JOIN::estimate_rowcount() {
         for (Table_ref *t = tl; t != nullptr; t = t->embedding) {
           if (t->join_cond() != nullptr) {
             condition = t->join_cond();
-            // true if the join condition is from a derived embedding table
-            embedding_derived_range = (t != tl && t->is_derived());
             break;
           }
         }
@@ -6061,7 +6084,7 @@ bool JOIN::estimate_rowcount() {
         condition = where_cond;
       }
       /*
-        This call fills tab->range_scan() with the best QUICK access method
+        This call fills tab->range_scan() with the best range access method
         possible for this table, and only if it's better than table scan.
         It also fills tab->needed_reg.
       */
@@ -6070,28 +6093,29 @@ bool JOIN::estimate_rowcount() {
       if (records == 0 && thd->is_error()) return true;
 
       /*
-        Check for "always false" and mark table as "const". Skip
-        "const" marking (i) of semi-joined tables (only semi-joined
-        tables that are functionally dependent can be marked "const",
-        and subsequently pulled out of their semi-join nests (ii) if
-        the condition used for the range check is of the embedding
-        derived table.
+        Check for "always false" and mark table as "const".
+        Exclude outer-joined tables unless the table is the single outer-joined
+        table in the query block (this also eliminates tables inside
+        outer-joined derived tables).
+        Exclude semi-joined and anti-joined tables (only those tables that are
+        functionally dependent can be marked "const", and subsequently pulled
+        out of their semi-join nests).
       */
       if (records == 0 && tab->table()->reginfo.impossible_range &&
-          (!(tl->embedding && tl->embedding->is_sj_or_aj_nest())) &&
-          !embedding_derived_range) {
+          (!tl->is_inner_table_of_outer_join() || tl->embedding == nullptr) &&
+          (!(tl->embedding != nullptr && tl->embedding->is_sj_or_aj_nest()))) {
         /*
-          Impossible WHERE condition or join condition
-          In case of join cond, mark that one empty NULL row is matched.
+          Always false WHERE condition or (outer) join condition.
+          In case of outer join, mark that one empty NULL row is matched.
           In case of WHERE, don't set found_const_table_map to get the
           caller to abort with a zero row result.
         */
         mark_const_table(tab, nullptr);
         tab->set_type(JT_CONST);  // Override setting made in mark_const_table()
-        if (tab->join_cond()) {
+        if (tab->join_cond() != nullptr) {
           // Generate an empty row
           trace_table.add("returning_empty_null_row", true)
-              .add_alnum("cause", "impossible_on_condition");
+              .add_alnum("cause", "always_false_outer_join_condition");
           found_const_table_map |= tl->map();
           tab->table()->set_null_row();  // All fields are NULL
         } else {
@@ -7129,7 +7153,7 @@ static void warn_index_not_applicable(THD *thd, const Field *field,
 
   if (thd->lex->is_explain() ||
       thd->variables.option_bits & OPTION_SAFE_UPDATES)
-    for (uint j = 0; j < field->table->s->keys; j++)
+    for (uint j = 0; j < field->table->s->total_keys; j++)
       if (cant_use_index.is_set(j))
         push_warning_printf(thd, Sql_condition::SL_WARNING,
                             ER_WARN_INDEX_NOT_APPLICABLE,
@@ -7848,9 +7872,9 @@ static bool add_key_part(Key_use_array *keyuse_array, Key_field *key_field) {
     Table_ref *const tl = key_field->item_field->table_ref;
     TABLE *const table = tl->table;
 
-    for (uint key = 0; key < table->s->keys; key++) {
+    for (uint key = 0; key < table->s->total_keys; key++) {
       if (!(table->keys_in_use_for_query.is_set(key))) continue;
-      if (table->key_info[key].flags & (HA_FULLTEXT | HA_SPATIAL))
+      if (table->key_info[key].flags & (HA_FULLTEXT | HA_SPATIAL | HA_VECTOR))
         continue;  // ToDo: ft-keys in non-ft queries.   SerG
 
       uint key_parts = actual_key_parts(&table->key_info[key]);
@@ -8193,7 +8217,7 @@ static void trace_indexes_added_group_distinct(Opt_trace_context *trace,
 
   KEY *key_info = join_tab->table()->key_info;
   Key_map existing_keys = join_tab->const_keys;
-  uint nbrkeys = join_tab->table()->s->keys;
+  uint nbrkeys = join_tab->table()->s->total_keys;
 
   Opt_trace_object trace_summary(trace, "const_keys_added");
   {
@@ -9365,7 +9389,7 @@ void JOIN::finalize_derived_keys() {
     */
     if (table == nullptr || !tr->uses_materialization() ||  // (1)
         table->is_created() ||                              // (2)
-        table->s->keys == 0 ||                              // (3)
+        table->s->total_keys == 0 ||                        // (3)
         (processed_tables & tr->map())) {                   // (4)
       continue;
     }
@@ -9373,9 +9397,9 @@ void JOIN::finalize_derived_keys() {
       Collect all used keys before starting to shuffle them:
       First create a map from key number to the table using the key:
     */
-    assert(table->s->keys <= MAX_INDEXES);
+    assert(table->s->total_keys <= MAX_INDEXES);
     TABLE *table_map[MAX_INDEXES];
-    for (uint j = 0; j < table->s->keys; j++) {
+    for (uint j = 0; j < table->s->total_keys; j++) {
       table_map[j] = nullptr;
     }
 
@@ -9385,7 +9409,7 @@ void JOIN::finalize_derived_keys() {
     // (deduplication) whether any expression refers to them or not.
     // In particular, they are used if we want to materialize a UNION DISTINCT
     // directly into the derived table.
-    for (uint key_idx = 0; key_idx < table->s->keys; ++key_idx) {
+    for (uint key_idx = 0; key_idx < table->s->total_keys; ++key_idx) {
       if (table->key_info[key_idx].flags & HA_NOSAME) {
         used_keys.set_bit(key_idx);
       }
@@ -9420,7 +9444,7 @@ void JOIN::finalize_derived_keys() {
     (void)table->s->find_first_unused_tmp_key(used_keys);
 
     // Process keys in increasing key order
-    for (uint j = 0; j < table->s->keys; j++) {
+    for (uint j = 0; j < table->s->total_keys; j++) {
       TABLE *const t = table_map[j];
       if (t == nullptr) continue;
 
@@ -9918,13 +9942,23 @@ static bool make_join_query_block(JOIN *join, Item *cond) {
                   recheck_reason = DONT_RECHECK;
                 }
               }
-              // We do a cost based search for an ordering index here. Do this
-              // only if prefer_ordering_index switch is on or an index is
-              // forced for order by
+
+              // We do a cost based search for an ordering index here, if:
+              // 1. "prefer_ordering_index" switch is on or
+              // 2. An index is forced for order by or
+              // 3. Optimizer has chosen to do table scan.
               if (recheck_reason != DONT_RECHECK &&
-                  (tab->table()->force_index_order ||
-                   thd->optimizer_switch_flag(
-                       OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX))) {
+                  (thd->optimizer_switch_flag(
+                       OPTIMIZER_SWITCH_PREFER_ORDERING_INDEX) ||
+                   tab->table()->force_index_order || tab->type() == JT_ALL)) {
+                DBUG_EXECUTE_IF("prefer_ordering_index_check", {
+                  const char act[] =
+                      "now wait_for "
+                      "signal.prefer_ordering_index_check_continue";
+                  assert(!debug_sync_set_action(current_thd,
+                                                STRING_WITH_LEN(act)));
+                });
+
                 int best_key = -1;
                 ha_rows select_limit =
                     join->query_expression()->select_limit_cnt;
@@ -10679,7 +10713,7 @@ static bool list_contains_unique_index(JOIN_TAB *tab,
   TABLE *table = tab->table();
 
   if (tab->is_inner_table_of_outer_join()) return false;
-  for (uint keynr = 0; keynr < table->s->keys; keynr++) {
+  for (uint keynr = 0; keynr < table->s->total_keys; keynr++) {
     if (keynr == table->s->primary_key ||
         (table->key_info[keynr].flags & HA_NOSAME)) {
       KEY *keyinfo = table->key_info + keynr;

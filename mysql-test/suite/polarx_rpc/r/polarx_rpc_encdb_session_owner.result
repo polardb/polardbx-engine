@@ -1,0 +1,16 @@
+#
+# Test polarx_rpc transaction survives EncDB KMS internal sessions.
+#
+ok
+SELECT COUNT(*) AS caller_rows_after_rollback FROM xtest.t1;
+caller_rows_after_rollback
+0
+SELECT COUNT(*) AS kms_rows_after_caller_rollback FROM mysql.encdb_kms_meta;
+kms_rows_after_caller_rollback
+1
+SELECT JSON_EXTRACT(CAST(FROM_BASE64(encdb_process_message('{"request_type":51}')) AS CHAR), '$.status') = 0 AS cleanup_ok;
+cleanup_ok
+1
+SELECT COUNT(*) AS kms_rows_after_cleanup FROM mysql.encdb_kms_meta;
+kms_rows_after_cleanup
+0

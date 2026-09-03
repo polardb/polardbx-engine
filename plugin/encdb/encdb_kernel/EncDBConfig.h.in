@@ -1,0 +1,19 @@
+// Copyright (c) 2019-2020 Alibaba DAMO DBLab.
+
+#pragma once
+
+// the configured options and settings for EncDB
+#define ENCDB_VERSION_MAJOR @EncDB_VERSION_MAJOR@
+#define ENCDB_VERSION_MINOR @EncDB_VERSION_MINOR@
+#define ENCDB_VERSION_PATCH @EncDB_VERSION_PATCH@
+#define ENCDB_VERSION "@EncDB_VERSION@"
+#define CLIENT_MIN_VERSION "@CLIENT_MIN_VERSION@"
+#define CLIENT_RECOMMENDED_VERSION "@CLIENT_RECOMMENDED_VERSION@"
+
+
+#define RDS_MYSQL      0x00
+#define POLARDB_MYSQL  0x01
+#define NO_DB          0x02
+#define ENCDB_DB_TYPE  @ENCDB_DB_TYPE@
+
+#cmakedefine ENCDB_BUILD_WITH_TEE   @ENCDB_BUILD_WITH_TEE@

@@ -43,27 +43,30 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+
 /** Gets the offset of the DB_TRX_ID field, in bytes relative to the origin of
 a clustered index record.
 @param[in] index Clustered index.
 @param[in] offsets rec_get_offsets(rec, index).
 @return offset of DATA_TRX_ID */
 [[nodiscard]] static inline ulint row_get_trx_id_offset(
-    const dict_index_t *index, const ulint *offsets);
+    const dict_index_t *index, const Slice *slc);
 /** Reads the trx id field from a clustered index record.
 @param[in] rec Record.
 @param[in] index Clustered index.
 @param[in] offsets rec_get_offsets(rec, index).
 @return value of the field */
 [[nodiscard]] static inline trx_id_t row_get_rec_trx_id(
-    const rec_t *rec, const dict_index_t *index, const ulint *offsets);
+    const Slice *slc, const dict_index_t *index);
 /** Reads the roll pointer field from a clustered index record.
 @param[in] rec Record.
 @param[in] index Clustered index.
 @param[in] offsets rec_get_offsets(rec, index).
 @return value of the field */
 [[nodiscard]] static inline roll_ptr_t row_get_rec_roll_ptr(
-    const rec_t *rec, const dict_index_t *index, const ulint *offsets);
+    const Slice *slc, const dict_index_t *index);
 
 /* Flags for row build type. */
 /** build index row */
@@ -123,8 +126,8 @@ index->table.
 @param[out] ext      cache of externally stored column prefixes, or nullptr.
 @param[in] heap      Memory heap from which the memory needed is allocated.
 @return own: row built; see the NOTE below! */
-dtuple_t *row_build(ulint type, const dict_index_t *index, const rec_t *rec,
-                    const ulint *offsets, const dict_table_t *col_table,
+dtuple_t *row_build(ulint type, const dict_index_t *index, creg_t reg,
+                    const Slice *slc, const dict_table_t *col_table,
                     const dtuple_t *add_cols, const ulint *col_map,
                     row_ext_t **ext, mem_heap_t *heap);
 
@@ -152,7 +155,7 @@ addition of new virtual columns.
                                 the memory needed is allocated
 @return own: row built */
 dtuple_t *row_build_w_add_vcol(ulint type, const dict_index_t *index,
-                               const rec_t *rec, const ulint *offsets,
+                               creg_t reg, const Slice *slc,
                                const dict_table_t *col_table,
                                const dtuple_t *add_cols,
                                const dict_add_v_col_t *add_v,
@@ -163,38 +166,36 @@ dtuple_t *row_build_w_add_vcol(ulint type, const dict_index_t *index,
  @return index entry built; does not set info_bits, and the data fields
  in the entry will point directly to rec */
 [[nodiscard]] dtuple_t *row_rec_to_index_entry_low(
-    const rec_t *rec,          /*!< in: record in the index */
+    const Slice *slc,          /*!< in: record in the index */
     const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     mem_heap_t *heap);         /*!< in: memory heap from which
                               the memory needed is allocated */
 /** Converts an index record to a typed data tuple. NOTE that externally
  stored (often big) fields are NOT copied to heap.
  @return own: index entry built */
 [[nodiscard]] dtuple_t *row_rec_to_index_entry(
-    const rec_t *rec,          /*!< in: record in the index */
+    const Slice *slc,          /*!< in: record in the index */
     const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in/out: rec_get_offsets(rec) */
     mem_heap_t *heap);         /*!< in: memory heap from which
                               the memory needed is allocated */
 /** Builds from a secondary index record a row reference with which we can
  search the clustered index record.
  @return own: row reference built; see the NOTE below! */
 [[nodiscard]] dtuple_t *row_build_row_ref(
-    ulint type,                /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
-                               the former copies also the data fields to
-                               heap, whereas the latter only places pointers
-                               to data fields on the index page */
-    const dict_index_t *index, /*!< in: secondary index */
-    const rec_t *rec,          /*!< in: record in the index;
-                               NOTE: in the case ROW_COPY_POINTERS
-                               the data fields in the row will point
-                               directly into this record, therefore,
-                               the buffer page of this record must be
-                               at least s-latched and the latch held
-                               as long as the row reference is used! */
-    mem_heap_t *heap);         /*!< in: memory heap from which the memory
-                              needed is allocated */
+    ulint type,                   /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
+                                  the former copies also the data fields to
+                                  heap, whereas the latter only places pointers
+                                  to data fields on the index page */
+    const dict_index_t *index,    /*!< in: secondary index */
+    creg_t reg, const Slice *slc, /*!< in: record in the index;
+                       NOTE: in the case ROW_COPY_POINTERS
+                       the data fields in the row will point
+                       directly into this record, therefore,
+                       the buffer page of this record must be
+                       at least s-latched and the latch held
+                       as long as the row reference is used! */
+    mem_heap_t *heap);            /*!< in: memory heap from which the memory
+                                 needed is allocated */
 
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record.
@@ -204,8 +205,9 @@ directly into this record, therefore, the buffer page of this record must be at
 least s-latched and the latch held as long as the row reference is used!
 @param[in] index Secondary index
 @param[in] offsets Rec_get_offsets(rec, index) or null */
-void row_build_row_ref_in_tuple(dtuple_t *ref, const rec_t *rec,
-                                const dict_index_t *index, ulint *offsets);
+void row_build_row_ref_in_tuple(dtuple_t *ref, creg_t reg,
+                                const dict_index_t *index, /* ulint *offsets,*/
+                                Slice *slc);
 
 /** Builds from a secondary index record a row reference with which we can
 search the clustered index record.
@@ -216,8 +218,7 @@ search the clustered index record.
                         used, as we do not copy field values to heap
 @param[in]      offsets array returned by rec_get_offsets() */
 static inline void row_build_row_ref_fast(dtuple_t *ref, const ulint *map,
-                                          const rec_t *rec,
-                                          const ulint *offsets);
+                                          const Slice *slc);
 
 /** Searches the clustered index record for a row, if we have the row
  reference.
@@ -232,12 +233,11 @@ static inline void row_build_row_ref_fast(dtuple_t *ref, const ulint *map,
 /** Fetches the clustered index record for a secondary index record. The latches
  on the secondary index record are preserved.
  @return record or NULL, if no record found */
-[[nodiscard]] rec_t *row_get_clust_rec(
+[[nodiscard]] reg_t row_get_clust_rec(
     ulint mode,                 /*!< in: BTR_MODIFY_LEAF, ... */
-    const rec_t *rec,           /*!< in: record in a secondary index */
+    const Slice *slc,           /*!< in: record in a secondary index */
     const dict_index_t *index,  /*!< in: secondary index */
     dict_index_t **clust_index, /*!< out: clustered index */
-    const ulint *offsets,       /*!< in: rec_get_offsets(rec, index) */
     mtr_t *mtr);                /*!< in: mtr */
 
 /** Parse the integer data from specified data, which could be
@@ -549,6 +549,8 @@ class Multi_value_entry_builder_insert : public Multi_value_entry_builder {
   }
 };
 
+#ifndef INNODB_ROW0ROW_IC_STANDALONE
 #include "row0row.ic"
+#endif /* !INNODB_ROW0ROW_IC_STANDALONE */
 
 #endif

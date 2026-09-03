@@ -71,7 +71,7 @@
 #include "sql/window_lex.h"
 #include "thr_lock.h"
 
-#include "sql/lizard/lizard_snapshot.h"
+#include "sql/transaction/komodo0snapshot.h"
 
 class Item;
 class Item_cache;
@@ -433,14 +433,14 @@ class PT_table_factor_table_ident : public PT_table_reference {
   List<String> *opt_use_partition;
   const char *const opt_table_alias;
   List<Index_hint> *opt_key_definition;
-  lizard::Snapshot_hint *opt_snapshot_hint{nullptr};
+  komodo::Snapshot_hint *opt_snapshot_hint{nullptr};
 
  public:
   PT_table_factor_table_ident(Table_ident *table_ident_arg,
                               List<String> *opt_use_partition_arg,
                               const LEX_CSTRING &opt_table_alias_arg,
                               List<Index_hint> *opt_key_definition_arg,
-                              lizard::Snapshot_hint *opt_snapshot_hint_arg)
+                              komodo::Snapshot_hint *opt_snapshot_hint_arg)
       : table_ident(table_ident_arg),
         opt_use_partition(opt_use_partition_arg),
         opt_table_alias(opt_table_alias_arg.str),
@@ -2205,6 +2205,12 @@ typedef PT_index_option<LEX_CSTRING, &KEY_CREATE_INFO::comment>
 typedef PT_index_option<LEX_CSTRING, &KEY_CREATE_INFO::parser_name>
     PT_fulltext_index_parser_name;
 typedef PT_index_option<bool, &KEY_CREATE_INFO::is_visible> PT_index_visibility;
+
+typedef PT_index_option<uint, &KEY_CREATE_INFO::vector_m> PT_index_vector_m;
+typedef PT_index_option<uint, &KEY_CREATE_INFO::vector_distance>
+    PT_index_vector_distance;
+typedef PT_index_option<uint, &KEY_CREATE_INFO::vector_ef_construction>
+    PT_index_vector_ef_construction;
 
 /**
   The data structure (B-tree, Hash, etc) used for an index is called

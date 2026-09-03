@@ -1,0 +1,93 @@
+####################################################################
+# Fail-closed contract of the worker load-channel binding.         #
+#                                                                  #
+# Every running DDL build worker must own a load channel; a        #
+# binding failure inside the worker (internal THD allocation --    #
+# an OOM-grade event) may not degrade silently.  The injection     #
+# makes every worker's create_internal_thd() fail: the worker      #
+# sets the sticky pool error and claims no tasks, the leader's     #
+# join sees the error and the whole ALTER fails, leaving no        #
+# half-built index behind.                                         #
+#                                                                  #
+# The bind injection is installed globally on purpose: build       #
+# workers are plain threads created by the ALTER, and a fresh      #
+# thread's DBUG stack starts from the global initial settings --   #
+# a SESSION keyword lives on the DDL connection's own stack only   #
+# and would never reach ddl_worker_bind_graph().                   #
+#                                                                  #
+# Red/green in one file: with the binding injection the ALTER must #
+# error out and count exactly one build error; without it the same #
+# ALTER succeeds and the index answers ANN probes. A separate      #
+# leader-side open injection verifies an optional channel          #
+# shortfall neither aborts the ALTER nor leaks its temporary error. #
+####################################################################
+--source include/have_debug.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/count_sessions.inc
+
+--disable_query_log
+CREATE DATABASE vidx_ddl_worker_bind_fail;
+USE vidx_ddl_worker_bind_fail;
+SET GLOBAL vidx_disabled = OFF;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(8)
+) ENGINE = InnoDB;
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 200;
+INSERT INTO t1(id, v)
+  WITH RECURSIVE seq(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 96
+  )
+  SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',3', 7), ']'))
+  FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+--enable_query_log
+
+let $err0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+
+SET @save_debug = @@GLOBAL.debug;
+SET GLOBAL debug = '+d,vidx_ddl_worker_bind_fail';
+--replace_regex /#sql-[0-9a-f_]+/#sql-TEMP/
+--error 7600
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SET GLOBAL debug = @save_debug;
+
+let $err1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_error_count', Value, 1);
+if (`SELECT $err1 - $err0 != 1`) {
+  --echo FATAL: bind failure moved the build error counter $err0 -> $err1
+  --die a failed direct-build ALTER must count exactly once at the choke point
+}
+--echo VERDICT 1 injected bind failure fails the ALTER: PASS
+
+# No injection: the identical ALTER succeeds and the index is usable.
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT COUNT(*) AS probe_rows FROM (
+  SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[5,3,3,3,3,3,3,3]')) LIMIT 3
+) p;
+--echo VERDICT 2 clean rebuild after failure: PASS
+
+# Opening extra worker channels is best-effort. Keep the first channel,
+# inject a resource failure for the next one, and verify the leader finishes
+# with reduced parallelism and a clean statement diagnostics area.
+ALTER TABLE t1 DROP INDEX vi;
+SET SESSION debug = '+d,vidx_ddl_worker_open_shortfall';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT @@warning_count AS warnings;
+SET SESSION debug = '-d,vidx_ddl_worker_open_shortfall';
+SELECT COUNT(*) AS probe_rows FROM (
+  SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[5,3,3,3,3,3,3,3]')) LIMIT 3
+) p;
+--echo VERDICT 3 optional worker open failure degrades cleanly: PASS
+
+--disable_query_log
+DROP DATABASE vidx_ddl_worker_bind_fail;
+SET SESSION vidx_ddl_threads = DEFAULT;
+SET GLOBAL vidx_disabled = DEFAULT;
+--enable_query_log
+--source include/wait_until_count_sessions.inc

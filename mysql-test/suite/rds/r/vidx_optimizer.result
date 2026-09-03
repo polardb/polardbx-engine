@@ -1,0 +1,774 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2;
+########################################
+# Preparation: create tables with data #
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b VARCHAR(32),
+v VECTOR(5),
+INDEX idx_a(a),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+t1_id INT NOT NULL,
+status VARCHAR(16),
+INDEX idx_t1id(t1_id),
+INDEX idx_status(status)
+) ENGINE = InnoDB;
+# Insert 100 rows into t1
+# Insert 200 rows into t2 (some matching, some not)
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+
+########################################
+# Baseline: simple vector index query  #
+########################################
+# Expect: type=index (vector index scan)
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 1: Derived table (materialized)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Expect: NO vector index (derived table
+# is materialized, no vector index on it)
+########################################
+EXPLAIN SELECT * FROM (SELECT id, a, v FROM t1 WHERE a > 3) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	vi	23	NULL	100	60.00	Using where; Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > 3) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM (SELECT id, a, v FROM t1 WHERE a > 3) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 2: Derived table (merged)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Expect: vector index USED (derived is
+# merged into outer query, base table)
+########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM (SELECT * FROM t1) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 3: CTE (materialized)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Force materialization with DISTINCT
+# Expect: NO vector index
+########################################
+EXPLAIN WITH cte AS (SELECT DISTINCT id, a, v FROM t1 WHERE a > 3)
+SELECT * FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	60	100.00	Using filesort
+2	DERIVED	t1	NULL	ALL	idx_a	NULL	NULL	NULL	100	60.00	Using where
+Warnings:
+Note	1003	with `cte` as (/* select#2 */ select distinct `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > 3)) /* select#1 */ select `cte`.`id` AS `id`,`cte`.`a` AS `a`,`cte`.`v` AS `v` from `cte` order by VEC_DISTANCE_EUCLIDEAN(`cte`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+WITH cte AS (SELECT DISTINCT id, a, v FROM t1 WHERE a > 3)
+SELECT id FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 4: CTE (merged/simple)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Expect: vector index USED if merged
+########################################
+EXPLAIN WITH cte AS (SELECT * FROM t1)
+SELECT * FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+WITH cte AS (SELECT * FROM t1)
+SELECT id FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 5: UNION ALL
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Expect: NO vector index (UNION creates
+# a temp table for results)
+########################################
+EXPLAIN (SELECT id, v FROM t1 WHERE a <= 5
+UNION ALL
+SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	idx_a	NULL	NULL	NULL	100	60.00	Using where
+2	UNION	t1	NULL	ALL	idx_a	NULL	NULL	NULL	100	40.00	Using where
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` <= 5) union all /* select#2 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > 5) order by VEC_DISTANCE_EUCLIDEAN(`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+(SELECT id, v FROM t1 WHERE a <= 5
+UNION ALL
+SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 6: UNION DISTINCT
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Expect: NO vector index
+########################################
+EXPLAIN (SELECT id, v FROM t1 WHERE a <= 5
+UNION DISTINCT
+SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	ALL	idx_a	NULL	NULL	NULL	100	60.00	Using where
+2	UNION	t1	NULL	ALL	idx_a	NULL	NULL	NULL	100	40.00	Using where
+3	UNION RESULT	<union1,2>	NULL	ALL	NULL	NULL	NULL	NULL	NULL	NULL	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` <= 5) union /* select#2 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > 5) order by VEC_DISTANCE_EUCLIDEAN(`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+(SELECT id, v FROM t1 WHERE a <= 5
+UNION DISTINCT
+SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 7: GROUP BY + ORDER BY
+# VEC_DISTANCE + LIMIT
+# Expect: NO vector index (GROUP BY
+# takes precedence, needs tmp table)
+########################################
+EXPLAIN SELECT a, COUNT(*) AS cnt, MIN(v) AS mv FROM t1
+GROUP BY a ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	idx_a	4	NULL	100	100.00	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,count(0) AS `cnt`,min(`test`.`t1`.`v`) AS `mv` from `test`.`t1` group by `test`.`t1`.`a` order by VEC_DISTANCE_EUCLIDEAN(`mv`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 8: DISTINCT + ORDER BY
+# VEC_DISTANCE + LIMIT
+# Key risk: DISTINCT may need tmp table,
+# verify vector index NOT incorrectly
+# selected or result stays correct
+########################################
+EXPLAIN SELECT DISTINCT id, a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# Correctness check: compare with non-DISTINCT baseline
+SELECT DISTINCT id, a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 9: SELECT DISTINCT on
+# non-PK column + ORDER BY VEC_DISTANCE
+# This triggers error because ORDER BY
+# expression not in DISTINCT select list
+########################################
+SELECT DISTINCT a FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+ERROR HY000: Expression #1 of ORDER BY clause is not in SELECT list, references column 'test.t1.v' which is not in SELECT list; this is incompatible with DISTINCT
+# BUG-FIXED: DISTINCT on non-unique columns + ORDER BY VEC_DISTANCE
+# previously crashed due to test_if_cheaper_vector_ordering()
+# modifying plan when no_changes=true in Plan_change_watchdog.
+# Fixed by adding no_changes parameter to skip plan modification
+# in probe mode.
+EXPLAIN SELECT DISTINCT a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN); Using temporary
+Warnings:
+Note	1003	/* select#1 */ select distinct `test`.`t1`.`a` AS `a`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT DISTINCT a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 10: INNER JOIN + ORDER BY
+# VEC_DISTANCE + LIMIT
+# Verify: multi-table simple_order check
+########################################
+EXPLAIN SELECT t1.id, t1.a, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	t2	NULL	ref	idx_t1id	idx_t1id	4	test.t1.id	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t2`.`status` AS `status` from `test`.`t1` join `test`.`t2` where (`test`.`t2`.`t1_id` = `test`.`t1`.`id`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 11: LEFT JOIN + ORDER BY
+# VEC_DISTANCE + LIMIT
+# Expect: simple_order=false due to
+# LEFT JOIN condition
+########################################
+EXPLAIN SELECT t1.id, t1.a, t2.status FROM t1
+LEFT JOIN t2 ON t1.id = t2.t1_id AND t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	t2	NULL	ref	idx_t1id,idx_status	idx_t1id	4	test.t1.id	2	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t2`.`status` AS `status` from `test`.`t1` left join `test`.`t2` on(((`test`.`t2`.`status` = 'active') and (`test`.`t2`.`t1_id` = `test`.`t1`.`id`))) where true order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT t1.id, t2.status FROM t1
+LEFT JOIN t2 ON t1.id = t2.t1_id AND t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 12: JOIN with WHERE filter
+# on second table + ORDER BY VEC_DISTANCE
+# Risk: vector index limit may be too
+# small after JOIN filter
+########################################
+EXPLAIN SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	t2	NULL	ref	idx_t1id,idx_status	idx_t1id	4	test.t1.id	2	50.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t2`.`status` AS `status` from `test`.`t1` join `test`.`t2` where ((`test`.`t2`.`t1_id` = `test`.`t1`.`id`) and (`test`.`t2`.`status` = 'active')) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 13: Subquery in WHERE (IN)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# May trigger semi-join transformation
+########################################
+EXPLAIN SELECT * FROM t1
+WHERE id IN (SELECT t1_id FROM t2 WHERE status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	4	test.t1.id	1	100.00	NULL
+2	MATERIALIZED	t2	NULL	ref	idx_t1id,idx_status	idx_status	67	const	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` semi join (`test`.`t2`) where ((`<subquery2>`.`t1_id` = `test`.`t1`.`id`) and (`test`.`t2`.`status` = 'active')) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1
+WHERE id IN (SELECT t1_id FROM t2 WHERE status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 14: Subquery in WHERE (EXISTS)
+# + ORDER BY VEC_DISTANCE + LIMIT
+########################################
+EXPLAIN SELECT * FROM t1
+WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.t1_id = t1.id AND t2.status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	4	test.t1.id	1	100.00	NULL
+2	MATERIALIZED	t2	NULL	ref	idx_t1id,idx_status	idx_status	67	const	100	100.00	NULL
+Warnings:
+Note	1276	Field or reference 'test.t1.id' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` semi join (`test`.`t2`) where ((`<subquery2>`.`t1_id` = `test`.`t1`.`id`) and (`test`.`t2`.`status` = 'active')) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1
+WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.t1_id = t1.id AND t2.status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 15: Subquery in WHERE (NOT IN)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Anti-join pattern
+########################################
+EXPLAIN SELECT * FROM t1
+WHERE id NOT IN (SELECT t1_id FROM t2 WHERE status = 'inactive')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	<subquery2>	NULL	eq_ref	<auto_distinct_key>	<auto_distinct_key>	5	test.t1.id	1	100.00	Using where; Not exists
+2	MATERIALIZED	t2	NULL	ref	idx_t1id,idx_status	idx_status	67	const	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` anti join (`test`.`t2`) on(((`<subquery2>`.`t1_id` = `test`.`t1`.`id`) and (`test`.`t2`.`status` = 'inactive'))) where true order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1
+WHERE id NOT IN (SELECT t1_id FROM t2 WHERE status = 'inactive')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 16: Scalar subquery in SELECT
+# + ORDER BY VEC_DISTANCE + LIMIT
+########################################
+EXPLAIN SELECT id, a, (SELECT COUNT(*) FROM t2 WHERE t2.t1_id = t1.id) AS t2_cnt
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+2	DEPENDENT SUBQUERY	t2	NULL	ref	idx_t1id	idx_t1id	4	test.t1.id	2	100.00	Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.id' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,(/* select#2 */ select count(0) from `test`.`t2` where (`test`.`t2`.`t1_id` = `test`.`t1`.`id`)) AS `t2_cnt` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id, (SELECT COUNT(*) FROM t2 WHERE t2.t1_id = t1.id) AS t2_cnt
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 17: Window function (simple)
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Risk: window may need sorting, may
+# conflict with vector index ordering
+########################################
+EXPLAIN SELECT id, a, ROW_NUMBER() OVER (ORDER BY id) AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,row_number() OVER (ORDER BY `test`.`t1`.`id` )  AS `rn` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 18: Window function without
+# ORDER BY in OVER clause
+########################################
+EXPLAIN SELECT id, a, ROW_NUMBER() OVER () AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	3598	To get information about window functions use EXPLAIN FORMAT=JSON
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,row_number() OVER ()  AS `rn` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id, ROW_NUMBER() OVER () AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 19: SQL_BUFFER_RESULT
+# + ORDER BY VEC_DISTANCE + LIMIT
+# Risk: forces tmp table before result,
+# may destroy vector index ordering
+########################################
+EXPLAIN SELECT SQL_BUFFER_RESULT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN); Using temporary
+Warnings:
+Note	1003	/* select#1 */ select sql_buffer_result `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT SQL_BUFFER_RESULT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 20: ORDER BY VEC_DISTANCE
+# with no LIMIT (should NOT use vidx)
+########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]'))
+
+########################################
+# Scenario 21: ORDER BY VEC_DISTANCE
+# DESC (should NOT use vidx, only ASC)
+########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) DESC LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) desc limit 5
+
+########################################
+# Scenario 22: Multiple ORDER BY columns
+# (VEC_DISTANCE + another column)
+# Should NOT use vidx (multi-col ORDER)
+########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")), id LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')),`test`.`t1`.`id` limit 5
+
+########################################
+# Scenario 23: Nested derived tables
+# Verify deep nesting doesn't crash
+########################################
+EXPLAIN SELECT * FROM (
+SELECT * FROM (
+SELECT id, v FROM t1 WHERE a > 5
+) AS inner_d
+) AS outer_d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(outer_d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	vi	23	NULL	100	40.00	Using where; Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > 5) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM (
+SELECT * FROM (
+SELECT id, v FROM t1 WHERE a > 5
+) AS inner_d
+) AS outer_d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(outer_d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 24: VIEW + ORDER BY VEC_DIST
+# Views are typically merged, so vector
+# index should be usable
+########################################
+CREATE VIEW v1 AS SELECT * FROM t1;
+EXPLAIN SELECT * FROM v1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM v1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+DROP VIEW v1;
+
+########################################
+# Scenario 25: VIEW with GROUP BY
+# (forces materialization)
+########################################
+CREATE VIEW v2 AS SELECT a, COUNT(*) AS cnt, MIN(v) AS mv FROM t1 GROUP BY a;
+EXPLAIN SELECT * FROM v2
+ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+2	DERIVED	t1	NULL	index	idx_a	idx_a	4	NULL	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`v2`.`a` AS `a`,`test`.`v2`.`cnt` AS `cnt`,`test`.`v2`.`mv` AS `mv` from `test`.`v2` order by VEC_DISTANCE_EUCLIDEAN(`test`.`v2`.`mv`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT a, cnt FROM v2
+ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+DROP VIEW v2;
+
+########################################
+# Scenario 26: Derived table with LIMIT
+# (prevents merge, forces materialization)
+########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1 LIMIT 50) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	50	100.00	Using filesort
+2	DERIVED	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `d`.`id` AS `id`,`d`.`a` AS `a`,`d`.`b` AS `b`,`d`.`v` AS `v` from (/* select#2 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` limit 50) `d` order by VEC_DISTANCE_EUCLIDEAN(`d`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM (SELECT * FROM t1 LIMIT 50) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 27: CTE referenced multiple
+# times (forces materialization)
+########################################
+EXPLAIN WITH cte AS (SELECT * FROM t1)
+SELECT c1.id FROM cte c1 JOIN cte c2 ON c1.id = c2.id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(c1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	PRIMARY	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+1	SIMPLE	t1	NULL	eq_ref	PRIMARY	PRIMARY	4	test.t1.id	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id` from `test`.`t1` join `test`.`t1` where (`test`.`t1`.`id` = `test`.`t1`.`id`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+WITH cte AS (SELECT * FROM t1)
+SELECT c1.id FROM cte c1 JOIN cte c2 ON c1.id = c2.id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(c1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 28: HAVING clause + ORDER BY
+# VEC_DISTANCE + LIMIT
+########################################
+EXPLAIN SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a HAVING cnt > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	idx_a	4	NULL	100	100.00	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,count(0) AS `cnt` from `test`.`t1` group by `test`.`t1`.`a` having (`cnt` > 5) order by VEC_DISTANCE_EUCLIDEAN(min(`test`.`t1`.`v`),VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 3
+SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a HAVING cnt > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+
+########################################
+# Scenario 29: ROLLUP + ORDER BY
+# VEC_DISTANCE + LIMIT
+########################################
+EXPLAIN SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a WITH ROLLUP
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	idx_a	4	NULL	100	100.00	Using temporary; Using filesort
+Warnings:
+Note	1003	/* select#1 */ select rollup_group_item(`test`.`t1`.`a`,0) AS `a`,rollup_sum_switcher(count(0)) AS `cnt` from `test`.`t1` group by `test`.`t1`.`a` with rollup order by VEC_DISTANCE_EUCLIDEAN(rollup_sum_switcher(min(`test`.`t1`.`v`)),VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 3
+
+########################################
+# Scenario 30: LIMIT 0 edge case
+########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Zero limit
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 0
+SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 0;
+id	a	b	v
+
+########################################
+# Scenario 31: FORCE INDEX + derived
+# table (should not crash)
+########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1 FORCE INDEX(vi)) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM (SELECT * FROM t1 FORCE INDEX(vi)) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 32: Correlated subquery in
+# WHERE + ORDER BY VEC_DISTANCE + LIMIT
+########################################
+EXPLAIN SELECT * FROM t1
+WHERE a > (SELECT AVG(t2.t1_id) FROM t2 WHERE t2.t1_id = t1.id)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using where; Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+2	DEPENDENT SUBQUERY	t2	NULL	ref	idx_t1id	idx_t1id	4	test.t1.id	2	100.00	Using index
+Warnings:
+Note	1276	Field or reference 'test.t1.id' of SELECT #2 was resolved in SELECT #1
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` where (`test`.`t1`.`a` > (/* select#2 */ select avg(`test`.`t2`.`t1_id`) from `test`.`t2` where (`test`.`t2`.`t1_id` = `test`.`t1`.`id`))) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1
+WHERE a > (SELECT AVG(t2.t1_id) FROM t2 WHERE t2.t1_id = t1.id)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Scenario 33: Multi-table DELETE with
+# ORDER BY VEC_DISTANCE (syntax check)
+########################################
+EXPLAIN DELETE t1 FROM t1 INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'inactive'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+########################################
+# Correctness Verification Section     #
+# Compare vector index results with    #
+# filesort results                     #
+########################################
+# Get baseline ordering using filesort (no vector index)
+# by using a LIMIT larger than rows/SCAN_COST threshold
+
+# Correctness test: VEC_DISTANCE values should be monotonically increasing
+SELECT id, VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 10;
+
+########################################
+# Scenario 34: FORCE INDEX for vector  #
+# index (explicit hint to use vidx)    #
+# Expect: vector index USED even when  #
+# LIMIT is large / missing             #
+########################################
+# 34a: FORCE INDEX(vi) + normal LIMIT
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+# 34b: FORCE INDEX(vi) + no LIMIT (should still use vidx)
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=100; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]'))
+# 34c: FORCE INDEX(vi) + large LIMIT exceeding row count
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 99999;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=100; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 99999
+# 34d: FORCE INDEX(vi) + WHERE filter
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+WHERE a > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	idx_a	vi	23	NULL	100	40.00	Using where; Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX FOR ORDER BY (`vi`) where (`test`.`t1`.`a` > 5) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+
+########################################
+# Scenario 35: IGNORE INDEX for vector #
+# index (explicit hint to NOT use vidx)#
+# Expect: vector index NOT used, uses  #
+# filesort instead                     #
+########################################
+# 35a: IGNORE INDEX(vi) + LIMIT (should NOT use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` IGNORE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+# 35b: IGNORE INDEX(vi) + small LIMIT (normally would use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` IGNORE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 1
+
+########################################
+# Scenario 36: FORCE INDEX for non-    #
+# vector index + ORDER BY VEC_DISTANCE #
+# Expect: vidx NOT used (forced to use #
+# a different index for ORDER BY)      #
+########################################
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (idx_a)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX FOR ORDER BY (`idx_a`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+
+########################################
+# Scenario 37: USE INDEX for vector    #
+# index + ORDER BY VEC_DISTANCE        #
+# Expect: vector index preferred       #
+########################################
+EXPLAIN SELECT * FROM t1 USE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` USE INDEX FOR ORDER BY (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 37b: USE INDEX for ORDER BY empty (no indexes for ORDER BY)
+EXPLAIN SELECT * FROM t1 USE INDEX FOR ORDER BY ()
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` USE INDEX FOR ORDER BY () order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+
+########################################
+# Scenario 38: bare FORCE INDEX(vi)    #
+# (without FOR ORDER BY qualifier)     #
+# Affects JOIN + ORDER BY + GROUP BY.  #
+# Expect: vector index USED for ORDER  #
+########################################
+# 38a: FORCE INDEX(vi) + LIMIT
+EXPLAIN SELECT * FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+# 38b: FORCE INDEX(vi) + no LIMIT (forced, should still use vidx)
+EXPLAIN SELECT * FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=100; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]'))
+
+########################################
+# Scenario 39: bare IGNORE INDEX(vi)   #
+# (without FOR ORDER BY qualifier)     #
+# Affects JOIN + ORDER BY + GROUP BY.  #
+# Expect: vector index NOT used        #
+########################################
+# 39a: IGNORE INDEX(vi) + LIMIT (should use filesort)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` IGNORE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 39b: IGNORE INDEX(vi) + small LIMIT (normally would use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b`,`test`.`t1`.`v` AS `v` from `test`.`t1` IGNORE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 1
+
+########################################
+# Scenario 40: Multi-index optimizer   #
+# selection per ORDER BY column        #
+########################################
+CREATE TABLE t_mi (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(5),
+v2 VECTOR(5),
+VECTOR INDEX vi1(v1),
+VECTOR INDEX vi2(v2) DISTANCE=cosine
+) ENGINE=InnoDB;
+ANALYZE TABLE t_mi;
+Table	Op	Msg_type	Msg_text
+test.t_mi	analyze	status	OK
+# 40a. Auto-select vi1 for v1 ORDER BY
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	vi1	23	NULL	30	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 40b. Auto-select vi2 for v2 ORDER BY
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	vi2	23	NULL	30	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=COSINE)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` order by VEC_DISTANCE_COSINE(`test`.`t_mi`.`v2`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 40c. FORCE INDEX(vi1) for v1
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (vi1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	vi1	23	NULL	30	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` FORCE INDEX FOR ORDER BY (`vi1`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 40d. FORCE INDEX(vi2) for v2
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (vi2)
+ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	vi2	23	NULL	30	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=COSINE)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` FORCE INDEX FOR ORDER BY (`vi2`) order by VEC_DISTANCE_COSINE(`test`.`t_mi`.`v2`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 40e. IGNORE INDEX(vi1) → v1 query uses filesort
+EXPLAIN SELECT * FROM t_mi IGNORE INDEX FOR ORDER BY (vi1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	ALL	NULL	NULL	NULL	NULL	30	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` IGNORE INDEX FOR ORDER BY (`vi1`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 40f. Correctness: both indexes return valid results
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 3;
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 3;
+DROP TABLE t_mi;
+
+########################################
+# Cleanup                              #
+########################################
+DROP TABLE t2;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

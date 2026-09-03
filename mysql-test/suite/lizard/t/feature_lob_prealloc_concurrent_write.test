@@ -1,0 +1,173 @@
+# Write BLOBs concurrently when LOB prealloc is enabled
+
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+--echo ####################################################################################
+--echo # 1. prepare
+--echo ####################################################################################
+
+set @old_innodb_lob_prealloc = @@innodb_lob_prealloc;
+SET global innodb_lob_prealloc = on;
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--let $connections = 16
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connect (con$i,localhost,root,,)
+  --inc $i
+}
+
+CREATE TABLE `t1` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `data` mediumblob NOT NULL,
+  PRIMARY KEY (`id`)
+) ;
+
+DELIMITER |;
+
+CREATE PROCEDURE InsertData()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE loop_count INT DEFAULT 10;
+
+    WHILE i <= loop_count DO
+        START TRANSACTION;
+        INSERT INTO t1 (id, data) VALUES (0, REPEAT('1', 16384));
+        COMMIT;
+
+        SET i = i + 1;
+    END WHILE;
+END |
+
+CREATE PROCEDURE UpdateData()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE loop_count INT DEFAULT 160;
+
+    WHILE i <= loop_count DO
+        START TRANSACTION;
+        UPDATE t1 set data = repeat(md5(rand()),512 ) where id = i;
+        COMMIT;
+
+        SET i = i + 1;
+    END WHILE;
+END |
+
+CREATE PROCEDURE InsertAndUpdateData()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE loop_count INT DEFAULT 10;
+
+    WHILE i <= loop_count DO
+        START TRANSACTION;
+        INSERT INTO t1 (id, data) VALUES (0, REPEAT('1', 16384));
+        UPDATE t1 set data = repeat(md5(rand()),512 ) where id = i;
+        COMMIT;
+
+        SET i = i + 1;
+    END WHILE;
+END |
+
+DELIMITER ;|
+
+--echo ####################################################################################
+--echo # 2. concurrently insert
+--echo ####################################################################################
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --send call InsertData()
+  --inc $i
+}
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --reap
+  --inc $i
+}
+
+# check data
+select count(*) from t1;
+select count(*) from t1 where data = REPEAT('1', 16384);
+check table t1;
+
+--echo ####################################################################################
+--echo # 3. concurrently update
+--echo ####################################################################################
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --send call UpdateData()
+  --inc $i
+}
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --reap
+  --inc $i
+}
+
+# check data
+select count(*) from t1;
+select count(*) from t1 where data = REPEAT('1', 16384);
+check table t1;
+
+--echo ####################################################################################
+--echo # 4. concurrently insert and update
+--echo ####################################################################################
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --send call InsertAndUpdateData()
+  --inc $i
+}
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --connection con$i
+  --reap
+  --inc $i
+}
+
+# check data
+select count(*) from t1;
+select count(*) from t1 where data = REPEAT('1', 16384);
+check table t1;
+
+--echo ####################################################################################
+--echo # 5. cleanup
+--echo ####################################################################################
+
+connection default;
+
+set global innodb_lob_prealloc = @old_innodb_lob_prealloc;
+
+--let $i= 1
+while ($i <= $connections)
+{
+  --disconnect con$i
+  --inc $i
+}
+
+drop table t1;
+
+drop PROCEDURE InsertData;
+drop PROCEDURE UpdateData;
+drop PROCEDURE InsertAndUpdateData;

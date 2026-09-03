@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "api0api.h"
 #include "api0misc.h"
@@ -61,6 +62,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0vers.h"
 #include "srv0start.h"
 #include "trx0roll.h"
+
+#include "lizard0mem0mem.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 /** configure variable for binlog option with InnoDB APIs */
 bool ib_binlog_enabled = false;
@@ -256,7 +261,7 @@ static inline void ib_wake_master_thread(void) {
 
 /** Read the columns from a rec into a tuple. */
 static ib_err_t ib_read_tuple(
-    const rec_t *rec,      /*!< in: Record to read */
+    const Slice *slc,      /*!< in: Record to read */
     bool page_format,      /*!< in: true if compressed format */
     ib_tuple_t *tuple,     /*!< in: tuple to read into */
     ib_tuple_t *cmp_tuple, /*!< in: tuple to compare and stop
@@ -268,32 +273,29 @@ static ib_err_t ib_read_tuple(
     ulint *used_len)       /*!< in/out: used buf len */
 {
   ulint i;
-  void *ptr;
-  rec_t *copy;
+  boc_t boc;
+  DSlice *copy = nullptr;
+  DSlice_ctx dsctx;
   ulint rec_meta_data;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
   dtuple_t *dtuple = tuple->ptr;
   const dict_index_t *index = tuple->index;
   ulint offset_size;
   byte *next_ptr;
   int cmp;
   ulint match = 0;
+  ut_ad(slc->is_positioned(index));
+  /** Only for sdi index currently. */
+  ut_ad(slc->contiguous());
 
-  rec_offs_init(offsets_);
-
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &tuple->heap);
-
-  rec_meta_data = rec_get_info_bits(rec, page_format);
+  rec_meta_data = rec_get_info_bits(slc->reg().rec, page_format);
   dtuple_set_info_bits(dtuple, rec_meta_data);
 
-  offset_size = rec_offs_size(offsets);
+  offset_size = slc->row_size();
 
   if (cmp_tuple && mode) {
     /* This is a case of "read up to" certain value. Used for
     index scan for "<" or "<=" case */
-    cmp = cmp_tuple->ptr->compare(rec, index, offsets, &match);
+    cmp = cmp_tuple->ptr->compare(index, slc, &match);
 
     if ((mode == IB_CUR_LE && cmp < 0) || (mode == IB_CUR_L && cmp <= 0)) {
       return (DB_END_OF_INDEX);
@@ -323,7 +325,8 @@ static ib_err_t ib_read_tuple(
       *used_len = 0;
     }
 
-    ptr = ((byte *)rec_buf + *used_len);
+    boc.buf = ((byte *)rec_buf + *used_len);
+    boc.loc = MLOC_IN_HEAP;
 
     next_ptr = static_cast<byte *>(
         ut_align((byte *)(rec_buf) + *used_len + offset_size + 8, 8));
@@ -331,16 +334,16 @@ static ib_err_t ib_read_tuple(
     *used_len = next_ptr - (byte *)(rec_buf);
   } else {
     /* Make a copy of the rec. */
-    ptr = mem_heap_alloc(tuple->heap, offset_size);
+    boc = mem_heap_alloc_boc(tuple->heap, offset_size);
   }
 
-  copy = rec_copy(ptr, rec, offsets);
+  copy = row_copy(boc, slc, &dsctx);
 
   /* DB_ROW_ID is added in dict_table_t unconditionally but is used only if PK
   isn't there. dtuple is made from the dict_table_t so it will also have it but
   record might not if PK is there. */
   size_t n_index_fields =
-      std::min(rec_offs_n_fields(offsets), dtuple_get_n_fields(dtuple));
+      std::min(rec_offs_n_fields(copy->offsets()), dtuple_get_n_fields(dtuple));
 
   /* If table has INSTANT DROP columns, then offsets would have count for these
   columns as well, where as logical record won't have them. */
@@ -367,17 +370,17 @@ static ib_err_t ib_read_tuple(
       dfield = dtuple_get_nth_field(dtuple, i);
     }
 
-    data = rec_get_nth_field_instant(copy, offsets, i, index, &len);
+    data = copy->get_nth_field_instant(index, i, &len);
 
     /* Fetch and copy any externally stored column. */
-    if (rec_offs_nth_extern(index, offsets, i)) {
+    if (rec_offs_nth_extern(index, copy->offsets(), i)) {
       const page_size_t page_size(dict_table_page_size(index->table));
 
       /* Passing nullptr to the transaction object.  This
       means that partial update of LOB is not supported
       via this interface.*/
       data = lob::btr_rec_copy_externally_stored_field(
-          nullptr, index, copy, offsets, page_size, i, &len, nullptr,
+          nullptr, index, copy, page_size, i, &len, nullptr,
           dict_index_is_sdi(index), tuple->heap);
 
       ut_a(len != UNIV_SQL_NULL);
@@ -707,7 +710,7 @@ static ib_err_t ib_create_cursor(ib_crsr_t *ib_crsr,  /*!< out: InnoDB cursor */
   mem_heap_t *heap;
   ib_cursor_t *cursor;
   ib_err_t err = DB_SUCCESS;
-  const lizard::Snapshot_vision *snapshot_vision = nullptr;
+  const komodo::Snapshot_vision *snapshot_vision = nullptr;
 
   // passing non-null might mean a memleak of old cursor
   ut_ad(*ib_crsr == nullptr);
@@ -1470,7 +1473,7 @@ ib_err_t ib_cursor_update_row(
 static ib_err_t ib_delete_row(
     ib_cursor_t *cursor, /*!< in: current cursor */
     btr_pcur_t *pcur,    /*!< in: Btree persistent cursor */
-    const rec_t *rec)    /*!< in: record to delete */
+    const DSlice *dslc)  /*!< in: record to delete */
 {
   ulint i;
   upd_t *upd;
@@ -1495,7 +1498,8 @@ static ib_err_t ib_delete_row(
 
   bool page_format = dict_table_is_comp(index->table);
 
-  ib_read_tuple(rec, page_format, tuple, nullptr, 0, nullptr, nullptr, nullptr);
+  ib_read_tuple(dslc, page_format, tuple, nullptr, 0, nullptr, nullptr,
+                nullptr);
 
   upd->n_fields = ib_tuple_get_n_cols(ib_tpl);
 
@@ -1551,36 +1555,41 @@ ib_err_t ib_cursor_delete_row(
   }
 
   if (ib_btr_cursor_is_positioned(pcur)) {
-    const rec_t *rec;
+    creg_t reg;
     mtr_t mtr;
-    rec_t *copy = nullptr;
     byte ptr[UNIV_PAGE_SIZE_MAX];
+    boc_t boc = {ptr, MLOC_IN_HEAP};
+
+    /** SPC: Current api ib_cursor was only used by sdi index(cluster index), so
+     * define dslice directly. */
+    DSlice_ctx dsctx;
+    DSlice *copy = nullptr;
 
     bool page_format = dict_table_is_comp(index->table);
 
     mtr_start(&mtr);
 
     if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, UT_LOCATION_HERE)) {
-      mem_heap_t *heap = nullptr;
-      ulint offsets_[REC_OFFS_NORMAL_SIZE];
-      ulint *offsets = offsets_;
+      Slice_ctx sctx;
+      Slice *slc = nullptr;
 
-      rec_offs_init(offsets_);
-
-      rec = pcur->get_rec();
+      reg = pcur->get_reg();
 
       /* Since mtr will be committed, the rec
       will not be protected. Make a copy of
       the rec. */
-      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
-      ut_ad(rec_offs_size(offsets) < UNIV_PAGE_SIZE_MAX);
-      copy = rec_copy(ptr, rec, offsets);
+      slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
+      ut_ad(slc->row_size() < UNIV_PAGE_SIZE_MAX);
+
+      /** ib_xx only for sdi index currently. */
+      ut_a(slc->contiguous());
+
+      copy = row_copy(boc, slc, &dsctx);
     }
 
     mtr_commit(&mtr);
 
-    if (copy && !rec_get_deleted_flag(copy, page_format)) {
+    if (copy && !rec_get_deleted_flag(copy->reg().rec, page_format)) {
       err = ib_delete_row(cursor, pcur, copy);
     } else {
       err = DB_RECORD_NOT_FOUND;
@@ -1637,20 +1646,22 @@ ib_err_t ib_cursor_read_row(
     mtr_start(&mtr);
 
     if (pcur->restore_position(BTR_SEARCH_LEAF, &mtr, UT_LOCATION_HERE)) {
-      const rec_t *rec;
+      creg_t reg;
 
       bool page_format = dict_table_is_comp(tuple->index->table);
-      rec = pcur->get_rec();
+      reg = pcur->get_reg();
 
-      if (!rec_get_deleted_flag(rec, page_format)) {
-        if (prebuilt->innodb_api && prebuilt->innodb_api_rec != nullptr) {
-          rec = prebuilt->innodb_api_rec;
+      if (!rec_get_deleted_flag(reg.rec, page_format)) {
+        if (prebuilt->innodb_api && prebuilt->innodb_api_reg.is_not_null()) {
+          reg = prebuilt->innodb_api_reg;
         }
       }
 
-      if (!rec_get_deleted_flag(rec, page_format)) {
-        err = ib_read_tuple(rec, page_format, tuple, cmp_tuple, mode, row_buf,
-                            (ulint *)slot, (ulint *)used_len);
+      if (!rec_get_deleted_flag(reg.rec, page_format)) {
+        err = ib_read_tuple(
+            Slice_ctx().get_offsets(reg, tuple->index, ULINT_UNDEFINED),
+            page_format, tuple, cmp_tuple, mode, row_buf, (ulint *)slot,
+            (ulint *)used_len);
       } else {
         err = DB_RECORD_NOT_FOUND;
       }
@@ -1759,7 +1770,7 @@ ib_err_t ib_cursor_moveto(ib_crsr_t ib_crsr, /*!< in: InnoDB cursor instance */
 
   ut_a(prebuilt->select_lock_type <= LOCK_NUM);
 
-  prebuilt->innodb_api_rec = nullptr;
+  prebuilt->innodb_api_reg.reset();
 
   buf = static_cast<unsigned char *>(
       ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, UNIV_PAGE_SIZE));
@@ -3140,8 +3151,12 @@ ib_err_t ib_sdi_drop(space_id_t tablespace_id) {
   mtr.commit();
 
   mtr.start();
+  /* This path bypasses the DDL log entirely (no FREE_TREE_LOG record is
+  written, no post_ddl replay).  Keep ahi=true so the FSP-layer fallback
+  still scrubs AHI entries page-by-page in case any AHI was attached to
+  the SDI tree at the moment of the call. */
   btr_free_if_exists(page_id_t(tablespace_id, root_page_num), page_size,
-                     dict_sdi_get_index_id(), &mtr);
+                     dict_sdi_get_index_id(), /*ahi=*/true, &mtr);
   mtr.commit();
 
   /* Remove SDI Flag presence from Page 0 */

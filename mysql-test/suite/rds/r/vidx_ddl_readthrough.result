@@ -1,0 +1,7 @@
+Warnings:
+Warning	7599	Vector index build reached the soft graph-window threshold (vidx_hnsw_cache_size); continuing in bounded windows with on-demand node reloads. In-flight work may temporarily exceed the threshold
+VERDICT 1 multi-window build exercised: PASS
+VERDICT 2 historical nodes loaded: PASS
+VERDICT 3 only executor read-through loaded historical nodes: PASS
+VERDICT 4 live==600 across windows: PASS
+VERDICT 5 ANN self-probes across windows: PASS

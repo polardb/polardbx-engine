@@ -1,0 +1,34 @@
+--echo #
+--echo # Crash regression: encdb_elog built the final log message (which may
+--echo # embed user data containing '%', e.g. a rule name inside a failed SQL
+--echo # text) and then passed it to encdb_log_message as the FORMAT string.
+--echo # The second vsnprintf consumed nonexistent varargs for each '%s' and
+--echo # crashed mysqld with signal 11.
+--echo #
+
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+create user noAccess@'%' identified by '123456';
+grant all privileges on test.* to noAccess@'%';
+
+connect(conn_no_access, localhost, noAccess, 123456, test);
+
+--echo # The internal INSERT fails with error 1142 (no privilege on
+--echo # mysql.encdb_sensitive_rules) and its SQL text, carrying the '%s'
+--echo # rule name, goes through the encdb error-log path.  Before the fix
+--echo # this crashed the server instead of returning an error.
+--replace_regex /INSERT INTO mysql\.encdb_sensitive_rules.*$/<rule SQL>" with error code 1142"/
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('add', '{"name":"%s%s%s%s%s%s%s%s%s%s","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+
+connection default;
+--echo # Server must still be alive.
+select 1;
+
+--echo # A rule name containing '%' must also work on the success path.
+select encdb_rule_op('add', '{"name":"%s%s%s%s%s%s%s%s%s%s","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+select encdb_rule_op('delete', '"%s%s%s%s%s%s%s%s%s%s"');
+
+disconnect conn_no_access;
+drop user noAccess@'%';

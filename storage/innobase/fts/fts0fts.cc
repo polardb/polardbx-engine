@@ -40,8 +40,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fts0plugin.h"
 #include "fts0priv.h"
 #include "fts0types.h"
-#include "fts0types.ic"
-#include "fts0vlc.ic"
 #include "ha_prototypes.h"
 #include "lob0lob.h"
 
@@ -49,12 +47,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "dict0dd.h"
 #include "lob0lob.h"
+#include "rem0types.h"
 #include "row0mysql.h"
 #include "row0sel.h"
 #include "row0upd.h"
 #include "sync0sync.h"
 #include "trx0roll.h"
 #include "ut0new.h"
+
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 static const ulint FTS_MAX_ID_LEN = 32;
 
@@ -1802,7 +1804,7 @@ static dict_table_t *fts_create_in_mem_aux_table(const char *aux_table_name,
 static dict_table_t *fts_create_one_common_table(
     trx_t *trx, const dict_table_t *table, const char *fts_table_name,
     const char *fts_suffix, mem_heap_t *heap,
-    const lizard::Ha_table_hint *table_hint) {
+    const komodo::Dict_table_hint *table_hint) {
   dict_table_t *new_table = nullptr;
   dberr_t error;
   bool is_config = fts_suffix == FTS_SUFFIX_CONFIG;
@@ -1914,7 +1916,7 @@ CREATE TABLE $FTS_PREFIX_CONFIG
 @return DB_SUCCESS if succeed */
 dberr_t fts_create_common_tables(trx_t *trx, const dict_table_t *table,
                                  const char *name, bool skip_doc_id_index,
-                                 const lizard::Ha_table_hint *table_hint) {
+                                 const komodo::Dict_table_hint *table_hint) {
   dberr_t error;
   fts_table_t fts_table;
   char full_name[sizeof(fts_common_tables) / sizeof(char *)][MAX_FULL_NAME_LEN];
@@ -1982,7 +1984,7 @@ func_exit:
 @return DB_SUCCESS or error code */
 static dict_table_t *fts_create_one_index_table(
     trx_t *trx, const dict_index_t *index, fts_table_t *fts_table,
-    mem_heap_t *heap, const lizard::Ha_table_hint *table_hint) {
+    mem_heap_t *heap, const komodo::Dict_table_hint *table_hint) {
   dict_field_t *field;
   dict_table_t *new_table = nullptr;
   char table_name[MAX_FULL_NAME_LEN];
@@ -2274,7 +2276,7 @@ dberr_t fts_create_index_dd_tables(dict_table_t *table) {
 @return DB_SUCCESS or error code */
 dberr_t fts_create_index_tables_low(trx_t *trx, dict_index_t *index,
                                     const char *table_name, table_id_t table_id,
-                                    const lizard::Ha_table_hint *table_hint) {
+                                    const komodo::Dict_table_hint *table_hint) {
   ulint i;
   fts_table_t fts_table;
   dberr_t error = DB_SUCCESS;
@@ -2338,7 +2340,7 @@ CREATE TABLE $FTS_PREFIX_INDEX_[1-6](
 @param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 dberr_t fts_create_index_tables(trx_t *trx, dict_index_t *index,
-                                const lizard::Ha_table_hint *table_hint) {
+                                const komodo::Dict_table_hint *table_hint) {
   dberr_t err;
   dict_table_t *table;
 
@@ -3365,13 +3367,12 @@ static void fts_fetch_doc_from_rec(
     dict_index_t *clust_index, /*!< in: cluster index */
     btr_pcur_t *pcur,          /*!< in: cursor whose position
                                has been stored */
-    ulint *offsets,            /*!< in: offsets */
+    const Slice *slc,          /*!< in: offsets */
     fts_doc_t *doc)            /*!< out: fts doc to hold parsed
                                documents */
 {
   dict_index_t *index;
   dict_table_t *table;
-  const rec_t *clust_rec;
   ulint num_field;
   const dict_field_t *ifield;
   const dict_col_t *col;
@@ -3389,7 +3390,7 @@ static void fts_fetch_doc_from_rec(
   table = get_doc->index_cache->index->table;
   parser = get_doc->index_cache->index->parser;
 
-  clust_rec = pcur->get_rec();
+  ut_ad(slc->is_positioned(pcur->get_rec(), clust_index));
 
   num_field = dict_index_get_n_fields(index);
 
@@ -3402,14 +3403,15 @@ static void fts_fetch_doc_from_rec(
       get_doc->index_cache->charset = fts_get_charset(ifield->col->prtype);
     }
 
-    if (rec_offs_nth_extern(index, offsets, clust_pos)) {
+    if (rec_offs_nth_extern(index, slc->offsets(), clust_pos)) {
       doc->text.f_str = lob::btr_rec_copy_externally_stored_field(
-          nullptr, clust_index, clust_rec, offsets, dict_table_page_size(table),
-          clust_pos, &doc->text.f_len, nullptr, false,
+          nullptr, clust_index, slc, dict_table_page_size(table), clust_pos,
+          &doc->text.f_len, nullptr, false,
           static_cast<mem_heap_t *>(doc->self_heap->arg));
     } else {
-      doc->text.f_str = const_cast<byte *>(rec_get_nth_field_instant(
-          clust_rec, offsets, clust_pos, clust_index, &doc->text.f_len));
+      doc->text.f_str =
+          const_cast<byte *>(const_cast<Slice *>(slc)->get_nth_field_instant(
+              clust_index, clust_pos, &doc->text.f_len));
     }
 
     doc->found = true;
@@ -3610,23 +3612,24 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
 
   /* If we have a match, add the data to doc structure */
   if (pcur.get_low_match() == 1) {
-    const rec_t *rec;
+    creg_t reg;
+    creg_t clust_reg;
     btr_pcur_t *doc_pcur;
-    const rec_t *clust_rec;
     btr_pcur_t clust_pcur;
-    ulint *offsets = nullptr;
+    Slice_ctx slc_ctx;
+    Slice *slc = nullptr;
     ulint num_idx = ib_vector_size(cache->get_docs);
 
-    rec = pcur.get_rec();
+    reg = pcur.get_creg();
 
     /* Doc could be deleted */
-    if (page_rec_is_infimum(rec) ||
-        rec_get_deleted_flag(rec, dict_table_is_comp(table))) {
+    if (page_rec_is_infimum(reg.rec) ||
+        rec_get_deleted_flag(reg.rec, dict_table_is_comp(table))) {
       goto func_exit;
     }
 
     if (is_id_cluster) {
-      clust_rec = rec;
+      clust_reg = reg;
       doc_pcur = &pcur;
     } else {
       dtuple_t *clust_ref;
@@ -3640,17 +3643,16 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
       clust_ref = dtuple_create(heap, n_fields);
       dict_index_copy_types(clust_ref, clust_index, n_fields);
 
-      row_build_row_ref_in_tuple(clust_ref, rec, fts_id_index, nullptr);
+      row_build_row_ref_in_tuple(clust_ref, reg, fts_id_index, nullptr);
 
       clust_pcur.open_no_init(clust_index, clust_ref, PAGE_CUR_LE,
                               BTR_SEARCH_LEAF, 0, &mtr, UT_LOCATION_HERE);
 
       doc_pcur = &clust_pcur;
-      clust_rec = clust_pcur.get_rec();
+      clust_reg = clust_pcur.get_creg();
     }
 
-    offsets = rec_get_offsets(clust_rec, clust_index, nullptr, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    slc = slc_ctx.get_offsets(clust_reg, clust_index, ULINT_UNDEFINED);
 
     for (ulint i = 0; i < num_idx; ++i) {
       fts_doc_t doc;
@@ -3663,7 +3665,7 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
 
       fts_doc_init(&doc);
 
-      fts_fetch_doc_from_rec(get_doc, clust_index, doc_pcur, offsets, &doc);
+      fts_fetch_doc_from_rec(get_doc, clust_index, doc_pcur, slc, &doc);
 
       if (doc.found) {
         doc_pcur->store_position(&mtr);
@@ -3719,7 +3721,9 @@ static ulint fts_add_doc_by_id(fts_trx_table_t *ftt, doc_id_t doc_id,
         if (i < num_idx - 1) {
           [[maybe_unused]] auto success = doc_pcur->restore_position(
               BTR_SEARCH_LEAF, &mtr, UT_LOCATION_HERE);
-
+          /* doc_pcur will be stored and restored many times, so we need to set
+           * the slc to the current record */
+          slc->store_position(doc_pcur->get_reg(), slc->index());
           ut_ad(success);
         }
       }
@@ -3785,31 +3789,27 @@ doc_id_t fts_get_max_doc_id(dict_table_t *table) /*!< in: user table */
   pcur.open_at_side(false, index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   if (!page_is_empty(pcur.get_page())) {
-    const rec_t *rec = nullptr;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
-    mem_heap_t *heap = nullptr;
+    creg_t reg;
+    Slice_ctx slc_ctx;
+    Slice *slc = nullptr;
     ulint len;
     const void *data;
 
-    rec_offs_init(offsets_);
-
     do {
-      rec = pcur.get_rec();
+      reg = pcur.get_creg();
 
-      if (page_rec_is_user_rec(rec)) {
+      if (page_rec_is_user_rec(reg.rec)) {
         break;
       }
     } while (pcur.move_to_prev(&mtr));
 
-    if (!rec) {
+    if (reg.is_null()) {
       goto func_exit;
     }
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    data = rec_get_nth_field(nullptr, rec, offsets, 0, &len);
+    data = slc->get_nth_field(nullptr, 0, &len);
 
     doc_id =
         static_cast<doc_id_t>(fts_read_doc_id(static_cast<const byte *>(data)));
@@ -5192,36 +5192,40 @@ doc_id_t fts_get_doc_id_from_row(dict_table_t *table, /*!< in: table */
 @param[in]      index   index of rec
 @param[in]      heap    heap memory
 @return doc id that was extracted from rec */
-doc_id_t fts_get_doc_id_from_rec(dict_table_t *table, const rec_t *rec,
+doc_id_t fts_get_doc_id_from_rec(dict_table_t *table, creg_t reg,
                                  const dict_index_t *index, mem_heap_t *heap) {
   ulint len;
   const byte *data;
   ulint col_no;
   doc_id_t doc_id = 0;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  mem_heap_t *my_heap = heap;
+  // ulint offsets_[REC_OFFS_NORMAL_SIZE];
+  // ulint *offsets = offsets_;
+  // mem_heap_t *my_heap = heap;
+  Slice_ctx slc_ctx;
+  Slice *slc = nullptr;
 
   ut_a(table->fts->doc_col != ULINT_UNDEFINED);
 
-  rec_offs_init(offsets_);
+  // rec_offs_init(offsets_);
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &my_heap);
+  // offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+  //                           UT_LOCATION_HERE, &my_heap);
+  slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
   col_no = index->get_col_pos(table->fts->doc_col);
 
   ut_ad(col_no != ULINT_UNDEFINED);
 
-  data = rec_get_nth_field(nullptr, rec, offsets, col_no, &len);
+  // data = rec_get_nth_field(nullptr, rec, slc, col_no, &len);
+  data = slc->get_nth_field(nullptr, col_no, &len);
 
   ut_a(len == 8);
   static_assert(8 == sizeof(doc_id));
   doc_id = static_cast<doc_id_t>(mach_read_from_8(data));
 
-  if (my_heap && !heap) {
-    mem_heap_free(my_heap);
-  }
+  // if (my_heap && !heap) {
+  //   mem_heap_free(my_heap);
+  // }
 
   return (doc_id);
 }

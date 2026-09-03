@@ -37,7 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include "my_time.h"
 
-namespace xlicense {
+namespace komodo {
 
 enum class License_error_t {
   LICENSE_OK, /** No error */
@@ -45,10 +45,11 @@ enum class License_error_t {
   LICENSE_FILE_NOT_EXIST, /** License file not exist */
   LICENSE_FILE_CORRUPTED, /** License file corrupted */
 
-  LICENSE_FORMAT_UNRECOGNIZED,  /** The format of license is not supported */
-  LICENSE_TYPE_UNSUPPORT,       /** The type of license is not supported */
-  LICENSE_EXPIRED,              /** The license has been expired */
-  LICENSE_UNAUTHORIZED_MACHINE, /** The server is unauthorized to use */
+  LICENSE_FORMAT_UNRECOGNIZED, /** The format of license is not supported */
+  LICENSE_TYPE_UNSUPPORT,      /** The type of license is not supported */
+  LICENSE_EXPIRED,             /** The license has been expired */
+  LICENSE_UNAUTHORIZED_MAC,    /** Unauthorized MAC Address */
+  LICENSE_UNAUTHORIZED_PORT,   /** Unauthorized Port */
 
   LICENSE_TOO_MUCH_CONNS, /** Exceed the limit of conns for current license */
   LICNESE_UNPERMITTED_BP_SIZE, /** Exceed the limit of BP for current license */
@@ -68,7 +69,8 @@ struct License_show_info {
         license_type(License_type_t::LICENSE_TYPE_UNSUPPORT),
         error(License_error_t::LICENSE_FILE_NOT_EXIST),
         conns_constrains(0),
-        BP_constrains(0) {}
+        BP_constrains(0),
+        port_range_str() {}
 
   std::string license_file_path;
   MYSQL_TIME apply_time;
@@ -78,8 +80,24 @@ struct License_show_info {
 
   uint64_t conns_constrains;  // max supported connections
   uint64_t BP_constrains;     // max supported buffer pool size in bytes
+  std::string port_range_str;  // permitted port range string
 };
 
-}  // namespace xlicense
+class Connection_count {
+ public:
+  Connection_count() : m_count(0), is_valid(false) {}
+  void init(uint count) {
+    m_count = count;
+    is_valid = true;
+  }
+  uint get() const { return m_count; }
+  bool valid() const { return is_valid; }
+
+ private:
+  /** Connection count */
+  uint m_count;
+  bool is_valid;
+};
+}  // namespace komodo
 
 #endif

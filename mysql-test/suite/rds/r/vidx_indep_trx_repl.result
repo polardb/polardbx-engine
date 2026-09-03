@@ -1,0 +1,257 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+[connection master]
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+##############################################
+# Setup                                      #
+##############################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+include/rpl_sync.inc
+[connection master]
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+[connection slave]
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+##############################################
+# 1. Large transaction: 20 rows INSERT      #
+#    Verify slave aux = master aux           #
+##############################################
+[connection master]
+BEGIN;
+COMMIT;
+# Master: verify row count
+SELECT COUNT(*) AS master_main_rows FROM t1;
+master_main_rows
+20
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+master_aux_rows
+20
+DEALLOCATE PREPARE s;
+include/rpl_sync.inc
+# Slave: verify matches master
+[connection slave]
+SELECT COUNT(*) AS slave_main_rows FROM t1;
+slave_main_rows
+20
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+slave_aux_rows
+20
+DEALLOCATE PREPARE s;
+# Slave: ANN search works
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,10,10]')) LIMIT 5;
+id
+10
+11
+12
+8
+9
+
+
+##############################################
+# 3. INSERT → UPDATE → DELETE sequence      #
+#    Verify slave tracks each step           #
+##############################################
+[connection master]
+# Step 1: INSERT
+INSERT INTO t1(a, v) VALUES (50, VEC_FROMTEXT('[50,50,50]'));
+include/rpl_sync.inc
+[connection master]
+SELECT COUNT(*) AS master_50 FROM t1 WHERE a = 50;
+master_50
+1
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+master_aux
+21
+DEALLOCATE PREPARE s;
+[connection slave]
+SELECT COUNT(*) AS slave_50 FROM t1 WHERE a = 50;
+slave_50
+1
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+slave_aux
+21
+DEALLOCATE PREPARE s;
+# Step 2: UPDATE vector
+[connection master]
+UPDATE t1 SET v = VEC_FROMTEXT('[55,55,55]') WHERE a = 50;
+include/rpl_sync.inc
+[connection master]
+SELECT VEC_TOTEXT(v) AS master_vec FROM t1 WHERE a = 50;
+master_vec
+[55,55,55]
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_after_upd FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+master_aux_after_upd
+22
+DEALLOCATE PREPARE s;
+[connection slave]
+SELECT VEC_TOTEXT(v) AS slave_vec FROM t1 WHERE a = 50;
+slave_vec
+[55,55,55]
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_after_upd FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+slave_aux_after_upd
+22
+DEALLOCATE PREPARE s;
+# Step 3: DELETE
+[connection master]
+DELETE FROM t1 WHERE a = 50;
+include/rpl_sync.inc
+[connection master]
+SELECT COUNT(*) AS master_50_gone FROM t1 WHERE a = 50;
+master_50_gone
+0
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_after_del FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+master_aux_after_del
+22
+DEALLOCATE PREPARE s;
+[connection slave]
+SELECT COUNT(*) AS slave_50_gone FROM t1 WHERE a = 50;
+slave_50_gone
+0
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_after_del FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+slave_aux_after_del
+22
+DEALLOCATE PREPARE s;
+
+##############################################
+# 4. GTID integrity: single GTID for        #
+#    multi-row INSERT                        #
+##############################################
+[connection master]
+BEGIN;
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT('[60,60,60]'));
+INSERT INTO t1(a, v) VALUES (61, VEC_FROMTEXT('[61,61,61]'));
+INSERT INTO t1(a, v) VALUES (62, VEC_FROMTEXT('[62,62,62]'));
+COMMIT;
+include/rpl_sync.inc
+# Slave: all 3 rows present
+[connection slave]
+SELECT COUNT(*) AS slave_rows_60_62 FROM t1 WHERE a BETWEEN 60 AND 62;
+slave_rows_60_62
+3
+# Slave: ANN works
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[61,61,61]')) LIMIT 3;
+id
+22
+23
+24
+
+##############################################
+# 5. Mixed DML in single transaction        #
+##############################################
+[connection master]
+BEGIN;
+INSERT INTO t1(a, v) VALUES (70, VEC_FROMTEXT('[70,70,70]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[11,11,11]') WHERE a = 1;
+DELETE FROM t1 WHERE a = 2;
+INSERT INTO t1(a, v) VALUES (71, VEC_FROMTEXT('[71,71,71]'));
+COMMIT;
+include/rpl_sync.inc
+# Master state
+[connection master]
+SELECT COUNT(*) AS master_total FROM t1;
+master_total
+24
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+master_aux
+28
+DEALLOCATE PREPARE s;
+# Slave state should match
+[connection slave]
+SELECT COUNT(*) AS slave_total FROM t1;
+slave_total
+24
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+slave_aux
+28
+DEALLOCATE PREPARE s;
+# Slave ANN works
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[70,70,70]')) LIMIT 3;
+id
+24
+25
+26
+
+##############################################
+# 6. Different database parallel replay     #
+#    (MTS safe: different schemas)           #
+##############################################
+[connection master]
+CREATE DATABASE db2;
+CREATE TABLE db2.t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(a, v) VALUES (80, VEC_FROMTEXT('[80,80,80]'));
+INSERT INTO db2.t2(v) VALUES (VEC_FROMTEXT('[80,80,80]'));
+include/rpl_sync.inc
+# Slave: both tables have data
+[connection slave]
+SELECT COUNT(*) AS slave_t1_80 FROM t1 WHERE a = 80;
+slave_t1_80
+1
+SELECT COUNT(*) AS slave_t2 FROM db2.t2;
+slave_t2
+1
+# Slave: ANN on both tables works
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[80,80,80]')) LIMIT 3;
+id
+25
+26
+27
+SELECT id FROM db2.t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[80,80,80]')) LIMIT 3;
+id
+1
+
+##############################################
+# Cleanup                                    #
+##############################################
+[connection slave]
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+[connection master]
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+DROP TABLE t1;
+DROP DATABASE db2;
+include/rpl_sync.inc
+[connection slave]
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;
+[connection master]
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;
+include/rpl_sync.inc
+include/rpl_end.inc

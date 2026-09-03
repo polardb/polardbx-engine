@@ -1,0 +1,41 @@
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+CREATE TABLE t1 (id BIGINT PRIMARY KEY, b LONGBLOB);
+####################################################################################
+# 1. INSERT fails when Lob_alloc_eager::fill() hits out-of-space
+####################################################################################
+SET @fail_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+SET DEBUG = '+d,innodb_alloc_lob_page_failed';
+INSERT INTO t1 VALUES (1, REPEAT('x', 65536));
+ERROR HY000: The table 't1' is full
+SET DEBUG = '-d,innodb_alloc_lob_page_failed';
+SET @fail_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+include/assert.inc [table is empty after failed INSERT]
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 2. UPDATE fails when Lob_alloc_eager::fill() hits out-of-space
+####################################################################################
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+SET @fail_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+SET DEBUG = '+d,innodb_alloc_lob_page_failed';
+UPDATE t1 SET b = REPEAT('y', 65536) WHERE id = 1;
+ERROR HY000: The table 't1' is full
+SET DEBUG = '-d,innodb_alloc_lob_page_failed';
+SET @fail_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+SELECT LENGTH(b) AS len_b FROM t1 WHERE id = 1;
+len_b
+100
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 3. cleanup
+####################################################################################
+DROP TABLE t1;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

@@ -64,6 +64,8 @@ que_thr_t *exit_step(que_thr_t *thr); /*!< in: query thread */
  @return query thread to run next or NULL */
 que_thr_t *return_step(que_thr_t *thr); /*!< in: query thread */
 
+#ifndef INNODB_EVAL0PROC_IC_STANDALONE
 #include "eval0proc.ic"
+#endif /* !INNODB_EVAL0PROC_IC_STANDALONE */
 
 #endif

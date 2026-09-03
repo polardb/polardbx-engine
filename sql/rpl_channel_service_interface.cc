@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_channel_service_interface.h"
 
 #include <stdio.h>
@@ -873,6 +875,19 @@ int channel_add_executed_gtids_to_received_gtids(const char *channel) {
 
   global_sid_lock->unlock();
   channel_map.unlock();
+
+  return return_status != RETURN_STATUS_OK;
+}
+
+int channel_add_executed_gtids_to_xpaxos_received_gtids(Relay_log_info *rli) {
+  DBUG_TRACE;
+
+  global_sid_lock->wrlock();
+
+  enum_return_status return_status =
+      rli->add_gtid_set(gtid_state->get_executed_gtids());
+
+  global_sid_lock->unlock();
 
   return return_status != RETURN_STATUS_OK;
 }

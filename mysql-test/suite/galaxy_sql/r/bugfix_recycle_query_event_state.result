@@ -1,0 +1,61 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+CREATE DATABASE recycle_event_state;
+CREATE TABLE recycle_event_state.ta(id INT);
+CREATE TABLE recycle_event_state.tb(id INT);
+include/stop_slave_sql.inc [FOR CHANNEL 'test']
+SET GLOBAL replica_parallel_workers = 0;
+Warnings:
+Warning	1287	'0' is deprecated and will be removed in a future release. Please use 1 instead
+SET GLOBAL init_replica =
+"SET SESSION recycle_bin_table_name = 'stale_applier'";
+include/start_slave_sql.inc [FOR CHANNEL 'test']
+SET GLOBAL init_replica = '';
+include/assert.inc [init_replica should seed the applier recycle name]
+ALTER TABLE recycle_event_state.ta ADD COLUMN applier_reset INT;
+include/assert.inc [Query_event should clear the applier recycle name]
+SET SESSION recycle_bin_table_name = 'custom_a';
+ALTER TABLE ta ADD COLUMN value_a INT;
+DROP TABLE recycle_event_state.tb;
+# A DROP from another source session must use an automatic name.
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+DROP TABLE ta;
+# The source session that owns custom_a can still consume it later.
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+__recycle_bin__	custom_a	recycle_event_state	ta	#	#
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+__recycle_bin__	custom_a	recycle_event_state	ta	#	#
+CREATE TABLE tc(id INT);
+SET SESSION recycle_bin_table_name = 'custom_duplicate';
+DROP TABLE tc;
+CREATE TABLE td(id INT);
+SET SESSION recycle_bin_table_name = 'custom_duplicate';
+DROP TABLE td;
+Warnings:
+Warning	7589	Table 'custom_duplicate' already exists in recycle_bin
+# A name that decides a duplicate-name fallback follows that DROP only.
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+__recycle_bin__	custom_a	recycle_event_state	ta	#	#
+__recycle_bin__	custom_duplicate	recycle_event_state	tc	#	#
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	<automatic_name>	recycle_event_state	tb	#	#
+__recycle_bin__	custom_a	recycle_event_state	ta	#	#
+__recycle_bin__	custom_duplicate	recycle_event_state	tc	#	#
+SET SESSION recycle_bin = OFF;
+DROP DATABASE recycle_event_state;
+include/rpl_end.inc

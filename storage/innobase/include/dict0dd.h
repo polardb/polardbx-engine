@@ -60,7 +60,9 @@ Data dictionary interface */
 #endif /* !UNIV_HOTBACKUP */
 #include "mysql_version.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dd.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 #ifndef UNIV_HOTBACKUP
 class THD;
@@ -262,8 +264,18 @@ enum dd_index_keys {
   DD_INDEX_SCN,
   /** GCN */
   DD_INDEX_GCN,
+  /** Creator trx_id for cross DDL index visibility */
+  DD_INDEX_CREATOR_TRX_ID,
+  /** Creator uba for cross DDL index visibility */
+  DD_INDEX_CREATOR_UBA,
+  /** Creator SCN for cross DDL index visibility */
+  DD_INDEX_CREATOR_SCN,
+  /** Creator GCN for cross DDL index visibility */
+  DD_INDEX_CREATOR_GCN,
   /** Root page type */
   DD_INDEX_PAGE_TYPE,
+  /** Page dict capacity */
+  DD_INDEX_PAGE_DICT_CAPACITY,
   /** Sentinel */
   DD_INDEX__LAST
 };
@@ -271,8 +283,13 @@ enum dd_index_keys {
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
 const char *const dd_index_key_strings[DD_INDEX__LAST] = {
-    "id",  "space_id", "table_id", "root",     "trx_id",
-    "uba", "scn",      "gcn",      "page_type"};
+    "id",                      "space_id",
+    "table_id",                "root",
+    "trx_id",                  "uba",
+    "scn",                     "gcn",
+    "creator_trx_id", "creator_uba",
+    "creator_scn",    "creator_gcn",
+    "page_type",               "page_dict_capacity"};
 
 /** InnoDB private key strings for dd::Index or dd::Partition_index.
 @see dd_index_keys */
@@ -817,8 +834,9 @@ bool dd_add_instant_columns(const dd::Table *old_dd_table,
 /** Clear the instant ADD COLUMN information of a table
 @param[in,out]  dd_table        dd::Table
 @param[in]      clear_version   true if version metadata is to be cleared
+@param[in]	new_dd          true if new meta will store into dd.
 @return DB_SUCCESS or error code */
-dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version);
+dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version, bool new_dd);
 
 /** Clear the instant ADD COLUMN information of a partition, to make it
 as a normal partition
@@ -946,8 +964,9 @@ void dd_set_autoinc(dd::Properties &se_private_data, uint64_t autoinc);
 @param[in]      system_table_name       Which dd system table to open
 @param[in,out]  table           dict_table_t obj of dd system table
 @retval the first rec of the dd system table */
-const rec_t *dd_startscan_system(THD *thd, MDL_ticket **mdl, btr_pcur_t *pcur,
-                                 mtr_t *mtr, const char *system_table_name,
+const Slice *dd_startscan_system(THD *thd, Slice_ctx *slc_ctx, MDL_ticket **mdl,
+                                 btr_pcur_t *pcur, mtr_t *mtr,
+                                 const char *system_table_name,
                                  dict_table_t **table);
 
 /** Process one mysql.tables record and get the dict_table_t
@@ -958,9 +977,11 @@ const rec_t *dd_startscan_system(THD *thd, MDL_ticket **mdl, btr_pcur_t *pcur,
 @param[in]      mdl             MDL on the table
 @param[in]      mtr             Mini-transaction
 @retval error message, or NULL on success */
-const char *dd_process_dd_tables_rec_and_mtr_commit(
-    mem_heap_t *heap, const rec_t *rec, dict_table_t **table,
-    dict_table_t *dd_tables, MDL_ticket **mdl, mtr_t *mtr);
+const char *dd_process_dd_tables_rec_and_mtr_commit(const Slice *slc,
+                                                    dict_table_t **table,
+                                                    dict_table_t *dd_tables,
+                                                    MDL_ticket **mdl,
+                                                    mtr_t *mtr);
 /** Process one mysql.table_partitions record and get the dict_table_t
 @param[in]      heap            Temp memory heap
 @param[in,out]  rec             mysql.table_partitions record
@@ -969,24 +990,11 @@ const char *dd_process_dd_tables_rec_and_mtr_commit(
 @param[in]      mdl             MDL on the table
 @param[in]      mtr             Mini-transaction
 @retval error message, or NULL on success */
-const char *dd_process_dd_partitions_rec_and_mtr_commit(
-    mem_heap_t *heap, const rec_t *rec, dict_table_t **table,
-    dict_table_t *dd_tables, MDL_ticket **mdl, mtr_t *mtr);
-
-/** Process one mysql.columns record and get info to dict_col_t
-@param[in,out]  heap            Temp memory heap
-@param[in]      rec             mysql.columns record
-@param[in,out]  col             dict_col_t to fill
-@param[in,out]  table_id        Table id
-@param[in,out]  col_name        Column name
-@param[in,out]  nth_v_col       Nth v column
-@param[in]      dd_columns      dict_table_t obj of mysql.columns
-@param[in,out]  mtr             Mini-transaction
-@retval true if column is filled */
-bool dd_process_dd_columns_rec(mem_heap_t *heap, const rec_t *rec,
-                               dict_col_t *col, table_id_t *table_id,
-                               char **col_name, ulint *nth_v_col,
-                               const dict_table_t *dd_columns, mtr_t *mtr);
+const char *dd_process_dd_partitions_rec_and_mtr_commit(const Slice *slc,
+                                                        dict_table_t **table,
+                                                        dict_table_t *dd_tables,
+                                                        MDL_ticket **mdl,
+                                                        mtr_t *mtr);
 
 /** Process one mysql.columns record for virtual columns
 @param[in]      heap            temp memory heap
@@ -998,7 +1006,7 @@ bool dd_process_dd_columns_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in]      dd_columns      dict_table_t obj of mysql.columns
 @param[in]      mtr             Mini-transaction
 @retval true if virtual info is filled */
-bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const Slice *slc,
                                        table_id_t *table_id, ulint **pos,
                                        ulint **base_pos, ulint *n_row,
                                        dict_table_t *dd_columns, mtr_t *mtr);
@@ -1007,7 +1015,8 @@ bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in,out]  pcur            Persistent cursor
 @param[in]              mtr                     Mini-transaction
 @retval next record */
-const rec_t *dd_getnext_system_rec(btr_pcur_t *pcur, mtr_t *mtr);
+const Slice *dd_getnext_system_rec(Slice_ctx *slc_ctx, btr_pcur_t *pcur,
+                                   mtr_t *mtr);
 
 /** Process one mysql.indexes record and get the dict_index_t
 @param[in]      heap            Temp memory heap
@@ -1019,9 +1028,9 @@ const rec_t *dd_getnext_system_rec(btr_pcur_t *pcur, mtr_t *mtr);
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @param[in]      mtr             Mini-transaction
 @retval true if index is filled */
-bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
-                               const dict_index_t **index, MDL_ticket **mdl,
-                               dict_table_t **parent, MDL_ticket **parent_mdl,
+bool dd_process_dd_indexes_rec(const Slice *slc, const dict_index_t **index,
+                               MDL_ticket **mdl, dict_table_t **parent,
+                               MDL_ticket **parent_mdl,
                                dict_table_t *dd_indexes, mtr_t *mtr,
                                bool exclude_dd_table);
 
@@ -1035,7 +1044,7 @@ bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @param[in]      mtr             Mini-transaction
 @retval true if index is filled */
-bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_partition_indexes_rec(const Slice *slc,
                                          const dict_index_t **index,
                                          MDL_ticket **mdl,
                                          dict_table_t **parent,
@@ -1049,8 +1058,7 @@ bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in,out]  space_id        space id
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @retval true if index is filled */
-bool dd_process_dd_indexes_rec_simple(mem_heap_t *heap, const rec_t *rec,
-                                      space_index_t *index_id,
+bool dd_process_dd_indexes_rec_simple(const Slice *slc, space_index_t *index_id,
                                       space_id_t *space_id,
                                       dict_table_t *dd_indexes);
 
@@ -1067,7 +1075,7 @@ bool dd_process_dd_indexes_rec_simple(mem_heap_t *heap, const rec_t *rec,
 @param[out] state           space state
 @param[in]  dd_spaces       dict_table_t obj of mysql.tablespaces
 @return true if data is retrieved */
-bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const Slice *slc,
                                    space_id_t *space_id, char **name,
                                    uint32_t *flags, uint32_t *server_version,
                                    uint32_t *space_version, bool *is_encrypted,
@@ -1224,6 +1232,13 @@ dict_table_t *dd_table_open_on_name(THD *thd, MDL_ticket **mdl,
                                     ulint ignore_err, int *error = nullptr);
 
 /** Returns a cached table object based on table id.
+This function does NOT move the table to the front of MRU, because currently it
+is called in contexts where we don't really mean to "use" the table, and believe
+that it would actually hurt performance if we moved it to the front, such as:
+1. The table would be evicted soon anyway.
+2. A batch of FTS tables would be opened from background thread,
+   and it is not proper to move these tables to mru.
+3. All tables in memory will be accessed sequentially, so it is useless to move.
 @param[in]      table_id        table id
 @param[in]      dict_locked     true=data dictionary locked
 @return table, NULL if does not exist */
@@ -1649,5 +1664,31 @@ template void dd_index_set_se_private_for_system_cols<dd::Partition_index>(
     dd::Partition_index *dd_index, const trx_id_t trx_id,
     const txn_info_t &txn_info);
 
+/** Set AS OF visible-from se private data for DD::Index or
+DD::Partition_index. Used by AS OF cross DDL to preserve logical index
+visibility metadata through INSTANT DDL.
+@param[in,out]  dd_index        dd::Index
+@param[in]      trx_id          AS OF visible-from trx ID
+@param[in]      txn_info        {scn, gcn, uba} */
+template <typename Index>
+void dd_index_set_se_private_for_creator_cols(Index *dd_index,
+                                              const trx_id_t trx_id,
+                                              const txn_info_t &txn_info) {
+  dd::Properties &p = dd_index->se_private_data();
+  p.set(dd_index_key_strings[DD_INDEX_CREATOR_TRX_ID], trx_id);
+  p.set(dd_index_key_strings[DD_INDEX_CREATOR_UBA], txn_info.undo_ptr);
+  p.set(dd_index_key_strings[DD_INDEX_CREATOR_SCN], txn_info.scn);
+  p.set(dd_index_key_strings[DD_INDEX_CREATOR_GCN], txn_info.gcn);
+}
+
+template void dd_index_set_se_private_for_creator_cols<dd::Index>(
+    dd::Index *dd_index, const trx_id_t trx_id, const txn_info_t &txn_info);
+
+template void dd_index_set_se_private_for_creator_cols<dd::Partition_index>(
+    dd::Partition_index *dd_index, const trx_id_t trx_id,
+    const txn_info_t &txn_info);
+
+#ifndef INNODB_DICT0DD_IC_STANDALONE
 #include "dict0dd.ic"
+#endif /* !INNODB_DICT0DD_IC_STANDALONE */
 #endif

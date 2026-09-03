@@ -178,6 +178,7 @@ inline void Table_helper::finalize() {
     }
   }
   m_table_share.keys = static_cast<uint>(m_index_defs.size());
+  m_table_share.total_keys = m_table_share.keys;  // total_keys should equal keys for test tables
   m_table_share.key_info = m_table.key_info = m_indexes.data();
 }
 

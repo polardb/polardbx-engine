@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 5/30/1994 Heikki Tuuri
  *******************************************************************/
 
+#ifndef ut0ut_h
+#define INNODB_UT0UT_IC_STANDALONE
+#include "univ.i"
+#include "ut0ut.h"
+#undef INNODB_UT0UT_IC_STANDALONE
+#endif /* !ut0ut_h */
 #include <algorithm>
 
 #include "os0thread.h"

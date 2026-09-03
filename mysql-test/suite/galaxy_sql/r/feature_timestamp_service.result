@@ -23,11 +23,11 @@ Warning	1681	Integer display width is deprecated and will be removed in a future
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
 Warning	1681	Integer display width is deprecated and will be removed in a future release.
 call dbms_tso.get_timestamp("", "", 1);
-ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [.]
+ERROR 42000: Unknown database ''
 call dbms_tso.get_timestamp("mydb", "", 1);
-ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [mydb.]
+ERROR 42S02: Table 'mydb.' doesn't exist
 call dbms_tso.get_timestamp("", "s1", 1);
-ERROR HY000: Failed to get timestamp value with timestamp service. Can not open table [.s1]
+ERROR 42000: Unknown database ''
 call dbms_tso.get_timestamp("mydb", "s1", -1);
 ERROR HY000: The 3th parameter didn't match for native procedure dbms_tso.get_timestamp
 call dbms_tso.get_timestamp("mydb", "s1", 99999999999999999999);

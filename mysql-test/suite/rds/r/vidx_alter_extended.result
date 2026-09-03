@@ -1,0 +1,354 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2;
+#
+# ==========================================================
+# 1. Setup
+# ==========================================================
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+extra INT DEFAULT 0,
+name VARCHAR(50) DEFAULT 'test',
+VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO t1(id, v, extra, name) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'), 10, 'a');
+INSERT INTO t1(id, v, extra, name) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'), 20, 'b');
+INSERT INTO t1(id, v, extra, name) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'), 30, 'c');
+INSERT INTO t1(id, v, extra, name) VALUES (4, VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'), 40, 'd');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COUNT(*) AS row_count FROM t1;
+row_count
+4
+#
+# ==========================================================
+# 2. DROP the vector column itself (with data)
+# ==========================================================
+# Risk: Dropping the vector column must also drop the vector
+# index and clean up the auxiliary table. The vector index
+# depends on this column.
+#
+# Note: check_alter_vector_ddl() should reject mixed operations.
+# Dropping the vector column implicitly drops the vector index,
+# which counts as DROP INDEX mixed with DROP COLUMN.
+#
+# 2.1 First, try to DROP the vector column (may be rejected as mixed op)
+ALTER TABLE t1 DROP COLUMN v;
+# Check table state
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+# Check if auxiliary tables were cleaned up
+SELECT COUNT(*) AS vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+vidx_tables
+1
+# Recreate for further tests
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+extra INT DEFAULT 0,
+name VARCHAR(50) DEFAULT 'test',
+VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO t1(id, v, extra, name) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'), 10, 'a');
+INSERT INTO t1(id, v, extra, name) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'), 20, 'b');
+INSERT INTO t1(id, v, extra, name) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'), 30, 'c');
+INSERT INTO t1(id, v, extra, name) VALUES (4, VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'), 40, 'd');
+#
+# ==========================================================
+# 3. MODIFY vector column dimension
+# ==========================================================
+# Risk: Changing vector dimension should be rejected because
+# the auxiliary table is built for a specific dimension.
+#
+ALTER TABLE t1 MODIFY v VECTOR(8);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COUNT(*) AS row_count FROM t1;
+row_count
+4
+# Verify ANN search still works (if column was not modified)
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+#
+# ==========================================================
+# 4. ADD COLUMN ... AFTER vector_column
+# ==========================================================
+# Risk: Adding a column after the vector column changes column
+# ordering; auxiliary table's reference must still be valid.
+#
+ALTER TABLE t1 ADD COLUMN data1 INT DEFAULT 0 AFTER v;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify ANN search after column position change
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+# ADD COLUMN ... BEFORE vector column (FIRST position)
+ALTER TABLE t1 ADD COLUMN data2 INT DEFAULT 0 FIRST;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `data2` int DEFAULT '0',
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify ANN search
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+# Verify auxiliary tables intact
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+has_vidx_tables
+1
+#
+# ==========================================================
+# 5. ALTER TABLE CHANGE/RENAME the vector column
+# ==========================================================
+# Risk: Renaming the column that the vector index depends on.
+# The vector index key_part references the column by field pointer,
+# so column rename should be transparent if done correctly.
+#
+ALTER TABLE t1 CHANGE v vec VECTOR(4);
+# Check state
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `data2` int DEFAULT '0',
+  `id` int NOT NULL AUTO_INCREMENT,
+  `vec` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`vec`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# If rename succeeded, test ANN search with new column name
+SELECT id, VEC_DISTANCE_EUCLIDEAN(vec, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(vec, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+# Rename back if needed
+ALTER TABLE t1 CHANGE vec v VECTOR(4);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `data2` int DEFAULT '0',
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# ==========================================================
+# 6. ALTER TABLE with multiple non-vector operations
+# ==========================================================
+# Risk: Multiple non-index operations in a single ALTER TABLE
+# while vector index exists. check_alter_vector_ddl() should
+# allow this since vector index is not being modified.
+#
+ALTER TABLE t1 ADD COLUMN z1 INT, ADD COLUMN z2 VARCHAR(10), DROP COLUMN data2;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  `z1` int DEFAULT NULL,
+  `z2` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify ANN search after compound ALTER
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+#
+# ==========================================================
+# 7. ALTER TABLE ADD VECTOR INDEX + ADD COLUMN in same DDL
+# ==========================================================
+# Risk: check_alter_vector_ddl() should reject mixed operations
+# where vector index is being added along with other changes.
+#
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4)
+) ENGINE=InnoDB;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v), ADD COLUMN extra INT;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Do them separately (should succeed)
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 ADD COLUMN extra INT;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+#
+# ==========================================================
+# 8. ALTER TABLE DROP VECTOR INDEX + DROP COLUMN in same DDL
+# ==========================================================
+# Risk: check_alter_vector_ddl() should reject mixed operations.
+#
+ALTER TABLE t1 DROP INDEX vi, DROP COLUMN z1;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `data1` int DEFAULT '0',
+  `extra` int DEFAULT '0',
+  `name` varchar(50) DEFAULT 'test',
+  `z1` int DEFAULT NULL,
+  `z2` varchar(10) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# ==========================================================
+# 9. ALTER TABLE with nullable vector column + NULL data
+# ==========================================================
+# The table allows NULL vector values. Verify DDL operations
+# handle NULL vector values correctly during table rebuild.
+#
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi3(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO t3(id, v) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO t3(id, v) VALUES (2, NULL);
+INSERT INTO t3(id, v) VALUES (3, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+INSERT INTO t3(id, v) VALUES (4, NULL);
+SELECT COUNT(*) AS total_rows FROM t3;
+total_rows
+4
+SELECT COUNT(v) AS non_null_vectors FROM t3;
+non_null_vectors
+2
+# OPTIMIZE TABLE with NULL vector data
+OPTIMIZE TABLE t3;
+Table	Op	Msg_type	Msg_text
+test.t3	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t3	optimize	status	OK
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi3` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT COUNT(*) AS total_rows FROM t3;
+total_rows
+4
+SELECT COUNT(v) AS non_null_vectors FROM t3;
+non_null_vectors
+2
+# ANN search should work, NULLs excluded from results
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t3
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+# ALTER TABLE FORCE with NULL data
+ALTER TABLE t3 FORCE;
+SELECT COUNT(*) AS total_rows FROM t3;
+total_rows
+4
+SELECT COUNT(v) AS non_null_vectors FROM t3;
+non_null_vectors
+2
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t3
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+DROP TABLE t3;
+#
+# ==========================================================
+# 10. Cleanup
+# ==========================================================
+#
+DROP TABLE IF EXISTS t1;
+# Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+final_vidx_count
+0
+SET GLOBAL vidx_disabled = ON;

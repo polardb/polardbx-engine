@@ -51,6 +51,15 @@
 
 using std::string;
 
+/*
+  PolarDB-X: server-side switch for the reserved-account / privilege hardening
+  (defined in sql/auth/sql_guard.cc, resolved against mysqld at load time).
+  When OFF (the default) the rewriter behaves exactly as upstream.
+*/
+namespace im {
+extern bool opt_enable_rds_priv_strategy;
+}
+
 /// Enabled for threads with privilege checks disabled
 static bool sys_var_enabled_for_threads_without_privilege_checks;
 
@@ -415,6 +424,19 @@ static bool allow_rewrite() {
   if (thd_get_security_context(current_thd, &sec_ctx)) {
     assert(false);
     return true;
+  }
+  // PolarDB-X hardening: when the RDS privilege strategy is enabled, never
+  // rewrite queries issued by SUPER connections, so a planted rule cannot turn
+  // an internal privileged connection's query into a GRANT (confused-deputy
+  // escalation). When the strategy is OFF (default), rewrite behaves as upstream
+  // for all connections.
+  if (im::opt_enable_rds_priv_strategy) {
+    bool has_super = false;
+    if (security_context_get_option(sec_ctx, "privilege_super", &has_super)) {
+      assert(false);
+      return true;
+    }
+    if (has_super) return false;
   }
   bool is_skip_grants_user;
   // check for thread with privilege checks disabled, such as

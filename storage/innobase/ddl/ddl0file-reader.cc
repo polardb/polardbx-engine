@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ddl0impl-file-reader.h"
 #include "dict0dict.h"
+#include "lizard0rem0types.h"
 #include "rem/rec.h"
 #include "rem0rec.h"
 
@@ -37,7 +38,7 @@ namespace ddl {
 
 dberr_t File_reader::prepare() noexcept {
   ut_a(m_ptr == nullptr);
-  ut_a(m_mrec == nullptr);
+  ut_a(m_slc_ctx.mrec() == nullptr);
   ut_a(m_buffer_size > 0);
   ut_a(m_bounds.first == nullptr && m_bounds.second == nullptr);
 
@@ -51,7 +52,7 @@ dberr_t File_reader::prepare() noexcept {
 
   m_io_buffer = m_aligned_buffer.io_buffer();
 
-  m_mrec = m_io_buffer.first;
+  m_slc_ctx.set_mrec(const_cast<byte *>(m_io_buffer.first));
   m_bounds.first = m_io_buffer.first;
   m_bounds.second = m_bounds.first + m_io_buffer.second,
 
@@ -60,18 +61,14 @@ dberr_t File_reader::prepare() noexcept {
   const auto n_fields = dict_index_get_n_fields(m_index);
   const auto n = 1 + REC_OFFS_HEADER_SIZE + n_fields;
 
-  ut_a(m_offsets.empty());
+  m_slc_ctx.set_n_alloc(n);
+  m_slc_ctx.set_n_fields(n_fields);
 
-  m_offsets.resize(n);
+  ut_a(m_aux_boc.buf == nullptr);
+  m_aux_boc = ut::new_arr_boc_withkey(ut::make_psi_memory_key(mem_key_ddl),
+                                      ut::Count{UNIV_PAGE_SIZE_MAX / 2});
 
-  m_offsets[0] = n;
-  m_offsets[1] = n_fields;
-
-  ut_a(m_aux_buf == nullptr);
-  m_aux_buf = ut::new_arr_withkey<byte>(ut::make_psi_memory_key(mem_key_ddl),
-                                        ut::Count{UNIV_PAGE_SIZE_MAX / 2});
-
-  if (m_aux_buf == nullptr) {
+  if (m_aux_boc.buf == nullptr) {
     return DB_OUT_OF_MEMORY;
   }
 
@@ -148,19 +145,19 @@ dberr_t File_reader::next() noexcept {
 
   /* Read the extra bytes. */
 
-  auto rec = const_cast<byte *>(m_ptr);
+  boc_t rec_boc = {const_cast<byte *>(m_ptr), MLOC_IN_HEAP};
 
-  if (unlikely(rec + extra_size >= m_bounds.second)) {
+  if (unlikely(rec_boc.buf + extra_size >= m_bounds.second)) {
     /* The record spans two blocks. Copy the entire record to the auxiliary
     buffer and handle this as a special case. */
     const auto partial_size = std::ptrdiff_t(m_bounds.second - m_ptr);
 
     ut_a(static_cast<size_t>(partial_size) < UNIV_PAGE_SIZE_MAX);
 
-    rec = m_aux_buf;
+    rec_boc = m_aux_boc;
 
     /* Copy the partial record from the file buffer to the aux buffer. */
-    memcpy(rec, m_ptr, partial_size);
+    memcpy(rec_boc.buf, m_ptr, partial_size);
 
     {
       const auto err = read_next();
@@ -174,14 +171,14 @@ dberr_t File_reader::next() noexcept {
       /* Copy the remaining record from the file buffer to the aux buffer. */
       const auto len = extra_size - partial_size;
 
-      memcpy(rec + partial_size, m_ptr, len);
+      memcpy(rec_boc.buf + partial_size, m_ptr, len);
 
       m_ptr += len;
     }
 
-    rec_deserialize_init_offsets(rec + extra_size, m_index, &m_offsets[0]);
-
-    const auto data_size = rec_offs_data_size(&m_offsets[0]);
+    MSlice *mslc = m_slc_ctx.deserialize_init_offsets(
+        {rec_boc.buf + extra_size, rec_boc.loc}, m_index);
+    const auto data_size = mslc->data_size();
 
     /* These overflows should be impossible given that records are much
     smaller than either buffer, and the record starts near the beginning
@@ -190,14 +187,15 @@ dberr_t File_reader::next() noexcept {
     ut_a(extra_size + data_size < UNIV_PAGE_SIZE_MAX);
 
     /* Copy the data bytes. */
-    memcpy(rec + extra_size, m_ptr, data_size);
+    memcpy(rec_boc.buf + extra_size, m_ptr, data_size);
 
     m_ptr += data_size;
 
   } else {
-    rec_deserialize_init_offsets(rec + extra_size, m_index, &m_offsets[0]);
+    MSlice *mslc = m_slc_ctx.deserialize_init_offsets(
+        {rec_boc.buf + extra_size, rec_boc.loc}, m_index);
 
-    const auto data_size = rec_offs_data_size(&m_offsets[0]);
+    const auto data_size = mslc->data_size();
 
     ut_a(extra_size + data_size < UNIV_PAGE_SIZE_MAX);
 
@@ -208,17 +206,16 @@ dberr_t File_reader::next() noexcept {
       /* The record spans two blocks. Copy prefix it to buf. */
       const auto partial_size = std::ptrdiff_t(m_bounds.second - m_ptr);
 
-      rec = m_aux_buf;
+      rec_boc = m_aux_boc;
 
-      memcpy(rec, m_ptr, partial_size);
+      memcpy(rec_boc.buf, m_ptr, partial_size);
 
       /* We cannot invoke rec_offs_make_valid() here, because there
       are no REC_N_NEW_EXTRA_BYTES between extra_size and data_size.
       Similarly, rec_offs_validate() would fail, because it invokes
       rec_get_status(). */
-      ut_d(m_offsets[3] = (ulint)m_index);
-      ut_d(m_offsets[2] = (ulint)rec + extra_size);
-
+      mslc->store_position({rec_boc.buf + extra_size, rec_boc.loc}, m_index,
+                           false);
       {
         const auto err = read_next();
 
@@ -231,7 +228,7 @@ dberr_t File_reader::next() noexcept {
         /* Copy the rest of the record. */
         const auto len = extra_size + data_size - partial_size;
 
-        memcpy(rec + partial_size, m_ptr, len);
+        memcpy(rec_boc.buf + partial_size, m_ptr, len);
         m_ptr += len;
       }
     } else {
@@ -241,7 +238,12 @@ dberr_t File_reader::next() noexcept {
 
   ++m_n_rows_read;
 
-  m_mrec = rec + extra_size;
+  /* We cannot invoke rec_offs_make_valid() here, because there
+  are no REC_N_NEW_EXTRA_BYTES between extra_size and data_size.
+  Similarly, rec_offs_validate() would fail, because it invokes
+  rec_get_status(). */
+  m_slc_ctx.mslc()->store_position({rec_boc.buf + extra_size, rec_boc.loc},
+                                   m_index, false);
 
   return DB_SUCCESS;
 }

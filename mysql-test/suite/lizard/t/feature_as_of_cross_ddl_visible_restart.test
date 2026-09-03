@@ -1,0 +1,118 @@
+# ================================================================
+# Test: AS OF cross-DDL -- index visible-from metadata persistence
+#        across resolve -> DD write-back -> restart
+#
+# Purpose:
+#   Exercise the full round-trip of creator_* DD keys on
+#   secondary indexes:
+#     1. The first AS OF query through a secondary index triggers
+#        dd_index_resolve_txn_scn() and caches resolved scn/gcn plus
+#        the committed uba on the runtime dict_index_t.
+#     2. A subsequent ADD INDEX causes dd_write_index() to flush the
+#        resolved (trx_id, uba, scn, gcn) tuple back into the index DD
+#        se_private_data.
+#     3. restart_mysqld reloads the index DD from disk. The new four
+#        keys must be read by dd_index_fill_txn_desc() so the AS OF
+#        path does not fall back to the committed UBA + NULL SCN/GCN
+#        state that used to trigger assertions in debug and wrong
+#        visibility decisions in release.
+#
+# Regression guard:
+#   This is the direct regression test for the AS OF cross-DDL visible
+#   metadata bug where restart re-loaded only the UBA and lost SCN/GCN.
+#   Keep it as a standalone restart-driven test; merging it into the
+#   main feature_as_of_cross_ddl.test would force that suite to
+#   restart mysqld, which is undesirable for the bulk of its cases.
+# ================================================================
+
+--echo # Verify AS OF index-visible metadata survives DD write-back and restart.
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 36000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+--disable_warnings
+DROP TABLE IF EXISTS asof_visible_restart;
+--enable_warnings
+
+CREATE TABLE asof_visible_restart (
+  id INT PRIMARY KEY,
+  name VARCHAR(64),
+  age INT
+) ENGINE=InnoDB;
+
+INSERT INTO asof_visible_restart VALUES (1, "Alice", 30), (2, "Bob", 25);
+ALTER TABLE asof_visible_restart ADD INDEX idx_name(name);
+
+sleep 3;
+SELECT scn INTO @scn_after_idx FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+
+--echo # First AS OF through idx_name resolves the index-visible txn metadata.
+SELECT id, name FROM asof_visible_restart AS OF SCN @scn_after_idx
+FORCE INDEX(idx_name) WHERE name = "Alice";
+
+--echo # A later ADD INDEX writes the resolved idx_name metadata back to DD.
+ALTER TABLE asof_visible_restart ADD INDEX idx_age(age);
+
+--echo # Verify rebuild overwrites creator metadata and survives restart.
+CREATE TABLE asof_creator_snapshots (
+  name VARCHAR(64) PRIMARY KEY,
+  scn BIGINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE asof_rebuild_creator_restart (
+  id INT PRIMARY KEY,
+  name VARCHAR(64),
+  age INT,
+  INDEX idx_name(name)
+) ENGINE=InnoDB;
+
+INSERT INTO asof_rebuild_creator_restart VALUES (1, "Alice", 30), (2, "Carol", 25);
+
+sleep 3;
+INSERT INTO asof_creator_snapshots
+SELECT "before_rebuild", scn FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+SELECT scn INTO @scn_before_rebuild FROM asof_creator_snapshots
+WHERE name = "before_rebuild";
+
+--echo # Before rebuild, the old secondary key is visible through creator metadata.
+UPDATE asof_rebuild_creator_restart SET name = "Bob" WHERE id = 1;
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+
+--echo # Rebuild creates a new physical secondary; old snapshots must reject it.
+ALTER TABLE asof_rebuild_creator_restart FORCE;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+
+--let $do_not_echo_parameters=1
+--source include/restart_mysqld.inc
+
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 36000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+sleep 3;
+SELECT scn INTO @scn_after_restart FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+
+--echo # After restart, idx_name must still be visible for an AS OF point after ADD INDEX.
+SELECT id, name FROM asof_visible_restart AS OF SCN @scn_after_restart
+FORCE INDEX(idx_name) WHERE name = "Alice";
+
+SELECT scn INTO @scn_before_rebuild FROM asof_creator_snapshots
+WHERE name = "before_rebuild";
+
+--echo # After restart, rebuild creator overwrite must still reject the old snapshot.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+
+DROP TABLE asof_visible_restart;
+DROP TABLE asof_rebuild_creator_restart;
+DROP TABLE asof_creator_snapshots;
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET GLOBAL innodb_txn_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

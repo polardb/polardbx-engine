@@ -73,16 +73,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mysql/service_thd_wait.h"
 
+#include "lizard0dbg.h"
 #include "lizard0gcs.h"
 #include "lizard0gp.h"
-#include "lizard0mtr.h"
+#include "lizard0mtr0mtr.h"
 #include "lizard0row.h"
-#include "lizard0scn.h"
-#include "lizard0tcn.h"
+#include "lizard0gcs0scn.h"
 #include "lizard0txn0space.h"
 #include "lizard0undo.h"
-#include "lizard0undo0types.h"
 #include "lizard0xa.h"
+#include "lizard0trx.h"
+#include "lizard0trx0history.h"
 
 static const ulint MAX_DETAILED_ERROR_LEN = 256;
 
@@ -229,8 +230,6 @@ static void trx_init(trx_t *trx) {
 
   trx->last_sql_stat_start.least_undo_no = 0;
 
-  // ut_ad(!MVCC::is_view_active(trx->read_view));
-  //
   ut_ad(!trx->vision.is_active());
 
   trx->lock.rec_cached = 0;
@@ -263,6 +262,7 @@ static void trx_init(trx_t *trx) {
   trx->gp_error_state = DB_SUCCESS;
 
   trx->vision.reset();
+  trx->shadow_view.reset();
 
   lizard::trx_release_xa_group_if_need(trx);
 
@@ -272,8 +272,16 @@ static void trx_init(trx_t *trx) {
 
   trx->is_rollback = false;
 
+  trx->tid_shard_no = -1;
+
+  trx->commit_rsegs.store_null();
+
   ++trx->version;
 }
+
+trx_guid_t::trx_guid_t(const trx_t &trx)
+    : m_immutable_id(reinterpret_cast<uint64_t>(&trx)),
+      m_version(trx.version) {}
 
 /** For managing the life-cycle of the trx_t instance that we get
 from the pool. */
@@ -295,6 +303,8 @@ struct TrxFactory {
 
     new (&trx->vision) lizard::Vision();
 
+    new (&trx->commit_rsegs) lizard::commit_rsegs_t();
+
     trx_init(trx);
 
     trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
@@ -309,12 +319,15 @@ struct TrxFactory {
     trx->lock.lock_heap =
         mem_heap_create(1024, UT_LOCATION_HERE, MEM_HEAP_FOR_LOCK_HEAP);
 
+    trx->ccache = ut::new_withkey<lizard::Plain_ccache>(
+        UT_NEW_THIS_FILE_PSI_KEY, lizard::thread_calc_ccache_entries());
+
     mutex_create(LATCH_ID_TRX, &trx->mutex);
     mutex_create(LATCH_ID_TRX_UNDO, &trx->undo_mutex);
 
     lock_trx_alloc_locks(trx);
 
-    lizard::alloc_commit_cleanout(trx);
+    lizard::trx_cleanout_alloc(trx);
 
     trx->min_active_tid.store(0);
   }
@@ -334,7 +347,7 @@ struct TrxFactory {
 
     ut_a(trx->dict_operation_lock_mode == 0);
 
-    assert_gp_state_initial(trx);
+    ut_ad(gp_state_is_initial(trx));
 
     if (trx->lock.lock_heap != nullptr) {
       mem_heap_free(trx->lock.lock_heap);
@@ -346,12 +359,13 @@ struct TrxFactory {
     ut::delete_(trx->xid);
     ut::free(trx->detailed_error);
 
+    ut::delete_(trx->ccache);
+
     mutex_free(&trx->mutex);
     mutex_free(&trx->undo_mutex);
 
     trx->mod_tables.~trx_mod_tables_t();
 
-    // ut_ad(trx->read_view == NULL);
     ut_ad(!trx->vision.is_active());
 
     if (!trx->lock.rec_pool.empty()) {
@@ -378,7 +392,9 @@ struct TrxFactory {
 
     trx->vision.~Vision();
 
-    lizard::release_commit_cleanout(trx);
+    trx->commit_rsegs.~commit_rsegs_t();
+
+    lizard::trx_cleanout_free(trx);
   }
 
   /** Enforce any invariants here, this is called before the transaction
@@ -418,10 +434,11 @@ struct TrxFactory {
 
     ut_ad(trx->killed_by == std::thread::id{});
 
-    assert_trx_commit_mark_initial(trx);
-    assert_txn_desc_initial(trx);
+    ut_ad(trx->txn_desc.is_whole_initial());
 
-    assert_gp_state_initial(trx);
+    ut_ad(gp_state_is_initial(trx));
+
+    ut_ad(trx->tid_shard_no == -1);
 
     return (true);
   }
@@ -497,9 +514,7 @@ static trx_t *trx_create_low() {
   trx_t *trx = trx_pools->get();
 
   assert_trx_is_free(trx);
-
-  assert_trx_commit_mark_initial(trx);
-  assert_txn_desc_initial(trx);
+  ut_ad(trx->txn_desc.is_whole_initial());
 
   mem_heap_t *heap;
   ib_alloc_t *alloc;
@@ -722,15 +737,15 @@ inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
 
   UT_LIST_REMOVE(trx_sys->mysql_trx_list, trx);
 
-  //  if (trx->read_view != NULL) {
-  //    trx_sys->mvcc->view_close(trx->read_view, true);
-  //  }
-
   if (trx->vision.is_active()) {
-    lizard::trx_vision_release(&trx->vision);
+    lizard::gcs_vision_release(&trx->vision);
   }
 
-  ut_ad(trx_sys_validate_trx_list());
+  if (trx->shadow_view.is_active()) {
+    lizard::gcs_shadow_view_release(&trx->shadow_view);
+  }
+
+  // ut_ad(trx_sys_validate_trx_list());
 
   if (prepared) {
     ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED));
@@ -747,6 +762,8 @@ inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
   }
 
   trx_sys_mutex_exit();
+
+  ut_ad(lizard::gcs_validate_rw_list());
 }
 
 /** Disconnect a transaction from MySQL.
@@ -895,9 +912,8 @@ static trx_t *trx_resurrect_insert(
   trx->rsegs.m_redo.insert_undo = undo;
   trx->is_recovered = true;
 
-  assert_trx_commit_mark_initial(trx);
-  assert_txn_desc_initial(trx);
-  ut_ad(slot_addr_validate(undo->slot_addr));
+  ut_ad(trx->txn_desc.is_whole_initial());
+  ut_ad(undo->slot_addr.is_validate());
 
   /* This is single-threaded startup code, we do not need the
   protection of trx->mutex or trx_sys->mutex here. */
@@ -909,11 +925,12 @@ static trx_t *trx_resurrect_insert(
     if (undo->is_prepared()) {
       ib::info(ER_IB_MSG_1204) << "Transaction " << trx_get_id_for_print(trx)
                                << " was in the XA prepared state"
-                               << ", XID " << trx_get_xid_for_print(trx);
+                               << ", XID " << trx_get_xid_for_print(trx)
+                             << ", state " << undo->state;
 
       if (srv_force_recovery == 0) {
         trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
-        ++trx_sys->n_prepared_trx;
+        // ++trx_sys->n_prepared_trx;
       } else {
         ib::info(ER_IB_MSG_1205) << "Since innodb_force_recovery"
                                     " > 0, we will force a rollback.";
@@ -963,18 +980,18 @@ void trx_resurrect_update_in_prepared_state(
   if (undo->is_prepared()) {
     ib::info(ER_IB_MSG_1206) << "Transaction " << trx_get_id_for_print(trx)
                              << " was in the XA prepared state."
-                             << ", XID " << trx_get_xid_for_print(trx);
+                             << ", XID " << trx_get_xid_for_print(trx)
+                             << ", state " << undo->state;
 
     ut_ad(trx->state.load(std::memory_order_relaxed) !=
           TRX_STATE_FORCED_ROLLBACK);
     /** Prepared trx didn't has valid scn, it will assign a new scn
         if need to commit */
-    assert_undo_commit_mark_initial(undo);
-    assert_trx_commit_mark_initial(trx);
-    assert_txn_desc_initial(trx);
+    ut_ad(undo->cmmt.is_initial());
+    ut_ad(trx->txn_desc.is_whole_initial());
 
     if (trx_state_eq(trx, TRX_STATE_NOT_STARTED)) {
-      ++trx_sys->n_prepared_trx;
+      // ++trx_sys->n_prepared_trx;
     } else {
       ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED));
     }
@@ -984,10 +1001,12 @@ void trx_resurrect_update_in_prepared_state(
     /** Only CACHED state here, because state PURGE undo must be added
     to history list */
     ut_ad(undo->state == TRX_UNDO_CACHED);
-    assert_undo_commit_mark_allocated(undo);
+    ut_ad(undo->cmmt.is_alloced());
+
     trx->txn_desc.cmmt = undo->cmmt;
-    assert_trx_commit_mark_allocated(trx);
-    assert_trx_undo_ptr_initial(trx);
+
+    ut_ad(trx->txn_desc.is_cmmt_alloced());
+    ut_ad(trx->txn_desc.is_slot_initial());
 
     trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY, std::memory_order_relaxed);
   }
@@ -1035,9 +1054,8 @@ static void trx_resurrect_update(
   } else {
     trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
 
-    assert_undo_commit_mark_initial(undo);
-    assert_trx_commit_mark_initial(trx);
-    assert_txn_desc_initial(trx);
+    ut_ad(undo->cmmt.is_initial());
+    ut_ad(trx->txn_desc.is_whole_initial());
   }
 
   /* trx_start_low() is not called with resurrect, so need to initialize
@@ -1115,27 +1133,28 @@ static void trx_resurrect(trx_rseg_t *rseg) {
   }
 }
 
-/** Adds the transaction to trx_sys->rw_trx_list
-Requires trx_sys->mutex, unless called in the single threaded startup code.
-@param[in]  trx   The transaction assumed to not be in the rw_trx_list yet
-*/
-static inline void trx_add_to_rw_trx_list(trx_t *trx) {
-  ut_ad(srv_is_being_started || trx_sys_mutex_own());
-  ut_ad(!trx->in_rw_trx_list);
-  UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
-  ut_d(trx->in_rw_trx_list = true);
-}
+///** Adds the transaction to trx_sys->rw_trx_list
+// Requires trx_sys->mutex, unless called in the single threaded startup code.
+//@param[in]  trx   The transaction assumed to not be in the rw_trx_list yet
+//*/
+// static inline void trx_add_to_rw_trx_list(trx_t *trx) {
+//   ut_ad(srv_is_being_started || trx_sys_mutex_own());
+//   ut_ad(!trx->in_rw_trx_list);
+//   UT_LIST_ADD_FIRST(trx_sys->rw_trx_list, trx);
+//   ut_d(trx->in_rw_trx_list = true);
+// }
+//
+///** Removes the transaction from trx_sys->rw_trx_list.
+// Requires trx_sys->mutex, unless called in the single threaded startup code.
+//@param[in]  trx   The transaction assumed to be in the rw_trx_list
+//*/
+// static inline void trx_remove_from_rw_trx_list(trx_t *trx) {
+//   ut_ad(srv_is_being_started || trx_sys_mutex_own());
+//   ut_ad(trx->in_rw_trx_list);
+//   UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
+//   ut_d(trx->in_rw_trx_list = false);
+// }
 
-/** Removes the transaction from trx_sys->rw_trx_list.
-Requires trx_sys->mutex, unless called in the single threaded startup code.
-@param[in]  trx   The transaction assumed to be in the rw_trx_list
-*/
-static inline void trx_remove_from_rw_trx_list(trx_t *trx) {
-  ut_ad(srv_is_being_started || trx_sys_mutex_own());
-  ut_ad(trx->in_rw_trx_list);
-  UT_LIST_REMOVE(trx_sys->rw_trx_list, trx);
-  ut_d(trx->in_rw_trx_list = false);
-}
 /** Creates trx objects for transactions and initializes the trx list of
  trx_sys at database start. Rollback segments and undo log lists must
  already exist when this function is called, because the lists of
@@ -1178,26 +1197,28 @@ void trx_lists_init_at_db_start(void) {
 
   undo::spaces->s_unlock();
 
-  ut::vector<trx_t *> trxs;
-  for (auto &shard : trx_sys->shards) {
-    shard.active_rw_trxs.latch_and_execute(
-        [&](const Trx_by_id_with_min &trx_by_id_with_min) {
-          for (const auto &trx_track : trx_by_id_with_min.by_id()) {
-            trxs.emplace_back(trx_track.second);
-          }
-        },
-        UT_LOCATION_HERE);
-  }
-  std::sort(trxs.begin(), trxs.end(),
-            [&](trx_t *a, trx_t *b) { return a->id < b->id; });
+//  ut::vector<trx_t *> trxs;
+//  for (auto &shard : trx_sys->shards) {
+//    shard.active_rw_trxs.latch_and_execute(
+//        [&](const Trx_by_id_with_min &trx_by_id_with_min) {
+//          for (const auto &trx_track : trx_by_id_with_min.by_id()) {
+//            trxs.emplace_back(trx_track.second);
+//          }
+//        },
+//        UT_LOCATION_HERE);
+//  }
+//  std::sort(trxs.begin(), trxs.end(),
+//            [&](trx_t *a, trx_t *b) { return a->id < b->id; });
+//
+//  for (trx_t *trx : trxs) {
+//    // if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE ||
+//    //     trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED) {
+//    //   trx_sys->rw_trx_ids.push_back(trx->id);
+//    // }
+//    trx_add_to_rw_trx_list(trx);
+//  }
 
-  for (trx_t *trx : trxs) {
-    // if (trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE ||
-    //     trx->state.load(std::memory_order_relaxed) == TRX_STATE_PREPARED) {
-    //   trx_sys->rw_trx_ids.push_back(trx->id);
-    // }
-    trx_add_to_rw_trx_list(trx);
-  }
+  lizard::gcs_resurrect_trxs();
 }
 
 /** Get next redo rollback segment in round-robin fashion.
@@ -1377,13 +1398,11 @@ void trx_assign_rseg_temp(trx_t *trx) {
       srv_read_only_mode ? nullptr : get_next_temp_rseg();
 
   if (trx->id == 0) {
-    trx_sys_mutex_enter();
+    // trx_sys_mutex_enter();
+    // trx->id = trx_sys_allocate_trx_id();
+    // trx_sys_mutex_exit();
 
-    trx->id = trx_sys_allocate_trx_id();
-
-    // trx_sys->rw_trx_ids.push_back(trx->id);
-
-    trx_sys_mutex_exit();
+    trx->id = lizard::gcs_new_tid();
 
     trx_sys_rw_trx_add(trx);
   }
@@ -1493,22 +1512,28 @@ static void trx_start_low(
     updates a temporary table */
     DEBUG_SYNC_C("trx_sys_before_assign_id");
 
-    trx_sys_mutex_enter();
+    //  trx_sys_mutex_enter();
 
-    trx->id = trx_sys_allocate_trx_id();
+    //  trx->id = trx_sys_allocate_trx_id();
 
-    // trx_sys->rw_trx_ids.push_back(trx->id);
+    //  ut_ad(trx->rsegs.m_redo.rseg != nullptr || srv_read_only_mode ||
+    //        srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
 
-    ut_ad(trx->rsegs.m_redo.rseg != nullptr || srv_read_only_mode ||
-          srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
+    //  trx_add_to_rw_trx_list(trx);
 
-    trx_add_to_rw_trx_list(trx);
+    //  trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
 
-    trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
+    //  ut_ad(trx_sys_validate_trx_list());
 
-    ut_ad(trx_sys_validate_trx_list());
+    //  trx_sys_mutex_exit();
 
-    trx_sys_mutex_exit();
+    lizard::gcs_new_tid(trx, [](trx_t *trx) -> bool {
+      ut_ad(trx->rsegs.m_redo.rseg != nullptr || srv_read_only_mode ||
+            srv_force_recovery >= SRV_FORCE_NO_TRX_UNDO);
+
+      trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
+      return false;
+    });
 
     trx_sys_rw_trx_add(trx);
 
@@ -1524,17 +1549,16 @@ static void trx_start_low(
       to write to the temporary table. */
 
       if (read_write) {
-        trx_sys_mutex_enter();
+        // trx_sys_mutex_enter();
 
         ut_ad(!srv_read_only_mode);
 
         trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
 
-        trx->id = trx_sys_allocate_trx_id();
+        trx->id = lizard::gcs_new_tid();
 
-        // trx_sys->rw_trx_ids.push_back(trx->id);
-
-        trx_sys_mutex_exit();
+        // trx->id = trx_sys_allocate_trx_id();
+        // trx_sys_mutex_exit();
 
         trx_set_trx_id_for_audit_trx_ctx(trx);
 
@@ -1602,13 +1626,14 @@ static bool trx_write_serialisation_history(
     /** Always has txn undo log segment */
     ut_ad(lizard::trx_is_txn_rseg_assigned(trx) &&
           lizard::trx_is_txn_rseg_updated(trx));
-    assert_commit_mark_initial(trx->rsegs.m_redo.insert_undo->prev_image);
+    ut_ad(trx->rsegs.m_redo.insert_undo->prev_image.is_initial());
 
     trx_undo_set_state_at_finish(trx->rsegs.m_redo.insert_undo, mtr);
   }
 
   if (trx->rsegs.m_noredo.insert_undo != nullptr) {
-    assert_commit_mark_initial(trx->rsegs.m_noredo.insert_undo->prev_image);
+    ut_ad(trx->rsegs.m_noredo.insert_undo->prev_image.is_initial());
+
     trx_undo_set_state_at_finish(trx->rsegs.m_noredo.insert_undo, &temp_mtr);
   }
 
@@ -1631,60 +1656,46 @@ static bool trx_write_serialisation_history(
     if this is the first UNDO log being written to assigned
     rollback segments. */
 
-    txn_undo_ptr_t *txn_rseg_undo_ptr =
+    txn_slot_ptr_t *txn_ptr =
         trx->rsegs.m_txn.txn_undo != nullptr ? &trx->rsegs.m_txn : nullptr;
 
-    trx_undo_ptr_t *redo_rseg_undo_ptr =
+    trx_undo_ptr_t *redo_ptr =
         trx->rsegs.m_redo.update_undo != nullptr ? &trx->rsegs.m_redo : nullptr;
 
-    trx_undo_ptr_t *temp_rseg_undo_ptr =
-        trx->rsegs.m_noredo.update_undo != nullptr ? &trx->rsegs.m_noredo
-                                                   : nullptr;
+    trx_undo_ptr_t *temp_ptr = trx->rsegs.m_noredo.update_undo != nullptr
+                                   ? &trx->rsegs.m_noredo
+                                   : nullptr;
 
     /** Lizard: txn undo header */
     commit_mark_t cmmt;
-    lizard::TxnUndoRsegs elem;
-    bool has_collected = lizard::trx_purge_collect_rsegs(
-        &elem, redo_rseg_undo_ptr, temp_rseg_undo_ptr, txn_rseg_undo_ptr);
-
-    ulint txn_rseg_len = 0;
+    lizard::trx_commit_rsegs_collect(trx, redo_ptr, temp_ptr);
     if (trx->rsegs.m_txn.txn_undo != nullptr) {
       page_t *undo_hdr_page;
       trx_undo_t *txn_undo = trx->rsegs.m_txn.txn_undo;
-      assert_commit_mark_allocated(txn_undo->prev_image);
+      ut_ad(txn_undo->prev_image.is_alloced());
 
-      auto undo_ptr = &trx->rsegs.m_txn;
       undo_hdr_page =
           trx_undo_set_state_at_finish(trx->rsegs.m_txn.txn_undo, mtr);
       /** Update state */
-      lizard::txn_undo_set_state_at_finish(
+      lizard::txn_slot_hdr_write_state_at_finish(
           trx, undo_hdr_page + txn_undo->hdr_offset, trx->is_rollback, mtr);
 
       /** Generate SCN */
       cmmt = lizard::trx_commit_mark(trx, nullptr, txn_undo, undo_hdr_page,
                                      txn_undo->hdr_offset, &serialised, mtr);
-      elem.set_scn(cmmt.scn);
       ut_a(cmmt.scn > txn_undo->prev_image.scn);
 
-      bool update_txn_rseg_len = (trx->rsegs.m_noredo.update_undo == nullptr &&
-                                  trx->rsegs.m_redo.update_undo == nullptr);
-      /** Delay add undo log length */
-      lizard::trx_txn_undo_cleanup(trx, undo_ptr, undo_hdr_page,
-                                   update_txn_rseg_len,
-                                   update_txn_rseg_len ? 1 : 0, mtr);
-      txn_rseg_len = update_txn_rseg_len ? 0 : 1;
+      lizard::txn_slot_cleanup_undo(trx, txn_ptr, undo_hdr_page, mtr);
     }
 
     /* It is not necessary to obtain trx->undo_mutex here because
     only a single OS thread is allowed to do the transaction commit
     for this transaction. */
     if (trx->rsegs.m_redo.update_undo != nullptr) {
-      page_t *undo_hdr_page;
       trx_undo_t *update_undo = trx->rsegs.m_redo.update_undo;
+      ut_ad(update_undo->prev_image.is_initial());
 
-      assert_commit_mark_initial(update_undo->prev_image);
-
-      undo_hdr_page =
+      page_t *undo_page =
           trx_undo_set_state_at_finish(trx->rsegs.m_redo.update_undo, mtr);
 
       /* Delay update of rseg_history_len if we plan to add
@@ -1694,55 +1705,40 @@ static bool trx_write_serialisation_history(
       bool update_rseg_len = !(trx->rsegs.m_noredo.update_undo != nullptr);
 
       /* Set flag if GTID information need to persist. */
-      auto undo_ptr = &trx->rsegs.m_redo;
-      trx_undo_gtid_set(trx, undo_ptr->update_undo, false);
+      trx_undo_gtid_set(trx, redo_ptr->update_undo, false);
 
       /** Always has txn undo log for transaction */
-      ut_ad(lizard::commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
-      lizard::trx_commit_mark(trx, &cmmt, update_undo, undo_hdr_page,
+      ut_ad(cmmt.is_alloced());
+      lizard::trx_commit_mark(trx, &cmmt, update_undo, undo_page,
                               update_undo->hdr_offset, &serialised, mtr);
 
-      trx_undo_update_cleanup(trx, undo_ptr, undo_hdr_page, update_rseg_len,
-                              (update_rseg_len ? 1 + txn_rseg_len : 0), mtr);
+      trx_undo_update_cleanup(trx, redo_ptr, undo_page, update_rseg_len,
+                              (update_rseg_len ? 1 : 0), mtr);
     }
 
     DBUG_EXECUTE_IF("ib_trx_crash_during_commit", DBUG_SUICIDE(););
 
     if (trx->rsegs.m_noredo.update_undo != nullptr) {
-      page_t *undo_hdr_page;
       trx_undo_t *update_undo = trx->rsegs.m_noredo.update_undo;
+      ut_ad(update_undo->prev_image.is_initial());
 
-      assert_commit_mark_initial(update_undo->prev_image);
-
-      undo_hdr_page = trx_undo_set_state_at_finish(
+      page_t *undo_page = trx_undo_set_state_at_finish(
           trx->rsegs.m_noredo.update_undo, &temp_mtr);
 
-      ulint n_added_logs =
-          (redo_rseg_undo_ptr != nullptr) ? 2 + txn_rseg_len : 1 + txn_rseg_len;
+      ulint n_added_logs = (redo_ptr != nullptr) ? 2 : 1;
 
-      if (lizard::commit_mark_state(cmmt) == SCN_STATE_ALLOCATED) {
-        /** Use already SCN */
-        lizard::trx_commit_mark(trx, &cmmt, update_undo, undo_hdr_page,
-                                update_undo->hdr_offset, &serialised,
-                                &temp_mtr);
-      } else {
-        /** Temporary update undo log purge still need SCN number */
-        /** Generate SCN */
-        cmmt = lizard::trx_commit_mark(trx, nullptr, update_undo, undo_hdr_page,
-                                       update_undo->hdr_offset, &serialised,
-                                       &temp_mtr);
-        elem.set_scn(cmmt.scn);
-      }
+      /** Use already SCN or Generate new SCN since temporary update undo log
+       * purge still need SCN number */
+      cmmt = lizard::trx_commit_mark(
+          trx, cmmt.is_alloced() ? &cmmt : nullptr, update_undo, undo_page,
+          update_undo->hdr_offset, &serialised, &temp_mtr);
 
-      trx_undo_update_cleanup(trx, &trx->rsegs.m_noredo, undo_hdr_page, true,
-                              n_added_logs, &temp_mtr);
+      trx_undo_update_cleanup(trx, temp_ptr, undo_page, true, n_added_logs,
+                              &temp_mtr);
     }
 
-    /** Add the rseg into purge queue */
-    if (has_collected) {
-      ut_ad(elem.get_scn() != SCN_NULL);
-      lizard::trx_purge_add_rsegs(cmmt, &elem);
-    }
+    /** Add the rseg into history queue */
+    lizard::trx_commit_rsegs_submit(trx, cmmt);
   }
 
   if (own_txn_rseg_mutex) {
@@ -1889,9 +1885,10 @@ static void trx_flush_log_if_needed(lsn_t lsn, /*!< in: lsn up to which logs are
     auto wait_stats = log_write_up_to(*log_sys, lsn, true);
     MONITOR_INC_WAIT_STATS(MONITOR_TRX_ON_LOG_, wait_stats);
   } else {
-    // Note:: xpaxos follower apply worker no need flush immediately
-    bool no_flush =
-        trx->mysql_thd && trx->mysql_thd->xpaxos_replication_channel;
+    // Note: xpaxos follower apply worker no need flush immediately.
+    // Use current_thd instead of trx->mysql_thd so that detached XA COMMIT
+    // (where trx->mysql_thd == nullptr) is also covered.
+    bool no_flush = current_thd && current_thd->xpaxos_replication_channel;
     trx_flush_log_if_needed_low(lsn, no_flush);
   }
 
@@ -1927,16 +1924,8 @@ also released by this call as trx is removed from rw_trx_list.
 @param[in]      trx             Transaction to erase, must have an ID > 0 */
 static void trx_erase_lists(trx_t *trx) {
   ut_ad(trx->id > 0);
-  ut_ad(trx_sys_mutex_own());
 
-  // trx_ids_t::iterator it = std::lower_bound(trx_sys->rw_trx_ids.begin(),
-  //                                           trx_sys->rw_trx_ids.end(),
-  //                                           trx->id);
-
-  // ut_ad(*it == trx->id);
-  // trx_sys->rw_trx_ids.erase(it);
-  //
-  assert_trx_in_recovery(trx);
+  ut_ad(lizard::trx_assert_in_recovery(trx));
 
   /**
      Lizard: it's for min_active_trx_id modification
@@ -1948,13 +1937,7 @@ static void trx_erase_lists(trx_t *trx) {
       (trx->rsegs.m_redo.rseg == nullptr && trx->rsegs.m_txn.rseg == nullptr)) {
     ut_ad(!trx->in_rw_trx_list);
   } else {
-    trx_remove_from_rw_trx_list(trx);
-    ut_ad(trx_sys_validate_trx_list());
-
-    // if (trx->read_view != nullptr) {
-    //   trx_sys->mvcc->view_close(trx->read_view, true);
-    // }
-    lizard::gcs_mod_min_active_tid(trx);
+    lizard::gcs_erase_tid(trx);
   }
 
   DEBUG_SYNC_C("after_trx_erase_lists");
@@ -1964,9 +1947,6 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
   check_trx_state(trx);
   ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE) ||
         trx_state_eq(trx, TRX_STATE_PREPARED));
-
-  bool trx_sys_latch_is_needed =
-      (trx->id > 0) || trx_state_eq(trx, TRX_STATE_PREPARED);
 
   /* Check and get GTID to be persisted. Do it outside mutex. It must be done
   before trx->state is changed to TRX_STATE_COMMITTED_IN_MEMORY, because the
@@ -1979,24 +1959,11 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     gtid_persistor.get_gtid_info(trx, gtid_desc);
   }
 
-  if (trx_sys_latch_is_needed) {
-    trx_sys_mutex_enter();
-  }
-
   if (trx->id > 0) {
     /* For consistent snapshot, we need to remove current
     transaction from running transaction id list for mvcc
     before doing commit and releasing locks. */
     trx_erase_lists(trx);
-  }
-
-  if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
-    ut_a(trx_sys->n_prepared_trx > 0);
-    --trx_sys->n_prepared_trx;
-  }
-
-  if (trx_sys_latch_is_needed) {
-    trx_sys_mutex_exit();
   }
 
   auto state_transition = [&]() {
@@ -2057,8 +2024,6 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
       gtid_persistor.add(gtid_desc);
     }
 
-    // trx_erase_from_serialisation_list_low(trx);
-
     trx_sys_gtids_mem_mutex_exit();
 
 #ifdef UNIV_DEBUG
@@ -2070,7 +2035,7 @@ static void trx_release_impl_and_expl_locks(trx_t *trx, bool serialised) {
     }
 #endif /* UNIV_DEBUG */
 
-    lizard::gcs_erase_lists(trx);
+    lizard::gcs_erase_scn(trx);
   }
 
   lock_trx_release_locks(trx);
@@ -2122,12 +2087,12 @@ written */
 
     ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
 
-    // if (trx->read_view != nullptr) {
-    //   trx_sys->mvcc->view_close(trx->read_view, false);
-    // }
-
     if (trx->vision.is_active()) {
-      lizard::trx_vision_release(&trx->vision);
+      lizard::gcs_vision_release(&trx->vision);
+    }
+
+    if (trx->shadow_view.is_active()) {
+      lizard::gcs_shadow_view_release(&trx->shadow_view);
     }
 
     MONITOR_INC(MONITOR_TRX_NL_RO_COMMIT);
@@ -2139,9 +2104,13 @@ written */
     trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
 
   } else {
-    assert_trx_in_recovery(trx);
+    ut_ad(lizard::trx_assert_in_recovery(trx));
+
+    /* commit changeset before trx release locks */
+    thd_commit_changeset_map(trx->mysql_thd, trx->is_rollback);
 
     lizard::cleanout_after_commit(trx, serialised);
+
     trx_release_impl_and_expl_locks(trx, serialised);
 
     /* Removed the transaction from the list of active transactions.
@@ -2153,16 +2122,17 @@ written */
     if (trx->read_only || (trx->rsegs.m_redo.rseg == nullptr &&
                            trx->rsegs.m_txn.rseg == nullptr)) {
       MONITOR_INC(MONITOR_TRX_RO_COMMIT);
-      // if (trx->read_view != nullptr) {
-      //   trx_sys->mvcc->view_close(trx->read_view, false);
-      // }
     } else {
       ut_ad(trx->id > 0);
       MONITOR_INC(MONITOR_TRX_RW_COMMIT);
     }
 
     if (trx->vision.is_active()) {
-      lizard::trx_vision_release(&trx->vision);
+      lizard::gcs_vision_release(&trx->vision);
+    }
+
+    if (trx->shadow_view.is_active()) {
+      lizard::gcs_shadow_view_release(&trx->shadow_view);
     }
   }
 
@@ -2242,7 +2212,6 @@ written */
     ut_ad(rseg->trx_ref_count > 0);
 
     rseg->trx_ref_count--;
-
     trx->rsegs.m_txn.rseg = nullptr;
   }
 
@@ -2446,14 +2415,17 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
   trx->undo_rseg_space = 0;
   trx->last_sql_stat_start.least_undo_no = 0;
 
-  trx_sys_mutex_enter();
+  // trx_sys_mutex_enter();
+
+  // ut_a(!trx->read_only);
+  // trx_remove_from_rw_trx_list(trx);
+
+  // lizard::gcs_mod_min_active_tid(trx);
+
+  // trx_sys_mutex_exit();
 
   ut_a(!trx->read_only);
-  trx_remove_from_rw_trx_list(trx);
-
-  lizard::gcs_mod_min_active_tid(trx);
-
-  trx_sys_mutex_exit();
+  lizard::gcs_erase_tid(trx);
 
   /* Change the transaction state without mutex protection, now
   that it no longer is in the trx_list. Recovered transactions
@@ -2463,7 +2435,7 @@ void trx_cleanup_at_db_startup(trx_t *trx) /*!< in: transaction */
   ut_ad(!trx->in_mysql_trx_list);
   trx->txn_desc.reset();
   trx->xa_spec = nullptr;
-  new (&trx->rsegs.m_txn) txn_undo_ptr_t();
+  new (&trx->rsegs.m_txn) txn_slot_ptr_t();
 
   trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
 }
@@ -2478,25 +2450,28 @@ lizard::Vision *trx_assign_read_view(
   ut_ad(trx_can_be_handled_by_current_thread_or_is_hp_victim(trx));
   ut_ad(trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE);
 
-  // if (srv_read_only_mode) {
-  //   ut_ad(trx->read_view == nullptr);
-  //   return (nullptr);
-
-  // } else if (!MVCC::is_view_active(trx->read_view)) {
-  //   trx_sys->mvcc->view_open(trx->read_view, trx);
-  // }
-
   if (srv_read_only_mode) {
     ut_ad(!trx->vision.is_active());
     return (nullptr);
   } else if (!trx->vision.is_active()) {
-    lizard::trx_vision_open(trx);
+    lizard::gcs_vision_open(trx);
   }
 
   /* NOTES: This may result in performance degradation. */
   trx->vision.xa_refresh(trx);
 
   return (&trx->vision);
+}
+
+lizard::Shadow_view *trx_assign_shadow_read_view(
+    trx_t *trx) /*!< in/out: active transaction */
+{
+  ut_ad(!srv_read_only_mode);
+  if (!trx->shadow_view.is_active()) {
+    lizard::gcs_shadow_view_open(trx);
+  }
+
+  return (&trx->shadow_view);
 }
 
 /** Prepares a transaction for commit/rollback. */
@@ -3214,38 +3189,42 @@ static void trx_prepare(trx_t *trx) {
   DBUG_EXECUTE_IF("ib_trx_crash_during_xa_prepare_step", DBUG_SUICIDE(););
 
   /* Acquire rseg mutex in order in advance */
-  lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+  lizard::locked_rsegs_t locked_rsegs(trx);
 
   mtr_t mtr;
-  lizard::Mtr_wrapper mtr_wrapper(&mtr);
+  lazy_mtr_t lazy_mtr(&mtr);
 
-  if (rseg_mutex_wrapper.txn_rseg_updated()) {
-    mtr_wrapper.start();
+  if (locked_rsegs.txn_rseg_updated()) {
+    lazy_mtr.start();
     lsn = lizard::txn_prepare_low(trx, &trx->rsegs.m_txn, &mtr);
   }
 
-  if (rseg_mutex_wrapper.redo_rseg_updated()) {
-    mtr_wrapper.start();
+  if (locked_rsegs.redo_rseg_updated()) {
+    lazy_mtr.start();
     lsn = trx_prepare_low(trx, &trx->rsegs.m_redo, false, &mtr);
   }
 
-  lsn = mtr_wrapper.commit();
+  lsn = lazy_mtr.commit();
 
-  if (rseg_mutex_wrapper.temp_rseg_updated()) {
+  if (locked_rsegs.temp_rseg_updated()) {
     mtr_t temp_mtr;
     mtr_start_sync(&temp_mtr);
     trx_prepare_low(trx, &trx->rsegs.m_noredo, true, &temp_mtr);
     mtr_commit(&temp_mtr);
   }
 
-  rseg_mutex_wrapper.release_mutex();
+  locked_rsegs.release_mutex();
 
   ut_a(trx->state.load(std::memory_order_relaxed) == TRX_STATE_ACTIVE);
 
-  trx_sys_mutex_enter();
+  //trx_sys_mutex_enter();
+  //trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
+  //trx_sys->n_prepared_trx++;
+  //trx_sys_mutex_exit();
+
+  trx_mutex_enter(trx);
   trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
-  trx_sys->n_prepared_trx++;
-  trx_sys_mutex_exit();
+  trx_mutex_exit(trx);
 
   /* close xa group for extern Xa transaction. */
   if (!trx->xa_desc.is_group_null()) {
@@ -3281,14 +3260,14 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
   mtr_t mtr;
 
   /* Acquire rseg mutex in order in advance */
-  lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+  lizard::locked_rsegs_t locked_rsegs(trx);
 
-  lizard::Mtr_wrapper mtr_wrapper(&mtr);
+  lazy_mtr_t lazy_mtr(&mtr);
 
   /* Lizard: Set prepared in tc status for TXN. */
   if (trx->rsegs.m_txn.txn_undo != nullptr) {
-    ut_ad(rseg_mutex_wrapper.txn_rseg_updated());
-    mtr_wrapper.start();
+    ut_ad(locked_rsegs.txn_rseg_updated());
+    lazy_mtr.start();
     // trx_rseg_t *rseg = trx->rsegs.m_txn.rseg;
     // rseg->latch();
     trx_undo_set_prepared_in_tc(trx, trx->rsegs.m_txn.txn_undo, &mtr);
@@ -3296,13 +3275,13 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
   }
 
   if (undo_ptr->insert_undo != nullptr || undo_ptr->update_undo != nullptr) {
-    ut_ad(rseg_mutex_wrapper.redo_rseg_updated());
+    ut_ad(locked_rsegs.redo_rseg_updated());
 
     // mtr_t mtr;
     // trx_rseg_t *rseg = undo_ptr->rseg;
 
     // mtr_start_sync(&mtr);
-    mtr_wrapper.start();
+    lazy_mtr.start();
 
     /* Change the undo log segment states from TRX_UNDO_ACTIVE to
     TRX_UNDO_PREPARED: these modifications to the file data
@@ -3336,8 +3315,8 @@ static lsn_t trx_set_prepared_in_tc_low(trx_t *trx, trx_undo_ptr_t *undo_ptr) {
     // return lsn;
   }
 
-  lsn = mtr_wrapper.commit();
-  rseg_mutex_wrapper.release_mutex();
+  lsn = lazy_mtr.commit();
+  locked_rsegs.release_mutex();
   return lsn;
 }
 
@@ -3464,18 +3443,52 @@ int trx_recover_for_mysql(
   /* We should set those transactions which are in the prepared state
   to the xid_list */
 
-  trx_sys_mutex_enter();
+  //  trx_sys_mutex_enter();
+  //
+  //  for (const trx_t *trx : trx_sys->rw_trx_list) {
+  //    assert_trx_in_rw_list(trx);
+  //
+  //    /* The state of a read-write transaction cannot change
+  //    from or to NOT_STARTED while we are holding the
+  //    trx_sys->mutex. It may change to PREPARED, but not if
+  //    trx->is_recovered. */
+  //    if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
+  //      if (get_info_about_prepared_transaction(&txn_list[count], trx,
+  //      mem_root))
+  //        break;
+  //
+  //      if (count == 0) {
+  //        ib::info(ER_IB_MSG_1207) << "Starting recovery for"
+  //                                    " XA transactions...";
+  //      }
+  //
+  //      ib::info(ER_IB_MSG_1208) << "Transaction " <<
+  //      trx_get_id_for_print(trx)
+  //                               << " in prepared state after recovery"
+  //                               << ", XID " << trx_get_xid_for_print(trx);
+  //
+  //      ib::info(ER_IB_MSG_1209)
+  //          << "Transaction contains changes to " << trx->undo_no << " rows";
+  //
+  //      count++;
+  //
+  //      if (count == len) {
+  //        break;
+  //      }
+  //    }
+  //  }
+  //
+  //  trx_sys_mutex_exit();
 
-  for (const trx_t *trx : trx_sys->rw_trx_list) {
-    assert_trx_in_rw_list(trx);
-
+  lizard::gcs_iterate_rw_trx([&txn_list, &len, &count,
+                               &mem_root](trx_t *trx) -> bool {
     /* The state of a read-write transaction cannot change
     from or to NOT_STARTED while we are holding the
     trx_sys->mutex. It may change to PREPARED, but not if
     trx->is_recovered. */
     if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
       if (get_info_about_prepared_transaction(&txn_list[count], trx, mem_root))
-        break;
+        return true;
 
       if (count == 0) {
         ib::info(ER_IB_MSG_1207) << "Starting recovery for"
@@ -3491,13 +3504,11 @@ int trx_recover_for_mysql(
 
       count++;
 
-      if (count == len) {
-        break;
-      }
+      if (count == len) return true;
     }
-  }
 
-  trx_sys_mutex_exit();
+    return false;
+  });
 
   if (count > 0) {
     ib::info(ER_IB_MSG_1210) << count
@@ -3512,15 +3523,31 @@ int trx_recover_tc_for_mysql(Xa_state_list &xa_list) {
   /* We should set those transactions which are in the prepared state
   to the xid_list */
 
-  trx_sys_mutex_enter();
+  // trx_sys_mutex_enter();
 
-  for (trx_t *trx : trx_sys->rw_trx_list) {
-    assert_trx_in_rw_list(trx);
+  //  for (trx_t *trx : trx_sys->rw_trx_list) {
+  //    assert_trx_in_rw_list(trx);
+  //
+  //    /* The state of a read-write transaction cannot change
+  //    from or to NOT_STARTED while we are holding the
+  //    trx_sys->mutex. It may change to PREPARED, but not if
+  //    trx->is_recovered. */
+  //    if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
+  //      if (trx_is_prepared_in_tc(trx)) {
+  //        /* We found the transaction in 2nd phase of prepare, add to XA
+  //           transaction state list as PREPARED_IN_TC */
+  //        xa_list.add(*trx->xid, enum_ha_recover_xa_state::PREPARED_IN_TC);
+  //      } else {
+  //        /* Otherwise, just add as PREPARED_IN_SE */
+  //        xa_list.add(*trx->xid, enum_ha_recover_xa_state::PREPARED_IN_SE);
+  //      }
+  //    }
+  //  }
+  //
 
-    /* The state of a read-write transaction cannot change
-    from or to NOT_STARTED while we are holding the
-    trx_sys->mutex. It may change to PREPARED, but not if
-    trx->is_recovered. */
+  //  trx_sys_mutex_exit();
+
+  lizard::gcs_iterate_rw_trx([&xa_list](trx_t *trx) -> bool {
     if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
       if (trx_is_prepared_in_tc(trx)) {
         /* We found the transaction in 2nd phase of prepare, add to XA
@@ -3531,9 +3558,9 @@ int trx_recover_tc_for_mysql(Xa_state_list &xa_list) {
         xa_list.add(*trx->xid, enum_ha_recover_xa_state::PREPARED_IN_SE);
       }
     }
-  }
 
-  trx_sys_mutex_exit();
+    return false;
+  });
 
   return 0;
 }
@@ -3548,25 +3575,46 @@ int trx_recover_tc_for_mysql(Xa_state_list &xa_list) {
 {
   ut_ad(trx_sys_mutex_own());
 
-  for (auto trx : trx_sys->rw_trx_list) {
-    assert_trx_in_rw_list(trx);
-
-    /* Most of the time server layer takes care of synchronizing access to a XID
-    from several connections, but when disconnecting there is a short period in
-    which server allows a new connection to pick up XID still processed by old
-    connection at InnoDB layer. To synchronize with trx_disconnect_from_mysql(),
-    we use trx->mysql_thd under protection of trx_sys->mutex. */
-
+  //  for (auto trx : trx_sys->rw_trx_list) {
+  //    assert_trx_in_rw_list(trx);
+  //
+  //    /* Most of the time server layer takes care of synchronizing access to a
+  //    XID from several connections, but when disconnecting there is a short
+  //    period in which server allows a new connection to pick up XID still
+  //    processed by old connection at InnoDB layer. To synchronize with
+  //    trx_disconnect_from_mysql(), we use trx->mysql_thd under protection of
+  //    trx_sys->mutex. */
+  //
+  //    if (trx->mysql_thd == nullptr && trx_state_eq(trx, TRX_STATE_PREPARED)
+  //    &&
+  //        xid->eq(trx->xid)) {
+  //      /* Invalidate the XID, so that subsequent calls
+  //      will not find it. */
+  //      trx->xid->reset();
+  //      return trx;
+  //    }
+  //  }
+  //
+  trx_t *rw_trx = nullptr;
+  lizard::gcs_iterate_rw_trx([&xid, &rw_trx](trx_t *trx) -> bool {
+    /* Most of the time server layer takes care of synchronizing access to
+    a XID from several connections, but when disconnecting there is a
+    short period in which server allows a new connection to pick up XID
+    still processed by old connection at InnoDB layer. To synchronize with
+    trx_disconnect_from_mysql(), we use trx->mysql_thd under protection of
+    trx_sys->mutex. */
     if (trx->mysql_thd == nullptr && trx_state_eq(trx, TRX_STATE_PREPARED) &&
         xid->eq(trx->xid)) {
       /* Invalidate the XID, so that subsequent calls
       will not find it. */
       trx->xid->reset();
-      return trx;
+      rw_trx = trx;
+      return true;
     }
-  }
+    return false;
+  });
 
-  return nullptr;
+  return rw_trx;
 }
 
 trx_t *trx_get_trx_by_xid(const XID *xid) {
@@ -3705,24 +3753,21 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
 
   DEBUG_SYNC_C("trx_sys_before_assign_id");
 
-  trx_sys_mutex_enter();
-
   ut_ad(trx->id == 0);
-  trx->id = trx_sys_allocate_trx_id();
 
-  // trx_sys->rw_trx_ids.push_back(trx->id);
+  // trx_sys_mutex_enter();
+  // trx->id = trx_sys_allocate_trx_id();
+  // trx_add_to_rw_trx_list(trx);
+  // trx_sys_mutex_exit();
 
-  /* So that we can see our own changes. */
-  // if (MVCC::is_view_active(trx->read_view)) {
-  //  MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
-  // }
+  lizard::gcs_new_tid(trx, [](trx_t *trx) -> bool {
+    ut_ad(trx->id != 0);
+    return false;
+  });
 
   if (trx->vision.is_active()) {
     trx->vision.set_vision_creator_trx_id(trx->id);
   }
-  trx_add_to_rw_trx_list(trx);
-
-  trx_sys_mutex_exit();
 
   trx_sys_rw_trx_add(trx);
 

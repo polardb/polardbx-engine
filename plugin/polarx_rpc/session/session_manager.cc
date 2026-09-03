@@ -41,6 +41,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "global_timestamp_service.h"
 #endif
 #include "sql/mysqld.h"
+#include "sql/auth/sql_internal_account.h"
 #include "sql/sql_class.h"
 
 #include "../coders/buffering_command_delegate.h"
@@ -420,6 +421,7 @@ err_t CsessionManager::new_session(CtcpConnection &tcp, const uint64_t &sid,
   if (UNLIKELY(err)) return err;
   err = session->switch_to_user(user_.c_str(), host_.c_str(), nullptr, nullptr);
   if (UNLIKELY(err)) return err;
+  im::apply_polarx_specific_user_default(session->get_thd());
   /// finish init
   {
     CautoSpinRWLock lck(session_lock_, true, session_poll_rwlock_spin_cnt);

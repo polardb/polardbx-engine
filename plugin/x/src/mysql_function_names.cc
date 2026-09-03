@@ -146,6 +146,7 @@ const char *const native_mysql_functions[] = {
     "PERIOD_ADD",
     "PERIOD_DIFF",
     "PI",
+    "POLARDBX_HASHER",
     "POW",
     "POWER",
     "PS_CURRENT_THREAD_ID",

@@ -1,0 +1,896 @@
+# ================================================================
+# Test: AS OF queries across DDL operations on partitioned tables
+#
+# Systematically tests cross-DDL AS OF behavior for InnoDB
+# partitioned tables, covering the ha_innopart.cc code paths.
+#
+#   Category P1: Partition no-rebuild DDLs -> normal traversal
+#       P1.1 ADD PARTITION (RANGE)
+#       P1.2 DROP PARTITION (RANGE) - surviving data accessible
+#       P1.3 LIST partition ADD PARTITION
+#       P1.4 RENAME INDEX on HASH partition
+#   Category P2: INSTANT DDL on partitioned -> normal traversal
+#       P2.1 ADD COLUMN (INSTANT)
+#       P2.2 DROP COLUMN (INSTANT)
+#       P2.3 ADD VIRTUAL COLUMN
+#   Category P3: ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED
+#       (exercises ha_innopart::change_active_index)
+#       P3.1 RANGE partition
+#       P3.2 HASH partition
+#       P3.3 LIST partition
+#   Category P4: INPLACE rebuild -> ER_AS_OF_TABLE_DEF_CHANGED (modified rows)
+#       Unmodified rows: current value = historical value, returned directly
+#       Modified rows: undo traversal detects table_id mismatch -> error
+#       P4.1 ALTER TABLE FORCE (RANGE)
+#       P4.2 OPTIMIZE TABLE (HASH)
+#       P4.3 ROW_FORMAT change (LIST)
+#   Category P5: COPY / partial rebuild -> empty result
+#       P5.1 MODIFY COLUMN shrink (COPY, all partitions)
+#       P5.2 REORGANIZE PARTITION (partial COPY rebuild)
+#       P5.3 TRUNCATE PARTITION (single partition replacement)
+#           - reorganized partitions: empty
+#           - non-reorganized partitions: normal traversal
+#   Category P6: Complex multi-timestamp scenario
+#   Category P7: cross_ddl OFF behavior on partitioned tables
+#       P7.1 ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED
+#       P7.2 INSTANT ADD COLUMN -> ER_AS_OF_TABLE_DEF_CHANGED
+#       P7.3 FORCE rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+#       P7.4 Parameter switch (DDL under OFF, query under ON)
+# ================================================================
+
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+# Helper: Get table_id for a specific partition of a table.
+# InnoDB names partition tables as "dbname/tblname#p#partname"
+DELIMITER //;
+CREATE FUNCTION get_part_id(tbl_name VARCHAR(64), part_name VARCHAR(64))
+RETURNS BIGINT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE tid BIGINT;
+    SELECT table_id INTO tid FROM information_schema.innodb_tables
+    WHERE name = CONCAT('test/', tbl_name, '#p#', part_name);
+    RETURN tid;
+END//
+DELIMITER ;//
+
+# ################################################################
+#   Category P1: Partition No-Rebuild DDLs -> Normal Traversal
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P1: Partition No-Rebuild DDLs
+--echo ================================================================
+
+# --- P1.1: ADD PARTITION (RANGE) ---
+--echo
+--echo --- P1.1: ADD PARTITION (RANGE) ---
+--echo # ADD PARTITION adds an empty partition; existing partitions NOT rebuilt
+
+CREATE TABLE p1_add_part (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20)
+);
+INSERT INTO p1_add_part VALUES (5, 'Alice'), (15, 'Bob');
+
+sleep 3;
+SET @ts_p1_add = NOW(6);
+sleep 3;
+
+--disable_result_log
+SELECT get_part_id('p1_add_part', 'p0') INTO @p0_before;
+SELECT get_part_id('p1_add_part', 'p1') INTO @p1_before;
+--enable_result_log
+
+ALTER TABLE p1_add_part ADD PARTITION (PARTITION p2 VALUES LESS THAN MAXVALUE);
+
+--disable_result_log
+SELECT get_part_id('p1_add_part', 'p0') INTO @p0_after;
+SELECT get_part_id('p1_add_part', 'p1') INTO @p1_after;
+--enable_result_log
+--let $assert_text= ADD PARTITION should not change p0 table_id
+--let $assert_cond= @p0_before = @p0_after
+--source include/assert.inc
+--let $assert_text= ADD PARTITION should not change p1 table_id
+--let $assert_cond= @p1_before = @p1_after
+--source include/assert.inc
+--echo # p0 and p1 table_ids unchanged (verified above) -> normal traversal
+SELECT * FROM p1_add_part AS OF TIMESTAMP @ts_p1_add ORDER BY id;
+
+# --- P1.2: DROP PARTITION (RANGE) ---
+--echo
+--echo --- P1.2: DROP PARTITION (RANGE) ---
+--echo # Surviving partitions not rebuilt; dropped partition data is gone
+
+CREATE TABLE p1_drop_part (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p1_drop_part VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+
+sleep 3;
+SET @ts_p1_drop = NOW(6);
+sleep 3;
+
+--echo # Update id=15 (in p1) after snapshot; id=25 (in p2) unmodified
+UPDATE p1_drop_part SET name = 'Bob_v2' WHERE id = 15;
+
+--disable_result_log
+SELECT get_part_id('p1_drop_part', 'p1') INTO @p1_before;
+SELECT get_part_id('p1_drop_part', 'p2') INTO @p2_before;
+--enable_result_log
+
+--echo # DROP PARTITION p0: removes id=5. Surviving p1, p2 table_ids unchanged.
+ALTER TABLE p1_drop_part DROP PARTITION p0;
+
+--disable_result_log
+SELECT get_part_id('p1_drop_part', 'p1') INTO @p1_after;
+SELECT get_part_id('p1_drop_part', 'p2') INTO @p2_after;
+--enable_result_log
+--let $assert_text= DROP PARTITION should not change surviving p1 table_id
+--let $assert_cond= @p1_before = @p1_after
+--source include/assert.inc
+--let $assert_text= DROP PARTITION should not change surviving p2 table_id
+--let $assert_cond= @p2_before = @p2_after
+--source include/assert.inc
+
+--echo # id=5 (dropped partition): no longer in any partition -> not found
+SELECT id, name FROM p1_drop_part AS OF TIMESTAMP @ts_p1_drop WHERE id = 5;
+--echo # id=15 (p1, updated after @ts): undo traversal -> shows old 'Bob'
+--echo # id=25 (p2, unmodified): directly visible -> 'Charlie'
+SELECT * FROM p1_drop_part AS OF TIMESTAMP @ts_p1_drop ORDER BY id;
+
+# --- P1.3: LIST partition ADD PARTITION ---
+--echo
+--echo --- P1.3: LIST partition ADD PARTITION ---
+
+CREATE TABLE p1_list (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+    PARTITION p_lo VALUES IN (1, 2, 3),
+    PARTITION p_hi VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p1_list VALUES (1, 'Alice'), (4, 'Bob');
+
+sleep 3;
+SET @ts_p1_list = NOW(6);
+sleep 3;
+
+ALTER TABLE p1_list ADD PARTITION (PARTITION p_xl VALUES IN (11, 12, 13, 14, 15));
+
+--echo # ADD PARTITION (LIST): existing partitions not rebuilt -> normal traversal
+SELECT * FROM p1_list AS OF TIMESTAMP @ts_p1_list ORDER BY id;
+
+# --- P1.4: RENAME INDEX on HASH partition ---
+--echo
+--echo --- P1.4: RENAME INDEX on HASH partition ---
+
+CREATE TABLE p1_rename_idx (id INT, name VARCHAR(64), PRIMARY KEY(id),
+    INDEX idx_old(name))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p1_rename_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 3;
+SET @ts_p1_ridx = NOW(6);
+sleep 3;
+
+ALTER TABLE p1_rename_idx RENAME INDEX idx_old TO idx_new;
+
+--echo # RENAME INDEX: no rebuild -> normal traversal (use renamed index)
+SELECT * FROM p1_rename_idx AS OF TIMESTAMP @ts_p1_ridx FORCE INDEX(idx_new)
+ORDER BY name;
+
+# ################################################################
+#   Category P2: INSTANT DDL on Partitioned Tables
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P2: INSTANT DDL on Partitioned Tables
+--echo ================================================================
+
+# --- P2.1: ADD COLUMN (INSTANT) ---
+--echo
+--echo --- P2.1: ADD COLUMN (INSTANT) on RANGE partition ---
+
+CREATE TABLE p2_add_col (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p2_add_col VALUES (1, 'Alice'), (11, 'Bob');
+
+sleep 3;
+SET @ts_p2_add = NOW(6);
+sleep 3;
+
+--disable_result_log
+SELECT get_part_id('p2_add_col', 'p0') INTO @p0_before;
+--enable_result_log
+ALTER TABLE p2_add_col ADD COLUMN email VARCHAR(128) DEFAULT 'n/a', ALGORITHM=INSTANT;
+--disable_result_log
+SELECT get_part_id('p2_add_col', 'p0') INTO @p0_after;
+--enable_result_log
+--let $assert_text= INSTANT ADD COLUMN should not change partition table_id
+--let $assert_cond= @p0_before = @p0_after
+--source include/assert.inc
+
+--echo # INSTANT ADD COLUMN: no rebuild -> normal traversal
+--echo # Historical rows show DEFAULT value for new column
+SELECT * FROM p2_add_col AS OF TIMESTAMP @ts_p2_add ORDER BY id;
+
+# --- P2.2: DROP COLUMN (INSTANT) ---
+--echo
+--echo --- P2.2: DROP COLUMN (INSTANT) on HASH partition ---
+
+CREATE TABLE p2_drop_col (id INT, name VARCHAR(64), age INT, PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p2_drop_col VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+
+sleep 3;
+SET @ts_p2_drop = NOW(6);
+sleep 3;
+
+ALTER TABLE p2_drop_col DROP COLUMN age, ALGORITHM=INSTANT;
+
+--echo # INSTANT DROP COLUMN: no rebuild -> normal traversal
+SELECT * FROM p2_drop_col AS OF TIMESTAMP @ts_p2_drop ORDER BY id;
+
+# --- P2.3: ADD VIRTUAL COLUMN ---
+--echo
+--echo --- P2.3: ADD VIRTUAL COLUMN on LIST partition ---
+
+CREATE TABLE p2_vcol (id INT, price INT, qty INT, PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+    PARTITION p_small VALUES IN (1, 2, 3),
+    PARTITION p_large VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p2_vcol VALUES (1, 100, 5), (4, 200, 3);
+
+sleep 3;
+SET @ts_p2_vcol = NOW(6);
+sleep 3;
+
+ALTER TABLE p2_vcol ADD COLUMN total INT AS (price * qty) VIRTUAL;
+
+--echo # ADD VIRTUAL COLUMN: no rebuild -> normal traversal
+SELECT * FROM p2_vcol AS OF TIMESTAMP @ts_p2_vcol ORDER BY id;
+
+# ################################################################
+#   Category P3: ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED
+#   Exercises ha_innopart::change_active_index which returns
+#   HA_ERR_AS_OF_TABLE_DEF_CHANGED when the index's trx_id is after
+#   the AS OF snapshot.
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P3: ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED (ha_innopart)
+--echo ================================================================
+
+# --- P3.1: RANGE partition ---
+--echo
+--echo --- P3.1: ADD INDEX on RANGE partition ---
+
+CREATE TABLE p3_range (id INT, name VARCHAR(64), score INT, PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p3_range VALUES (1, 'Alice', 90), (11, 'Bob', 85), (21, 'Charlie', 80);
+
+sleep 3;
+SET @ts_p3_range = NOW(6);
+sleep 3;
+
+ALTER TABLE p3_range ADD INDEX idx_name(name);
+ALTER TABLE p3_range ADD INDEX idx_score(score);
+
+--echo # Via PRIMARY -> success (clustered index, always usable)
+SELECT id, name FROM p3_range AS OF TIMESTAMP @ts_p3_range
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # Via idx_name (did not exist at snapshot) -> ER_AS_OF_TABLE_DEF_CHANGED
+--echo # Exercises ha_innopart::change_active_index
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p3_range AS OF TIMESTAMP @ts_p3_range FORCE INDEX(idx_name);
+
+--echo # Via idx_score (did not exist at snapshot) -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, score FROM p3_range AS OF TIMESTAMP @ts_p3_range FORCE INDEX(idx_score);
+
+# --- P3.2: HASH partition ---
+--echo
+--echo --- P3.2: ADD INDEX on HASH partition ---
+
+CREATE TABLE p3_hash (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 4;
+INSERT INTO p3_hash VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie'), (4, 'David');
+
+sleep 3;
+SET @ts_p3_hash = NOW(6);
+sleep 3;
+
+ALTER TABLE p3_hash ADD INDEX idx_name(name);
+
+--echo # HASH partition, FORCE INDEX via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p3_hash AS OF TIMESTAMP @ts_p3_hash FORCE INDEX(idx_name);
+
+--echo # Via PRIMARY -> success
+SELECT id, name FROM p3_hash AS OF TIMESTAMP @ts_p3_hash
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+# --- P3.3: LIST partition ---
+--echo
+--echo --- P3.3: ADD INDEX on LIST partition ---
+
+CREATE TABLE p3_list (id INT, name VARCHAR(64), val INT, PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+    PARTITION p0 VALUES IN (1, 2, 3, 4, 5),
+    PARTITION p1 VALUES IN (6, 7, 8, 9, 10),
+    PARTITION p2 VALUES IN (11, 12, 13, 14, 15)
+);
+INSERT INTO p3_list VALUES (1, 'Alice', 10), (8, 'Bob', 20), (12, 'Charlie', 30);
+
+sleep 3;
+SET @ts_p3_list = NOW(6);
+sleep 3;
+
+ALTER TABLE p3_list ADD INDEX idx_val(val);
+
+--echo # LIST partition, via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, val FROM p3_list AS OF TIMESTAMP @ts_p3_list FORCE INDEX(idx_val);
+
+--echo # Via PRIMARY -> success
+SELECT id, name FROM p3_list AS OF TIMESTAMP @ts_p3_list
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+# ################################################################
+#   Category P4: INPLACE Rebuild -> ER_AS_OF_TABLE_DEF_CHANGED (modified rows)
+#
+#   INPLACE rebuild (FORCE/OPTIMIZE/ROW_FORMAT) creates a new physical
+#   table with a new table_id, migrating rows from the old table.
+#   Result:
+#     - Unmodified rows (not modified after snapshot):
+#       Current value equals historical value. The engine returns the
+#       row directly without traversing the undo version chain.
+#     - Modified rows (updated after snapshot, before rebuild):
+#       Undo traversal encounters old table_id (from the pre-rebuild
+#       undo record) vs new table_id -> ER_AS_OF_TABLE_DEF_CHANGED
+#   Behavior is consistent with non-partitioned tables (see user guide).
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P4: INPLACE Rebuild on Partitioned Tables
+--echo ================================================================
+
+# --- P4.1: ALTER TABLE FORCE (RANGE) ---
+--echo
+--echo --- P4.1: ALTER TABLE FORCE on RANGE partition ---
+--echo # 3 partitions: p0 (id=1), p1 (id=11), p2 (id=21)
+--echo # Update p0 and p1 rows after @ts; leave p2 row unmodified
+
+CREATE TABLE p4_force (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p4_force VALUES (1, 'Alice'), (11, 'Bob'), (21, 'Charlie');
+
+sleep 3;
+SET @ts_p4_force = NOW(6);
+sleep 3;
+
+UPDATE p4_force SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_force SET name = 'Bob_v2' WHERE id = 11;
+
+--disable_result_log
+SELECT get_part_id('p4_force', 'p0') INTO @p0_before;
+SELECT get_part_id('p4_force', 'p1') INTO @p1_before;
+SELECT get_part_id('p4_force', 'p2') INTO @p2_before;
+--enable_result_log
+
+ALTER TABLE p4_force FORCE;
+
+--disable_result_log
+SELECT get_part_id('p4_force', 'p0') INTO @p0_after;
+SELECT get_part_id('p4_force', 'p1') INTO @p1_after;
+SELECT get_part_id('p4_force', 'p2') INTO @p2_after;
+--enable_result_log
+--let $assert_text= FORCE should change p0 table_id (INPLACE rebuild)
+--let $assert_cond= @p0_before != @p0_after
+--source include/assert.inc
+--let $assert_text= FORCE should change p1 table_id (INPLACE rebuild)
+--let $assert_cond= @p1_before != @p1_after
+--source include/assert.inc
+--let $assert_text= FORCE should change p2 table_id (INPLACE rebuild)
+--let $assert_cond= @p2_before != @p2_after
+--source include/assert.inc
+
+--echo # id=21 (p2, unmodified): current value = historical value -> returned directly
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 21;
+
+--echo # id=1 (p0, updated after @ts): UPDATE roll_ptr preserved, old table_id
+--echo # -> table_id mismatch after rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 1;
+
+--echo # id=11 (p1, updated after @ts): same mechanism -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 11;
+
+--echo # Full scan: first updated row encountered -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_force AS OF TIMESTAMP @ts_p4_force;
+
+# --- P4.2: OPTIMIZE TABLE (HASH) ---
+--echo
+--echo --- P4.2: OPTIMIZE TABLE on HASH partition ---
+
+CREATE TABLE p4_optimize (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 3;
+INSERT INTO p4_optimize VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie');
+
+sleep 3;
+SET @ts_p4_opt = NOW(6);
+sleep 3;
+
+--echo # Update id=1 and id=2; leave id=3 unmodified
+UPDATE p4_optimize SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_optimize SET name = 'Bob_v2' WHERE id = 2;
+
+OPTIMIZE TABLE p4_optimize;
+
+--echo # id=3 (unmodified): current value = historical value -> returned directly
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 3;
+
+--echo # id=1 and id=2 (updated after @ts): ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 1;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 2;
+
+--echo # Full scan -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt;
+
+# --- P4.3: ROW_FORMAT change (LIST) ---
+--echo
+--echo --- P4.3: ROW_FORMAT change on LIST partition ---
+
+CREATE TABLE p4_rowfmt (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+    PARTITION p_odd VALUES IN (1, 3, 5, 7, 9),
+    PARTITION p_even VALUES IN (2, 4, 6, 8, 10)
+);
+INSERT INTO p4_rowfmt VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 3;
+SET @ts_p4_rf = NOW(6);
+sleep 3;
+
+UPDATE p4_rowfmt SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_rowfmt SET name = 'Bob_v2' WHERE id = 2;
+
+ALTER TABLE p4_rowfmt ROW_FORMAT = COMPRESSED;
+
+--echo # ROW_FORMAT change (INPLACE rebuild) -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_rowfmt AS OF TIMESTAMP @ts_p4_rf;
+
+# ################################################################
+#   Category P5: COPY / Partial Rebuild -> Empty Result
+#
+#   COPY rebuild creates entirely new partition rows (INSERT-based).
+#   All rows in rebuilt partitions are invisible before the DDL.
+#   For REORGANIZE PARTITION: only reorganized partitions are rebuilt;
+#   non-reorganized partitions retain their original trx_id/table_id
+#   and are accessible via normal traversal.
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P5: COPY Rebuild on Partitioned Tables
+--echo ================================================================
+
+# --- P5.1: MODIFY COLUMN (shrink) -> COPY rebuild all partitions ---
+--echo
+--echo --- P5.1: MODIFY COLUMN (shrink) on RANGE partition ---
+
+CREATE TABLE p5_shrink (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_shrink VALUES (1, 'Alice'), (11, 'Bob');
+
+sleep 3;
+SET @ts_p5_shrink = NOW(6);
+sleep 3;
+
+--disable_result_log
+SELECT get_part_id('p5_shrink', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_shrink', 'p1') INTO @p1_before;
+--enable_result_log
+
+ALTER TABLE p5_shrink MODIFY COLUMN name VARCHAR(32);
+
+--disable_result_log
+SELECT get_part_id('p5_shrink', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_shrink', 'p1') INTO @p1_after;
+--enable_result_log
+--let $assert_text= MODIFY shrink should change p0 table_id (COPY rebuild)
+--let $assert_cond= @p0_before != @p0_after
+--source include/assert.inc
+--let $assert_text= MODIFY shrink should change p1 table_id (COPY rebuild)
+--let $assert_cond= @p1_before != @p1_after
+--source include/assert.inc
+
+--echo # COPY rebuild: all rows newly inserted by DDL -> empty result
+SELECT * FROM p5_shrink AS OF TIMESTAMP @ts_p5_shrink;
+
+# --- P5.2: REORGANIZE PARTITION (partial COPY rebuild) ---
+--echo
+--echo --- P5.2: REORGANIZE PARTITION (partial rebuild) ---
+--echo # p0 (id=5) and p1 (id=15) will be reorganized (COPY rebuilt)
+--echo # p2 (id=25) will NOT be reorganized -> normal traversal
+
+CREATE TABLE p5_reorg (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_reorg VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+
+sleep 3;
+SET @ts_p5_reorg = NOW(6);
+sleep 3;
+
+--echo # Update id=5 (in p0, will be reorganized) after snapshot
+UPDATE p5_reorg SET name = 'Alice_v2' WHERE id = 5;
+
+--disable_result_log
+SELECT get_part_id('p5_reorg', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_reorg', 'p1') INTO @p1_before;
+SELECT get_part_id('p5_reorg', 'p2') INTO @p2_before;
+--enable_result_log
+
+--echo # Reorganize p0 + p1: splits boundary 10 -> 8
+ALTER TABLE p5_reorg REORGANIZE PARTITION p0, p1 INTO (
+    PARTITION p0 VALUES LESS THAN (8),
+    PARTITION p1 VALUES LESS THAN (20)
+);
+
+--disable_result_log
+SELECT get_part_id('p5_reorg', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_reorg', 'p1') INTO @p1_after;
+SELECT get_part_id('p5_reorg', 'p2') INTO @p2_after;
+--enable_result_log
+--let $assert_text= REORGANIZE should change p0 table_id (rebuilt)
+--let $assert_cond= @p0_before != @p0_after
+--source include/assert.inc
+--let $assert_text= REORGANIZE should change p1 table_id (rebuilt)
+--let $assert_cond= @p1_before != @p1_after
+--source include/assert.inc
+--let $assert_text= REORGANIZE should NOT change p2 table_id (not rebuilt)
+--let $assert_cond= @p2_before = @p2_after
+--source include/assert.inc
+--echo # p0 and p1: new table_ids (COPY rebuilt)
+--echo # p2: UNCHANGED table_id (not reorganized)
+
+--echo
+--echo # id=5 (reorganized p0, updated after @ts):
+--echo # COPY rebuild creates fresh INSERT undo for the new partition,
+--echo # disconnecting the old undo chain -> empty result (not ER_AS_OF_TABLE_DEF_CHANGED)
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 5;
+
+--echo # id=15 (reorganized p1, unmodified): COPY rebuilt -> empty result
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 15;
+
+--echo # id=25 (p2, NOT reorganized): table_id unchanged -> normal traversal -> visible
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 25;
+
+--echo
+--echo --- P5.3: TRUNCATE PARTITION (single partition replacement) ---
+--echo # Only p1 is truncated/recreated. p0 and p2 keep their table_id and
+--echo # remain visible to AS OF before the truncate. p1 becomes a new empty
+--echo # physical generation, so pre-truncate rows from p1 are not visible.
+
+CREATE TABLE p5_trunc_part (
+    id INT,
+    name VARCHAR(64),
+    PRIMARY KEY(id),
+    KEY idx_name(name)
+)
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_trunc_part VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+
+sleep 3;
+SET @ts_p5_trunc = NOW(6);
+sleep 3;
+
+--disable_result_log
+SELECT get_part_id('p5_trunc_part', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_trunc_part', 'p1') INTO @p1_before;
+SELECT get_part_id('p5_trunc_part', 'p2') INTO @p2_before;
+--enable_result_log
+
+ALTER TABLE p5_trunc_part TRUNCATE PARTITION p1;
+
+--disable_result_log
+SELECT get_part_id('p5_trunc_part', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_trunc_part', 'p1') INTO @p1_after;
+SELECT get_part_id('p5_trunc_part', 'p2') INTO @p2_after;
+--enable_result_log
+--let $assert_text= TRUNCATE PARTITION should not change p0 table_id
+--let $assert_cond= @p0_before = @p0_after
+--source include/assert.inc
+--let $assert_text= TRUNCATE PARTITION should change p1 table_id
+--let $assert_cond= @p1_before != @p1_after
+--source include/assert.inc
+--let $assert_text= TRUNCATE PARTITION should not change p2 table_id
+--let $assert_cond= @p2_before = @p2_after
+--source include/assert.inc
+
+--echo # Current table has only rows from untruncated partitions.
+SELECT * FROM p5_trunc_part ORDER BY id;
+
+--echo # Insert a new row into the truncated partition after TRUNCATE.
+INSERT INTO p5_trunc_part VALUES (16, 'Bob_after_truncate');
+
+--echo # The current table includes the new p1 row.
+SELECT * FROM p5_trunc_part ORDER BY id;
+
+--echo # p1 row before TRUNCATE is gone from the current physical mapping.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id = 15;
+
+--echo # p1 row inserted after TRUNCATE is not visible to the pre-truncate snapshot.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id = 16;
+
+--echo # p0 and p2 were not rebuilt -> normal traversal.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id IN (5, 25) ORDER BY id;
+
+--echo # Full PRIMARY scan returns only rows from untruncated partitions.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # Secondary path on the truncated partition also returns empty.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name = 'Bob';
+
+--echo # Secondary path does not expose the post-truncate p1 row either.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name = 'Bob_after_truncate';
+
+--echo # Secondary path on untruncated partitions remains usable.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name IN ('Alice', 'Charlie') ORDER BY name;
+
+# ################################################################
+#   Category P6: Complex Multi-Timestamp Scenario
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P6: Complex Multi-Timestamp Scenario
+--echo ================================================================
+
+CREATE TABLE p6_complex (id INT, name VARCHAR(64), score INT, PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p_low  VALUES LESS THAN (10),
+    PARTITION p_mid  VALUES LESS THAN (20),
+    PARTITION p_high VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p6_complex VALUES (1, 'Alice', 90), (11, 'Bob', 85), (21, 'Charlie', 80);
+
+--echo # Timestamp T1: initial state (3 rows across 3 partitions, no extra index)
+sleep 3;
+SET @ts_p6_t1 = NOW(6);
+sleep 3;
+
+INSERT INTO p6_complex VALUES (5, 'Dave', 95);
+
+--echo # Timestamp T2: 4 rows (Dave added to p_low)
+sleep 3;
+SET @ts_p6_t2 = NOW(6);
+sleep 3;
+
+--echo # ADD COLUMN (INSTANT, no rebuild) + ADD INDEX (no rebuild)
+ALTER TABLE p6_complex ADD COLUMN level VARCHAR(16) DEFAULT 'junior', ALGORITHM=INSTANT;
+ALTER TABLE p6_complex ADD INDEX idx_score(score);
+
+--echo # Timestamp T3: ADD COLUMN + ADD INDEX applied
+sleep 3;
+SET @ts_p6_t3 = NOW(6);
+sleep 3;
+
+UPDATE p6_complex SET level = 'senior', score = 91 WHERE id = 1;
+UPDATE p6_complex SET level = 'mid'              WHERE id = 11;
+
+--echo # Timestamp T4: rows 1 and 11 updated
+sleep 3;
+SET @ts_p6_t4 = NOW(6);
+sleep 3;
+
+--echo
+--echo --- P6.1: AS OF T1 (3 rows, no idx_score, level shows DEFAULT) ---
+SELECT id, name, score, level FROM p6_complex AS OF TIMESTAMP @ts_p6_t1
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # Via idx_score (new index path) -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t1 FORCE INDEX(idx_score);
+
+--echo
+--echo --- P6.2: AS OF T2 (4 rows: Alice/Dave in p_low, Bob in p_mid, Charlie in p_high) ---
+SELECT id, name, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t2
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo
+--echo --- P6.3: AS OF T3 (after ADD INDEX; idx_score now valid for AS OF) ---
+SELECT id, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t3
+FORCE INDEX(idx_score) ORDER BY score;
+
+--echo
+--echo --- P6.4: AS OF T4 (after updates to id=1 and id=11) ---
+SELECT id, name, score, level FROM p6_complex AS OF TIMESTAMP @ts_p6_t4
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo
+--echo --- P6.5: Cross-partition traversal at T1 using PRIMARY ---
+SELECT id, name FROM p6_complex AS OF TIMESTAMP @ts_p6_t1
+FORCE INDEX(PRIMARY) WHERE id BETWEEN 1 AND 25 ORDER BY id;
+
+# ################################################################
+#   Category P7: cross_ddl OFF Behavior on Partitioned Tables
+#
+#   With cross_ddl OFF:
+#   - ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED (not INDEX_NOT_EXIST)
+#     because dd_index_modification_visible() is not called; the old
+#     error path is taken.
+#   - INSTANT DDL -> ER_AS_OF_TABLE_DEF_CHANGED (se_private_data
+#     overwritten, modification_visible() fails)
+#   - FORCE rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category P7: cross_ddl OFF on Partitioned Tables
+--echo ================================================================
+
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+# --- P7.1: ADD INDEX (cross_ddl OFF) -> ER_AS_OF_TABLE_DEF_CHANGED ---
+--echo
+--echo --- P7.1: ADD INDEX on RANGE (cross_ddl OFF) ---
+
+CREATE TABLE p7_add_idx (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p7_add_idx VALUES (1, 'Alice'), (11, 'Bob');
+
+sleep 3;
+SET @ts_p7_idx = NOW(6);
+sleep 3;
+
+ALTER TABLE p7_add_idx ADD INDEX idx_name(name);
+
+--echo # cross_ddl OFF: new index -> ER_AS_OF_TABLE_DEF_CHANGED (not INDEX_NOT_EXIST)
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p7_add_idx AS OF TIMESTAMP @ts_p7_idx FORCE INDEX(idx_name);
+
+--echo # Via PRIMARY (clustered, se_private_data unchanged) -> success
+SELECT id, name FROM p7_add_idx AS OF TIMESTAMP @ts_p7_idx
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+# --- P7.2: INSTANT ADD COLUMN (cross_ddl OFF) -> ER_AS_OF_TABLE_DEF_CHANGED ---
+--echo
+--echo --- P7.2: INSTANT ADD COLUMN on HASH (cross_ddl OFF) ---
+
+CREATE TABLE p7_instant (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p7_instant VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 3;
+SET @ts_p7_inst = NOW(6);
+sleep 3;
+
+ALTER TABLE p7_instant ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+
+--echo # cross_ddl OFF: INSTANT DDL overwrites se_private_data -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p7_instant AS OF TIMESTAMP @ts_p7_inst;
+
+--echo # Non-AS-OF: normal query works fine
+SELECT * FROM p7_instant ORDER BY id;
+
+# --- P7.3: FORCE rebuild (cross_ddl OFF) -> ER_AS_OF_TABLE_DEF_CHANGED ---
+--echo
+--echo --- P7.3: FORCE rebuild on LIST (cross_ddl OFF) ---
+
+CREATE TABLE p7_force (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+    PARTITION p_low  VALUES IN (1, 2, 3),
+    PARTITION p_high VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p7_force VALUES (1, 'Alice'), (5, 'Bob');
+
+sleep 3;
+SET @ts_p7_force = NOW(6);
+sleep 3;
+
+UPDATE p7_force SET name = 'Alice_v2' WHERE id = 1;
+ALTER TABLE p7_force FORCE;
+
+--echo # cross_ddl OFF: FORCE rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p7_force AS OF TIMESTAMP @ts_p7_force;
+
+# --- P7.4: Parameter switch (DDL under OFF, query under ON) ---
+--echo
+--echo --- P7.4: Parameter switch (DDL under OFF, query under ON) ---
+--echo # When INSTANT DDL runs under OFF: se_private_data IS overwritten.
+--echo # When query runs under ON: clustered index is always let through
+--echo # (ON path bypasses modification_visible for clustered index) -> success.
+
+CREATE TABLE p7_switch (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p7_switch VALUES (1, 'Alice'), (11, 'Bob');
+
+sleep 3;
+SET @ts_p7_sw = NOW(6);
+sleep 3;
+
+--echo # DDL under OFF: INSTANT ADD COLUMN overwrites se_private_data
+ALTER TABLE p7_switch ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+--echo # Query under ON: clustered index always visible (ON code path) -> success
+SELECT id, name FROM p7_switch AS OF TIMESTAMP @ts_p7_sw
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+# ################################################################
+#   Cleanup
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Cleanup
+--echo ================================================================
+
+DROP TABLE IF EXISTS p1_add_part, p1_drop_part, p1_list, p1_rename_idx;
+DROP TABLE IF EXISTS p2_add_col, p2_drop_col, p2_vcol;
+DROP TABLE IF EXISTS p3_range, p3_hash, p3_list;
+DROP TABLE IF EXISTS p4_force, p4_optimize, p4_rowfmt;
+DROP TABLE IF EXISTS p5_shrink, p5_reorg, p5_trunc_part;
+DROP TABLE IF EXISTS p6_complex;
+DROP TABLE IF EXISTS p7_add_idx, p7_instant, p7_force, p7_switch;
+
+DROP FUNCTION IF EXISTS get_part_id;
+
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

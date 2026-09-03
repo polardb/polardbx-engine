@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 
 struct dict_index_t;
+struct dtuple_t;
 
 namespace lizard {
 

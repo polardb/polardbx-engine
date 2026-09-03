@@ -29,6 +29,7 @@
 #include <memory>
 #include "sql/binlog_ostream.h"
 #include "sql/current_thd.h"
+#include "sql/recycle_bin/recycle.h"
 #include "sql/sql_class.h"
 #include "unittest/gunit/test_utils.h"
 
@@ -116,6 +117,8 @@ class LogEventStatusSizeTest : public ::testing::Test {
     qe.need_opt_flashback_area = 1;
     qe.need_opt_index_format_gpp_enabled = 1;
     qe.need_opt_index_format_panda_enabled = 1;
+    qe.need_opt_index_format_hippo_enabled = 1;
+    qe.need_opt_index_format_spc_enabled = 1;
 
     for (size_t did = 0; did < MAX_DBS_IN_EVENT_MTS; ++did) {
       std::string db = fill_str(NAME_LEN, 'a' + did);
@@ -124,6 +127,11 @@ class LogEventStatusSizeTest : public ::testing::Test {
     // sanity check after filling accessed dbs, db names must be unique
     ASSERT_EQ(qe.thd->get_binlog_accessed_db_names()->elements,
               MAX_DBS_IN_EVENT_MTS);
+
+    /* The event encodes the per-command recycle state, not the sysvar. */
+    auto mock_table_name = fill_str(NAME_LEN, 'a');
+    qe.thd->recycle_state->set_name(mock_table_name.c_str(),
+                                    mock_table_name.length());
 
     qe.write(&os);
 

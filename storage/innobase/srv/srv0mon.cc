@@ -295,6 +295,12 @@ static monitor_info_t innodb_counter_info[] = {
                                  MONITOR_DEFAULT_ON),
      MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_BYTES_DIRTY},
 
+    {"buffer_pool_dirty_ratio", "buffer",
+     "Buffer pages currently dirty ratio (innodb_buffer_pool_dirty_ratio)",
+     static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
+                                 MONITOR_DEFAULT_ON),
+     MONITOR_DEFAULT_START, MONITOR_OVLD_BUF_POOL_DIRTY_RATIO},
+
     {"buffer_pool_pages_free", "buffer",
      "Buffer pages currently free (innodb_buffer_pool_pages_free)",
      static_cast<monitor_type_t>(MONITOR_EXISTING | MONITOR_DISPLAY_CURRENT |
@@ -1430,7 +1436,7 @@ monitor_value_t innodb_counter_value[NUM_MONITOR];
 
 /* monitor_set_tbl is used to record and determine whether a monitor
 has been turned on/off. */
-ulint monitor_set_tbl[(NUM_MONITOR + NUM_BITS_ULINT - 1) / NUM_BITS_ULINT];
+std::bitset<NUM_MONITOR> monitor_set_tbl;
 
 /** Get a monitor's "monitor_info" by its monitor id (index into the
  innodb_counter_info array.
@@ -1695,6 +1701,11 @@ void srv_mon_process_existing_counter(
       value = buf_pools_list_size.flush_list_bytes;
       break;
 
+    /* innodb_buffer_pool_dirty_ratio */
+    case MONITOR_OVLD_BUF_POOL_DIRTY_RATIO:
+      value = buf_get_modified_ratio_pct();
+      break;
+
     /* innodb_buffer_pool_pages_free */
     case MONITOR_OVLD_BUF_POOL_PAGES_FREE:
       buf_get_total_list_len(&LRU_len, &free_len, &flush_list_len);
@@ -1893,7 +1904,7 @@ void srv_mon_process_existing_counter(
       break;
 
     case MONITOR_RSEG_HISTORY_LEN:
-      value = trx_sys->rseg_history_len;
+      value = lizard::trx_rseg_history_len();
       break;
 
     case MONITOR_RSEG_CUR_SIZE:

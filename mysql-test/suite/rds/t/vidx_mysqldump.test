@@ -1,0 +1,140 @@
+##########################################
+# Test mysqldump backup and restore      #
+# for tables with VECTOR INDEX           #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo # 1. Create table with vector index and insert data
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--disable_warnings
+INSERT INTO t1(name, v) VALUES ('vec1', VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(name, v) VALUES ('vec2', VEC_FROMTEXT("[5,4,3,2,1]"));
+INSERT INTO t1(name, v) VALUES ('vec3', VEC_FROMTEXT("[1,1,1,1,1]"));
+INSERT INTO t1(name, v) VALUES ('vec4', VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t1(name, v) VALUES ('vec5', VEC_FROMTEXT("[3,3,3,3,3]"));
+--enable_warnings
+
+--echo # Original data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Original table structure
+SHOW CREATE TABLE t1;
+
+--echo # Original ANN query result
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+
+--echo
+--echo # 2. Dump database using mysqldump
+--let $dump_file = $MYSQLTEST_VARDIR/tmp/vidx_dump.sql
+--exec $MYSQL_DUMP --databases test > $dump_file
+
+--echo
+--echo # 3. Drop and recreate database
+DROP DATABASE test;
+CREATE DATABASE test;
+USE test;
+
+--echo
+--echo # 4. Restore from dump
+--exec $MYSQL test < $dump_file
+
+--echo
+--echo # 5. Verify restored table structure contains VECTOR INDEX
+USE test;
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 6. Verify restored data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 7. Verify ANN query works correctly after restore
+--disable_warnings
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+--enable_warnings
+
+--echo
+--echo # 8. Verify INSERT works after restore
+--disable_warnings
+INSERT INTO t1(name, v) VALUES ('vec6', VEC_FROMTEXT("[4,4,4,4,4]"));
+--enable_warnings
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 9. Test dump with specific table
+--let $dump_file2 = $MYSQLTEST_VARDIR/tmp/vidx_dump2.sql
+--exec $MYSQL_DUMP test t1 > $dump_file2
+
+DROP TABLE t1;
+
+--exec $MYSQL test < $dump_file2
+
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo # 10. Clean up
+DROP TABLE t1;
+--remove_file $dump_file
+--remove_file $dump_file2
+
+--echo
+--echo # 11. Multi-index dump and restore
+CREATE TABLE t_mi (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v1 VECTOR(4),
+  v2 VECTOR(4),
+  VECTOR INDEX vi1(v1) M=16 DISTANCE=euclidean,
+  VECTOR INDEX vi2(v2) M=8 DISTANCE=cosine
+) ENGINE=InnoDB;
+
+--disable_warnings
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[1,0,0,0]'), VEC_FROMTEXT('[0,0,0,1]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[0,1,0,0]'), VEC_FROMTEXT('[0,0,1,0]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[0,0,1,0]'), VEC_FROMTEXT('[0,1,0,0]'));
+--enable_warnings
+
+--echo # Original structure
+SHOW CREATE TABLE t_mi;
+
+--echo # Original ANN queries
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 1;
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+
+--echo # Dump
+--let $dump_mi = $MYSQLTEST_VARDIR/tmp/vidx_dump_mi.sql
+--exec $MYSQL_DUMP test t_mi > $dump_mi
+
+--echo # Drop and restore
+DROP TABLE t_mi;
+--exec $MYSQL test < $dump_mi
+
+--echo # Verify restored structure has both VECTOR INDEX
+SHOW CREATE TABLE t_mi;
+
+--echo # Verify ANN queries work on both columns after restore
+--disable_warnings
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 1;
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+--enable_warnings
+
+--echo # Verify INSERT works after restore on multi-index table
+--disable_warnings
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[0,0,0,1]'), VEC_FROMTEXT('[1,0,0,0]'));
+--enable_warnings
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+
+DROP TABLE t_mi;
+--remove_file $dump_mi
+
+SET GLOBAL vidx_disabled = ON;

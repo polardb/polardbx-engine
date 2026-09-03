@@ -1,0 +1,28 @@
+DROP TABLE IF EXISTS t1;
+SET @old_stats_persistent = @@GLOBAL.innodb_stats_persistent;
+SET @old_limit_optimistic = @@GLOBAL.innodb_limit_optimistic_insert_debug;
+SET GLOBAL innodb_stats_persistent = OFF;
+# Step 1: build a clustered index of height 1.
+CREATE TABLE t1 (id INT PRIMARY KEY) ENGINE = InnoDB;
+SET GLOBAL innodb_limit_optimistic_insert_debug = 2;
+INSERT INTO t1 VALUES (10), (20), (30);
+ANALYZE TABLE t1;
+include/assert.inc [t1 PRIMARY must be height >= 1 before sampling]
+# Step 2: park the sampler at the top of fetch_next_leaf_node().
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SET SESSION debug = "+d,polarx_sample_force_block_mode";
+SET DEBUG_SYNC = "polarx_sample_before_fetch_next_leaf_node SIGNAL sampler_parked WAIT_FOR sampler_go";
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t1;
+SET DEBUG_SYNC = "now WAIT_FOR sampler_parked";
+# Step 3: raise the tree to height 2 behind the parked sampler.
+INSERT INTO t1 VALUES (40), (50), (60);
+# Step 4: release the sampler; it must re-find level 1, not the stale page.
+SET DEBUG_SYNC = "now SIGNAL sampler_go";
+COUNT(*)
+6
+ANALYZE TABLE t1;
+include/assert.inc [t1 PRIMARY must have grown while the sampler was parked]
+SET DEBUG_SYNC = "RESET";
+DROP TABLE t1;
+SET GLOBAL innodb_limit_optimistic_insert_debug = @old_limit_optimistic;
+SET GLOBAL innodb_stats_persistent = @old_stats_persistent;

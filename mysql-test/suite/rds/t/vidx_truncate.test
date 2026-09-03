@@ -1,0 +1,138 @@
+##########################################
+# VECTOR INDEX with TRUNCATE TABLE
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo #
+--echo # Cleanup before test
+--echo #
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+--echo #
+--echo # 8.1 Create table with VECTOR INDEX (no INSERT due to crash bug)
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  extra VARCHAR(100),
+  VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Check initial auxiliary table count
+SELECT COUNT(*) AS initial_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # Record auxiliary table names
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+
+--echo #
+--echo # 8.2 TRUNCATE TABLE - verify VECTOR INDEX preserved
+--echo #
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+
+--echo # Check auxiliary tables still exist
+SELECT COUNT(*) AS after_truncate_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo #
+--echo # 8.3 INSERT test after TRUNCATE (Blocked by INSERT crash bug)
+--echo #
+# Note: INSERT tests are blocked by INSERT crash bug at lock0lock.cc:5283
+# The following tests would be:
+# INSERT INTO t1(v, extra) VALUES (VEC_FROMTEXT('[1,2,3,4]'), 'after truncate');
+# SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4]')) LIMIT 1;
+
+--echo #
+--echo # 8.4 Multiple consecutive TRUNCATEs - verify no leftover auxiliary tables
+--echo #
+
+--echo # First TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_1 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # Second TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_2 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # Third TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_3 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # Verify auxiliary table names are consistent (no accumulation)
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+
+--echo #
+--echo # 8.5 TRUNCATE verification - structure remains consistent
+--echo #
+SHOW CREATE TABLE t1;
+
+--echo # Verify via SHOW INDEX
+SHOW INDEX FROM t1;
+
+--echo #
+--echo # Additional: Test TRUNCATE with different VECTOR configurations
+--echo #
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v) m=20 distance=cosine
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t2;
+
+--echo # Record initial state
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+
+--echo # TRUNCATE t2
+TRUNCATE TABLE t2;
+SHOW CREATE TABLE t2;
+
+--echo # Verify both tables' auxiliary tables exist
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+
+--echo #
+--echo # Test: TRUNCATE preserves VECTOR INDEX options
+--echo #
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi_custom(v) m=50 distance=cosine
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t3;
+
+TRUNCATE TABLE t3;
+
+--echo # Verify options (M=50, DISTANCE=COSINE) are preserved
+SHOW CREATE TABLE t3;
+
+--echo #
+--echo # Cleanup
+--echo #
+DROP TABLE t1, t2, t3;
+
+--echo # Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+SET GLOBAL vidx_disabled = ON;

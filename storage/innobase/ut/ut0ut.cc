@@ -506,6 +506,9 @@ const char *ut_strerr(dberr_t num) {
     case DB_LOCK_IGNORE_CREATE:
       return("Ignore lock create");
 
+    case DB_SPC_ENCODE_FAILED:
+      return ("Failed to compress the page using prefix compression");
+
     case DB_ERROR_UNSET:;
       /* Fall through. */
 

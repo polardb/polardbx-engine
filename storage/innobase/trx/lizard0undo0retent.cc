@@ -34,11 +34,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/sql_error.h"
 #include "sql/sql_plugin_var.h"
+#include "sql/transaction/komodo0hb0freezer.h"
 
 #include "srv0srv.h"
 #include "trx0purge.h"
 
 #include "lizard0undo0retent.h"
+#include "lizard0txn0space.h"
 
 #ifdef UNIV_PFS_MUTEX
 /* Lizard undo retention start mutex PFS key */
@@ -50,37 +52,21 @@ namespace lizard {
 /** Retention time of txn undo data in seconds. */
 ulong txn_retention_time = 0;
 
+/** TXN will be retained for a period of time after the database is restarted */
 ib_time_system_us_t server_start_time_for_txn = 0;
 
-/*
-  static members.
-*/
-ulint Undo_retention::retention_time = 0;
-ulint Undo_retention::space_limit = 100 * 1024;
-ulint Undo_retention::space_reserve = 0;
-char Undo_retention::status[128] = {0};
-Undo_retention Undo_retention::inst;
+/*********************************************************************/
+/* Retention Parameters */
+/*********************************************************************/
+ulint srv_undo_retention_time_in_seconds = 0;             // in seconds
+ulint srv_undo_retention_space_limit_in_mb = 100 * 1024;  // in MiB
+ulint srv_undo_retention_space_reserve_in_mb = 0;         // in MiB
 
-/* Init undo_retention */
-void undo_retention_init() {
-  /* Init the lizard undo retention mutex. */
-  Undo_retention::instance()->init_mutex();
-
-  /* Force to refrese once at starting */
-  Undo_retention::instance()->refresh_stat_data();
-}
-
-void init_server_start_time_for_txn() {
-  ut_ad(!server_start_time_for_txn);
-
-  server_start_time_for_txn = ut_time_system_us();
-}
-
-int Undo_retention::check_limit(THD *thd, SYS_VAR *var, void *save,
-                                struct st_mysql_value *value) {
+int undo_retention_check_space_limit(THD *thd, SYS_VAR *var, void *save,
+                                     struct st_mysql_value *value) {
   if (check_func_long(thd, var, save, value)) return 1;
 
-  if (*(ulong *)save < space_reserve) {
+  if (*(ulong *)save < srv_undo_retention_space_reserve_in_mb) {
     push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
                         "InnoDB: innodb_undo_space_limit should more than"
                         " innodb_undo_space_reserve.");
@@ -90,11 +76,11 @@ int Undo_retention::check_limit(THD *thd, SYS_VAR *var, void *save,
   return 0;
 }
 
-int Undo_retention::check_reserve(THD *thd, SYS_VAR *var, void *save,
-                                  struct st_mysql_value *value) {
+int undo_retention_check_space_reserve(THD *thd, SYS_VAR *var, void *save,
+                                       struct st_mysql_value *value) {
   if (check_func_long(thd, var, save, value)) return 1;
 
-  if (*(ulong *)save > space_limit) {
+  if (*(ulong *)save > srv_undo_retention_space_limit_in_mb) {
     push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
                         "InnoDB: innodb_undo_space_reserve should less than"
                         " innodb_undo_space_limit.");
@@ -104,110 +90,164 @@ int Undo_retention::check_reserve(THD *thd, SYS_VAR *var, void *save,
   return 0;
 }
 
-void Undo_retention::on_update(THD *, SYS_VAR *, void *var_ptr,
-                               const void *save) {
+void undo_retention_parameter_on_update(THD *, SYS_VAR *, void *var_ptr,
+                                        const void *save) {
   *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
   srv_purge_wakeup(); /* notify purge thread to try again */
 }
 
-void Undo_retention::on_update_and_start(THD *thd, SYS_VAR *var, void *var_ptr,
-                                         const void *save) {
-  ulong old_value = *static_cast<const ulong *>(var_ptr);
-  ulong new_value = *static_cast<const ulong *>(save);
-  on_update(thd, var, var_ptr, save);
-
-  /* If open the undo retention, refresh stat data synchronously. */
-  if (new_value > 0 && old_value == 0) {
-    instance()->refresh_stat_data();
-  }
+/*********************************************************************/
+/* Time_retention */
+/*********************************************************************/
+/** Block the purge while the undo is still within the retention time
+ * window since its commit time. */
+bool Time_retention::block_purge(const commit_order_t &ommt) {
+  return ommt.us + std::chrono::duration_cast<std::chrono::microseconds>(
+                       std::chrono::seconds(srv_undo_retention_time_in_seconds))
+                       .count() >
+         static_cast<ulint>(ut_time_system_us());
 }
 
-/*
-  Collect latest undo space sizes periodically.
-*/
-void Undo_retention::refresh_stat_data() {
-  mutex_enter(&m_mutex);
+/*********************************************************************/
+/* Space_retention */
+/*********************************************************************/
+/** Convert the page count into MiB size.
+ *
+ * @param[in]	n_pages	page number
+ *
+ * @retval	size in MiB */
+static ulint pages_to_mb(ulint n_pages) {
+  return (ulint)(univ_page_size.physical() * n_pages / (1024.0 * 1024.0));
+}
+
+/** Force the purge once the txn space usage exceeds the limit. */
+bool Space_retention::advance_purge(const commit_order_t &ommt) {
+  ulint limit_in_mb = srv_undo_retention_space_limit_in_mb;
+  return (limit_in_mb > 0) && (m_txn_used_in_mb > limit_in_mb);
+}
+
+/** Block the purge while the txn space usage is below the reserve. */
+bool Space_retention::block_purge(const commit_order_t &ommt) {
+  ulint reserve_in_mb = srv_undo_retention_space_reserve_in_mb;
+  return (reserve_in_mb > 0) && (m_txn_used_in_mb < reserve_in_mb);
+}
+
+/** Recollect the current txn undo space usage. */
+void Space_retention::refresh() {
   ulint used_size = 0;
-  ulint file_size = 0;
-  std::vector<space_id_t> undo_spaces;
 
-  if (retention_time == 0) {
-    m_stat_done = false;
-    mutex_exit(&m_mutex);
-    return;
-  }
-
-  /* Actual used size */
-  undo::spaces->s_lock();
-  for (auto undo_space : undo::spaces->m_spaces) {
+  /* TXN actual used size */
+  for (auto undo_space : txn_spaces) {
     ulint size = 0;
+
+    ut_ad(undo_space->is_txn());
 
     for (auto rseg : *undo_space->rsegs()) {
       size += rseg->get_curr_size();
     }
 
     used_size += size;
-    undo_spaces.push_back(undo_space->id());
-  }
-  undo::spaces->s_unlock();
-
-  /* Physical file size */
-  for (auto id : undo_spaces) {
-    auto size = fil_space_get_size(id);
-    file_size += size;
   }
 
-  m_total_used_size = used_size;
-  m_total_file_size = file_size;
-
-  m_stat_done = true;
-
-  mutex_exit(&m_mutex);
+  m_txn_used_in_mb = pages_to_mb(used_size);
 }
 
-
-/*
-  Decide whether to block purge or not based on the current
-  undo tablespace size and retention configuration.
-
-  @return     true     if blocking purge
-*/
-bool Undo_retention::purge_advise(ulint us) {
-  ut_a(us != 0);
-  ulint utc = (ulint)(us / 1000000);
-
-  /* Retention turned off or stating not done, can not advise */
-  if (retention_time == 0 || !m_stat_done) return false;
-
-  ulint used_size = m_total_used_size.load();
-
-  if (space_limit > 0) {
-    /* Rule_1: reach space limit, do purge */
-    if (used_size > mb_to_pages(space_limit)) return false;
-  }
-
-  /* Rule_2: retention time not satisfied, block purge */
-  auto cur_utc = current_utc();
-  if ((utc + retention_time) > cur_utc) {
-    return true;
-  }
-
-  /* Rule_3: below reserved size yet, can hold more history data */
-  if (space_reserve > 0 && used_size < mb_to_pages(space_reserve)) {
-    return true;
-  }
-
-  /* Rule_4: time satisfied and exceeded the reserved, just do purge */
-  return false;
+/*********************************************************************/
+/* GCN_retention */
+/*********************************************************************/
+void GCN_retention::refresh(gcn_t new_retention_gcn) {
+  /** The monotonicity of the atomic variable `retention_gcn` is no longer
+  guaranteed. If a caller requires monotonicity, it is their responsibility
+  to handle this requirement correctly. */
+  m_retention_gcn.store(new_retention_gcn);
+  srv_purge_wakeup();
 }
 
+gcn_t GCN_retention::get() const {
+  return m_retention_gcn.load(std::memory_order_relaxed);
+}
 
+bool GCN_retention::advance_purge(const commit_order_t &ommt) {
+  /**
+    (0, retention_gcn) will be purged.
+    [retention_gcn, infinity) will be retention.
+  */
+  return ommt.gcn < m_retention_gcn.load();
+}
 
+/*********************************************************************/
+/* Freezer_retention */
+/*********************************************************************/
+/** Block the purge if the heartbeat freezer requires freezing. */
+bool Freezer_retention::block_purge(const commit_order_t &) {
+  return komodo::hb_freezer_determine_freeze();
+}
+
+/*********************************************************************/
+/* Undo_manager */
+/*********************************************************************/
+Undo_manager::Undo_manager()
+    : m_retention_vec(), m_space_retention(nullptr), m_gcn_retention(nullptr) {}
+
+Undo_manager::~Undo_manager() {
+  if (!m_retention_vec.empty()) {
+    destory();
+  }
+}
+
+void Undo_manager::init() {
+  m_retention_vec.push_back(new Time_retention());
+  m_retention_vec.push_back((m_space_retention = new Space_retention()));
+  m_retention_vec.push_back((m_gcn_retention = new GCN_retention()));
+  m_retention_vec.push_back(new Freezer_retention());
+
+  refresh_stat_data();
+}
+
+void Undo_manager::destory() {
+  for (auto retention : m_retention_vec) {
+    delete retention;
+  }
+  m_retention_vec.clear();
+  m_space_retention = nullptr;
+  m_gcn_retention = nullptr;
+}
+
+bool Undo_manager::can_purge(const commit_order_t &ommt) {
+  /* Any advance vote forces the purge and overrides all the block votes. */
+  for (auto retention : m_retention_vec) {
+    if (retention->advance_purge(ommt)) return true;
+  }
+
+  /* Otherwise any block vote blocks the purge. */
+  for (auto retention : m_retention_vec) {
+    if (retention->block_purge(ommt)) return false;
+  }
+
+  return true;
+}
+
+void Undo_manager::refresh_stat_data() {
+  m_space_retention->refresh();
+}
+
+void Undo_manager::refresh_retention_gcn(gcn_t retention_gcn) {
+  m_gcn_retention->refresh(retention_gcn);
+}
+
+gcn_t Undo_manager::get_retention_gcn() const { return m_gcn_retention->get(); }
+
+/** Check if the retention time has been satisfied since the server
+ * start, so the txn undo is always retained for a whole retention
+ * window after the restart.
+ *
+ * @retval	true if no retention is configured, or the retention window
+ * since the server start has passed */
 static bool txn_retention_satisfied_from_server_start() {
   ib_time_system_us_t cur_utc;
 
   /** Not set retention, can reuse txn */
-  if (!txn_retention_time && !lizard::Undo_retention::retention_time) {
+  if (!txn_retention_time && !srv_undo_retention_time_in_seconds) {
     return true;
   }
 
@@ -219,7 +259,7 @@ static bool txn_retention_satisfied_from_server_start() {
   cur_utc = ut_time_system_us();
 
   std::chrono::microseconds retention_time = std::chrono::seconds(
-      std::max(txn_retention_time, lizard::Undo_retention::retention_time));
+      std::max(txn_retention_time, srv_undo_retention_time_in_seconds));
 
   if (cur_utc < server_start_time_for_txn + retention_time.count()) {
     return false;
@@ -244,17 +284,27 @@ bool txn_retention_satisfied(utc_t utc) {
 
   ut_ad(utc > 0);
 
-  auto cur_utc = ut_time_system_us();
-  std::chrono::microseconds elapsed_time(cur_utc - utc);
+  ib_time_system_us_t cur_utc = ut_time_system_us();
   std::chrono::microseconds retention_time =
       std::chrono::seconds(txn_retention_time);
-  ut_a(elapsed_time.count() > 0);
 
-  if (elapsed_time > retention_time) {
-    return true;
+  if (cur_utc < static_cast<int64_t>(utc) + retention_time.count()) {
+    return false;
   }
 
-  return false;
+  return true;
 }
 
 }  // namespace lizard
+
+
+namespace komodo {
+/** Record the server start time, from which the txn retention window
+ * after the restart is measured. Must be called only once during the
+ * server startup. */
+void init_server_start_time_for_txn() {
+  ut_ad(!lizard::server_start_time_for_txn);
+
+  lizard::server_start_time_for_txn = ut_time_system_us();
+}
+}  // namespace komodo

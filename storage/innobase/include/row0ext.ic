@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created September 2006 Marko Makela
  *******************************************************/
 
+#ifndef row0ext_h
+#define INNODB_ROW0EXT_IC_STANDALONE
+#include "row0ext.h"
+#undef INNODB_ROW0EXT_IC_STANDALONE
+#endif /* !row0ext_h */
 #include "btr0types.h"
 #include "rem0types.h"
 

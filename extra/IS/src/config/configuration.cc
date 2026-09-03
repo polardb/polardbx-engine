@@ -79,7 +79,21 @@ uint64_t StableConfiguration::allMin(const GetValue &getValue) const {
   return value;
 }
 
-Configuration::ServerRef StableConfiguration::getServer(uint64_t serverId) {
+uint64_t StableConfiguration::allMinLeraner(const GetValue &getValue) const {
+  if (learners.empty()) return 0;
+  uint64_t value = UINT64_MAX;
+  for (auto &it : learners) {
+    if (it) {
+      auto tmp = getValue(*it);
+      if (tmp < value) {
+        value = tmp;
+      }
+    }
+  }
+  return value;
+}
+
+StableConfiguration::ServerRef StableConfiguration::getServer(uint64_t serverId) {
   if (serverId == 0) return nullptr;
 
   if (serverId < 100) {
@@ -106,7 +120,7 @@ Configuration::ServerRef StableConfiguration::getServer(uint64_t serverId) {
   }
 }
 
-Configuration::ServerRef StableConfiguration::getLearnerByAddr(
+StableConfiguration::ServerRef StableConfiguration::getLearnerByAddr(
     const std::string &addr) {
   for (auto &learner : learners) {
     if (learner && getAddr(learner->strAddr) == addr) return learner;
@@ -226,7 +240,7 @@ std::string StableConfiguration::configToString(std::vector<ServerRef> &servers,
   return ret;
 }
 
-Configuration::ServerRef StableConfiguration::addServer(
+StableConfiguration::ServerRef StableConfiguration::addServer(
     std::vector<ServerRef> &servers, ServerRef newServer, bool useAppend) {
   uint64_t id = 0;
   for (auto &it : servers) {

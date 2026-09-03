@@ -1,0 +1,563 @@
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+#
+# Test: AI model/function defaults are managed through dbms_ai interfaces.
+#
+# The kernel initializes mysql.ai_function_config with supported AI function
+# metadata rows, but leaves model_name empty.  The control plane registers
+# model rows and then sets per-function defaults through dbms_ai.update_function.
+#
+
+connection default;
+
+# ================================================================
+# 1. Startup state: supported functions exist without defaults
+# ================================================================
+--echo # 1. Startup has no AI model rows or function default models
+
+--echo # 1.1 list_models should be empty before control-plane registration
+CALL dbms_ai.list_models();
+
+--echo # 1.2 show_ai_function should list supported functions without default models
+CALL dbms_ai.show_ai_function();
+
+--echo # 1.3 default AI_PROMPT should fail before a default model is configured
+--error ER_WRONG_ARGUMENTS
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 1.4 update_function rejects a missing model
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_FUTURE_LLM');
+
+--let $ai_mock_port= `SELECT @@port + 77`
+--let $ai_mock_script= $MYSQL_TMP_DIR/ai_mock_gateway.pl
+--let $ai_mock_pid= $MYSQL_TMP_DIR/ai_mock_gateway.pid
+--let $ai_mock_log= $MYSQL_TMP_DIR/ai_mock_gateway.log
+--write_file $ai_mock_script
+use strict;
+use warnings;
+use IO::Socket::INET;
+
+my ($port, $pid_file) = @ARGV;
+my $server = IO::Socket::INET->new(
+  LocalAddr => '127.0.0.1',
+  LocalPort => $port,
+  Proto => 'tcp',
+  Listen => 5,
+  Reuse => 1,
+) or die "listen failed on $port: $!\n";
+
+open(my $pid_fh, '>', $pid_file) or die "open pid file failed: $!\n";
+print $pid_fh $$;
+close($pid_fh);
+
+$SIG{TERM} = sub { close($server); exit 0; };
+
+while (my $client = $server->accept()) {
+  $client->autoflush(1);
+  my $request = '';
+  while (my $line = <$client>) {
+    $request .= $line;
+    last if $line eq "\r\n" || $line eq "\n";
+  }
+  my $body_in = '';
+  if ($request =~ /Content-Length:\s*(\d+)/i) {
+    read($client, $body_in, $1);
+  }
+
+  my $body;
+  if ($request =~ m{/embeddings/}) {
+    $body = '{"output":{"embeddings":[{"embedding":[0.1,0.2,0.3]}]}}';
+  } elsif ($request =~ m{/text2sql-fence}) {
+    $body = '{"output":{"choices":[{"message":{"content":"```sql\nSELECT 1;\n```"}}]}}';
+  } elsif ($body_in =~ /Which tables are needed/ && $body_in =~ /PICK_USERS_TABLE/) {
+    my $target = -1;
+    while ($body_in =~ /(\d+): users\(/g) { $target = $1; }
+    $body = '{"output":{"choices":[{"message":{"content":"[' . $target . ']"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /PICK_USERS_TABLE/) {
+    my $c = ($body_in =~ /filler_/) ? 'unfiltered' : 'filtered-ok';
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /IDENT_CHECK/) {
+    my $c = ($body_in =~ /CREATE TABLE `weird``tbl`/) ? 'escaped-ok' : 'bad-escape';
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /PRIV_CHECK/) {
+    my $c;
+    if ($body_in =~ /t_secret/) {
+      $c = 'leaked';
+    } elsif ($body_in =~ /CREATE TABLE `orders`/ && $body_in =~ /amount/) {
+      $c = 'col-leaked';
+    } elsif ($body_in =~ /CREATE TABLE `users`/ && $body_in =~ /CREATE TABLE `orders`/ && $body_in =~ /`id`/) {
+      $c = 'col-safe';
+    } else {
+      $c = 'missing-visible';
+    }
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } elsif ($body_in =~ /Which tables are needed/ && $body_in =~ /SP_FILTER/) {
+    my $target = -1;
+    while ($body_in =~ /(\d+): sales data\(/g) { $target = $1; }
+    $body = '{"output":{"choices":[{"message":{"content":"[' . $target . ']"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /SP_FILTER/) {
+    my $c = ($body_in =~ /CREATE TABLE `sales data`/) ? 'spfilter-ok' : 'spfilter-bad';
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /SP_REND/) {
+    my $c = ($body_in =~ /CREATE TABLE `sales data`/) ? 'space-ok' : 'space-bad';
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } elsif ($body_in =~ /You are a SQL expert/ && $body_in =~ /COMMA_REND/) {
+    my $c = ($body_in =~ /CREATE TABLE `a,b`/) ? 'comma-ok' : 'comma-bad';
+    $body = '{"output":{"choices":[{"message":{"content":"' . $c . '"}}]}}';
+  } else {
+    $body = '{"output":{"choices":[{"message":{"content":"ok"}}]}}';
+  }
+
+  print $client "HTTP/1.1 200 OK\r\n";
+  print $client "Content-Type: application/json\r\n";
+  print $client "Content-Length: " . length($body) . "\r\n";
+  print $client "Connection: close\r\n\r\n";
+  print $client $body;
+  close($client);
+}
+EOF
+--exec perl $ai_mock_script $ai_mock_port $ai_mock_pid > $ai_mock_log 2>&1 &
+--sleep 1
+
+# ================================================================
+# 2. Control-plane model registration
+# ================================================================
+--echo # 2. Control-plane registers default model rows
+
+--echo # 2.1 register LLM models with default model names
+--disable_query_log
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_QWEN35_PLUS',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/aigc/text-generation/generation',
+  'qwen3.5-plus',
+  '{"api_key":"sk-mock"}'
+);
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_QWEN_PLUS',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/aigc/text-generation/generation',
+  'qwen-plus',
+  '{"api_key":"sk-mock"}'
+);
+eval CALL dbms_ai.register_model(
+  'user_default_llm',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/aigc/text-generation/generation',
+  'qwen-plus',
+  '{"api_key":"sk-mock"}'
+);
+
+--echo # 2.2 register embedding models with default model names
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_TEXT_EMBEDDING_V4',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/embeddings/text-embedding/text-embedding',
+  'text-embedding-v4',
+  '{"api_key":"sk-mock"}'
+);
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_TEXT_EMBEDDING_V3',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/embeddings/text-embedding/text-embedding',
+  'text-embedding-v3',
+  '{"api_key":"sk-mock"}'
+);
+
+--echo # 2.3 register model rows for the remaining AI function defaults
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_QWEN3_VL_RERANK',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/rerank/text-rerank/text-rerank',
+  'qwen3-vl-rerank',
+  '{"api_key":"sk-mock"}'
+);
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_QWEN_DOC_TURBO',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/aigc/text-generation/generation',
+  'qwen-doc-turbo',
+  '{"api_key":"sk-mock"}'
+);
+eval CALL dbms_ai.register_model(
+  '__POLARDBX_QWEN3_VL_EMBEDDING',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding',
+  'qwen3-vl-embedding',
+  '{"api_key":"sk-mock"}'
+);
+--enable_query_log
+
+--echo # 2.4 list_models shows only rows registered through the interface
+--replace_result $ai_mock_port AI_MOCK_PORT
+CALL dbms_ai.list_models();
+
+# ================================================================
+# 3. update_function and runtime lookup
+# ================================================================
+--echo # 3. update_function sets defaults used by AI functions
+
+--echo # 3.1 configure AI_PROMPT default and call through it
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN35_PLUS');
+CALL dbms_ai.show_ai_function();
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 3.2 switch AI_PROMPT to another available default and call through it
+CALL dbms_ai.update_function('AI_PROMPT', 'user_default_llm');
+CALL dbms_ai.show_ai_function();
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 3.3 dropping the configured default model leaves ACTUAL_MODEL empty
+CALL dbms_ai.drop_model('user_default_llm');
+CALL dbms_ai.show_ai_function();
+--error ER_WRONG_ARGUMENTS
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 3.4 restore AI_PROMPT to another available model and call through it
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 3.5 configure AI_EMBEDDING and AI_SIMILARITY defaults
+CALL dbms_ai.update_function('AI_EMBEDDING', '__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.update_function('AI_SIMILARITY', '__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.show_ai_function();
+SELECT AI_EMBEDDING('hello') IS NOT NULL;
+SELECT AI_SIMILARITY('hello', 'world') IS NOT NULL;
+
+--echo # 3.6 update_function accepts lowercase function_name
+CALL dbms_ai.update_function('ai_summarize', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+
+--echo # 3.7 inactive default model is treated as missing at lookup time
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"status":"INACTIVE"}');
+CALL dbms_ai.show_ai_function();
+--error ER_WRONG_ARGUMENTS
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"status":"ACTIVE"}');
+CALL dbms_ai.show_ai_function();
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+
+--echo # 3.8 update_model underlying model changes show_ai_function ACTUAL_MODEL
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"model":"qwen-max"}');
+CALL dbms_ai.show_ai_function();
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"model":"qwen-plus"}');
+CALL dbms_ai.show_ai_function();
+
+--echo # 3.9 configure every supported AI function default
+CALL dbms_ai.update_function('AI_CLASSIFY', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.update_function('AI_RANK', '__POLARDBX_QWEN3_VL_RERANK');
+CALL dbms_ai.update_function('AI_EXTRACT', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.update_function('AI_PARSE_DOCUMENT', '__POLARDBX_QWEN_DOC_TURBO');
+CALL dbms_ai.update_function('AI_VL_EMBEDDING', '__POLARDBX_QWEN3_VL_EMBEDDING');
+CALL dbms_ai.update_function('AI_TEXT2SQL', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+
+--echo # 3.10 AI_TEXT2SQL generates SQL from current database tables
+CREATE DATABASE ai_t2s_db;
+USE ai_t2s_db;
+CREATE TABLE users (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(64) NOT NULL,
+  age INT COMMENT 'age in years',
+  KEY idx_age (age)
+) COMMENT='user info';
+CREATE TABLE orders (
+  id INT PRIMARY KEY,
+  user_id INT,
+  amount DECIMAL(10,2),
+  UNIQUE KEY uk_user (user_id, id)
+);
+SELECT AI_TEXT2SQL('Find all users older than 30');
+SELECT AI_TEXT2SQL('Find all users older than 30', '__POLARDBX_QWEN_PLUS');
+SELECT AI_TEXT2SQL('Find all users older than 30', NULL,
+                   '{"temperature":0.2,"max_tokens":100}');
+
+--echo # 3.11 AI_TEXT2SQL NULL prompt returns NULL
+SELECT AI_TEXT2SQL(NULL);
+
+--echo # 3.12 AI_TEXT2SQL empty prompt should fail
+--error ER_WRONG_ARGUMENTS
+SELECT AI_TEXT2SQL('');
+
+--echo # 3.13 AI_TEXT2SQL invalid options JSON should fail
+--error ER_WRONG_ARGUMENTS
+SELECT AI_TEXT2SQL('Find all users older than 30', NULL, 'not-json');
+
+--echo # 3.14 AI_TEXT2SQL unknown model should fail
+--error ER_WRONG_ARGUMENTS
+SELECT AI_TEXT2SQL('Find all users older than 30', '__POLARDBX_MISSING_LLM');
+
+--echo # 3.15 AI_TEXT2SQL strips the markdown code fence around the SQL
+--disable_query_log
+eval CALL dbms_ai.register_model(
+  't2s_fence_llm',
+  'dashscope',
+  'http://127.0.0.1:$ai_mock_port/api/v1/text2sql-fence',
+  'qwen-plus',
+  '{"api_key":"sk-mock"}'
+);
+--enable_query_log
+SELECT AI_TEXT2SQL('Find all users older than 30', 't2s_fence_llm');
+CALL dbms_ai.drop_model('t2s_fence_llm');
+
+--echo # 3.16 special identifiers and comments are escaped in the rendered DDL
+# The mock gateway inspects the generation request body: it replies
+# 'escaped-ok' only when the DDL contains the correctly quoted name
+# CREATE TABLE `weird``tbl` (append_identifier doubles the backtick).
+CREATE TABLE `weird``tbl` (
+  `col``x` INT COMMENT 'a\'b\\c',
+  PRIMARY KEY (`col``x`)
+) COMMENT='it''s a \\ test';
+SELECT AI_TEXT2SQL('IDENT_CHECK query the weird table');
+DROP TABLE `weird``tbl`;
+
+--echo # 3.17 pre-filter falls back to the first tables when the LLM reply
+--echo #      matches no table name (mock answers 'ok' without a token)
+--disable_query_log
+let $i= 1;
+while ($i <= 11)
+{
+  eval CREATE TABLE filler_$i (id INT PRIMARY KEY, val VARCHAR(32));
+  inc $i;
+}
+--enable_query_log
+SELECT AI_TEXT2SQL('Find all users older than 30');
+
+--echo # 3.18 pre-filter narrows the schema context via LLM table selection
+# The mock answers 'users' to the pre-filter round, so the generation
+# round must contain only the users table; it replies 'unfiltered' if
+# any filler table leaks into the schema context.
+SELECT AI_TEXT2SQL('PICK_USERS_TABLE find all users');
+
+--echo # restore the small-table environment for the following cases:
+--echo # with the fillers present the pre-filter round would run and
+--echo # the fallback could drop tables the case expects in context
+--disable_query_log
+let $i= 1;
+while ($i <= 11)
+{
+  eval DROP TABLE filler_$i;
+  inc $i;
+}
+--enable_query_log
+
+--echo # 3.19 optional arguments are re-evaluated per row (no stale NULL)
+# Row 1 passes a NULL model (falls back to the default), row 2 passes a
+# non-existent model name and must fail: a stale NULL state from row 1
+# would silently reuse the default model instead.
+--error ER_WRONG_ARGUMENTS
+SELECT AI_TEXT2SQL('find users', m)
+  FROM (SELECT 1 AS id, NULL AS m
+        UNION ALL SELECT 2 AS id, 'no_such_model_x' AS m) t
+  ORDER BY id;
+
+--echo # 3.20 AI_TEXT2SQL requires a current database
+connect (conn_nodb, localhost, root,,*NO-ONE*);
+--error ER_NO_DB_ERROR
+SELECT AI_TEXT2SQL('Find all users older than 30');
+connection default;
+disconnect conn_nodb;
+
+--echo # 3.21 tables without SELECT privilege are excluded from the context
+# ai_t2s_limited: INSERT-only on t_secret (must NOT be sent), SELECT on
+# users and column-level SELECT(id) on orders (both must be sent, but
+# only the granted column of orders).  The mock replies 'leaked' if
+# t_secret appears, 'col-leaked' if the unauthorized column 'amount' of
+# orders appears, 'col-safe' when users and orders are present with
+# only the granted columns.
+CREATE TABLE t_secret (secret_col INT);
+CREATE USER 'ai_t2s_limited'@'localhost';
+GRANT INSERT ON ai_t2s_db.t_secret TO 'ai_t2s_limited'@'localhost';
+GRANT SELECT ON ai_t2s_db.users TO 'ai_t2s_limited'@'localhost';
+GRANT SELECT(id) ON ai_t2s_db.orders TO 'ai_t2s_limited'@'localhost';
+connect (conn_t2s_limited, localhost, ai_t2s_limited,,ai_t2s_db);
+SELECT AI_TEXT2SQL('PRIV_CHECK find all users');
+connection default;
+disconnect conn_t2s_limited;
+DROP USER 'ai_t2s_limited'@'localhost';
+
+--echo # 3.22 table names with spaces render as legal quoted identifiers
+CREATE TABLE `sales data` (id INT PRIMARY KEY, total DECIMAL(10,2));
+SELECT AI_TEXT2SQL('SP_REND query the sales data');
+DROP TABLE `sales data`;
+
+--echo # 3.23 table names with commas render as legal quoted identifiers
+CREATE TABLE `a,b` (id INT PRIMARY KEY);
+SELECT AI_TEXT2SQL('COMMA_REND query table a comma b');
+DROP TABLE `a,b`;
+
+--echo # 3.24 pre-filter matches table names containing spaces
+# More than 10 tables exist here, so the pre-filter round runs; the
+# mock answers 'sales data' and the generation round must receive the
+# quoted definition of that table (greedy longest-match scanning).
+CREATE TABLE `sales data` (id INT PRIMARY KEY, total DECIMAL(10,2));
+SELECT AI_TEXT2SQL('SP_FILTER total sales');
+DROP TABLE `sales data`;
+
+--echo # 3.25 cleanup text2sql database
+DROP DATABASE ai_t2s_db;
+USE test;
+
+--echo # 3.26 AI function results join and compare with default collation
+# Regression for the utf8mb4_bin result collation: mixing the result
+# with utf8mb4_0900_ai_ci literals and columns must not raise
+# ER_CANT_AGGREGATE_2COLLATIONS (bin sorts win the aggregation).
+SELECT AI_PROMPT('Say exactly one word: ok') = 'ok' AS eq_ok;
+SELECT AI_PROMPT('Say exactly one word: ok') LIKE '%ok%' AS like_ok;
+SELECT CONCAT(AI_PROMPT('Say exactly one word: ok'), '-suffix') LIKE '%ok-suffix%' AS concat_ok;
+CREATE TABLE ai_coll_t (v VARCHAR(16) COLLATE utf8mb4_0900_ai_ci);
+INSERT INTO ai_coll_t VALUES ('ok');
+SELECT AI_PROMPT('Say exactly one word: ok') = v AS col_eq_ok FROM ai_coll_t;
+DROP TABLE ai_coll_t;
+
+--echo # 3.27 utf8mb4_bin comparison is case-sensitive (documented contract)
+# The mock always answers 'ok'; with the bin collation 'OK' is a
+# different value.  The old utf8mb4_general_ci return collation was
+# unusable with literals on 8.0 default connections (error 1267), so
+# binary semantics are the documented replacement, pinned here.
+SELECT AI_PROMPT('Say exactly one word: ok') = 'OK' AS case_sensitive;
+SELECT UPPER(AI_PROMPT('Say exactly one word: ok')) = 'OK' AS upper_eq;
+
+# ================================================================
+# 4. update_function validation
+# ================================================================
+--echo # 4. update_function validation
+
+--echo # 4.1 invalid function name should fail
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('AI_NOT_EXISTS', '__POLARDBX_QWEN35_PLUS');
+
+--echo # 4.2 empty function name should fail
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('', '__POLARDBX_QWEN35_PLUS');
+
+--echo # 4.3 empty model name should fail
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('AI_PROMPT', '');
+
+--echo # 4.4 model_name length is validated by native procedure signature
+--error 7500
+CALL dbms_ai.update_function('AI_PROMPT', REPEAT('x', 129));
+
+--echo # 4.5 valid function with missing model should fail
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.update_function('AI_EMBEDDING', '__POLARDBX_FUTURE_EMBED');
+
+--echo # 4.6 update_function wrong argument count should fail
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_ai.update_function('AI_PROMPT');
+
+--echo # 4.7 show_ai_function wrong argument count should fail
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_ai.show_ai_function('unexpected');
+
+# ================================================================
+# 5. Endpoint scheme is not enforced at the DN
+# ================================================================
+--echo # 5. endpoint scheme is not enforced at DN
+
+--echo # 5.1 register_model with HTTP endpoint should succeed
+CALL dbms_ai.register_model(
+  'http_test',
+  'dashscope',
+  'http://internal.example.com/v1/chat/completions',
+  'qwen-plus',
+  '{}'
+);
+CALL dbms_ai.drop_model('http_test');
+
+--echo # 5.2 register_model with HTTPS endpoint should succeed
+CALL dbms_ai.register_model(
+  'https_test',
+  'dashscope',
+  'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+  'qwen-plus',
+  '{}'
+);
+
+--echo # 5.3 update_model endpoint to HTTP should succeed
+CALL dbms_ai.update_model('https_test', '{"endpoint":"http://10.0.0.1:8080/"}');
+
+--echo # 5.4 update_model endpoint to HTTPS should succeed
+CALL dbms_ai.update_model('https_test', '{"endpoint":"https://dashscope.aliyuncs.com/v1/new-path"}');
+
+--echo # 5.5 cleanup
+CALL dbms_ai.drop_model('https_test');
+
+# ================================================================
+# 6. Security: admin privilege required for model/function management,
+#    while read-only inspection stays available to normal users
+# ================================================================
+--echo # 6. Admin privilege required for writes, read-only open to all
+
+--echo # 6.1 create a non-admin user
+CREATE USER 'ai_nopriv'@'localhost';
+GRANT SELECT ON *.* TO 'ai_nopriv'@'localhost';
+
+--echo # 6.2 connect as non-admin user
+connect (conn_nopriv, localhost, ai_nopriv,,);
+
+--echo # 6.3 AI inference functions stay usable for non-admin users
+SELECT AI_TEXT2SQL('Find all users older than 30');
+
+--echo # 6.4 register_model should fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CALL dbms_ai.register_model('priv_test', 'x', 'https://x.com/v1', 'x', '{}');
+
+--echo # 6.5 list_models is read-only and allowed for non-admin users
+--replace_result $ai_mock_port AI_MOCK_PORT
+CALL dbms_ai.list_models();
+
+--echo # 6.6 describe_model is read-only and allowed for non-admin users
+--replace_result $ai_mock_port AI_MOCK_PORT
+CALL dbms_ai.describe_model('__POLARDBX_QWEN35_PLUS');
+
+--echo # 6.7 update_model should fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CALL dbms_ai.update_model('__POLARDBX_QWEN35_PLUS', '{"description":"hacked"}');
+
+--echo # 6.8 show_ai_function is read-only and allowed for non-admin users
+CALL dbms_ai.show_ai_function();
+
+--echo # 6.9 update_function should fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+
+--echo # 6.10 drop_model should fail
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CALL dbms_ai.drop_model('__POLARDBX_QWEN35_PLUS');
+
+--echo # 6.11 cleanup: back to default connection
+connection default;
+disconnect conn_nopriv;
+DROP USER 'ai_nopriv'@'localhost';
+
+# ================================================================
+# 7. Cleanup
+# ================================================================
+--echo # 7. Cleanup
+CALL dbms_ai.drop_model('__POLARDBX_QWEN35_PLUS');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.drop_model('__POLARDBX_TEXT_EMBEDDING_V4');
+CALL dbms_ai.drop_model('__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN3_VL_RERANK');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN_DOC_TURBO');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN3_VL_EMBEDDING');
+
+--echo # 7.1 list_models should be empty after cleanup
+CALL dbms_ai.list_models();
+
+--echo # 7.2 configured function rows are allowed to reference missing models
+CALL dbms_ai.show_ai_function();
+
+--exec kill `cat $ai_mock_pid`
+--remove_file $ai_mock_script
+--remove_file $ai_mock_pid
+--remove_file $ai_mock_log
+
+--enable_ps_protocol

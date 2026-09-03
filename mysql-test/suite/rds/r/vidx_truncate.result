@@ -1,0 +1,173 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# Cleanup before test
+#
+DROP TABLE IF EXISTS t1, t2;
+#
+# 8.1 Create table with VECTOR INDEX (no INSERT due to crash bug)
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+extra VARCHAR(100),
+VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check initial auxiliary table count
+SELECT COUNT(*) AS initial_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+initial_vidx_count
+1
+# Record auxiliary table names
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+NAME
+test/vidx_XXXXX_0
+#
+# 8.2 TRUNCATE TABLE - verify VECTOR INDEX preserved
+#
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary tables still exist
+SELECT COUNT(*) AS after_truncate_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+after_truncate_count
+1
+#
+# 8.3 INSERT test after TRUNCATE (Blocked by INSERT crash bug)
+#
+#
+# 8.4 Multiple consecutive TRUNCATEs - verify no leftover auxiliary tables
+#
+# First TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_1 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+count_after_truncate_1
+1
+# Second TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_2 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+count_after_truncate_2
+1
+# Third TRUNCATE
+TRUNCATE TABLE t1;
+SELECT COUNT(*) AS count_after_truncate_3 FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+count_after_truncate_3
+1
+# Verify auxiliary table names are consistent (no accumulation)
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+NAME
+test/vidx_XXXXX_0
+#
+# 8.5 TRUNCATE verification - structure remains consistent
+#
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  `extra` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify via SHOW INDEX
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=12, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+#
+# Additional: Test TRUNCATE with different VECTOR configurations
+#
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v) m=20 distance=cosine
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(8) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=20 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Record initial state
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+NAME
+test/vidx_XXXXX_0
+test/vidx_XXXXX_0
+# TRUNCATE t2
+TRUNCATE TABLE t2;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(8) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=20 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify both tables' auxiliary tables exist
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%' ORDER BY NAME;
+NAME
+test/vidx_XXXXX_0
+test/vidx_XXXXX_0
+#
+# Test: TRUNCATE preserves VECTOR INDEX options
+#
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi_custom(v) m=50 distance=cosine
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_custom` (`v`) M=50 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+TRUNCATE TABLE t3;
+# Verify options (M=50, DISTANCE=COSINE) are preserved
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_custom` (`v`) M=50 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Cleanup
+#
+DROP TABLE t1, t2, t3;
+# Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+final_vidx_count
+0
+SET GLOBAL vidx_disabled = ON;

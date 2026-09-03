@@ -1,0 +1,156 @@
+--source include/have_debug.inc
+--source include/big_test.inc
+
+# save_neighbors_only regression: 8-way concurrent UPDATE stress for ~25-40s.
+# Higher concurrency than vidx_dup_key_repro_stress to catch any residual
+# revive race that only surfaces at higher contention.
+# Vidx_indep_dml_deadlock delta = 0, Vidx_neighbor_save_count grows.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 80)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_dl    = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $b_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+let $b_inv   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_skip_tref_changed'`;
+
+DELIMITER $$;
+CREATE PROCEDURE p1(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 2500 DO
+    UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, "]")) WHERE id = (j % 80) + 1;
+    SET j = j + 1;
+  END WHILE;
+END$$
+DELIMITER ;$$
+
+connect (c1, localhost, root,,);
+connect (c2, localhost, root,,);
+connect (c3, localhost, root,,);
+connect (c4, localhost, root,,);
+connect (c5, localhost, root,,);
+connect (c6, localhost, root,,);
+connect (c7, localhost, root,,);
+connect (c8, localhost, root,,);
+
+--connection c1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(1)
+--connection c2
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(7)
+--connection c3
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(13)
+--connection c4
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(19)
+--connection c5
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(29)
+--connection c6
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(37)
+--connection c7
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(43)
+--connection c8
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(53)
+
+--connection c1
+--error 0,1213,1022,1062
+--reap
+--connection c2
+--error 0,1213,1022,1062
+--reap
+--connection c3
+--error 0,1213,1022,1062
+--reap
+--connection c4
+--error 0,1213,1022,1062
+--reap
+--connection c5
+--error 0,1213,1022,1062
+--reap
+--connection c6
+--error 0,1213,1022,1062
+--reap
+--connection c7
+--error 0,1213,1022,1062
+--reap
+--connection c8
+--error 0,1213,1022,1062
+--reap
+
+--connection default
+
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_dl    = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $a_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+let $a_inv   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_skip_tref_changed'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_dl    = `SELECT $a_dl - $b_dl`;
+let $d_err   = `SELECT $a_err - $b_err`;
+let $d_inv   = `SELECT $a_inv - $b_inv`;
+
+# Stable result: --echo does NOT expand `SELECT ...` backticks; emit only
+# pre-evaluated 0/1 booleans so concurrency-driven counter values stay out
+# of the .result baseline.  --die assertions below are the real signal.
+let $ok_nbr = `SELECT $d_nbr > 0`;
+let $ok_dup = `SELECT $d_dup = 0`;
+let $ok_dl  = `SELECT $d_dl = 0`;
+let $ok_err = `SELECT $d_err = 0`;
+# $d_inv is ulonglong so >=0 is structurally true — drop the echo.
+--echo == save_neighbors_only high-concurrency deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+--echo indep_dml_deadlock_eq_0=$ok_dl
+--echo indep_dml_commit_error_eq_0=$ok_err
+
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 under 8-way concurrency
+}
+if (`SELECT $d_err != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_indep_dml_commit_error must stay 0
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+disconnect c1;
+disconnect c2;
+disconnect c3;
+disconnect c4;
+disconnect c5;
+disconnect c6;
+disconnect c7;
+disconnect c8;
+
+DROP PROCEDURE p1;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

@@ -1,0 +1,619 @@
+##########################################
+# Independent transaction on primary     #
+# + XA transaction + slave verification  #
+##########################################
+#
+# TEST: vidx_indep_trx
+#
+# Covers the following code paths:
+#   - SAVEPOINT + ROLLBACK TO SAVEPOINT (aux orphan tolerance)
+#   - Nested SAVEPOINT with multi-level partial rollback
+#   - Two vector-index tables in same transaction (multi-table hook)
+#   - REPLACE INTO in explicit transaction (DELETE+INSERT path)
+#   - INSERT ... ON DUPLICATE KEY UPDATE in transaction
+#   - Long transaction with Attachable_trx_rw used across 10 DML statements
+#   - INSERT ... SELECT batch insert (per-row indep trx)
+#   - Independent-trx (per-row commit) is the default for vector DML
+#   - Explicit BEGIN/COMMIT with vector DML
+#   - Explicit BEGIN/ROLLBACK  (orphan tolerance proves aux committed independently)
+#   - Concurrent DML from two connections (aux locks released per-row)
+#   - Implicit commit (DDL inside open transaction)
+#   - XA INSERT / UPDATE / DELETE + two-phase commit
+#   - XA ROLLBACK after PREPARE
+#   - XA ONE PHASE commit
+#   - XA mixed DML (INSERT+UPDATE+DELETE) in single XA
+#   - Sequential XA transactions (Attachable_trx_rw cleanup/recreate)
+#   - Normal (non-XA) transaction baseline
+#   - Slave replication verification (slave always uses independent trx)
+#   - ANN query via FORCE INDEX on both master and slave
+
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo ##############################################
+--echo # 1. Prepare: create table with vector index #
+--echo ##############################################
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+
+--echo
+--echo # Insert seed data for HNSW graph
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,2,3,4,10]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[1,2,3,4,9]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[1,2,3,4,8]"));
+INSERT INTO t1(a, v) VALUES (4, VEC_FROMTEXT("[1,2,3,4,7]"));
+INSERT INTO t1(a, v) VALUES (5, VEC_FROMTEXT("[1,2,3,4,6]"));
+--source include/rpl_sync.inc
+
+--echo
+--echo ##############################################
+--echo # 2. Explicit BEGIN + COMMIT with vector DML #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10,10,10]"));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT("[11,11,11,11,11]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[50,50,50,50,50]") WHERE id = 1;
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SET transaction_isolation = 'READ-COMMITTED';
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ##############################################
+--echo # 3. Explicit BEGIN + ROLLBACK               #
+--echo #    Main-table row gone; orphan in aux      #
+--echo #    table proves independent commit.        #
+--echo #    ANN search tolerates orphan.            #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+SELECT COUNT(*) AS cnt_before FROM t1;
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (99, VEC_FROMTEXT("[99,99,99,99,99]"));
+--echo # Row visible inside own transaction
+SELECT COUNT(*) FROM t1 WHERE a = 99;
+ROLLBACK;
+
+--echo # After ROLLBACK: main-table row should NOT exist
+SELECT COUNT(*) FROM t1 WHERE a = 99;
+--echo # Total count unchanged
+SELECT COUNT(*) AS cnt_after FROM t1;
+--echo # ANN search must work without crash (aux orphan tolerated)
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5,5,5]")) LIMIT 3;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on slave: no orphan row visible
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1 WHERE a = 99;
+
+--echo
+--echo ##############################################
+--echo # 4. Two-session DML: aux table locks         #
+--echo #    released independently (no blocking)     #
+--echo #    NOTE: deliberately sequential between    #
+--echo #    sessions — proves master2 is NOT blocked #
+--echo #    by master's open user trx, not a true    #
+--echo #    concurrent deadlock test.  Stress and    #
+--echo #    deadlock coverage live in                #
+--echo #    vidx_neighbor_save_high_conc.test.       #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+--connect (master2, 127.0.0.1, root,,test,$MASTER_MYPORT,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # conn master: BEGIN + INSERT (don't commit yet)
+--source include/rpl_connection_master.inc
+BEGIN;
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT("[20,20,20,20,20]"));
+--echo # Main-table transaction still open, but aux DML already committed
+
+--echo # conn master2: INSERT should succeed immediately (aux locks released)
+--connection master2
+INSERT INTO t1(a, v) VALUES (21, VEC_FROMTEXT("[21,21,21,21,21]"));
+
+--echo # conn master: now COMMIT
+--source include/rpl_connection_master.inc
+COMMIT;
+
+--echo # Verify both rows exist on master
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (20, 21) ORDER BY a;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (20, 21) ORDER BY a;
+
+--echo
+--echo ##############################################
+--echo # 5. Implicit commit (DDL during open trx)   #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT("[30,30,30,30,30]"));
+--echo # DDL triggers implicit commit of the above INSERT
+CREATE TABLE t2 (x INT) ENGINE = InnoDB;
+--echo # INSERT should be committed, per-row Attachable_trx_rw cleaned up
+SELECT COUNT(*) FROM t1 WHERE a = 30;
+DROP TABLE t2;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1 WHERE a = 30;
+
+--echo
+--echo ##############################################
+--echo # 6. XA INSERT + COMMIT (two-phase)          #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_ins_1';
+INSERT INTO t1(a, v) VALUES (40, VEC_FROMTEXT("[40,40,40,40,40]"));
+INSERT INTO t1(a, v) VALUES (41, VEC_FROMTEXT("[41,41,41,41,41]"));
+XA END 'xa_ins_1';
+XA PREPARE 'xa_ins_1';
+XA COMMIT 'xa_ins_1';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (40, 41) ORDER BY a;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (40, 41) ORDER BY a;
+
+--echo
+--echo ##############################################
+--echo # 7. XA UPDATE + COMMIT                      #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_upd_1';
+UPDATE t1 SET v = VEC_FROMTEXT("[55,55,55,55,55]") WHERE a = 2;
+XA END 'xa_upd_1';
+XA PREPARE 'xa_upd_1';
+XA COMMIT 'xa_upd_1';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+
+--echo
+--echo ##############################################
+--echo # 8. XA DELETE + COMMIT                      #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_del_1';
+DELETE FROM t1 WHERE a = 3;
+XA END 'xa_del_1';
+XA PREPARE 'xa_del_1';
+XA COMMIT 'xa_del_1';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) FROM t1 WHERE a = 3;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1 WHERE a = 3;
+
+--echo
+--echo ##############################################
+--echo # 9. XA ROLLBACK after PREPARE               #
+--echo #    (base-table rolls back, independent     #
+--echo #     aux DML already committed)             #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_rb_1';
+INSERT INTO t1(a, v) VALUES (88, VEC_FROMTEXT("[88,88,88,88,88]"));
+XA END 'xa_rb_1';
+XA PREPARE 'xa_rb_1';
+XA ROLLBACK 'xa_rb_1';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master: rolled-back row should NOT exist
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) FROM t1 WHERE a = 88;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1 WHERE a = 88;
+
+--echo
+--echo ##############################################
+--echo # 10. XA ONE PHASE commit                    #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_1ph_1';
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT("[60,60,60,60,60]"));
+XA END 'xa_1ph_1';
+XA COMMIT 'xa_1ph_1' ONE PHASE;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo
+--echo ##############################################
+--echo # 11. XA mixed DML (INSERT+UPDATE+DELETE)    #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_mix_1';
+INSERT INTO t1(a, v) VALUES (70, VEC_FROMTEXT("[70,70,70,70,70]"));
+UPDATE t1 SET a = 100, v = VEC_FROMTEXT("[100,100,100,100,100]") WHERE a = 4;
+DELETE FROM t1 WHERE a = 5;
+XA END 'xa_mix_1';
+XA PREPARE 'xa_mix_1';
+XA COMMIT 'xa_mix_1';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ##############################################
+--echo # 12. Sequential XA transactions             #
+--echo #     (Attachable_trx_rw cleanup across     #
+--echo #      consecutive XAs)                     #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_seq_1';
+INSERT INTO t1(a, v) VALUES (71, VEC_FROMTEXT("[71,71,71,71,71]"));
+XA END 'xa_seq_1';
+XA PREPARE 'xa_seq_1';
+XA COMMIT 'xa_seq_1';
+
+XA START 'xa_seq_2';
+INSERT INTO t1(a, v) VALUES (72, VEC_FROMTEXT("[72,72,72,72,72]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[73,73,73,73,73]") WHERE a = 71;
+XA END 'xa_seq_2';
+XA PREPARE 'xa_seq_2';
+XA COMMIT 'xa_seq_2';
+
+XA START 'xa_seq_3';
+DELETE FROM t1 WHERE a = 72;
+XA END 'xa_seq_3';
+XA PREPARE 'xa_seq_3';
+XA COMMIT 'xa_seq_3';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master after sequential XAs
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on slave after sequential XAs
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+# §13 (non-XA baseline) removed — duplicates §2 (BEGIN+INSERT+UPDATE+COMMIT
+# main+slave verify); the §2 INSERT path is the same code path.
+
+--echo ##############################################
+--echo # 14. TRUNCATE TABLE (delete_all path)       #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+TRUNCATE TABLE t1;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master: table should be empty
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) FROM t1;
+
+--echo # Verify on slave: table should be empty
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo ##############################################
+--echo # 15. Re-insert after TRUNCATE + ANN query   #
+--echo #     verification on both master and slave  #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1,1,1]"));
+
+XA START 'xa_after_trunc';
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3,3,3]"));
+XA END 'xa_after_trunc';
+XA PREPARE 'xa_after_trunc';
+XA COMMIT 'xa_after_trunc';
+
+--source include/rpl_sync.inc
+
+--echo # Verify on master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,2,2,2]")) LIMIT 3;
+
+--echo # Verify on slave (ANN on replica)
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,2,2,2]")) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 16. SAVEPOINT + ROLLBACK TO SAVEPOINT      #
+--echo #     Primary path: aux committed indep;     #
+--echo #     main-table partial rollback tolerated  #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (100, VEC_FROMTEXT("[100,100,100,100,100]"));
+SAVEPOINT sp1;
+INSERT INTO t1(a, v) VALUES (101, VEC_FROMTEXT("[101,101,101,101,101]"));
+--echo # Row a=101 visible inside trx before rollback-to-savepoint
+SELECT COUNT(*) FROM t1 WHERE a = 101;
+ROLLBACK TO SAVEPOINT sp1;
+--echo # Row a=101 rolled back in main table
+SELECT COUNT(*) FROM t1 WHERE a = 101;
+INSERT INTO t1(a, v) VALUES (102, VEC_FROMTEXT("[102,102,102,102,102]"));
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: a=100 and a=102 visible, a=101 gone
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS visible FROM t1 WHERE a IN (100, 102);
+SELECT COUNT(*) AS gone FROM t1 WHERE a = 101;
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v,
+  VEC_FROMTEXT("[100,100,100,100,100]")) LIMIT 3;
+
+--echo # Slave: same as master
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS visible FROM t1 WHERE a IN (100, 102);
+SELECT COUNT(*) AS gone FROM t1 WHERE a = 101;
+
+--echo
+--echo ##############################################
+--echo # 17. Nested SAVEPOINT: multi-level partial  #
+--echo #     rollback; multiple aux orphan rows     #
+--echo #     tolerated by ANN search               #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (200, VEC_FROMTEXT("[200,200,200,200,200]"));
+SAVEPOINT sp_outer;
+INSERT INTO t1(a, v) VALUES (201, VEC_FROMTEXT("[201,201,201,201,201]"));
+SAVEPOINT sp_inner;
+INSERT INTO t1(a, v) VALUES (202, VEC_FROMTEXT("[202,202,202,202,202]"));
+ROLLBACK TO SAVEPOINT sp_inner;
+INSERT INTO t1(a, v) VALUES (203, VEC_FROMTEXT("[203,203,203,203,203]"));
+ROLLBACK TO SAVEPOINT sp_outer;
+INSERT INTO t1(a, v) VALUES (204, VEC_FROMTEXT("[204,204,204,204,204]"));
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: only a=200 and a=204 survive
+--source include/rpl_connection_master.inc
+SELECT a FROM t1 WHERE a BETWEEN 200 AND 204 ORDER BY a;
+--echo # ANN search works despite multiple orphan aux rows
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v,
+  VEC_FROMTEXT("[202,202,202,202,202]")) LIMIT 3;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT a FROM t1 WHERE a BETWEEN 200 AND 204 ORDER BY a;
+
+--echo
+--echo ##############################################
+--echo # 18. Two vector-index tables in same trx   #
+--echo #     (tests unlock_hlindex_handlers_bound  #
+--echo #      to for multiple tables in one hook   #
+--echo #      invocation)                          #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (300, VEC_FROMTEXT("[30,30,30,30,30]"));
+INSERT INTO t2(a, v) VALUES (300, VEC_FROMTEXT("[30,30,30]"));
+INSERT INTO t1(a, v) VALUES (301, VEC_FROMTEXT("[31,31,31,31,31]"));
+INSERT INTO t2(a, v) VALUES (301, VEC_FROMTEXT("[31,31,31]"));
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: t1 has 2 new rows; t2 has 2 rows
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_new FROM t1 WHERE a IN (300, 301);
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_new FROM t1 WHERE a IN (300, 301);
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo
+--echo ##############################################
+--echo # 19. REPLACE INTO in explicit transaction  #
+--echo #     REPLACE = DELETE + INSERT; both aux   #
+--echo #     DMLs go through hlindex_indep_dml     #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(id, a, v) VALUES (9000, 400, VEC_FROMTEXT("[40,40,40,40,40]"));
+COMMIT;
+
+BEGIN;
+REPLACE INTO t1(id, a, v) VALUES (9000, 401, VEC_FROMTEXT("[41,41,41,41,41]"));
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: id=9000 updated by REPLACE (a=401)
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9000;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9000;
+
+--echo
+--echo ##############################################
+--echo # 20. INSERT ... ON DUPLICATE KEY UPDATE    #
+--echo #     in explicit transaction               #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(id, a, v) VALUES (9000, 500, VEC_FROMTEXT("[50,50,50,50,50]"))
+  ON DUPLICATE KEY UPDATE a = 500, v = VEC_FROMTEXT("[50,50,50,50,50]");
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: id=9000 updated by ON DUPLICATE KEY UPDATE (a=500)
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9000;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9000;
+
+--echo
+--echo ##############################################
+--echo # 21. Long transaction: Attachable_trx_rw used       #
+--echo #     across 10 DML statements in one trx   #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (600, VEC_FROMTEXT("[60,60,60,60,60]"));
+INSERT INTO t1(a, v) VALUES (601, VEC_FROMTEXT("[61,61,61,61,61]"));
+INSERT INTO t1(a, v) VALUES (602, VEC_FROMTEXT("[62,62,62,62,62]"));
+INSERT INTO t1(a, v) VALUES (603, VEC_FROMTEXT("[63,63,63,63,63]"));
+INSERT INTO t1(a, v) VALUES (604, VEC_FROMTEXT("[64,64,64,64,64]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[69,69,69,69,69]") WHERE a = 600;
+UPDATE t1 SET v = VEC_FROMTEXT("[68,68,68,68,68]") WHERE a = 601;
+DELETE FROM t1 WHERE a = 602;
+INSERT INTO t1(a, v) VALUES (605, VEC_FROMTEXT("[65,65,65,65,65]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[67,67,67,67,67]") WHERE a = 603;
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master: a=600,601,603,604,605 visible; a=602 gone
+--source include/rpl_connection_master.inc
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a BETWEEN 600 AND 605 ORDER BY a;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a BETWEEN 600 AND 605 ORDER BY a;
+
+--echo
+# §22 (INSERT…SELECT) removed — covered by special §3 (autocommit) and
+# aux_verify §7 (with direct aux row-count assertion).  Drop §18's t2
+# here so cleanup (§23) leaves only t1.
+--source include/rpl_connection_master.inc
+DROP TABLE t2;
+--source include/rpl_sync.inc
+
+--echo
+--echo ##############################################
+--echo # 23. DROP TABLE (cleanup path)              #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+DROP TABLE t1;
+
+--source include/rpl_sync.inc
+
+--echo # Verify on slave: table should not exist
+--source include/rpl_connection_slave.inc
+--error ER_NO_SUCH_TABLE
+SELECT * FROM t1;
+
+--echo
+--echo ##############################################
+--echo # 24. Cleanup                                #
+--echo ##############################################
+
+--disconnect master2
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

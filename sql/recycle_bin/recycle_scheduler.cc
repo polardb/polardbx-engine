@@ -21,7 +21,9 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/recycle_bin/recycle_scheduler.h"
+#include <sstream>
 #include "mysql/components/services/log_builtins.h"
+#include "m_ctype.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_cond.h"
 #include "mysql/psi/mysql_memory.h"
@@ -53,6 +55,13 @@ bool recycle_scheduler_purge_table_print = false;
 /** Record the recycle scheduler version changes if modified
     recycle_scheduler_rentention */
 static ulonglong recycle_scheduler_loop_version = 1;
+
+/* Maximum number of consecutive skip rounds before forced execution */
+ulonglong recycle_scheduler_max_skip_rounds = 20;
+
+static bool get_recycle_bin_size(ulonglong *total_size_bytes);
+static bool calc_dir_size(const char *dir_path, ulonglong *total_size_bytes);
+
 /**
   Log error message when purge table
 
@@ -87,7 +96,9 @@ Recycle_scheduler_error_handler::~Recycle_scheduler_error_handler() {
 }
 
 Recycle_scheduler::Recycle_scheduler()
-    : m_state(State::INITED), m_scheduler_thd(nullptr) {
+    : m_state(State::INITED), m_scheduler_thd(nullptr),
+      m_last_cleanup_version(0), m_earliest_expiration_time(ULLONG_MAX),
+      m_skip_count(0) {
   mysql_mutex_init(key_LOCK_state_recycle_scheduler, &m_state_mutex,
                    MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_state_recycle_scheduler, &m_state_cond);
@@ -306,75 +317,240 @@ static my_time_t get_epoch_time(ulonglong nr) {
 }
 
 /**
+  Get the total disk space used by all tables in __recycle_bin__ schema.
+
+  @param[out] total_size_bytes  Total size in bytes
+
+  @retval     false             Success
+  @retval     true              Error occurred
+*/
+static bool get_recycle_bin_size(ulonglong *total_size_bytes) {
+  DBUG_ENTER("get_recycle_bin_size");
+
+  if (!total_size_bytes) {
+    DBUG_RETURN(true);
+  }
+
+  *total_size_bytes = 0;
+
+  // Get the data directory path
+  const char *data_dir = mysql_real_data_home;
+  if (!data_dir) {
+    std::stringstream ss;
+    ss << "Failed to get mysql data directory";
+    LogErr(ERROR_LEVEL, ER_RECYCLE_BIN, ss.str().c_str());
+    DBUG_RETURN(true);
+  }
+  // Construct the recycle bin schema path using fn_format (cross-platform)
+  char schema_path[FN_REFLEN];
+  fn_format(schema_path, RECYCLE_BIN_SCHEMA.str, data_dir, "", MY_REPLACE_DIR);
+
+  DBUG_RETURN(calc_dir_size(schema_path, total_size_bytes));
+}
+
+/**
+  calculate the total size of ibd files in the directory
+
+  @param[in]  dir_path          Directory path
+  @param[out] total_size_bytes  Total size in bytes
+
+  @retval     false             Success
+  @retval     true              Error occurred
+*/
+static bool calc_dir_size(const char *dir_path, ulonglong *total_size_bytes) {
+  DBUG_ENTER("calc_dir_size");
+
+  if (!total_size_bytes) {
+    DBUG_RETURN(true);
+  }
+
+  *total_size_bytes = 0;
+
+  // use MY_WANT_STAT flag to get the file size
+  MY_DIR *dir = my_dir(dir_path, MYF(MY_WANT_STAT));
+  if (!dir) {
+    // Directory doesn't exist, which is normal if no tables are recycled
+    std::stringstream ss;
+    ss << "Failed to open directory " << dir_path << " when counting recycle bin disk usage";
+    LogErr(ERROR_LEVEL, ER_RECYCLE_BIN, ss.str().c_str());
+    DBUG_RETURN(true);
+  }
+
+  // Process each entry in the directory
+  for (uint i = 0; i < dir->number_off_files; i++) {
+    FILEINFO *file_info = dir->dir_entry + i;
+    const char *filename = file_info->name;
+
+    // Skip . and .. entries
+    if (filename[0] == '.') {
+      continue;
+    }
+
+    // directly use file_info->mystat, no need to call my_stat()
+    if (MY_S_ISREG(file_info->mystat->st_mode)) {
+      // Check if it's a .ibd file
+      const char *ext = fn_ext(filename);
+      if (ext && my_strcasecmp(&my_charset_filename, ext, ".ibd") == 0) {
+        // It's a .ibd file, add its size
+        *total_size_bytes += file_info->mystat->st_size;
+      }
+    } else if (MY_S_ISDIR(file_info->mystat->st_mode)) {
+      // It's a subdirectory, recursively count (use fn_format)
+      char file_path[FN_REFLEN];
+      fn_format(file_path, filename, dir_path, "", MY_REPLACE_DIR);
+
+      ulonglong subdir_size = 0;
+      if (calc_dir_size(file_path, &subdir_size)) {
+        std::stringstream ss;
+        ss << "Failed to get size for subdirectory " << file_path << " when counting recycle bin disk usage";
+        LogErr(WARNING_LEVEL, ER_RECYCLE_BIN, ss.str().c_str());
+        continue;
+      }
+      *total_size_bytes += subdir_size;
+    }
+  }
+
+  my_dirend(dir);
+  DBUG_RETURN(false);
+}
+
+/**
+  Check if the current purge round should be skipped.
+
+  @param[in]  curr_time_sec  Current time in seconds
+  @retval     true       Should skip this round
+  @retval     false      Should proceed with purge
+*/
+bool Recycle_scheduler::should_skip_purge_round(ulonglong curr_time_sec) {
+  DBUG_ENTER("Recycle_scheduler::should_skip_purge_round");
+
+  /* Force execution if we've skipped too many rounds */
+  if (m_skip_count >= recycle_scheduler_max_skip_rounds) {
+    m_skip_count = 0;
+    DBUG_RETURN(false);
+  }
+
+  ulonglong current_version = recycle_bin_version.load();
+  /* if the earliest expiration time larger than current time, no tables is expired */
+  bool under_retention = (m_earliest_expiration_time > curr_time_sec);
+  /*
+    if the version is unchanged, no new tables added to recycle bin, 
+    so the size of the recycle bin is less or equal to the capacity limit 
+  */
+  bool under_capacity = (current_version == m_last_cleanup_version);
+
+  /*
+    If no new tables added to recycle bin (version unchanged),
+    and earliest table not expired yet, skip this round.
+  */
+  if (under_retention && under_capacity) {
+    m_skip_count++;
+    DBUG_RETURN(true);
+  }
+
+  /* Reset skip count when proceeding with purge */
+  m_skip_count = 0;
+  DBUG_RETURN(false);
+}
+
+/**
+  Purge expired tables and oversized tables in the recycle bin.
+
+  @param thd Thread handle for the current session
+  @param mem_root Memory pool
+  @param container Vector to store pointers to recycle table information
+
+  @return The minimum time (in seconds) until the next check is needed:
+          - If no tables exist, returns ULLONG_MAX
+*/
+ulonglong Recycle_scheduler::detect_and_purge_recycle_table(THD *thd,MEM_ROOT *mem_root,
+                                                            std::vector<Recycle_show_result*> *container) {
+  thd_proc_info(thd, "Recycle scheduler collect tables");
+  ulonglong lc_retention = recycle_bin_retention;
+  ulonglong lc_capacity_limit = recycle_bin_capacity_limit;
+  ulonglong lc_current_size = 0;
+  my_time_t curr_time_sec = my_micro_time() / 1000000;
+  ulonglong min_future = ULLONG_MAX;
+  long long delta = 0;
+
+  /* Check if we should skip this round */
+  if (should_skip_purge_round(curr_time_sec)) {
+    return m_earliest_expiration_time - static_cast<ulonglong>(curr_time_sec);
+  }
+  /* Update local version number */
+  m_last_cleanup_version = recycle_bin_version.load();
+  /* reset the earliest expiration time */
+  m_earliest_expiration_time = ULLONG_MAX;
+
+  /* Get the current size of the recycle bin */
+  if (get_recycle_bin_size(&lc_current_size)) return ULLONG_MAX;
+  get_recycle_tables(thd, mem_root, container);
+  std::sort(container->begin(), container->end(),
+            [](const Recycle_show_result *a, const Recycle_show_result *b) {
+              return a->recycled_time < b->recycled_time;
+            });
+
+  // Process tables from oldest to newest
+  for (auto it = container->cbegin(); it != container->cend(); it++) {
+    if (!is_running()) break;
+    delta = curr_time_sec - get_epoch_time((*it)->recycled_time);
+    // Check if table should be purged due to time expiration or capacity limit
+    if ((delta >= 0 && static_cast<ulonglong>(delta) >= lc_retention) ||
+        (lc_capacity_limit > 0 && lc_current_size > lc_capacity_limit)) {
+      if (recycle_scheduler_purge_table_print) {
+        std::stringstream ss;
+        ss << "purging table " << (*it)->table.str;
+        LogErr(INFORMATION_LEVEL, ER_RECYCLE_BIN, ss.str().c_str());
+      }
+      purge_table(*it);
+      // Update the current size of the recycle bin
+      get_recycle_bin_size(&lc_current_size);
+    } else {
+      // This table is the next table expect to be expired,
+      // calculate the next round wait time
+      min_future = lc_retention - delta;
+      m_earliest_expiration_time = get_epoch_time((*it)->recycled_time) + lc_retention;
+      break;
+    }
+  }
+  container->clear();
+  mem_root->Clear();
+  return min_future;
+}
+
+/**
   Wakeup the sleep recycle scheduler.
 */
 void Recycle_scheduler::wakeup() {
   recycle_scheduler_loop_version++;
+  recycle_bin_version.fetch_add(1);
   if (is_running()) {
     lock_sleep();
     mysql_cond_broadcast(&m_sleep_cond);
     unlock_sleep();
   }
 }
+
 /**
   Run the background thread to purge the recycled table.
 
   @param[in]    thd     scheduler thread
 */
 void Recycle_scheduler::run(THD *thd) {
-  my_time_t curr_time_sec;
   struct timespec abs_timeout;
   DBUG_ENTER("Recycle_scheduler::run");
   LogErr(SYSTEM_LEVEL, ER_RECYCLE_SCHEDULER, "background thread start");
-
   std::vector<Recycle_show_result *> container;
   MEM_ROOT mem_root(key_memory_recycle, MEM_ROOT_BLOCK_SIZE);
   while (is_running()) {
     thd_proc_info(thd, "Recycle scheduler collect tables");
     ulonglong lc_version = recycle_scheduler_loop_version;
-    ulonglong lc_retention = recycle_bin_retention;
-    curr_time_sec = my_micro_time() / 1000000;
-    ulonglong min_future = ULLONG_MAX;
-
-    /* Retrieve all the recycled tables */
-    get_recycle_tables(thd, &mem_root, &container);
-
-    /**
-      Next round time calculation rule:
-        1. Wait to minimum recycled time if any recycled table.
-        2. Wait recycle_scheduler_interval if not any recycled table.
-        3. Wake up if modify the recycle_bin_retention.
-    */
-    for (auto it = container.cbegin(); it != container.cend(); it++) {
-      if (is_running()) {
-        long long delta = curr_time_sec - get_epoch_time((*it)->recycled_time);
-
-        /* If the keeped time has exceeded retention, then purge it. */
-        if (delta >= 0 && static_cast<ulonglong>(delta) >= lc_retention) {
-          if (recycle_scheduler_purge_table_print) {
-            std::stringstream ss;
-            ss << "purge table " << (*it)->table.str;
-            LogErr(INFORMATION_LEVEL, ER_RECYCLE_BIN, ss.str().c_str());
-          }
-          purge_table(*it);
-        } else {
-          /* Get the next round least wait time */
-          ulonglong lc_future = lc_retention - delta;
-          min_future = min_future > lc_future ? lc_future : min_future;
-        }
-      } else {
-        break;
-      }
-    }
-    container.clear();
-    mem_root.Clear();
+    ulonglong min_future = detect_and_purge_recycle_table(thd, &mem_root, &container);
     thd_proc_info(thd, "Recycle scheduler waiting for next round");
 
     /** Maybe awaked by stop command here, so instead of my_sleep() */
-    if (min_future == ULLONG_MAX)
-      set_timespec(&abs_timeout, recycle_scheduler_interval);
-    else
-      set_timespec(&abs_timeout, min_future);
+    min_future = std::min(min_future, recycle_scheduler_interval);
+    set_timespec(&abs_timeout, min_future);
 
     lock_sleep();
     if (!thd->is_killed() && (lc_version == recycle_scheduler_loop_version)) {

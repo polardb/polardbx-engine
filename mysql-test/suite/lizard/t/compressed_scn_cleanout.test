@@ -1,0 +1,37 @@
+#
+# GCS/Lizard cleanout of scn/uba/gcn on ROW_FORMAT=COMPRESSED clustered index.
+#
+# Runs the same cleanout + correctness scenario for every supported
+# KEY_BLOCK_SIZE (1, 2, 4, 8) under a 16K innodb page size.
+#
+--source include/have_innodb_16k.inc
+
+--let $orig_undo_retention = `SELECT @@global.innodb_undo_retention`
+--let $orig_txn_retention = `SELECT @@global.innodb_txn_retention`
+--let $orig_stat = `SELECT @@global.innodb_lizard_stat_enabled`
+
+# Flashback (AS OF GCN) needs the undo/txn history retained; purge is kept
+# stopped for the whole test so records stay in the un-cleaned state and the
+# cleanout counters are deterministic across all iterations. Stats must be on
+# for the cleanout counters to accumulate.
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 9000;
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--let $kbs = 1
+--source suite/lizard/include/compressed_scn_cleanout.inc
+
+--let $kbs = 2
+--source suite/lizard/include/compressed_scn_cleanout.inc
+
+--let $kbs = 4
+--source suite/lizard/include/compressed_scn_cleanout.inc
+
+--let $kbs = 8
+--source suite/lizard/include/compressed_scn_cleanout.inc
+
+--eval SET GLOBAL innodb_undo_retention = $orig_undo_retention
+--eval SET GLOBAL innodb_txn_retention = $orig_txn_retention
+--eval SET GLOBAL innodb_lizard_stat_enabled = $orig_stat
+SET GLOBAL innodb_purge_run_now = ON;

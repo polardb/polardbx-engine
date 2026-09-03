@@ -1075,6 +1075,8 @@ bool upgrade_tables(THD *thd) {
   Disable_gpp_guard disable_gpp_guard(thd);
   Disable_panda_guard disable_panda_guard(thd);
   Disable_fba_guard disable_fba_guard(thd);
+  Disable_hippo_guard disable_hippo_guard(thd);
+  Disable_spc_guard disable_spc_guard(thd);
   if (!bootstrap::DD_bootstrap_ctx::instance().is_dd_upgrade()) return false;
 
   /*

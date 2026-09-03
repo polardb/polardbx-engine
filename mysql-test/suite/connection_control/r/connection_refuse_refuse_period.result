@@ -6,6 +6,7 @@
 # Install connection_control plugin
 INSTALL PLUGIN connection_control SONAME 'CONNECTION_CONTROL_LIB';
 INSTALL PLUGIN connection_control_failed_login_attempts SONAME 'CONNECTION_CONTROL_LIB';
+INSTALL PLUGIN connection_control_refuse_statistic SONAME 'CONNECTION_CONTROL_LIB';
 # Create user account for testing
 CREATE USER u1 IDENTIFIED BY 'abcd';
 # Save original values of connection_control variables
@@ -72,5 +73,6 @@ DROP USER u1;
 # Uninstall connection_control plugin
 UNINSTALL PLUGIN connection_control;
 UNINSTALL PLUGIN connection_control_failed_login_attempts;
+UNINSTALL PLUGIN connection_control_refuse_statistic;
 
 # ----------------------------------------------------------------------

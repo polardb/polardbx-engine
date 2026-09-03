@@ -1,0 +1,75 @@
+# A fixed-width prefix index must use its prefix width when SPC reserves the
+# page dictionary.  On the unfixed code this CREATE INDEX aborts at
+# dict_index_determine_pd_capacity_low(): capacity > 2000.
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+--disable_query_log
+--disable_result_log
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  c1 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c2 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c3 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c4 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c5 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c6 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c7 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c8 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c9 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c10 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c11 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c12 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c13 CHAR(255) CHARACTER SET ucs2 NOT NULL,
+  c14 CHAR(255) CHARACTER SET ucs2 NOT NULL
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+CREATE INDEX idx_prefix ON t1(
+  c1(1), c2(1), c3(1), c4(1), c5(1), c6(1), c7(1),
+  c8(1), c9(1), c10(1), c11(1), c12(1), c13(1), c14(1)
+) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+
+CHECK TABLE t1;
+DROP TABLE t1;
+
+# Simulate a legacy conservative pd_capacity for a fixed-width prefix.
+# The corrected estimator must accept that DD value on reopen.
+SET SESSION debug = '+d,set_pd_capacity_specified';
+SET GLOBAL innodb_dbug_pd_capacity = 3000;
+
+CREATE TABLE t_legacy (
+  id INT NOT NULL PRIMARY KEY,
+  c CHAR(255) CHARACTER SET ucs2 NOT NULL
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+CREATE INDEX idx_legacy ON t_legacy(c(1))
+  SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+
+SET SESSION debug = '-d,set_pd_capacity_specified';
+
+# A no-prefix index retains the exact-capacity validation path.
+CREATE TABLE t_exact (
+  id INT NOT NULL PRIMARY KEY,
+  c CHAR(255) CHARACTER SET ucs2 NOT NULL
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+CREATE INDEX idx_exact ON t_exact(c)
+  SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+
+--source include/restart_mysqld.inc
+
+# The restart covers DD restore.  DML and a forced lookup cover the insert
+# and search assertions after the old capacity has been restored.
+INSERT INTO t_legacy VALUES (1, REPEAT('a', 255));
+SELECT id FROM t_legacy FORCE INDEX (idx_legacy)
+  WHERE c = REPEAT('a', 255);
+CHECK TABLE t_legacy;
+DROP TABLE t_legacy;
+
+INSERT INTO t_exact VALUES (1, REPEAT('b', 255));
+SELECT id FROM t_exact FORCE INDEX (idx_exact)
+  WHERE c = REPEAT('b', 255);
+CHECK TABLE t_exact;
+DROP TABLE t_exact;

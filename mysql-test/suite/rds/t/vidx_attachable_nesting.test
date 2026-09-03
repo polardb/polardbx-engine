@@ -1,0 +1,126 @@
+##############################################################
+# Trigger fires vidx DML on a second vidx table — exercises
+# the save/restore of Indep_dml_scope state (m_attachable_rw_audited,
+# m_audited_base_handler, in_sub_stmt) across a stack of
+# Indep_dml_scope entries.
+#
+# True attachable_rw nesting (one Indep_dml_scope opened inside
+# another) cannot happen by construction — the three vidx
+# primitives (mhnsw_insert / mhnsw_invalidate / mhnsw_delete_all)
+# do not recurse.  But trigger-bodied vidx DML chains several
+# Indep_dml_scope entries sequentially within the same outer
+# statement, which is the only realistic stress for the THD-bit
+# save/restore RAII discipline.  If a future change breaks the
+# restore, the audit handler pointer would leak to the outer
+# stmt, and the next non-vidx base-handler call after the trigger
+# returns would fire the
+#   assert((void*)this != thd->get_audited_base_handler());
+# in ha_innobase::update_thd().  Running this test under debug
+# build catches that regression class.
+##############################################################
+
+SET GLOBAL vidx_disabled = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  src INT NOT NULL,
+  v VECTOR(3),
+  VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+
+DELIMITER //;
+CREATE TRIGGER tr_t1_after_insert AFTER INSERT ON t1
+FOR EACH ROW
+BEGIN
+  /* Trigger body runs *inside* the outer t1 INSERT statement.
+     The INSERT INTO t2 below routes through vidx, opening a
+     fresh Indep_dml_scope while the trigger frame is on the
+     SQL stack.  This is the closest realistic scenario to
+     Indep_dml_scope nesting that can be set up declaratively. */
+  INSERT INTO t2(src, v) VALUES (NEW.id, NEW.v);
+END//
+DELIMITER ;//
+
+# Record baselines.
+SELECT VARIABLE_VALUE INTO @ic_b FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT VARIABLE_VALUE INTO @insert_b FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_insert_count';
+
+# Drive the trigger 6 times.  Each outer INSERT into t1 triggers
+# one inner INSERT into t2 — so Indep_dml_scope opens twice per
+# outer statement (once for t1.vi, once for t2.vi2 inside the
+# trigger).  Total expected indep commits: 12.
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,0,1]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,1,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,1]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,1,1]'));
+
+SELECT VARIABLE_VALUE INTO @ic_a FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT VARIABLE_VALUE INTO @insert_a FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_insert_count';
+
+# 12 commits (6 t1 + 6 t2).  We assert >= 12 rather than == 12
+# because mhnsw_insert may legitimately need more than one
+# attachable for the first-insert path (entry-point allocation).
+--echo # Indep_dml_scope entered at least 12 times (6 t1 + 6 t2):
+SELECT (@ic_a - @ic_b) >= 12 AS indep_commit_at_least_12;
+--echo # Insert counter advanced by exactly 12 (6 + 6):
+SELECT (@insert_a - @insert_b) = 12 AS insert_count_eq_12;
+
+# Both tables must hold all 6 rows.  If the trigger-driven
+# Indep_dml_scope leaked audit state to the outer stmt, the
+# update_thd assert (debug build) would have already panicked
+# above.
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+# Run an ANN scan on each — exercises the read path right after
+# the audited-write path, validating that no audit state leaked
+# across DML/SELECT boundary (would surface as the update_thd
+# debug assert firing inside the ANN ha_rnd_pos sequence).  We
+# only care that the scan completes — the seed data has every
+# vector at the same distance from the probe, so the LIMIT pick
+# is order-dependent and not worth pinning in the .result.
+SELECT COUNT(*) AS t1_ann_rows FROM (
+  SELECT id FROM t1 FORCE INDEX(vi)
+    ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5]'))
+    LIMIT 3) x;
+SELECT COUNT(*) AS t2_ann_rows FROM (
+  SELECT id FROM t2 FORCE INDEX(vi2)
+    ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5]'))
+    LIMIT 3) x;
+
+# UPDATE path: trigger drives invalidate+insert on t2 for each
+# outer UPDATE on t1.  Exercises the second Indep_dml_scope
+# inside the trigger body when the outer stmt is UPDATE rather
+# than INSERT.
+DELIMITER //;
+CREATE TRIGGER tr_t1_after_update AFTER UPDATE ON t1
+FOR EACH ROW
+BEGIN
+  UPDATE t2 SET v = NEW.v WHERE src = NEW.id;
+END//
+DELIMITER ;//
+
+UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]') WHERE id = 1;
+UPDATE t1 SET v = VEC_FROMTEXT('[8,8,8]') WHERE id = 2;
+
+# Verify cross-table consistency after trigger-driven UPDATE.
+SELECT t1.v = t2.v AS t1_t2_v_match
+  FROM t1 JOIN t2 ON t2.src = t1.id
+  WHERE t1.id IN (1, 2)
+  ORDER BY t1.id;
+
+# Cleanup
+DROP TABLE t1, t2;
+SET GLOBAL vidx_disabled = ON;

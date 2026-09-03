@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 5/20/1997 Heikki Tuuri
  *******************************************************/
 
+#ifndef hash0hash_h
+#define INNODB_HASH0HASH_IC_STANDALONE
+#include "hash0hash.h"
+#undef INNODB_HASH0HASH_IC_STANDALONE
+#endif /* !hash0hash_h */
 #include "ut0rnd.h"
 
 static inline hash_cell_t *hash_get_nth_cell(hash_table_t *table, size_t n) {
@@ -49,14 +54,14 @@ static inline void hash_table_clear(
   memset(table->cells.get(), 0x0, table->get_n_cells() * sizeof(hash_cell_t));
 }
 
-static inline size_t hash_get_n_cells(hash_table_t *table) {
+static inline size_t hash_get_n_cells(hash_table_t const *table) {
   ut_ad(table);
   ut_ad(table->magic_n == hash_table_t::HASH_TABLE_MAGIC_N);
   return table->get_n_cells();
 }
 
 static inline uint64_t hash_calc_cell_id(uint64_t hash_value,
-                                         hash_table_t *table) {
+                                         hash_table_t const *table) {
   ut_ad(table);
   ut_ad(table->magic_n == hash_table_t::HASH_TABLE_MAGIC_N);
   return hash_value % table->get_n_cells_fast_modulo();

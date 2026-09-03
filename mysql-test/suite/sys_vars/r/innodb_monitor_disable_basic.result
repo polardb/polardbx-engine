@@ -39,6 +39,7 @@ buffer_pool_pages_data	disabled
 buffer_pool_bytes_data	disabled
 buffer_pool_pages_dirty	disabled
 buffer_pool_bytes_dirty	disabled
+buffer_pool_dirty_ratio	disabled
 buffer_pool_pages_free	disabled
 buffer_pages_created	disabled
 buffer_pages_written	disabled

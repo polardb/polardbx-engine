@@ -49,6 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #endif /* UNIV_HOTBACKUP */
 #include "lock0latches.h"
 #include "lock0prdt.h"
+#include "ut0sharded_bitset.h"
 
 #include "lizard0row0sel.h"
 
@@ -252,9 +253,19 @@ class Vision;
 
 extern bool innobase_deadlock_detect;
 
-/** Gets the size of a lock struct.
- @return size in bytes */
-ulint lock_get_size(void);
+/** Allocates memory suitable for holding a lock_t from specified heap.
+The allocated memory has additional bitmap_bytes right after the returned
+lock_t instance for holding the bitmap used by LOCK_REC type.
+@param[in]     heap
+                 The heap to allocate the memory from
+@param[in]     bitmap_bytes
+                 The number of bytes to reserve right after the lock_t struct
+                 for the bitmap. Defaults to 0, which is ok for LOCK_TABLE.
+@return A pointer to the memory allocated from the heap, aligned as lock_t,
+and of size sizeof(lock_t)+bitmap_bytes. Note that it can contain garbage,
+so it is caller's responsibility to initialize lock_t and the bitmap. */
+lock_t *lock_alloc_from_heap(mem_heap_t *heap, size_t bitmap_bytes = 0);
+
 /** Creates the lock system at database start. */
 void lock_sys_create(
     ulint n_cells); /*!< in: number of slots in lock hash table */
@@ -285,7 +296,7 @@ list end is moved to another page.
 @param[in] block Index page
 @param[in,out] rec Record on page: this is the first record moved */
 void lock_move_rec_list_end(const buf_block_t *new_block,
-                            const buf_block_t *block, const rec_t *rec);
+                            const buf_block_t *block, creg_t reg);
 
 /** Moves the explicit locks on user records to another page if a record
  list start is moved to another page.
@@ -295,8 +306,8 @@ void lock_move_rec_list_end(const buf_block_t *new_block,
 @param[in] old_end Old previous-to-last record on new_page before the records
 were copied */
 void lock_move_rec_list_start(const buf_block_t *new_block,
-                              const buf_block_t *block, const rec_t *rec,
-                              const rec_t *old_end);
+                              const buf_block_t *block, creg_t reg,
+                              creg_t old_end);
 
 /** Updates the lock table when a page is split to the right.
 @param[in] right_block Right page
@@ -309,8 +320,7 @@ void lock_update_split_right(const buf_block_t *right_block,
 @param[in] orig_succ Original successor of infimum on the right page before
 merge
 @param[in] left_block Merged index page which will be discarded */
-void lock_update_merge_right(const buf_block_t *right_block,
-                             const rec_t *orig_succ,
+void lock_update_merge_right(const buf_block_t *right_block, creg_t orig_succ,
                              const buf_block_t *left_block);
 
 /** Updates the lock table when the root page is copied to another in
@@ -383,8 +393,7 @@ void lock_update_split_left(const buf_block_t *right_block,
 @param[in] orig_pred Original predecessor of supremum on the left page before
 merge
 @param[in] right_block Merged index page which will be discarded */
-void lock_update_merge_left(const buf_block_t *left_block,
-                            const rec_t *orig_pred,
+void lock_update_merge_left(const buf_block_t *left_block, creg_t orig_pred,
                             const buf_block_t *right_block);
 
 /** Resets the original locks on heir and replaces them with gap type locks
@@ -473,10 +482,9 @@ void lock_rec_restore_from_page_infimum(const buf_block_t *block,
     ulint flags,              /*!< in: if BTR_NO_LOCKING_FLAG
                               bit is set, does nothing */
     const buf_block_t *block, /*!< in: buffer block of rec */
-    const rec_t *rec,         /*!< in: record which should be
+    const Slice *slc,         /*!< in: record which should be
                               modified */
     dict_index_t *index,      /*!< in: clustered index */
-    const ulint *offsets,     /*!< in: rec_get_offsets(rec, index) */
     que_thr_t *thr);          /*!< in: query thread */
 /** Checks if locks of other transactions prevent an immediate modify
  (delete mark or delete unmark) of a secondary index record.
@@ -485,11 +493,11 @@ void lock_rec_restore_from_page_infimum(const buf_block_t *block,
     ulint flags,         /*!< in: if BTR_NO_LOCKING_FLAG
                          bit is set, does nothing */
     buf_block_t *block,  /*!< in/out: buffer block of rec */
-    const rec_t *rec,    /*!< in: record which should be
-                         modified; NOTE: as this is a secondary
-                         index, we always have to modify the
-                         clustered index record first: see the
-                         comment below */
+    creg_t reg,          /*!< in: record which should be
+                                   modified; NOTE: as this is a secondary
+                                   index, we always have to modify the
+                                   clustered index record first: see the
+                                   comment below */
     dict_index_t *index, /*!< in: secondary index */
     que_thr_t *thr,      /*!< in: query thread
                          (can be NULL if BTR_NO_LOCKING_FLAG) */
@@ -534,8 +542,7 @@ secondary index record.
 DB_SKIP_LOCKED, or DB_LOCK_NOWAIT */
 dberr_t lock_sec_rec_read_check_and_lock(lock_duration_t duration,
                                          const buf_block_t *block,
-                                         const rec_t *rec, dict_index_t *index,
-                                         const ulint *offsets,
+                                         const Slice *slc, dict_index_t *index,
                                          select_mode sel_mode, lock_mode mode,
                                          ulint gap_mode, que_thr_t *thr,
                                          const lock_ignore_t &ignore);
@@ -566,10 +573,9 @@ lock on the record.
 @return DB_SUCCESS, DB_SUCCESS_LOCKED_REC, DB_LOCK_WAIT, DB_DEADLOCK,
 DB_SKIP_LOCKED, or DB_LOCK_NOWAIT */
 dberr_t lock_clust_rec_read_check_and_lock(
-    lock_duration_t duration, const buf_block_t *block, const rec_t *rec,
-    dict_index_t *index, const ulint *offsets, select_mode sel_mode,
-    lock_mode mode, ulint gap_mode, que_thr_t *thr,
-    const lock_ignore_t &ignore);
+    lock_duration_t duration, const buf_block_t *block, const Slice *slc,
+    dict_index_t *index, select_mode sel_mode, lock_mode mode, ulint gap_mode,
+    que_thr_t *thr, const lock_ignore_t &ignore);
 
 /** Checks if locks of other transactions prevent an immediate read, or passing
  over by a read cursor, of a clustered index record. If they do, first tests
@@ -582,10 +588,10 @@ dberr_t lock_clust_rec_read_check_and_lock(
  @return DB_SUCCESS, DB_LOCK_WAIT, or DB_DEADLOCK */
 [[nodiscard]] dberr_t lock_clust_rec_read_check_and_lock_alt(
     const buf_block_t *block, /*!< in: buffer block of rec */
-    const rec_t *rec,         /*!< in: user record or page
-                              supremum record which should
-                              be read or passed over by a
-                              read cursor */
+    creg_t reg,               /*!< in: user record or page
+                                    supremum record which should
+                                    be read or passed over by a
+                                    read cursor */
     dict_index_t *index,      /*!< in: clustered index */
     lock_mode mode,           /*!< in: mode of the lock which
                               the read cursor should set on
@@ -599,12 +605,12 @@ dberr_t lock_clust_rec_read_check_and_lock(
  @return true if sees, or false if an earlier version of the record
  should be retrieved */
 bool lock_clust_rec_cons_read_sees(
-    const rec_t *rec,        /*!< in: user record which should be read or
-                             passed over by a read cursor */
-    dict_index_t *index,     /*!< in: clustered index */
-    const ulint *offsets,    /*!< in: rec_get_offsets(rec, index) */
-    btr_pcur_t *pcur,        /*!< in: current pcur that define position */
-    lizard::Vision *vision); /*!< in: consistent read view */
+    const Slice *slc,       /*!< in: user record which should be read or
+                            passed over by a read cursor */
+    dict_index_t *index,    /*!< in: clustered index */
+    btr_pcur_t *pcur,       /*!< in: current pcur that define position */
+    lizard::Vision *vision, /*!< in: consistent read view */
+    trx_t *trx);            /*!< in: optional trx context. */
 /** Checks that a non-clustered index record is seen in a consistent read.
 
  NOTE that a non-clustered index page contains so little information on
@@ -614,7 +620,7 @@ bool lock_clust_rec_cons_read_sees(
 
  @return true if certainly sees, or false if an earlier version of the
  clustered index record might be needed */
-[[nodiscard]] bool lock_sec_rec_cons_read_sees(
+[[nodiscard]] bool lock_sec_rec_cons_read_sees_slow(
     const rec_t *rec,              /*!< in: user record which
                                    should be read or passed over
                                    by a read cursor */
@@ -695,9 +701,6 @@ searching for a lock in the hash table or getting global shard index.
 @return hash value */
 static inline uint64_t lock_rec_hash_value(const page_id_t &page_id);
 
-/** Get the lock hash table */
-static inline hash_table_t *lock_hash_get(ulint mode); /*!< in: lock mode */
-
 /** Looks for a set bit in a record lock bitmap.
 Returns ULINT_UNDEFINED, if none found.
 @param[in]  lock    A record lock
@@ -774,9 +777,9 @@ bool has_to_wait(const lock_t *lock1, const lock_t *lock2,
 @param[in] index Index
 @param[in] offsets Rec_get_offsets(rec, index)
 @param[in] next_trx_id value received from trx_sys_get_next_trx_id_or_no() */
-void lock_report_trx_id_insanity(trx_id_t trx_id, const rec_t *rec,
+void lock_report_trx_id_insanity(trx_id_t trx_id, const Slice *slc,
                                  const dict_index_t *index,
-                                 const ulint *offsets, trx_id_t next_trx_id);
+                                 trx_id_t next_trx_id);
 
 /** Prints info of locks for all transactions.
 @param[in]  file   file where to print */
@@ -816,16 +819,6 @@ uint32_t lock_get_type(const lock_t *lock); /*!< in: lock */
 @return the transaction's id */
 trx_id_t lock_get_trx_id(const lock_t *lock);
 
-/** Gets the immutable id of the transaction owning a lock
-@param[in]  lock   A lock of the transaction we are interested in
-@return the transaction's immutable id */
-uint64_t lock_get_trx_immutable_id(const lock_t *lock);
-
-/** Gets the immutable id of this lock.
-@param[in]  lock   The lock we are interested in
-@return The lock's immutable id */
-uint64_t lock_get_immutable_id(const lock_t *lock);
-
 /** Get the performance schema event (thread_id, event_id)
 that created the lock.
 @param[in]      lock            Lock
@@ -834,18 +827,6 @@ that created the lock.
 */
 void lock_get_psi_event(const lock_t *lock, ulonglong *thread_id,
                         ulonglong *event_id);
-
-/** Get the first lock of a trx lock list.
-@param[in]      trx_lock        the trx lock
-@return The first lock
-*/
-const lock_t *lock_get_first_trx_locks(const trx_lock_t *trx_lock);
-
-/** Get the next lock of a trx lock list.
-@param[in]      lock    the current lock
-@return The next lock
-*/
-const lock_t *lock_get_next_trx_locks(const lock_t *lock);
 
 /** Gets the mode of a lock in a human readable string.
  The string should not be free()'d or modified.
@@ -940,8 +921,8 @@ Emits an error otherwise.
 @param[in]  index    The index which contained the rec
 @param[in]  offsets  The result of rec_get_offsets(rec, index)
 @return true iff ok */
-bool lock_check_trx_id_sanity(trx_id_t trx_id, const rec_t *rec,
-                              const dict_index_t *index, const ulint *offsets);
+bool lock_check_trx_id_sanity(trx_id_t trx_id, const Slice *slc,
+                              const dict_index_t *index);
 
 #ifdef UNIV_DEBUG
 /** Check if the transaction holds an exclusive lock on a record.
@@ -1023,6 +1004,69 @@ struct lock_op_t {
 };
 
 typedef ib_mutex_t Lock_mutex;
+/** A hashmap used by lock sys, to organize locks by page (block), so that
+it is easy to maintain a list of all locks related to a given page by
+append(lock,..), prepend(lock,..), erase(lock,..), move_to_front(lock,...)
+while also providing ability to iterate over all locks related for a given
+page in that order.
+
+The hash has a configurable number of cells, and handles conflicts by using
+a singly linked list for each cell - locks related to same page are guaranteed
+to hash to the same cell. This detail is exposed because, for performance
+reasons you might want to resize(n) it, or inspect all locks from a given
+cell with find_in_cell(cell_id, visitor), or find a next non-empty cell with
+find_set_in_this_shard(..), or cell to which a given hash_value is mapped
+with get_cell_id(hash_value).
+*/
+struct Locks_hashtable {
+  using Cells_in_use = ut::Sharded_bitset<locksys::Latches::SHARDS_COUNT>;
+  Locks_hashtable(size_t n_cells)
+      : ht(ut::make_unique<hash_table_t>(n_cells)),
+        cells_in_use(ht->get_n_cells(),
+                     ut::make_psi_memory_key(mem_key_lock_sys)) {}
+
+  void append(lock_t *lock, uint64_t hash_value);
+  void prepend(lock_t *lock, uint64_t hash_value);
+  void erase(lock_t *lock, uint64_t hash_value);
+  void move_to_front(lock_t *lock, uint64_t hash_value);
+  void resize(size_t n_cells);
+
+  template <typename F>
+  lock_t *find_in_cell(size_t cell_id, F &&f);
+  template <typename F>
+  lock_t *find_on_page(page_id_t page_id, F &&f);
+  template <typename F>
+  lock_t *find_on_block(const buf_block_t *block, F &&f);
+  template <typename F>
+  lock_t *find_on_record(const struct RecID &rec_id, F &&f);
+#ifdef UNIV_DEBUG
+  /* Don't use it in Release - it's too slow, as it requires the global latch.
+  Instead use All_locks_iterator, or something like that - which will not
+  give you a consistent view, needed in debug, but would be faster. */
+  template <typename F>
+  lock_t *find(F &&f);
+#endif /* UNIV_DEBUG */
+
+  size_t get_n_cells() { return ht->get_n_cells(); }
+  size_t find_set_in_this_shard(size_t start_pos) {
+    return cells_in_use.find_set_in_this_shard(start_pos);
+  }
+
+  size_t get_cell_id(uint64_t hash_value);
+
+ private:
+  bool append(hash_cell_t *cell, lock_t *lock);
+  bool prepend(hash_cell_t *cell, lock_t *lock);
+  bool erase(hash_cell_t *cell, lock_t *lock);
+
+  // Disable copying
+  Locks_hashtable(Locks_hashtable &&) = delete;
+  Locks_hashtable(const Locks_hashtable &) = delete;
+  Locks_hashtable &operator=(Locks_hashtable &&) = delete;
+  Locks_hashtable &operator=(const Locks_hashtable &) = delete;
+  ut::unique_ptr<hash_table_t> ht;
+  Cells_in_use cells_in_use;
+};
 
 /** The lock system struct */
 struct lock_sys_t {
@@ -1031,13 +1075,22 @@ struct lock_sys_t {
 
   /** The hash table of the record (LOCK_REC) locks, except for predicate
   (LOCK_PREDICATE) and predicate page (LOCK_PRDT_PAGE) locks */
-  hash_table_t *rec_hash;
+  Locks_hashtable rec_hash;
 
   /** The hash table of predicate (LOCK_PREDICATE) locks */
-  hash_table_t *prdt_hash;
+  Locks_hashtable prdt_hash;
 
   /** The hash table of the predicate page (LOCK_PRD_PAGE) locks */
-  hash_table_t *prdt_page_hash;
+  Locks_hashtable prdt_page_hash;
+
+  lock_sys_t(size_t n_cells)
+      : rec_hash{n_cells}, prdt_hash{n_cells}, prdt_page_hash{n_cells} {}
+
+  /** number of calls to lock_sys_resize() so far. Used to determine if
+  iterators should be invalidated.
+  Modified under global exclusive lock_sys latch.
+  Read under global shared lock_sys latch. */
+  uint32_t n_resizes;
 
   /** Padding to avoid false sharing of wait_mutex field */
   char pad2[ut::INNODB_CACHE_LINE_SIZE];
@@ -1076,8 +1129,8 @@ set on the record, sets one for it.
 @param[in]  rec       user record on page
 @param[in]  index     index of record
 @param[in]  offsets   rec_get_offsets(rec, index) */
-void lock_rec_convert_impl_to_expl(const buf_block_t *block, const rec_t *rec,
-                                   dict_index_t *index, const ulint *offsets,
+void lock_rec_convert_impl_to_expl(const buf_block_t *block, const Slice *slc,
+                                   dict_index_t *index,
                                    const trx_t *optional_trx);
 
 /** Removes a record lock request, waiting or granted, from the queue. */
@@ -1101,11 +1154,32 @@ void lock_rtr_move_rec_list(const buf_block_t *new_block,
 void lock_rec_free_all_from_discard_page(
     const buf_block_t *block); /*!< in: page to be discarded */
 
-/** Reset the nth bit of a record lock.
+/** Reset the nth bit of a record lock. If this was a wait lock clears the wait
+flag on it, and marks that the trx no longer waits on it, but doesn't wake up
+the transaction. This function is meant to be used when lock requests are moved
+from one place to another, and thus a new (equivalent) lock request will be soon
+created for the transaction, so there's no point in waking it up.
 @param[in,out]  lock record lock
-@param[in] i    index of the bit that will be reset
-@param[in] type whether the lock is in wait mode */
-void lock_rec_trx_wait(lock_t *lock, ulint i, ulint type);
+@param[in] heap_no    index of the bit that will be reset
+@return false iff the bit was already cleared before the call
+*/
+bool lock_rec_clear_request_no_wakeup(lock_t *lock, uint16_t heap_no);
+
+/** Checks if the lock is waiting (as opposed to granted).
+Caller should hold a latch on shard containging the lock in order for this check
+to be meaningful.
+@param[in]  lock  the lock to inspect
+@return true iff the lock is waiting */
+bool lock_is_waiting(const lock_t &lock);
+
+/** Inspect the lock queues associated with the given page_id in search for a
+lock which has guid equal to the given one. Caller should hold a latch on shard
+containing locks for this page.
+@param[in]  page_id       the id of the page, for which we expect the lock
+@param[in]  guid          the guid of the lock we seek for
+@return the lock with a given guid or nullptr if no such lock */
+const lock_t *lock_find_record_lock_by_guid(page_id_t page_id,
+                                            const lock_guid_t &guid);
 
 /** The lock system */
 extern lock_sys_t *lock_sys;
@@ -1124,7 +1198,9 @@ static inline void lock_wait_mutex_enter() {
 /** Release the lock_sys->wait_mutex. */
 static inline void lock_wait_mutex_exit() { lock_sys->wait_mutex.exit(); }
 
+#ifndef INNODB_LOCK0LOCK_IC_STANDALONE
 #include "lock0lock.ic"
+#endif /* !INNODB_LOCK0LOCK_IC_STANDALONE */
 
 namespace locksys {
 

@@ -33,12 +33,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0page_h
 #define lizard0page_h
 
-#include "lizard0scn0types.h"
-#include "lizard0undo0types.h"
+#include "lizard0spc0types.h"
+#include "lizard0cmmt0types.h"
+#include "lizard0fil0types.h"
+#include "lizard0txn0slot0uba0types.h"
 #include "page0types.h"
 
 struct dict_index_t;
 struct txn_desc_t;
+struct prefix_t;
 
 namespace lizard {
 
@@ -53,11 +56,9 @@ namespace lizard {
   @param[in]      undo_ptr    undo_ptr
 */
 void page_zip_write_clover(page_zip_des_t *page_zip, const dict_index_t *index,
-                           byte *rec, const ulint *offsets, ulint scn_col,
-                           const scn_t scn, const undo_ptr_t undo_ptr,
-                           const gcn_t gcn);
+                           Slice *slc, ulint scn_col, const scn_t scn,
+                           const undo_ptr_t undo_ptr, const gcn_t gcn);
 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /**
   Check the lizard fields in every user records of the page
   @param[in]      page        cluster index page
@@ -65,18 +66,15 @@ void page_zip_write_clover(page_zip_des_t *page_zip, const dict_index_t *index,
 
   @retval         true        Success
 */
-bool page_txn_attributes(page_t *page, const dict_index_t *index);
-#endif /* UNIV_DEBUG || LIZARD_DEBUG define */
+bool page_txn_is_valid(page_t *page, const dict_index_t *index);
 
+void page_create_dict(page_t *page, const pd_data_t *data, ulint *offsets,
+                      mtr_t *mtr);
+
+bool page_validate_spc_area(const page_t *page, bool must_spc);
+
+byte *page_parse_create_dict(byte *ptr, byte *end_ptr, buf_block_t *block,
+                             mtr_t *mtr);
 }  // namespace lizard
-
-#if defined UNIV_DEBUG || defined lizard_DEBUG
-#define assert_page_txn_attributes(page, index)     \
-  do {                                                 \
-    ut_a(lizard::page_txn_attributes(page, index)); \
-  } while (0)
-#else
-#define assert_page_txn_attributes(page, index)
-#endif /* UNIV_DEBUG || LIZARD_DEBUG define */
 
 #endif

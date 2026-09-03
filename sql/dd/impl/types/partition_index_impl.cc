@@ -113,6 +113,48 @@ bool Partition_index_impl::validate() const {
 
 ///////////////////////////////////////////////////////////////////////////
 
+static void accumulate_se_attrs(const dd::Partition_index *idx_obj,
+                                dd::Index *index_obj) {
+  int has_gpp = 0;
+  int has_panda = 0;
+  int has_hippo = 0;
+  int has_spc = 0;
+  /** 1. Get current se_attrs from Partition index object */
+  if (idx_obj->options().exists(komodo::OPTION_IFT)) {
+    ulonglong format;
+    idx_obj->options().Properties::get(komodo::OPTION_IFT, &format);
+    has_gpp = (format & komodo::IFT_GPP) ? 1 : 0;
+  }
+  if (idx_obj->se_private_data().exists(komodo::PAGE_TYPE_STR)) {
+    uint16_t page_type;
+    idx_obj->se_private_data().Properties::get(komodo::PAGE_TYPE_STR,
+                                               &page_type);
+    has_panda = (page_type == komodo::PANDA_PAGE_TYPE) ? 1 : 0;
+    has_hippo = (page_type == komodo::HIPPO_PAGE_TYPE) ? 1 : 0;
+    has_spc = (page_type == komodo::SPC_PAGE_TYPE) ? 1 : 0;
+  }
+
+  /** 2. Accumulate se_attrs to Index object */
+  has_gpp |=
+      index_obj->se_attrs().attr_gpp() == komodo::dd_se_attrs_t::ATTR_TRUE;
+  has_panda |=
+      index_obj->se_attrs().attr_panda() == komodo::dd_se_attrs_t::ATTR_TRUE;
+  has_hippo |=
+      index_obj->se_attrs().attr_hippo() == komodo::dd_se_attrs_t::ATTR_TRUE;
+  has_spc |=
+      index_obj->se_attrs().attr_spc() == komodo::dd_se_attrs_t::ATTR_TRUE;
+
+  /** 3. Set new se_attrs to Index object */
+  char buffer[128];
+  size_t written = snprintf(
+      buffer, sizeof(buffer),
+
+      R"({"gpp": "%d", "panda index": "%d", "hippo index": "%d", "spc": "%d"})",
+      has_gpp, has_panda, has_hippo, has_spc);
+  assert(written < sizeof(buffer));
+  index_obj->set_se_attrs(komodo::dd_se_attrs_t({buffer, written}));
+}
+
 bool Partition_index_impl::restore_attributes(const Raw_record &r) {
   // Must resolve ambiguity by static cast.
   if (check_parent_consistency(
@@ -128,6 +170,8 @@ bool Partition_index_impl::restore_attributes(const Raw_record &r) {
   set_options(r.read_str(Index_partitions::FIELD_OPTIONS, ""));
 
   set_se_private_data(r.read_str(Index_partitions::FIELD_SE_PRIVATE_DATA, ""));
+
+  accumulate_se_attrs(this, m_index);
 
   return false;
 }

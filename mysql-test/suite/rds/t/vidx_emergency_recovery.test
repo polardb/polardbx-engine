@@ -1,0 +1,564 @@
+##############################################################
+# VECTOR INDEX Emergency Recovery Scenarios                  #
+#                                                            #
+# Covers auxiliary table data corruption/destruction and     #
+# recovery. Uses show_vidx_hlindex_tables=ON to access the   #
+# auxiliary table directly via DML.                          #
+#                                                            #
+# Scenarios:                                                 #
+#  1. TRUNCATE auxiliary table -> query/DML/recovery         #
+#  2. DELETE all rows from auxiliary table -> behavior       #
+#  3. DELETE partial rows from auxiliary table -> behavior   #
+#  4. Corrupt aux rows (tref=NULL) -> behavior               #
+#  5. Read auxiliary table directly (show_vidx_hlindex_tables=ON)     #
+#  6. Multiple OPTIMIZE (idempotent rebuild)                          #
+#  7. Simulate "drop" via DROP+ADD vector index                       #
+#  8. Transaction atomicity + recovery                                #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("\\[ERROR\\].*");
+CALL mtr.add_suppression("\\[Warning\\].*");
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--echo #
+--echo # Setup: Create table with VECTOR INDEX and insert data
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v  VECTOR(4),
+  label VARCHAR(20),
+  VECTOR INDEX vi (v) M=6 DISTANCE=EUCLIDEAN
+) ENGINE=InnoDB;
+
+INSERT INTO t1(id, v, label) VALUES
+  (1,  VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'), 'A'),
+  (2,  VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'), 'B'),
+  (3,  VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'), 'C'),
+  (4,  VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'), 'D'),
+  (5,  VEC_FROMTEXT('[1.0, 1.0, 0.0, 0.0]'), 'E'),
+  (6,  VEC_FROMTEXT('[0.0, 1.0, 1.0, 0.0]'), 'F'),
+  (7,  VEC_FROMTEXT('[0.0, 0.0, 1.0, 1.0]'), 'G'),
+  (8,  VEC_FROMTEXT('[1.0, 0.0, 0.0, 1.0]'), 'H');
+
+SELECT COUNT(*) AS base_row_count FROM t1;
+
+--echo # Cache TABLE_ID for dynamic auxiliary table name
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # Verify auxiliary table exists
+SELECT COUNT(*) > 0 AS aux_exists
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo # Verify aux table row count matches primary table
+SET @s = CONCAT('SELECT COUNT(*) AS aux_initial_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+--echo # Baseline ANN search: nearest to [1,0,0,0] -> id=1
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 1: DELETE ALL rows from auxiliary table (simulates TRUNCATE)
+--echo # ================================================================
+--echo # All HNSW graph rows removed; primary table data intact.
+--echo # ANN search: no entry point -> 0 rows or graceful error.
+--echo # INSERT: may succeed (first node rebuild) or fail.
+--echo # Recovery: OPTIMIZE TABLE on primary table.
+--echo #
+SET @s = CONCAT('DELETE FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+FLUSH TABLES t1;
+
+--echo # 1.1 Primary table: readable (full scan, no vector index needed)
+--echo # Verify aux table is now empty
+SET @s = CONCAT('SELECT COUNT(*) AS aux_after_delete FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) AS primary_rows FROM t1;
+SELECT id, label FROM t1 ORDER BY id LIMIT 4;
+
+--echo # 1.2 ANN search with empty aux table: 0 rows or graceful error
+--echo #     (no entry point => graph traversal impossible)
+--disable_result_log
+--error 0, ER_VECTOR_INDEX_FAILED, 1105
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 1.3 INSERT after truncated aux: may succeed or fail
+--error 0, ER_VECTOR_INDEX_FAILED, ER_KEY_NOT_FOUND
+INSERT INTO t1(id, v, label) VALUES (9, VEC_FROMTEXT('[0.5, 0.5, 0.5, 0.5]'), 'I1');
+
+--echo # 1.4 Non-vector DML: must succeed
+UPDATE t1 SET label = 'A_mod' WHERE id = 1;
+SELECT id, label FROM t1 WHERE id = 1;
+
+--echo # 1.5 OPTIMIZE TABLE primary: rebuilds aux table from scratch
+OPTIMIZE TABLE t1;
+
+SELECT COUNT(*) > 0 AS aux_after_optimize
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # 1.6 Aux table rows should match primary after rebuild
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows_after_rebuild FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) AS primary_rows_after_rebuild FROM t1;
+
+--echo # 1.7 ANN search works after OPTIMIZE
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # 1.8 INSERT/DELETE/UPDATE all work after OPTIMIZE
+INSERT INTO t1(id, v, label) VALUES (10, VEC_FROMTEXT('[0.9, 0.1, 0.0, 0.0]'), 'I2');
+DELETE FROM t1 WHERE id IN (9, 10);
+UPDATE t1 SET v = VEC_FROMTEXT('[0.98, 0.02, 0.0, 0.0]') WHERE id = 1;
+SELECT COUNT(*) AS rows_after_dml FROM t1;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 2: DELETE ALL + INSERT into broken graph + OPTIMIZE
+--echo # ================================================================
+--echo # After DELETE ALL, attempt INSERT (first-insert-as-entry-point logic).
+--echo # Then OPTIMIZE restores the full graph.
+--echo #
+SET @s = CONCAT('DELETE FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+FLUSH TABLES t1;
+
+--echo # 2.1 Primary table intact
+SELECT COUNT(*) AS primary_rows FROM t1;
+
+--echo # 2.2 Attempt INSERT when aux is empty: may succeed or fail
+--error 0, ER_VECTOR_INDEX_FAILED, ER_KEY_NOT_FOUND
+INSERT INTO t1(id, v, label) VALUES (20, VEC_FROMTEXT('[0.2, 0.8, 0.0, 0.0]'), 'J1');
+
+--echo # 2.3 OPTIMIZE TABLE rebuilds full graph
+OPTIMIZE TABLE t1;
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows_rebuilt FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) AS primary_rows_rebuilt FROM t1;
+
+--echo # 2.4 ANN search works after OPTIMIZE
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # 2.5 Cleanup inserted test row if it exists
+DELETE FROM t1 WHERE id = 20;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 3: DELETE PARTIAL rows from auxiliary table
+--echo # ================================================================
+--echo # Removing a subset of HNSW nodes creates disconnected graph.
+--echo # ANN search: degraded accuracy, must not crash.
+--echo # Recovery: OPTIMIZE TABLE.
+--echo #
+--echo # Delete only layer=0 rows (leaf nodes, not entry point).
+--echo # Entry point is the node with the highest layer.
+SET @s = CONCAT('DELETE FROM `vidx_', @t1_tid, '_0` WHERE layer = 0 LIMIT 4');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+FLUSH TABLES t1;
+
+--echo # 3.1 Primary table intact
+SELECT COUNT(*) AS primary_rows FROM t1;
+
+--echo # 3.2 ANN search with partial aux: may return degraded results, must not crash
+--echo # Result rows are non-deterministic; only verify no crash/error
+--disable_result_log
+--error 0, ER_VECTOR_INDEX_FAILED
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 3.3 INSERT on partially corrupted graph: may succeed or fail with various errors
+--error 0, ER_VECTOR_INDEX_FAILED, ER_KEY_NOT_FOUND
+INSERT INTO t1(id, v, label) VALUES (11, VEC_FROMTEXT('[0.8, 0.6, 0.0, 0.0]'), 'I3');
+
+--echo # 3.4 OPTIMIZE TABLE: full rebuild
+OPTIMIZE TABLE t1;
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+SET @s = CONCAT('SELECT COUNT(*) AS aux_full_count FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SELECT COUNT(*) AS primary_full_count FROM t1;
+
+--echo # 3.5 ANN search correct after full rebuild
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 4: Corrupt aux rows by setting tref = NULL
+--echo # ================================================================
+--echo # tref = NULL marks a HNSW node as "soft-deleted".
+--echo # Setting it on all rows: graph has entry point but no live nodes.
+--echo # ANN search: returns 0 rows or graceful error.
+--echo # Recovery: OPTIMIZE TABLE.
+--echo #
+SET @s = CONCAT('UPDATE `vidx_', @t1_tid, '_0` SET tref = NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+FLUSH TABLES t1;
+
+--echo # 4.1 Primary table intact
+SELECT COUNT(*) AS primary_rows FROM t1;
+
+--echo # 4.2 ANN search with all-deleted nodes: 0 rows or graceful error
+--disable_result_log
+--error 0, ER_VECTOR_INDEX_FAILED
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 4.3 OPTIMIZE TABLE: rebuild from primary, discard corrupted aux
+OPTIMIZE TABLE t1;
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # 4.4 ANN search correct after rebuild
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 5: Read auxiliary table directly
+--echo # ================================================================
+--echo # With show_vidx_hlindex_tables=ON, aux table is readable via SELECT.
+--echo # Verify aux row count and ANN search still work (no modification).
+--echo #
+--echo # NOTE: OPTIMIZE/REPAIR/ANALYZE TABLE on an aux table is rejected at
+--echo # statement entry (ER_NOT_ALLOWED_COMMAND); see Scenario 9 for the
+--echo # explicit coverage and the rationale.
+--echo #
+SET @s = CONCAT('SELECT COUNT(*) AS aux_direct_count FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) AS primary_direct_count FROM t1;
+
+--echo # ANN search still works (aux not modified)
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 6: Multiple consecutive OPTIMIZE (idempotent rebuild)
+--echo # ================================================================
+--echo # Delete all aux rows, OPTIMIZE, DML, OPTIMIZE again, OPTIMIZE again.
+--echo # Verifies that repeated OPTIMIZE is stable.
+--echo #
+SET @s = CONCAT('DELETE FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+FLUSH TABLES t1;
+
+--echo # First OPTIMIZE
+OPTIMIZE TABLE t1;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT COUNT(*) > 0 AS aux_after_opt1
+  FROM information_schema.INNODB_TABLES WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo # DML after first rebuild
+INSERT INTO t1(id, v, label) VALUES (12, VEC_FROMTEXT('[0.3, 0.7, 0.0, 0.0]'), 'I4');
+--echo # Use non-deterministic cleanup: delete any rows with id >= 11 that may exist
+DELETE FROM t1 WHERE id >= 11 AND id != 12;
+UPDATE t1 SET v = VEC_FROMTEXT('[0.97, 0.03, 0.0, 0.0]') WHERE id = 1;
+
+--echo # Second OPTIMIZE: idempotent
+OPTIMIZE TABLE t1;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+SELECT COUNT(*) AS rows_after_opt2 FROM t1;
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # Third OPTIMIZE: still stable
+OPTIMIZE TABLE t1;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) AS stable_rows FROM t1;
+
+--echo # EXPLAIN still picks vector index
+EXPLAIN SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 7: Simulate "drop" via DROP+ADD VECTOR INDEX
+--echo # ================================================================
+--echo # DROP INDEX removes the aux table entirely.
+--echo # ADD INDEX rebuilds it from primary table data.
+--echo # This is the official recovery path if OPTIMIZE does not exist.
+--echo #
+ALTER TABLE t1 DROP INDEX vi;
+
+--echo # Aux table should be gone after DROP INDEX
+SELECT COUNT(*) AS aux_after_drop_idx
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo # Primary table still fully accessible
+SELECT COUNT(*) AS primary_rows FROM t1;
+SELECT id, label FROM t1 ORDER BY id LIMIT 4;
+
+--echo # ANN query without vector index: table scan result (order by distance still works)
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # INSERT without index: should succeed (no vidx maintenance needed)
+INSERT INTO t1(id, v, label) VALUES (13, VEC_FROMTEXT('[0.7, 0.7, 0.0, 0.0]'), 'I5');
+
+ALTER TABLE t1 ADD VECTOR INDEX vi (v) M=6 DISTANCE=EUCLIDEAN;
+
+SELECT COUNT(*) > 0 AS aux_after_add_idx
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # ANN search works after re-add
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # Aux row count matches primary row count
+SET @s = CONCAT('SELECT COUNT(*) AS aux_final FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) AS primary_final FROM t1;
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 8: Non-vector DML transactional integrity after corruption
+--echo # ================================================================
+--echo # After corruption (DELETE ALL + OPTIMIZE restored), verify that:
+--echo # 1. Non-vector DML in a transaction is atomic (ROLLBACK works).
+--echo # 2. ANN search is NOT affected by rolled-back non-vector DML.
+--echo # 3. Further corruption + OPTIMIZE inside transaction round-trip.
+--echo #
+--echo # Step 1: Normal transactional DML with rollback
+BEGIN;
+INSERT INTO t1(id, v, label) VALUES (30, VEC_FROMTEXT('[0.1, 0.1, 0.1, 0.1]'), 'TX_INSERT');
+UPDATE t1 SET label = 'TX_MOD' WHERE id = 2;
+SELECT COUNT(*) AS tx_rows FROM t1;
+ROLLBACK;
+
+--echo # After rollback: primary table must be back to pre-tx state
+SELECT COUNT(*) AS after_rollback_rows FROM t1;
+SELECT id, label FROM t1 WHERE id = 2;
+
+--echo # ANN search unaffected by rollback (aux table consistent)
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo # Step 2: Corrupt aux outside tx, then run OPTIMIZE to restore,
+--echo # then verify that transactions with DML still work correctly.
+FLUSH TABLES t1;
+SET @s = CONCAT('DELETE FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+FLUSH TABLES t1;
+
+--echo # OPTIMIZE first to restore consistent state
+OPTIMIZE TABLE t1;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+SELECT COUNT(*) > 0 AS aux_restored
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo # Now verify normal transactional DML works after restore
+BEGIN;
+UPDATE t1 SET label = 'safe' WHERE id = 3;
+COMMIT;
+SELECT id, label FROM t1 WHERE id = 3;
+
+--echo # ANN search still correct after transactional DML
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+
+
+--echo #
+--echo # ================================================================
+--echo # Scenario 9: OPTIMIZE/ANALYZE/REPAIR on aux table is rejected
+--echo # ================================================================
+--echo # The aux table is exposed by show_vidx_hlindex_tables=ON for direct
+--echo # SELECT/CHECK only. Routing it through ALTER-recreate (OPTIMIZE/
+--echo # ANALYZE/REPAIR) rotates its se_private_id but leaves the aux name
+--echo # tied to the base table's old TABLE_ID; the next base-table OPTIMIZE
+--echo # then crashes at vidx_index.cc:249. Reject at statement entry so
+--echo # mysqlcheck --all-databases / DBA scripts cannot trigger it.
+--echo #
+--echo # Coverage:
+--echo #   - aux OPTIMIZE / ANALYZE / REPAIR -> ER_NOT_ALLOWED_COMMAND
+--echo #   - aux direct ALTER TABLE -> ER_NOT_ALLOWED_COMMAND
+--echo #   - aux CHECK still works (read-only, no TABLE_ID rotation)
+--echo #   - mixed list (base + aux, either order) rejects the whole stmt
+--echo #     and the base table's TABLE_ID stays unchanged
+--echo #   - subsequent OPTIMIZE on the base table still succeeds
+--echo #
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT NAME INTO @aux_full
+  FROM information_schema.INNODB_TABLES WHERE NAME LIKE 'test/vidx_%' LIMIT 1;
+--let $aux= `SELECT SUBSTRING_INDEX(@aux_full, '/', -1)`
+
+--echo # --- 9.1 OPTIMIZE aux -> ER_NOT_ALLOWED_COMMAND ---
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval OPTIMIZE TABLE test.`$aux`;
+
+--echo # --- 9.2 ANALYZE aux -> ER_NOT_ALLOWED_COMMAND ---
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval ANALYZE TABLE test.`$aux`;
+
+--echo # --- 9.3 REPAIR aux -> ER_NOT_ALLOWED_COMMAND ---
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval REPAIR TABLE test.`$aux`;
+
+--echo # --- 9.4 CHECK aux still works (read-only) ---
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+eval CHECK TABLE test.`$aux`;
+
+--echo # --- 9.5 Mixed list with aux FIRST: whole stmt rejected, base UNCHANGED ---
+SELECT TABLE_ID INTO @before FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval OPTIMIZE TABLE test.`$aux`, test.t1;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval ANALYZE TABLE test.`$aux`, test.t1;
+SELECT @before = TABLE_ID AS base_tid_unchanged
+  FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # --- 9.6 Known limitation: with the aux LAST ("OPTIMIZE base, aux") the
+--echo #     per-table admin loop optimizes the base before it reaches the aux,
+--echo #     so only the trailing aux entry is rejected (no crash; data stays
+--echo #     consistent because the base OPTIMIZE rebuilds the aux).  It is not
+--echo #     executed here because rebuilding the aux changes its TABLE_ID and
+--echo #     would invalidate the aux name for the checks below.  List the aux
+--echo #     FIRST (see 9.5) for whole-statement rejection with the base
+--echo #     untouched.
+
+--echo # --- 9.7 Direct ALTER TABLE on aux -> ER_NOT_ALLOWED_COMMAND ---
+--echo #     (ALTER ... ENGINE=InnoDB also routes through mysql_alter_table
+--echo #      and would rotate the aux TABLE_ID; reject it the same way)
+SELECT TABLE_ID INTO @before FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval ALTER TABLE test.`$aux` ENGINE=InnoDB;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval ALTER TABLE test.`$aux` ADD COLUMN dummy INT;
+SELECT @before = TABLE_ID AS base_tid_unchanged_after_aux_alter
+  FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # --- 9.8 Base-table OPTIMIZE still succeeds after the rejected aux ops ---
+OPTIMIZE TABLE t1;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT COUNT(*) > 0 AS aux_after_base_opt
+  FROM information_schema.INNODB_TABLES WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+
+--echo #
+--echo # ================================================================
+--echo # Final summary verification
+--echo # ================================================================
+--echo #
+SELECT COUNT(*) AS final_primary_rows FROM t1;
+SELECT COUNT(*) > 0 AS final_aux_exists
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+SHOW CREATE TABLE t1;
+
+SET @s = CONCAT('SELECT COUNT(*) AS final_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+--echo # Full ANN result from origin
+SELECT id, label,
+       VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY dist
+LIMIT 5;
+
+
+--echo #
+--echo # Cleanup
+--echo #
+DROP TABLE t1;
+
+SELECT COUNT(*) AS cleanup_aux_count
+  FROM information_schema.INNODB_TABLES
+  WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

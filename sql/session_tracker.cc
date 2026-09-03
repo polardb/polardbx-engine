@@ -60,7 +60,7 @@
 #include "sql_string.h"
 #include "template_utils.h"
 
-#include "bl_consensus_log.h" /* consensus_ptr */
+#include "komodo0xlog.h"
 #include "sql/log.h"
 #include "sql/session_tracker.h"
 
@@ -1788,8 +1788,8 @@ bool Session_index_tracker::store(THD *thd, String &buf) {
     DBUG_EXECUTE_IF(
         "ok_packet_return_index",
         sql_print_warning("Sent index in ok packet: (%lld)", ret_index););
-  } else if (is_enabled() && consensus_ptr) {
-    ret_index = consensus_ptr->getAppliedIndex();
+  } else if (is_enabled()) {
+    ret_index = komodo::xlog_get_paxos_applied_index();
     DBUG_EXECUTE_IF("ok_packet_return_index",
                     sql_print_warning("Sent lastest index in ok packet: (%lld)",
                                       ret_index););

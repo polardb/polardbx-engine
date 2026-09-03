@@ -1,15 +1,18 @@
---echo # Test the new ddl hint secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
---echo # whose priority is higher than the variable opt_index_format_gpp_enabled and opt_index_format_panda_enabled.
+--echo # Test the new ddl hint secondary_engine_attribute '{"gpp":"1","panda index":"1","hippo index":"1"}',
+--echo # whose priority is higher than the variable opt_index_format_gpp_enabled, opt_index_format_panda_enabled and opt_index_format_hippo_enabled.
+--echo # Note: hippo index only supports non-unique secondary indexes.
 --echo #
 
 
 SET opt_index_format_gpp_enabled=false;
 SET opt_index_format_panda_enabled=false;
+SET opt_index_format_hippo_enabled=false;
 CREATE TABLE t1 (
   a int DEFAULT NULL,
   b int DEFAULT NULL,
   c int DEFAULT NULL,
   d int DEFAULT NULL,
+  e int DEFAULT NULL,
   UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
   UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"0","panda index":"1"}',
   UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"1","panda index":"0"}',
@@ -17,19 +20,25 @@ CREATE TABLE t1 (
   UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"1","foo":"bar"}',
   UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"1"}',
   UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
-  UNIQUE KEY `d_a` (d, a)
+  UNIQUE KEY `d_a` (d, a),
+  KEY `idx_e` (e) secondary_engine_attribute '{"hippo index":"1"}',
+  KEY `idx_e_a` (e, a) secondary_engine_attribute '{"hippo index":"0"}',
+  KEY `idx_a_e` (a, e) secondary_engine_attribute '{"hippo index":"1","gpp":"1"}',
+  KEY `idx_b_e` (b, e) secondary_engine_attribute ''
 );
-INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+INSERT INTO t1 (a, b, c, d, e) VALUES (1, 2, 3, 4, 5);
 --source suite/lizard/include/ddl_se_attr_hint_export_import.inc
 
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=1;
 SET opt_index_format_panda_enabled=1;
+SET opt_index_format_hippo_enabled=1;
 CREATE TABLE t1 (
   a int DEFAULT NULL,
   b int DEFAULT NULL,
   c int DEFAULT NULL,
   d int DEFAULT NULL,
+  e int DEFAULT NULL,
   UNIQUE KEY `a` (a) secondary_engine_attribute '{"gpp":"True","panda index":"true"}',
   UNIQUE KEY `b` (b) secondary_engine_attribute '{"gpp":"FALSE","panda index":"TRUE"}',
   UNIQUE KEY `c` (c) secondary_engine_attribute '{"gpp":"True","panda index":"FALSE"}',
@@ -37,20 +46,27 @@ CREATE TABLE t1 (
   UNIQUE KEY `a_b` (a, b) secondary_engine_attribute '{"gpp":"tRue","panda index":"foo"}',
   UNIQUE KEY `b_c` (b, c) secondary_engine_attribute '{"panda index":"true","gpp":""}',
   UNIQUE KEY `c_d` (c, d) secondary_engine_attribute '',
-  UNIQUE KEY `d_a` (d, a)
+  UNIQUE KEY `d_a` (d, a),
+  KEY `idx_e` (e) secondary_engine_attribute '{"hippo index":"TRUE"}',
+  KEY `idx_e_a` (e, a) secondary_engine_attribute '{"hippo index":"false"}',
+  KEY `idx_a_e` (a, e) secondary_engine_attribute '{"hippo index":"True","gpp":"1"}',
+  KEY `idx_b_e` (b, e) secondary_engine_attribute '{"hippo index":"fAlse"}',
+  KEY `idx_c_e` (c, e) secondary_engine_attribute ''
 );
-INSERT INTO t1 (a, b, c, d) VALUES (1, 2, 3, 4);
+INSERT INTO t1 (a, b, c, d, e) VALUES (1, 2, 3, 4, 5);
 --source suite/lizard/include/ddl_se_attr_hint_export_import.inc
 
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=0;
 SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=0;
 CREATE TABLE t1 (
   a int NOT NULL,
   b int NOT NULL,
   c int NOT NULL,
   PRIMARY KEY (a),
-  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}'
 );
 INSERT INTO t1 (a,b,c) VALUES (1,2,3);
 OPTIMIZE TABLE t1;
@@ -59,12 +75,14 @@ OPTIMIZE TABLE t1;
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=0;
 SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=0;
 CREATE TABLE t1 (
   a int NOT NULL,
   b int NOT NULL,
   c int NOT NULL,
   PRIMARY KEY (a),
-  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}'
 );
 INSERT INTO t1 (a,b,c) VALUES (1,2,3);
 ALTER TABLE t1 DROP PRIMARY KEY;
@@ -73,42 +91,101 @@ ALTER TABLE t1 DROP PRIMARY KEY;
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=1;
 SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=1;
 CREATE TABLE t1 (
   a int NOT NULL,
   b int NOT NULL,
   c int NOT NULL,
   PRIMARY KEY (a),
-  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}'
 );
 INSERT INTO t1 (a,b,c) VALUES (1,2,3);
-ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (c), DROP KEY b, ADD UNIQUE KEY `b_2` (b) secondary_engine_attribute '{"gpp":"0"}';
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (c), DROP KEY b, ADD UNIQUE KEY `b_2` (b) secondary_engine_attribute '{"gpp":"0"}', DROP KEY idx_c, ADD KEY `idx_c_2` (c) secondary_engine_attribute '{"hippo index":"0"}';
 --source suite/lizard/include/ddl_se_attr_hint_export_import.inc
 
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=0;
 SET opt_index_format_panda_enabled=1;
+SET opt_index_format_hippo_enabled=0;
 CREATE TABLE t1 (
   a int NOT NULL,
   b int DEFAULT NULL,
   c int NOT NULL,
   PRIMARY KEY (a),
-  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}'
 );
 INSERT INTO t1 (a,b,c) VALUES (1,2,3);
 ALTER TABLE t1 DROP COLUMN a;
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+--echo # Test hippo index with different variable combinations
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=1;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  KEY idx_b (b) secondary_engine_attribute '{"hippo index":"0"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}',
+  KEY idx_bc (b, c)
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=1;
+SET opt_index_format_panda_enabled=1;
+SET opt_index_format_hippo_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  PRIMARY KEY (a),
+  UNIQUE KEY b (b) secondary_engine_attribute '{"gpp":"0","panda index":"0"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"1"}',
+  KEY idx_bc (b, c) secondary_engine_attribute '{"hippo index":"true"}'
+);
+INSERT INTO t1 (a,b,c) VALUES (1,2,3);
+--source suite/lizard/include/ddl_se_attr_hint_export_import.inc
+
+--echo # Test hippo index alone (only hippo index hint, no gpp/panda)
+DROP TABLE t1;
+SET opt_index_format_gpp_enabled=0;
+SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=0;
+CREATE TABLE t1 (
+  a int NOT NULL,
+  b int NOT NULL,
+  c int NOT NULL,
+  d int NOT NULL,
+  PRIMARY KEY (a),
+  KEY idx_b (b) secondary_engine_attribute '{"hippo index":"1"}',
+  KEY idx_c (c) secondary_engine_attribute '{"hippo index":"0"}',
+  KEY idx_d (d) secondary_engine_attribute '{"hippo index":"TRUE"}',
+  KEY idx_bc (b, c) secondary_engine_attribute '{"hippo index":"false"}',
+  KEY idx_cd (c, d)
+);
+INSERT INTO t1 (a,b,c,d) VALUES (1,2,3,4);
 --source suite/lizard/include/ddl_se_attr_hint_export_import.inc
 
 --echo # Not support for partition table
 DROP TABLE t1;
 SET opt_index_format_gpp_enabled=0;
 SET opt_index_format_panda_enabled=0;
+SET opt_index_format_hippo_enabled=0;
 CREATE TABLE t1 (
   a int NOT NULL,
   b int NOT NULL,
   c int NOT NULL,
   pad varchar(8192),
   primary key (a),
-  UNIQUE KEY b (b,a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}'
+  UNIQUE KEY b (b,a) secondary_engine_attribute '{"gpp":"1","panda index":"1"}',
+  KEY idx_c (c,a) secondary_engine_attribute '{"hippo index":"1"}'
 ) ENGINE=InnoDB AUTO_INCREMENT=0
 PARTITION BY RANGE(a) (
     PARTITION p0 VALUES LESS THAN (3),

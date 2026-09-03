@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 5/30/1994 Heikki Tuuri
  *******************************************************************/
 
+#ifndef ut0byte_h
+#define INNODB_UT0BYTE_IC_STANDALONE
+#include "ut0byte.h"
+#undef INNODB_UT0BYTE_IC_STANDALONE
+#endif /* !ut0byte_h */
 constexpr uint64_t ut_ull_create(uint32_t high, uint32_t low) {
   return (uint64_t{high} << 32) | low;
 }

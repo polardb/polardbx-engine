@@ -9,125 +9,136 @@ server_id	role	learner_source
 3	Follower	0
 100	Learner	1
 ############ check follower before
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
+master-bin.NNNNNN	#	#
 stop xpaxos_replication;
 SET @@global.binlog_expire_logs_seconds=1;
-############ check learner before
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
+############ check logger before
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
+master-bin.NNNNNN	#	#
+SET @@global.binlog_expire_logs_seconds=1;
+############ check learner before
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.NNNNNN	#	#
 stop xpaxos_replication;
 SET @@global.binlog_expire_logs_seconds=1;
 ############ check leader before
-create table t1(id int);
-insert into t1 values (1);
-insert into t1 values (2);
-flush logs;
+create table t1(c1 int auto_increment primary key, c2 blob);
+insert into t1 (c2) values(repeat('#', 5000));
+insert into t1 (c2) values(repeat('#', 5000));
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 SET @@global.binlog_expire_logs_seconds=1;
 ############ check follower before2
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
-master-bin.000003	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+############ check logger before2
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 ############ check learner before2
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
-master-bin.000003	#	#
+master-bin.NNNNNN	#	#
 ############ check leader after
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 SET SESSION debug="+d,force_rotate";
-insert into t1 values(6);
+insert into t1 (c2) values(repeat('#', 5000));
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000002	#	#
-master-bin.000003	#	#
-insert into t1 values(7);
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+insert into t1 (c2) values(repeat('#', 5000));
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000003	#	#
-master-bin.000004	#	#
-flush logs;
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000003	#	#
-master-bin.000004	#	#
-master-bin.000005	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 SET @@global.binlog_expire_logs_seconds=default;
 ############ check follower after
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
-master-bin.000003	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 start xpaxos_replication;
 Warnings:
 Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000002	#	#
-master-bin.000003	#	#
-master-bin.000004	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+############ check logger after
+set global consensus_disable_election=ON;
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+set global consensus_disable_election=OFF;
 ############ check learner after
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000001	#	#
-master-bin.000002	#	#
-master-bin.000003	#	#
+master-bin.NNNNNN	#	#
 start xpaxos_replication;
 Warnings:
 Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
-set force_revise=1;
-set sql_log_bin=0;
-flush relay logs;
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000002	#	#
-master-bin.000003	#	#
-master-bin.000004	#	#
+master-bin.NNNNNN	#	#
 ############ check leader after2
-insert into t1 values(8);
-insert into t1 values(9);
 ############ check follower after2
+SET SESSION debug="+d,force_rotate";
+insert into t1 (c2) values(repeat('#', 5000));
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000003	#	#
-master-bin.000004	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+insert into t1 (c2) values(repeat('#', 5000));
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
 SET @@global.binlog_expire_logs_seconds=default;
+############ check logger after2
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.NNNNNN	#	#
+master-bin.NNNNNN	#	#
+SET @@global.binlog_expire_logs_seconds=default;
+set global consensus_disable_election=OFF;
 ############ check learner after2
 show consensus logs;
 Log_name	File_size	Start_log_index
-master-bin.000003	#	#
-master-bin.000004	#	#
+master-bin.NNNNNN	#	#
 SET @@global.binlog_expire_logs_seconds=default;
+############ check leader after3
+set global consensus_force_promote=1;
 ############ cleanup
 call dbms_consensus.drop_learner(learner_cluster_info);
 drop table t1;

@@ -59,7 +59,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0vec.h"
 
 #include "lizard0btr0btr.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dd.h"
+#include "lizard0dict0dict.h"
 
 dberr_t dict_build_table_def(dict_table_t *table,
                              const HA_CREATE_INFO *create_info, trx_t *trx) {
@@ -383,6 +384,7 @@ void dict_build_index_def(const dict_table_t *table, /*!< in: table */
 
   /* Note that the index was created by this transaction. */
   index->trx_id = trx->id;
+  index->creator_trx_id = trx->id;
 }
 
 /** Creates an index tree for the index if it is not a member of a cluster.
@@ -421,9 +423,11 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx,
         lizard::btr_page_upgrade_root(index, page_type, expected_page_type);
 
     /** Lizard: We can only decide the root page type. */
-    index->root = {FIL_NULL, page_type};
+    index->set_root({FIL_NULL, page_type});
+    index->set_pd_capacity(lizard::dict_index_determine_pd_capacity(index));
 
     index->trx_id = trx->id;
+    index->creator_trx_id = trx->id;
 
     return (DB_SUCCESS);
   }
@@ -439,11 +443,16 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx,
                       expected_page_type, &mtr);
   }
 
-  index->root = root;
+  index->set_root(root);
+  index->set_pd_capacity(lizard::dict_index_determine_pd_capacity(index));
   index->trx_id = trx->id;
+  index->creator_trx_id = trx->id;
 
   mtr_commit(&mtr);
-  if (err == DB_SUCCESS) {
+
+  if (root.page_no == FIL_NULL) {
+    err = DB_OUT_OF_FILE_SPACE;
+  } else if (err == DB_SUCCESS) {
     /* FIXME: Now writing ddl log after the index has been created,
     so if server crashes before the redo log gets persisted,
     there is no way to find the resources(two segments, etc.)
@@ -481,7 +490,8 @@ void dict_drop_temporary_table_index(const dict_index_t *index,
   tablespace and the .ibd file is missing do nothing,
   else free the all the pages */
   if (root_page_no != FIL_NULL && found) {
-    btr_free(page_id_t(space, root_page_no), page_size);
+    ut_ad(index->disable_ahi);
+    btr_free(page_id_t(space, root_page_no), page_size, /*ahi=*/false);
   }
 }
 

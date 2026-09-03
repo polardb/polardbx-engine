@@ -2499,3 +2499,43 @@ EOF
 
 --remove_file $SELECT_WITH_JOIN
 DROP TABLE t1, t2, t3, t4, t5;
+ 
+--echo #
+--echo # Bug #34801284 partitions: MySQL is trying to perform a consistent read but the read view is not assigned
+--echo #
+CREATE TABLE t1 (c0 int);
+CREATE TABLE t2 (c1 int, c2 int) PARTITION BY KEY (c1) PARTITIONS 4;
+ 
+SELECT * from t2 WHERE c2 IN ((SELECT c0 FROM t1 LIMIT 1),null);
+SELECT * from t2 WHERE c2 NOT IN ((SELECT c0 FROM t1 LIMIT 1),null);
+ 
+DROP TABLE t1, t2;
+
+CREATE TABLE `t1` (
+  `SN_ID`   BIGINT NOT NULL AUTO_INCREMENT,
+  `TRXDATE` DATE   NOT NULL,
+  PRIMARY KEY (`SN_ID`, `TRXDATE`)
+)
+ENGINE = InnoDB
+PARTITION BY LIST (DAYOFYEAR(`TRXDATE`)) (
+  PARTITION `partition_01`  VALUES IN (1),
+  PARTITION `partition_02` VALUES IN (2),
+  PARTITION `partition_03` VALUES IN (3),
+  PARTITION `partition_04` VALUES IN (4),
+  PARTITION `partition_05` VALUES IN (5),
+  PARTITION `partition_06` VALUES IN (6)
+);
+
+INSERT INTO t1 (TRXDATE) VALUES (STR_TO_DATE('2025-01-02 00:00:00', '%Y-%m-%d %H:%i:%s'));
+INSERT INTO t1 (TRXDATE) VALUES (STR_TO_DATE('2025-01-03 00:00:00', '%Y-%m-%d %H:%i:%s'));
+
+SET @val = DATE'2025-01-02';
+SET @val2 = DATE'2025-01-03';
+
+PREPARE stmt FROM 'select * from t1 where `TRXDATE` in (?, ?)';
+EXECUTE stmt USING @val,@val2;
+
+PREPARE stmt FROM 'select * from t1 where `TRXDATE` in (DATE_FORMAT(?, \'%Y-%m-%d\'), DATE_FORMAT(?, \'%Y-%m-%d\'))';
+EXECUTE stmt USING @val,@val2;
+
+DROP TABLE t1;

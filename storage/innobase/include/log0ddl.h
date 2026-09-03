@@ -322,15 +322,15 @@ class DDL_Log_Table {
   @param[in]    rec             index record
   @param[in]    offsets         index record offset
   @param[in,out]        record          to store the innodb_ddl_log record. */
-  void convert_to_ddl_record(bool is_clustered, rec_t *rec,
-                             const ulint *offsets, DDL_Record &record);
+  void convert_to_ddl_record(bool is_clustered, const Slice *slc,
+                             DDL_Record &record);
 
   /** Parse the index record and get 'ID'.
   @param[in]    index   index where the record resides
   @param[in]    rec     index rec
   @param[in]    offsets offsets of the index.
   @return id of the record. */
-  ulint parse_id(const dict_index_t *index, rec_t *rec, const ulint *offsets);
+  ulint parse_id(const dict_index_t *index, const Slice *slc);
 
   /** Set the given field of the innodb_ddl_log record from given data.
   @param[in]    data    data to be set

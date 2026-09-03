@@ -1,0 +1,77 @@
+# Enable all secondary-index formats + gpp.
+SET SESSION opt_index_format_panda_enabled = ON;
+SET SESSION opt_index_format_hippo_enabled = ON;
+SET SESSION opt_index_format_spc_enabled = ON;
+SET SESSION opt_index_format_gpp_enabled = ON;
+#
+# 1. COMPRESSED table: every index must stay a plain INDEX, gpp disabled.
+#
+CREATE TABLE t_zip (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_uk (a),
+KEY idx_sk (b)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+INSERT INTO t_zip VALUES (1,'aaa',10), (2,'bbb',20), (3,'ccc',30);
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_zip'
+  ORDER BY INDEX_NAME;
+INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+idx_sk	0	INDEX
+idx_uk	0	INDEX
+PRIMARY	0	INDEX
+#
+# 2. Non-compressed control table: the options are effective here.
+#    (unique -> PANDA_INDEX, non-unique -> SPC_PAGE, gpp on secondaries)
+#
+CREATE TABLE t_plain (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_uk (a),
+KEY idx_sk (b)
+) ENGINE=InnoDB;
+INSERT INTO t_plain VALUES (1,'aaa',10), (2,'bbb',20), (3,'ccc',30);
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_plain'
+  ORDER BY INDEX_NAME;
+INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+idx_sk	1	SPC_PAGE
+idx_uk	1	PANDA_INDEX
+PRIMARY	0	INDEX
+#
+# 3. ALTER TABLE ... ADD INDEX on a compressed table also stays plain.
+#
+ALTER TABLE t_zip ADD UNIQUE KEY idx_uk2 (b);
+ALTER TABLE t_zip ADD KEY idx_sk2 (a);
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_zip'
+  ORDER BY INDEX_NAME;
+INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+idx_sk	0	INDEX
+idx_sk2	0	INDEX
+idx_uk	0	INDEX
+idx_uk2	0	INDEX
+PRIMARY	0	INDEX
+#
+# 4. A table converted to COMPRESSED rebuilds indexes as plain INDEX.
+#
+ALTER TABLE t_plain ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_plain'
+  ORDER BY INDEX_NAME;
+INDEX_NAME	GPP_ENABLED	INDEX_PAGE_TYPE
+idx_sk	0	INDEX
+idx_uk	0	INDEX
+PRIMARY	0	INDEX
+DROP TABLE t_zip;
+DROP TABLE t_plain;
+SET SESSION opt_index_format_panda_enabled = 1;
+SET SESSION opt_index_format_hippo_enabled = 1;
+SET SESSION opt_index_format_spc_enabled = 0;
+SET SESSION opt_index_format_gpp_enabled = 1;

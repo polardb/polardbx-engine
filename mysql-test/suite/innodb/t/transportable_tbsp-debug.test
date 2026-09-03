@@ -1241,7 +1241,7 @@ call mtr.add_suppression("\\[ERROR\\] .* Cannot open datafile for read-only:");
 call mtr.add_suppression("\\[ERROR\\] .* Could not find a valid tablespace file for `test_wl5522/t1`");
 call mtr.add_suppression("\\[ERROR\\] .* Failed to find tablespace for table `test_wl5522`.`t1` in the cache");
 call mtr.add_suppression("\\[ERROR\\] .* If you are installing InnoDB, remember that you must create directories yourself");
-call mtr.add_suppression("\\[ERROR\\] .* IO Error: while reading index meta-data, expected to read 44 bytes but read only 0 bytes");
+call mtr.add_suppression("\\[ERROR\\] .* IO Error: while reading index meta-data, expected to read 48 bytes but read only 0 bytes");
 call mtr.add_suppression("\\[ERROR\\] .* Operating system error number 2 in a file operation.");
 call mtr.add_suppression("\\[ERROR\\] .* The error means the system cannot find the path specified.");
 call mtr.add_suppression("\\[ERROR\\] .* Trying to import a tablespace, but could not open the tablespace file");

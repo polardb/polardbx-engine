@@ -27,8 +27,11 @@ MYSQL_ADD_PLUGIN(daemon_example
   TEST_ONLY
   )
 
+# Only useful next to libdaemon_example.so, which is TEST_ONLY (Bug #85439771).
+IF(WITH_TEST_ONLY_PLUGINS)
 INSTALL(FILES
   daemon_example.ini
   DESTINATION ${INSTALL_PLUGINDIR}
   COMPONENT Test
   )
+ENDIF()

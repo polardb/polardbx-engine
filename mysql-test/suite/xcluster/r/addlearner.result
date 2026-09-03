@@ -1,5 +1,7 @@
 # start a new learner
 # connect leader
+call dbms_consensus.add_learner("127.0.0.1:PAXOS_PORT_1");
+ERROR HY000: The consensus membership change failed, error code is 4, error msg: Target node already exists.
 call dbms_consensus.add_learner(learner_cluster_info);
 select count(*) from information_schema.alisql_cluster_global where role='LEARNER';
 count(*)

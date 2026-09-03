@@ -1,0 +1,170 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test GPP (Guess Primary Page) for SORT-UNION INDEX MERGE (GM_INDEX_MERGE)
+--echo # on HASH-partitioned tables. INDEX_MERGE hint with OR conditions involving
+--echo # range predicates triggers sort-union merge; GPP should accelerate the
+--echo # clustered index lookup when merging sorted rowids.
+--echo #
+
+# Save original values
+--let $orig_innodb_lizard_stat_enabled = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $orig_innodb_index_purge_guess_clust_enabled = `SELECT @@GLOBAL.innodb_index_purge_guess_clust_enabled`
+--let $orig_innodb_index_scan_guess_clust_enabled = `SELECT @@GLOBAL.innodb_index_scan_guess_clust_enabled`
+--let $orig_innodb_adaptive_hash_index = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $orig_innodb_polarx_btree_search_mode = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+
+# Enable GPP mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+
+--echo # -----------------------------------------------------------------------
+--echo # Create a HASH-partitioned table with multiple secondary indexes.
+--echo # -----------------------------------------------------------------------
+
+CREATE TABLE tp (
+    id  INT AUTO_INCREMENT,
+    a   VARCHAR(10) NOT NULL,
+    b   INT         NOT NULL,
+    c   INT         NOT NULL,
+    d   CHAR(1)     NOT NULL DEFAULT 'A',
+    PRIMARY KEY (id),
+    KEY idx_a (a),
+    KEY idx_b (b),
+    KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY HASH(id) PARTITIONS 4;
+
+--echo # -----------------------------------------------------------------------
+--echo # Insert 1000 rows distributed across 4 partitions.
+--echo # -----------------------------------------------------------------------
+
+--delimiter //
+CREATE PROCEDURE insert_tp_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        INSERT INTO tp (id, a, b, c, d) VALUES (
+            i,
+            CONCAT('NO', LPAD(i, 4, '0')),
+            i * 10,
+            i * 50,
+            ELT(((i - 1) % 3) + 1, 'A', 'B', 'C')
+        );
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END//
+--delimiter ;
+
+CALL insert_tp_data(1000);
+SELECT COUNT(*) AS row_count FROM tp;
+
+--echo # -----------------------------------------------------------------------
+--echo # Warm up: verify secondary index GPP info is valid via point lookups.
+--echo # -----------------------------------------------------------------------
+
+SELECT * FROM tp WHERE a = 'NO0001';
+SELECT * FROM tp WHERE b = 10;
+SELECT * FROM tp WHERE c = 100 AND d = 'B';
+
+--echo # ===================================================================
+--echo # Test 1: Sort-union merge (id range OR b range)
+--echo # Range on both sides triggers sort-union instead of union.
+--echo # ===================================================================
+
+call dbms_stat.flush_gpp();
+
+SELECT /*+INDEX_MERGE(tp idx_b,PRIMARY) */ * FROM tp WHERE id > 999 OR b < 20;
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+
+--let $assert_text = [partition sort-union idx_b,PK] gpp total (hit+miss) should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo # ===================================================================
+--echo # Test 2: Sort-union merge (equality idx_a OR range idx_b)
+--echo # One equality + one range triggers sort-union.
+--echo # ===================================================================
+
+call dbms_stat.flush_gpp();
+
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b) */ * FROM tp WHERE a = "NO0101" OR b < 20;
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+
+--let $assert_text = [partition sort-union idx_a,idx_b] gpp total (hit+miss) should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo # ===================================================================
+--echo # Test 3: Sort-union merge (range idx_a OR range idx_b)
+--echo # Both sides use range conditions.
+--echo # ===================================================================
+
+call dbms_stat.flush_gpp();
+
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b) */ * FROM tp WHERE a < "NO0101" OR b < 20;
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+
+--let $assert_text = [partition sort-union range a,range b] gpp total (hit+miss) should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo # ===================================================================
+--echo # Test 4: Sort-union merge (equality idx_a OR partial idx_cd)
+--echo # Partial composite index triggers sort-union.
+--echo # ===================================================================
+
+call dbms_stat.flush_gpp();
+
+SELECT /*+INDEX_MERGE(tp idx_a,idx_cd) */ * FROM tp WHERE a = "NO0101" OR c = 50;
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+
+--let $assert_text = [partition sort-union idx_a,partial idx_cd] gpp total (hit+miss) should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo # ===================================================================
+--echo # Test 5: Sort-union merge with 3 indexes
+--echo # ===================================================================
+
+call dbms_stat.flush_gpp();
+
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b,idx_cd) */ * FROM tp
+WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+
+--let $assert_text = [partition sort-union 3 indexes] gpp total (hit+miss) should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Clean up
+--echo # -----------------------------------------------------------------------
+
+DROP PROCEDURE insert_tp_data;
+DROP TABLE tp;
+
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+
+--eval SET GLOBAL innodb_lizard_stat_enabled = $orig_innodb_lizard_stat_enabled
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $orig_innodb_index_purge_guess_clust_enabled
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $orig_innodb_index_scan_guess_clust_enabled
+--eval SET GLOBAL innodb_adaptive_hash_index = $orig_innodb_adaptive_hash_index
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $orig_innodb_polarx_btree_search_mode
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';

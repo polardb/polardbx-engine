@@ -1,0 +1,49 @@
+SET GLOBAL innodb_change_buffering=all;
+SELECT @@global.innodb_change_buffering;
+@@global.innodb_change_buffering
+all
+CREATE TABLE t1(f1 POINT NOT NULL);
+INSERT INTO t1 VALUES (POINT(15, 20));
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+512
+CREATE TEMPORARY TABLE IF NOT EXISTS tmp_table SELECT * FROM t1 LIMIT 366;
+CREATE SPATIAL INDEX k1 ON tmp_table(f1);
+Warnings:
+Warning	3674	The spatial index on column 'f1' will not be used by the query optimizer since the column does not have an SRID attribute. Consider adding an SRID attribute to the column.
+DROP TABLE t1;
+CREATE TEMPORARY TABLE t2 (
+id INT AUTO_INCREMENT NOT NULL,
+g POINT NOT NULL SRID 0,
+PRIMARY KEY(id),
+SPATIAL INDEX sp_idx(g)
+) ENGINE=InnoDB;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+400
+SELECT COUNT(*) FROM t2 WHERE MBRContains(
+ST_GeomFromText('POLYGON((0.5 0.5, 100.5 0.5, 100.5 100.5, 0.5 100.5, 0.5 0.5))'), g);
+COUNT(*)
+100
+DROP TEMPORARY TABLE t2;
+CREATE TABLE t3 (
+id INT AUTO_INCREMENT NOT NULL,
+g POINT NOT NULL SRID 0,
+PRIMARY KEY(id),
+SPATIAL INDEX sp_idx(g)
+) ENGINE=InnoDB;
+SELECT COUNT(*) FROM t3 WHERE MBRContains(
+ST_GeomFromText('POLYGON((0.5 0.5, 50.5 0.5, 50.5 50.5, 0.5 50.5, 0.5 0.5))'), g);
+COUNT(*)
+50
+DROP TABLE t3;
+SET GLOBAL innodb_change_buffering=default;

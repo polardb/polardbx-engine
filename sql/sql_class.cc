@@ -94,6 +94,7 @@
 #include "sql/sp_head.h"          // sp_head
 #include "sql/sql_audit.h"        // mysql_audit_free_thd
 #include "sql/sql_backup_lock.h"  // release_backup_lock
+#include "sql/sql_ftrunc_lock.h"  // release_ftrunc_lock
 #include "sql/sql_base.h"         // close_temporary_tables
 #include "sql/sql_callback.h"     // MYSQL_CALLBACK
 #include "sql/sql_cmd.h"
@@ -118,6 +119,18 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+#include "sql/sys_vars_ext.h"
+#include "sql/gh_slow_query_block/slow_query_block.h"
+#include "sql/polarx_proc/changeset_manager.h"
+
+/* Forward decl avoids pulling vidx_hnsw.h + vidx_stats.h + <atomic> into
+   this large community TU on every vidx-stats edit.  Definition lives
+   in sql/vidx/vidx_hnsw_ops.cc. */
+namespace vidx {
+namespace hnsw {
+void flush_share_cache_on_xa_disconnect(THD *thd);
+}  // namespace hnsw
+}  // namespace vidx
 
 class Parse_tree_root;
 
@@ -749,7 +762,12 @@ THD::THD(bool enable_plugins)
       xpaxos_replication_channel(false),
       sqb_should_block(false),
       m_trx_affected_rows(0),
-      sqb_ret_error(Sqb_ret_error::SQB_RET_ERROR_NONE) {
+      sqb_ret_error(Sqb_ret_error::SQB_RET_ERROR_NONE),
+      sql_current_thread_id(0),
+      enable_mask_internal_user(false),
+      enable_mask_ai_model_config_api_key(true),
+      enable_column_encryption(false) {
+  is_polarx_sys_user = false;
   main_lex->reset();
   set_psi(nullptr);
   mdl_context.init(this);
@@ -1287,6 +1305,8 @@ void THD::cleanup(void) {
   killed = KILL_CONNECTION;
 
   if (trn_ctx->xid_state()->has_state(XID_STATE::XA_PREPARED)) {
+    // save changeset context
+    thd_save_prepared_changeset_map(this, xs->get_xid());
     /*
       Return error is not an option as XA is in prepared state and
       connection is gone. Log the error and continue.
@@ -1296,6 +1316,16 @@ void THD::cleanup(void) {
       LogErr(ERROR_LEVEL, ER_XA_CANT_CREATE_MDL_BACKUP);
     }
     xa::Transaction_cache::detach(trn_ctx, this->xpaxos_replication_channel);
+
+    /* Disconnect-on-XA_PREPARED degrades a non-detach XA into the
+       global cache (see xa::Transaction_cache::detach above).  vidx
+       (builtin) defers its share-cache flush until do_commit /
+       do_rollback when xa_detach_on_prepare = OFF; with the user thd
+       about to be torn down, no later do_commit on THIS thd will fire
+       (recovery thd handles the eventual XA COMMIT / ROLLBACK), so we
+       must flush here.  Direct call rather than a generic hook: vidx
+       is the only in-tree consumer and is statically linked. */
+    vidx::hnsw::flush_share_cache_on_xa_disconnect(this);
   } else {
     xs->set_state(XID_STATE::XA_NOTR);
     trans_rollback(this);
@@ -1328,6 +1358,11 @@ void THD::cleanup(void) {
     If Backup Lock was acquired it must be released on disconnect.
   */
   release_backup_lock(this);
+
+  /*
+    If Ftrunc Lock was acquired it must be released on disconnect.
+  */
+  release_ftrunc_lock(this);
 
   /* All metadata locks must have been released by now. */
   assert(!mdl_context.has_locks());
@@ -1403,6 +1438,11 @@ void THD::start_disposal() {
  */
 void THD::release_resources() {
   Global_THD_manager::get_instance()->release_thread_id(m_thread_id);
+  // Release encdb plugin session data
+  if (encdb_session_data_cleanup && encdb_session_data) {
+    encdb_session_data_cleanup(encdb_session_data);
+    encdb_session_data = nullptr;
+  }
 
   /* Ensure that no one is using THD */
   mysql_mutex_lock(&LOCK_query_plan);
@@ -1888,7 +1928,7 @@ void THD::cleanup_after_query() {
   // Set the default "cute" mode for the execution environment:
   check_for_truncated_fields = CHECK_FIELD_IGNORE;
 
-  enable_mask_internal_user = false;
+  column_encryption_ctx.restore(this);
 }
 
 /*
@@ -2235,6 +2275,14 @@ void THD::send_kill_message() const {
     m_mem_cnt.set_thd_error_status();
     return;
   }
+  if (err && sqb_is_enabled &&
+      sqb_ret_error != Sqb_ret_error::SQB_RET_ERROR_NONE) {
+    if (!running_explain_analyze) {
+      const_cast<Diagnostics_area *>(get_stmt_da())->reset_diagnostics_area();
+      sqb_send_kill_message(err);
+    }
+    return;
+  }
   if (err && !get_stmt_da()->is_set()) {
     if ((err == KILL_CONNECTION) && !connection_events_loop_aborted())
       err = KILL_QUERY;
@@ -2251,11 +2299,7 @@ void THD::send_kill_message() const {
       can look at the execution plan and statistics so far.
     */
     if (!running_explain_analyze) {
-      if (sqb_is_enabled) {
-        sqb_send_kill_message(err);
-      } else {
-        my_error(err, MYF(ME_FATALERROR));
-      }
+      my_error(err, MYF(ME_FATALERROR));
     }
   }
 }
@@ -3179,6 +3223,35 @@ bool add_item_to_list(THD *thd, Item *item) {
   return thd->lex->query_block->add_item_to_list(item);
 }
 
+void thd_save_prepared_changeset_map(THD *thd, XID *xid) {
+  if (thd) {
+    im::gChangesetManager.save_prepared_changeset(thd, xid);
+  }
+}
+
+bool thd_load_prepared_changeset_map(THD *thd, XID *xid) {
+  if (thd) {
+    return im::gChangesetManager.load_prepared_changeset(thd, xid);
+  }
+  return false;
+}
+
+void thd_commit_changeset_map(THD *thd, bool is_rollback) {
+  if (thd) {
+    if (is_rollback) {
+      im::gChangesetManager.erase_changeset_cache_by_thd(thd);
+    } else {
+      im::gChangesetManager.commit_change(thd);
+    }
+  } else if (current_thd) {
+    if (is_rollback) {
+      im::gChangesetManager.erase_changeset_cache_by_thd(current_thd);
+    } else {
+      im::gChangesetManager.commit_change(current_thd);
+    }
+  }
+}
+
 THD::Transaction_state::Transaction_state()
     : m_query_tables_list(new Query_tables_list()),
       m_ha_data(PSI_NOT_INSTRUMENTED, m_ha_data.initial_capacity) {}
@@ -3201,6 +3274,8 @@ void THD::notify_hton_post_release_exclusive(const MDL_key *mdl_key) {
   Then, transform the parse tree further into an AST, ready for resolving.
 */
 bool THD::sql_parser() {
+  m_query_has_vector_column = false;
+
   /*
     SQL parser function generated by YACC from sql_yacc.yy.
 
@@ -3342,21 +3417,25 @@ bool THD::sqb_is_block_command() const {
          lex->sql_command == SQLCOM_INSERT ||
          lex->sql_command == SQLCOM_REPLACE ||
          lex->sql_command == SQLCOM_INSERT_SELECT ||
-         lex->sql_command == SQLCOM_REPLACE_SELECT;
+         lex->sql_command == SQLCOM_REPLACE_SELECT || 
+         lex->sql_command == SQLCOM_DELETE_MULTI ||
+         lex->sql_command == SQLCOM_UPDATE_MULTI;
 }
 
 /** Used for GongHang slow query block get cpu start time. */
 void THD::sqb_set_cpu_start_time() {
-  if (!sqb_should_block) return;
-  using namespace std::chrono;
-  clockid_t cid;
-  if (pthread_getcpuclockid((pthread_t)real_id, &cid) == 0) {
-    struct timespec ts;
-    clock_gettime(cid, &ts);
-    auto start_s = seconds(ts.tv_sec);
-    auto start_ns = nanoseconds(ts.tv_nsec);
-    sqb_cpu_start_time = duration_cast<milliseconds>(start_s).count() +
-                         duration_cast<milliseconds>(start_ns).count();
+  sqb_cpu_start_time = 0;
+  if (sqb_should_block || polarx::check_pushdown_username(this)) {
+    using namespace std::chrono;
+    clockid_t cid;
+    if (pthread_getcpuclockid((pthread_t)sql_current_thread_id, &cid) == 0) {
+      struct timespec ts;
+      clock_gettime(cid, &ts);
+      auto start_s = seconds(ts.tv_sec);
+      auto start_ns = nanoseconds(ts.tv_nsec);
+      sqb_cpu_start_time = duration_cast<milliseconds>(start_s).count() +
+                           duration_cast<milliseconds>(start_ns).count();
+    }
   }
 }
 
@@ -3367,6 +3446,7 @@ void THD::sqb_set_time_and_error() {
   if (sqb_is_enabled) {
     /** Every new sql comes, reset sqb error status and get enable status. */
     sqb_start_time = sqb_query_start_in_ms();
+    sql_current_thread_id = my_thread_self();
     sqb_set_cpu_start_time();
   }
 }
@@ -3478,12 +3558,13 @@ bool set_my_ok(THD *thd, ulonglong affected_rows, ulonglong id,
                const char *message) {
   /** When trx_max_affected_rows unset, it will not be blocked */
   ulonglong max_trx_affected_rows = sqb_max_trx_affected_rows;
-  if (max_trx_affected_rows == 0) {
+  if (max_trx_affected_rows == 0 || !thd->sqb_is_block_command()) {
     my_ok(thd, affected_rows, id, message);
     return false;
   }
 
   ulonglong trx_affected_rows = thd->m_trx_affected_rows + affected_rows;
+  thd->audit_trx_ctx.set_trx_affected_rows(trx_affected_rows);
   if (trx_affected_rows > max_trx_affected_rows) {
     my_error(ER_TRANSACTION_TOO_BIG, MYF(0), "");
     return true;

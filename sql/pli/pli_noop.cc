@@ -31,9 +31,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 #include "pli/pli.h"
 
-namespace xlicense {
+namespace komodo {
 
-static bool verify_license_conns_constrains_noop(uint) { return true; }
+static bool verify_license_conns_constrains_noop(Connection_count &) {
+  return true;
+}
 
 static bool verify_license_BP_constrains_noop(long long &) { return true; }
 
@@ -53,4 +55,4 @@ static PLI_service_t PLI_service_noop = {
 
 PLI_service_t *PLI_service = &PLI_service_noop;
 
-}  // namespace xlicense
+}  // namespace komodo

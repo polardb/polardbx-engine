@@ -395,6 +395,8 @@ constexpr uint32_t QUE_NODE_ELSIF = 27;
 constexpr uint32_t QUE_NODE_CALL = 28;
 constexpr uint32_t QUE_NODE_EXIT = 29;
 
+#ifndef INNODB_QUE0QUE_IC_STANDALONE
 #include "que0que.ic"
+#endif /* !INNODB_QUE0QUE_IC_STANDALONE */
 
 #endif

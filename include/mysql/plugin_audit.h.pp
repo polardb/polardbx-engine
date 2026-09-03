@@ -102,6 +102,7 @@ int thd_in_lock_tables(const void * thd);
 int thd_tablespace_op(const void * thd);
 long long thd_test_options(const void * thd, long long test_options);
 int thd_sql_command(const void * thd);
+bool thd_sql_recycle_command(const void * thd);
 const char *set_thd_proc_info(void * thd, const char *info,
                               const char *calling_func,
                               const char *calling_file,
@@ -363,6 +364,7 @@ typedef struct {
 } mysql_event_message_key_value_t;
 LEX_STRING *thd_get_rds_audit_event_buf(void * thd);
 void thd_set_rds_audit_event_buf(void * thd, LEX_STRING *event_buf);
+extern void rds_audit_log_enabled_sync(bool value);
 typedef enum {
   MYSQL_AUDIT_GENERAL_CLASS = 0,
   MYSQL_AUDIT_CONNECTION_CLASS = 1,
@@ -379,6 +381,8 @@ typedef enum {
   MYSQL_AUDIT_MESSAGE_CLASS = 12,
   MYSQL_AUDIT_RDS_CONNECTION_CLASS = 13,
   MYSQL_AUDIT_RDS_QUERY_CLASS = 14,
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS =
+      15,
   MYSQL_AUDIT_CLASS_MASK_SIZE
 } mysql_event_class_t;
 struct st_mysql_audit {
@@ -635,4 +639,19 @@ struct mysql_event_rds_query {
   unsigned long long temp_sort_file_size;
   MYSQL_LEX_CSTRING endpoint_ip;
   unsigned long long trx_id;
+  unsigned long long cpu_time_sec;
+  double cpu_time_percent;
+  unsigned long long trx_affected_rows;
+  unsigned long long binlog_cache_used;
+};
+typedef enum {
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK = 1 << 0,
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CHECK = 1 << 1,
+} mysql_event_polarx_connection_control_subclass_t;
+struct mysql_event_polarx_connection_control {
+  mysql_event_polarx_connection_control_subclass_t event_subclass;
+  bool successful_login;
+  MYSQL_LEX_CSTRING user;
+  MYSQL_LEX_CSTRING host;
+  MYSQL_LEX_CSTRING ip;
 };

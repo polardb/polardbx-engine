@@ -1,0 +1,229 @@
+SET opt_index_format_hippo_enabled=on;
+SET GLOBAL innodb_purge_stop_now = ON;
+##################################################################
+# Path: row_log_table_insert
+# INSERT during table rebuild
+##################################################################
+CREATE TABLE t_insert (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_insert VALUES (1, 100), (2, 200);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_insert DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# INSERT during rebuild
+INSERT INTO t_insert VALUES (3, 300);
+INSERT INTO t_insert VALUES (4, 400);
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify INSERT applied
+SELECT * FROM t_insert ORDER BY val;
+id	val
+1	100
+2	200
+3	300
+4	400
+SELECT * FROM t_insert FORCE INDEX(idx_val) WHERE val IN (300, 400) ORDER BY val;
+id	val
+3	300
+4	400
+DROP TABLE t_insert;
+##################################################################
+# Path: row_log_table_update
+# UPDATE during table rebuild
+##################################################################
+CREATE TABLE t_update (
+id INT NOT NULL,
+val INT NOT NULL,
+data VARCHAR(100),
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_update VALUES (1, 100, 'old'), (2, 200, 'old');
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_update DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# UPDATE indexed column
+UPDATE t_update SET val=150 WHERE id=1;
+# UPDATE non-indexed column
+UPDATE t_update SET data='new' WHERE id=2;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify UPDATE applied
+SELECT * FROM t_update ORDER BY val;
+id	val	data
+1	150	old
+2	200	new
+SELECT * FROM t_update FORCE INDEX(idx_val) WHERE val=150;
+id	val	data
+1	150	old
+SELECT * FROM t_update FORCE INDEX(idx_val) WHERE val=100;
+id	val	data
+DROP TABLE t_update;
+##################################################################
+# Path: row_log_table_delete
+# DELETE during table rebuild
+##################################################################
+CREATE TABLE t_delete (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_delete VALUES (1, 100), (2, 200), (3, 300);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_delete DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# DELETE during rebuild
+DELETE FROM t_delete WHERE id=2;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify DELETE applied
+SELECT * FROM t_delete ORDER BY val;
+id	val
+1	100
+3	300
+SELECT * FROM t_delete FORCE INDEX(idx_val) WHERE val=200;
+id	val
+DROP TABLE t_delete;
+##################################################################
+# Path: ROLLBACK INSERT during rebuild
+# row0uins.cc:118 - row_log_table_delete
+##################################################################
+CREATE TABLE t_rb_ins (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_rb_ins VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rb_ins DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# INSERT then ROLLBACK
+BEGIN;
+INSERT INTO t_rb_ins VALUES (10, 1000);
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rollback
+SELECT * FROM t_rb_ins;
+id	val
+1	100
+SELECT * FROM t_rb_ins FORCE INDEX(idx_val) WHERE val=1000;
+id	val
+DROP TABLE t_rb_ins;
+##################################################################
+# Path: ROLLBACK DELETE during rebuild
+# Undo delete-mark -> row_log_table_insert
+##################################################################
+CREATE TABLE t_rb_del (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_rb_del VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rb_del DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# DELETE then ROLLBACK
+BEGIN;
+DELETE FROM t_rb_del WHERE id=1;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rollback restored the row
+SELECT * FROM t_rb_del;
+id	val
+1	100
+SELECT * FROM t_rb_del FORCE INDEX(idx_val) WHERE val=100;
+id	val
+1	100
+DROP TABLE t_rb_del;
+##################################################################
+# Path: ROLLBACK UPDATE during rebuild
+# row0umod.cc:342/346 - row_log_table_update/delete
+##################################################################
+CREATE TABLE t_rb_upd (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_rb_upd VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rb_upd DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# UPDATE indexed column then ROLLBACK
+BEGIN;
+UPDATE t_rb_upd SET val=999 WHERE id=1;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rollback restored original value
+SELECT * FROM t_rb_upd;
+id	val
+1	100
+SELECT * FROM t_rb_upd FORCE INDEX(idx_val) WHERE val=100;
+id	val
+1	100
+SELECT * FROM t_rb_upd FORCE INDEX(idx_val) WHERE val=999;
+id	val
+DROP TABLE t_rb_upd;
+##################################################################
+# Mixed: Committed and rolled back transactions
+##################################################################
+CREATE TABLE t_mixed (
+id INT NOT NULL,
+val INT NOT NULL,
+PRIMARY KEY(id),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t_mixed VALUES (1, 10), (2, 20), (3, 30);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_mixed DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# Committed transaction
+BEGIN;
+INSERT INTO t_mixed VALUES (100, 100);
+UPDATE t_mixed SET val=11 WHERE id=1;
+DELETE FROM t_mixed WHERE id=2;
+COMMIT;
+# Rolled back transaction
+BEGIN;
+INSERT INTO t_mixed VALUES (200, 200);
+UPDATE t_mixed SET val=999 WHERE id=3;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify final state
+SELECT * FROM t_mixed ORDER BY val;
+id	val
+1	11
+3	30
+100	100
+# Via hippo index
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=11;
+id	val
+1	11
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=20;
+id	val
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=30;
+id	val
+3	30
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=100;
+id	val
+100	100
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=200;
+id	val
+DROP TABLE t_mixed;
+##################################################################
+# Cleanup
+##################################################################
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;

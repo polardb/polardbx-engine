@@ -1,0 +1,25 @@
+SELECT @@innodb_sort_buffer_size;
+@@innodb_sort_buffer_size
+65537
+CREATE TABLE t1 (
+id INT NOT NULL,
+k1 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+k2 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+k3 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+c INT NOT NULL,
+PRIMARY KEY (id, k1, k2, k3)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 32), REPEAT('b', 32),
+REPEAT('c', 32), 1);
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+65536
+SET debug_sync = 'alter_table_update_log SIGNAL scan_done WAIT_FOR log_filled';
+OPTIMIZE TABLE t1;
+SET debug_sync = 'now WAIT_FOR scan_done';
+SET debug_sync = 'now SIGNAL log_filled';
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SET debug_sync = 'RESET';
+DROP TABLE t1;

@@ -1,0 +1,129 @@
+#
+# 1. Verify default values
+#
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+5000
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+0
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+0
+#
+# 2. Dynamic SET consensus_election_timeout
+#
+SET GLOBAL consensus_election_timeout = 10000;
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+10000
+SET GLOBAL consensus_election_timeout = 2000;
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+2000
+#
+# 3. Dynamic SET consensus_heartbeat_interval
+#
+SET GLOBAL consensus_heartbeat_interval = 2000;
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+2000
+SET GLOBAL consensus_heartbeat_interval = 0;
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+0
+#
+# 4. heartbeat_interval exceeding election_timeout is clamped internally
+#
+SET GLOBAL consensus_election_timeout = 5000;
+SET GLOBAL consensus_heartbeat_interval = 6000;
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+6000
+#
+# 5. Reducing election_timeout: Paxos internally auto-adjusts heartbeat
+#
+SET GLOBAL consensus_election_timeout = 10000;
+SET GLOBAL consensus_heartbeat_interval = 8000;
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+8000
+SET GLOBAL consensus_election_timeout = 3000;
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+3000
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+8000
+#
+# 6. Boundary values (out-of-range values are clamped with warnings)
+#
+SET GLOBAL consensus_election_timeout = 200000;
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+200000
+SET GLOBAL consensus_election_timeout = 1000;
+Warnings:
+Warning	1292	Truncated incorrect consensus_election_timeout value: '1000'
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+2000
+SET GLOBAL consensus_election_timeout = 300000;
+Warnings:
+Warning	1292	Truncated incorrect consensus_election_timeout value: '300000'
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+200000
+#
+# 7. Verify parameter changes take effect in the Paxos layer
+#    (heartbeat counter must grow after setting a fast heartbeat_interval).
+#
+SET GLOBAL consensus_election_timeout = 10000;
+SET GLOBAL consensus_heartbeat_interval = 500;
+# OK: Heartbeat counter grew, confirming Paxos layer applied the new heartbeat_interval.
+#
+# 8. Dynamic SET consensus_vote_backoff_timeout
+#
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+0
+SET GLOBAL consensus_vote_backoff_timeout = 3000;
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+3000
+SET GLOBAL consensus_vote_backoff_timeout = 8000;
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+8000
+SET GLOBAL consensus_vote_backoff_timeout = 0;
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+0
+#
+# 9. vote_backoff_timeout boundary values
+#
+SET GLOBAL consensus_vote_backoff_timeout = 1000000;
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+1000000
+SET GLOBAL consensus_vote_backoff_timeout = 2000000;
+Warnings:
+Warning	1292	Truncated incorrect consensus_vote_backoff_timeout value: '2000000'
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+1000000
+#
+# 10. Restore defaults
+#
+SET GLOBAL consensus_election_timeout = 5000;
+SET GLOBAL consensus_heartbeat_interval = 0;
+SET GLOBAL consensus_vote_backoff_timeout = 0;
+SELECT @@global.consensus_election_timeout;
+@@global.consensus_election_timeout
+5000
+SELECT @@global.consensus_heartbeat_interval;
+@@global.consensus_heartbeat_interval
+0
+SELECT @@global.consensus_vote_backoff_timeout;
+@@global.consensus_vote_backoff_timeout
+0

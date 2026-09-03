@@ -33,8 +33,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef INNOBASE_FTS0VLC_IC
 #define INNOBASE_FTS0VLC_IC
 
+#ifndef INNOBASE_FTS0TYPES_H
+#define INNODB_FTS0TYPES_IC_STANDALONE
 #include "fts0types.h"
-
+#undef INNODB_FTS0TYPES_IC_STANDALONE
+#endif /* !INNOBASE_FTS0TYPES_H */
 /** Return length of val if it were encoded using our VLC scheme.
  FIXME: We will need to be able encode 8 bytes value
  @return length of value encoded, in bytes */

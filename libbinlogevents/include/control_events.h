@@ -48,6 +48,7 @@
 #include "uuid.h"
 
 #include "compression/base.h"
+#include "my_dbug.h"
 
 namespace binary_log {
 /**
@@ -1088,6 +1089,7 @@ class Gtid_event : public Binary_log_event {
 
   /* We have only original commit timestamp if both timestamps are equal. */
   int get_commit_timestamp_length() const {
+    DBUG_EXECUTE_IF("do_not_write_rpl_timestamps", return 0;);
     if (original_commit_timestamp != immediate_commit_timestamp)
       return FULL_COMMIT_TIMESTAMP_LENGTH;
     return ORIGINAL_COMMIT_TIMESTAMP_LENGTH;
@@ -1098,6 +1100,7 @@ class Gtid_event : public Binary_log_event {
     same.
   */
   int get_server_version_length() const {
+    DBUG_EXECUTE_IF("do_not_write_rpl_timestamps", return 0;);
     if (original_server_version != immediate_server_version)
       return FULL_SERVER_VERSION_LENGTH;
     return IMMEDIATE_SERVER_VERSION_LENGTH;

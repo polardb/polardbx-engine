@@ -33,12 +33,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0mon_h
 #define lizard0mon_h
 
+#include <vector>
+
 #include "univ.i"
 
-#include "srv0srv.h"
+#include "komodo0handler0types.h"
+
+#include "sql/package/gpp_stat.h"
 
 class THD;
 struct SHOW_VAR;
+struct dict_table_t;
 
 namespace lizard {
 
@@ -81,7 +86,7 @@ struct generic_vars_t {
 
   ulint scan_cleanout_txn_clean;
   ulint scan_cleanout_gpp_clean;
-  ulint ddl_cleanout_clean;
+  ulint pread_cleanout_clean;
   ulint commit_cleanout_clean;
 
   /*Max commit gcn. */
@@ -89,6 +94,9 @@ struct generic_vars_t {
 
   /* Max purged gcn, snapshot gcn before that is too old to asof select. */
   ulint purged_gcn;
+
+  /* retention gcn */
+  ulint retention_gcn;
 
   /** txn undo log segment put into rseg cached list */
   ulint txn_undo_log_recycle;
@@ -116,6 +124,11 @@ struct generic_vars_t {
   /** The count of failed clustered index record inferences during locking. */
   ulint index_lock_guess_clust_miss;
 
+  /** The count of successful pcur guess restore (page re-search hit). */
+  ulint index_pcur_guess_restore_hit;
+  /** The count of failed pcur guess restore (page re-search miss). */
+  ulint index_pcur_guess_restore_miss;
+
   /** Number of queries via flashback area. */
   ulint flashback_area_query_cnt;
 
@@ -127,6 +140,73 @@ struct generic_vars_t {
 
   ulint tcn_cache_hit;
   ulint tcn_cache_miss;
+  ulint tcn_cache_write;
+
+  /** Global query wait counter. */
+  ulint query_wait_count;
+  ulint query_wait_time;
+  ulint query_wait_timeout;
+
+  /** Polarx btree search mode hit count. */
+  ulint polarx_btree_search_mode_hit;
+  /** Polarx btree search mode miss count. */
+  ulint polarx_btree_search_mode_miss;
+  /** Current number of working purge threads */
+  ulint n_purge_threads;
+
+  /** Count of gpp hit during the scan of rowid intersection. */
+  ulint rowid_intersection_gpp_hit;
+  /** Count of gpp miss during the scan of rowid intersection. */
+  ulint rowid_intersection_gpp_miss;
+
+  /** Count of gpp hit during the scan of rowid union. */
+  ulint rowid_union_gpp_hit;
+  /** Count of gpp miss during the scan of rowid union. */
+  ulint rowid_union_gpp_miss;
+
+  /** Count of gpp hit during the scan of sort union. */
+  ulint index_merge_gpp_hit;
+  /** Count of gpp miss during the scan of sort union. */
+  ulint index_merge_gpp_miss;
+
+  /** Count of gpp hit during the scan of multi-range read. */
+  ulint multi_range_read_gpp_hit;
+  /** Count of gpp miss during the scan of multi-range read. */
+  ulint multi_range_read_gpp_miss;
+
+  /** Count of gpp hit during the scan of filesort. */
+  ulint filesort_gpp_hit;
+  /** Count of gpp miss during the scan of filesort. */
+  ulint filesort_gpp_miss;
+
+  /** Count of gpp hit during multi-table update rowid lookup. */
+  ulint multi_update_gpp_hit;
+  /** Count of gpp miss during multi-table update rowid lookup. */
+  ulint multi_update_gpp_miss;
+
+  /** Count of gpp hit during multi-table delete rowid lookup. */
+  ulint multi_delete_gpp_hit;
+  /** Count of gpp miss during multi-table delete rowid lookup. */
+  ulint multi_delete_gpp_miss;
+
+  /** Number of LOB pages successfully preallocated by Lob_alloc_eager. */
+  ulint lob_prealloc_pages;
+
+  /** Number of LOB prealloc attempts aborted due to out-of-space. */
+  ulint lob_prealloc_fail_no_space;
+
+  /** Number of LOBs rejected from prealloc path because the required
+      page count exceeds LOB_MAX_PREALLOC_PAGES. */
+  ulint lob_prealloc_reject_too_large;
+
+  /** Number of unexpected fallbacks into InsertContext::fill_lob_page
+      (should stay 0 in well-behaved runs). */
+  ulint lob_prealloc_underestimate_pages;
+
+  /** Number of preallocated LOB pages freed by Lob_alloc_eager::clear()
+      (should stay 0 in well-behaved runs; non-zero means leftover pages
+      were returned to the segment instead of being consumed). */
+  ulint lob_prealloc_overestimate_pages;
 };
 
 struct generic_stats_t {
@@ -176,7 +256,7 @@ struct generic_stats_t {
 
   ulint_ctr_1_t scan_cleanout_txn_clean;
   ulint_ctr_1_t scan_cleanout_gpp_clean;
-  ulint_ctr_1_t ddl_cleanout_clean;
+  ulint_ctr_1_t pread_cleanout_clean;
   ulint_ctr_1_t commit_cleanout_clean;
 
   ulint_ctr_1_t txn_undo_log_recycle;
@@ -205,6 +285,11 @@ struct generic_stats_t {
   /** The count of failed clustered index record inferences during locking. */
   ulint_ctr_1_t index_lock_guess_clust_miss;
 
+  /** The count of successful pcur guess restore (page re-search hit). */
+  ulint_ctr_1_t index_pcur_guess_restore_hit;
+  /** The count of failed pcur guess restore (page re-search miss). */
+  ulint_ctr_1_t index_pcur_guess_restore_miss;
+
   ulint_ctr_1_t flashback_area_query_cnt;
 
   ulint_ctr_1_t row_prev_vers_build_cnt;
@@ -212,8 +297,66 @@ struct generic_stats_t {
   ulint_ctr_1_t txn_read_guess_request;
   ulint_ctr_1_t txn_read_guess_fail;
 
-  ulint_ctr_1_t tcn_cache_hit;
-  ulint_ctr_1_t tcn_cache_miss;
+  ulint_ctr_1_t query_wait_count;
+  ulint_ctr_1_t query_wait_time;
+  ulint_ctr_1_t query_wait_timeout;
+
+  ulint_ctr_1_t polarx_btree_search_mode_hit;
+  ulint_ctr_1_t polarx_btree_search_mode_miss;
+
+  /* Count of gpp hit during the scan of rowid intersection. */
+  ulint_ctr_1_t rowid_intersection_gpp_hit;
+  /** Count of gpp miss during the scan of rowid intersection. */
+  ulint_ctr_1_t rowid_intersection_gpp_miss;
+
+  /* Count of gpp hit during the scan of rowid union. */
+  ulint_ctr_1_t rowid_union_gpp_hit;
+  /** Count of gpp miss during the scan of rowid union. */
+  ulint_ctr_1_t rowid_union_gpp_miss;
+
+  /* Count of gpp hit during the scan of sort union. */
+  ulint_ctr_1_t index_merge_gpp_hit;
+  /** Count of gpp miss during the scan of sort union. */
+  ulint_ctr_1_t index_merge_gpp_miss;
+
+  /* Count of gpp hit during the scan of multi-range read. */
+  ulint_ctr_1_t multi_range_read_gpp_hit;
+  /** Count of gpp miss during the scan of multi-range read. */
+  ulint_ctr_1_t multi_range_read_gpp_miss;
+
+  /* Count of gpp hit during the scan of filesort. */
+  ulint_ctr_1_t filesort_gpp_hit;
+  /** Count of gpp miss during the scan of filesort. */
+  ulint_ctr_1_t filesort_gpp_miss;
+
+  /* Count of gpp hit during multi-table update rowid lookup. */
+  ulint_ctr_1_t multi_update_gpp_hit;
+  /** Count of gpp miss during multi-table update rowid lookup. */
+  ulint_ctr_1_t multi_update_gpp_miss;
+
+  /* Count of gpp hit during multi-table delete rowid lookup. */
+  ulint_ctr_1_t multi_delete_gpp_hit;
+  /** Count of gpp miss during multi-table delete rowid lookup. */
+  ulint_ctr_1_t multi_delete_gpp_miss;
+
+  /** Number of LOB pages successfully preallocated by Lob_alloc_eager. */
+  ulint_ctr_1_t lob_prealloc_pages;
+
+  /** Number of LOB prealloc attempts aborted due to out-of-space. */
+  ulint_ctr_1_t lob_prealloc_fail_no_space;
+
+  /** Number of LOBs rejected from prealloc path because the required
+      page count exceeds LOB_MAX_PREALLOC_PAGES. */
+  ulint_ctr_1_t lob_prealloc_reject_too_large;
+
+  /** Number of unexpected fallbacks into InsertContext::fill_lob_page
+      (should stay 0 in well-behaved runs). */
+  ulint_ctr_1_t lob_prealloc_underestimate_pages;
+
+  /** Number of preallocated LOB pages freed by Lob_alloc_eager::clear()
+      (should stay 0 in well-behaved runs; non-zero means leftover pages
+      were returned to the segment instead of being consumed). */
+  ulint_ctr_1_t lob_prealloc_overestimate_pages;
 };
 
 extern bool stat_enabled;
@@ -258,13 +401,15 @@ inline void index_lock_guess_clust_stat(bool hit) {
   }
 }
 
-inline void tcn_cache_stat(bool hit) {
+/** The count of successful / failed pcur guess restore during
+ * restore_position. */
+inline void index_pcur_guess_restore_stat(bool hit) {
   if (!stat_enabled) return;
 
   if (hit) {
-    generic_stats.tcn_cache_hit.inc();
+    generic_stats.index_pcur_guess_restore_hit.inc();
   } else {
-    generic_stats.tcn_cache_miss.inc();
+    generic_stats.index_pcur_guess_restore_miss.inc();
   }
 }
 
@@ -280,9 +425,9 @@ inline void scan_cleanout_gpp_clean_stat(ulint value) {
   }
 }
 
-inline void ddl_cleanout_clean_stat(ulint value) {
+inline void pread_cleanout_clean_stat(ulint value) {
   if (value > 0 && stat_enabled) {
-    generic_stats.ddl_cleanout_clean.add(value);
+    generic_stats.pread_cleanout_clean.add(value);
   }
 }
 inline void commit_cleanout_clean_stat(ulint value) {
@@ -294,6 +439,133 @@ inline void commit_cleanout_clean_stat(ulint value) {
 inline void cleanout_cursor_restore_fail_stat() {
   generic_stats.cleanout_cursor_restore_fail.inc();
 }
+
+inline void polarx_btree_search_mode_stat(bool hit) {
+  if (hit) {
+    generic_stats.polarx_btree_search_mode_hit.inc();
+  } else {
+    generic_stats.polarx_btree_search_mode_miss.inc();
+  }
+}
+
+inline void rowid_intersection_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.rowid_intersection_gpp_hit.inc();
+  } else {
+    generic_stats.rowid_intersection_gpp_miss.inc();
+  }
+}
+
+inline void rowid_union_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.rowid_union_gpp_hit.inc();
+  } else {
+    generic_stats.rowid_union_gpp_miss.inc();
+  }
+}
+
+inline void index_merge_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.index_merge_gpp_hit.inc();
+  } else {
+    generic_stats.index_merge_gpp_miss.inc();
+  }
+}
+inline void multi_range_read_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.multi_range_read_gpp_hit.inc();
+  } else {
+    generic_stats.multi_range_read_gpp_miss.inc();
+  }
+}
+
+inline void filesort_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.filesort_gpp_hit.inc();
+  } else {
+    generic_stats.filesort_gpp_miss.inc();
+  }
+}
+
+inline void multi_update_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.multi_update_gpp_hit.inc();
+  } else {
+    generic_stats.multi_update_gpp_miss.inc();
+  }
+}
+
+inline void multi_delete_gpp_stat(bool hit) {
+  if (!stat_enabled) return;
+  if (hit) {
+    generic_stats.multi_delete_gpp_hit.inc();
+  } else {
+    generic_stats.multi_delete_gpp_miss.inc();
+  }
+}
+
+inline void index_pos_guess_clust_stat(komodo::guess_mode_t gmode, bool hit) {
+  switch (gmode) {
+    case komodo::GM_ROWID_INTERSECTION:
+      rowid_intersection_gpp_stat(hit);
+      break;
+    case komodo::GM_ROWID_UNION:
+      rowid_union_gpp_stat(hit);
+      break;
+    case komodo::GM_INDEX_MERGE:
+      index_merge_gpp_stat(hit);
+      break;
+    case komodo::GM_MRR:
+      multi_range_read_gpp_stat(hit);
+      break;
+    case komodo::GM_FILESORT:
+      filesort_gpp_stat(hit);
+      break;
+    case komodo::GM_MULTI_UPDATE:
+      multi_update_gpp_stat(hit);
+      break;
+    case komodo::GM_MULTI_DELETE:
+      multi_delete_gpp_stat(hit);
+      break;
+    default:
+      ut_ad(false);
+      break;
+  }
+}
+
+/** Collect gpp stats of each index. */
+class Gpp_index_stat_collector {
+ public:
+  /** Constructor.
+  @param[in,out]  stats   container to collect stats into */
+  Gpp_index_stat_collector(std::vector<im::Index_gpp_stat> &stats)
+      : m_stats(stats) {}
+
+  Gpp_index_stat_collector() = delete;
+
+  /** Visitor.
+  @param[in]      table   table to visit */
+  void operator()(dict_table_t *table);
+
+ private:
+  std::vector<im::Index_gpp_stat> &m_stats; /** Collected stats. */
+};
+
+/** Reset gpp stats of each index. */
+class Gpp_index_stat_flusher {
+ public:
+  Gpp_index_stat_flusher() = default;
+
+  /** Visitor.
+  @param[in]      table   table to visit */
+  void operator()(dict_table_t *table);
+};
 
 }  // namespace lizard
 

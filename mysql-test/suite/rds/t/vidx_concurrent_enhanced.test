@@ -1,0 +1,260 @@
+##########################################
+# Enhanced concurrent lock behavior for  #
+# VECTOR INDEX with independent trx      #
+# Per-row lock release verification      #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/have_debug.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+
+--echo ########################################
+--echo # Setup
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  data VARCHAR(100),
+  v VECTOR(3),
+  VECTOR INDEX vidx1(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(data, v) VALUES ('seed1', VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(data, v) VALUES ('seed2', VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(data, v) VALUES ('seed3', VEC_FROMTEXT('[0,0,1]'));
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo ########################################
+--echo # Scenario 1: Two sessions INSERT different rows simultaneously
+--echo # Aux table per-row lock release — no mutual blocking
+--echo ########################################
+
+--connect (con_a, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con_b, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con_c, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con_d, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connection con_a
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('con_a_1', VEC_FROMTEXT('[10,0,0]'));
+INSERT INTO t1(data, v) VALUES ('con_a_2', VEC_FROMTEXT('[11,0,0]'));
+
+--connection con_b
+BEGIN;
+--echo # con_b should not be blocked by con_a's aux table locks (per-row release)
+INSERT INTO t1(data, v) VALUES ('con_b_1', VEC_FROMTEXT('[0,10,0]'));
+INSERT INTO t1(data, v) VALUES ('con_b_2', VEC_FROMTEXT('[0,11,0]'));
+
+--connection con_a
+COMMIT;
+
+--connection con_b
+COMMIT;
+
+--connection default
+--echo # All 4 rows from both sessions present
+SELECT COUNT(*) AS total_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search finds all new rows
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,0,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 2: Session A inserts (aux committed), sleeps;
+--echo # Session B inserts same vector — B not blocked
+--echo ########################################
+
+--connection con_a
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('slow_a', VEC_FROMTEXT('[5,5,5]'));
+--echo # aux table already independently committed at this point
+--echo # Now sleep — holding main table trx open but aux lock released
+
+--connection con_b
+--echo # B inserts same vector value — should NOT be blocked by A's aux table
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('fast_b', VEC_FROMTEXT('[5,5,5]'));
+COMMIT;
+
+--connection con_a
+COMMIT;
+
+--connection default
+SELECT COUNT(*) AS dup_vec_count FROM t1 WHERE data IN ('slow_a', 'fast_b');
+
+--echo ########################################
+--echo # Scenario 3: Two sessions UPDATE same row
+--echo # Main table row lock conflict (normal), but aux each commit independently
+--echo ########################################
+
+--connection default
+INSERT INTO t1(data, v) VALUES ('upd_target', VEC_FROMTEXT('[7,7,7]'));
+let $upd_id = `SELECT id FROM t1 WHERE data = 'upd_target'`;
+
+--connection con_a
+BEGIN;
+--eval UPDATE t1 SET v = VEC_FROMTEXT('[8,8,8]'), data = 'upd_by_a' WHERE id = $upd_id
+--echo # con_a holds X lock on the main table row
+
+--connection con_b
+BEGIN;
+--echo # con_b tries to UPDATE same row — will wait on main table row lock
+SET SESSION innodb_lock_wait_timeout = 2;
+--error ER_LOCK_WAIT_TIMEOUT
+--eval UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]'), data = 'upd_by_b' WHERE id = $upd_id
+
+--connection con_a
+COMMIT;
+
+--connection con_b
+--echo # After A commits, B can retry
+--eval UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]'), data = 'upd_by_b' WHERE id = $upd_id
+COMMIT;
+
+--connection default
+--eval SELECT data FROM t1 WHERE id = $upd_id
+SET @s = CONCAT('SELECT COUNT(*) AS after_update_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search reflects the latest update
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 4: High concurrency — 4 sessions INSERT simultaneously
+--echo ########################################
+
+--connection con_a
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_a1', VEC_FROMTEXT('[20,1,0]'));
+INSERT INTO t1(data, v) VALUES ('hc_a2', VEC_FROMTEXT('[20,2,0]'));
+
+--connection con_b
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_b1', VEC_FROMTEXT('[0,20,1]'));
+INSERT INTO t1(data, v) VALUES ('hc_b2', VEC_FROMTEXT('[0,20,2]'));
+
+--connection con_c
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_c1', VEC_FROMTEXT('[1,0,20]'));
+INSERT INTO t1(data, v) VALUES ('hc_c2', VEC_FROMTEXT('[2,0,20]'));
+
+--connection con_d
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_d1', VEC_FROMTEXT('[20,20,0]'));
+INSERT INTO t1(data, v) VALUES ('hc_d2', VEC_FROMTEXT('[0,20,21]'));
+
+--echo # All 4 sessions commit
+--connection con_a
+COMMIT;
+--connection con_b
+COMMIT;
+--connection con_c
+COMMIT;
+--connection con_d
+COMMIT;
+
+--connection default
+--echo # All 8 new rows should be present
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'hc_%';
+SET @s = CONCAT('SELECT COUNT(*) AS hc_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search across high-concurrency inserted rows
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 5: Concurrent INSERT + DELETE on different rows
+--echo # Aux table independent commits don't interfere
+--echo ########################################
+
+--connection default
+let $seed1_id = `SELECT id FROM t1 WHERE data = 'seed1'`;
+
+--connection con_a
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cd_new', VEC_FROMTEXT('[30,0,0]'));
+
+--connection con_b
+BEGIN;
+--eval DELETE FROM t1 WHERE id = $seed1_id
+COMMIT;
+
+--connection con_a
+COMMIT;
+
+--connection default
+--echo # seed1 should be deleted, cd_new should exist
+SELECT COUNT(*) FROM t1 WHERE data = 'seed1';
+SELECT COUNT(*) FROM t1 WHERE data = 'cd_new';
+
+--echo # ANN works correctly after concurrent insert+delete
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[30,0,0]')) LIMIT 2;
+
+--echo ########################################
+--echo # Scenario 6: Concurrent transactions with ROLLBACK
+--echo # A commits, B rolls back — aux table state consistent
+--echo ########################################
+
+--connection con_a
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cr_a1', VEC_FROMTEXT('[40,0,0]'));
+
+--connection con_b
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cr_b1', VEC_FROMTEXT('[0,40,0]'));
+
+--connection con_a
+COMMIT;
+
+--connection con_b
+--echo # B rolls back — main table row gone, but aux has orphan
+ROLLBACK;
+
+--connection default
+SELECT COUNT(*) FROM t1 WHERE data = 'cr_a1';
+SELECT COUNT(*) FROM t1 WHERE data = 'cr_b1';
+
+--echo # ANN still works (orphan node from cr_b1 tolerated)
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0,40,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+--connection con_a
+--disconnect con_a
+--connection con_b
+--disconnect con_b
+--connection con_c
+--disconnect con_c
+--connection con_d
+--disconnect con_d
+
+--connection default
+--enable_warnings
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;

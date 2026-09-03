@@ -1,0 +1,12 @@
+!include suite/xcluster/my.cnf
+
+[mysqld]
+max_allowed_packet=64M
+replica_pending_jobs_size_max=64M
+replica_max_allowed_packet=64M
+binlog_format=ROW
+consensus_log_cache_size=1
+consensus_max_log_size=128
+consensus_large_trx_split_size=128
+consensus_large_event_split_size=128
+

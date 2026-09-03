@@ -1,0 +1,4 @@
+--vidx_disabled=OFF
+--show_vidx_hlindex_tables=ON
+--xa_detach_on_prepare=OFF
+--transaction_isolation=READ-COMMITTED

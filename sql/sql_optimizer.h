@@ -229,6 +229,8 @@ class JOIN {
   bool grouped;
   /// If true, send produced rows using query_result
   bool do_send_rows{true};
+  /// primary fast lookup
+  bool is_fast_path_using_primary{false};
   /// Set of tables contained in query
   table_map all_table_map{0};
   table_map const_table_map;  ///< Set of tables found to be const
@@ -617,6 +619,7 @@ class JOIN {
   bool contains_non_aggregated_fts() const;
 
   bool optimize(bool finalize_access_paths);
+
   void reset();
   bool prepare_result();
   void destroy();
@@ -1062,6 +1065,9 @@ class JOIN {
     See comments in JOIN::optimize().
    */
   AccessPath *m_root_access_path_no_in2exists = nullptr;
+
+ private:
+  int rbo_optimize();
 };
 
 /**

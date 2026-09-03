@@ -642,6 +642,95 @@ PREPARE stmt FROM @str;
 EXECUTE stmt;
 DROP PREPARE stmt;
 
+-- AI model config system table
+SET @cmd = "CREATE TABLE IF NOT EXISTS ai_model_config (
+  id bigint AUTO_INCREMENT NOT NULL,
+  model_name varchar(128) NOT NULL,
+  provider varchar(64) NOT NULL,
+  endpoint varchar(512) NOT NULL,
+  model varchar(128),
+  api_key varchar(512),
+  model_params text,
+  status varchar(16) DEFAULT 'ACTIVE',
+  description varchar(1024),
+  gmt_created timestamp DEFAULT CURRENT_TIMESTAMP,
+  gmt_modified timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_model_name (model_name)
+) ENGINE=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin comment='AI model configuration' TABLESPACE=mysql";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
+-- AI function default model config system table
+SET @cmd = "CREATE TABLE IF NOT EXISTS ai_function_config (
+  function_name varchar(64) NOT NULL,
+  model_name varchar(128) DEFAULT NULL,
+  description varchar(1024) NOT NULL DEFAULT '',
+  PRIMARY KEY (function_name),
+  KEY idx_model_name (model_name)
+) ENGINE=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8mb4 COLLATE utf8mb4_bin comment='AI function default model mapping' TABLESPACE=mysql";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
+INSERT IGNORE INTO ai_function_config (function_name, description) VALUES
+  ('AI_PROMPT', 'AI prompt function'),
+  ('AI_EMBEDDING', 'AI embedding function'),
+  ('AI_CLASSIFY', 'AI classify function'),
+  ('AI_RANK', 'AI rank function'),
+  ('AI_SIMILARITY', 'AI similarity function'),
+  ('AI_EXTRACT', 'AI extract function'),
+  ('AI_SUMMARIZE', 'AI summarize function'),
+  ('AI_PARSE_DOCUMENT', 'AI parse document function'),
+  ('AI_VL_EMBEDDING', 'AI vl embedding function'),
+  ('AI_TEXT2SQL', 'AI text2sql function');
+
+-- EncDB system table
+SET @cmd = "CREATE TABLE IF NOT EXISTS encdb_auth_users(
+  user VARCHAR(64) NOT NULL,
+  salt_mac VARCHAR(128),
+  accs_type INT DEFAULT NULL,
+  expire_time DATETIME DEFAULT '9999-12-31 23:59:59',
+  PRIMARY KEY(user)
+) STATS_PERSISTENT=0 CHARACTER SET utf8 COLLATE utf8_bin comment='encdb_auth_users table for encdb'";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
+SET @cmd = "CREATE TABLE IF NOT EXISTS encdb_sensitive_rules (
+  sensitive_databases TEXT,
+  sensitive_tables TEXT,
+  sensitive_columns TEXT,
+  algos TEXT,
+  default_algo TEXT,
+  endpoints TEXT,
+  rule_name VARCHAR(64),
+  enabled BOOL,
+  rule_type INT,
+  description TEXT NOT NULL DEFAULT (''),
+  PRIMARY KEY(rule_name)
+) STATS_PERSISTENT=0 CHARACTER SET utf8 COLLATE utf8_bin comment='encdb_sensitive_rules table for EncDB'";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
+SET @cmd = "CREATE TABLE IF NOT EXISTS encdb_kms_meta (
+  version INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  enc_mek TEXT NOT NULL,
+  region VARCHAR(64) NOT NULL,
+  key_id VARCHAR(128) NOT NULL,
+  salt_mac TEXT NOT NULL
+) ENGINE=InnoDB STATS_PERSISTENT=0 CHARACTER SET utf8 COLLATE utf8_bin comment='KMS meta table for EncDB'";
+SET @str = CONCAT(@cmd, " ENCRYPTION='", @is_mysql_encrypted, "'");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
 --
 -- Only create the ndb_binlog_index table if the server is built with ndb.
 -- Create this table last among the tables in the mysql schema to make it

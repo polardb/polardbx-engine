@@ -19,12 +19,9 @@
 
 #include "consensus_admin.h"
 
-#include "consensus_recovery_manager.h"
-#include "sql/appliedindex_checker.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/binlog.h"
-#include "sql/bl_consensus_log.h"
-#include "sql/consensus_log_manager.h"
+#include "sql/consensus_logindex_manager.h"
 #include "sql/current_thd.h"
 #include "sql/mysqld_thd_manager.h"
 #include "sql/rpl_mi.h"
@@ -44,10 +41,14 @@
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/log.h"
 #include "sql/sql_lex.h"
-//#include "sql/binlog_ext.h"
 #include "mysql/psi/mysql_file.h"
 #include "replica_read_manager.h"
 #include "sql/protocol.h"
+
+#include "sql/xa/komodo0xa.h"
+#include "sql/komodo0xlog.h"
+#include "komodo0xlog0meta.h"
+#include "komodo0consensus0xlog.h"
 
 using std::max;
 
@@ -316,7 +317,7 @@ bool show_consensus_logs(THD *thd) {
     protocol->store(file_length);
 
     ulonglong start_index =
-        consensus_log_manager.get_log_file_index()->get_start_index_of_file(
+        komodo::xlog_engine_get_log_file_index()->get_start_index_of_file(
             std::string(fname));
     protocol->store(start_index);
     if (protocol->end_row()) {
@@ -337,8 +338,8 @@ err:
   DBUG_RETURN(true);
 }
 
-static bool invalid_on_consensus_limited(enum_sql_command cmd,
-                                         bool no_write_to_binlog) {
+bool invalid_on_consensus_limited(enum_sql_command cmd,
+                                  bool no_write_to_binlog) {
   /* cases for setting no_write_to_binlog, according to sql_yacc.yy */
   /* alter/optimize may execute slowly, just check it ahead. */
   if (cmd == SQLCOM_ALTER_TABLE || cmd == SQLCOM_OPTIMIZE)
@@ -358,7 +359,7 @@ static bool invalid_on_consensus_limited(enum_sql_command cmd,
          (cmd >= SQLCOM_CHANGE_MASTER && cmd <= SQLCOM_RENAME_TABLE) || /* 62-64 */
          (cmd >= SQLCOM_DELETE_MULTI && cmd <= SQLCOM_UPDATE_MULTI) || /* 74-75 */
          (cmd >= SQLCOM_CREATE_USER && cmd <= SQLCOM_REVOKE_ALL) || /* 84-87 */
-         (cmd >= SQLCOM_CREATE_PROCEDURE && cmd <= SQLCOM_SHOW_STATUS_FUNC) || /* 89-98 */
+         (cmd >= SQLCOM_CREATE_PROCEDURE && cmd <= SQLCOM_ALTER_FUNCTION) || /* 89-94 */
          (cmd >= SQLCOM_CREATE_VIEW && cmd <= SQLCOM_XA_ROLLBACK) || /* 102-110 */
          (cmd == SQLCOM_ALTER_TABLESPACE) || /* 114 */
          (cmd == SQLCOM_BINLOG_BASE64_EVENT) || /* 117 */
@@ -367,82 +368,10 @@ static bool invalid_on_consensus_limited(enum_sql_command cmd,
          (cmd == SQLCOM_ALTER_INSTANCE); /* 138 */
 }
 
-static bool invalid_on_logger_limited(enum_sql_command cmd) {
+bool invalid_on_logger_limited(enum_sql_command cmd) {
   return (cmd == SQLCOM_START_XPAXOS_REPLICATION) ||
          (cmd == SQLCOM_STOP_XPAXOS_REPLICATION) ||
          (cmd == SQLCOM_CHANGE_MASTER);
-}
-
-static bool invalid_on_consensus_force_recovery_limited(enum_sql_command cmd) {
-  return (cmd == SQLCOM_START_XPAXOS_REPLICATION) ||
-         (cmd == SQLCOM_STOP_XPAXOS_REPLICATION);
-}
-
-int consensus_command_limit(THD *thd) {
-  /* rw check: leader read-write, others read-only */
-  bool reject_query = false;
-  bool is_leader = !ConsensusLogManager::enable_consensus();
-  DBUG_ENTER("consensus_command_limit");
-  // dd_upgrade execute inner sql before consensus module startup
-  if (!opt_initialize && consensus_ptr != NULL) {
-    if (consensus_ptr->getState() == alisql::Paxos::LEADER) {
-      is_leader = true;
-      if (consensus_ptr->getTerm() != consensus_log_manager.get_current_term())
-        reject_query = true;
-    } else {
-      is_leader = false;
-      if (invalid_on_consensus_limited(thd->lex->sql_command,
-                                       thd->lex->no_write_to_binlog))
-        reject_query = true;
-    }
-  }
-  if (reject_query && !thd->slave_thread) {
-    if ((thd->security_context()->master_access() & SUPER_ACL) == 0) {
-      // normal account
-      if (is_leader)
-        my_error(ER_CONSENSUS_LEADER_NOT_ALLOWED, MYF(0));
-      else
-        my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
-      DBUG_RETURN(1);
-    } else if (thd->variables.opt_force_revise == false &&
-               (thd->variables.option_bits &
-                OPTION_BIN_LOG))  // arg is only used for super account
-    {
-      // super account
-      if (!opt_cluster_log_type_instance) {
-        // log type node allow super user to write data with sql-log-bin off
-        if (is_leader &&
-            invalid_on_consensus_limited(thd->lex->sql_command,
-                                         thd->lex->no_write_to_binlog)) {
-          my_error(ER_CONSENSUS_LEADER_NOT_ALLOWED, MYF(0));
-          DBUG_RETURN(1);
-        }
-        if (!is_leader) {
-          my_error(ER_CONSENSUS_FOLLOWER_NOT_ALLOWED, MYF(0));
-          DBUG_RETURN(1);
-        }
-      }
-    }
-  }
-
-  /* logger node check: logger is not allowed to do configure change unless
-   * force_revise is set to TRUE */
-  if (opt_cluster_log_type_instance &&
-      invalid_on_logger_limited(thd->lex->sql_command) &&
-      thd->variables.opt_force_revise == false) {
-    my_error(ER_CONSENSUS_LOG_TYPE_NODE, MYF(0));
-    DBUG_RETURN(1);
-  }
-
-  /* Consensus related commands are not allowed in consensus_force_recovery mode
-   */
-  if (opt_consensus_force_recovery &&
-      invalid_on_consensus_force_recovery_limited(thd->lex->sql_command)) {
-    my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
-    DBUG_RETURN(1);
-  }
-
-  DBUG_RETURN(0);
 }
 
 class Kill_all_conn : public Do_THD_Impl {
@@ -499,39 +428,37 @@ int start_consensus_apply_threads() {
   int thread_mask = SLAVE_SQL;
   int error = 0;
   channel_map.wrlock();
-  if (!opt_skip_replica_start || !opt_initialize) {
-    for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
-         it++) {
-      mi = it->second;
+  for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
+        it++) {
+    mi = it->second;
 
-      // Todo: mi must be itself
-      /* If server id is not set, start_slave_thread() will say it */
-      if (mi && channel_map.is_xpaxos_channel(mi)) {
-        /* same as in start_slave() cache the global var values into rli's
-         * members */
-        mi->rli->opt_replica_parallel_workers =
-            opt_mts_replica_parallel_workers;
-        mi->rli->checkpoint_group = opt_mta_checkpoint_group;
-        if (mts_parallel_option == MTS_PARALLEL_TYPE_DB_NAME)
-          mi->rli->channel_mts_submode = MTS_PARALLEL_TYPE_DB_NAME;
-        else
-          mi->rli->channel_mts_submode = MTS_PARALLEL_TYPE_LOGICAL_CLOCK;
-        /* wait intergrity consensus log  */
-        while (mi->rli->get_consensus_apply_index() >
-               consensus_log_manager.get_sync_index())
-          my_sleep(2000000);
-        if (start_slave_threads(true /*need_lock_slave=true*/,
-                                false /*wait_for_start=false*/, mi,
-                                thread_mask)) {
-          /*
-          Creation of slave threads for subsequent channels are stopped
-          if a failure occurs in this iteration.
-          @todo:have an option if the user wants to continue
-          the replication for other channels.
-          */
-          xp::error(ER_XP_0) << "Failed to create slave threads";
-          error = 1;
-        }
+    // Todo: mi must be itself
+    /* If server id is not set, start_slave_thread() will say it */
+    if (mi && channel_map.is_xpaxos_channel(mi)) {
+      /* same as in start_slave() cache the global var values into rli's
+        * members */
+      mi->rli->opt_replica_parallel_workers =
+          opt_mts_replica_parallel_workers;
+      mi->rli->checkpoint_group = opt_mta_checkpoint_group;
+      if (mts_parallel_option == MTS_PARALLEL_TYPE_DB_NAME)
+        mi->rli->channel_mts_submode = MTS_PARALLEL_TYPE_DB_NAME;
+      else
+        mi->rli->channel_mts_submode = MTS_PARALLEL_TYPE_LOGICAL_CLOCK;
+      /* wait intergrity consensus log  */
+      while (mi->rli->get_consensus_apply_index() >
+              komodo::xlog_engine_get_sync_index())
+        my_sleep(2000000);
+      if (start_slave_threads(true /*need_lock_slave=true*/,
+                              false /*wait_for_start=false*/, mi,
+                              thread_mask)) {
+        /*
+        Creation of slave threads for subsequent channels are stopped
+        if a failure occurs in this iteration.
+        @todo:have an option if the user wants to continue
+        the replication for other channels.
+        */
+        xp::error(ER_XP_0) << "Failed to create slave threads";
+        error = 1;
       }
     }
   }
@@ -540,30 +467,13 @@ int start_consensus_apply_threads() {
 }
 
 
-void xpaxos_set_privilege_checks_user() {
-  Master_info *mi = NULL;
-  channel_map.rdlock();
-  if (!opt_initialize) {
-    for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
-         it++) {
-      mi = it->second;
-      if (Master_info::is_configured(mi) && mi->rli->inited) {
-        xp::info(ER_XP_RECOVERY)
-            << "set_privilege_checks_user for channel '" << mi->get_channel() << "'";
-        mi->rli->set_privilege_checks_user();
-      }
-    }
-  }
-  channel_map.unlock();
-}
-
 int start_slave_threads() {
   DBUG_ENTER("start_slave_threads");
   Master_info *mi = NULL;
   int default_thread_mask = SLAVE_SQL | SLAVE_IO;
   int error = 0;
   channel_map.wrlock();
-  if (!opt_skip_replica_start && !opt_initialize) {
+  if (!opt_skip_replica_start) {
     for (mi_map::iterator it = channel_map.begin(); it != channel_map.end();
          it++) {
       int thread_mask = default_thread_mask;
@@ -616,14 +526,15 @@ void stop_slave_threads() {
 
 int check_exec_consensus_log_end_condition(Relay_log_info *rli) {
   DBUG_ENTER("check_exec_consensus_log_end_condition");
+  auto &log_manager = komodo::xlog_engine_get_log_manager();
   // determine whether exit
-  uint64 stop_term = consensus_log_manager.get_stop_term();
+  uint64 stop_term = log_manager.get_stop_term();
   long time_diff= 0;
   if (opt_consensus_leader_stop_apply_time && rli->last_master_timestamp)
     time_diff= ((long)(time(0) - rli->last_master_timestamp) - rli->mi->clock_diff_with_master);
 
-  if (consensus_log_manager.get_apply_term() >= stop_term
-      || (0 < opt_consensus_stop_apply_index && opt_consensus_stop_apply_index <= consensus_log_manager.get_real_apply_index())
+  if (log_manager.get_apply_term() >= stop_term
+      || (0 < opt_consensus_stop_apply_index && opt_consensus_stop_apply_index <= log_manager.get_real_apply_index())
       || opt_consensus_leader_stop_apply
       || (opt_consensus_leader_stop_apply_time && time_diff < (long)opt_consensus_leader_stop_apply_time)) {
     xp::system(ER_XP_APPLIER)
@@ -635,18 +546,18 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli) {
         << ", consensus_stop_apply_index: "
         << opt_consensus_stop_apply_index;
     opt_consensus_leader_stop_apply = false;
-    mysql_mutex_lock(consensus_log_manager.get_apply_thread_lock());
-    mysql_cond_broadcast(consensus_log_manager.get_catchup_cond());
-    consensus_log_manager.set_apply_catchup(true);
+    mysql_mutex_lock(log_manager.get_apply_thread_lock());
+    mysql_cond_broadcast(log_manager.get_catchup_cond());
+    log_manager.set_apply_catchup(true);
     rli->sql_thread_kill_accepted = true;
     rli->force_apply_queue_before_stop = true;
-    mysql_mutex_unlock(consensus_log_manager.get_apply_thread_lock());
+    mysql_mutex_unlock(log_manager.get_apply_thread_lock());
     xp::system(ER_XP_APPLIER)
         << "Apply thread catchup commit index, consensus index: "
         << rli->get_consensus_apply_index()
-        << ", current term: " << consensus_log_manager.get_current_term()
-        << ", apply term: " << consensus_log_manager.get_apply_term()
-        << ", stop term: " << consensus_log_manager.get_stop_term();
+        << ", current term: " << log_manager.get_current_term()
+        << ", apply term: " << log_manager.get_apply_term()
+        << ", stop term: " << log_manager.get_stop_term();
     DBUG_RETURN(1);
   }
   DBUG_RETURN(0);
@@ -654,20 +565,22 @@ int check_exec_consensus_log_end_condition(Relay_log_info *rli) {
 
 int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
   DBUG_ENTER("check_wait_commitindex");
+  auto &log_manager = komodo::xlog_engine_get_log_manager();
+
   if (is_xpaxos_replication && !opt_disable_wait_commitindex) {
     uint64 tmpCommitIndex = 0;
     // xp::system(ER_XP_APPLIER)
     //     << "check_wait_commitindex "
-    //     << ", current term: " << consensus_log_manager.get_current_term()
-    //     << ", apply term: " << consensus_log_manager.get_apply_term()
-    //     << ", stop term: " << consensus_log_manager.get_stop_term()
-    //     << ", tmpCommitIndex: " << consensus_ptr->getCommitIndex()
-    //     << ", get_real_apply_index: " << consensus_log_manager.get_real_apply_index()
+    //     << ", current term: " << log_manager.get_current_term()
+    //     << ", apply term: " << log_manager.get_apply_term()
+    //     << ", stop term: " << log_manager.get_stop_term()
+    //     << ", tmpCommitIndex: " << komodo::xlog_get_paxos_commit_index
+    //     << ", get_real_apply_index: " << log_manager.get_real_apply_index()
     //     << ", get_consensus_apply_index: " << rli->get_consensus_apply_index()
-    //     << ", get_apply_index_current_pos: " << consensus_log_manager.get_apply_index_current_pos()
-    //     << ", get_apply_index_end_pos: " << consensus_log_manager.get_apply_index_end_pos()
-    //     << ", get_apply_ev_sequence: " << consensus_log_manager.get_apply_ev_sequence()
-    //     << ", get_apply_ev_finish_count: " << consensus_log_manager.get_apply_ev_finish_count();
+    //     << ", get_apply_index_current_pos: " << log_manager.get_apply_index_current_pos()
+    //     << ", get_apply_index_end_pos: " << log_manager.get_apply_index_end_pos()
+    //     << ", get_apply_ev_sequence: " << log_manager.get_apply_ev_sequence()
+    //     << ", get_apply_ev_finish_count: " << log_manager.get_apply_ev_finish_count();
 
     // when any the followe case match, continue read, return 0
     //   commitIndex > applyIndex
@@ -676,13 +589,14 @@ int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
     // when any the followe case, wait and retry
     //   commitIndex < applyIndex
     //   commitIndex == applyIndex && apply_current_pos >= apply_end_pos && is_trx_apply_finished
-    while (((tmpCommitIndex = consensus_ptr->checkCommitIndex(consensus_log_manager.get_current_term())) <
-              consensus_log_manager.get_real_apply_index())
-            || (tmpCommitIndex == consensus_log_manager.get_real_apply_index()
-                && consensus_log_manager.get_apply_index_current_pos() >=
-                      consensus_log_manager.get_apply_index_end_pos()
-                && consensus_log_manager.is_trx_apply_finished())) {
-      if (consensus_ptr->isShutdown()) {
+    while (((tmpCommitIndex = komodo::xlog_check_paxos_commit_index(
+                 log_manager.get_current_term())) <
+            log_manager.get_real_apply_index()) ||
+           (tmpCommitIndex == log_manager.get_real_apply_index() &&
+            log_manager.get_apply_index_current_pos() >=
+                log_manager.get_apply_index_end_pos() &&
+            log_manager.is_trx_apply_finished())) {
+      if (komodo::xlog_is_paxos_shutdown()) {
         xp::info(ER_XP_APPLIER)
             << "Apply thread is terminated because of shutdown";
         DBUG_RETURN(1);
@@ -704,20 +618,20 @@ int check_wait_commitindex(Relay_log_info *rli, bool is_xpaxos_replication) {
         }
       }
 
-      if (consensus_log_manager.get_stop_term() == UINT64_MAX) {
+      if (log_manager.get_stop_term() == UINT64_MAX) {
         my_sleep(opt_consensus_check_commit_index_interval);
         continue;
       } else if (check_exec_consensus_log_end_condition(rli)) {
         DBUG_RETURN(1);
-      } else if (consensus_ptr->getCommitIndex() >
-                     consensus_log_manager.get_real_apply_index()
-                 || (consensus_ptr->getCommitIndex() ==
-                        consensus_log_manager.get_real_apply_index()
-                     && (consensus_log_manager.get_apply_index_current_pos() <
-                          consensus_log_manager.get_apply_index_end_pos()
-                         || !consensus_log_manager.is_trx_apply_finished()))
-                || (consensus_ptr->getCommitIndex() == 1
-                    && consensus_log_manager.get_real_apply_index() == 1)) {
+      } else if (komodo::xlog_get_paxos_commit_index() >
+                     log_manager.get_real_apply_index() ||
+                 (komodo::xlog_get_paxos_commit_index() ==
+                      log_manager.get_real_apply_index() &&
+                  (log_manager.get_apply_index_current_pos() <
+                       log_manager.get_apply_index_end_pos() ||
+                   !log_manager.is_trx_apply_finished())) ||
+                 (komodo::xlog_get_paxos_commit_index() == 1 &&
+                  log_manager.get_real_apply_index() == 1)) {
         // not reach commit index, continue to read log
         break;
       } else {
@@ -735,6 +649,8 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
                                 bool is_xpaxos_replication) {
   MY_UNUSED(rli);
   if (is_xpaxos_replication) {
+    auto &log_manager = komodo::xlog_engine_get_log_manager();
+
     // update apply index
     /* for large trx, use the first one */
     if (ev->get_type_code() == binary_log::CONSENSUS_LOG_EVENT) {
@@ -744,24 +660,24 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
       uint64 consensus_index_end_pos =
           r_ev->future_event_relay_log_pos + r_ev->get_length();
 
-      if (r_ev->get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX) {
-        if (!consensus_log_manager.get_in_large_trx_applying()) {
-          consensus_log_manager.set_apply_index(consensus_index);
-          consensus_log_manager.set_apply_term(consensus_term);
-          consensus_log_manager.set_apply_ev_sequence(0);
-          consensus_log_manager.set_in_large_trx_applying(true);
+      if (r_ev->get_flag() & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX) {
+        if (!log_manager.get_in_large_trx_applying()) {
+          log_manager.set_apply_index(consensus_index);
+          log_manager.set_apply_term(consensus_term);
+          log_manager.set_apply_ev_sequence(0);
+          log_manager.set_in_large_trx_applying(true);
         }
       } else if (r_ev->get_flag() &
-                 Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
-        consensus_log_manager.set_in_large_trx_applying(false);
+                 komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
+        log_manager.set_in_large_trx_applying(false);
       } else {
         /* normal case */
-        consensus_log_manager.set_apply_index(consensus_index);
-        consensus_log_manager.set_apply_term(consensus_term);
-        consensus_log_manager.set_apply_ev_sequence(0);
+        log_manager.set_apply_index(consensus_index);
+        log_manager.set_apply_term(consensus_term);
+        log_manager.set_apply_ev_sequence(0);
       }
-      consensus_log_manager.set_real_apply_index(consensus_index);
-      consensus_log_manager.set_apply_index_end_pos(consensus_index_end_pos);
+      log_manager.set_real_apply_index(consensus_index);
+      log_manager.set_apply_index_end_pos(consensus_index_end_pos);
 
       // xp::info(ER_XP_APPLIER) << "update_consensus_apply_pos: "
       //                       << ", consensus_index: " << consensus_index
@@ -773,17 +689,17 @@ void update_consensus_apply_pos(Relay_log_info *rli, Log_event *ev,
       //                       << ", consensus_index_current_pos: " <<
       //                       ev->future_event_relay_log_pos
       //                       << ", apply_ev_sequence: " <<
-      //                       consensus_log_manager.get_apply_ev_sequence();
+      //                       log_manager.get_apply_ev_sequence();
     }
 
-    consensus_log_manager.set_apply_index_current_pos(
+    log_manager.set_apply_index_current_pos(
         ev->future_event_relay_log_pos);
-    ev->consensus_index = consensus_log_manager.get_apply_index();
-    ev->consensus_real_index = consensus_log_manager.get_real_apply_index();
+    ev->consensus_index = log_manager.get_apply_index();
+    ev->consensus_real_index = log_manager.get_real_apply_index();
     ev->consensus_index_end_pos =
-        consensus_log_manager.get_apply_index_end_pos();
-    ev->consensus_sequence = consensus_log_manager.get_apply_ev_sequence();
-    consensus_log_manager.incr_apply_ev_sequence();
+        log_manager.get_apply_index_end_pos();
+    ev->consensus_sequence = log_manager.get_apply_ev_sequence();
+    log_manager.incr_apply_ev_sequence();
   }
 }
 
@@ -795,37 +711,38 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
   std::string recover_log_content;
   bool recover_outer = false;
   uint recover_flag = 0;
-  uint64 recover_checksum = 0;
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
 
   if (is_xpaxos_channel) {
-    recover_status =
-        consensus_log_manager.get_consensus_info()->get_recover_status();
-    assert(consensus_log_manager.get_status() == RELAY_LOG_WORKING);
-    start_apply_index =
-        consensus_log_manager.get_consensus_info()->get_start_apply_index();
+    auto consensus_info = komodo::xlog_meta_get_consensus_info();
+    recover_status = consensus_info->get_recover_status();
+    assert(!komodo::xlog_engine_binlog_working());
+    start_apply_index = consensus_info->get_start_apply_index();
+    auto &log_manager = komodo::xlog_engine_get_log_manager();
+
     xp::system(ER_XP_APPLIER)
         << "Apply thread start, recover status = " << recover_status
         << ", start apply index = " << start_apply_index
         << ", rli consensus index " << rli->get_consensus_apply_index()
-        << ", consensus_ptr CommitIndex " << consensus_ptr->getCommitIndex();
+        << ", consensus_ptr CommitIndex "
+        << komodo::xlog_get_paxos_commit_index();
 
     // follower recover, do nothing, leader recover should set apply start point
-    if (recover_status == BINLOG_WORKING) {
+    if (recover_status == komodo::BINLOG_WORKING) {
       // leader degrade
       if (start_apply_index == 0) {
         // crash when the role is leader
         // care whether truncate log
-        uint64 recover_index = consensus_log_manager.get_recovery_manager()
-                                   ->get_last_leader_term_index();
+        uint64 recover_index =
+            komodo::xlog_recovery_get_last_leader_term_index();
         uint64 next_index =
-            consensus_log_manager.get_next_trx_index(recover_index);
-        if (consensus_log_manager.get_log_position(next_index, false, log_name,
+            log_manager.get_next_trx_index(recover_index);
+        if (log_manager.get_log_position(next_index, false, log_name,
                                                    &log_pos)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find start index " << next_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
@@ -834,15 +751,15 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
         rli->set_group_relay_log_name(log_name);
         rli->set_group_relay_log_pos(log_pos);
 
-        if (consensus_log_manager.get_log_directly(
-                recover_index, &recover_term, recover_log_content,
-                &recover_outer, &recover_flag, &recover_checksum, false)) {
+        if (log_manager.get_log_directly(recover_index, &recover_term,
+                                         recover_log_content, &recover_outer,
+                                         &recover_flag, false)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find term by index " << recover_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         rli->set_consensus_apply_index(recover_index);
-        consensus_log_manager.set_apply_term(recover_term);
+        log_manager.set_apply_term(recover_term);
         rli->flush_info(true);
       } else {
         // role already degraded to follower ,but log status is still binlog
@@ -850,12 +767,12 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
         uint64 start_index =
             max(start_apply_index, rli->get_consensus_apply_index());
         uint64 next_index =
-            consensus_log_manager.get_next_trx_index(start_index);
-        if (consensus_log_manager.get_log_position(next_index, false, log_name,
+            log_manager.get_next_trx_index(start_index);
+        if (log_manager.get_log_position(next_index, false, log_name,
                                                    &log_pos)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find start index " << next_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
@@ -864,31 +781,30 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
         rli->set_group_relay_log_name(log_name);
         rli->set_group_relay_log_pos(log_pos);
 
-        if (consensus_log_manager.get_log_directly(
-                start_index, &recover_term, recover_log_content, &recover_outer,
-                &recover_flag, &recover_checksum, false)) {
+        if (log_manager.get_log_directly(start_index, &recover_term,
+                                         recover_log_content, &recover_outer,
+                                         &recover_flag, false)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find term by index " << start_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         rli->set_consensus_apply_index(start_index);
-        consensus_log_manager.set_apply_term(recover_term);
+        log_manager.set_apply_term(recover_term);
         rli->flush_info(true);
       }
     } else {
       if (start_apply_index == 0) {
         // node first initial
-        if (consensus_log_manager.get_recovery_manager()
-                    ->get_last_leader_term_index() == 0 &&
+        if (komodo::xlog_recovery_get_last_leader_term_index() == 0 &&
             rli->get_consensus_apply_index() == 0) {
           // start replay from first position
           uint64 start_index = 0, start_term = 1;
           uint64 next_index = 1;
-          if (consensus_log_manager.get_log_position(next_index, false,
+          if (log_manager.get_log_position(next_index, false,
                                                      log_name, &log_pos)) {
             xp::error(ER_XP_APPLIER)
                 << "Apply thread cannot find start index " << next_index;
-            abort();
+            _exit(2);  // Using _exit(), since exit() is not async signal safe
           }
           xp::system(ER_XP_APPLIER)
               << "Apply thread group relay log file name = '" << log_name
@@ -897,19 +813,19 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
           rli->set_group_relay_log_name(log_name);
           rli->set_group_relay_log_pos(log_pos);
           rli->set_consensus_apply_index(start_index);
-          consensus_log_manager.set_apply_term(start_term);
+          log_manager.set_apply_term(start_term);
           rli->flush_info(true);
         } else {
           // because backup restore will reorganize the log , so should use
           // index to set the replay pos
           uint64 start_index = rli->get_consensus_apply_index();
           uint64 next_index =
-              consensus_log_manager.get_next_trx_index(start_index);
-          if (consensus_log_manager.get_log_position(next_index, false,
+              log_manager.get_next_trx_index(start_index);
+          if (log_manager.get_log_position(next_index, false,
                                                      log_name, &log_pos)) {
             xp::error(ER_XP_APPLIER)
                 << "Apply thread cannot find start index " << next_index;
-            abort();
+            _exit(2);  // Using _exit(), since exit() is not async signal safe
           }
           xp::system(ER_XP_APPLIER)
               << "Apply thread group relay log file name = '" << log_name
@@ -927,12 +843,12 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
         uint64 start_index =
             max(start_apply_index, rli->get_consensus_apply_index());
         uint64 next_index =
-            consensus_log_manager.get_next_trx_index(start_index);
-        if (consensus_log_manager.get_log_position(next_index, false, log_name,
+            log_manager.get_next_trx_index(start_index);
+        if (log_manager.get_log_position(next_index, false, log_name,
                                                    &log_pos)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find start index " << next_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         xp::system(ER_XP_APPLIER)
             << "Apply thread group relay log file name = '" << log_name
@@ -940,15 +856,15 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
         rli->set_group_relay_log_name(log_name);
         rli->set_group_relay_log_pos(log_pos);
 
-        if (consensus_log_manager.get_log_directly(
-                start_index, &recover_term, recover_log_content, &recover_outer,
-                &recover_flag, &recover_checksum, false)) {
+        if (log_manager.get_log_directly(start_index, &recover_term,
+                                         recover_log_content, &recover_outer,
+                                         &recover_flag, false)) {
           xp::error(ER_XP_APPLIER)
               << "Apply thread cannot find start index " << next_index;
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         rli->set_consensus_apply_index(start_index);
-        consensus_log_manager.set_apply_term(recover_term);
+        log_manager.set_apply_term(recover_term);
         rli->flush_info(true);
       }
     }
@@ -961,16 +877,16 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
      * which means truncate log is finished and we have correct hotlog.
      */
     /*
-    while (consensus_ptr->getCommitIndex() <=
-    consensus_log_manager.get_consensus_info()->get_start_apply_index())
+    while (komodo::xlog_get_paxos_commit_index <=
+    log_manager.get_consensus_info()->get_start_apply_index())
       my_sleep(5000);
     */
     // set consensus info to relay-working
-    consensus_log_manager.get_consensus_info()->set_start_apply_index(0);
-    consensus_log_manager.get_consensus_info()->set_last_leader_term(0);
-    consensus_log_manager.get_consensus_info()->set_recover_status(
-        RELAY_LOG_WORKING);
-    if (consensus_log_manager.get_consensus_info()->flush_info(true, false)) {
+    consensus_info = komodo::xlog_meta_get_consensus_info();
+    consensus_info->set_start_apply_index(0);
+    consensus_info->set_last_leader_term(0);
+    consensus_info->set_recover_status(komodo::RELAY_LOG_WORKING);
+    if (consensus_info->flush_info(true, false)) {
       rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR,
                   "Error flush consensus info set recover status");
       return -1;
@@ -985,32 +901,8 @@ void update_applied_index(const unsigned long long commitIndex)
   uint64 tmpi = opt_appliedindex_force_delay >= commitIndex
                     ? 0
                     : commitIndex - opt_appliedindex_force_delay;
-  consensus_ptr->updateAppliedIndex(tmpi);
+  komodo::xlog_update_paxos_applied_index(tmpi);
   replica_read_manager.update_lsn(tmpi);
 }
 
-int check_limit_xa(THD *thd, const bool is_commit_one_phase)
-{
-  if (!thd->slave_thread
-      && opt_consensus_disable_commit_before_change_leader
-      && ((!is_commit_one_phase && consensus_log_manager.is_in_limit_xa_finish())
-          || (is_commit_one_phase && consensus_log_manager.is_in_limit_all()))) {
-    XID empty_xid;
-    xp::warn(ER_XP_COMMIT) << "Cannot do xa finish because leadership changing"
-        << ", leader_transfer_state: " << consensus_log_manager.get_leader_transfer_state()
-        << ", xa_finishing_count: " << xa_finishing_count.load()
-        << ", xid " 
-        << ((thd->get_transaction()->xid_state() 
-            && thd->get_transaction()->xid_state()->get_xid()) 
-          ? *thd->get_transaction()->xid_state()->get_xid()
-          : empty_xid)
-        << ", one_phase " << is_commit_one_phase
-        << ", status "
-        << (thd->get_transaction()->xid_state()
-          ? thd->get_transaction()->xid_state()->state_name()
-          : "null");
-    my_error(ER_CONSENSUS_LEADERSHIP_IS_CHANGING, MYF(0));
-    return 1;
-  }
-  return 0;
-}
+

@@ -13,7 +13,7 @@ ALTER TABLE t1 CHANGE c c2 BLOB;
 ALTER TABLE t1 CHANGE d d2 LONGBLOB;
 ALTER TABLE t1 CHANGE e e2 MEDIUMBLOB;
 ALTER TABLE t1 CHANGE f f2 TINYBLOB;
-SET GLOBAL DEBUG= '+d, skip_purge_check_shutdown';
+SET GLOBAL DEBUG= '+d,skip_purge_check_shutdown';
 ["ibd2sdi"
 ,
 {
@@ -477,7 +477,7 @@ SET GLOBAL DEBUG= '+d, skip_purge_check_shutdown';
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "IFT=0;flags=0;",
-                "se_private_data": "gcn=F;id=A;page_type=G;root=B;space_id=C,table_id=D,trx_id=E",
+                "se_private_data": "gcn=F;id=A;page_dict_capacity=H;page_type=G;root=B;space_id=C,table_id=D,trx_id=E",
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,

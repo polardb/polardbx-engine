@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 11/28/1995 Heikki Tuuri
  ***********************************************************************/
 
+#ifndef fut0lst_h
+#define INNODB_FUT0LST_IC_STANDALONE
+#include "fut0lst.h"
+#undef INNODB_FUT0LST_IC_STANDALONE
+#endif /* !fut0lst_h */
 #include "buf0buf.h"
 #include "fut0fut.h"
 #include "mtr0log.h"

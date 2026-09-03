@@ -1,0 +1,72 @@
+## Verify polarx_specific_user_list applies to PolarX RPC sessions.
+
+--let $ALLOW_TEMP_FILE = polarx_rpc_specific_user_dml_allow
+--let $NORMAL_TEMP_FILE = polarx_rpc_specific_user_dml_normal
+
+--source include/polarx_rpc_preamble.inc
+
+CREATE USER 'dml_allow_user'@'%' IDENTIFIED WITH 'mysql_native_password';
+GRANT ALL ON *.* TO 'dml_allow_user'@'%';
+
+CREATE USER 'normal_user'@'%' IDENTIFIED WITH 'mysql_native_password';
+GRANT ALL ON *.* TO 'normal_user'@'%';
+
+CREATE SCHEMA xtest;
+CREATE TABLE xtest.mytable (pk INT PRIMARY KEY AUTO_INCREMENT, data VARCHAR(100));
+INSERT INTO xtest.mytable VALUES (DEFAULT, 'initial');
+
+--write_file $MYSQL_TMP_DIR/$ALLOW_TEMP_FILE.tmp
+-->switchsid 1
+
+PolarXRPC.Session.NewSession {
+}
+-->recvok
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "update mytable set data = 'allowed'"
+  schema_name: "xtest"
+}
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "select data from mytable order by pk"
+  schema_name: "xtest"
+}
+-->recvtype PolarXRPC.Resultset.ColumnMetaData
+-->recvtype PolarXRPC.Resultset.Row
+-->recvtype PolarXRPC.Resultset.FetchDone
+-->recvtype PolarXRPC.Notice.Frame
+-->recvtype PolarXRPC.Sql.StmtExecuteOk
+
+PolarXRPC.Session.Close {
+}
+-->recvok
+EOF
+
+--write_file $MYSQL_TMP_DIR/$NORMAL_TEMP_FILE.tmp
+-->switchsid 1
+
+PolarXRPC.Session.NewSession {
+}
+-->recvok
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "update mytable set data = 'blocked'"
+  schema_name: "xtest"
+}
+-->recverror ER_HIGH_RISK_SQL_BLOCKED
+
+PolarXRPC.Session.Close {
+}
+-->recvok
+EOF
+
+--exec $POLARX_RPC_TEST -udml_allow_user --password='' --file=$MYSQL_TMP_DIR/$ALLOW_TEMP_FILE.tmp 2>&1
+--exec $POLARX_RPC_TEST -unormal_user --password='' --file=$MYSQL_TMP_DIR/$NORMAL_TEMP_FILE.tmp 2>&1
+
+DROP SCHEMA xtest;
+DROP USER 'dml_allow_user'@'%';
+DROP USER 'normal_user'@'%';
+
+--remove_file $MYSQL_TMP_DIR/$ALLOW_TEMP_FILE.tmp
+--remove_file $MYSQL_TMP_DIR/$NORMAL_TEMP_FILE.tmp

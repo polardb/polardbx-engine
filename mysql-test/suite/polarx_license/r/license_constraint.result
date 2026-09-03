@@ -9,8 +9,8 @@ show variables like 'polarx_license_path';
 Variable_name	Value
 polarx_license_path	test_license1.perm
 call dbms_license.show_info();
-FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX CONNS	MAX BP SIZE
-test_license1.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615
+FILE_PATH	FILE_STATUS	APPLY_TIME	EXPIRE_TIME	LICENSE_TYPE	MAX_CONNS	MAX_BP_SIZE	PORT_RANGE
+test_license1.perm	 ACTIVATED 	1677-09-21 03:12:44	2262-04-12 02:47:16	 STANDARD 	18446744073709551615	18446744073709551615	0-3306;3307;3308-65535;
 set GLOBAL innodb_buffer_pool_size = 268435456;
 Warnings:
 Warning	1292	Truncated incorrect innodb_buffer_pool_size value: '268435456'

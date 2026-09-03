@@ -1,0 +1,654 @@
+########################################################################
+# SPC Index - Import/Export Tablespace Test
+#
+# Test Strategy:
+# 1. Basic SPC export/import with encoded + non-encoded pages
+# 2. SPC -> non-SPC mismatch (should fail)
+# 3. non-SPC -> SPC mismatch (should fail)
+# 4. DML after import on SPC index with real encoded pages
+# 5. Rollback after import
+# 6. MVCC concurrent read/write via SPC index after import
+# 7. Partition table import with SPC index
+# 8. Mixed SPC and non-SPC indexes in same table
+#
+# Data Design:
+#   To exercise SPC encoding, we use VARCHAR(200) columns with a long
+#   common prefix (REPEAT('a',190)) and varying suffix (LPAD(i,10,'0')).
+#   500+ rows guarantee multiple page splits, producing pages that have
+#   been run through the SPC page encoder. A few extra rows inserted
+#   after the batch land on the last (not-yet-full) page, which may
+#   NOT have been encoded. Import must handle both kinds correctly.
+#
+# Key Code Paths:
+#   - row0import.cc: update_index_page()  handles FIL_PAGE_INDEX_SPC
+#   - row0import.cc: set_root_by_name()   restores pd_capacity
+#   - row0quiesce.cc: write_one_index()   writes pd_capacity in V9 cfg
+#   - row0import.cc: read_index_data()    reads pd_capacity from V9 cfg
+#   - row0import.cc: match_index_columns() checks page_type
+#
+########################################################################
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+connect (read_con,localhost,root,,);
+connection default;
+
+# SPC is enabled via suite my.cnf (opt_index_format_spc_enabled=on)
+# Disable hippo to avoid interference
+SET opt_index_format_hippo_enabled=off;
+
+# Helper table to hold read view
+CREATE TABLE dummy_table (id int primary key);
+INSERT INTO dummy_table VALUES (1);
+
+LET $MYSQLD_DATADIR = `SELECT @@datadir`;
+
+# Stored procedure: insert N rows with long common prefix.
+# With REPEAT('a',190)+LPAD(i,10,'0') each key is ~200 bytes.
+# 500 rows cause many page splits → encoded SPC pages.
+DELIMITER |;
+CREATE PROCEDURE populate_spc(IN tbl VARCHAR(64), IN n INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE prefix VARCHAR(200);
+  SET prefix = REPEAT('a', 190);
+  START TRANSACTION;
+  WHILE (i <= n) DO
+    SET @s = CONCAT('INSERT INTO ', tbl,
+      ' VALUES (', i, ',',
+      ' CONCAT(''', prefix, ''', LPAD(', i, ',10,''0'')),',
+      ' CONCAT(''', prefix, ''', LPAD(', i, ' % 100,10,''0'')))');
+    PREPARE stmt FROM @s;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+    SET i = i + 1;
+  END WHILE;
+  COMMIT;
+END|
+DELIMITER ;|
+
+
+--echo #####################################
+--echo # Test 1: Basic SPC Index Export/Import
+--echo #   - 500 rows with long common prefix → encoded pages
+--echo #   - 5 extra rows after batch → last page may be non-encoded
+--echo #####################################
+
+CREATE TABLE t1 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1),
+  INDEX idx_c1_prefix (c1(64)),
+  INDEX idx_c1c2 (c1, c2)
+) ENGINE=InnoDB;
+
+# Bulk insert 500 rows → triggers page splits → SPC-encoded pages
+CALL populate_spc('t1', 500);
+
+# Extra rows land on the last (possibly non-encoded) page
+INSERT INTO t1 VALUES (501, CONCAT(REPEAT('a',190), 'EXTRA00001'),
+                            CONCAT(REPEAT('a',190), 'EXTRA_0001'));
+INSERT INTO t1 VALUES (502, CONCAT(REPEAT('a',190), 'EXTRA00002'),
+                            CONCAT(REPEAT('a',190), 'EXTRA_0002'));
+
+# Verify SPC index type
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# Checksum via primary vs SPC index (data consistency)
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(idx_c1)`
+--let $assert_text = Pre-export: PK and SPC index checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+
+--let $prefix_spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(idx_c1_prefix)`
+--let $assert_text = Pre-export: PK and SPC prefix index checksum must match
+--let $assert_cond = $pk_chk = $prefix_spc_chk
+--source include/assert.inc
+
+CHECKSUM TABLE t1;
+
+# Start a read view before export
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM dummy_table;
+
+--connection default
+FLUSH TABLE t1 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLTEST_VARDIR/tmp/t1.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLTEST_VARDIR/tmp/t1.cfg
+UNLOCK TABLES;
+
+DROP TABLE t1;
+
+# Recreate with same schema
+CREATE TABLE t1 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1),
+  INDEX idx_c1_prefix (c1(64)),
+  INDEX idx_c1c2 (c1, c2)
+) ENGINE=InnoDB;
+
+ALTER TABLE t1 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t1.ibd $MYSQLD_DATADIR/test/t1.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t1.cfg $MYSQLD_DATADIR/test/t1.cfg
+
+ALTER TABLE t1 IMPORT TABLESPACE;
+
+# Verify SPC integrity (encoded + non-encoded pages)
+CHECK TABLE t1;
+
+# Verify data integrity
+CHECKSUM TABLE t1;
+SELECT COUNT(*) FROM t1;
+
+# Verify SPC index type after import
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# Cross-check PK vs SPC index after import
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(idx_c1)`
+--let $assert_text = Post-import: PK and SPC index checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+
+--let $prefix_spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t1 FORCE INDEX(idx_c1_prefix)`
+--let $assert_text = Post-import: PK and SPC prefix index checksum must match
+--let $assert_cond = $pk_chk = $prefix_spc_chk
+--source include/assert.inc
+
+# Verify range scan on SPC index
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1) WHERE c1 < CONCAT(REPEAT('a',190), '0000000100');
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1_prefix) WHERE c1 < CONCAT(REPEAT('a',190), '0000000100');
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1c2);
+
+# Extra rows must be readable
+SELECT id FROM t1 FORCE INDEX(idx_c1) WHERE c1 LIKE '%EXTRA%' ORDER BY id;
+
+--connection read_con
+--error ER_TABLE_DEF_CHANGED
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 LIKE '%0000000001' LIMIT 1;
+COMMIT;
+
+--connection default
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.cfg
+
+
+--echo #####################################
+--echo # Test 2: SPC -> non-SPC Mismatch (should fail)
+--echo #####################################
+
+CREATE TABLE t2 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES (1, 100), (2, 200);
+
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+FLUSH TABLE t2 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t2.ibd $MYSQLTEST_VARDIR/tmp/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t2.cfg $MYSQLTEST_VARDIR/tmp/t2.cfg
+UNLOCK TABLES;
+
+DROP TABLE t2;
+
+SET opt_index_format_spc_enabled=off;
+CREATE TABLE t2 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SET opt_index_format_spc_enabled=on;
+
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+ALTER TABLE t2 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t2.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t2.cfg $MYSQLD_DATADIR/test/t2.cfg
+
+--error ER_TABLE_SCHEMA_MISMATCH
+ALTER TABLE t2 IMPORT TABLESPACE;
+
+DROP TABLE t2;
+--remove_file $MYSQLD_DATADIR/test/t2.ibd
+--remove_file $MYSQLD_DATADIR/test/t2.cfg
+--remove_file $MYSQLTEST_VARDIR/tmp/t2.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t2.cfg
+
+
+--echo #####################################
+--echo # Test 3: non-SPC -> SPC Mismatch (should fail)
+--echo #####################################
+
+SET opt_index_format_spc_enabled=off;
+CREATE TABLE t3 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SET opt_index_format_spc_enabled=on;
+
+INSERT INTO t3 VALUES (1, 100), (2, 200);
+
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+FLUSH TABLE t3 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t3.ibd $MYSQLTEST_VARDIR/tmp/t3.ibd
+--copy_file $MYSQLD_DATADIR/test/t3.cfg $MYSQLTEST_VARDIR/tmp/t3.cfg
+UNLOCK TABLES;
+
+DROP TABLE t3;
+
+CREATE TABLE t3 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+ALTER TABLE t3 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t3.ibd $MYSQLD_DATADIR/test/t3.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t3.cfg $MYSQLD_DATADIR/test/t3.cfg
+
+--error ER_TABLE_SCHEMA_MISMATCH
+ALTER TABLE t3 IMPORT TABLESPACE;
+
+DROP TABLE t3;
+--remove_file $MYSQLD_DATADIR/test/t3.ibd
+--remove_file $MYSQLD_DATADIR/test/t3.cfg
+--remove_file $MYSQLTEST_VARDIR/tmp/t3.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t3.cfg
+
+
+--echo #####################################
+--echo # Test 4: DML after Import (encoded SPC pages)
+--echo #####################################
+
+CREATE TABLE t4 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+CALL populate_spc('t4', 500);
+
+FLUSH TABLE t4 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t4.ibd $MYSQLTEST_VARDIR/tmp/t4.ibd
+--copy_file $MYSQLD_DATADIR/test/t4.cfg $MYSQLTEST_VARDIR/tmp/t4.cfg
+UNLOCK TABLES;
+
+DROP TABLE t4;
+
+CREATE TABLE t4 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+ALTER TABLE t4 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t4.ibd $MYSQLD_DATADIR/test/t4.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t4.cfg $MYSQLD_DATADIR/test/t4.cfg
+ALTER TABLE t4 IMPORT TABLESPACE;
+
+CHECK TABLE t4;
+
+--echo # DML operations after import on encoded SPC pages
+
+# INSERT new row into existing SPC pages
+INSERT INTO t4 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+                            CONCAT(REPEAT('a',190),'0000000501'));
+
+# UPDATE indexed column (delete-mark + insert in SPC index)
+UPDATE t4 SET c1 = CONCAT(REPEAT('a',190),'UPDATED001') WHERE id = 1;
+
+# DELETE from middle of SPC index
+DELETE FROM t4 WHERE id = 250;
+
+SELECT COUNT(*) FROM t4;
+
+# Cross-check after DML
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t4 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t4 FORCE INDEX(idx_c1)`
+--let $assert_text = Post-DML: PK and SPC index checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+
+DROP TABLE t4;
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.cfg
+
+
+--echo #####################################
+--echo # Test 5: Rollback after Import
+--echo #####################################
+
+CREATE TABLE t5 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+# Use 500 rows – enough for many encoded SPC pages
+--disable_query_log
+DELIMITER |;
+CREATE PROCEDURE populate_t5()
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE prefix VARCHAR(200);
+  SET prefix = REPEAT('a', 190);
+  START TRANSACTION;
+  WHILE (i <= 500) DO
+    INSERT INTO t5 VALUES (i, CONCAT(prefix, LPAD(i, 10, '0')));
+    SET i = i + 1;
+  END WHILE;
+  COMMIT;
+END|
+DELIMITER ;|
+CALL populate_t5();
+DROP PROCEDURE populate_t5;
+--enable_query_log
+
+FLUSH TABLE t5 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t5.ibd $MYSQLTEST_VARDIR/tmp/t5.ibd
+--copy_file $MYSQLD_DATADIR/test/t5.cfg $MYSQLTEST_VARDIR/tmp/t5.cfg
+UNLOCK TABLES;
+
+DROP TABLE t5;
+
+CREATE TABLE t5 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t5 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t5.ibd $MYSQLD_DATADIR/test/t5.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t5.cfg $MYSQLD_DATADIR/test/t5.cfg
+ALTER TABLE t5 IMPORT TABLESPACE;
+
+CHECK TABLE t5;
+
+--echo # Rollback INSERT after import
+BEGIN;
+INSERT INTO t5 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'));
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+
+--echo # Rollback DELETE after import
+BEGIN;
+DELETE FROM t5 WHERE id = 1;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+
+--echo # Rollback UPDATE after import
+BEGIN;
+UPDATE t5 SET c1 = CONCAT(REPEAT('b',190),'ROLLBACKME') WHERE id = 100;
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t5 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t5 FORCE INDEX(idx_c1)`
+--let $assert_text = During txn: PK and SPC index checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+
+DROP TABLE t5;
+--remove_file $MYSQLTEST_VARDIR/tmp/t5.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t5.cfg
+
+
+--echo #####################################
+--echo # Test 6: MVCC after Import (concurrent read/write)
+--echo #####################################
+
+CREATE TABLE t6 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+CALL populate_spc('t6', 500);
+
+FLUSH TABLE t6 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t6.ibd $MYSQLTEST_VARDIR/tmp/t6.ibd
+--copy_file $MYSQLD_DATADIR/test/t6.cfg $MYSQLTEST_VARDIR/tmp/t6.cfg
+UNLOCK TABLES;
+
+DROP TABLE t6;
+
+CREATE TABLE t6 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t6 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t6.ibd $MYSQLD_DATADIR/test/t6.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t6.cfg $MYSQLD_DATADIR/test/t6.cfg
+ALTER TABLE t6 IMPORT TABLESPACE;
+
+CHECK TABLE t6;
+
+SELECT COUNT(*) FROM t6;
+
+# Establish read view in read_con
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+
+--connection default
+# Modify data while read_con holds read view
+INSERT INTO t6 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+                            CONCAT(REPEAT('a',190),'0000000501'));
+UPDATE t6 SET c1 = CONCAT(REPEAT('a',190),'UPDATED001') WHERE id = 1;
+DELETE FROM t6 WHERE id = 500;
+
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+
+--connection read_con
+# Snapshot must still see old data
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+COMMIT;
+
+# After commit, sees current data
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+
+--connection default
+DROP TABLE t6;
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.cfg
+
+
+--echo #####################################
+--echo # Test 7: Partition Table Import with SPC Index
+--echo #####################################
+
+CREATE TABLE t7 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+  PARTITION p0 VALUES LESS THAN (300),
+  PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+
+# Insert 500 rows; p0 gets ids 1-299, p1 gets ids 300-500
+CALL populate_spc('t7', 500);
+
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 't7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1'
+ORDER BY TABLE_NAME;
+
+--let $p0_cnt = `SELECT COUNT(*) FROM t7 PARTITION(p0)`
+SELECT COUNT(*) FROM t7 PARTITION (p0);
+
+FLUSH TABLE t7 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t7#p#p0.ibd $MYSQLTEST_VARDIR/tmp/t7_p0.ibd
+--copy_file $MYSQLD_DATADIR/test/t7#p#p0.cfg $MYSQLTEST_VARDIR/tmp/t7_p0.cfg
+UNLOCK TABLES;
+
+DROP TABLE t7;
+
+# Import partition p0 into non-partitioned table
+CREATE TABLE t7 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t7 DISCARD TABLESPACE;
+--move_file $MYSQLTEST_VARDIR/tmp/t7_p0.ibd $MYSQLD_DATADIR/test/t7.ibd
+--move_file $MYSQLTEST_VARDIR/tmp/t7_p0.cfg $MYSQLD_DATADIR/test/t7.cfg
+
+ALTER TABLE t7 IMPORT TABLESPACE;
+
+CHECK TABLE t7;
+
+SELECT COUNT(*) FROM t7;
+
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t7 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c1))) FROM t7 FORCE INDEX(idx_c1)`
+--let $assert_text = Partition import: PK and SPC index checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+
+# DML after partition import
+INSERT INTO t7 VALUES (600, CONCAT(REPEAT('a',190),'0000000600'),
+                            CONCAT(REPEAT('a',190),'0000000000'));
+DELETE FROM t7 WHERE id = 1;
+SELECT COUNT(*) FROM t7 FORCE INDEX(idx_c1);
+
+DROP TABLE t7;
+
+
+--echo #####################################
+--echo # Test 8: Mixed SPC and non-SPC indexes
+--echo #  unique index → NOT SPC; non-unique → SPC
+--echo #####################################
+
+CREATE TABLE t8 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  UNIQUE KEY uk_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+# uk_c1 is unique → PANDA; idx_c2 is non-unique → SPC
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t8' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# Insert 500 rows for sufficient SPC-encoded pages on both indexes
+--disable_query_log
+DELIMITER |;
+CREATE PROCEDURE populate_t8()
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE prefix VARCHAR(200);
+  SET prefix = REPEAT('a', 190);
+  START TRANSACTION;
+  WHILE (i <= 500) DO
+    INSERT INTO t8 VALUES (i,
+      CONCAT(prefix, LPAD(i, 10, '0')),
+      CONCAT(prefix, LPAD(i % 100, 10, '0')));
+    SET i = i + 1;
+  END WHILE;
+  COMMIT;
+END|
+DELIMITER ;|
+CALL populate_t8();
+DROP PROCEDURE populate_t8;
+--enable_query_log
+
+CHECKSUM TABLE t8;
+
+FLUSH TABLE t8 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t8.ibd $MYSQLTEST_VARDIR/tmp/t8.ibd
+--copy_file $MYSQLD_DATADIR/test/t8.cfg $MYSQLTEST_VARDIR/tmp/t8.cfg
+UNLOCK TABLES;
+
+DROP TABLE t8;
+
+CREATE TABLE t8 (
+  id  INT NOT NULL PRIMARY KEY,
+  c1  VARCHAR(200),
+  c2  VARCHAR(200),
+  UNIQUE KEY uk_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+ALTER TABLE t8 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.ibd $MYSQLD_DATADIR/test/t8.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.cfg $MYSQLD_DATADIR/test/t8.cfg
+ALTER TABLE t8 IMPORT TABLESPACE;
+
+CHECK TABLE t8;
+
+CHECKSUM TABLE t8;
+
+# Both index scans must work
+SELECT COUNT(*) FROM t8 FORCE INDEX(uk_c1);
+SELECT COUNT(*) FROM t8 FORCE INDEX(idx_c2);
+
+# Cross-check SPC index vs PK
+--let $pk_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c2))) FROM t8 FORCE INDEX(PRIMARY)`
+--let $spc_chk = `SELECT BIT_XOR(CRC32(CONCAT(id,c2))) FROM t8 FORCE INDEX(idx_c2)`
+--let $assert_text = Mixed index import: PK and SPC(idx_c2) checksum must match
+--let $assert_cond = $pk_chk = $spc_chk
+--source include/assert.inc
+
+# DML on mixed-index table after import
+INSERT INTO t8 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+                            CONCAT(REPEAT('a',190),'0000000001'));
+UPDATE t8 SET c2 = CONCAT(REPEAT('b',190),'UPDATED001') WHERE id = 150;
+DELETE FROM t8 WHERE id = 1;
+
+SELECT COUNT(*) FROM t8;
+
+DROP TABLE t8;
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.cfg
+
+
+--echo #####################################
+--echo # Cleanup
+--echo #####################################
+
+--connection read_con
+disconnect read_con;
+
+--connection default
+DROP PROCEDURE populate_spc;
+DROP TABLE dummy_table;
+
+SET opt_index_format_hippo_enabled=default;
+
+--echo # Test completed successfully

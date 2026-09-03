@@ -31,15 +31,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-03-26 by Jianwei.zhao
  *******************************************************/
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "data0data.h"
 #include "dict0mem.h"
 #include "rem0cmp.h"
-#include "trx0undo.h"
 
-#include "lizard0dict.h"
-#include "lizard0undo.h"
+#include "lizard0dict0dict.h"
 
 /**
  * Read GPP_NO from dfield data which only exist in memory.
@@ -114,8 +111,10 @@ void dtuple_set_data_v_gfield(dtuple_t *entry, const dtuple_t *row) {
 ulint ibuf_dtuple_get_ordered_n_fields(const dtuple_t *entry,
                                        const dict_index_t *index) {
   ut_ad(entry && index && !index->is_clustered() && !index->is_panda());
-  assert_lizard_dict_index_gstored_check(index);
+  ut_ad(lizard::dict_index_check_gstored(index));
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
+  ut_ad(dict_index_txn_layout(index) == txn_layout_t::TL_NONE ||
+        dict_index_txn_layout(index) == txn_layout_t::TL_LOTUS);
   return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
 
@@ -128,7 +127,7 @@ ulint ibuf_dtuple_get_ordered_n_fields(const dtuple_t *entry,
 ulint row_search_dtuple_get_ordered_n_fields(const dtuple_t *entry,
                                              const dict_index_t *index) {
   ut_ad(entry && index && !index->is_clustered());
-  assert_lizard_dict_index_gstored_check(index);
+  ut_ad(lizard::dict_index_check_gstored(index));
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
   if (entry->n_panda_suffix) {
     ut_ad(dict_index_is_panda(index) &&
@@ -148,7 +147,7 @@ ulint row_search_dtuple_get_ordered_n_fields(const dtuple_t *entry,
 ulint row_upd_dtuple_get_user_n_fields(const dtuple_t *entry,
                                        const dict_index_t *index) {
   ut_ad(entry && index && !index->is_clustered());
-  assert_lizard_dict_index_gstored_check(index);
+  ut_ad(lizard::dict_index_check_gstored(index));
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
   return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
@@ -162,7 +161,7 @@ ulint row_upd_dtuple_get_user_n_fields(const dtuple_t *entry,
 ulint row_ver_dtuple_get_ordered_n_fields(const dtuple_t *entry,
                                           const dict_index_t *index) {
   ut_ad(entry && index && !index->is_clustered());
-  assert_lizard_dict_index_gstored_check(index);
+  ut_ad(lizard::dict_index_check_gstored(index));
   ut_ad(dtuple_get_n_fields(entry) == index->n_fields);
   return dtuple_get_n_fields(entry) - dict_index_n_sec_functional_fields(index);
 }
@@ -185,7 +184,7 @@ bool row_ver_sec_dtuple_coll_eq(const dtuple_t *tuple1, const dtuple_t *tuple2,
   ut_ad(dtuple_check_typed(tuple1));
   ut_ad(dtuple_check_typed(tuple2));
   ut_ad(!sec_index->is_clustered());
-  assert_lizard_dict_index_gstored_check(sec_index);
+  ut_ad(lizard::dict_index_check_gstored(sec_index));
 
   n_fields = row_ver_dtuple_get_ordered_n_fields(tuple1, sec_index);
 

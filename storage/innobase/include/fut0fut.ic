@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/13/1995 Heikki Tuuri
  ***********************************************************************/
 
+#if !defined(UNIV_HOTBACKUP)
+#ifndef fut0fut_h
+#define INNODB_FUT0FUT_IC_STANDALONE
+#include "fut0fut.h"
+#undef INNODB_FUT0FUT_IC_STANDALONE
+#endif /* !fut0fut_h */
 #include "buf0buf.h"
 #include "sync0rw.h"
 
@@ -63,3 +69,4 @@ static inline byte *fut_get_ptr(space_id_t space, const page_size_t &page_size,
 
   return (ptr);
 }
+#endif /* !defined(UNIV_HOTBACKUP) */

@@ -173,6 +173,7 @@ constexpr PaxosMsg::PaxosMsg(
   , myserverid_(uint64_t{0u})
   , applydelayseconds_(uint64_t{0u})
   , serverport_(uint64_t{0u})
+  , durationbeforevote_(uint64_t{0u})
   , applythreadrunning_(false)
   , disableelection_(false)
   , loginstance_(false){}
@@ -3092,19 +3093,22 @@ class PaxosMsg::_Internal {
     (*has_bits)[0] |= 536870912u;
   }
   static void set_has_applythreadrunning(HasBits* has_bits) {
-    (*has_bits)[0] |= 2147483648u;
-  }
-  static void set_has_disableelection(HasBits* has_bits) {
     (*has_bits)[1] |= 1u;
   }
-  static void set_has_loginstance(HasBits* has_bits) {
+  static void set_has_disableelection(HasBits* has_bits) {
     (*has_bits)[1] |= 2u;
+  }
+  static void set_has_loginstance(HasBits* has_bits) {
+    (*has_bits)[1] |= 4u;
   }
   static void set_has_serverip(HasBits* has_bits) {
     (*has_bits)[0] |= 4u;
   }
   static void set_has_serverport(HasBits* has_bits) {
     (*has_bits)[0] |= 1073741824u;
+  }
+  static void set_has_durationbeforevote(HasBits* has_bits) {
+    (*has_bits)[0] |= 2147483648u;
   }
   static bool MissingRequiredFields(const HasBits& has_bits) {
     return ((has_bits[0] & 0x000021e0) ^ 0x000021e0) != 0;
@@ -3252,14 +3256,14 @@ void PaxosMsg::Clear() {
   }
   if (cached_has_bits & 0xff000000u) {
     ::memset(&appliedindex_, 0, static_cast<size_t>(
-        reinterpret_cast<char*>(&applythreadrunning_) -
-        reinterpret_cast<char*>(&appliedindex_)) + sizeof(applythreadrunning_));
+        reinterpret_cast<char*>(&durationbeforevote_) -
+        reinterpret_cast<char*>(&appliedindex_)) + sizeof(durationbeforevote_));
   }
   cached_has_bits = _has_bits_[1];
-  if (cached_has_bits & 0x00000003u) {
-    ::memset(&disableelection_, 0, static_cast<size_t>(
+  if (cached_has_bits & 0x00000007u) {
+    ::memset(&applythreadrunning_, 0, static_cast<size_t>(
         reinterpret_cast<char*>(&loginstance_) -
-        reinterpret_cast<char*>(&disableelection_)) + sizeof(loginstance_));
+        reinterpret_cast<char*>(&applythreadrunning_)) + sizeof(loginstance_));
   }
   _has_bits_.Clear();
   _internal_metadata_.Clear<std::string>();
@@ -3606,6 +3610,15 @@ const char* PaxosMsg::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
+      // optional uint64 durationBeforeVote = 38;
+      case 38:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _Internal::set_has_durationbeforevote(&_has_bits_);
+          durationbeforevote_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -3829,21 +3842,21 @@ uint8_t* PaxosMsg::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(32, this->_internal_applydelayseconds(), target);
   }
 
+  cached_has_bits = _has_bits_[1];
   // optional bool applyThreadRunning = 33;
-  if (cached_has_bits & 0x80000000u) {
+  if (cached_has_bits & 0x00000001u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(33, this->_internal_applythreadrunning(), target);
   }
 
-  cached_has_bits = _has_bits_[1];
   // optional bool disableElection = 34;
-  if (cached_has_bits & 0x00000001u) {
+  if (cached_has_bits & 0x00000002u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(34, this->_internal_disableelection(), target);
   }
 
   // optional bool logInstance = 35;
-  if (cached_has_bits & 0x00000002u) {
+  if (cached_has_bits & 0x00000004u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(35, this->_internal_loginstance(), target);
   }
@@ -3859,6 +3872,12 @@ uint8_t* PaxosMsg::_InternalSerialize(
   if (cached_has_bits & 0x40000000u) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(37, this->_internal_serverport(), target);
+  }
+
+  // optional uint64 durationBeforeVote = 38;
+  if (cached_has_bits & 0x80000000u) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(38, this->_internal_durationbeforevote(), target);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -4110,21 +4129,28 @@ size_t PaxosMsg::ByteSizeLong() const {
           this->_internal_serverport());
     }
 
-    // optional bool applyThreadRunning = 33;
+    // optional uint64 durationBeforeVote = 38;
     if (cached_has_bits & 0x80000000u) {
-      total_size += 2 + 1;
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64Size(
+          this->_internal_durationbeforevote());
     }
 
   }
   cached_has_bits = _has_bits_[1];
-  if (cached_has_bits & 0x00000003u) {
-    // optional bool disableElection = 34;
+  if (cached_has_bits & 0x00000007u) {
+    // optional bool applyThreadRunning = 33;
     if (cached_has_bits & 0x00000001u) {
       total_size += 2 + 1;
     }
 
-    // optional bool logInstance = 35;
+    // optional bool disableElection = 34;
     if (cached_has_bits & 0x00000002u) {
+      total_size += 2 + 1;
+    }
+
+    // optional bool logInstance = 35;
+    if (cached_has_bits & 0x00000004u) {
       total_size += 2 + 1;
     }
 
@@ -4256,16 +4282,19 @@ void PaxosMsg::MergeFrom(const PaxosMsg& from) {
       serverport_ = from.serverport_;
     }
     if (cached_has_bits & 0x80000000u) {
-      applythreadrunning_ = from.applythreadrunning_;
+      durationbeforevote_ = from.durationbeforevote_;
     }
     _has_bits_[0] |= cached_has_bits;
   }
   cached_has_bits = from._has_bits_[1];
-  if (cached_has_bits & 0x00000003u) {
+  if (cached_has_bits & 0x00000007u) {
     if (cached_has_bits & 0x00000001u) {
-      disableelection_ = from.disableelection_;
+      applythreadrunning_ = from.applythreadrunning_;
     }
     if (cached_has_bits & 0x00000002u) {
+      disableelection_ = from.disableelection_;
+    }
+    if (cached_has_bits & 0x00000004u) {
       loginstance_ = from.loginstance_;
     }
     _has_bits_[1] |= cached_has_bits;

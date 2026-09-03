@@ -59,6 +59,8 @@ extern ulonglong recycle_scheduler_interval;
 extern bool opt_recycle_scheduler;
 /* Whether print the detailed information when purge table */
 extern bool recycle_scheduler_purge_table_print;
+/* Maximum number of consecutive skip rounds before forced execution */
+extern ulonglong recycle_scheduler_max_skip_rounds;
 
 /* recycle object allocator */
 template <typename T, typename... Args>
@@ -168,6 +170,28 @@ class Recycle_scheduler {
   bool purge_table(struct Recycle_show_result *recycle_table);
 
   /**
+    Purge expired tables and oversized tables in the recycle bin.
+
+    @param thd Thread handle for the current session
+    @param mem_root Memory pool
+    @param container Vector to store pointers to recycle table information
+
+    @return The minimum time (in seconds) until the next check is needed:
+            - If no tables exist, returns ULLONG_MAX
+  */
+  ulonglong detect_and_purge_recycle_table(THD *thd, MEM_ROOT *mem_root,
+                                           std::vector<Recycle_show_result*> *container);
+
+  /**
+    Check if the current purge round should be skipped.
+
+    @param[in]  curr_time_sec  Current time in seconds
+    @retval     true       Should skip this round
+    @retval     false      Should proceed with purge
+  */
+  bool should_skip_purge_round(ulonglong curr_time_sec);
+
+  /**
     Wakeup the sleep recycle scheduler.
   */
   void wakeup();
@@ -183,6 +207,16 @@ class Recycle_scheduler {
 
   mysql_mutex_t m_sleep_mutex;
   mysql_cond_t m_sleep_cond;
+
+  /* Local version number to track changes since last cleanup */
+  ulonglong m_last_cleanup_version;
+
+  /* Earliest expiration time (recycle_time + retention) of tables in recycle bin */
+  /* This represents the earliest time when any table needs to be purged */
+  ulonglong m_earliest_expiration_time;
+
+  /* Count of consecutive skip rounds since last purge execution */
+  ulonglong m_skip_count;
 };
 
 struct Recycle_scheduler_param {

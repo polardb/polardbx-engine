@@ -44,7 +44,7 @@ commit;
 alter table t1 add column c2 int after id;
 begin;
 select count(0) from t1;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 commit;
 #########################################
 #  Case 5
@@ -110,7 +110,7 @@ commit;
 alter table t1 add column c2 int after id;
 begin;
 select count(0) from t1;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 commit;
 #########################################
 #  Case 5

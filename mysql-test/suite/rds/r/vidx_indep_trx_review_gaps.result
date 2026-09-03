@@ -1,0 +1,104 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+##############################################
+# 1. Lazy-cleanup orphan-row reclamation     #
+#    Vidx_invalidate_skip_* counter is       #
+#    monotonic; indep_dml_commit grows.      #
+##############################################
+SELECT VARIABLE_VALUE INTO @sk_nf_before FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_invalidate_skip_not_found';
+SELECT VARIABLE_VALUE INTO @ic_before FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+UPDATE t1 SET v = VEC_FROMTEXT('[2,2,2]') WHERE id = 1;
+UPDATE t1 SET v = VEC_FROMTEXT('[3,3,3]') WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+SELECT VARIABLE_VALUE INTO @sk_nf_after FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_invalidate_skip_not_found';
+SELECT VARIABLE_VALUE INTO @ic_after FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT @sk_nf_after >= @sk_nf_before AS lazy_clean_monotonic;
+lazy_clean_monotonic
+1
+SELECT @ic_after > @ic_before AS indep_commits_grew;
+indep_commits_grew
+1
+
+##############################################
+# 2. trigger / stored function DML path      #
+#    Verifies in_sub_stmt save/clear in      #
+#    hlindex_indep_dml                       #
+##############################################
+CREATE TABLE t_src (id INT PRIMARY KEY, payload INT) ENGINE=InnoDB;
+CREATE TRIGGER tr_src_ai AFTER INSERT ON t_src
+FOR EACH ROW
+BEGIN
+INSERT INTO t1(a, v) VALUES (200 + NEW.id,
+VEC_FROMTEXT(CONCAT('[', NEW.payload, ',',
+NEW.payload, ',',
+NEW.payload, ']')));
+END//
+SELECT VARIABLE_VALUE INTO @ic_trig_before FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+INSERT INTO t_src VALUES (1, 33);
+SELECT VARIABLE_VALUE INTO @ic_trig_after FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT @ic_trig_after > @ic_trig_before AS trigger_body_indep_commit;
+trigger_body_indep_commit
+1
+SELECT COUNT(*) AS t1_has_trigger_row FROM t1 WHERE a = 201;
+t1_has_trigger_row
+1
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t2(a, v) SELECT a + 100, v FROM t1
+WHERE id IN (SELECT id FROM t1 WHERE a > 0);
+SELECT COUNT(*) > 0 AS t2_has_rows FROM t2;
+t2_has_rows
+1
+DROP TRIGGER tr_src_ai;
+DROP TABLE t_src;
+DROP TABLE t2;
+
+##############################################
+# 3. DDL failure rollback                    #
+#    failed_before_vidx_ddl injects a        #
+#    hlindex creation failure                #
+##############################################
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3)
+) ENGINE = InnoDB;
+SET SESSION debug = '+d,failed_before_vidx_ddl';
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+ERROR HY000: Create vector index `vi` in `test`.`#sql-XXXX_XX` (aux_tab: vidx_NNN_0) failed: debug failed before vidx ddl.
+SET SESSION debug = '-d,failed_before_vidx_ddl';
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t3;
+
+##############################################
+# Cleanup                                    #
+##############################################
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

@@ -1,0 +1,44 @@
+#
+# Bug: dict_create_index_tree_in_mem() did not check the root
+# returned by btr_create(). When btr_create() failed (returned
+# FIL_NULL), a FREE_TREE_LOG record with page_no = FIL_NULL
+# (4294967295) was persisted into mysql.innodb_ddl_log. Replaying
+# that record on recovery crashed the server repeatedly with
+# "Trying to access page number 4294967295 ... which is outside
+# the tablespace bounds".
+#
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT) ENGINE = InnoDB;
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30);
+# Simulate out-of-space failure of btr_create() when building
+# the new index tree. The DDL must fail cleanly instead of
+# logging a FREE_TREE_LOG record with an invalid page number.
+SET SESSION debug = '+d,ib_btr_create_fail_root_seg';
+ALTER TABLE t1 ADD INDEX idx_b (b);
+ERROR HY000: The table 't1' is full
+SET SESSION debug = '-d,ib_btr_create_fail_root_seg';
+# Restart to verify that DDL log recovery does not replay any
+# bad FREE_TREE_LOG record (page_no = FIL_NULL) and crash.
+# restart
+SELECT * FROM t1;
+a	b
+1	10
+2	20
+3	30
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Index creation succeeds once the failure injection is gone.
+ALTER TABLE t1 ADD INDEX idx_b (b);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  PRIMARY KEY (`a`),
+  KEY `idx_b` (`b`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;

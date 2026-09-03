@@ -44,3 +44,8 @@ leak:sasl_client_add_plugin
 
 # The GSS API plugin for SASL has leaks.
 leak:gss_acquire_cred_from
+
+# easy network library: AUTOCONN session pool not freed on shutdown.
+# The connect session's pool becomes orphaned after connection establishment.
+# Bounded leak: 512 bytes per Paxos peer, only during Paxos::init.
+leak:easy_pool_create

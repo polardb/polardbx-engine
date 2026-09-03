@@ -178,6 +178,10 @@ struct trx_named_savept_t {
 
 UT_LIST_NODE_GETTER_DEFINITION(trx_named_savept_t, trx_savepoints)
 
+extern void trx_rollback_active(trx_t *trx); /*!< in/out: transaction */
+
+#ifndef INNODB_TRX0ROLL_IC_STANDALONE
 #include "trx0roll.ic"
+#endif /* !INNODB_TRX0ROLL_IC_STANDALONE */
 
 #endif

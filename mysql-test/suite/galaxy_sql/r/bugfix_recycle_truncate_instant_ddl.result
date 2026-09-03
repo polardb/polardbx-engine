@@ -1,0 +1,86 @@
+create database db_recycle;
+use db_recycle;
+------------------------------------------------------
+case 1.
+------------------------------------------------------
+create table t1 (c1 int);
+insert into t1 (c1) values (1);
+alter table t1 add column c2 int;
+insert into t1 (c1) values (1);
+alter table t1 drop column c2;
+insert into t1 (c1) values (1);
+set session recycle_bin=on;
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `c1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_165");
+insert into t1 (c1) values (1);
+alter table t1 add column c2 int;
+insert into t1 (c1) values (1);
+alter table t1 drop column c2;
+insert into t1 (c1) values (1);
+set session recycle_bin=on;
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `c1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+call dbms_recycle.purge_table("__innodb_165");
+drop table t1;
+call dbms_recycle.purge_table("__innodb_165");
+------------------------------------------------------
+case 2.
+------------------------------------------------------
+create table t1 (c1 int)
+PARTITION BY HASH(c1)
+PARTITIONS 4;
+insert into t1 (c1) values (1);
+alter table t1 add column c2 int;
+insert into t1 (c1) values (1);
+alter table t1 drop column c2;
+insert into t1 (c1) values (1);
+set session recycle_bin=on;
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `c1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 4 */
+call dbms_recycle.purge_table("__innodb_165");
+insert into t1 (c1) values (1);
+alter table t1 add column c2 int;
+insert into t1 (c1) values (1);
+alter table t1 drop column c2;
+insert into t1 (c1) values (1);
+set session recycle_bin=on;
+truncate table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_165	db_recycle	t1	#	#
+show create table __recycle_bin__.__innodb_165;
+Table	Create Table
+__innodb_165	CREATE TABLE `__innodb_165` (
+  `c1` int DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 4 */
+call dbms_recycle.purge_table("__innodb_165");
+drop table t1;
+call dbms_recycle.purge_table("__innodb_165");
+set session recycle_bin=off;
+drop database db_recycle;

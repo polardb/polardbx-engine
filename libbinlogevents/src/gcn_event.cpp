@@ -36,11 +36,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "event_reader.h"
 #include "event_reader_macros.h"
 
-#include "sql/xa/lizard_cmmt_policy.h"
+#include "sql/xa/komodo0cmmt0policy.h"
 
 namespace binary_log {
 
-Gcn_event::Gcn_event(const lizard::Commit_policy *policy,
+Gcn_event::Gcn_event(const komodo::Commit_policy *policy,
                      const uint64_t innodb_commit_gcn,
                      const uint64_t innodb_snapshot_gcn)
     : Binary_log_event(GCN_LOG_EVENT), flags(0), gcn(GCN_NULL) {

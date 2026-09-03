@@ -1,0 +1,181 @@
+##########################################
+# Test GTID mode replication for         #
+# VECTOR INDEX operations                #
+##########################################
+--source include/have_gtid.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/master-slave.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--echo
+--echo # 1. Setup slave
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+
+--echo
+--echo # 2. Setup master
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo # 3. Create table with vector index on master
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 4. Insert data on master
+--disable_warnings
+INSERT INTO t1(name, v) VALUES ('vec1', VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(name, v) VALUES ('vec2', VEC_FROMTEXT("[5,4,3,2,1]"));
+INSERT INTO t1(name, v) VALUES ('vec3', VEC_FROMTEXT("[1,1,1,1,1]"));
+INSERT INTO t1(name, v) VALUES ('vec4', VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t1(name, v) VALUES ('vec5', VEC_FROMTEXT("[3,3,3,3,3]"));
+--enable_warnings
+
+--echo # Master data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Master ANN query
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+
+--echo
+--echo # 5. Sync slave and verify
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify table structure on slave
+SHOW CREATE TABLE t1;
+
+--echo # Verify data consistency on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify EXPLAIN on slave uses vector index
+EXPLAIN SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+
+--echo # Verify ANN query on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+
+--echo
+--echo # 6. Test UPDATE replication
+--source include/rpl_connection_master.inc
+--disable_warnings
+UPDATE t1 SET v = VEC_FROMTEXT("[9,9,9,9,9]") WHERE id = 1;
+--enable_warnings
+
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify update on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--echo # Verify ANN query finds updated vector on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[9,9,9,9,9]")) LIMIT 1;
+
+--echo
+--echo # 7. Test DELETE replication
+--source include/rpl_connection_master.inc
+DELETE FROM t1 WHERE id = 2;
+
+SELECT COUNT(*) FROM t1;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify delete on slave
+SELECT COUNT(*) FROM t1;
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 8. Test transaction replication
+--source include/rpl_connection_master.inc
+
+BEGIN;
+--disable_warnings
+INSERT INTO t1(name, v) VALUES ('vec6', VEC_FROMTEXT("[6,6,6,6,6]"));
+INSERT INTO t1(name, v) VALUES ('vec7', VEC_FROMTEXT("[7,7,7,7,7]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[8,8,8,8,8]") WHERE id = 3;
+--enable_warnings
+COMMIT;
+
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify transaction on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 9. Test DDL replication - ALTER TABLE
+--source include/rpl_connection_master.inc
+
+ALTER TABLE t1 DROP INDEX `vi`;
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v) m=16 distance=cosine;
+SHOW CREATE TABLE t1;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify DDL on slave
+SHOW CREATE TABLE t1;
+
+--echo # Verify ANN query with new index on slave.  The probe vector ties
+--echo # with every [k,k,k,k,k] row on cosine distance, so the member order
+--echo # depends on graph traversal; assert the row count only.
+SELECT COUNT(*) AS ann_rows FROM (
+  SELECT id FROM t1 FORCE INDEX(`vi2`)
+  ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3
+) q;
+
+--echo
+--echo # 10. Test TRUNCATE replication
+--source include/rpl_connection_master.inc
+
+TRUNCATE TABLE t1;
+SELECT COUNT(*) FROM t1;
+SHOW CREATE TABLE t1;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify truncate on slave
+SELECT COUNT(*) FROM t1;
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 11. Insert after truncate and verify
+--source include/rpl_connection_master.inc
+--disable_warnings
+INSERT INTO t1(name, v) VALUES ('new_vec1', VEC_FROMTEXT("[1,1,1,1,1]"));
+INSERT INTO t1(name, v) VALUES ('new_vec2', VEC_FROMTEXT("[2,2,2,2,2]"));
+--enable_warnings
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+
+--echo # Verify new data on slave
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+SELECT id, name, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi2`) ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT("[1,1,1,1,1]")) LIMIT 2;
+
+--echo
+--echo # 12. Clean up
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

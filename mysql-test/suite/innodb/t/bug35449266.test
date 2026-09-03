@@ -1,0 +1,75 @@
+#
+# Bug#35449266 Column rename that differs only in letter case breaks
+#              INSTANT metadata.
+#
+# InnoDB get_renamed_col() used case-sensitive strcmp() to match the old
+# column name, while the server compares identifiers case-insensitively.
+# In a non-instant, non-rebuild inplace ALTER (e.g. combined with ADD
+# INDEX) that renames a column and refers to the old column name with a
+# different letter case, the column was wrongly treated as dropped and
+# its INSTANT metadata (physical position / version info / default) was
+# not migrated to the new dd::Table. Debug builds hit
+# ut_ad(dd_column->se_private_data().exists("physical_pos")) in
+# dd_write_table() right at DDL commit; release builds persisted a
+# corrupted data dictionary.
+#
+# Flow:
+# 1. INSTANT ADD creates a row version.
+# 2. ADD INDEX + CHANGE COLUMN referring to the old name with different
+#    case forces the inplace (non-instant) metadata copy path.
+# 3. Repeat on multi-row-version and INSTANT DROP combinations.
+# 4. Control case: a genuine drop/add pair must not be taken as rename.
+# 5. Restart and verify old and new rows are still interpreted correctly.
+#
+
+# --- Setup ---
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--echo # Step 1: create table and INSTANT ADD a column (creates row version)
+CREATE TABLE t1 (id INT PRIMARY KEY, c1 INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 1);
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 100, ALGORITHM=INSTANT;
+INSERT INTO t1 VALUES (2, 2, 200);
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 2: inplace ALTER renames c2 but refers to it as C2 (case
+--echo #         mismatch); ADD INDEX kicks the statement out of INSTANT
+ALTER TABLE t1 ADD INDEX i1(c1), CHANGE COLUMN C2 c2x INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+CHECK TABLE t1;
+
+--echo # Step 3: further INSTANT ADD on the renamed table (multi version)
+ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 7, ALGORITHM=INSTANT;
+INSERT INTO t1 VALUES (3, 3, 300, 30);
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 4: case-mismatched rename again on the multi-version table
+ALTER TABLE t1 ADD INDEX i2(id), CHANGE COLUMN C2X c2y INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 5: case-only rename (c3 -> C3) combined with an index op
+ALTER TABLE t1 ADD INDEX i3(c3), RENAME COLUMN c3 TO C3;
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 6: INSTANT DROP then case-mismatched rename
+ALTER TABLE t1 DROP INDEX i1;
+ALTER TABLE t1 DROP COLUMN c1, ALGORITHM=INSTANT;
+ALTER TABLE t1 DROP INDEX i2, CHANGE COLUMN C2Y c2z INT DEFAULT 100;
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 7: control - genuine drop/add pair must not be seen as rename
+ALTER TABLE t1 DROP COLUMN c2z, ADD COLUMN d1 INT, ALGORITHM=INSTANT;
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Step 8: restart and verify reads and writes on all row versions
+--source include/restart_mysqld.inc
+SHOW CREATE TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+INSERT INTO t1 VALUES (4, 40, 4);
+SELECT * FROM t1 ORDER BY id;
+CHECK TABLE t1;
+
+# --- Cleanup ---
+DROP TABLE t1;

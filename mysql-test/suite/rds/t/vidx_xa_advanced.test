@@ -1,0 +1,508 @@
+##########################################
+# XA + VECTOR INDEX – advanced scenarios #
+# RDS Master/Slave Verification          #
+##########################################
+
+# TEST: vidx_xa_advanced
+#
+# Covers scenarios NOT in vidx_xa_deferred:
+#   - Auxiliary table (hlindex) row count verification on master & slave
+#   - XA ROLLBACK auxiliary table proof
+#   - xa_detach_on_prepare ON/OFF coverage
+#   - Multi-table with vector index in single XA
+#   - Large batch INSERT in XA
+#   - XA with NULL vector → UPDATE to populate
+#   - XA ROLLBACK then immediate XA COMMIT (aux_thd reuse)
+#   - ANN search consistency verification on slave
+#
+# Cross-reference for set_prepared_in_tc behavior:
+#   §4 (XA ROLLBACK) and §5 (ROLLBACK then COMMIT) exercise the
+#   non-detach branch of set_prepared_in_tc — at PREPARE time it
+#   returns 0, share-cache invalidation is deferred to do_rollback
+#   / do_commit on the same thd.  §6 (xa_detach_on_prepare = ON)
+#   exercises the eager-flush branch.  §7 (xa_detach_on_prepare =
+#   OFF) is the same-thd commit path.  The disconnect-degrades-to-
+#   detach forwarder (THD::cleanup → flush_share_cache_on_xa_-
+#   disconnect) is covered by vidx_xa.test §3 and the focused
+#   vidx_xa_prepare_flush.test §4.
+
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/have_debug.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+
+--echo ########################################
+--echo # Setup: create tables + seed data    #
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  label VARCHAR(32) NOT NULL DEFAULT '',
+  v VECTOR(3),
+  VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+
+--echo # Seed data
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+INSERT INTO t2(label, v) VALUES ('a', VEC_FROMTEXT("[10,10,10]"));
+INSERT INTO t2(label, v) VALUES ('b', VEC_FROMTEXT("[20,20,20]"));
+
+# Cache InnoDB TABLE_ID on master for aux table name
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+
+--source include/rpl_sync.inc
+
+# Cache TABLE_ID on slave (different from master)
+--source include/rpl_connection_slave.inc
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+
+--echo
+--echo ########################################
+--echo # 1. Verify seed: main + aux tables   #
+--echo ########################################
+--source include/rpl_connection_master.inc
+--echo # Master
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 2. XA INSERT - aux count increases  #
+--echo ########################################
+--source include/rpl_connection_master.inc
+XA START 'xa_ins';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10]"));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT("[11,11,11]"));
+XA END 'xa_ins';
+XA PREPARE 'xa_ins';
+XA COMMIT 'xa_ins';
+
+--source include/rpl_sync.inc
+
+--echo # Master: main + aux
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave: main + aux
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 3. Multi-table XA with aux verify   #
+--echo ########################################
+--source include/rpl_connection_master.inc
+XA START 'xa_multi';
+INSERT INTO t2(label, v) VALUES ('c', VEC_FROMTEXT("[30,30,30]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[5,5,5]") WHERE a = 1;
+DELETE FROM t1 WHERE a = 2;
+XA END 'xa_multi';
+XA PREPARE 'xa_multi';
+XA COMMIT 'xa_multi';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 4. XA ROLLBACK - aux table UNCHANGED#
+--echo ########################################
+--source include/rpl_connection_master.inc
+--echo # Record aux count before rollback
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+XA START 'xa_rb';
+INSERT INTO t1(a, v) VALUES (99, VEC_FROMTEXT("[99,99,99]"));
+DELETE FROM t1 WHERE a = 3;
+XA END 'xa_rb';
+XA PREPARE 'xa_rb';
+XA ROLLBACK 'xa_rb';
+
+--source include/rpl_sync.inc
+
+--echo # Master: aux count after rollback (must match before)
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+--echo # Rolled-back row must NOT exist
+SELECT COUNT(*) AS a99_count FROM t1 WHERE a = 99;
+--echo # Existing row must still exist
+SELECT COUNT(*) AS a3_count FROM t1 WHERE a = 3;
+
+--echo # Slave: verify rollback
+--source include/rpl_connection_slave.inc
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS a99_count FROM t1 WHERE a = 99;
+SELECT COUNT(*) AS a3_count FROM t1 WHERE a = 3;
+
+--echo
+--echo ########################################
+--echo # 5. XA ROLLBACK then XA COMMIT      #
+--echo #    Verify aux_thd reuse after rb    #
+--echo ########################################
+--source include/rpl_connection_master.inc
+XA START 'xa_rb2';
+INSERT INTO t1(a, v) VALUES (300, VEC_FROMTEXT("[30,30,30]"));
+XA END 'xa_rb2';
+XA PREPARE 'xa_rb2';
+XA ROLLBACK 'xa_rb2';
+
+XA START 'xa_after_rb';
+INSERT INTO t1(a, v) VALUES (301, VEC_FROMTEXT("[31,31,31]"));
+XA END 'xa_after_rb';
+XA PREPARE 'xa_after_rb';
+XA COMMIT 'xa_after_rb';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a300_count FROM t1 WHERE a = 300;
+SELECT COUNT(*) AS a301_count FROM t1 WHERE a = 301;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a300_count FROM t1 WHERE a = 300;
+SELECT COUNT(*) AS a301_count FROM t1 WHERE a = 301;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 6. xa_detach_on_prepare = ON        #
+--echo ########################################
+--source include/rpl_connection_master.inc
+SET SESSION xa_detach_on_prepare = ON;
+XA START 'xa_detach_on';
+INSERT INTO t1(a, v) VALUES (400, VEC_FROMTEXT("[40,40,40]"));
+XA END 'xa_detach_on';
+XA PREPARE 'xa_detach_on';
+XA COMMIT 'xa_detach_on';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 7. xa_detach_on_prepare = OFF       #
+--echo ########################################
+--source include/rpl_connection_master.inc
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_detach_off';
+INSERT INTO t1(a, v) VALUES (500, VEC_FROMTEXT("[50,50,50]"));
+XA END 'xa_detach_off';
+XA PREPARE 'xa_detach_off';
+XA COMMIT 'xa_detach_off';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 8. NULL vector then UPDATE          #
+--echo #    aux table tracks changes         #
+--echo ########################################
+--source include/rpl_connection_master.inc
+--echo # Aux count before NULL inserts
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before_null FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+XA START 'xa_null';
+INSERT INTO t1(a, v) VALUES (600, NULL);
+INSERT INTO t1(a, v) VALUES (601, NULL);
+XA END 'xa_null';
+XA PREPARE 'xa_null';
+XA COMMIT 'xa_null';
+
+--echo # After NULL insert: aux count should NOT increase
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_null FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+XA START 'xa_set_vec';
+UPDATE t1 SET v = VEC_FROMTEXT("[60,60,60]") WHERE a = 600;
+UPDATE t1 SET v = VEC_FROMTEXT("[61,61,61]") WHERE a = 601;
+XA END 'xa_set_vec';
+XA PREPARE 'xa_set_vec';
+XA COMMIT 'xa_set_vec';
+
+--source include/rpl_sync.inc
+
+--echo # After UPDATE to set vector: aux count should increase
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 9. Batch INSERT in XA              #
+--echo ########################################
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+XA START 'xa_batch';
+INSERT INTO t1(a, v) VALUES (701, VEC_FROMTEXT("[71,71,71]"));
+INSERT INTO t1(a, v) VALUES (702, VEC_FROMTEXT("[72,72,72]"));
+INSERT INTO t1(a, v) VALUES (703, VEC_FROMTEXT("[73,73,73]"));
+INSERT INTO t1(a, v) VALUES (704, VEC_FROMTEXT("[74,74,74]"));
+INSERT INTO t1(a, v) VALUES (705, VEC_FROMTEXT("[75,75,75]"));
+INSERT INTO t1(a, v) VALUES (706, VEC_FROMTEXT("[76,76,76]"));
+INSERT INTO t1(a, v) VALUES (707, VEC_FROMTEXT("[77,77,77]"));
+INSERT INTO t1(a, v) VALUES (708, VEC_FROMTEXT("[78,78,78]"));
+INSERT INTO t1(a, v) VALUES (709, VEC_FROMTEXT("[79,79,79]"));
+INSERT INTO t1(a, v) VALUES (710, VEC_FROMTEXT("[80,80,80]"));
+XA END 'xa_batch';
+XA PREPARE 'xa_batch';
+XA COMMIT 'xa_batch';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ########################################
+--echo # 10. XA ROLLBACK then re-INSERT same #
+--echo #     id via new XA (DUPP_KEY compat) #
+--echo #                                     #
+--echo # XA PREPARE commits aux table row;   #
+--echo # XA ROLLBACK rolls back main table   #
+--echo # but leaves aux table row intact.    #
+--echo # Re-inserting the same logical row   #
+--echo # in a new XA triggers DUPP_KEY on    #
+--echo # aux table - must be tolerated.      #
+--echo ########################################
+--source include/rpl_connection_master.inc
+
+--echo # Insert a row, then XA ROLLBACK it
+XA START 'xa_rb_reinsert_1';
+INSERT INTO t1(id, a, v) VALUES (9001, 91, VEC_FROMTEXT("[91,91,91]"));
+XA END 'xa_rb_reinsert_1';
+XA PREPARE 'xa_rb_reinsert_1';
+XA ROLLBACK 'xa_rb_reinsert_1';
+
+--echo # Re-insert the same id in a new XA and commit
+--echo # Aux table already has a row with this tref from the previous
+--echo # XA PREPARE; clear_stale_tref_node must handle the conflict.
+XA START 'xa_rb_reinsert_2';
+INSERT INTO t1(id, a, v) VALUES (9001, 92, VEC_FROMTEXT("[92,92,92]"));
+XA END 'xa_rb_reinsert_2';
+XA PREPARE 'xa_rb_reinsert_2';
+XA COMMIT 'xa_rb_reinsert_2';
+
+--source include/rpl_sync.inc
+
+--echo # Master: id=9001 must exist with a=92
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9001;
+
+--echo # Slave: same
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 9001;
+
+--echo
+--echo ########################################
+--echo # 11. (removed) worker-retry injection #
+--echo ########################################
+# The previous version of §11 injected a debug point named
+# `simulate_hl_lock_timeout_once` that never existed in the source
+# tree, so the case exercised nothing while pretending to validate
+# the worker-retry-after-aux-partial-commit path.  Removing it is
+# preferable to leaving a dead test in place — concurrent retry
+# behaviour for the indep-DML aux path is genuinely covered by
+# vidx_neighbor_save_high_conc.test and vidx_dup_key_repro_stress.test
+# (and ER_LOCK_WAIT_TIMEOUT injection has dedicated coverage in
+# vidx_indep_trx_debug.test via vidx_indep_dml_fail_before_commit).
+
+--echo
+--echo ########################################
+--echo # 12. ANN search consistency          #
+--echo ########################################
+--source include/rpl_connection_master.inc
+--echo # ANN on t1 (master)
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5]")) LIMIT 5;
+--echo # ANN on t2 (master)
+--sorted_result
+SELECT id FROM t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[15,15,15]")) LIMIT 3;
+
+--echo # ANN on t1 (slave)
+--source include/rpl_connection_slave.inc
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5]")) LIMIT 5;
+--echo # ANN on t2 (slave)
+--sorted_result
+SELECT id FROM t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[15,15,15]")) LIMIT 3;
+
+--echo
+--echo ########################################
+--echo # Cleanup                             #
+--echo ########################################
+--enable_warnings
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

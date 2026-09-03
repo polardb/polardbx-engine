@@ -1,0 +1,152 @@
+##########################################
+# VECTOR INDEX with RENAME TABLE and cross-database migration
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo #
+--echo # Cleanup before test
+--echo #
+--disable_warnings
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+--enable_warnings
+
+--echo #
+--echo # 7.1 Create db1.t1 with VECTOR INDEX (no INSERT due to crash bug)
+--echo #
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+
+CREATE TABLE db1.t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) m=10 distance=euclidean
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE db1.t1;
+
+--echo # Check auxiliary tables in db1
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+
+--echo #
+--echo # 7.2 RENAME TABLE within same database (db1.t1 -> db1.t2)
+--echo #
+RENAME TABLE db1.t1 TO db1.t2;
+SHOW CREATE TABLE db1.t2;
+
+--echo # Check auxiliary tables still in db1 (with new table name)
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+
+--echo #
+--echo # 7.3 RENAME TABLE cross database (db1.t2 -> db2.t1)
+--echo #
+RENAME TABLE db1.t2 TO db2.t1;
+SHOW CREATE TABLE db2.t1;
+
+--echo # Check auxiliary tables migrated to db2
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%' ORDER BY NAME;
+
+--echo # Verify db1 has no more vidx tables
+SELECT COUNT(*) AS db1_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%';
+
+--echo #
+--echo # 7.4 Verify VECTOR INDEX is still functional after cross-db rename
+--echo #
+SHOW CREATE TABLE db2.t1;
+
+SHOW INDEX FROM db2.t1;
+
+--echo #
+--echo # 7.5 INSERT test (Blocked by INSERT crash bug)
+--echo #
+# Note: INSERT tests are blocked by INSERT crash bug at lock0lock.cc:5283
+# The following tests would be:
+# INSERT INTO db2.t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4]'));
+# SELECT * FROM db2.t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4]')) LIMIT 1;
+
+--echo #
+--echo # 7.6 RENAME back to db1 - verify round-trip rename correctness
+--echo #
+RENAME TABLE db2.t1 TO db1.t1;
+SHOW CREATE TABLE db1.t1;
+
+--echo # Verify auxiliary tables back in db1
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+
+--echo # Verify db2 has no more vidx tables
+SELECT COUNT(*) AS db2_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%';
+
+--echo #
+--echo # 7.7 Multiple consecutive cross-database renames - verify auxiliary table consistency
+--echo #
+
+--echo # Rename 1: db1 -> db2
+RENAME TABLE db1.t1 TO db2.t1;
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+
+--echo # Rename 2: db2 -> db1 
+RENAME TABLE db2.t1 TO db1.t1;
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+
+--echo # Rename 3: db1 -> db2 (different table name)
+RENAME TABLE db1.t1 TO db2.t2;
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+
+--echo # Final verification
+SHOW CREATE TABLE db2.t2;
+
+--echo #
+--echo # Additional: Test RENAME with multiple VECTOR INDEX tables
+--echo #
+CREATE TABLE db1.t_multi1 (
+  id INT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi(v) m=6 distance=cosine
+) ENGINE=InnoDB;
+
+CREATE TABLE db1.t_multi2 (
+  id INT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=8 distance=euclidean
+) ENGINE=InnoDB;
+
+--echo # Verify both tables have auxiliary tables
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+
+--echo # Rename both tables to db2
+RENAME TABLE db1.t_multi1 TO db2.t_multi1, db1.t_multi2 TO db2.t_multi2;
+
+--echo # Verify auxiliary tables migrated
+--replace_regex /vidx_[0-9]+/vidx_XXXXX/
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%' ORDER BY NAME;
+
+SHOW CREATE TABLE db2.t_multi1;
+SHOW CREATE TABLE db2.t_multi2;
+
+--echo #
+--echo # Cleanup
+--echo #
+DROP DATABASE db1;
+DROP DATABASE db2;
+
+SET GLOBAL vidx_disabled = ON;

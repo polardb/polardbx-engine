@@ -670,7 +670,7 @@ bool set_record_buffer(TABLE *table, double expected_rows_to_fetch) {
       Assume that the existing buffer has the shape we want. That is, the
       record size shouldn't change for a table during execution.
     */
-    assert(table->m_record_buffer.record_size() == record_prefix_size(table));
+    assert(table->m_record_buffer.data_size() == record_prefix_size(table));
     table->m_record_buffer.reset();
     table->file->ha_set_record_buffer(&table->m_record_buffer);
     return false;
@@ -685,7 +685,9 @@ bool set_record_buffer(TABLE *table, double expected_rows_to_fetch) {
     read set. We don't need to allocate space for unread columns at
     the end of the record.
   */
-  const size_t record_size = record_prefix_size(table);
+  const size_t data_size = record_prefix_size(table);
+  const size_t extra_size = sizeof(komodo::gpp_no_t);
+  const size_t record_size = data_size + extra_size;
 
   // Do not allocate a buffer whose total size exceeds MAX_RECORD_BUFFER_SIZE.
   if (record_size > 0)
@@ -695,11 +697,12 @@ bool set_record_buffer(TABLE *table, double expected_rows_to_fetch) {
   // Do not allocate space for more rows than the handler asked for.
   rows_in_buffer = std::min(rows_in_buffer, max_rows);
 
-  const auto bufsize = Record_buffer::buffer_size(rows_in_buffer, record_size);
+  const auto bufsize = static_cast<size_t>(rows_in_buffer * record_size);
   const auto ptr = pointer_cast<uchar *>(current_thd->alloc(bufsize));
   if (ptr == nullptr) return true; /* purecov: inspected */
 
-  table->m_record_buffer = Record_buffer{rows_in_buffer, record_size, ptr};
+  table->m_record_buffer =
+      Record_buffer{rows_in_buffer, data_size, extra_size, ptr};
   table->file->ha_set_record_buffer(&table->m_record_buffer);
   return false;
 }
@@ -3784,7 +3787,7 @@ AccessPath *QEP_TAB::access_path() {
     case JT_INDEX_SCAN:
       path = NewIndexScanAccessPath(join()->thd, table(), index(), use_order(),
                                     m_reversed_access,
-                                    /*count_examined_rows=*/true);
+                                    /*count_examined_rows=*/true, vec_func());
       break;
     case JT_ALL:
     case JT_RANGE:
@@ -4735,7 +4738,8 @@ AccessPath *create_table_access_path(THD *thd, TABLE *table,
 
 unique_ptr_destroy_only<RowIterator> init_table_iterator(
     THD *thd, TABLE *table, AccessPath *range_scan, Table_ref *table_ref,
-    POSITION *position, bool ignore_not_found_rows, bool count_examined_rows) {
+    POSITION *position, bool ignore_not_found_rows, bool count_examined_rows,
+    komodo::guess_mode_t gmode) {
   unique_ptr_destroy_only<RowIterator> iterator;
 
   empty_record(table);
@@ -4747,7 +4751,7 @@ unique_ptr_destroy_only<RowIterator> init_table_iterator(
         thd, thd->mem_root, Mem_root_array<TABLE *>{table},
         table->unique_result.io_cache, ignore_not_found_rows,
         /*has_null_flags=*/false,
-        /*examined_rows=*/nullptr);
+        /*examined_rows=*/nullptr, gmode);
     table->unique_result.io_cache =
         nullptr;  // Now owned by SortFileIndirectIterator.
   } else if (table->unique_result.has_result_in_memory()) {
@@ -4760,7 +4764,7 @@ unique_ptr_destroy_only<RowIterator> init_table_iterator(
     iterator = NewIterator<SortBufferIndirectIterator>(
         thd, thd->mem_root, Mem_root_array<TABLE *>{table},
         &table->unique_result, ignore_not_found_rows, /*has_null_flags=*/false,
-        /*examined_rows=*/nullptr);
+        /*examined_rows=*/nullptr, gmode);
   } else {
     AccessPath *path = create_table_access_path(
         thd, table, range_scan, table_ref, position, count_examined_rows);

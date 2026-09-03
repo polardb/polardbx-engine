@@ -41,7 +41,7 @@ call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Changing innodb_extend_and_i
 call mtr.add_suppression("Failed to initialize TLS for channel: mysql_main");
 
 let $total_global_vars=`SELECT COUNT(*) FROM performance_schema.global_variables where variable_name NOT LIKE 'ndb_%' AND variable_name NOT LIKE 'debug_%'`;
-let $total_persistent_vars=672;
+let $total_persistent_vars= 752;
 
 --echo ***************************************************************
 --echo * 0. Verify that variables present in performance_schema.global
@@ -68,7 +68,6 @@ performance_schema.global_variables WHERE variable_name NOT IN
 'innodb_monitor_disable',
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
-'rds_active_memory_profiling',
 'rbr_exec_mode');
 
 --let $count_vars= `SELECT COUNT(*) FROM global_vars;`

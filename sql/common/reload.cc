@@ -40,6 +40,9 @@ SHOW_VAR reload_entry_status[] = {
     {"outline",
      (char *)offsetof(System_status_var, reload_stat[(uint)RELOAD_OUTLINE]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"ai_model",
+     (char *)offsetof(System_status_var, reload_stat[(uint)RELOAD_AI_MODEL]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
 
 /**

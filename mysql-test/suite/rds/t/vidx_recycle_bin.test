@@ -1,0 +1,136 @@
+##########################################
+# VECTOR INDEX and Recycle Bin Test      #
+# Vector index tables must NOT enter     #
+# the recycle bin (both base and aux).   #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("Fail to recycle table");
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2, t3;
+DROP DATABASE IF EXISTS db_vidx_recycle;
+--enable_warnings
+
+CREATE DATABASE IF NOT EXISTS db_vidx_recycle;
+USE db_vidx_recycle;
+
+--echo #
+--echo # Scenario 1.1: Vector index table must skip recycle bin and be dropped directly
+--echo #
+
+SET GLOBAL recycle_scheduler = OFF;
+SET SESSION recycle_bin = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  content VARCHAR(200),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Check auxiliary table exists in information_schema.INNODB_TABLES
+SELECT COUNT(*) > 0 AS has_aux_table FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db_vidx_recycle%';
+
+--echo #
+--echo # Scenario 1.2: DROP TABLE -> table should NOT enter recycle bin
+--echo #
+
+DROP TABLE t1;
+
+--echo # Recycle bin should be empty (vector index table rejected)
+--replace_column 2 # 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+--echo # Auxiliary table should also be deleted
+SELECT COUNT(*) AS remaining_aux_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db_vidx_recycle%';
+
+--echo #
+--echo # Scenario 1.3: Recreate table with same name -> no conflict
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  content VARCHAR(200),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Scenario 1.4: Recycle bin OFF, DROP -> auxiliary table directly deleted
+--echo #
+
+SET SESSION recycle_bin = OFF;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # Check auxiliary table exists before DROP
+SELECT COUNT(*) > 0 AS has_aux_table FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+
+DROP TABLE t2;
+
+--echo # Check auxiliary table is deleted after DROP
+SELECT COUNT(*) AS remaining_aux_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+
+--echo #
+--echo # Scenario 1.5: DROP and recreate same name table -> verify no interference
+--echo #
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t3;
+DROP TABLE t3;
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi2(v) m=10
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t3;
+DROP TABLE t3;
+
+--echo #
+--echo # Scenario 1.6: Non-vector table with recycle bin ON should still enter recycle bin
+--echo #
+
+SET SESSION recycle_bin = ON;
+
+CREATE TABLE t_normal (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100)
+) ENGINE = InnoDB;
+
+DROP TABLE t_normal;
+
+--echo # Normal table should appear in recycle bin
+--replace_column 2 # 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+--echo # Cleanup
+SET SESSION recycle_bin = OFF;
+USE test;
+DROP DATABASE db_vidx_recycle;
+
+SET GLOBAL vidx_disabled = ON;

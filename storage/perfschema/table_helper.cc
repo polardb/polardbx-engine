@@ -439,6 +439,22 @@ void set_field_schema_name(Field *f, const PFS_schema_name *schema) {
   set_field_varchar_utf8mb4(f, schema->ptr(), schema->length());
 }
 
+void set_nullable_field_schema_name(Field *f,
+                                    const PFS_schema_name_view *schema) {
+  assert(f->is_nullable());
+  const size_t len = schema->length();
+  if (len == 0) {
+    f->set_null();
+  } else {
+    set_field_varchar_utf8mb4(f, schema->ptr(), len);
+  }
+}
+
+void set_field_schema_name(Field *f, const PFS_schema_name_view *schema) {
+  assert(!f->is_nullable());
+  set_field_varchar_utf8mb4(f, schema->ptr(), schema->length());
+}
+
 void set_nullable_field_object_name(Field *f, const PFS_object_name *object) {
   assert(f->is_nullable());
   size_t len = object->length();
@@ -450,6 +466,22 @@ void set_nullable_field_object_name(Field *f, const PFS_object_name *object) {
 }
 
 void set_field_object_name(Field *f, const PFS_object_name *object) {
+  assert(!f->is_nullable());
+  set_field_varchar_utf8mb4(f, object->ptr(), object->length());
+}
+
+void set_nullable_field_object_name(Field *f,
+                                    const PFS_object_name_view *object) {
+  assert(f->is_nullable());
+  const size_t len = object->length();
+  if (len == 0) {
+    f->set_null();
+  } else {
+    set_field_varchar_utf8mb4(f, object->ptr(), len);
+  }
+}
+
+void set_field_object_name(Field *f, const PFS_object_name_view *object) {
   assert(!f->is_nullable());
   set_field_varchar_utf8mb4(f, object->ptr(), object->length());
 }
@@ -701,7 +733,7 @@ int PFS_object_row::make_row(PFS_program *pfs) {
 }
 
 int PFS_column_row::make_row(const MDL_key *mdl) {
-  static_assert(MDL_key::NAMESPACE_END == 18,
+  static_assert(MDL_key::NAMESPACE_END == 19,
                 "Adjust performance schema when changing enum_mdl_namespace");
 
   /** Create a local copy of mdl to prevent inconsistencies that could arise if
@@ -804,6 +836,12 @@ int PFS_column_row::make_row(const MDL_key *mdl) {
       with_schema = true;
       with_object = true;
       break;
+    case MDL_key::FTRUNC_LOCK:
+      m_object_type = OBJECT_TYPE_FTRUNC_LOCK;
+      m_schema_name_length = 0;
+      m_object_name_length = 0;
+      m_column_name_length = 0;
+      break;
     case MDL_key::NAMESPACE_END:
     default:
       assert(false);
@@ -875,6 +913,42 @@ void PFS_object_row::set_field(uint index, Field *f) {
 }
 
 void PFS_object_row::set_nullable_field(uint index, Field *f) {
+  switch (index) {
+    case 0: /* OBJECT_TYPE */
+      if (m_object_type != NO_OBJECT_TYPE) {
+        set_field_object_type(f, m_object_type);
+      } else {
+        f->set_null();
+      }
+      break;
+    case 1: /* SCHEMA_NAME */
+      set_nullable_field_schema_name(f, &m_schema_name);
+      break;
+    case 2: /* OBJECT_NAME */
+      set_nullable_field_object_name(f, &m_object_name);
+      break;
+    default:
+      assert(false);
+  }
+}
+
+void PFS_object_view_row::set_field(uint index, Field *f) {
+  switch (index) {
+    case 0: /* OBJECT_TYPE */
+      set_field_object_type(f, m_object_type);
+      break;
+    case 1: /* SCHEMA_NAME */
+      set_field_schema_name(f, &m_schema_name);
+      break;
+    case 2: /* OBJECT_NAME */
+      set_field_object_name(f, &m_object_name);
+      break;
+    default:
+      assert(false);
+  }
+}
+
+void PFS_object_view_row::set_nullable_field(uint index, Field *f) {
   switch (index) {
     case 0: /* OBJECT_TYPE */
       if (m_object_type != NO_OBJECT_TYPE) {
@@ -997,6 +1071,44 @@ void PFS_index_row::set_nullable_field(uint index, Field *f) {
     case 3: /* INDEX_NAME */
       if (m_index_name_length > 0) {
         set_field_varchar_utf8mb4(f, m_index_name, m_index_name_length);
+      } else {
+        f->set_null();
+      }
+      break;
+    default:
+      assert(false);
+  }
+}
+
+void PFS_index_view_row::set_field(uint index, Field *f) {
+  switch (index) {
+    case 0: /* OBJECT_TYPE */
+    case 1: /* SCHEMA_NAME */
+    case 2: /* OBJECT_NAME */
+      m_object_row.set_field(index, f);
+      break;
+    case 3: /* INDEX_NAME */
+      if (m_index_name.length() > 0) {
+        set_field_varchar_utf8mb4(f, m_index_name.ptr(), m_index_name.length());
+      } else {
+        f->set_null();
+      }
+      break;
+    default:
+      assert(false);
+  }
+}
+
+void PFS_index_view_row::set_nullable_field(uint index, Field *f) {
+  switch (index) {
+    case 0: /* OBJECT_TYPE */
+    case 1: /* SCHEMA_NAME */
+    case 2: /* OBJECT_NAME */
+      m_object_row.set_nullable_field(index, f);
+      break;
+    case 3: /* INDEX_NAME */
+      if (m_index_name.length() > 0) {
+        set_field_varchar_utf8mb4(f, m_index_name.ptr(), m_index_name.length());
       } else {
         f->set_null();
       }

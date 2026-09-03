@@ -11,7 +11,7 @@ insert into t1 values (1);
 
 --sleep 2
 
-set global debug="+d,crash_before_flush_binlog";
+set global debug="+d,crash_after_append_log_in_flush";
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --error 2013
 insert into t1 values (2);

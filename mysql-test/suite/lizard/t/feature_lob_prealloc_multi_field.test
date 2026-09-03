@@ -1,0 +1,194 @@
+# Verify LOB pre-allocation when a single row carries multiple external
+# BLOB fields (big_rec->n_fields > 1).
+#
+# This path exercises calc_lob_prealloc_pages() which iterates every
+# field in the big_rec vector and enforces an "all-or-nothing" policy:
+#   - one partial-update field rejects the entire pre-alloc,
+#   - otherwise the claim count equals the sum of per-field page counts
+#     (including fields that require multiple node pages).
+
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+--echo ####################################################################################
+--echo # 1. prepare
+--echo ####################################################################################
+
+set @old_innodb_lob_prealloc = @@innodb_lob_prealloc;
+
+# See calc_lob_pages_needed() in lizard0lob0lob.cc.
+set @size_0 = 15680;
+set @size_1 = 162623;
+set @size_2 = 4603567;
+
+SET global innodb_lob_prealloc = on;
+
+CREATE TABLE `t1` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `b1` mediumblob NOT NULL,
+  `b2` mediumblob NOT NULL,
+  `b3` mediumblob NOT NULL,
+  PRIMARY KEY (`id`)
+) ;
+
+--echo ####################################################################################
+--echo # 2. INSERT with multiple BLOB fields: pages_claimed = sum(per-field pages)
+--echo ####################################################################################
+
+# b1: size_0       -> 1 page  (first only)
+# b2: size_0 + 1   -> 2 pages (first + 1 data)
+# b3: size_1       -> 10 pages (first + 9 data)
+# total expected   -> 13 pages
+
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+INSERT INTO t1 VALUES (1, REPEAT('a', @size_0),
+                          REPEAT('b', @size_0 + 1),
+                          REPEAT('c', @size_1));
+
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+if (`SELECT CONVERT(@alloc_after, SIGNED) != CONVERT(@alloc_before, SIGNED) + 13`)
+{
+  SELECT @alloc_before AS before_val, @alloc_after AS after_val;
+  --echo "Unexpected: multi-field INSERT should pre-allocate exactly 13 pages."
+  --die
+}
+
+check table t1;
+
+--echo ####################################################################################
+--echo # 3. INSERT with one beyond-size_2 field: prealloc continues (multi-node-page path)
+--echo ####################################################################################
+
+# b1: size_0       -> 1 page
+# b2: size_0       -> 1 page
+# b3: size_2 + 1   -> 285 pages (transitions to 2-node-page structure)
+# total expected   -> 287 pages
+
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+INSERT INTO t1 VALUES (2, REPEAT('a', @size_0),
+                          REPEAT('b', @size_0),
+                          REPEAT('c', @size_2 + 1));
+
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+if (`SELECT CONVERT(@alloc_after, SIGNED) != CONVERT(@alloc_before, SIGNED) + 287`)
+{
+  SELECT @alloc_before AS before_val, @alloc_after AS after_val;
+  --echo "Unexpected: multi-field INSERT with beyond-tier2 field should pre-allocate exactly 287 pages."
+  --die
+}
+
+check table t1;
+
+--echo ####################################################################################
+--echo # 4. UPDATE multi-field BLOB row: pre-alloc count matches new sizes
+--echo ####################################################################################
+
+# Rewrite row id=1. New sizes:
+#   b1: size_1 + 1 -> 12 pages (first + 10 data + 1 node)
+#   b2: 10000      -> 1 page
+#   b3: size_0 + 1 -> 2 pages
+# total expected -> 15 pages.
+
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+UPDATE t1 SET b1 = REPEAT('A', @size_1 + 1),
+              b2 = REPEAT('B', 10000),
+              b3 = REPEAT('C', @size_0 + 1)
+       WHERE id = 1;
+
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+if (`SELECT CONVERT(@alloc_after, SIGNED) != CONVERT(@alloc_before, SIGNED) + 15`)
+{
+  SELECT @alloc_before AS before_val, @alloc_after AS after_val;
+  --echo "Unexpected: multi-field UPDATE should pre-allocate exactly 15 pages."
+  --die
+}
+
+# Data correctness: the new payloads must survive the prealloc-and-write path.
+SELECT id, LENGTH(b1), LENGTH(b2), LENGTH(b3) FROM t1 WHERE id = 1;
+
+check table t1;
+
+--echo ####################################################################################
+--echo # 5. Pre-alloc disabled at session level: counter stays flat for multi-field
+--echo ####################################################################################
+
+SET global innodb_lob_prealloc = off;
+
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+INSERT INTO t1 VALUES (4, REPEAT('a', @size_0 + 1),
+                          REPEAT('b', @size_0 + 1),
+                          REPEAT('c', @size_0 + 1));
+
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+
+if (`SELECT CONVERT(@alloc_after, SIGNED) != CONVERT(@alloc_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_pages must stay flat when prealloc off."
+  --die
+}
+
+check table t1;
+
+SET global innodb_lob_prealloc = on;
+
+--echo ####################################################################################
+--echo # 6. Rollback must not leak pre-allocated pages: counters stay balanced
+--echo ####################################################################################
+
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+SET @unexpected_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                          WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+START TRANSACTION;
+INSERT INTO t1 VALUES (5, REPEAT('a', @size_0 + 1),
+                          REPEAT('b', @size_0 + 1),
+                          REPEAT('c', @size_0 + 1));
+ROLLBACK;
+
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+SET @unexpected_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                         WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+# Pre-alloc did occur during the INSERT (before ROLLBACK).
+if (`SELECT CONVERT(@alloc_after, SIGNED) <= CONVERT(@alloc_before, SIGNED)`)
+{
+  --echo "Unexpected: pre-allocation counter should have advanced inside the txn."
+  --die
+}
+
+# Logic-error counter must not grow: all paths clean up gracefully.
+if (`SELECT CONVERT(@unexpected_after, SIGNED) != CONVERT(@unexpected_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_underestimate_pages must remain flat across rollback."
+  --die
+}
+
+# The row must not appear after ROLLBACK.
+SELECT COUNT(*) FROM t1 WHERE id = 5;
+
+check table t1;
+
+--echo ####################################################################################
+--echo # 7. cleanup
+--echo ####################################################################################
+
+set global innodb_lob_prealloc = @old_innodb_lob_prealloc;
+
+drop table t1;

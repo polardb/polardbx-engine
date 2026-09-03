@@ -46,6 +46,8 @@ SET @@session.collation_database=DEFAULT/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
 /*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_hippo_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_spc_enabled=0*//*!*/;
 create table t1 (word varchar(20))
 /*!*/;
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
@@ -61,6 +63,8 @@ SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
 /*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_hippo_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_spc_enabled=0*//*!*/;
 create table t2 (id int auto_increment not null primary key)
 /*!*/;
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
@@ -491,6 +495,8 @@ SET @@session.collation_database=DEFAULT/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
 /*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_hippo_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_spc_enabled=0*//*!*/;
 create table t1 (word varchar(20))
 /*!*/;
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
@@ -506,6 +512,8 @@ SET TIMESTAMP=#/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
 /*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_hippo_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_spc_enabled=0*//*!*/;
 create table t2 (id int auto_increment not null primary key)
 /*!*/;
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;
@@ -972,6 +980,8 @@ SET @@session.collation_database=DEFAULT/*!*/;
 /*!80032 SET @@session.opt_flashback_area=0*//*!*/;
 /*!80032 SET @@session.opt_index_format_gpp_enabled=1*//*!*/;
 /*!80032 SET @@session.opt_index_format_panda_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_hippo_enabled=1*//*!*/;
+/*!80032 SET @@session.opt_index_format_spc_enabled=0*//*!*/;
 create table t1 (a varchar(64) character set utf8)
 /*!*/;
 ##CONSENSUS FLAG: # TERM: # INDEX: # LENGTH: # RESERVE: 0'/*!*/;

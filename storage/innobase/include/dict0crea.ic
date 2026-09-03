@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 1/8/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef dict0crea_h
+#define INNODB_DICT0CREA_IC_STANDALONE
+#include "dict0crea.h"
+#undef INNODB_DICT0CREA_IC_STANDALONE
+#endif /* !dict0crea_h */
 #include "ha_prototypes.h"
 
 #include "mem0mem.h"

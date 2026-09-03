@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <stack>
 #include "btr0types.h"
 #include "data0data.h"
+#include "dict0dict.h"
 #include "dict0types.h"
 #include "lob0lob.h"
 #include "row0types.h"
@@ -115,9 +116,8 @@ row is updated or marked deleted.
 @param[in]      trx             transaction
 @param[in]      roll_ptr        roll ptr of the undo log record, can be 0
                                 during IMPORT */
-static inline void row_upd_rec_sys_fields(rec_t *rec, page_zip_des_t *page_zip,
+static inline void row_upd_rec_sys_fields(Slice *slc, page_zip_des_t *page_zip,
                                           const dict_index_t *index,
-                                          const ulint *offsets,
                                           const trx_t *trx,
                                           roll_ptr_t roll_ptr);
 #endif /* !UNIV_HOTBACKUP */
@@ -125,6 +125,9 @@ static inline void row_upd_rec_sys_fields(rec_t *rec, page_zip_des_t *page_zip,
 /** Sets the trx id or roll ptr field of a clustered index entry.
 @param[in,out] entry Index entry, where the memory buffers for sys fields are
 already allocated: the function just copies the new values to them
+@param[in,out] rec the record which is converted from the entry before, need to
+be updated with the new values too.
+@param[in] offsets offsets of the record
 @param[in] index Clustered index
 @param[in] type Data_trx_id or data_roll_ptr
 @param[in] val Value to write */
@@ -152,7 +155,7 @@ void row_upd_index_write_log(dict_index_t *index, const upd_t *update,
  the field is external in rec or update */
 bool row_upd_changes_field_size_or_external(
     const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
+    const Slice *slc,          /*!< in: rec_get_offsets(rec, index) */
     const upd_t *update);      /*!< in: update vector */
 /** Returns true if row update contains disowned external fields.
  @return true if the update contains disowned external fields. */
@@ -164,9 +167,8 @@ bool row_upd_changes_field_size_or_external(
  secondary index is row_ins_sec_index_entry_by_modify() or its
  counterpart in ibuf_insert_to_index_page(). */
 void row_upd_rec_in_place(
-    rec_t *rec,                /*!< in/out: record where replaced */
+    Slice *slc,                /*!< in/out: record where replaced */
     const dict_index_t *index, /*!< in: the index the record belongs to */
-    const ulint *offsets,      /*!< in: array returned by rec_get_offsets() */
     const upd_t *update,       /*!< in: update vector */
     page_zip_des_t *page_zip); /*!< in: compressed page with enough space
                              available, or NULL */
@@ -175,9 +177,8 @@ void row_upd_rec_in_place(
  the fields as binary strings!
  @return own: update vector of differing fields */
 [[nodiscard]] upd_t *row_upd_build_sec_rec_difference_binary(
-    const rec_t *rec,      /*!< in: secondary index record */
+    const Slice *slc,      /*!< in: secondary index record */
     dict_index_t *index,   /*!< in: index */
-    const ulint *offsets,  /*!< in: rec_get_offsets(rec, index) */
     const dtuple_t *entry, /*!< in: entry to insert */
     mem_heap_t *heap);     /*!< in: memory heap from which allocated */
 /** Builds an update vector from those fields, excluding the roll ptr and
@@ -198,9 +199,9 @@ the equal ordering fields. NOTE: we compare the fields as binary strings!
 @return own: update vector of differing fields, excluding roll ptr and
 trx id */
 [[nodiscard]] upd_t *row_upd_build_difference_binary(
-    dict_index_t *index, const dtuple_t *entry, const rec_t *rec,
-    const ulint *offsets, bool no_sys, trx_t *trx, mem_heap_t *heap,
-    TABLE *mysql_table, dberr_t *error);
+    dict_index_t *index, const dtuple_t *entry, creg_t reg,
+    /* const ulint *offsets,*/ const Slice *slc, bool no_sys, trx_t *trx,
+    mem_heap_t *heap, TABLE *mysql_table, dberr_t *error);
 
 /** Replaces the new column values stored in the update vector to the index
  entry given.
@@ -338,9 +339,9 @@ byte *row_upd_parse_sys_vals(const byte *ptr,     /*!< in: buffer */
 @param[in] pos Trx_id position in rec
 @param[in] trx_id Transaction id
 @param[in] roll_ptr Roll ptr of the undo log record */
-void row_upd_rec_sys_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
-                                        const ulint *offsets, ulint pos,
-                                        trx_id_t trx_id, roll_ptr_t roll_ptr);
+void row_upd_rec_sys_fields_in_recovery(Slice *slc, page_zip_des_t *page_zip,
+                                        ulint pos, trx_id_t trx_id,
+                                        roll_ptr_t roll_ptr);
 
 /** Parses the log data written by row_upd_index_write_log.
  @return log data end or NULL */
@@ -807,6 +808,8 @@ constexpr uint32_t UPD_NODE_NO_ORD_CHANGE = 1;
 constexpr uint32_t UPD_NODE_NO_SIZE_CHANGE = 2;
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_ROW0UPD_IC_STANDALONE
 #include "row0upd.ic"
+#endif /* !INNODB_ROW0UPD_IC_STANDALONE */
 
 #endif

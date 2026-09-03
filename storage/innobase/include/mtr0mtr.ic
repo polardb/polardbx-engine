@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 11/26/1995 Heikki Tuuri
  *******************************************************/
 
+#ifndef mtr0mtr_h
+#define INNODB_MTR0MTR_IC_STANDALONE
+#include "mtr0mtr.h"
+#undef INNODB_MTR0MTR_IC_STANDALONE
+#endif /* !mtr0mtr_h */
 #include "buf0buf.h"
 
 /**

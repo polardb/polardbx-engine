@@ -1,0 +1,122 @@
+####################################################################################
+# 1. prepare
+####################################################################################
+set @old_innodb_lob_prealloc = @@innodb_lob_prealloc;
+set @size_0 = 15680;
+set @size_1 = 162623;
+set @size_2 = 4603567;
+CREATE TABLE `t1` (
+`id` bigint unsigned NOT NULL AUTO_INCREMENT,
+`data` mediumblob NOT NULL,
+PRIMARY KEY (`id`)
+) ;
+SET @fails_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_fail_no_space');
+SET @under_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_underestimate_pages');
+####################################################################################
+# 2. innodb_lob_prealloc is off
+####################################################################################
+SET global innodb_lob_prealloc = off;
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t1 values(1, repeat('1', 16384));
+update t1 set data = repeat('2', 16384) where id = 1;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET global innodb_lob_prealloc = on;
+####################################################################################
+# 3. write blob with size <= first page size (15680, size_0)
+####################################################################################
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t1 values(2, repeat('1', 10000));
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+update t1 set data = repeat('2', @size_0) where id = 2;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+####################################################################################
+# 4. write blob with size <= size_1 (162623, defined in lizard0lob0lob.cc)
+####################################################################################
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t1 values(3, repeat('1', @size_0 + 1));
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+update t1 set data = repeat('2', @size_1) where id = 3;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+####################################################################################
+# 5. write blob with size <= size_2 (4603567, defined in lizard0lob0lob.cc)
+####################################################################################
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t1 values(4, repeat('1', @size_1 + 1));
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+update t1 set data = repeat('2', @size_2) where id = 4;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+####################################################################################
+# 6. write blob with size > size_2 (4603567, defined in lizard0lob0lob.cc)
+####################################################################################
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t1 values(5, repeat('1', @size_2 + 1));
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+update t1 set data = repeat('2', @size_2 + 5) where id = 5;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 7. write blob with random size in (10k, @size_2]
+####################################################################################
+truncate table t1;
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+CREATE PROCEDURE InsertRandomData()
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE loop_count INT DEFAULT 100;
+DECLARE size INT;
+WHILE i <= loop_count DO
+-- size is random in (8129, @size_2]
+SET size = FLOOR(RAND() * (@size_2 - 8129 + 1)) + 8192;
+INSERT INTO t1 (id, data) VALUES (0, REPEAT('1', size));
+SET i = i + 1;
+END WHILE;
+END |
+CREATE PROCEDURE UpdateRandomData()
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE loop_count INT DEFAULT 100;
+DECLARE size INT;
+WHILE i <= loop_count DO
+-- size is random in (8129, @size_2]
+SET size = FLOOR(RAND() * (100 - 8 + 1)) + 8;
+update t1 set data = repeat('2', @size_2) where id = i;
+SET i = i + 1;
+END WHILE;
+END |
+call InsertRandomData();
+call UpdateRandomData();
+select count(*) from t1;
+count(*)
+100
+SET @fails_after     = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_fail_no_space');
+SET @under_after     = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_underestimate_pages');
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+####################################################################################
+# 8. temporary table BLOB UPDATE falls back to BTR_MODIFY_TREE
+####################################################################################
+CREATE TEMPORARY TABLE `t_tmp` (
+`id` bigint unsigned NOT NULL AUTO_INCREMENT,
+`data` mediumblob NOT NULL,
+PRIMARY KEY (`id`)
+);
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+insert into t_tmp values(1, repeat('1', 16384));
+update t_tmp set data = repeat('2', 16384) where id = 1;
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+check table t_tmp;
+Table	Op	Msg_type	Msg_text
+test.t_tmp	check	status	OK
+drop temporary table t_tmp;
+####################################################################################
+# 9. cleanup
+####################################################################################
+set global innodb_lob_prealloc = @old_innodb_lob_prealloc;
+drop table t1;
+drop PROCEDURE InsertRandomData;
+drop PROCEDURE UpdateRandomData;

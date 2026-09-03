@@ -62,7 +62,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "current_thd.h"
 
-#include "lizard0mtr.h"
+#include "lizard0dbg.h"
+#include "lizard0gcs.h"
+#include "lizard0mtr0mtr.h"
+#include "lizard0txn.h"
 #include "lizard0undo.h"
 
 /** This many pages must be undone before a truncate is tried within
@@ -199,7 +202,7 @@ static dberr_t trx_rollback_low(trx_t *trx) {
 
   mtr_t mtr;
   lsn_t lsn;
-  lizard::Mtr_wrapper mtr_wrapper(&mtr);
+  lazy_mtr_t lazy_mtr(&mtr);
 
   switch (trx->state.load(std::memory_order_relaxed)) {
     case TRX_STATE_FORCED_ROLLBACK:
@@ -222,25 +225,25 @@ static dberr_t trx_rollback_low(trx_t *trx) {
 
       {
         /* Acquire rseg mutex in order in advance */
-        lizard::Trx_rseg_mutex_wrapper rseg_mutex_wrapper(trx);
+        lizard::locked_rsegs_t locked_rsegs(trx);
 
         /** Lizard: Deal with txn undo firstly under one mtr */
-        if (rseg_mutex_wrapper.txn_rseg_updated()) {
-          txn_undo_ptr_t *undo_ptr = &trx->rsegs.m_txn;
+        if (locked_rsegs.txn_rseg_updated()) {
+          txn_slot_ptr_t *undo_ptr = &trx->rsegs.m_txn;
 
-          mtr_wrapper.start();
+          lazy_mtr.start();
 
           trx_undo_set_state_at_prepare(trx, undo_ptr->txn_undo, true, &mtr);
         }
 
-        if (rseg_mutex_wrapper.redo_rseg_updated()) {
+        if (locked_rsegs.redo_rseg_updated()) {
           /* Change the undo log state back from
           TRX_UNDO_PREPARED to TRX_UNDO_ACTIVE
           so that if the system gets killed,
           recovery will perform the rollback. */
           trx_undo_ptr_t *undo_ptr = &trx->rsegs.m_redo;
 
-          mtr_wrapper.start();
+          lazy_mtr.start();
 
           // trx->rsegs.m_redo.rseg->latch();
 
@@ -265,9 +268,9 @@ static dberr_t trx_rollback_low(trx_t *trx) {
           // mtr.commit();
           // ut_ad(mtr.commit_lsn() > 0 || !mtr_t::s_logging.is_enabled());
         }
-        lsn = mtr_wrapper.commit();
+        lsn = lazy_mtr.commit();
 
-        rseg_mutex_wrapper.release_mutex();
+        locked_rsegs.release_mutex();
       }
 
       /** Debug crash. */
@@ -612,7 +615,7 @@ trx_savept_t trx_savept_take(trx_t *trx) /*!< in: transaction */
 }
 
 /** Roll back an active transaction. */
-static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
+void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
 {
   mem_heap_t *heap;
   que_fork_t *fork;
@@ -695,26 +698,29 @@ static void trx_rollback_active(trx_t *trx) /*!< in/out: transaction */
  @return true if the transaction was cleaned up or rolled back
  and trx_sys->mutex was released. */
 static bool trx_rollback_or_clean_resurrected(
-    trx_t *trx, /*!< in: transaction to rollback or clean */
-    bool all)   /*!< in: false=roll back dictionary transactions;
-                 true=roll back all non-PREPARED transactions */
+    trx_t *trx,           /*!< in: transaction to rollback or clean */
+    Tid_list_t *tid_list, /*!< in: which tid list */
+    bool all)             /*!< in: false=roll back dictionary transactions;
+                           true=roll back all non-PREPARED transactions */
 {
   ut_ad(trx_sys_mutex_own());
   ut_ad(trx->in_rw_trx_list);
+  ut_ad(tid_list->lock_own());
 
-  /* Generally, an HA transaction with is_recovered && state==TRX_STATE_PREPARED
-  can be committed or rolled back by a client who knows its XID at any time.
-  To prove that no such state transition is possible while our thread operates,
-  observe that we hold trx_sys->mutex which is required by both commit and
-  rollback to deregister the trx from trx_sys->rw_trx_list during
-  trx_release_impl_and_expl_locks() and we see the trx is still in this list.
-  Thus, if we see is_recovered==true, then the state can not change until we
-  release the trx_sys->mutex. Moreover for TRX_STATE_PREPARED we do nothing, so
-  we will not interfere with an HA COMMIT or ROLLBACK. So, if XA ROLLBACK or
-  COMMIT latches trx_sys->mutex before us, then we will not see the trx in the
-  rw_trx_list (so trx_rollback_or_clean_resurrected() would not be called for
-  this transaction in the first place), and if we latch first, then we will
-  leave the trx intact. */
+  /* Generally, an HA transaction with is_recovered &&
+  state==TRX_STATE_PREPARED can be committed or rolled back by a client who
+  knows its XID at any time. To prove that no such state transition is
+  possible while our thread operates, observe that we hold trx_sys->mutex
+  which is required by both commit and rollback to deregister the trx from
+  trx_sys->rw_trx_list during trx_release_impl_and_expl_locks() and we see
+  the trx is still in this list. Thus, if we see is_recovered==true, then the
+  state can not change until we release the trx_sys->mutex. Moreover for
+  TRX_STATE_PREPARED we do nothing, so we will not interfere with an HA
+  COMMIT or ROLLBACK. So, if XA ROLLBACK or COMMIT latches trx_sys->mutex
+  before us, then we will not see the trx in the rw_trx_list (so
+  trx_rollback_or_clean_resurrected() would not be called for this
+  transaction in the first place), and if we latch first, then we will leave
+  the trx intact. */
 
   trx_mutex_enter(trx);
   const bool is_recovered = trx->is_recovered;
@@ -728,10 +734,11 @@ static bool trx_rollback_or_clean_resurrected(
 
   switch (state) {
     case TRX_STATE_COMMITTED_IN_MEMORY:
+      tid_list->unlock();
       trx_sys_mutex_exit();
       ib::info(ER_IB_MSG_1188)
-          << "Cleaning up trx with id " << trx_get_id_for_print(trx)
-          << ", XID " << trx_get_xid_for_print(trx);
+          << "Cleaning up trx with id " << trx_get_id_for_print(trx) << ", XID "
+          << trx_get_xid_for_print(trx);
 
       /** If has committed, only left insert undo to cleanup */
       lizard_ut_ad(trx->rsegs.m_txn.rseg == NULL);
@@ -741,6 +748,7 @@ static bool trx_rollback_or_clean_resurrected(
       return true;
     case TRX_STATE_ACTIVE:
       if (all || trx->ddl_operation) {
+        tid_list->unlock();
         trx_sys_mutex_exit();
         trx_rollback_active(trx);
         trx_free_for_background(trx);
@@ -766,10 +774,13 @@ void trx_rollback_or_clean_recovered(
     bool all) /*!< in: false=roll back dictionary transactions;
                true=roll back all non-PREPARED transactions */
 {
+  Tid_rw_t tid_rw;
+  trx_t *trx = nullptr;
+  Tid_list_t *tid_list = nullptr;
   ut_ad(!srv_read_only_mode);
 
   ut_a(srv_force_recovery < SRV_FORCE_NO_TRX_UNDO);
-  ut_ad(!all || trx_sys_need_rollback());
+  ut_ad(!all || lizard::gcs_need_rollback());
 
   if (all) {
     ib::info(ER_IB_MSG_1189) << "Starting in background the rollback"
@@ -783,44 +794,49 @@ void trx_rollback_or_clean_recovered(
 
   /* Loop over the transaction list as long as there are
   recovered transactions to clean up or recover. */
-
   trx_sys_mutex_enter();
-  for (bool need_one_more_scan = true; need_one_more_scan;) {
-    need_one_more_scan = false;
-    for (auto trx : trx_sys->rw_trx_list) {
-      assert_trx_in_rw_list(trx);
+  Tid_list_iterator it(&lizard::gcs->tid);
 
-      /* In case of slow shutdown, we have to wait for the background
-      thread (trx_recovery_rollback) which is doing the rollbacks of
-      recovered transactions. Note that it can add undo to purge.
-      In case of fast shutdown we do not care if we left transactions
-      not rolled back. But still we want to stop the thread, so since
-      certain point of shutdown we might be sure there are no changes
-      to transactions / undo. */
-      if (srv_shutdown_state.load() >= SRV_SHUTDOWN_RECOVERY_ROLLBACK &&
-          srv_fast_shutdown != 0) {
-        ut_a(srv_shutdown_state_matches([](auto state) {
-          return state == SRV_SHUTDOWN_RECOVERY_ROLLBACK ||
-                 state == SRV_SHUTDOWN_EXIT_THREADS;
-        }));
+  while (it.current(tid_rw)) {
+    std::tie(trx, tid_list) = tid_rw;
 
-        trx_sys_mutex_exit();
+    ut_ad(trx && tid_list->lock_own());
+    assert_trx_in_rw_list(trx);
 
-        if (all) {
-          ib::info(ER_IB_MSG_TRX_RECOVERY_ROLLBACK_NOT_COMPLETED);
-        }
-        return;
+    /* In case of slow shutdown, we have to wait for the background
+    thread (trx_recovery_rollback) which is doing the rollbacks of
+    recovered transactions. Note that it can add undo to purge.
+    In case of fast shutdown we do not care if we left transactions
+    not rolled back. But still we want to stop the thread, so since
+    certain point of shutdown we might be sure there are no changes
+    to transactions / undo. */
+    if (srv_shutdown_state.load() >= SRV_SHUTDOWN_RECOVERY_ROLLBACK &&
+        srv_fast_shutdown != 0) {
+      ut_a(srv_shutdown_state_matches([](auto state) {
+        return state == SRV_SHUTDOWN_RECOVERY_ROLLBACK ||
+               state == SRV_SHUTDOWN_EXIT_THREADS;
+      }));
+
+      it.interrupt();
+      trx_sys_mutex_exit();
+
+      if (all) {
+        ib::info(ER_IB_MSG_TRX_RECOVERY_ROLLBACK_NOT_COMPLETED);
       }
-
-      /* If this function does a cleanup or rollback
-      then it will release the trx_sys->mutex, therefore
-      we need to reacquire it before retrying the loop. */
-      if (trx_rollback_or_clean_resurrected(trx, all)) {
-        trx_sys_mutex_enter();
-        need_one_more_scan = true;
-        break;
-      }
+      return;
     }
+
+    /* If this function does a cleanup or rollback
+    then it will release the trx_sys->mutex, therefore
+    we need to reacquire it before retrying the loop. */
+    if (trx_rollback_or_clean_resurrected(trx, tid_list, all)) {
+      trx_sys_mutex_enter();
+      tid_list->lock();
+      it.rewind();
+      continue;
+    }
+
+    it.next();
   }
   trx_sys_mutex_exit();
 

@@ -63,7 +63,8 @@
 #include "sql/xa.h"
 #include "thr_mutex.h"
 
-#include "sql/xa/lizard_cmmt_policy.h"
+#include "sql/xa/komodo0cmmt0policy.h"
+#include "sql/komodo0xlog.h"
 
 namespace {
 /**
@@ -114,6 +115,8 @@ bool trx_coordinator::commit_detached_by_xid(THD *thd, bool run_after_commit) {
   assert(xs->is_detached());
   raii::Sentry<> reset_detached_guard{[&]() -> void { xs->reset(); }};
 
+  komodo::commit_policy_decide_if_not(thd);
+
   auto error = plugin_foreach(thd, ::commit_one_ht, MYSQL_STORAGE_ENGINE_PLUGIN,
                               const_cast<XID *>(xs->get_xid()));
 
@@ -130,6 +133,8 @@ bool trx_coordinator::rollback_detached_by_xid(THD *thd) {
   auto xs = thd->get_transaction()->xid_state();
   assert(xs->is_detached());
   raii::Sentry<> reset_detached_guard{[&]() -> void { xs->reset(); }};
+
+  komodo::commit_policy_decide_if_not(thd);
 
   return plugin_foreach(thd, ::rollback_one_ht, MYSQL_STORAGE_ENGINE_PLUGIN,
                         const_cast<XID *>(xs->get_xid()));
@@ -191,8 +196,7 @@ bool commit_one_ht(THD *thd, plugin_ref plugin, void *arg) {
 
   if (ht->commit_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
-    XA_specification xa_spec;
-    lizard::commit_policy_decide(thd);
+    komodo::XA_specification xa_spec;
     xa_spec.set_when_commit(thd->cpolicy_ctx.current_policy());
 
     xa_status_code ret =
@@ -217,8 +221,7 @@ bool rollback_one_ht(THD *thd, plugin_ref plugin, void *arg) {
 
   if (ht->rollback_by_xid != nullptr && ht->state == SHOW_OPTION_YES &&
       ht->recover != nullptr) {
-    XA_specification xa_spec;
-    lizard::commit_policy_decide(thd);
+    komodo::XA_specification xa_spec;
     xa_spec.set_when_commit(thd->cpolicy_ctx.current_policy());
 
     xa_status_code ret =
@@ -251,7 +254,7 @@ int set_prepared_in_tc_one_ht(THD *thd, handlerton *ht) {
 }  // namespace
 
 int TC_LOG_DUMMY::open(const char *) {
-  if (ha_recover()) {
+  if (ha_recover(nullptr, nullptr, nullptr, komodo::xlog_recovery_get_recovery())) {
     LogErr(ERROR_LEVEL, ER_TC_RECOVERY_FAILED_THESE_ARE_YOUR_OPTIONS);
     return 1;
   }
@@ -394,7 +397,7 @@ int TC_LOG_MMAP::open(const char *opt_name) {
 
   if (crashed) {
     if (recover()) goto err;
-  } else if (ha_recover()) {
+  } else if (ha_recover(nullptr, nullptr, nullptr, komodo::xlog_recovery_get_recovery())) {
     LogErr(ERROR_LEVEL, ER_TC_RECOVERY_FAILED_THESE_ARE_YOUR_OPTIONS);
     goto err;
   }
@@ -735,7 +738,7 @@ int TC_LOG_MMAP::recover() {
       }
     }
 
-    bool err = ha_recover(&xids);
+    bool err = ha_recover(&xids, nullptr, nullptr, komodo::xlog_recovery_get_recovery());
     if (err) goto err1;
   }
 
@@ -755,7 +758,8 @@ bool TC_LOG::using_heuristic_recover() {
   if (tc_heuristic_recover == TC_HEURISTIC_NOT_USED) return false;
 
   LogErr(INFORMATION_LEVEL, ER_TC_HEURISTIC_RECOVERY_MODE);
-  if (ha_recover(nullptr)) LogErr(ERROR_LEVEL, ER_TC_HEURISTIC_RECOVERY_FAILED);
+  if (ha_recover(nullptr, nullptr, nullptr, komodo::xlog_recovery_get_recovery()))
+    LogErr(ERROR_LEVEL, ER_TC_HEURISTIC_RECOVERY_FAILED);
   LogErr(INFORMATION_LEVEL, ER_TC_RESTART_WITHOUT_TC_HEURISTIC_RECOVER);
   return true;
 }

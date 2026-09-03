@@ -486,7 +486,7 @@ bool partition_info::set_used_partition(THD *thd,
 
   if (!fields.empty() || values.empty()) {
     if (fill_record(thd, table, fields, values, &full_part_field_set, nullptr,
-                    false))
+                    false, nullptr))
       return true;
   } else {
     if (fill_record(thd, table, table->field, values, &full_part_field_set,

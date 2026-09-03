@@ -7,6 +7,7 @@ memory/sql/changeset_file_name	Memory allocated for filename of changeset
 memory/sql/changeset_primary_key	Memory allocated for primary keys of changeset
 memory/sql/changeset_primary_key_cache	Memory allocated for primary keys of changeset cache
 memory/sql/changeset_result_buffer	Memory allocated for fetching result of changeset
+memory/sql/consensus_engine_fifo_cache	Memory allocated for consensus engine fifo cache
 memory/sql/dd::column_statistics	Column statistics histograms allocated.
 memory/sql/dd::default_values	Temporary buffer for preparing column default values.
 memory/sql/dd::import	File name handling while importing MyISAM tables.

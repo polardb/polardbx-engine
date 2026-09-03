@@ -86,6 +86,8 @@ static inline bool ut_bit_get_nth(ulint a, ulint n);
 @return the ulint with the bit set as requested */
 static inline ulint ut_bit_set_nth(ulint a, ulint n, bool val);
 
+#ifndef INNODB_UT0BYTE_IC_STANDALONE
 #include "ut0byte.ic"
+#endif /* !INNODB_UT0BYTE_IC_STANDALONE */
 
 #endif

@@ -3,14 +3,72 @@ flush local logs;
 create table t1(id int);
 flush local logs;
 insert into t1 values (1);
-call dbms_consensus.purge_log(100000000);
+flush local logs;
+insert into t1 values (1);
+flush local logs;
 insert into t1 values (1);
 call dbms_consensus.purge_log(100000000);
-ERROR HY000: The consensus membership change failed, error code is -1, error msg: Some error happens, please check the error log.
-call dbms_consensus.force_purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000004	#	#
+select @@gtid_purged;
+@@gtid_purged
+leader_uuid:X
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X
+insert into t1 values (1);
+flush local logs;
 call dbms_consensus.purge_log(100000000);
 ERROR HY000: The consensus membership change failed, error code is -1, error msg: Some error happens, please check the error log.
 call dbms_consensus.force_purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+extra_purged_vs_leader
+
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X
+flush local logs;
+call dbms_consensus.purge_log(100000000);
+ERROR HY000: The consensus membership change failed, error code is -1, error msg: Some error happens, please check the error log.
+call dbms_consensus.force_purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+extra_purged_vs_leader
+
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X
+"restart follower"
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000002	#	#
+master-bin.000003	#	#
+extra_purged_vs_leader
+
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X
+set global consensus_force_promote=1;
+insert into t1 values (1);
+"restart leader"
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000004	#	#
+select @@gtid_purged;
+@@gtid_purged
+leader_uuid:X
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X,
+f1_uuid:X
+set global consensus_force_promote=1;
+insert into t1 values (1);
 flush local logs;
 flush local logs;
 flush local logs;
@@ -23,7 +81,25 @@ call dbms_consensus.force_purge_log(100000000);
 # for f1: purge local should fail
 call dbms_consensus.local_purge_log(100000000);
 call dbms_consensus.force_purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000004	#	#
+extra_purged_vs_leader
+
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X,
+f1_uuid:X
 # for f2: purge local should success
 call dbms_consensus.local_purge_log(100000000);
+show consensus logs;
+Log_name	File_size	Start_log_index
+master-bin.000004	#	#
+extra_purged_vs_leader
+
+select @@gtid_executed;
+@@gtid_executed
+leader_uuid:X,
+f1_uuid:X
 call dbms_consensus.drop_learner("127.0.0.1:24000");
 drop table t1;

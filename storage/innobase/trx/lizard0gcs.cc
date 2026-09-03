@@ -32,28 +32,21 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "fsp0fsp.h"
 #include "mtr0mtr.h"
-#include "srv0start.h"
 #include "trx0sys.h"
 #include "trx0trx.h"
+#include "clone0clone.h"
 
-#include "lizard0dbg.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0fil.h"
-#include "lizard0fsp.h"
+#include "lizard0gcs0cache.h"
+#include "lizard0gcs0gcn.h"
 #include "lizard0gcs.h"
-#include "lizard0read0read.h"
-#include "lizard0scn.h"
+#include "lizard0gcs0read.h"
+#include "lizard0gcs0scn.h"
+#include "lizard0trx0purge.h"
 
 #include "lizard0ut.h"
-
-#ifdef UNIV_PFS_MUTEX
-/* GCS scn list mutex PFS key */
-mysql_pfs_key_t scn_list_mutex_key;
-/* GCS gcn order mutex PFS key */
-mysql_pfs_key_t gcn_order_mutex_key;
-/* GCS gcn persist mutex PFS key */
-mysql_pfs_key_t gcn_persist_mutex_key;
-#endif
+#include "univ.i"
 
 namespace lizard {
 
@@ -61,6 +54,10 @@ namespace lizard {
 /** simulate assigned gcn to run all testcases. */
 bool srv_simulate_assigned_gcn_debug = false;
 #endif
+
+/** Whether to print gcs process info. */
+bool srv_gcs_print_process_debug = false;
+
 
 /** The global Global Change System memory structure */
 gcs_t *gcs = nullptr;
@@ -71,29 +68,31 @@ void gcs_init() {
 
   gcs = static_cast<gcs_t *>(ut::zalloc(sizeof(*gcs)));
 
-  new (&(gcs->persisters)) Persisters();
+  /** Placement new TID object  */
+  new (&(gcs->tid)) TID();
 
   /** Placement new SCN object  */
-  new (&(gcs->scn)) SCN(gcs->persisters.scn_persister());
+  new (&(gcs->scn)) SCN();
+
   /** Placement new GCN object  */
-  new (&(gcs->gcn)) GCN(gcs->persisters.gcn_persister());
+  new (&(gcs->gcn)) GCN();
 
-  new (&(gcs->csnapshot_mgr))
-      CSnapshot_mgr(commit_snapshot_mem_key, srv_commit_snapshot_partition,
-                    srv_commit_snapshot_capacity);
+  /** Placement new UTC object  */
+  new (&(gcs->utc)) UTC();
 
-  /** Promise here didn't have any active trx */
-  ut_ad(trx_sys == nullptr || UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
+  /** Placement new mvcc object  */
+  new (&(gcs->mvcc)) MVCC(MVCC_N_LISTS);
 
-  UT_LIST_INIT(gcs->serialisation_list_scn);
+  /** Placement new csnapshot object */
+  new (&(gcs->csnapshot))
+      CSnapshot(commit_snapshot_mem_key, srv_commit_snapshot_partition,
+                srv_commit_snapshot_capacity);
 
-  mutex_create(LATCH_ID_SCN_LIST, &gcs->m_scn_list_mutex);
-  mutex_create(LATCH_ID_GCN_ORDER, &gcs->m_gcn_order_mutex);
-  mutex_create(LATCH_ID_GCN_PERSIST, &gcs->m_gcn_persist_mutex);
+  /** Placement new cclean object */
+  new (&(gcs->cclean)) CClean(GCS_DATA_PURGE_GCN, GCS_DATA_ERASE_GCN);
 
-  gcs->min_active_tid.store(0);
-
-  gcs->m_persisted_gcn.store(0);
+  /** Placement new ccache object */
+  new (&(gcs->ccache)) Atomic_ccache(srv_tcn_cache_entries);
 
   return;
 }
@@ -101,33 +100,86 @@ void gcs_init() {
 /**
   Raise gcn metadata when parse gcn redo log record.
 
-  @param[in]	gcn	Parsed gcn
-*/
-void CRecover::recover_gcn(gcn_t gcn) {
+  @param[in]	gcn	Parsed gcn */
+void CRecover::recover_gcn(const gcn_meta_t &meta) {
   ut_ad(is_need_recovery());
-  ut_ad(gcn != GCN_NULL);
+  ut_a(meta.valid());
 
-  m_metadata.set_gcn_if_bigger(gcn);
+  if (srv_gcs_print_process_debug) {
+    lizard_info(ER_LIZARD) << "GCS Recover GCN: " << meta.gcn;
+  }
+
+  m_gcn_meta.set_gcn_if_bigger(meta);
+  m_gcn_recovered = true;
+  return;
+}
+/**
+  Raise scn metadata when parse scn redo log record.
+
+  @param[in]	scn	Parsed scn */
+void CRecover::recover_scn(const scn_meta_t &meta) {
+  ut_ad(is_need_recovery());
+  ut_a(meta.valid());
+
+  if (srv_gcs_print_process_debug) {
+    lizard_info(ER_LIZARD) << "GCS Recover SCN: " << meta.scn;
+  }
+
+  m_scn_meta.set_scn_if_bigger(meta);
+  m_scn_recovered = true;
+  return;
+}
+/**
+  Raise tid metadata when parse undo log header redo.
+
+  @param[in]	tid	Parsed tid */
+void CRecover::recover_tid(const tid_meta_t &meta) {
+  ut_ad(is_need_recovery());
+  ut_ad(meta.valid());
+
+  if (srv_gcs_print_process_debug) {
+    lizard_info(ER_LIZARD) << "GCS Recover TID: " << meta.tid;
+  }
+
+  m_tid_meta.set_tid_if_bigger(meta);
+  m_tid_recovered = true;
   return;
 }
 
-/**
-  Recover the max parsed gcn to current gcn.
-*/
-void CRecover::apply_gcn() {
-  gcn_t recovered_gcn = m_metadata.get_gcn();
+/** Recover the max parsed gcn to current gcn. */
+void CRecover::apply_cmmt() {
+  // Apply max used tid from undo hdr redo log.
+  if (m_tid_recovered) {
+    ut_ad(m_tid_meta.valid());
+    ut_ad(m_need_recovery);
+    ut_ad(gcs->tid.load_next_tid() == gcs->tid.persisted_next_tid());
 
-  /** Not found any gcn redo log record. */
-  if (recovered_gcn == GCN_NULL) {
-    m_need_recovery = false;
-    return;
+    gcs->tid.recover_tid_if_bigger(m_tid_meta);
+
+    lizard_system(ER_LIZARD) << "GCS Recover Max TID: " << m_tid_meta.tid;
   }
 
-  ut_ad(is_need_recovery());
+  /** Apply max scn from redo log record. */
+  if (m_scn_recovered) {
+    ut_ad(m_scn_meta.valid());
+    ut_ad(is_need_recovery());
+    ut_ad(gcs->scn.load_scn() == gcs->scn.persisted_scn());
 
-  ut_ad(gcs->gcn.load_gcn() == gcs->m_persisted_gcn.load());
+    gcs->scn.recover_scn_if_bigger(m_scn_meta);
 
-  gcs->gcn.set_gcn_if_bigger(recovered_gcn);
+    lizard_system(ER_LIZARD) << "GCS Recover Max SCN: " << m_scn_meta.scn;
+  }
+
+  /** Apply max gcn from redo log record. */
+  if (m_gcn_recovered) {
+    ut_ad(is_need_recovery());
+    ut_ad(m_gcn_meta.valid());
+    ut_ad(gcs->gcn.load_gcn() == gcs->gcn.persisted_gcn());
+
+    gcs->gcn.recover_gcn_if_bigger(m_gcn_meta);
+
+    lizard_system(ER_LIZARD) << "GCS Recover Max GCN: " << m_gcn_meta.gcn;
+  }
 
   m_need_recovery = false;
   return;
@@ -140,16 +192,16 @@ void CRecover::apply_gcn() {
  * @param[in/out]	mtr
  *
  * @retval	proposal mark */
-proposal_mark_t gcs_t::new_prepare(trx_t *trx, mtr_t *mtr) {
+proposal_mark_t gcs_t::new_proposal(trx_t *trx, mtr_t *mtr) {
   ut_ad(trx->txn_desc.cmmt.scn == SCN_NULL);
-  ut_ad(!trx->txn_desc.pmmt.is_null());
+  ut_ad(!trx->txn_desc.xa_pmmt().is_null());
 
-  gcn_tuple_t gtuple =
-      gcn.new_gcn(trx->txn_desc.pmmt.gcn, trx->txn_desc.pmmt.csr, mtr);
+  const proposal_mark_t xa_pmmt = trx->txn_desc.xa_pmmt();
 
-  trx->txn_desc.pmmt = {gtuple.gcn, gtuple.csr};
+  gcn_tuple_t gtuple = gcn.new_proposal_gcn(xa_pmmt, trx, mtr);
 
-  ut_ad(undo_ptr_is_active(trx->txn_desc.undo_ptr));
+  ut_ad(!trx->txn_desc.is_slot_committed());
+
   return {gtuple.gcn, gtuple.csr};
 }
 
@@ -160,23 +212,20 @@ proposal_mark_t gcs_t::new_prepare(trx_t *trx, mtr_t *mtr) {
  *
  * @retval	commit mark */
 commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
-  commit_mark_t cmmt;
-
   ut_ad(!recv_sys || !recv_sys->cn_recover->is_need_recovery());
-
-  /** 1. generate scn number */
-  scn_list_mutex_enter();
+  gcn_tuple_t xa_gcn = trx->txn_desc.xa_gcn();
 
   DBUG_EXECUTE_IF(
       "crash_before_gcn_commit",
-      if (trx->txn_desc.cmmt.gcn != GCN_NULL) { DBUG_SUICIDE(); });
+      if (xa_gcn.gcn != GCN_NULL) { DBUG_SUICIDE(); });
 
-  assert_trx_commit_mark_initial(trx);
+  ut_ad(trx->txn_desc.is_cmmt_initial());
 
+  /** 1. generate scn number */
   /** We don't want to call **ut_time_system_us** within the scope
   of the gcs mutex protection. So we just only set
   trx->txn_desc.scn.first here */
-  trx->txn_desc.cmmt.scn = cmmt.scn = scn.new_scn();
+  scn_t commit_scn = scn.new_scn(trx, mtr);
 
   /** If a read only transaction (for example: start transaction read only),
   temporary table can be also modified. It doesn't matter if purge_sys purges
@@ -187,146 +236,74 @@ commit_mark_t gcs_t::new_commit(trx_t *trx, mtr_t *mtr) {
       serialisation list */
 
   /** add to gcs->serialisation_list_scn */
-  UT_LIST_ADD_LAST(gcs->serialisation_list_scn, trx);
-
-  scn_list_mutex_exit();
 
   /** 2. generate gcn number. */
-  gcn_tuple_t ret =
-      gcn.new_gcn(trx->txn_desc.cmmt.gcn, trx->txn_desc.cmmt.csr, mtr);
-
-  trx->txn_desc.cmmt.gcn = cmmt.gcn = ret.gcn;
-  trx->txn_desc.cmmt.csr = cmmt.csr = ret.csr;
+  gcn_tuple_t commit_gcn = gcn.new_commit_gcn(xa_gcn, trx, mtr);
 
   /** 3. generate utc time. */
-  trx->txn_desc.cmmt.us = cmmt.us = ut_time_system_us();
+  utc_t commit_us = utc.new_us(trx);
 
-  /** 4. mark undo_ptr, only memory structure, didn't modify undo header UBA. */
-  ut_ad(undo_ptr_is_active(trx->txn_desc.undo_ptr));
+  ut_ad(trx->txn_desc.is_cmmt_committed());
+  ut_ad(!trx->txn_desc.is_slot_committed());
 
 #ifdef UNIV_DEBUG
   if (srv_simulate_assigned_gcn_debug) {
-    trx->txn_desc.cmmt.csr = cmmt.csr = CSR_ASSIGNED;
+    trx->txn_desc.cmmt.csr = commit_gcn.csr = CSR_ASSIGNED;
   }
 #endif
 
-  return cmmt;
+  return {commit_scn, commit_us, commit_gcn.gcn, commit_gcn.csr};
 }
 
-/** Push a commit snapshot. */
-void gcs_t::new_snapshot(const commit_snap_t &snap) {
-  csnapshot_mgr.push(snap);
-  return;
+/** Task a global commit system snapshot. */
+commit_snap_t gcs_t::new_snapshot() {
+  commit_snap_t snap;
+
+  /** Step 1: Get least active tid. */
+  snap.up_limit_tid = tid.load_min_active_tid();
+  /** Step 2: Get utc. */
+  snap.utc_sec = ut_time_system_us() / 1000000;
+  /** Step 3. Generate new scn. */
+  snap.scn = scn.new_scn();
+  /** Step 4. Get gcn. */
+  snap.gcn = gcn.load_gcn();
+
+  csnapshot.push(snap);
+  return snap;
 }
 
-template <typename T>
-trx_id_t gcs_t::search_up_limit_tid(const T *lhs) {
-  return csnapshot_mgr.search_up_limit_tid(lhs);
-}
-
-template <typename T>
-extern trx_id_t gcs_search_up_limit_tid(const T *lhs) {
-  return gcs->search_up_limit_tid(lhs);
-}
-
-template trx_id_t gcs_t::search_up_limit_tid<Snapshot_gcn_vision>(
-    const Snapshot_gcn_vision *lhs);
-template trx_id_t gcs_t::search_up_limit_tid<Snapshot_scn_vision>(
-    const Snapshot_scn_vision *lhs);
-
-template trx_id_t gcs_search_up_limit_tid<Snapshot_gcn_vision>(
-    const Snapshot_gcn_vision *lhs);
-
-template trx_id_t gcs_search_up_limit_tid<Snapshot_scn_vision>(
-    const Snapshot_scn_vision *lhs);
 /**
-  Persist gcn if current gcn > persisted gcn.
+  Persist transaction id and commit number.
 
-  @retval	true	if written
- */
-bool gcs_persist_gcn() {
+  @retval	true	if written */
+bool gcs_persist_cmmt() {
   ut_ad(gcs);
-  return gcs->persist_gcn();
-}
+  bool written_tid = gcs->tid.persist_tid();
+  bool written_scn = gcs->scn.persist_scn();
+  bool written_gcn = gcs->gcn.persist_gcn();
 
-/**
-  Persist gcn if current gcn > persisted gcn.
-
-  @retval	true	if written
- */
-bool gcs_t::persist_gcn() {
-  bool written = false;
-  gcn_t current_gcn;
-
-  gcn_persist_mutex_enter();
-
-  current_gcn = gcn.load_gcn();
-  if (current_gcn > m_persisted_gcn.load()) {
-    /** Recover must be completed. */
-    ut_ad(!recv_sys || !recv_sys->cn_recover->is_need_recovery());
-
-    m_persisted_gcn.store(current_gcn);
-
-    PersistentGcsData meta;
-    meta.set_gcn(m_persisted_gcn.load());
-    persisters.gcn_persister()->write(&meta);
-
-    written = true;
-  }
-  gcn_persist_mutex_exit();
-
-  return written;
-}
-
-/** Erase trx in serialisation_list_scn, and update min_safe_scn
-@param[in]      trx      trx to be removed */
-void gcs_erase_lists(trx_t *trx) {
-  assert_lizard_min_safe_scn_valid();
-
-  scn_list_mutex_enter();
-
-  lizard_ut_ad(UT_LIST_GET_LEN(gcs->serialisation_list_scn) > 0);
-
-  lizard_ut_ad(trx != NULL && trx->state == TRX_STATE_COMMITTED_IN_MEMORY);
-
-  auto oldest_trx = UT_LIST_GET_FIRST(gcs->serialisation_list_scn);
-  UT_LIST_REMOVE(gcs->serialisation_list_scn, trx);
-
-  /** Considering the case:
-  serialisation_list_scn [100, 101], gcs->scn = 101
-  if **101** erased, and then **100** erased, serialisation_list_scn []
-  we also set min_safe_scn as 100 for safety */
-  if (oldest_trx == trx) {
-    lizard_ut_ad(gcs->min_safe_scn.load() < trx->txn_desc.cmmt.scn);
-    gcs->min_safe_scn.store(oldest_trx->txn_desc.cmmt.scn);
-  }
-
-  scn_list_mutex_exit();
-
-  assert_lizard_min_safe_scn_valid();
+  return written_tid || written_scn || written_gcn;
 }
 
 /** Close Global Change System structure. */
 void gcs_close() {
   if (gcs != nullptr) {
-    lizard_ut_ad(UT_LIST_GET_LEN(gcs->serialisation_list_scn) == 0);
-
+    gcs->tid.~TID();
     gcs->scn.~SCN();
     gcs->gcn.~GCN();
+    gcs->utc.~UTC();
 
-    gcs->persisters.~Persisters();
+    gcs->mvcc.~MVCC();
 
-    gcs->csnapshot_mgr.~CSnapshot_mgr();
+    gcs->csnapshot.~CSnapshot();
 
-    mutex_free(&gcs->m_scn_list_mutex);
-    mutex_free(&gcs->m_gcn_order_mutex);
-    mutex_free(&gcs->m_gcn_persist_mutex);
+    gcs->cclean.~CClean();
+
+    gcs->ccache.~CCache();
 
     ut::free(gcs);
     gcs = nullptr;
   }
-
-  trx_vision_container_destroy();
 }
 
 /** Get the address of Global Change System header */
@@ -347,19 +324,67 @@ gcs_sysf_t *gcs_sysf_get(mtr_t *mtr) {
 void gcs_boot() {
   ut_ad(gcs);
 
-  gcs->scn.boot();
+  gcs->tid.boot();
 
-  gcs->min_safe_scn = gcs->scn.load_scn();
+  gcs->scn.boot();
 
   gcs->gcn.boot();
 
-  gcs->m_persisted_gcn = gcs->gcn.load_gcn();
+  lizard_system(ER_LIZARD) << "Global Change System has started.";
+}
 
-  ut_ad(gcs->m_persisted_gcn.load() != GCN_NULL &&
-        gcs->m_persisted_gcn.load() >= GCN_INITIAL);
+/** Resurrect all recovered trx into gcs structures. */
+void gcs_resurrect_trxs() {
+  ut::vector<trx_t *> trxs;
 
-  /** Init vision system */
-  trx_vision_container_init();
+  for (auto &shard : trx_sys->shards) {
+    shard.active_rw_trxs.latch_and_execute(
+        [&](const Trx_by_id_with_min &trx_by_id_with_min) {
+          for (const auto &trx_track : trx_by_id_with_min.by_id()) {
+            trxs.emplace_back(trx_track.second);
+          }
+        },
+        UT_LOCATION_HERE);
+  }
+
+  std::sort(trxs.begin(), trxs.end(),
+            [&](trx_t *a, trx_t *b) { return a->id < b->id; });
+
+  for (trx_t *trx : trxs) {
+    gcs->tid.resurrect_trx(trx);
+  }
+
+  gcs->tid.start_active_tid();
+  lizard_system(ER_LIZARD) << "GCS Start Active TID: "
+                           << gcs->tid.load_min_active_tid();
+
+  /** Push up min safe scn */
+  gcs->scn.start_active_scn();
+  lizard_system(ER_LIZARD) << "GCS Start Active SCN: "
+                           << gcs->scn.load_min_active_scn();
+}
+
+/** Determine if there are incomplete transactions in the system.
+@return whether incomplete transactions need rollback */
+bool gcs_need_rollback() {
+  uint64_t n_trx = 0;
+  uint64_t n_prepared_trx = 0;
+
+  gcs->tid.latch_and_iterate_trx([&](trx_t *trx) -> bool {
+    n_trx++;
+
+    if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
+      n_prepared_trx++;
+    }
+
+    return false;
+  });
+
+  ut_ad(n_trx >= n_prepared_trx);
+
+  n_trx -= n_prepared_trx;
+
+  return n_trx > 0;
 }
 
 /** Create a new file segment special for Global Change System
@@ -381,21 +406,22 @@ static void gcs_create_sysf(mtr_t *mtr) {
 
   hdr = gcs_sysf_get(mtr);
 
-  /* The scan number is counting from SCN_RESERVERD_MAX */
-  mach_write_to_8(hdr + GCS_DATA_SCN, SCN_RESERVERD_MAX);
+  /* The scn number is counting from SCN_INSTALL_VALUE */
+  mach_write_to_8(hdr + GCS_DATA_SCN, SCN::SCN_INSTALL_VALUE);
 
   /** The global commit number initial value */
-  mach_write_to_8(hdr + GCS_DATA_GCN, GCN_INITIAL);
+  mach_write_to_8(hdr + GCS_DATA_GCN, GCN::GCN_INSTALL_VALUE);
 
   /** The max GCN number whose transaction has been purged */
-  mach_write_to_8(hdr + GCS_DATA_PURGE_GCN, GCN_INITIAL);
+  mach_write_to_8(hdr + GCS_DATA_PURGE_GCN, GCN::GCN_INSTALL_VALUE);
 
   ptr = hdr + GCS_DATA_NOT_USED;
 
   memset(ptr, 0, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - ptr);
 
   mlog_log_string(hdr, UNIV_PAGE_SIZE - FIL_PAGE_DATA_END + page - hdr, mtr);
-  lizard_info(ER_LIZARD) << "Initialize Global Change System";
+
+  lizard_system(ER_LIZARD) << "Global Change System has initialized.";
 }
 
 /** Create Global Change System pages within system tablespace */
@@ -410,214 +436,210 @@ void gcs_create_sys_pages() {
   mtr_commit(&mtr);
 }
 
-/** Get current SCN number */
-scn_t gcs_load_scn() {
-  ut_a(gcs);
+/**
+  Assign vision for an active trancaction.
 
-  return gcs->scn.load_scn();
+  @param[in]		the transaction to assign vision
+*/
+void gcs_vision_open(trx_t *trx) {
+  Vision *vision = nullptr;
+  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
+
+  vision = &trx->vision;
+  gcs->mvcc.vision_open(vision, trx->id);
+
+  /* Cache min active tid. */
+  trx->min_active_tid.store(vision->up_limit_tid(), std::memory_order_relaxed);
+
+  /** Verify commit snapshot module correctness. */
+  if (srv_vision_use_commit_snapshot_debug) {
+    komodo::Snapshot_scn_vision v(vision->snapshot_scn(), 0);
+    vision->set_up_limit_tid(
+        gcs_search_up_limit_tid<komodo::Snapshot_scn_vision>(&v));
+  }
 }
 
-/** Get max persisted GCN number */
-gcn_t gcs_load_gcn() {
-  ut_a(gcs);
+void gcs_shadow_view_open(trx_t *trx) {
+  Shadow_view *shadow = nullptr;
+  Vision *vision = nullptr;
+  ut_ad(trx->id != TRX_ID_MAX);
+  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
 
-  return gcs->gcn.load_gcn();
+  shadow = &trx->shadow_view;
+  vision = shadow->vision();
+
+  /** 1. Get SCN and block purge */
+  gcs->mvcc.vision_open(vision, trx->id);
+
+  /** 2. Get GCN */
+  shadow->set_gcn(gcs_load_gcn());
+
+  /** 3. Get up_limit_tid */
+  komodo::Snapshot_automatic_gcn_vision tmp(shadow->gcn(),
+                                            vision->snapshot_scn());
+  shadow->set_up_limit_tid(
+      gcs_search_up_limit_tid<komodo::Snapshot_gcn_vision>(&tmp));
 }
 
 /**
-  Modify the min active trx id
+  Release the corresponding element.
 
-  @param[in]      the removed trx */
-void gcs_mod_min_active_tid(trx_t *trx) {
-  trx_t *min_active_trx = NULL;
+  @param[in]		the element will be released
+*/
+void gcs_vision_release(Vision *vision) { gcs->mvcc.vision_release(vision); }
 
-  ut_ad(trx != NULL);
-  ut_ad(gcs != nullptr);
-  /* Must hold the trx sys mutex */
-  ut_ad(trx_sys_mutex_own() || srv_is_being_started);
+void gcs_shadow_view_release(Shadow_view *shadow) {
+  Vision *vision = nullptr;
+  vision = shadow->vision();
+  ut_ad(vision != nullptr);
 
-  /** Called after remove */
-  // ut_ad(!trx->in_rw_trx_list);
+  gcs->mvcc.vision_release(vision);
+  shadow->reset();
+}
 
-  /** Read only didn't put into rw list even through it allocated new trx id
-     for temporary table update. */
-  ut_ad((trx->read_only ||
-         (trx->rsegs.m_redo.rseg == NULL && trx->rsegs.m_txn.rseg == NULL)) ||
-        gcs->min_active_tid.load() <= trx->id);
+/**
+  Get the earliest undestructed element.
 
+  @param[out]		the earliest entry undestructed element
+*/
+void gcs_clone_oldest_vision(cycle_vision_t *cvision) {
+  Vision *vision = nullptr;
+  scn_t min_active_scn = 0;
+  scn_t oldest_scn = 0;
+
+  ut_ad(gcs->mvcc.inited());
+  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
+
+  vision = cvision->vision();
+
+  /** S1: acquire min active scn. */
 #ifdef UNIV_DEBUG
-  /** Only myself modify mtx id, so delay to hold mtx mutex */
-  trx_id_t old_min_active_tid = gcs->min_active_tid.load();
+  min_active_scn = gcs->scn.traverse_min_active_scn();
+#else
+  min_active_scn = gcs->scn.load_min_active_scn();
+  if (cvision->limit().scn >= min_active_scn) {
+    min_active_scn = gcs->scn.traverse_min_active_scn();
+  }
 #endif
 
-  min_active_trx = UT_LIST_GET_LAST(trx_sys->rw_trx_list);
+  commit_order_t limit = {min_active_scn, (utc_t)ut_time_system_us(),
+                         gcs_load_gcn()};
+  cvision->set_limit(limit);
 
-  trx_id_t min_tid = min_active_trx == nullptr
-                         ? trx_sys->next_trx_id_or_no.load()
-                         : min_active_trx->id;
+  /** S2: acquire oldest vision. */
+  oldest_scn = gcs->mvcc.clone_oldest_vision();
 
-  gcs->min_active_tid.store(min_tid);
-  trx->min_active_tid.store(min_tid);
-
-  ut_ad(old_min_active_tid <= gcs->min_active_tid.load());
+  /** Difference with purge vision:
+   *
+   * 1. min safe is unnecessary since cycle didn't use min-heap.
+   *
+   * 2. gtid is protected by update undo. so ignore it.
+   * */
+  vision->set_snapshot_scn(oldest_scn);
 }
 
 /**
-  Get the min active trx id
+  Get the earliest undestructed element.
 
-  @retval         the min active id in trx_sys. */
-trx_id_t gcs_load_min_active_tid() {
-  trx_id_t ret;
-  ret = gcs->min_active_tid.load();
-  return ret;
-}
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-/** Check if min_safe_scn is valid
-@return         true if min_safe_scn is valid */
-void min_safe_scn_valid() {
-  scn_t sys_scn;
-  trx_t *trx = nullptr;
-  trx_t *prev_trx = nullptr;
-
-  ut_ad(!scn_list_mutex_own());
-
-  scn_list_mutex_enter();
-
-  sys_scn = gcs_load_scn();
-  if (UT_LIST_GET_LEN(gcs->serialisation_list_scn) == 0) {
-    ut_a(gcs->min_safe_scn <= sys_scn);
-  } else {
-    trx = UT_LIST_GET_FIRST(gcs->serialisation_list_scn);
-    ut_a(trx);
-
-    ut_a(gcs->min_safe_scn < trx->txn_desc.cmmt.scn);
-
-    ut_a(gcs->min_safe_scn < sys_scn);
-
-    /** trx in serialisation_list_scn are ordered by scn */
-    prev_trx = trx;
-    for (trx = UT_LIST_GET_NEXT(scn_list, trx); trx != nullptr;
-         trx = UT_LIST_GET_NEXT(scn_list, trx)) {
-      ut_a(prev_trx->txn_desc.cmmt.scn < trx->txn_desc.cmmt.scn);
-      prev_trx = trx;
-    }
-  }
-
-  scn_list_mutex_exit();
-}
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
-
-/**
-  In MySQL 8.0:
-  * Hold trx_sys::mutex, generate trx->no, add trx to
-  trx_sys->serialisation_list
-  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are
-  ordered.
-  * Erase above mutexs, commit in undo header
-  * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
-    the modifications from the committed trx can be seen.
-
-  In Lizard:
-  * Hold trx_sys::mutex, generate trx->txn_desc.scn
-  * Hold SCN::mutex, add trx to trx_sys->serialisation_list_scn
-  * Erase trx_sys::mutex, hold purge_sys::pq_mutex and rseg::mutex, and add
-    undo rseg to purge_queue. So undo records in the same rseg are ordered, but
-    undo records from different rsegs are not ordered in purge_heap.
-  * Erase above mutexs, commit in undo header
-  * Hold SCN::mutex, remove trx in trx_sys->serialisation_list_scn,
-    and update min_safe_scn.
-
-  To ensure purge_sys purge in order, min_safe_scn is used for purge sys.
-  min_safe_scn is the current smallest scn of committing transactions (both
-  prepared state and committed in memory state).
-
-  This function might be used in the following scenarios:
-  * purge sys should get a safe scn for purging
-  * clone
-  * PolarDB
-
-  @retval         the min safe commited scn in current lizard sys
+  @param[out]		the earliest entry undestructed element
 */
-scn_t gcs_load_min_safe_scn() {
-  ut_ad(!scn_list_mutex_own());
-  assert_lizard_min_safe_scn_valid();
-  /* Get the oldest transaction from serialisation list. */
-  return gcs->min_safe_scn.load();
-}
+void gcs_clone_oldest_vision(purge_vision_t *pvision) {
+  Vision *vision = nullptr;
+  scn_t min_safe_scn = 0;
+  scn_t oldest_scn = 0;
+  scn_t gtid_oldest_trxscn = 0;
+  ut_ad(gcs->mvcc.inited());
+  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
 
-void gcs_set_gcn_if_bigger(gcn_t gcn) { gcs->gcn.set_gcn_if_bigger(gcn); }
+  vision = pvision->vision();
 
-template <unsigned long long POS>
-void Persisted_gcn<POS>::init() {
-  ut_ad(m_inited == false);
-  m_gcn = read();
-  m_inited = true;
-}
-
-template <unsigned long long POS>
-gcn_t Persisted_gcn<POS>::read() {
-  gcn_t gcn;
-  gcs_sysf_t *hdr;
-  mtr_t mtr;
-
-  mtr_start(&mtr);
-  hdr = gcs_sysf_get(&mtr);
-
-  gcn = mach_read_from_8(hdr + POS);
-
-  /** If lizard version is low, purge_gcn or erased_gcn has not been saved. */
-  if (gcn == 0) {
-    gcn = GCN_INITIAL;
-  } else {
-    ut_a(gcn >= GCN_INITIAL);
+  /** S1: acquire min safe scn. */
+#ifdef UNIV_DEBUG
+  min_safe_scn = gcs_traverse_min_safe_scn();
+#else
+  min_safe_scn = gcs_load_min_safe_scn();
+  /** More accurate if few transaction. */
+  if (pvision->safe_scn() >= min_safe_scn) {
+    min_safe_scn = gcs_traverse_min_safe_scn();
   }
+#endif
+  /** Save scn for min-heap pop safely. */
+  pvision->set_safe_scn(min_safe_scn);
 
-  mtr_commit(&mtr);
-  return gcn;
-}
+  /** S2: acquire oldest vision */
+  oldest_scn = gcs->mvcc.clone_oldest_vision();
 
-template <unsigned long long POS>
-void Persisted_gcn<POS>::write(gcn_t gcn) {
-  ut_ad(m_inited == true);
-  gcs_sysf_t *hdr;
-  mtr_t mtr;
+  /** S3: Block purging transaction till GTID is persisted. */
+  auto &gtid_persistor = clone_sys->get_gtid_persistor();
+  gtid_oldest_trxscn = gtid_persistor.get_oldest_trx_scn();
 
-  mtr_start(&mtr);
-  hdr = gcs_sysf_get(&mtr);
-  mlog_write_ull(hdr + POS, gcn, &mtr);
-  mtr_commit(&mtr);
-}
-
-template <unsigned long long POS>
-gcn_t Persisted_gcn<POS>::get() {
-  ut_ad(m_inited == true);
-  return m_gcn.load();
+  /** Save oldest as vision snapshot scn. */
+  oldest_scn = std::min(oldest_scn, gtid_oldest_trxscn);
+  vision->set_snapshot_scn(std::min(min_safe_scn, oldest_scn));
 }
 
 /**
-  Flush the bigger commit number to lizard tbs,
-  Only one single thread to persist.
+  Get total size of all active vision
+
+  @retval       total size of all active vision
 */
-template <unsigned long long POS>
-void Persisted_gcn<POS>::flush(gcn_t gcn) {
-  ut_ad(m_inited == true);
-  if (gcn > m_gcn) {
-    m_gcn.store(gcn);
-    write(m_gcn);
-  }
+ulint gcs_mvcc_size() {
+  ut_ad(gcs->mvcc.inited());
+  ut_ad(trx_sys == nullptr || !trx_sys_mutex_own());
+
+  return gcs->mvcc.size();
 }
 
-template void Persisted_gcn<GCS_DATA_PURGE_GCN>::init();
-template void Persisted_gcn<GCS_DATA_PURGE_GCN>::flush(gcn_t gcn);
-template gcn_t Persisted_gcn<GCS_DATA_PURGE_GCN>::read();
-template gcn_t Persisted_gcn<GCS_DATA_PURGE_GCN>::get();
-template void Persisted_gcn<GCS_DATA_PURGE_GCN>::write(gcn_t gcn);
+/** Guess whether rec tid is within the range of tcn cache.
+ *
+ * @param[in]	txn_rec		txn record
+ * @param[in]	up_limit_tid	up limit tid of vision
+ *
+ * @retval		guess result */
+bool gcs_cache_guess(const txn_rec_t &txn_rec, const trx_id_t up_limit_tid) {
+  trx_id_t rec_tid = 0;
+  trx_id_t boot_tid = 0;
+  trx_id_t low_tid = 0;
+  ulint n_entry = 0;
+  ulint window = 0;
+  ut_ad(txn_rec.is_active());
 
-template void Persisted_gcn<GCS_DATA_ERASE_GCN>::init();
-template void Persisted_gcn<GCS_DATA_ERASE_GCN>::flush(gcn_t gcn);
-template gcn_t Persisted_gcn<GCS_DATA_ERASE_GCN>::read();
-template gcn_t Persisted_gcn<GCS_DATA_ERASE_GCN>::get();
-template void Persisted_gcn<GCS_DATA_ERASE_GCN>::write(gcn_t gcn);
+  rec_tid = txn_rec.trx_id;
+  boot_tid = gcs->tid.boot_tid();
+  n_entry = gcs->ccache.n_entry();
+
+  ut_ad(rec_tid > 0 && rec_tid < TRX_ID_MAX);
+  ut_ad(boot_tid > 0 && boot_tid < TRX_ID_MAX);
+
+  /** Global tcn cache is disabled (innodb_tcn_cache_level = none). */
+  if (n_entry == 0) {
+    return false;
+  }
+
+  /** Rec tid is less than boot tid, maybe out of range. Active recovered
+   * transactions whose tids are less than boot tid also fall here even if
+   * they are cached after committed, they give up the global tcn cache
+   * acceleration. */
+  if (rec_tid < boot_tid) {
+    return false;
+  }
+
+  /** Rec tid maybe is newer transaction. */
+  if (up_limit_tid > 0 && rec_tid >= up_limit_tid) {
+    return true;
+  }
+
+  /** Calculate low tid by the tid window scaled from cache entry number. */
+  window = (n_entry * srv_tcn_cache_guess_ratio) / 100;
+  if (up_limit_tid > window) {
+    low_tid = up_limit_tid - window;
+  } else {
+    low_tid = 1;
+  }
+
+  low_tid = std::max(low_tid, boot_tid);
+
+  return (rec_tid >= low_tid && rec_tid < up_limit_tid);
+}
 
 }  // namespace lizard

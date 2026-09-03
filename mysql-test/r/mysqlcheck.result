@@ -5,12 +5,17 @@ mtr.asserted_test_suppressions                     OK
 mtr.global_suppressions                            OK
 mtr.test_ignored_global_suppressions               OK
 mtr.test_suppressions                              OK
+mysql.ai_function_config                           OK
+mysql.ai_model_config                              OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
 mysql.concurrency_control                          OK
 mysql.consensus_info                               OK
 mysql.db                                           OK
 mysql.default_roles                                OK
+mysql.encdb_auth_users                             OK
+mysql.encdb_kms_meta                               OK
+mysql.encdb_sensitive_rules                        OK
 mysql.engine_cost                                  OK
 mysql.func                                         OK
 mysql.general_log
@@ -61,6 +66,12 @@ status   : OK
 mtr.test_suppressions
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+mysql.ai_function_config
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.ai_model_config
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.columns_priv
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -77,6 +88,15 @@ mysql.db
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.default_roles
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_auth_users
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_kms_meta
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_sensitive_rules
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.engine_cost
@@ -191,12 +211,17 @@ status   : OK
 sys.sys_config
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
+mysql.ai_function_config                           OK
+mysql.ai_model_config                              OK
 mysql.columns_priv                                 OK
 mysql.component                                    OK
 mysql.concurrency_control                          OK
 mysql.consensus_info                               OK
 mysql.db                                           OK
 mysql.default_roles                                OK
+mysql.encdb_auth_users                             OK
+mysql.encdb_kms_meta                               OK
+mysql.encdb_sensitive_rules                        OK
 mysql.engine_cost                                  OK
 mysql.func                                         OK
 mysql.general_log
@@ -234,6 +259,12 @@ mysql.time_zone_name                               OK
 mysql.time_zone_transition                         OK
 mysql.time_zone_transition_type                    OK
 mysql.user                                         OK
+mysql.ai_function_config
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.ai_model_config
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
 mysql.columns_priv
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
@@ -250,6 +281,15 @@ mysql.db
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.default_roles
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_auth_users
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_kms_meta
+note     : Table does not support optimize, doing recreate + analyze instead
+status   : OK
+mysql.encdb_sensitive_rules
 note     : Table does not support optimize, doing recreate + analyze instead
 status   : OK
 mysql.engine_cost

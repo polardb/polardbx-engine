@@ -387,7 +387,7 @@ bool check_sequence_fields_valid(Alter_info *alter_info) {
                     CREATE TABLE ...sequence engine
   @retval   false   Not
 */
-bool sequence_create_info(HA_CREATE_INFO *create_info) {
+bool sequence_create_info(const HA_CREATE_INFO *create_info) {
   /* CREATE SEQUENCE syntax */
   if (create_info->sequence_info) return true;
 

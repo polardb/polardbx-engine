@@ -83,15 +83,14 @@ extern space_index_t dbug_panda_index_id;
 #endif /* UNIV_DEBUG */
 
 /** Write txn columns into undo record.
- * @param[in/out]  ptr             pointer to undo record
- * @param[in]      index           index handler
- * @param[in]      rec             record
- * @param[in]      offsets         offsets
- * @return         pointer to current position
- */
-byte *trx_undo_update_rec_write_txn_cols(byte *ptr, const dict_index_t *index,
-                                         const rec_t *rec,
-                                         const ulint *offsets, const txn_layout_t &layout);
+ * @param[in/out]	ptr             pointer to undo record
+ * @param[in]		index           index handler
+ * @param[in]		slc             record
+ *
+ * @retval		pointer to current position */
+byte *trx_undo_update_rec_write_txn_cols(byte *ptr, const Slice *slc,
+                                         const dict_index_t *index,
+                                         const txn_layout_t &layout);
 /**
  * Choose the index according to the type and index_id of undo record
  *

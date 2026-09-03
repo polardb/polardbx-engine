@@ -26,14 +26,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/consensus/consensus_channel.h"
 #include "sql/rpl_msr.h"
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0xlog.h"
 
 /** Special channel name for xpaxos channel. */
 const char *Multisource_info::xpaxos_channel = "xpaxos_applier";
 
 /** Whether channel is xpaxos replication according to channel name. */
 bool Multisource_info::is_xpaxos_replication_channel_name(const char *channel) {
-  if (!ConsensusLogManager::enable_consensus()) return false;
+  if (!komodo::xlog_enable_consensus()) return false;
 
   if (!channel) return true;
 

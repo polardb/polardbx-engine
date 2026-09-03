@@ -1,0 +1,56 @@
+# Test 1: FULLTEXT index creation with existing data
+CREATE TABLE t_fts1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+title VARCHAR(200),
+body TEXT
+) ENGINE=InnoDB;
+ALTER TABLE t_fts1 ADD FULLTEXT INDEX ft_body (body);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SELECT COUNT(*) FROM t_fts1 WHERE MATCH(body) AGAINST ('fulltext');
+COUNT(*)
+200
+SELECT COUNT(*) FROM t_fts1 WHERE MATCH(body) AGAINST ('number');
+COUNT(*)
+200
+# Test 2: force the release/latch cycle on every bulk insert
+CREATE TABLE t_fts2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+word VARCHAR(10)
+) ENGINE=InnoDB;
+SET SESSION debug = '+d,btree_load_simulate_log_free';
+ALTER TABLE t_fts2 ADD FULLTEXT INDEX ft_word (word);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SET SESSION debug = '-d,btree_load_simulate_log_free';
+SELECT COUNT(*) FROM t_fts2 WHERE MATCH(word) AGAINST ('w100');
+COUNT(*)
+1
+SELECT COUNT(*) FROM t_fts2 WHERE MATCH(word) AGAINST ('w299');
+COUNT(*)
+1
+# Test 3: multiple text columns FULLTEXT
+CREATE TABLE t_fts3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+col_a VARCHAR(100),
+col_b VARCHAR(100),
+col_c TEXT
+) ENGINE=InnoDB;
+ALTER TABLE t_fts3 ADD FULLTEXT INDEX ft_multi (col_a, col_b, col_c);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+SELECT COUNT(*) FROM t_fts3 WHERE MATCH(col_a, col_b, col_c) AGAINST ('alpha');
+COUNT(*)
+150
+SELECT COUNT(*) FROM t_fts3 WHERE MATCH(col_a, col_b, col_c) AGAINST ('gamma');
+COUNT(*)
+150
+# Test 4: empty table (no records to bulk load)
+CREATE TABLE t_fts4 (
+id INT PRIMARY KEY,
+content TEXT
+) ENGINE=InnoDB;
+ALTER TABLE t_fts4 ADD FULLTEXT INDEX ft_content (content);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+DROP TABLE t_fts1, t_fts2, t_fts3, t_fts4;

@@ -5,9 +5,8 @@
 # gcs history will start new trx and assign durable rseg,
 # which might cause uneven usage of the undo tablespace,
 # because there are some big transactions in the testcase.
---disable_query_log
+
 set global innodb_scn_history_task_enabled = off;
---enable_query_log
 
 if ($CRASH_ON_SHUTDOWN == 0)
 {
@@ -188,7 +187,13 @@ if ($CRASH_ON_SHUTDOWN == 1)
 SET GLOBAL innodb_max_undo_log_size=20000000;
 SET GLOBAL innodb_fast_shutdown=0;
 SET GLOBAL innodb_purge_rseg_truncate_frequency=1;
+SET GLOBAL innodb_purge_batch_size=1;
+SET GLOBAL innodb_dbug_gcs_enable_traverse_scn_list=ON;
 SET GLOBAL innodb_purge_run_now=ON;
+
+create table t3(id int);
+drop table t3;
+
 --let $shutdown_server_timeout= 300
 --source include/shutdown_mysqld.inc
 
@@ -217,7 +222,7 @@ if ($CRASH_ON_SHUTDOWN == 0)
   --echo # Compare the undo tablespace sizes before and after truncation.
   if ($FILE_SIZE_12 <= $FILE_SIZE_13)
   {
-    --echo ERROR: Truncated size is wrong for $UNDO_NAME_1: Size before truncation is $FILE_SIZE_12, Size after truncation  is $FILE_SIZE_13;
+    --echo ERROR: Truncated size is wrong for $UNDO_NAME_1: Size before truncation is $FILE_SIZE_12, Size after truncation is $FILE_SIZE_13;
   }
   if ($FILE_SIZE_22 <= $FILE_SIZE_23)
   {

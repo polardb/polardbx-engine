@@ -33,7 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define LIZARD_DD_POLICY_INCLUDED
 
 #include "dd/types/table.h"
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 
 namespace lizard {
 
@@ -42,7 +42,7 @@ namespace lizard {
   Which should be called when open a table.
 */
 template <typename Table>
-extern Indexes_policy dd_fill_indexes_policy(const Table *dd_table);
+extern komodo::Indexes_policy dd_fill_indexes_policy(const Table *dd_table);
 
 /**
   Fill table_policy from a dd::Table or dd::Partition object.
@@ -51,7 +51,7 @@ extern Indexes_policy dd_fill_indexes_policy(const Table *dd_table);
   @param[in,out]  table_policy       table policy to be filled
   @param[in]      dd_table           dd::table
 */
-extern void dd_fill_table_policy(Table_policy &table_policy,
+extern void dd_fill_table_policy(komodo::Table_policy &table_policy,
                                  const dd::Table &dd_table);
 
 /**
@@ -62,12 +62,12 @@ extern void dd_fill_table_policy(Table_policy &table_policy,
   @param[in]    dd_table        The old parent table of a partitioned table.
   Must be provided if the ddl hint requires inheritance.
 */
-extern const Table_policy ha_ddl_create_table_policy(
-    const Ha_table_hint *table_hint, const dict_table_t *table,
+extern const komodo::Table_policy ha_ddl_invoke_table_policy(
+    const komodo::Dict_table_hint *table_hint, const dict_table_t *table,
     const dd::Table *dd_table = nullptr);
 
-extern const Index_policy ha_ddl_create_index_policy(
-    const Ha_index_hint *index_hint, const dict_table_t *table,
+extern const komodo::Index_policy ha_ddl_invoke_index_policy(
+    const komodo::Dict_index_hint *index_hint, const dict_table_t *table,
     const dict_index_t *index);
 }  // namespace lizard
 

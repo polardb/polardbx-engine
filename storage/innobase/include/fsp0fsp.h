@@ -543,6 +543,12 @@ returned block is not allocated nor initialized otherwise */
     fseg_header_t *seg_header, page_no_t hint, byte direction,
     bool has_done_reservation, mtr_t *mtr, mtr_t *init_mtr);
 
+[[nodiscard]] page_no_t fseg_claim_free_page_general(fseg_header_t *seg_header,
+                                                     page_no_t hint,
+                                                     byte direction,
+                                                     bool has_done_reservation,
+                                                     mtr_t *mtr);
+
 /** Allocates a single free page from a segment. This function implements
  the intelligent allocation strategy which tries to minimize
  file space fragmentation.
@@ -819,17 +825,15 @@ page_no_t fsp_sdi_get_root_page_num(space_id_t space,
 void fsp_sdi_write_root_to_page(page_t *page, const page_size_t &page_size,
                                 page_no_t root_page_num, mtr_t *mtr);
 
-#include "fsp0fsp.ic"
-
 /** Reads the server version from the first page of a tablespace.
 @param[in]      page    first page of a tablespace
 @return space server version */
-inline uint32_t fsp_header_get_server_version(const page_t *page);
+static inline uint32_t fsp_header_get_server_version(const page_t *page);
 
 /** Reads the server space version from the first page of a tablespace.
 @param[in]      page    first page of a tablespace
 @return space server version */
-inline uint32_t fsp_header_get_space_version(const page_t *page);
+static inline uint32_t fsp_header_get_space_version(const page_t *page);
 
 /** Get the state of an xdes.
 @param[in]      descr   extent descriptor
@@ -937,6 +941,11 @@ dberr_t fsp_alter_encrypt_tablespace(THD *thd, space_id_t space_id,
 /** Initiate roll-forward of alter encrypt in background thread */
 void fsp_init_resume_alter_encrypt_tablespace();
 
+buf_block_t *fsp_page_create(const page_id_t &page_id,
+                             const page_size_t &page_size,
+                             rw_lock_type_t rw_latch, mtr_t *mtr,
+                             mtr_t *init_mtr);
+
 /** A wrapper class to operate on a file segment inode pointer (fseg_inode_t*)
  */
 class File_segment_inode {
@@ -1027,4 +1036,8 @@ inline std::ostream &operator<<(std::ostream &out,
 fseg_inode_t *fseg_inode_get(const fseg_header_t *header, space_id_t space,
                              const page_size_t &page_size, mtr_t *mtr,
                              buf_block_t **block = nullptr);
+
+#ifndef INNODB_FSP0FSP_IC_STANDALONE
+#include "fsp0fsp.ic"
+#endif /* !INNODB_FSP0FSP_IC_STANDALONE */
 #endif

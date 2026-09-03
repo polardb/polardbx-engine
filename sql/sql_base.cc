@@ -74,6 +74,7 @@
 #include "mysql/thread_type.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
+#include "scope_guard.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_table_access
 #include "sql/auth/sql_security_ctx.h"
@@ -104,7 +105,8 @@
 #include "sql/item_cmpfunc.h"  // Item_func_eq
 #include "sql/item_func.h"
 #include "sql/item_subselect.h"
-#include "sql/lock.h"  // mysql_lock_remove
+#include "sql/item_timefunc.h"  // Item_func_modify_on_update
+#include "sql/lock.h"           // mysql_lock_remove
 #include "sql/log.h"
 #include "sql/log_event.h"           // Query_log_event
 #include "sql/mysqld.h"              // replica_open_temp_tables
@@ -993,6 +995,13 @@ void release_table_share(TABLE_SHARE *share) {
 
   assert(share->ref_count() != 0);
   if (share->decrement_ref_count() == 0) {
+#ifndef NDEBUG
+    if (share->hlindex_shares != nullptr)
+      for (uint slot = 0; slot < share->hlindexes(); slot++)
+        assert(share->hlindex_shares[slot] == nullptr ||
+               share->hlindex_shares[slot]->ref_count() == 0);
+#endif
+
     if (share->has_old_version() || table_def_shutdown_in_progress)
       table_def_cache->erase(to_string(share->table_cache_key));
     else {
@@ -1121,6 +1130,17 @@ OPEN_TABLE_LIST *list_open_tables(THD *thd, const char *db, const char *wild) {
 
 void intern_close_table(TABLE *table) {  // Free all structures
   DBUG_TRACE;
+
+  if (table->hlindex_tables != nullptr) {
+    auto [p, end] = table->hlindex_tables_range();
+    for (; p < end; ++p) {
+      if (*p) intern_close_table(*p);
+    }
+    my_free(table->hlindex_tables);
+    table->hlindex_tables = nullptr;
+  }
+  table->hlindex_active = nullptr;
+
   DBUG_PRINT("tcache",
              ("table: '%s'.'%s' %p", table->s ? table->s->db.str : "?",
               table->s ? table->s->table_name.str : "?", table));
@@ -2406,6 +2426,18 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
 
 void close_temporary(THD *thd, TABLE *table, bool free_share,
                      bool delete_table) {
+  if (table->hlindex_tables != nullptr) {
+    /* The temp table during DDL may have one or more hlindexes. */
+    auto [p, end] = table->hlindex_tables_range();
+    for (; p < end; ++p) {
+      if (*p) close_temporary(thd, *p, free_share, delete_table);
+    }
+    my_free(table->hlindex_tables);
+    table->hlindex_tables = nullptr;
+    table->hlindex_active = nullptr;
+    table->s->hlindex_shares = nullptr;
+  }
+
   handlerton *table_type = table->s->db_type();
   DBUG_TRACE;
   DBUG_PRINT("tmptable", ("closing table: '%s'.'%s'", table->s->db.str,
@@ -3397,7 +3429,9 @@ share_found:
       goto err_lock;
     }
 
-    if (table_def && table_def->hidden() == dd::Abstract_table::HT_HIDDEN_SE) {
+    // Block direct open of HT_HIDDEN_SE tables unless the debug sysvar is ON.
+    if (table_def && table_def->hidden() == dd::Abstract_table::HT_HIDDEN_SE &&
+        !opt_show_vidx_hlindex_tables) {
       my_error(ER_NO_SUCH_TABLE, MYF(0), table_list->db,
                table_list->table_name);
       goto err_lock;
@@ -8574,7 +8608,6 @@ static bool mark_common_columns(THD *thd, Table_ref *table_ref_1,
       equi-join condition to the ON clause.
     */
     if (nj_col_2 && (!using_fields || is_using_column_1)) {
-
       /* RDS IPK : Skip the implicit row for natural join */
       if (item_is_implicit_and_hide<Field>(thd, nj_col_1->field()) &&
           item_is_implicit_and_hide<Field>(thd, nj_col_2->field()))
@@ -9217,6 +9250,11 @@ bool setup_fields(THD *thd, ulong want_privilege, bool allow_sum_func,
       // our iterator is invalidated. Reconstruct it.
       it = std::find(fields->begin(), fields->end(), item);
     }
+    if (item->has_encryption_type()) {
+      /** Disable error reporting if the item has encryption column */
+      thd->column_encryption_ctx.backup(thd);
+      thd->variables.max_error_count = 0;
+    }
   }
   select->is_item_list_lookup = save_is_item_list_lookup;
   thd->lex->allow_sum_func = save_allow_sum_func;
@@ -9589,10 +9627,12 @@ bool insert_fields(THD *thd, Query_block *query_block, const char *db_name,
     @retval true    Error occurred
 */
 
-bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
-                 const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
-                 MY_BITMAP *insert_into_fields_bitmap,
-                 bool raise_autoinc_has_expl_non_null_val) {
+bool fill_record(
+    THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
+    const mem_root_deque<Item *> &values, MY_BITMAP *bitmap,
+    MY_BITMAP *insert_into_fields_bitmap,
+    bool raise_autoinc_has_expl_non_null_val,
+    std::map<uint, Item_func_mod_onupd *> *mod_onupd_items) {
   DBUG_TRACE;
 
   assert(CountVisibleFields(fields) == CountVisibleFields(values));
@@ -9629,6 +9669,21 @@ bool fill_record(THD *thd, TABLE *table, const mem_root_deque<Item *> &fields,
 
     /* Generated columns will be filled after all base columns are done. */
     if (rfield->is_gcol()) continue;
+
+    /*
+      MODIFY_ON_UPDATE(value) is skipped here and processed later in
+      fill_function_defaults() after compare_records().
+      Supports all column types - the conditional update semantics apply
+      regardless of whether the field has ON UPDATE attribute.
+    */
+    if (value->type() == Item::FUNC_ITEM &&
+        down_cast<Item_func *>(value)->functype() ==
+            Item_func::MOD_ONUPD_FUNC &&
+        mod_onupd_items) {
+      (*mod_onupd_items)[rfield->field_index()] =
+          down_cast<Item_func_mod_onupd *>(value);
+      continue;
+    }
 
     if (raise_autoinc_has_expl_non_null_val &&
         rfield == table->next_number_field)
@@ -9875,6 +9930,8 @@ bool fill_record_n_invoke_before_triggers(
     const mem_root_deque<Item *> &values, TABLE *table,
     enum enum_trigger_event_type event, int num_fields,
     bool raise_autoinc_has_expl_non_null_val, bool *is_row_changed) {
+  std::map<uint, Item_func_mod_onupd *> mod_onupd_items;
+
   // is_row_changed is used by UPDATE operation to set compare_record() result.
   assert(is_row_changed == nullptr ||
          optype_info->get_operation_type() == COPY_INFO::UPDATE_OPERATION);
@@ -9882,7 +9939,8 @@ bool fill_record_n_invoke_before_triggers(
     Fill DEFAULT functions (like CURRENT_TIMESTAMP) and DEFAULT expressions on
     the columns that are not on the list of assigned columns.
   */
-  auto fill_function_defaults = [table, optype_info, is_row_changed]() {
+  auto fill_function_defaults = [table, optype_info, is_row_changed,
+                                 &mod_onupd_items]() {
     /*
       Unlike INSERT and LOAD, UPDATE operation requires comparison of old
       and new records to determine whether function defaults have to be
@@ -9891,13 +9949,21 @@ bool fill_record_n_invoke_before_triggers(
     if (optype_info->get_operation_type() == COPY_INFO::UPDATE_OPERATION) {
       *is_row_changed =
           (!records_are_comparable(table) || compare_records(table));
-      /*
-        Evaluate function defaults for columns with ON UPDATE clause only
-        if any other column of the row is updated.
+      /* 
+        Evaluate function defaults for columns with ON UPDATE clause and
+        MODIFY_ON_UPDATE columns only if any other column of the row is
+        updated. 
       */
-      if (*is_row_changed &&
-          (optype_info->function_defaults_apply_on_columns(table->write_set))) {
-        if (optype_info->set_function_defaults(table)) return true;
+      if (*is_row_changed) {
+        if (optype_info->function_defaults_apply_on_columns(table->write_set)) {
+          if (optype_info->set_function_defaults(table)) return true;
+        }
+        if (!mod_onupd_items.empty()) {
+          for (const auto &[field_idx, func] : mod_onupd_items) {
+            if (func->set_mod_onupd(table->field[field_idx]))
+              return true;
+          }
+        }
       }
     } else if (optype_info->function_defaults_apply_on_columns(
                    table->write_set)) {
@@ -9931,7 +9997,26 @@ bool fill_record_n_invoke_before_triggers(
       if (!rc)
         rc = fill_record(thd, table, fields, values, nullptr,
                          &insert_into_fields_bitmap,
-                         raise_autoinc_has_expl_non_null_val);
+                         raise_autoinc_has_expl_non_null_val, nullptr);
+
+      // Collect MODIFY_ON_UPDATE items for REPLACE (values already evaluated)
+      if (!rc &&
+          optype_info->get_duplicate_handling() == DUP_REPLACE &&
+          thd->lex->has_mod_onupd()) {
+        auto &rmap = optype_info->get_mod_onupd_items_for_replace();
+        rmap.clear();
+        auto vit = VisibleFields(values).begin();
+        for (Item *fld : VisibleFields(fields)) {
+          Item *val = *vit++;
+          if (val->type() == Item::FUNC_ITEM &&
+              down_cast<Item_func *>(val)->functype() ==
+                  Item_func::MOD_ONUPD_FUNC) {
+            Item_field *f = fld->field_for_view_update();
+            rmap[f->field->field_index()] =
+                down_cast<Item_func_mod_onupd *>(val);
+          }
+        }
+      }
 
       if (!rc)
         rc = call_before_insert_triggers(thd, table, event,
@@ -9940,7 +10025,8 @@ bool fill_record_n_invoke_before_triggers(
       bitmap_free(&insert_into_fields_bitmap);
     } else {
       rc = fill_record(thd, table, fields, values, nullptr, nullptr,
-                       raise_autoinc_has_expl_non_null_val);
+                       raise_autoinc_has_expl_non_null_val,
+                       &mod_onupd_items);
 
       if (!rc) {
         rc = fill_function_defaults();
@@ -9972,9 +10058,30 @@ bool fill_record_n_invoke_before_triggers(
 
     return rc || check_inserting_record(thd, table->field);
   } else {
+    bool is_update = (optype_info->get_operation_type() == COPY_INFO::UPDATE_OPERATION);
     if (fill_record(thd, table, fields, values, nullptr, nullptr,
-                    raise_autoinc_has_expl_non_null_val))
+                    raise_autoinc_has_expl_non_null_val,
+                    is_update ? &mod_onupd_items : nullptr))
       return true;
+
+    // Collect MODIFY_ON_UPDATE items for REPLACE (values already evaluated)
+    if (optype_info->get_duplicate_handling() == DUP_REPLACE &&
+        thd->lex->has_mod_onupd()) {
+      auto &rmap = optype_info->get_mod_onupd_items_for_replace();
+      rmap.clear();
+      auto vit = VisibleFields(values).begin();
+      for (Item *fld : VisibleFields(fields)) {
+        Item *val = *vit++;
+        if (val->type() == Item::FUNC_ITEM &&
+            down_cast<Item_func *>(val)->functype() ==
+                Item_func::MOD_ONUPD_FUNC) {
+          Item_field *f = fld->field_for_view_update();
+          rmap[f->field->field_index()] =
+              down_cast<Item_func_mod_onupd *>(val);
+        }
+      }
+    }
+
     if (fill_function_defaults()) return true;
     return check_record(thd, fields);
   }

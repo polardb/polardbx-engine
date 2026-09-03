@@ -139,10 +139,11 @@ struct Row {
   row_ext_t *m_ext{};
 
   /** Column offsets. */
-  ulint *m_offsets{};
+  // ulint *m_offsets{};
+  Slice *m_slc{};
 
   /** Row data. */
-  const rec_t *m_rec{};
+  // const rec_t *m_rec{};
 
   /** DTuple data, mapped over m_rec. */
   const dtuple_t *m_ptr{};

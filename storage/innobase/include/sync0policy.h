@@ -449,7 +449,9 @@ class BlockMutexPolicy
   latch_id_t m_id;
 };
 
+#ifndef INNODB_SYNC0POLICY_IC_STANDALONE
 #include "sync0policy.ic"
+#endif /* !INNODB_SYNC0POLICY_IC_STANDALONE */
 
 #endif /* !UNIV_LIBRARY */
 #endif /* sync0policy_h */

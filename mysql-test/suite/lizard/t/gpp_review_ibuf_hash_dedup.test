@@ -1,0 +1,118 @@
+--source include/have_debug.inc
+
+--echo #
+--echo # P1-3: ibuf_get_volume_buffered_hash() hashes every user field of a
+--echo # buffered entry, including the stored GPP column which is excluded
+--echo # from ordered comparison. A buffered INSERT carries the real
+--echo # clustered page number while the DELETE_MARK for the very same
+--echo # record carries FIL_NULL, so the pair is wrongly counted as two
+--echo # distinct records. That satisfies the min_n_recs >= 2 guard and lets
+--echo # a purge IBUF_OP_DELETE be buffered on evidence of only one record.
+--echo #
+--echo # Expected (fixed) behaviour: the guard sees one record, refuses to
+--echo # buffer the purge DELETE, and purge removes the record in place, so
+--echo # no purge operation is ever merged from the change buffer.
+--echo #
+
+--disable_query_log
+--let $saved_change_buffering = `SELECT @@GLOBAL.innodb_change_buffering`
+
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_disable_background_merge = ON;
+SET GLOBAL innodb_change_buffering = 'none';
+
+# The MTR environment enables hippo by default. A hippo secondary index
+# disables purge buffering entirely (ibuf_hippo_purge_possible), which
+# would bypass the min_n_recs guard under test. Use a plain GPP index.
+SET SESSION opt_index_format_hippo_enabled = OFF;
+SET SESSION opt_index_format_panda_enabled = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  k INT NOT NULL,
+  KEY idx_k (k)
+) ENGINE = InnoDB STATS_PERSISTENT = 0;
+
+# Filler rows so that the secondary index has several leaves and the
+# leftmost leaf (which will host k = 1) is not the root.
+INSERT INTO t1 VALUES (1000, 1000);
+--let $i = 0
+while ($i < 12)
+{
+  eval INSERT INTO t1 SELECT id + POWER(2, $i), k + POWER(2, $i) FROM t1 WHERE id >= 1000;
+  inc $i;
+}
+
+# Reset the transient-stats modified counter: otherwise the DELETE below
+# triggers a stats recalc that reads the secondary leaf back into the
+# buffer pool and merges the buffered INSERT prematurely.
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+
+# Clean all pages so that change_buffering_debug can evict them.
+SET GLOBAL innodb_buf_flush_list_now = ON;
+
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_change_buffering_debug = 1;
+
+--let $del_merged_before = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete', COUNT, 1)
+--let $dmk_merged_before = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete_mark', COUNT, 1)
+--let $ins_merged_before = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_insert', COUNT, 1)
+
+# Buffer IBUF_OP_INSERT (entry GPP = real clustered page number).
+INSERT INTO t1 VALUES (1, 1);
+# Buffer IBUF_OP_DELETE_MARK for the same record (entry GPP = FIL_NULL).
+DELETE FROM t1 WHERE id = 1;
+
+--let $ins_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_insert', COUNT, 1)
+--let $dmk_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete_mark', COUNT, 1)
+--let $del_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete', COUNT, 1)
+--let $d_ins = `SELECT $ins_mid - $ins_merged_before`
+--let $d_dmk = `SELECT $dmk_mid - $dmk_merged_before`
+--let $d_del = `SELECT $del_mid - $del_merged_before`
+--echo diag after DML before purge: merged ins=$d_ins dmk=$d_dmk del=$d_del
+
+# Let purge process the delete: it probes the secondary leaf with
+# BTR_DELETE and consults the min_n_recs guard described above.
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+# wait_innodb_all_purged.inc unconditionally re-enables the query log.
+--disable_query_log
+SET GLOBAL innodb_change_buffering_debug = 0;
+
+--let $ins_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_insert', COUNT, 1)
+--let $dmk_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete_mark', COUNT, 1)
+--let $del_mid = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete', COUNT, 1)
+--let $d_ins = `SELECT $ins_mid - $ins_merged_before`
+--let $d_dmk = `SELECT $dmk_mid - $dmk_merged_before`
+--let $d_del = `SELECT $del_mid - $del_merged_before`
+--echo diag after purge before select: merged ins=$d_ins dmk=$d_dmk del=$d_del
+--enable_query_log
+
+# Force the pending changes for the leftmost secondary leaf to merge.
+SELECT COUNT(*) AS visible_rows FROM t1 FORCE INDEX (idx_k) WHERE k <= 2;
+
+--disable_query_log
+--let $ins_merged_after = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_insert', COUNT, 1)
+--let $dmk_merged_after = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete_mark', COUNT, 1)
+--let $del_merged_after = query_get_value(SELECT COUNT FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE NAME='ibuf_merges_delete', COUNT, 1)
+
+--let $assert_text = the insert of the probe row must have been buffered
+--let $assert_cond = $ins_merged_after > $ins_merged_before
+--source include/assert.inc
+
+--let $assert_text = the delete-mark of the probe row must have been buffered
+--let $assert_cond = $dmk_merged_after > $dmk_merged_before
+--source include/assert.inc
+
+--let $assert_text = purge DELETE must not be buffered on evidence of a single record
+--let $assert_cond = $del_merged_after = $del_merged_before
+--source include/assert.inc
+
+SET GLOBAL innodb_change_buffering_debug = DEFAULT;
+SET GLOBAL innodb_disable_background_merge = DEFAULT;
+eval SET GLOBAL innodb_change_buffering = '$saved_change_buffering';
+DROP TABLE t1;
+--enable_query_log

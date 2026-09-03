@@ -30,8 +30,18 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 10/4/1994 Heikki Tuuri
  *************************************************************************/
 
+#ifndef page0cur_h
+#define INNODB_PAGE0CUR_IC_STANDALONE
+#include "page0cur.h"
+#undef INNODB_PAGE0CUR_IC_STANDALONE
+#endif /* !page0cur_h */
 #include "buf0types.h"
+#include "lizard0rem0types.h"
+#include "lizard0rec0spc.h"
+#include "page0cur.h"
 #include "page0page.h"
+#include "rem0rec.h"
+#include "rem0types.h"
 
 #ifdef UNIV_DEBUG
 #ifndef UNIV_HOTBACKUP
@@ -76,6 +86,14 @@ static inline rec_t *page_cur_get_rec(page_cur_t *cur) /*!< in: page cursor */
   return (cur->rec);
 }
 #endif /* UNIV_DEBUG */
+
+static inline reg_t page_cur_get_reg(page_cur_t *cur) {
+  return {page_cur_get_rec(cur), MLOC_IN_PAGE};
+}
+
+static inline creg_t page_cur_get_creg(const page_cur_t *cur) {
+  return {page_cur_get_rec(const_cast<page_cur_t *>(cur)), MLOC_IN_PAGE};
+}
 
 /** Sets the cursor object to point before the first user record
  on the page. */
@@ -183,49 +201,51 @@ static inline ulint page_cur_search(const buf_block_t *block,
   return (page_cur_search(block, index, tuple, PAGE_CUR_LE, cursor));
 }
 
-static inline rec_t *page_cur_tuple_insert(page_cur_t *cursor,
-                                           const dtuple_t *tuple,
-                                           dict_index_t *index, ulint **offsets,
-                                           mem_heap_t **heap, mtr_t *mtr) {
-  rec_t *rec;
-  rec_t *insert_rec;
+static inline reg_t page_cur_tuple_insert(page_cur_t *cursor,
+                                          const dtuple_t *tuple,
+                                          dict_index_t *index, Slice **slc,
+                                          Slice_ctx *sctx, mem_heap_t **heap,
+                                          mtr_t *mtr) {
+  reg_t reg;
+  reg_t insert_reg;
 
   ulint size = rec_get_converted_size(index, tuple);
 
   if (!*heap) {
     *heap = mem_heap_create(
         size + (4 + REC_OFFS_HEADER_SIZE + dtuple_get_n_fields(tuple)) *
-                   sizeof **offsets,
+                   sizeof(ulint),
         UT_LOCATION_HERE);
   }
 
-  rec = rec_convert_dtuple_to_rec((byte *)mem_heap_alloc(*heap, size), index,
-                                  tuple);
+  reg =
+      rec_convert_dtuple_to_reg(mem_heap_alloc_boc(*heap, size), index, tuple);
 
-  *offsets = rec_get_offsets(rec, index, *offsets, ULINT_UNDEFINED,
-                             UT_LOCATION_HERE, heap);
+  *slc = sctx->get_offsets(reg, index, ULINT_UNDEFINED);
 
-  ut_ad(cmp_dtuple_rec(tuple, rec, index, *offsets) == 0);
+  ut_ad(cmp_dtuple_rec(tuple, index, *slc) == 0);
 
+  ut_ad((*slc)->is_positioned(reg, index));
   if (buf_block_get_page_zip(cursor->block)) {
-    insert_rec = page_cur_insert_rec_zip(cursor, index, rec, *offsets, mtr);
+    insert_reg = page_cur_insert_rec_zip(cursor, index, *slc, mtr);
   } else {
-    insert_rec =
-        page_cur_insert_rec_low(cursor->rec, index, rec, *offsets, mtr);
+    insert_reg = page_cur_insert_rec_low(page_cur_get_reg(cursor), index, *slc,
+                                         mtr);
   }
-
 #ifdef UNIV_DEBUG
-  if (insert_rec != nullptr) {
-    if (cmp_dtuple_rec(tuple, insert_rec, index, *offsets) != 0) {
+  ut_ad(insert_reg.is_null() || (*slc)->is_positioned(insert_reg, index));
+  if (insert_reg.is_not_null()) {
+    if (cmp_dtuple_rec(tuple, index, *slc) != 0) {
       std::cerr << "tuple=" << rec_printer(tuple).str() << std::endl;
-      std::cerr << "rec=" << rec_printer(insert_rec, *offsets).str()
-                << std::endl;
+      std::cerr << "rec=" << rec_printer(*slc).str() << std::endl;
     }
   }
-  ut_ad(!insert_rec || !cmp_dtuple_rec(tuple, insert_rec, index, *offsets));
+  ut_ad(insert_reg.is_null() || !cmp_dtuple_rec(tuple, index, *slc));
 #endif /* UNIV_DEBUG */
-
-  return (insert_rec);
+  if (insert_reg.is_null()) {
+    *slc = sctx->reset_slice();
+  }
+  return insert_reg;
 }
 
 /** Insert a record next to page cursor. Record is directly copied to
@@ -238,14 +258,24 @@ the page from tuple without creating intermediate copy of the record.
 @param[in]      rec_size  The size of new record
 
 @return pointer to record if succeed, NULL otherwise */
-static inline rec_t *page_cur_tuple_direct_insert(page_cur_t *cursor,
-                                                  const dtuple_t *tuple,
-                                                  dict_index_t *index,
-                                                  mtr_t *mtr, ulint rec_size) {
+static inline reg_t page_cur_tuple_direct_insert(page_cur_t *cursor,
+                                                 const dtuple_t *tuple,
+                                                 dict_index_t *index,
+                                                 mtr_t *mtr, ulint rec_size,
+                                                 Slice **slc,
+                                                 Slice_ctx *sctx) {
+  reg_t reg;
   ut_ad(index->table->is_intrinsic());
 
-  return page_cur_direct_insert_rec_low(cursor->rec, index, tuple, mtr,
-                                        rec_size);
+  reg = page_cur_direct_insert_rec_low(page_cur_get_reg(cursor), index, tuple,
+                                       mtr, rec_size);
+
+  if (reg.is_not_null())
+    *slc = sctx->get_offsets(reg, index, ULINT_UNDEFINED);
+  else
+    *slc = sctx->reset_slice();
+
+  return reg;
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -260,16 +290,15 @@ static inline rec_t *page_cur_tuple_direct_insert(page_cur_t *cursor,
  or by invoking ibuf_reset_free_bits() before mtr_commit().
 
  @return pointer to record if succeed, NULL otherwise */
-static inline rec_t *page_cur_rec_insert(
+static inline reg_t page_cur_rec_insert(
     page_cur_t *cursor,  /*!< in/out: a page cursor */
-    const rec_t *rec,    /*!< in: record to insert */
     dict_index_t *index, /*!< in: record descriptor */
-    ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
+    Slice *slc,          /*!< in/out: rec_get_offsets(rec, index) */
     mtr_t *mtr)          /*!< in: mini-transaction handle, or NULL */
 {
   if (buf_block_get_page_zip(cursor->block)) {
-    return (page_cur_insert_rec_zip(cursor, index, rec, offsets, mtr));
+    return (page_cur_insert_rec_zip(cursor, index, slc, mtr));
   } else {
-    return (page_cur_insert_rec_low(cursor->rec, index, rec, offsets, mtr));
+    return (page_cur_insert_rec_low(page_cur_get_reg(cursor), index, slc, mtr));
   }
 }

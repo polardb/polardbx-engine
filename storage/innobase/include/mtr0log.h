@@ -280,6 +280,8 @@ byte *mlog_parse_index_8027(byte *ptr, const byte *end_ptr, bool comp,
 extra mlog buffer size for variable size data */
 constexpr auto MLOG_BUF_MARGIN = 256;
 
+#ifndef INNODB_MTR0LOG_IC_STANDALONE
 #include "mtr0log.ic"
+#endif /* !INNODB_MTR0LOG_IC_STANDALONE */
 
 #endif /* mtr0log_h */

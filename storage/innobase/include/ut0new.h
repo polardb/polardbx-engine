@@ -124,6 +124,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <memory>
 #include <set>
 #include <type_traits> /* std::is_trivially_default_constructible */
+#include <unordered_map>
 #include <unordered_set>
 
 #include "my_basename.h"
@@ -216,6 +217,7 @@ extern PSI_memory_key mem_key_dict_stats_bg_recalc_pool_t;
 extern PSI_memory_key mem_key_dict_stats_index_map_t;
 extern PSI_memory_key mem_key_dict_stats_n_diff_on_level;
 extern PSI_memory_key mem_key_fil_space_t;
+extern PSI_memory_key mem_key_lock_sys;
 extern PSI_memory_key mem_key_redo_log_archive_queue_element;
 extern PSI_memory_key mem_key_other;
 extern PSI_memory_key mem_key_partitioning;
@@ -226,7 +228,7 @@ extern PSI_memory_key mem_key_std;
 extern PSI_memory_key mem_key_trx_sys_t_rw_trx_ids;
 extern PSI_memory_key mem_key_undo_spaces;
 extern PSI_memory_key mem_key_ut_lock_free_hash_t;
-extern PSI_memory_key mem_key_tcn;
+extern PSI_memory_key tcn_mem_key;
 /* Please obey alphabetical order in the definitions above. */
 
 /** Setup the internal objects needed for ut::*_withkey() to operate.
@@ -2893,6 +2895,12 @@ using unordered_set =
 template <typename Key, typename Value, typename Compare = std::less<Key>>
 using map =
     std::map<Key, Value, Compare, ut::allocator<std::pair<const Key, Value>>>;
+
+template <typename Key, typename Value, typename Hash = std::hash<Key>,
+          typename Key_equal = std::equal_to<Key>>
+using unordered_map =
+    std::unordered_map<Key, Value, Hash, Key_equal,
+                       ut::allocator<std::pair<const Key, Value>>>;
 
 }  // namespace ut
 

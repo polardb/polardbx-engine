@@ -25,19 +25,22 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 #include "consensus_prefetch_manager.h"
 #include "binlog.h"
-#include "consensus_log_manager.h"
+#include "komodo0xlog.h"
 #include "log.h"
 #include "mysql/thread_pool_priv.h"
 #include "sql/consensus/consensus_err.h"
 #include "sql/sql_thd_internal_api.h"
 #include "storage/innobase/include/ut0dbg.h"
+#include "komodo0consensus0xlog.h"
+
+namespace komodo {
 
 #ifdef HAVE_PSI_INTERFACE
 PSI_thread_key key_thread_prefetch;
 PSI_rwlock_key key_rwlock_ConsensusLog_prefetch_channels_hash;
 #endif
 
-int ConsensusPreFetchChannel::init(uint64 id, uint64 max_cache_size,
+int Consensus_prefetch_channel::init(uint64 id, uint64 max_cache_size,
                                    uint64 prefetch_window_size,
                                    uint64 prefetch_wakeup_ratio) {
   if (!inited) {
@@ -63,14 +66,14 @@ int ConsensusPreFetchChannel::init(uint64 id, uint64 max_cache_size,
     if (mysql_thread_create(key_thread_prefetch, &prefetch_thread_handle, NULL,
                             run_prefetch, (void *)this)) {
       xp::error(ER_XP_PREFETCH) << "Fail to create thread run_prefetch.";
-      abort();
+      _exit(2);  // Using _exit(), since exit() is not async signal safe
     }
     inited = true;
   }
   return 0;
 }
 
-int ConsensusPreFetchChannel::cleanup() {
+int Consensus_prefetch_channel::cleanup() {
   if (inited) {
     mysql_mutex_lock(&LOCK_prefetch_request);
     is_running = false;
@@ -87,6 +90,7 @@ int ConsensusPreFetchChannel::cleanup() {
     while (ref_count != 0) {
       my_sleep(1000);
     }
+    reset_prefetch_cache();
     mysql_mutex_destroy(&LOCK_prefetch_channel);
     mysql_mutex_destroy(&LOCK_prefetch_request);
     mysql_cond_destroy(&COND_prefetch_channel);
@@ -97,7 +101,7 @@ int ConsensusPreFetchChannel::cleanup() {
   return 0;
 }
 
-int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
+int Consensus_prefetch_channel::add_log_to_prefetch_cache(
     uint64 term, uint64 index, size_t buf_size, uchar *buffer, bool outer,
     uint flag, uint64 checksum) {
   mysql_mutex_lock(&LOCK_prefetch_channel);
@@ -207,7 +211,7 @@ int ConsensusPreFetchChannel::add_log_to_prefetch_cache(
   return CLC_SUCCESS;
 }
 
-void ConsensusPreFetchChannel::add_log_to_large_trx_table(uint64 term,
+void Consensus_prefetch_channel::add_log_to_large_trx_table(uint64 term,
                                                           uint64 index,
                                                           bool outer,
                                                           uint flag) {
@@ -219,15 +223,15 @@ void ConsensusPreFetchChannel::add_log_to_large_trx_table(uint64 term,
   mysql_mutex_unlock(&LOCK_prefetch_channel);
 }
 
-void ConsensusPreFetchChannel::clear_large_trx_table() {
+void Consensus_prefetch_channel::clear_large_trx_table() {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   large_trx_table.clear();
   mysql_mutex_unlock(&LOCK_prefetch_channel);
 }
 
-int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
+int Consensus_prefetch_channel::get_log_from_prefetch_cache(
     uint64 index, uint64 *term, std::string &log_content, bool *outer,
-    uint *flag, uint64 *checksum) {
+    uint *flag) {
   int error = CLC_SUCCESS;
   mysql_mutex_lock(&LOCK_prefetch_channel);
 
@@ -285,7 +289,6 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
     *term = log_entry.term;
     *outer = log_entry.outer;
     *flag = log_entry.flag;
-    *checksum = log_entry.checksum;
     ut_a(log_entry.index == index);
     log_content.assign((char *)(log_entry.buffer), log_entry.buf_size);
 
@@ -318,7 +321,7 @@ int ConsensusPreFetchChannel::get_log_from_prefetch_cache(
   return error;
 }
 
-bool ConsensusPreFetchChannel::log_exist(uint64 index) {
+bool Consensus_prefetch_channel::log_exist(uint64 index) {
   bool exist = false;
   mysql_mutex_lock(&LOCK_prefetch_channel);
   if (index >= first_index_in_cache &&
@@ -329,7 +332,7 @@ bool ConsensusPreFetchChannel::log_exist(uint64 index) {
   return exist;
 }
 
-int ConsensusPreFetchChannel::reset_prefetch_cache() {
+int Consensus_prefetch_channel::reset_prefetch_cache() {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   large_trx_table.clear();
   for (auto iter = prefetch_cache.begin(); iter != prefetch_cache.end();
@@ -347,14 +350,14 @@ int ConsensusPreFetchChannel::reset_prefetch_cache() {
   return 0;
 }
 
-int ConsensusPreFetchChannel::enable_prefetch_channel() {
+int Consensus_prefetch_channel::enable_prefetch_channel() {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   stop_prefetch_flag = false;
   mysql_mutex_unlock(&LOCK_prefetch_channel);
   return 0;
 }
 
-int ConsensusPreFetchChannel::disable_prefetch_channel() {
+int Consensus_prefetch_channel::disable_prefetch_channel() {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   stop_prefetch_flag = true;
   mysql_mutex_unlock(&LOCK_prefetch_channel);
@@ -362,7 +365,7 @@ int ConsensusPreFetchChannel::disable_prefetch_channel() {
   return 0;
 }
 
-int ConsensusPreFetchChannel::start_prefetch_thread() {
+int Consensus_prefetch_channel::start_prefetch_thread() {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   stop_prefetch_flag = false;
   mysql_mutex_unlock(&LOCK_prefetch_channel);
@@ -373,12 +376,12 @@ int ConsensusPreFetchChannel::start_prefetch_thread() {
   if (mysql_thread_create(key_thread_prefetch, &prefetch_thread_handle, NULL,
                           run_prefetch, (void *)this)) {
     xp::error(ER_XP_PREFETCH) << "Fail to create thread run_prefetch.";
-    abort();
+    _exit(2);  // Using _exit(), since exit() is not async signal safe
   }
   return 0;
 }
 
-int ConsensusPreFetchChannel::stop_prefetch_thread() {
+int Consensus_prefetch_channel::stop_prefetch_thread() {
   mysql_mutex_lock(&LOCK_prefetch_request);
   is_running = false;
   mysql_mutex_unlock(&LOCK_prefetch_request);
@@ -393,7 +396,7 @@ int ConsensusPreFetchChannel::stop_prefetch_thread() {
   return 0;
 }
 
-int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
+int Consensus_prefetch_channel::truncate_prefetch_cache(uint64 index) {
   mysql_mutex_lock(&LOCK_prefetch_channel);
   /* truncate large_trx_table */
   if (channel_id == 0) {
@@ -444,7 +447,7 @@ int ConsensusPreFetchChannel::truncate_prefetch_cache(uint64 index) {
   return 0;
 }
 
-int ConsensusPreFetchChannel::set_prefetch_request(uint64 index) {
+int Consensus_prefetch_channel::set_prefetch_request(uint64 index) {
   if (stop_prefetch_request || index == 0) return 0;
   mysql_mutex_lock(&LOCK_prefetch_request);
   current_prefetch_request = index;
@@ -453,7 +456,7 @@ int ConsensusPreFetchChannel::set_prefetch_request(uint64 index) {
   return 0;
 }
 
-uint64 ConsensusPreFetchChannel::get_prefetch_request() {
+uint64 Consensus_prefetch_channel::get_prefetch_request() {
   // if queue is empty, this function will return 0
   uint64 index = 0;
   mysql_mutex_lock(&LOCK_prefetch_request);
@@ -466,14 +469,14 @@ uint64 ConsensusPreFetchChannel::get_prefetch_request() {
   return index;
 }
 
-int ConsensusPreFetchChannel::clear_prefetch_request() {
+int Consensus_prefetch_channel::clear_prefetch_request() {
   mysql_mutex_lock(&LOCK_prefetch_request);
   current_prefetch_request = 0;
   mysql_mutex_unlock(&LOCK_prefetch_request);
   return 0;
 }
 
-int ConsensusPreFetchManager::init(uint64 max_prefetch_cache_size_arg) {
+int Consensus_prefetch_manager::init(uint64 max_prefetch_cache_size_arg) {
   if (!inited) {
     key_LOCK_prefetch_channels_hash =
         key_rwlock_ConsensusLog_prefetch_channels_hash;
@@ -487,7 +490,7 @@ int ConsensusPreFetchManager::init(uint64 max_prefetch_cache_size_arg) {
   return 0;
 }
 
-int ConsensusPreFetchManager::cleanup() {
+int Consensus_prefetch_manager::cleanup() {
   if (inited) {
     mysql_rwlock_destroy(&LOCK_prefetch_channels_hash);
     for (auto iter = prefetch_channels_hash.begin();
@@ -500,7 +503,7 @@ int ConsensusPreFetchManager::cleanup() {
   return 0;
 }
 
-int ConsensusPreFetchManager::trunc_log_from_prefetch_cache(uint64 index) {
+int Consensus_prefetch_manager::trunc_log_from_prefetch_cache(uint64 index) {
   mysql_rwlock_wrlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
        iter != prefetch_channels_hash.end(); ++iter) {
@@ -510,9 +513,9 @@ int ConsensusPreFetchManager::trunc_log_from_prefetch_cache(uint64 index) {
   return 0;
 }
 
-ConsensusPreFetchChannel *ConsensusPreFetchManager::get_prefetch_channel(
+Consensus_prefetch_channel *Consensus_prefetch_manager::get_prefetch_channel(
     uint64 channel_id) {
-  ConsensusPreFetchChannel *channel = NULL;
+  Consensus_prefetch_channel *channel = NULL;
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   auto it = prefetch_channels_hash.find(channel_id);
   if (it != prefetch_channels_hash.end()) {
@@ -525,11 +528,11 @@ ConsensusPreFetchChannel *ConsensusPreFetchManager::get_prefetch_channel(
     mysql_rwlock_wrlock(&LOCK_prefetch_channels_hash);
     auto iit = prefetch_channels_hash.find(channel_id);
     if (iit == prefetch_channels_hash.end()) {
-      channel = new ConsensusPreFetchChannel();
+      channel = new Consensus_prefetch_channel();
       channel->init(channel_id, max_prefetch_cache_size, prefetch_window_size,
                     prefetch_wakeup_ratio);
       prefetch_channels_hash.insert(
-          std::map<uint64, ConsensusPreFetchChannel *>::value_type(channel_id,
+          std::map<uint64, Consensus_prefetch_channel *>::value_type(channel_id,
                                                                    channel));
     } else {
       channel = iit->second;
@@ -540,7 +543,7 @@ ConsensusPreFetchChannel *ConsensusPreFetchManager::get_prefetch_channel(
   return channel;
 }
 
-int ConsensusPreFetchManager::reset_prefetch_cache() {
+int Consensus_prefetch_manager::reset_prefetch_cache() {
   int error = 0;
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
@@ -552,9 +555,9 @@ int ConsensusPreFetchManager::reset_prefetch_cache() {
   return error;
 }
 
-int ConsensusPreFetchManager::drop_prefetch_channel(uint64 channel_id) {
+int Consensus_prefetch_manager::drop_prefetch_channel(uint64 channel_id) {
   int error = 0;
-  ConsensusPreFetchChannel *channel = nullptr;
+  Consensus_prefetch_channel *channel = nullptr;
   mysql_rwlock_wrlock(&LOCK_prefetch_channels_hash);
   auto iter = prefetch_channels_hash.find(channel_id);
   if (iter == prefetch_channels_hash.end()) {
@@ -571,7 +574,7 @@ int ConsensusPreFetchManager::drop_prefetch_channel(uint64 channel_id) {
   return error;
 }
 
-int ConsensusPreFetchManager::set_max_prefetch_cache_size(
+int Consensus_prefetch_manager::set_max_prefetch_cache_size(
     uint64 max_prefetch_cache_size_arg) {
   max_prefetch_cache_size = max_prefetch_cache_size_arg;
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
@@ -583,7 +586,7 @@ int ConsensusPreFetchManager::set_max_prefetch_cache_size(
   return 0;
 }
 
-int ConsensusPreFetchManager::set_prefetch_window_size(
+int Consensus_prefetch_manager::set_prefetch_window_size(
     uint64 prefetch_window_size_arg) {
   prefetch_window_size = prefetch_window_size_arg;
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
@@ -595,7 +598,7 @@ int ConsensusPreFetchManager::set_prefetch_window_size(
   return 0;
 }
 
-int ConsensusPreFetchManager::set_prefetch_wakeup_ratio(
+int Consensus_prefetch_manager::set_prefetch_wakeup_ratio(
     uint64 prefetch_wakeup_ratio_arg) {
   prefetch_wakeup_ratio = prefetch_wakeup_ratio_arg;
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
@@ -607,7 +610,7 @@ int ConsensusPreFetchManager::set_prefetch_wakeup_ratio(
   return 0;
 }
 
-int ConsensusPreFetchManager::stop_prefetch_channel_request(uint64 channel_id,
+int Consensus_prefetch_manager::stop_prefetch_channel_request(uint64 channel_id,
                                                             bool flag) {
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
@@ -619,7 +622,7 @@ int ConsensusPreFetchManager::stop_prefetch_channel_request(uint64 channel_id,
   return 0;
 }
 
-int ConsensusPreFetchManager::enable_all_prefetch_channels() {
+int Consensus_prefetch_manager::enable_all_prefetch_channels() {
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
        iter != prefetch_channels_hash.end(); ++iter) {
@@ -629,7 +632,7 @@ int ConsensusPreFetchManager::enable_all_prefetch_channels() {
   return 0;
 }
 
-int ConsensusPreFetchManager::disable_all_prefetch_channels() {
+int Consensus_prefetch_manager::disable_all_prefetch_channels() {
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
        iter != prefetch_channels_hash.end(); ++iter) {
@@ -639,7 +642,7 @@ int ConsensusPreFetchManager::disable_all_prefetch_channels() {
   return 0;
 }
 
-int ConsensusPreFetchManager::start_prefetch_threads() {
+int Consensus_prefetch_manager::start_prefetch_threads() {
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
        iter != prefetch_channels_hash.end(); ++iter) {
@@ -649,7 +652,7 @@ int ConsensusPreFetchManager::start_prefetch_threads() {
   return 0;
 }
 
-int ConsensusPreFetchManager::stop_prefetch_threads() {
+int Consensus_prefetch_manager::stop_prefetch_threads() {
   mysql_rwlock_rdlock(&LOCK_prefetch_channels_hash);
   for (auto iter = prefetch_channels_hash.begin();
        iter != prefetch_channels_hash.end(); ++iter) {
@@ -661,7 +664,7 @@ int ConsensusPreFetchManager::stop_prefetch_threads() {
 
 void *run_prefetch(void *arg) {
   if (my_thread_init()) return NULL;
-  ConsensusPreFetchChannel *channel = (ConsensusPreFetchChannel *)arg;
+  Consensus_prefetch_channel *channel = (Consensus_prefetch_channel *)arg;
   THD *thd = create_thd(false, true, true, channel->get_PSI_thread_key(), 0);
   while (channel->is_running) {
     uint64 index = channel->get_prefetch_request();
@@ -675,7 +678,7 @@ void *run_prefetch(void *arg) {
       xp::info(ER_XP_PREFETCH)
           << "Consensus prefetch channel " << channel->get_channel_id()
           << " try to fetch index : " << index;
-      if (consensus_log_manager.prefetch_log_directly(
+      if (xlog_engine_get_log_manager().prefetch_log_directly(
               thd, channel->get_channel_id(), index)) {
         channel->clear_prefetch_request();
       }
@@ -685,4 +688,6 @@ void *run_prefetch(void *arg) {
   destroy_thd(thd);
   my_thread_end();
   return NULL;
+}
+
 }

@@ -1,0 +1,493 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test index_pos_guess_clust_enabled switch
+--echo # This test verifies the switch works correctly for:
+--echo # - Index Intersection
+--echo # - Index Union
+--echo # - Index Merge (Sort-Union)
+--echo # - Multi-Range Read (MRR)
+--echo #
+
+--echo # Save original values
+--let $innodb_lizard_stat_enabled_original = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $innodb_index_purge_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_purge_guess_clust_enabled`
+--let $innodb_index_scan_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_scan_guess_clust_enabled`
+--let $innodb_adaptive_hash_index_original = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $innodb_polarx_btree_search_mode_original = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+
+--echo # enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+
+--echo # ============================================================
+--echo # Setup: Create test table and data
+--echo # ============================================================
+
+CREATE TABLE t (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    a VARCHAR(20) NOT NULL,
+    b INT NOT NULL,
+    c INT NOT NULL,
+    d CHAR(1) NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (250),
+    PARTITION p1 VALUES LESS THAN (500),
+    PARTITION p2 VALUES LESS THAN (750),
+    PARTITION p3 VALUES LESS THAN (1000),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+
+--echo # Insert test data
+delimiter |;
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(20);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('VAL', LPAD(i, 5, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END|
+delimiter ;|
+
+CALL insert_t_data(1000);
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+
+--echo # Warm up GPP info by accessing records
+SELECT * FROM t WHERE a = 'VAL00001' LIMIT 1;
+SELECT * FROM t WHERE b = 10 LIMIT 1;
+SELECT * FROM t WHERE c = 50 AND d = 'A' LIMIT 1;
+
+--echo # ============================================================
+--echo # Test 1: Index Intersection with switch ON/OFF
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # Test Index Intersection with switch ON
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' AND b = 500;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection ON idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Index Intersection with PRIMARY key
+SELECT /*+ INDEX_MERGE(t idx_a, PRIMARY) */ * FROM t 
+WHERE a = 'VAL00020' AND id < 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection ON idx_a,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Index Intersection with composite index
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' AND c = 2500 AND d = 'A';
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection ON idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test with switch OFF
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' AND b = 500;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection OFF idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_a, PRIMARY) */ * FROM t 
+WHERE a = 'VAL00050' AND id < 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection OFF idx_a,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' AND c = 2500 AND d = 'A';
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection OFF idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # ============================================================
+--echo # Test 2: Index Union with switch ON/OFF
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # Test Index Union with switch ON
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' OR b = 500 LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union ON idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Index Union with PRIMARY key
+explain SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union ON idx_b,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Index Union with composite index
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR (c = 2500 AND d = 'A') LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union ON idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Index Union with three indexes
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b, idx_cd) */ * FROM t 
+WHERE (a = 'VAL00050' AND b = 500) OR (c = 2500 AND d = 'A') LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union ON idx_a,idx_b,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test with switch OFF
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' OR b = 500 LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union OFF idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union OFF idx_b,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR (c = 2500 AND d = 'A') LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union OFF idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # ============================================================
+--echo # Test 3: Index Merge Sort-Union with switch ON/OFF
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # Test Sort-Union with range conditions (switch ON)
+explain SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union ON idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Sort-Union with PRIMARY key range
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE id < 10 OR b < 50 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union ON idx_b,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Sort-Union with composite index range
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR c < 2500 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union ON idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test Sort-Union with three indexes
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR b < 50 OR (c = 2500 AND d = 'A') LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union ON idx_a,idx_b,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test with switch OFF
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union OFF idx_a,idx_b] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE id < 10 OR b < 50 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union OFF idx_b,PRIMARY] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR c < 2500 LIMIT 20;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union OFF idx_a,idx_cd] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # ============================================================
+--echo # Test 4: Multi-Range Read (MRR) with switch ON/OFF
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # Test MRR with range scan (switch ON)
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR ON range] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test MRR with multiple ranges
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a IN ('VAL00010', 'VAL00020', 'VAL00030', 'VAL00040', 'VAL00050') 
+ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR ON multi-range] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test MRR with filter condition
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 100 ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR ON filter] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Test with switch OFF
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR OFF range] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a IN ('VAL00010', 'VAL00020', 'VAL00030', 'VAL00040', 'VAL00050') 
+ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR OFF multi-range] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 100 ORDER BY a;
+SHOW status LIKE "%multi_range%";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [MRR OFF filter] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # ============================================================
+--echo # Test 5: Combined scenarios with switch toggle
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # Execute Intersection, Union, Sort-Union, MRR with switch ON
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' AND b = 1000 LIMIT 1;
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' OR b = 1000 LIMIT 5;
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00100' OR b < 1000 LIMIT 10;
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00090' AND 'VAL00110' ORDER BY a LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [combined ON] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SHOW status LIKE "%multi_range%";
+
+--echo # Toggle switch OFF and execute same queries
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' AND b = 1000 LIMIT 1;
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' OR b = 1000 LIMIT 5;
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00100' OR b < 1000 LIMIT 10;
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00090' AND 'VAL00110' ORDER BY a LIMIT 10;
+
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [combined OFF] index_merge gpp total should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SHOW status LIKE "%multi_range%";
+
+--echo # Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+
+--echo # ============================================================
+--echo # Test 6: Verify switch value can be set and read
+--echo # ============================================================
+
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+
+--echo # ============================================================
+--echo # Final statistics check
+--echo # ============================================================
+
+
+--let $final_scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $final_scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [final stats] index_merge total scan_guess should be > 0
+--let $assert_cond= $final_scan_hit + $final_scan_miss > 0
+--source include/assert.inc
+
+SHOW status LIKE "%multi_range%";
+
+--echo # ============================================================
+--echo # Cleanup
+--echo # ============================================================
+DROP TABLE t;
+DROP PROCEDURE insert_t_data;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+--echo # Restore original values
+--eval SET GLOBAL innodb_lizard_stat_enabled = $innodb_lizard_stat_enabled_original
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $innodb_index_purge_guess_clust_enabled_original
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $innodb_index_scan_guess_clust_enabled_original
+--eval SET GLOBAL innodb_adaptive_hash_index = $innodb_adaptive_hash_index_original
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $innodb_polarx_btree_search_mode_original
+
+
+
+
+
+

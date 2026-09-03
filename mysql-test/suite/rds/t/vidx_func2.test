@@ -1,0 +1,454 @@
+####################################################################
+# VEC_FROMTEXT / VEC_TOTEXT / CAST AS VECTOR parser comprehensive  #
+# test — covers whitespace tolerance, number-format boundaries,     #
+# charset dispatch, result caching, dimension validation, DML+ANN.  #
+####################################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo ########################################################################
+--echo # 1. Whitespace tolerance
+--echo ########################################################################
+SELECT VECTOR_DIM(VEC_FROMTEXT("  [1,2,3]"));
+SELECT VECTOR_DIM(VEC_FROMTEXT("\t[1,2,3]"));
+SELECT VECTOR_DIM(VEC_FROMTEXT("\n[1,2,3]"));
+SELECT VECTOR_DIM(VEC_FROMTEXT("\r\n[1,2,3]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[  1,2,3]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,  2,  3]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3  ]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]  "));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\n"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\r\n"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("  [  1,  2.5,  3  ]  "));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[  0.1 ,\t0.2 ,\n0.3  ]"));
+
+--echo # Whitespace BEFORE comma (after number) — should succeed
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1 ,2 ,3]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1\t,2\t,3]"));
+
+--echo # Whitespace-only input → error
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("   ");
+
+--echo
+--echo ########################################################################
+--echo # 2. Valid number formats & boundaries
+--echo ########################################################################
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[0,1,2,3,4,5,6,7,8,9]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[-1,-2,-3]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1.5, 2.5, 3.5e0]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1e0, 2.5e-1, -3.14e+2]"));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1E0, 2E+1, 3E-1, -4e2]"));
+
+--echo # Decimal without integer part
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.5, .25, .125]'));
+
+--echo # Integer without decimal part
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]'));
+
+--echo # Negative zero
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-0.0, 0.0, -0]'));
+
+--echo # Zero in various forms
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[0, 0.0, -0.0, 0e0, 0.0e+0]'));
+
+--echo # Float boundary values
+SELECT VECTOR_DIM(VEC_FROMTEXT('[3.4028235e+38, -3.4028235e+38]'));
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.17549435e-38, 1.0]'));
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]'));
+
+--echo # Below smallest float subnormal -> underflows to a finite 0.0f and is
+--echo # accepted (NOT rejected as conversion error). pgvector / strtof do the same.
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0]'));
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0]'));
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.23456789012345, 9.87654321098765]'));
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1.123456789, 2.987654321, 3.141592653]"));
+
+--echo # Single element
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[42.0]'));
+SELECT VECTOR_DIM(VEC_FROMTEXT('[42.0]'));
+
+--echo # NULL handling
+SELECT VEC_FROMTEXT(NULL);
+SELECT VEC_TOTEXT(NULL);
+SELECT VECTOR_DIM(NULL);
+SELECT VEC_TOTEXT(x'');
+
+--echo
+--echo ########################################################################
+--echo # 3. Invalid inputs & error paths
+--echo ########################################################################
+--echo # Leading '+' sign — now accepted in both paths
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5, +3.5]'));
+
+--echo # ERANGE overflow
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1e400,2,3]");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[-1e400,2,3]");
+--echo # Float-specific overflow: valid double but > FLT_MAX rounds to inf -> rejected
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[4e38,2,3]");
+
+--echo # Inf/NaN
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[inf, 2, 3]");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1, nan, 3]");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1, 2, -inf]");
+
+--echo # Empty / missing brackets
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("1,2,3");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1,2,3");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[]");
+
+--echo # Non-numeric / garbage
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1, abc, 3]");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1,2,3] extra");
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT("[1,2,3]abc");
+
+--echo # Very long number (100 digits) — overflow
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONCAT('[', REPEAT('1', 100), ',2,3]'));
+
+--echo
+--echo ########################################################################
+--echo # 4. Structural delimiter edge cases
+--echo ########################################################################
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1,2,3,]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1,,2,3]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[,1,2,3]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[,,,]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[[1,2,3]]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1;2;3]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1 2 3]');
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONCAT('[', CHAR(0xEF,0xBC,0x91 USING utf8mb4), ',2,3]'));
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONCAT('[1,', CHAR(0), ',3]'));
+
+--echo
+--echo ########################################################################
+--echo # 5. Charset dispatch (ASCII fast path vs generic path)
+--echo ########################################################################
+--echo # ASCII-based → fast path
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_latin1'[1.5, 2.5, 3.5]'));
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_utf8mb4'  [1, 2, 3]  '));
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_binary'[10,20,30]'));
+
+--echo # NOT ASCII-based → generic path
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1.1, 2.2, 3.3]' USING ucs2)));
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('  [4, 5, 6]  ' USING utf16)));
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[7,8,9]' USING utf32)));
+
+--echo # Generic path — extreme underflow to 0.0f accepted (exercises the
+--echo # generic-path fast_float fix; the ASCII cases above only cover the fast path)
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)));
+SELECT VECTOR_DIM(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)));
+
+--echo # Generic path — error cases (trailing garbage in non-ASCII charset)
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONVERT('[1,2,3]xyz' USING utf16));
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONVERT('not_vec' USING ucs2));
+
+--echo # Generic path — overflow (inf) rejected on the non-ASCII path too
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CONVERT('[1e400, 2, 3]' USING utf16));
+
+--echo
+--echo ########################################################################
+--echo # 6. use_fast_float toggle — two-path equivalence
+--echo ########################################################################
+SET @saved_ff = @@GLOBAL.vidx_use_fast_float;
+
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.5, -2.5e1, 3.14159, 0.0001]')) AS ff_on;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.5, -2.5e1, 3.14159, 0.0001]')) AS ff_off;
+
+--echo # Integer without fraction
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]')) AS ff_on_intdot;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]')) AS ff_off_intdot;
+
+--echo # Fraction without integer
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.1, .2, .3]')) AS ff_on_dotfrac;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.1, .2, .3]')) AS ff_off_dotfrac;
+
+--echo # Leading '+' — now accepted by both paths (manual skip before fast_float)
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5]')) AS ff_on_plus;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5]')) AS ff_off_plus;
+
+--echo # Subnormal — accepted by both paths (ERANGE only rejects overflow→inf)
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]')) AS ff_on_subnormal;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]')) AS ff_off_subnormal;
+
+--echo # Extreme underflow to zero -- accepted by both paths (value rounds to a
+--echo # finite 0.0f, not overflow). Regression: VEC_FROMTEXT('[1e-300,...]') was
+--echo # wrongly rejected with ER_TO_VECTOR_CONVERSION on the fast_float path.
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_on_underflow;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_on_underflow_dim;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_off_underflow;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_off_underflow_dim;
+
+--echo # Negative extreme underflow rounds to -0.0f; double-subnormal 2e-320
+--echo # also underflows to float 0.0f -- both accepted on either path.
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-1e-300, 2e-320, 1.0]')) AS ff_on_neg_underflow;
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-1e-300, 2e-320, 1.0]')) AS ff_off_neg_underflow;
+
+--echo # strtof ERANGE path (overflow on fallback path)
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1e400, 2, 3]');
+
+--echo # Invalid input on strtof path
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT('[1,abc,3]');
+
+SET GLOBAL vidx_use_fast_float = @saved_ff;
+
+--echo
+--echo ########################################################################
+--echo # 7. Result caching — SP / prepared stmt / const literal
+--echo ########################################################################
+--echo # 7.1 Same literal in multiple columns
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1,2,3]')) AS v1,
+       VEC_TOTEXT(VEC_FROMTEXT('[1,2,3]')) AS v2,
+       VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT('[1,2,3]'), VEC_FROMTEXT('[4,5,6]')) AS d;
+
+--echo # 7.2 Stored procedure — cleanup() resets cache between calls
+DELIMITER |;
+CREATE PROCEDURE sp_vec_parse(IN txt VARCHAR(255))
+BEGIN
+  DECLARE v BLOB;
+  SET v = VEC_FROMTEXT(txt);
+  SELECT VEC_TOTEXT(v) AS result;
+END|
+DELIMITER ;|
+CALL sp_vec_parse('[1,2,3]');
+CALL sp_vec_parse('[4,5,6]');
+CALL sp_vec_parse('  [7, 8, 9]  ');
+
+--echo # 7.3 SP with invalid then valid input (cache not poisoned by errors)
+DELIMITER |;
+CREATE PROCEDURE sp_vec_err_ok()
+BEGIN
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION BEGIN END;
+  SELECT VEC_FROMTEXT('invalid') INTO @dummy;
+  SELECT VEC_TOTEXT(VEC_FROMTEXT('[100,200,300]')) AS after_error;
+END|
+DELIMITER ;|
+CALL sp_vec_err_ok();
+DROP PROCEDURE sp_vec_err_ok;
+DROP PROCEDURE sp_vec_parse;
+
+--echo # 7.4 Prepared stmt with constant literal (cached)
+PREPARE p_const FROM "SELECT VEC_TOTEXT(VEC_FROMTEXT('[10,20,30]'))";
+EXECUTE p_const;
+EXECUTE p_const;
+DEALLOCATE PREPARE p_const;
+
+--echo # 7.5 Prepared stmt with parameter (re-evaluated each time)
+PREPARE p_param FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(?))';
+SET @a = '[1,1,1]';
+EXECUTE p_param USING @a;
+SET @a = '[2,2,2]';
+EXECUTE p_param USING @a;
+SET @a = '[3,3,3]';
+EXECUTE p_param USING @a;
+DEALLOCATE PREPARE p_param;
+
+--echo
+--echo ########################################################################
+--echo # 8. CAST(... AS VECTOR)
+--echo ########################################################################
+SELECT VEC_TOTEXT(CAST('  [1, 2, 3]  ' AS VECTOR));
+
+CREATE TABLE t_cast_src (id INT PRIMARY KEY, txt VARCHAR(100));
+INSERT INTO t_cast_src VALUES (1, '[10,20,30]'), (2, '  [4, 5, 6]  ');
+SELECT id, VEC_TOTEXT(CAST(txt AS VECTOR)) FROM t_cast_src ORDER BY id;
+DROP TABLE t_cast_src;
+
+--error ER_TO_VECTOR_CONVERSION
+SELECT CAST('not a vector' AS VECTOR);
+--error ER_TO_VECTOR_CONVERSION
+SELECT CAST('[]' AS VECTOR);
+
+--echo
+--echo ########################################################################
+--echo # 9. Dimension mismatch — get_key() & mhnsw_read_first validation
+--echo ########################################################################
+CREATE TABLE t_dim5 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t_dim5(v) VALUES
+  (VEC_FROMTEXT('[1,1,1,1,1]')),
+  (VEC_FROMTEXT('[2,2,2,2,2]')),
+  (VEC_FROMTEXT('[3,3,3,3,3]'));
+
+--echo # dim=3 vs index dim=5 → error
+--error ER_WRONG_ARGUMENTS
+SELECT id FROM t_dim5
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3]')) LIMIT 2;
+
+--echo # dim=6 vs index dim=5 → error
+--error ER_WRONG_ARGUMENTS
+SELECT id FROM t_dim5
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5,6]')) LIMIT 2;
+
+--echo # dim=5 → success
+SELECT id FROM t_dim5
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+
+DROP TABLE t_dim5;
+
+--echo
+--echo ########################################################################
+--echo # 10. DML + ANN index roundtrip
+--echo ########################################################################
+CREATE TABLE t_roundtrip (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t_roundtrip(v) VALUES
+  (VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]')),
+  (VEC_FROMTEXT('[ -1.5 , 2.5 , -3.5 , 4.5 ]')),
+  (VEC_FROMTEXT('[1e-5, 1e5, -1e-5, -1e5]'));
+
+SELECT id, VEC_TOTEXT(v) FROM t_roundtrip ORDER BY id;
+
+SELECT id FROM t_roundtrip
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0, 0, 0, 0]')) LIMIT 2;
+
+--echo # Exact distance: sqrt(2)
+SELECT VEC_DISTANCE_EUCLIDEAN(
+  VEC_FROMTEXT('[1,0,0,0]'),
+  VEC_FROMTEXT('[0,1,0,0]')) AS d_expect_sqrt2;
+
+--echo # Whitespace equivalence
+SELECT VEC_DISTANCE_EUCLIDEAN(
+  VEC_FROMTEXT("[  1.5 ,  -2.5 ,  3.5 , 0 ]"),
+  VEC_FROMTEXT("[1.5, -2.5, 3.5, 0]")) AS should_be_zero;
+
+DROP TABLE t_roundtrip;
+
+--echo # Underflow-to-zero INSERT into a VECTOR column
+--echo # (Aone 84330967 exact repro: INSERT VEC_FROMTEXT('[1e-300,1e-200,0,0]')
+--echo # was rejected with TDDL-4614 / 7596; must now succeed, stored as 0).
+CREATE TABLE t_underflow (id INT PRIMARY KEY, v VECTOR(4));
+INSERT INTO t_underflow VALUES (1, VEC_FROMTEXT('[1e-300, 1e-200, 0, 0]'));
+INSERT INTO t_underflow VALUES (2, VEC_FROMTEXT('[-1e-300, 3e-320, 0, 0]'));
+SELECT id, VEC_TOTEXT(v) FROM t_underflow ORDER BY id;
+DROP TABLE t_underflow;
+
+--echo
+--echo ########################################################################
+--echo # 11. VIEW & compatibility aliases
+--echo ########################################################################
+CREATE TABLE t_view_src (id INT PRIMARY KEY, v VECTOR(3));
+INSERT INTO t_view_src VALUES (1, VEC_FROMTEXT('[1,2,3]')),
+                              (2, VEC_FROMTEXT('[4,5,6]'));
+CREATE VIEW v_dist AS
+  SELECT id, VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3]')) AS dist
+  FROM t_view_src;
+SELECT * FROM v_dist ORDER BY dist;
+SHOW CREATE VIEW v_dist;
+DROP VIEW v_dist;
+DROP TABLE t_view_src;
+
+SELECT VEC_TOTEXT(TO_VECTOR("[  1,  2,  3  ]"));
+SELECT VEC_TOTEXT(STRING_TO_VECTOR("[  1,  2,  3  ]"));
+SELECT FROM_VECTOR(VEC_FROMTEXT("[  1,  2,  3  ]"));
+SELECT VECTOR_TO_STRING(VEC_FROMTEXT("[  1,  2,  3  ]"));
+
+--echo
+--echo ########################################################################
+--echo # 12. MAX_DIMENSIONS boundary (16383)
+--echo ########################################################################
+--disable_query_log
+SET @big = CONCAT('[', REPEAT('1,', 16383), '1]');
+SET @ok  = CONCAT('[', REPEAT('1,', 16382), '1]');
+--enable_query_log
+
+--echo # 16384 > MAX_DIMENSIONS → error
+--error ER_DATA_OUT_OF_RANGE
+SELECT VECTOR_DIM(VEC_FROMTEXT(@big));
+
+--echo # 16383 = MAX_DIMENSIONS → success
+SELECT VECTOR_DIM(VEC_FROMTEXT(@ok));
+
+SET @big = NULL;
+SET @ok = NULL;
+
+--echo
+--echo ########################################################################
+--echo # 13. VECTOR(N) column-definition dimension bound (Aone 84323011)
+--echo #     N must be in [1, MAX_DIMENSIONS]. Oversized / zero / overflowing N
+--echo #     must be rejected cleanly -- not silently accepted as vector(0),
+--echo #     not converted to BLOB, and (non-strict) must not crash the server.
+--echo ########################################################################
+--echo # N > MAX_DIMENSIONS rejected (was 1074 in strict, crash in non-strict)
+--error ER_WRONG_ARGUMENTS
+CREATE TABLE dim_over (id INT PRIMARY KEY, v VECTOR(16384));
+--echo # N = 0 rejected
+--error ER_WRONG_ARGUMENTS
+CREATE TABLE dim_zero (id INT PRIMARY KEY, v VECTOR(0));
+--echo # Oversized N whose byte length overflows uint32 rejected (was vector(0))
+--error ER_TOO_BIG_DISPLAYWIDTH
+CREATE TABLE dim_ovf (id INT PRIMARY KEY, v VECTOR(1073741824));
+
+--echo # Non-strict sql_mode must reject the same way and NOT crash (regression)
+SET @saved_sql_mode = @@SESSION.sql_mode;
+SET SESSION sql_mode = '';
+--error ER_WRONG_ARGUMENTS
+CREATE TABLE dim_over_ns (id INT PRIMARY KEY, v VECTOR(16384));
+--error ER_TOO_BIG_DISPLAYWIDTH
+CREATE TABLE dim_ovf_ns (id INT PRIMARY KEY, v VECTOR(1073741824));
+SET SESSION sql_mode = @saved_sql_mode;
+
+--echo # Server is still responsive (fails here if a DDL above had crashed it)
+SELECT 1 + 1 AS alive;
+
+--echo # A valid dimension still works end-to-end
+CREATE TABLE dim_ok (id INT PRIMARY KEY, v VECTOR(128));
+INSERT INTO dim_ok VALUES (1, VEC_FROMTEXT(CONCAT('[', REPEAT('0.5,', 127), '0.5]')));
+SELECT id, VECTOR_DIM(v) FROM dim_ok;
+DROP TABLE dim_ok;
+
+--echo
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+SET GLOBAL vidx_disabled = ON;

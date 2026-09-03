@@ -1,0 +1,191 @@
+set global opt_enable_rds_priv_strategy=on;
+create database my_db;
+create table my_db.priv_src (id int primary key);
+insert into my_db.priv_src values (1);
+# 'xx' and 'u0' are reserved (maintain) accounts, protected by the guard.
+create user 'xx'@'%';
+create user 'u0'@'%';
+# give u0 a protected dynamic privilege (lands in mysql.global_grants)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%';
+# ordinary non-reserved accounts (pp: role peer, qq: boundary delete)
+create user 'pp'@'%';
+create user 'qq'@'%';
+# build a role edge whose FROM_USER is the reserved account u0
+grant 'u0'@'%' to 'pp'@'%';
+# 'u1' is a normal user holding every privilege except SUPER.
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+grant all privileges on my_db.* to 'u1'@'%';
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+#
+# Part 1: mysql.user - multi-table DML must not bypass the guard
+#
+# 1.1 multi-table UPDATE (immediate path) cannot escalate privilege
+update mysql.user u, my_db.priv_src b
+set u.super_priv='Y'
+  where u.user='u1' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 1.2 multi-table UPDATE cannot rename a row into a reserved account
+update mysql.user u, my_db.priv_src b
+set u.user='xx'
+  where u.user='u1' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 1.3 multi-table UPDATE (delayed/buffered path via self-join) is guarded too
+update mysql.user a, mysql.user b
+set a.super_priv='Y'
+  where a.user='u1' and b.user='u1';
+ERROR HY000: Rerserved user or privileges can't be modified
+# 1.4 INSERT ... SELECT cannot insert a reserved privilege
+insert into mysql.user (host, user, super_priv)
+select '%','zz','Y' from my_db.priv_src where id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 1.5 INSERT ... SELECT cannot insert a reserved account
+insert into mysql.user (host, user)
+select '%','xx' from my_db.priv_src where id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 1.6 multi-table DELETE cannot delete a reserved account
+delete u from mysql.user u, my_db.priv_src b
+where u.user='xx' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 2: mysql.user - INSERT ... ON DUPLICATE KEY UPDATE / REPLACE
+#
+# 2.1 a "safe" INSERT value cannot be used to escalate via ON DUPLICATE KEY UPDATE
+insert into mysql.user (host, user, super_priv) values ('%','u1','N')
+on duplicate key update super_priv='Y';
+ERROR HY000: Rerserved user or privileges can't be modified
+# 2.2 INSERT ... SELECT ... ON DUPLICATE KEY UPDATE cannot escalate
+insert into mysql.user (host, user, super_priv)
+select '%','u1','N' from my_db.priv_src where id=1
+on duplicate key update super_priv='Y';
+ERROR HY000: Rerserved user or privileges can't be modified
+# 2.3 other reserved privileges are protected on ON DUPLICATE KEY UPDATE too
+insert into mysql.user (host, user, file_priv) values ('%','u1','N')
+on duplicate key update file_priv='Y';
+ERROR HY000: Rerserved user or privileges can't be modified
+# 2.4 ON DUPLICATE KEY UPDATE cannot rename a row into a reserved account
+insert into mysql.user (host, user) values ('%','u1')
+on duplicate key update user='xx';
+ERROR HY000: Rerserved user or privileges can't be modified
+# 2.5 REPLACE cannot escalate privilege
+replace into mysql.user (host, user, super_priv) values ('%','u1','Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+# 2.6 REPLACE cannot overwrite / recreate a reserved account
+replace into mysql.user (host, user) values ('%','xx');
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 3: mysql.global_grants - multi-table DML must not bypass the guard
+#
+# 3.1 INSERT ... SELECT cannot grant a protected dynamic privilege
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+select 'u1','%','SYSTEM_VARIABLES_ADMIN','Y' from my_db.priv_src where id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 3.2 multi-table UPDATE cannot tamper with a reserved account's dynamic privilege
+update mysql.global_grants g, my_db.priv_src b
+set g.user='u1'
+  where g.user='u0' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 3.3 multi-table DELETE cannot remove a reserved account's dynamic privilege
+delete g from mysql.global_grants g, my_db.priv_src b
+where g.user='u0' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 4: mysql.role_edges - multi-table DML must not bypass the guard
+#         (guard keys on FROM_USER, so all cases target from_user='u0')
+#
+# 4.1 INSERT ... SELECT cannot create a role edge from a reserved account
+insert into mysql.role_edges (from_host, from_user, to_host, to_user, with_admin_option)
+select '%','u0','%','u1','N' from my_db.priv_src where id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 4.2 multi-table UPDATE cannot tamper with a reserved role edge
+update mysql.role_edges r, my_db.priv_src b
+set r.with_admin_option='Y'
+  where r.from_user='u0' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 4.3 multi-table DELETE cannot remove a reserved role edge
+delete r from mysql.role_edges r, my_db.priv_src b
+where r.from_user='u0' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# 4.4 REPLACE cannot create a role edge from a reserved account
+replace into mysql.role_edges (from_host, from_user, to_host, to_user, with_admin_option)
+values ('%','u0','%','u1','Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 5: mysql.global_grants - REPLACE / ON DUPLICATE KEY UPDATE
+#
+# 5.1 REPLACE cannot grant a dynamic privilege (guard blocks all non-SUPER INSERT)
+replace into mysql.global_grants (user, host, priv, with_grant_option)
+values ('u1','%','SYSTEM_VARIABLES_ADMIN','Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+# 5.2 INSERT ... ON DUPLICATE KEY UPDATE on global_grants is blocked at INSERT
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+values ('u0','%','SYSTEM_VARIABLES_ADMIN','Y')
+on duplicate key update with_grant_option='Y';
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 6: LOAD DATA ... REPLACE on mysql.user
+#
+# 6.1 prepare csv file via root connection
+select '%','u1','Y' into outfile 'MYSQLTEST_VARDIR/tmp/guard_load_test.csv';
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+# 6.2 LOAD DATA REPLACE cannot escalate privilege on a guarded table
+load data infile 'MYSQLTEST_VARDIR/tmp/guard_load_test.csv' replace into table mysql.user fields terminated by '\t' (host, user, super_priv);
+ERROR HY000: Rerserved user or privileges can't be modified
+# 6.3 LOAD DATA (plain INSERT path) cannot insert a reserved account
+select '%','xx' into outfile 'MYSQLTEST_VARDIR/tmp/guard_load_test2.csv';
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+load data infile 'MYSQLTEST_VARDIR/tmp/guard_load_test2.csv' into table mysql.user fields terminated by '\t' (host, user);
+ERROR HY000: Rerserved user or privileges can't be modified
+#
+# Part 7: regression - ordinary (unguarded) tables must NOT be affected
+#         (write_record now calls guard_record for every INSERT, so make
+#          sure a normal business table still works through every path)
+#
+create table my_db.biz (id int primary key, v int);
+insert into my_db.biz values (1,10),(2,20);
+# INSERT ... SELECT into an ordinary table
+insert into my_db.biz select id+100, id*10 from my_db.priv_src;
+# INSERT ... ON DUPLICATE KEY UPDATE on an ordinary table
+insert into my_db.biz values (1,10) on duplicate key update v=v+5;
+# REPLACE on an ordinary table
+replace into my_db.biz values (2,99);
+# multi-table UPDATE on an ordinary table
+update my_db.biz a, my_db.priv_src b set a.v=a.v+1 where a.id=b.id;
+# multi-table DELETE on an ordinary table
+delete a from my_db.biz a, my_db.priv_src b where a.id=b.id;
+select * from my_db.biz;
+id	v
+101	10
+2	99
+#
+# Part 8: boundary - non-reserved targets and non-protected fields are allowed
+#
+# 8.1 multi-table DELETE of a non-reserved account is allowed
+delete u from mysql.user u, my_db.priv_src b
+where u.user='qq' and b.id=1;
+# 8.2 multi-table UPDATE of a non-protected column on a non-reserved
+#     account that holds no reserved privilege is allowed
+update mysql.user u, my_db.priv_src b
+set u.max_questions=10
+where u.user='pp' and b.id=1;
+#
+# Part 9: a SUPER user (root) is not affected by the guard.
+#
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+update mysql.user u, my_db.priv_src b
+set u.super_priv='N'
+  where u.user='u1' and b.id=1;
+#
+# cleanup
+#
+drop user 'u1'@'%';
+drop user 'u0'@'%';
+drop user 'xx'@'%';
+drop user 'pp'@'%';
+# qq's mysql.user row was already removed by the boundary DELETE (8.1)
+drop database my_db;
+flush privileges;
+set global opt_enable_rds_priv_strategy=off;

@@ -17,7 +17,10 @@ set @@debug='';
 
 flush logs;
 --eval $sql0
+--eval $sql0
+--eval $sql0
 select @@debug;
+
 let $last_log_index= query_get_value(select LAST_LOG_INDEX from  information_schema.ALISQL_CLUSTER_LOCAL, LAST_LOG_INDEX, 1);
 --disable_query_log
 --error 0,2013

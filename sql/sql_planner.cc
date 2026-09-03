@@ -450,9 +450,9 @@ Key_use *Optimize_table_order::find_best_ref(
               quick_cond is equivalent to ref_const_cond (if it was an
               empty interval we wouldn't have got here).
             */
-            if (table->quick_keys.is_set(key))
-              cur_fanout = (double)table->quick_rows[key];
-            else {
+            if (table->quick_keys.is_set(key)) {
+              cur_fanout = (double)table->quick_rows_canonical[key];
+            } else {
               // quick_range couldn't use key
               cur_fanout = (double)tab->records() / distinct_keys_est;
             }
@@ -487,8 +487,8 @@ Key_use *Optimize_table_order::find_best_ref(
                  (((key_part_map)1 << table->quick_key_parts[key]) - 1)) ==
                     (((key_part_map)1 << table->quick_key_parts[key]) - 1) &&
                 table->quick_n_ranges[key] == 1 &&
-                cur_fanout > (double)table->quick_rows[key]) {
-              cur_fanout = (double)table->quick_rows[key];
+                cur_fanout > (double)table->quick_rows_canonical[key]) {
+              cur_fanout = (double)table->quick_rows_canonical[key];
             }
           }
           cur_read_cost =
@@ -551,7 +551,7 @@ Key_use *Optimize_table_order::find_best_ref(
             table->quick_n_ranges[key] ==
                 1 + (ref_or_null_part ? 1 : 0))  //(C3)
         {
-          cur_fanout = (double)table->quick_rows[key];
+          cur_fanout = (double)table->quick_rows_canonical[key];
         } else {
           // Check if we have statistic about the distribution
           if (keyinfo->has_records_per_key(cur_used_keyparts - 1)) {
@@ -651,8 +651,8 @@ Key_use *Optimize_table_order::find_best_ref(
               const_part & ((key_part_map)1 << table->quick_key_parts[key]) &&
               table->quick_n_ranges[key] ==
                   1 + ((ref_or_null_part & const_part) ? 1 : 0) &&
-              cur_fanout > (double)table->quick_rows[key]) {
-            cur_fanout = (double)table->quick_rows[key];
+              cur_fanout > (double)table->quick_rows_canonical[key]) {
+            cur_fanout = (double)table->quick_rows_canonical[key];
           }
         }
 

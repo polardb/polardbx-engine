@@ -1,0 +1,89 @@
+create table test.t1(id int);
+insert into test.t1 values(1);
+xa start 'x1';
+insert into test.t1 values(1);
+xa end 'x1';
+xa prepare 'x1';
+xa commit 'x1';
+select count(*) from test.t1;
+count(*)
+2
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	No
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+# case 1 change_leader to disable_election node succeeds (operator-initiated bypasses disableElection)
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+3
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	No
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	No
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+set global consensus_disable_election=0;
+# case 2 change_leader succeeds even when both leader and target have disable_election=1
+set global consensus_disable_election=1;
+set global consensus_disable_election=1;
+insert into test.t1 values(1);
+select count(*) from test.t1;
+count(*)
+4
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+### ha begin
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_2");
+### ha succ
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Follower	5	Normal	Yes
+2	Leader	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+call dbms_consensus.change_leader("127.0.0.1:MYPORT_CONSENSUS_1");
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+SERVER_ID	ROLE	ELECTION_WEIGHT	INSTANCE_TYPE	DISABLE_ELECTION
+1	Leader	5	Normal	Yes
+2	Follower	5	Normal	Yes
+3	Follower	5	Normal	No
+show global status like "consensus_in_leader_transfer";
+Variable_name	Value
+consensus_in_leader_transfer	0
+set global consensus_disable_election=0;
+set global consensus_disable_election=0;
+drop table test.t1;

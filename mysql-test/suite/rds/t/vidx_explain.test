@@ -1,0 +1,207 @@
+##########################################
+# EXPLAIN observability for VECTOR INDEX  #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Setup: table with EUCLIDEAN vector index
+CREATE TABLE t1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 0
+while ($i < 100) {
+  eval INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  --inc $i
+}
+--enable_query_log
+ANALYZE TABLE t1;
+
+--echo # 2. EXPLAIN shows ef_search, limit, metric
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 3. Different LIMIT values
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 10;
+
+--echo # 4. Change ef_search and verify it reflects in EXPLAIN
+SET vidx_hnsw_ef_search = 50;
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+SET vidx_hnsw_ef_search = 200;
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+SET vidx_hnsw_ef_search = 20;
+
+--echo # 5. EXPLAIN FORMAT=JSON shows vector_index info
+--replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": X/ /"rows_produced_per_join": [0-9]+/"rows_produced_per_join": X/ /"prefix_cost": [0-9.]+/"prefix_cost": X/ /"data_read_per_join": "[^"]+"/"data_read_per_join": "X"/ /"query_cost": "[^"]+"/"query_cost": "X"/ /"filtered": "[^"]+"/"filtered": "X"/
+EXPLAIN FORMAT=JSON SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 6. EXPLAIN ANALYZE shows nodes_visited
+--replace_regex /actual time=[0-9.]+\.\.[0-9.]+/actual time=N..N/ /rows=[0-9]+/rows=N/ /loops=[0-9]+/loops=N/ /nodes_visited=[0-9]+/nodes_visited=N/ /cost=[0-9.]+ /cost=N /
+EXPLAIN ANALYZE SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 7. When vector index is NOT used (limit too large), no vector info in Extra
+--replace_column 10 X
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 100;
+
+--echo # 8. COSINE metric
+CREATE TABLE t2 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi_cos(v) distance=cosine
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 0
+while ($i < 100) {
+  eval INSERT INTO t2(v) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  --inc $i
+}
+--enable_query_log
+ANALYZE TABLE t2;
+
+EXPLAIN SELECT * FROM t2 ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 9. nodes_visited accuracy: value is non-zero and continuation
+--echo #    re-searches are accumulated (full-traversal semantics)
+# nodes_visited is inherently non-deterministic (HNSW layer assignment uses
+# my_rnd), so we assert relations/bounds instead of an exact value:
+#   (a) a plain query records nodes_visited > 0  -> the stat is written;
+#   (b) a query whose WHERE rejects every row forces mhnsw_read_next to keep
+#       re-searching until the reachable graph is exhausted, so its
+#       nodes_visited must exceed the plain query -> continuation re-searches
+#       are accounted for, not just the first search.
+--let $nv_simple = $MYSQLTEST_VARDIR/tmp/vidx_nv_simple.txt
+--let $nv_cont = $MYSQLTEST_VARDIR/tmp/vidx_nv_cont.txt
+--exec $MYSQL test -e "EXPLAIN ANALYZE SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5" > $nv_simple 2>&1
+--exec $MYSQL test -e "EXPLAIN ANALYZE SELECT * FROM t1 WHERE id + 0 > 1000000 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5" > $nv_cont 2>&1
+perl;
+  sub nodes_visited {
+    my ($file) = @_;
+    open(my $fh, '<', $file) or die "cannot open $file: $!";
+    local $/; my $content = <$fh>; close($fh);
+    return $content =~ /nodes_visited=(\d+)/ ? $1 : -1;
+  }
+  my $simple = nodes_visited("$ENV{MYSQLTEST_VARDIR}/tmp/vidx_nv_simple.txt");
+  my $cont   = nodes_visited("$ENV{MYSQLTEST_VARDIR}/tmp/vidx_nv_cont.txt");
+  die "simple: nodes_visited not found in EXPLAIN ANALYZE output\n"
+      if $simple < 0;
+  die "cont: nodes_visited not found in EXPLAIN ANALYZE output\n"
+      if $cont < 0;
+  die "simple query did not record any visited node (got $simple)\n"
+      unless $simple > 0;
+  die "continuation re-search not accumulated (cont=$cont, simple=$simple)\n"
+      unless $cont > $simple;
+  print "nodes_visited accuracy OK\n";
+EOF
+--remove_file $nv_simple
+--remove_file $nv_cont
+
+--echo # 10. Extra coexists with "Using where" when a runtime filter is present
+--echo #     and still carries accurate vector params (id + 0 > 5 blocks PK range,
+--echo #     so the optimizer keeps the vector index scan plus a Using where filter)
+--replace_column 10 X 11 X
+EXPLAIN SELECT * FROM t1 WHERE id + 0 > 5 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 11. FORMAT=JSON accuracy under non-default ef_search and COSINE metric
+--echo #     (cross-checks ef_search/limit/metric in the JSON path, not just the
+--echo #     default combination covered by scenario 5)
+SET vidx_hnsw_ef_search = 50;
+--replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": X/ /"rows_produced_per_join": [0-9]+/"rows_produced_per_join": X/ /"prefix_cost": [0-9.]+/"prefix_cost": X/ /"data_read_per_join": "[^"]+"/"data_read_per_join": "X"/ /"query_cost": "[^"]+"/"query_cost": "X"/ /"filtered": "[^"]+"/"filtered": "X"/
+EXPLAIN FORMAT=JSON SELECT * FROM t2 ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 7;
+SET vidx_hnsw_ef_search = 20;
+
+--echo # 12. INNER_PRODUCT metric
+CREATE TABLE t3 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi_ip(v) distance=inner_product
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 0
+while ($i < 100) {
+  eval INSERT INTO t3(v) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  --inc $i
+}
+--enable_query_log
+ANALYZE TABLE t3;
+
+--echo # 12a. Tabular EXPLAIN shows metric=INNER_PRODUCT
+EXPLAIN SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 12b. FORMAT=JSON with INNER_PRODUCT metric
+--replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": X/ /"rows_produced_per_join": [0-9]+/"rows_produced_per_join": X/ /"prefix_cost": [0-9.]+/"prefix_cost": X/ /"data_read_per_join": "[^"]+"/"data_read_per_join": "X"/ /"query_cost": "[^"]+"/"query_cost": "X"/ /"filtered": "[^"]+"/"filtered": "X"/
+EXPLAIN FORMAT=JSON SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 12c. EXPLAIN ANALYZE with INNER_PRODUCT metric shows nodes_visited
+--replace_regex /actual time=[0-9.]+\.\.[0-9.]+/actual time=N..N/ /rows=[0-9]+/rows=N/ /loops=[0-9]+/loops=N/ /nodes_visited=[0-9]+/nodes_visited=N/ /cost=[0-9.]+ /cost=N /
+EXPLAIN ANALYZE SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 13. ef_construction value is accurate in EXPLAIN Extra
+CREATE TABLE t4 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi_ec(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 0
+while ($i < 20) {
+  eval INSERT INTO t4(v) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  --inc $i
+}
+--enable_query_log
+ANALYZE TABLE t4;
+
+EXPLAIN SELECT * FROM t4 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+--echo # 14. Multi-index: optimizer picks correct index per column
+CREATE TABLE t_mi (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  v1 VECTOR(4),
+  v2 VECTOR(4),
+  VECTOR INDEX idx_v1(v1) DISTANCE=euclidean,
+  VECTOR INDEX idx_v2(v2) DISTANCE=cosine
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 0
+while ($i < 20) {
+  eval INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')), VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  --inc $i
+}
+--enable_query_log
+ANALYZE TABLE t_mi;
+
+--echo # 14a. EXPLAIN on v1 should show idx_v1
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 14b. EXPLAIN on v2 should show idx_v2
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 14c. FORCE INDEX(idx_v1) for v1 query
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (idx_v1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 14d. FORCE INDEX(idx_v2) for v2 query
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (idx_v2)
+ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 14e. IGNORE INDEX(idx_v1) → v1 query uses filesort
+EXPLAIN SELECT * FROM t_mi IGNORE INDEX FOR ORDER BY (idx_v1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 14f. FORMAT=JSON distinguishes index names
+--replace_regex /"rows_examined_per_scan": [0-9]+/"rows_examined_per_scan": X/ /"rows_produced_per_join": [0-9]+/"rows_produced_per_join": X/ /"prefix_cost": [0-9.]+/"prefix_cost": X/ /"data_read_per_join": "[^"]+"/"data_read_per_join": "X"/ /"query_cost": "[^"]+"/"query_cost": "X"/ /"filtered": "[^"]+"/"filtered": "X"/
+EXPLAIN FORMAT=JSON SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+DROP TABLE t_mi;
+
+--echo # Cleanup
+DROP TABLE t1, t2, t3, t4;
+SET GLOBAL vidx_disabled = default;

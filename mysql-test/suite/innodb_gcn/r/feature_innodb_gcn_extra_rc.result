@@ -13,11 +13,11 @@ a	b
 create table dd_db.t2 (a int, b int, primary key (a));
 set innodb_snapshot_seq = @base_seq +1500;
 select * from dd_db.t2;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 create table dd_db.t3 (a int, b int, primary key (a));
 set innodb_snapshot_seq = @base_seq +1400;
 select * from dd_db.t3;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 drop database dd_db;
 #
 # Insert ... select & create .... select & update

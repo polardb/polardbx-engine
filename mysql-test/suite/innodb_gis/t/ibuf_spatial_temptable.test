@@ -1,0 +1,65 @@
+--source include/have_innodb_max_16k.inc
+
+SET GLOBAL innodb_change_buffering=all;
+SELECT @@global.innodb_change_buffering;
+
+CREATE TABLE t1(f1 POINT NOT NULL);
+INSERT INTO t1 VALUES (POINT(15, 20));
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+INSERT INTO t1 SELECT * FROM t1;
+SELECT COUNT(*) FROM t1;
+CREATE TEMPORARY TABLE IF NOT EXISTS tmp_table SELECT * FROM t1 LIMIT 366;
+CREATE SPATIAL INDEX k1 ON tmp_table(f1);
+DROP TABLE t1;
+
+# Bug#36682518: a runtime R-tree page split on a temporary table must not
+# update the change buffer bitmap (the temporary tablespace has none).
+# Row-by-row inserts reach rtr_page_split_and_insert(), unlike the DDL
+# bulk load path above.
+CREATE TEMPORARY TABLE t2 (
+  id INT AUTO_INCREMENT NOT NULL,
+  g POINT NOT NULL SRID 0,
+  PRIMARY KEY(id),
+  SPATIAL INDEX sp_idx(g)
+) ENGINE=InnoDB;
+--disable_query_log
+let $i= 1;
+while ($i <= 400)
+{
+  eval INSERT INTO t2 (g) VALUES (ST_PointFromText('POINT($i $i)'));
+  inc $i;
+}
+--enable_query_log
+SELECT COUNT(*) FROM t2;
+SELECT COUNT(*) FROM t2 WHERE MBRContains(
+  ST_GeomFromText('POLYGON((0.5 0.5, 100.5 0.5, 100.5 100.5, 0.5 100.5, 0.5 0.5))'), g);
+DROP TEMPORARY TABLE t2;
+
+# Control: the same split path on a persistent table keeps updating the
+# free bits and the spatial index stays usable.
+CREATE TABLE t3 (
+  id INT AUTO_INCREMENT NOT NULL,
+  g POINT NOT NULL SRID 0,
+  PRIMARY KEY(id),
+  SPATIAL INDEX sp_idx(g)
+) ENGINE=InnoDB;
+--disable_query_log
+let $i= 1;
+while ($i <= 100)
+{
+  eval INSERT INTO t3 (g) VALUES (ST_PointFromText('POINT($i $i)'));
+  inc $i;
+}
+--enable_query_log
+SELECT COUNT(*) FROM t3 WHERE MBRContains(
+  ST_GeomFromText('POLYGON((0.5 0.5, 50.5 0.5, 50.5 50.5, 0.5 50.5, 0.5 0.5))'), g);
+DROP TABLE t3;
+
+SET GLOBAL innodb_change_buffering=default;

@@ -76,7 +76,7 @@ void hash_create_sync_obj(hash_table_t *table, latch_id_t id,
 @param[in]      table           hash table
 @return cell index for specified hash table*/
 static inline uint64_t hash_calc_cell_id(uint64_t hash_value,
-                                         hash_table_t *table);
+                                         hash_table_t const *table);
 
 /** Gets the nth cell in a hash table.
 @param[in]      table   hash table
@@ -216,7 +216,8 @@ static inline void hash_table_clear(
 
 /** Returns the number of cells in a hash table.
  @return number of cells */
-static inline size_t hash_get_n_cells(hash_table_t *table); /*!< in: table */
+static inline size_t hash_get_n_cells(
+    hash_table_t const *table); /*!< in: table */
 
 /** Deletes a struct which is stored in the heap of the hash table, and compacts
  the heap. The hash value must be stored in the struct NODE in a field named
@@ -390,13 +391,13 @@ class hash_table_t {
   - when holding S-latch for at least one n_sync_obj to get the "real" value
   @return value of n_cells
   */
-  size_t get_n_cells() { return n_cells.load(std::memory_order_relaxed); }
+  size_t get_n_cells() const { return n_cells.load(std::memory_order_relaxed); }
 
   /** Returns a helper class for calculating fast modulo n_cells.
    If type==HASH_TABLE_SYNC_RW_LOCK it can be used:
   - without any latches to peek a value, before hash_lock_[sx]_confirm
   - when holding S-latch for at least one n_sync_obj to get the "real" value */
-  const ut::fast_modulo_t get_n_cells_fast_modulo() {
+  const ut::fast_modulo_t get_n_cells_fast_modulo() const {
     return n_cells_fast_modulo.load();
   }
 
@@ -467,6 +468,8 @@ class hash_table_t {
 #endif /* UNIV_DEBUG */
 };
 
+#ifndef INNODB_HASH0HASH_IC_STANDALONE
 #include "hash0hash.ic"
+#endif /* !INNODB_HASH0HASH_IC_STANDALONE */
 
 #endif

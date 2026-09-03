@@ -81,7 +81,7 @@ class CstmtCommandDelegate : public CstreamingCommandDelegate {
 
 #ifdef MYSQL8PLUS
     // check global leader in transfer
-    if (mysql_bin_log.is_in_leader_transfer())
+    if (mysql_bin_log.is_in_switchover())
       msg_enc().encode_notice_server_state(
           PolarXRPC::Notice::
               SessionStateChanged_ExtraServerState_IN_LEADER_TRANSFER_FLAG);

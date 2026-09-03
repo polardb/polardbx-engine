@@ -1,0 +1,204 @@
+--source include/no_valgrind_without_big.inc
+--source include/have_debug.inc
+--source include/not_windows.inc
+--source suite/innodb/include/have_tde_enc_checksum.inc
+
+--let $server_log= $MYSQLTEST_VARDIR/log/tde_enc_checksum.err
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--replace_result $KEYRING_PLUGIN_OPT KEYRING_PLUGIN_OPT
+--replace_result $KEYRING_PLUGIN KEYRING_PLUGIN
+
+--disable_query_log
+CALL mtr.add_suppression("Database page corruption on disk or a failed file read of page");
+CALL mtr.add_suppression("Uncompressed page, stored checksum in field1");
+--enable_query_log
+
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--source include/restart_mysqld_no_echo.inc
+
+--echo # verify TDE/keyring and enc_checksum are both active before test starts
+SELECT PLUGIN_NAME, PLUGIN_STATUS, PLUGIN_TYPE
+FROM INFORMATION_SCHEMA.PLUGINS
+WHERE PLUGIN_NAME IN ('enc_checksum', 'keyring_file')
+ORDER BY PLUGIN_NAME;
+
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL VARIABLES LIKE 'innodb_verify_enc_checksum';
+
+SELECT @@global.enc_checksum_enabled IN (0,1);
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SELECT @@session.enc_checksum_enabled;
+SHOW SESSION VARIABLES LIKE 'enc_checksum_enabled';
+SELECT * FROM performance_schema.global_variables
+WHERE variable_name='enc_checksum_enabled';
+SELECT * FROM performance_schema.session_variables
+WHERE variable_name='enc_checksum_enabled';
+
+--echo # runtime toggle should switch the active bridge without restart
+SET GLOBAL enc_checksum_enabled = OFF;
+--error ER_GLOBAL_VARIABLE
+SET SESSION enc_checksum_enabled = OFF;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+SET GLOBAL enc_checksum_enabled = ON;
+--error ER_GLOBAL_VARIABLE
+SET SESSION enc_checksum_enabled = ON;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+--error ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL enc_checksum_enabled = 1.1;
+--error ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL enc_checksum_enabled = 1e1;
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL enc_checksum_enabled = 'some text';
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  pad LONGBLOB
+) ENGINE=InnoDB ENCRYPTION='Y';
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 65536));
+SET GLOBAL innodb_buf_flush_list_now = 1;
+
+--echo # restart with decrypt fault injection after TDE setup is confirmed
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+# PK point lookup touches one leaf page (avoids parallel COUNT(*) read path).
+# enc_checksum_corrupt_ciphertext_byte is one-shot (see os0enc.cc): first
+# decrypt attempt may see corrupted ciphertext; Buf_fetch read retry succeeds.
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+
+--let $grep_pattern= Database page corruption on disk or a failed file read of page
+--let $grep_file= $server_log
+--let $wait_timeout= 10
+--source include/wait_for_pattern_in_file.inc
+
+--let $assert_text= legacy crc mismatch is logged when verify_enc_checksum is off
+--let $assert_file= $server_log
+--let $assert_select= Database page corruption on disk or a failed file read of page
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+--let $assert_text= legacy crc checksum detail is logged when verify_enc_checksum is off
+--let $assert_file= $server_log
+--let $assert_select= calculated checksums for field1
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+
+--echo # with verify enabled the same corruption is reported as enc_checksum
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+SET GLOBAL innodb_verify_enc_checksum = ON;
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+
+--let $grep_pattern= enc_checksum detected checksum mismatch, page
+--let $grep_file= $server_log
+--let $wait_timeout= 10
+--source include/wait_for_pattern_in_file.inc
+
+--let $assert_text= enc_checksum mismatch is logged once
+--let $assert_file= $server_log
+--let $assert_select= enc_checksum detected checksum mismatch, page
+--let $assert_count= 1
+--source include/assert_grep.inc
+
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+SET GLOBAL innodb_verify_enc_checksum = OFF;
+
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+
+--echo # with verify enabled but inactive bridge the corruption stays legacy CRC
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+SET GLOBAL enc_checksum_enabled = OFF;
+SET GLOBAL innodb_verify_enc_checksum = ON;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+
+--let $grep_pattern= Database page corruption on disk or a failed file read of page
+--let $grep_file= $server_log
+--let $wait_timeout= 10
+--source include/wait_for_pattern_in_file.inc
+
+--let $assert_text= legacy crc mismatch is logged when enc_checksum is inactive
+--let $assert_file= $server_log
+--let $assert_select= Database page corruption on disk or a failed file read of page
+--let $assert_count= 1
+--let $assert_only_after= ready for connections
+--source include/assert_grep.inc
+
+--let $assert_text= enc_checksum mismatch is not logged when bridge is inactive
+--let $assert_file= $server_log
+--let $assert_select= enc_checksum detected checksum mismatch, page
+--let $assert_count= 0
+--let $assert_only_after= ready for connections
+--source include/assert_grep.inc
+--let $assert_only_after=
+
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+SET GLOBAL innodb_verify_enc_checksum = OFF;
+SET GLOBAL enc_checksum_enabled = ON;
+
+--echo # persisted OFF should survive restart and leave the bridge inactive
+SET PERSIST enc_checksum_enabled = OFF;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+SET PERSIST enc_checksum_enabled = ON;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load="keyring_file=$KEYRING_PLUGIN" --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+
+RESET PERSIST IF EXISTS enc_checksum_enabled;
+
+DROP TABLE IF EXISTS t1;
+
+--let $restart_parameters= restart: --log-error=$server_log --early-plugin-load=keyring_file=$KEYRING_PLUGIN --loose-keyring_file_data=$MYSQL_TMP_DIR/tde_enc_checksum_keyring $KEYRING_PLUGIN_OPT
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--source include/restart_mysqld_no_echo.inc
+
+--remove_file $MYSQL_TMP_DIR/tde_enc_checksum_keyring
+--remove_file $server_log
+
+--let $restart_parameters= restart:
+--source include/restart_mysqld_no_echo.inc

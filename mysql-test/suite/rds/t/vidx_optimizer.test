@@ -1,0 +1,745 @@
+##########################################
+# Vector Index x Optimizer Table         #
+# Cross-scenario Risk Verification       #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+--echo ########################################
+--echo # Preparation: create tables with data #
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL,
+  b VARCHAR(32),
+  v VECTOR(5),
+  INDEX idx_a(a),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  t1_id INT NOT NULL,
+  status VARCHAR(16),
+  INDEX idx_t1id(t1_id),
+  INDEX idx_status(status)
+) ENGINE = InnoDB;
+
+--echo # Insert 100 rows into t1
+--disable_warnings
+--disable_query_log
+let $i=100;
+while ($i)
+{
+  eval INSERT INTO t1(a, b, v) VALUES ($i % 10, CONCAT('row_', $i), VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  dec $i;
+}
+--enable_query_log
+
+--echo # Insert 200 rows into t2 (some matching, some not)
+--disable_query_log
+let $i=100;
+while ($i)
+{
+  eval INSERT INTO t2(t1_id, status) VALUES ($i, 'active');
+  eval INSERT INTO t2(t1_id, status) VALUES ($i, 'inactive');
+  dec $i;
+}
+--enable_query_log
+--enable_warnings
+
+ANALYZE TABLE t1, t2;
+
+--echo
+--echo ########################################
+--echo # Baseline: simple vector index query  #
+--echo ########################################
+--echo # Expect: type=index (vector index scan)
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--disable_result_log
+SELECT id FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 1: Derived table (materialized)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Expect: NO vector index (derived table
+--echo # is materialized, no vector index on it)
+--echo ########################################
+EXPLAIN SELECT * FROM (SELECT id, a, v FROM t1 WHERE a > 3) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM (SELECT id, a, v FROM t1 WHERE a > 3) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 2: Derived table (merged)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Expect: vector index USED (derived is
+--echo # merged into outer query, base table)
+--echo ########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM (SELECT * FROM t1) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 3: CTE (materialized)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Force materialization with DISTINCT
+--echo # Expect: NO vector index
+--echo ########################################
+EXPLAIN WITH cte AS (SELECT DISTINCT id, a, v FROM t1 WHERE a > 3)
+SELECT * FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+WITH cte AS (SELECT DISTINCT id, a, v FROM t1 WHERE a > 3)
+SELECT id FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 4: CTE (merged/simple)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Expect: vector index USED if merged
+--echo ########################################
+EXPLAIN WITH cte AS (SELECT * FROM t1)
+SELECT * FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+WITH cte AS (SELECT * FROM t1)
+SELECT id FROM cte ORDER BY VEC_DISTANCE_EUCLIDEAN(cte.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 5: UNION ALL
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Expect: NO vector index (UNION creates
+--echo # a temp table for results)
+--echo ########################################
+EXPLAIN (SELECT id, v FROM t1 WHERE a <= 5
+         UNION ALL
+         SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+(SELECT id, v FROM t1 WHERE a <= 5
+ UNION ALL
+ SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 6: UNION DISTINCT
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Expect: NO vector index
+--echo ########################################
+EXPLAIN (SELECT id, v FROM t1 WHERE a <= 5
+         UNION DISTINCT
+         SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+(SELECT id, v FROM t1 WHERE a <= 5
+ UNION DISTINCT
+ SELECT id, v FROM t1 WHERE a > 5)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 7: GROUP BY + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo # Expect: NO vector index (GROUP BY
+--echo # takes precedence, needs tmp table)
+--echo ########################################
+EXPLAIN SELECT a, COUNT(*) AS cnt, MIN(v) AS mv FROM t1
+GROUP BY a ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 8: DISTINCT + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo # Key risk: DISTINCT may need tmp table,
+--echo # verify vector index NOT incorrectly
+--echo # selected or result stays correct
+--echo ########################################
+EXPLAIN SELECT DISTINCT id, a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo # Correctness check: compare with non-DISTINCT baseline
+--disable_result_log
+SELECT DISTINCT id, a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 9: SELECT DISTINCT on
+--echo # non-PK column + ORDER BY VEC_DISTANCE
+--echo # This triggers error because ORDER BY
+--echo # expression not in DISTINCT select list
+--echo ########################################
+--error 3065
+SELECT DISTINCT a FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo # BUG-FIXED: DISTINCT on non-unique columns + ORDER BY VEC_DISTANCE
+--echo # previously crashed due to test_if_cheaper_vector_ordering()
+--echo # modifying plan when no_changes=true in Plan_change_watchdog.
+--echo # Fixed by adding no_changes parameter to skip plan modification
+--echo # in probe mode.
+EXPLAIN SELECT DISTINCT a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT DISTINCT a, v FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 10: INNER JOIN + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo # Verify: multi-table simple_order check
+--echo ########################################
+EXPLAIN SELECT t1.id, t1.a, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 11: LEFT JOIN + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo # Expect: simple_order=false due to
+--echo # LEFT JOIN condition
+--echo ########################################
+EXPLAIN SELECT t1.id, t1.a, t2.status FROM t1
+LEFT JOIN t2 ON t1.id = t2.t1_id AND t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT t1.id, t2.status FROM t1
+LEFT JOIN t2 ON t1.id = t2.t1_id AND t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 12: JOIN with WHERE filter
+--echo # on second table + ORDER BY VEC_DISTANCE
+--echo # Risk: vector index limit may be too
+--echo # small after JOIN filter
+--echo ########################################
+EXPLAIN SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT t1.id, t2.status FROM t1
+INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'active'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 13: Subquery in WHERE (IN)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # May trigger semi-join transformation
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+WHERE id IN (SELECT t1_id FROM t2 WHERE status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1
+WHERE id IN (SELECT t1_id FROM t2 WHERE status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 14: Subquery in WHERE (EXISTS)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.t1_id = t1.id AND t2.status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1
+WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.t1_id = t1.id AND t2.status = 'active')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 15: Subquery in WHERE (NOT IN)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Anti-join pattern
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+WHERE id NOT IN (SELECT t1_id FROM t2 WHERE status = 'inactive')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1
+WHERE id NOT IN (SELECT t1_id FROM t2 WHERE status = 'inactive')
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 16: Scalar subquery in SELECT
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo ########################################
+EXPLAIN SELECT id, a, (SELECT COUNT(*) FROM t2 WHERE t2.t1_id = t1.id) AS t2_cnt
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id, (SELECT COUNT(*) FROM t2 WHERE t2.t1_id = t1.id) AS t2_cnt
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 17: Window function (simple)
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Risk: window may need sorting, may
+--echo # conflict with vector index ordering
+--echo ########################################
+EXPLAIN SELECT id, a, ROW_NUMBER() OVER (ORDER BY id) AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 18: Window function without
+--echo # ORDER BY in OVER clause
+--echo ########################################
+EXPLAIN SELECT id, a, ROW_NUMBER() OVER () AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id, ROW_NUMBER() OVER () AS rn
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 19: SQL_BUFFER_RESULT
+--echo # + ORDER BY VEC_DISTANCE + LIMIT
+--echo # Risk: forces tmp table before result,
+--echo # may destroy vector index ordering
+--echo ########################################
+EXPLAIN SELECT SQL_BUFFER_RESULT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT SQL_BUFFER_RESULT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 20: ORDER BY VEC_DISTANCE
+--echo # with no LIMIT (should NOT use vidx)
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+
+--echo
+--echo ########################################
+--echo # Scenario 21: ORDER BY VEC_DISTANCE
+--echo # DESC (should NOT use vidx, only ASC)
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) DESC LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Scenario 22: Multiple ORDER BY columns
+--echo # (VEC_DISTANCE + another column)
+--echo # Should NOT use vidx (multi-col ORDER)
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")), id LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Scenario 23: Nested derived tables
+--echo # Verify deep nesting doesn't crash
+--echo ########################################
+EXPLAIN SELECT * FROM (
+  SELECT * FROM (
+    SELECT id, v FROM t1 WHERE a > 5
+  ) AS inner_d
+) AS outer_d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(outer_d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM (
+  SELECT * FROM (
+    SELECT id, v FROM t1 WHERE a > 5
+  ) AS inner_d
+) AS outer_d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(outer_d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 24: VIEW + ORDER BY VEC_DIST
+--echo # Views are typically merged, so vector
+--echo # index should be usable
+--echo ########################################
+CREATE VIEW v1 AS SELECT * FROM t1;
+EXPLAIN SELECT * FROM v1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM v1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+DROP VIEW v1;
+
+--echo
+--echo ########################################
+--echo # Scenario 25: VIEW with GROUP BY
+--echo # (forces materialization)
+--echo ########################################
+CREATE VIEW v2 AS SELECT a, COUNT(*) AS cnt, MIN(v) AS mv FROM t1 GROUP BY a;
+EXPLAIN SELECT * FROM v2
+ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT a, cnt FROM v2
+ORDER BY VEC_DISTANCE_EUCLIDEAN(mv, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+DROP VIEW v2;
+
+--echo
+--echo ########################################
+--echo # Scenario 26: Derived table with LIMIT
+--echo # (prevents merge, forces materialization)
+--echo ########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1 LIMIT 50) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM (SELECT * FROM t1 LIMIT 50) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 27: CTE referenced multiple
+--echo # times (forces materialization)
+--echo ########################################
+EXPLAIN WITH cte AS (SELECT * FROM t1)
+SELECT c1.id FROM cte c1 JOIN cte c2 ON c1.id = c2.id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(c1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+WITH cte AS (SELECT * FROM t1)
+SELECT c1.id FROM cte c1 JOIN cte c2 ON c1.id = c2.id
+ORDER BY VEC_DISTANCE_EUCLIDEAN(c1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 28: HAVING clause + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo ########################################
+EXPLAIN SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a HAVING cnt > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+
+--disable_result_log
+SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a HAVING cnt > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 29: ROLLUP + ORDER BY
+--echo # VEC_DISTANCE + LIMIT
+--echo ########################################
+--error 0,1235
+EXPLAIN SELECT a, COUNT(*) AS cnt FROM t1
+GROUP BY a WITH ROLLUP
+ORDER BY VEC_DISTANCE_EUCLIDEAN(MIN(v), VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 3;
+
+--echo
+--echo ########################################
+--echo # Scenario 30: LIMIT 0 edge case
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 0;
+
+SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 0;
+
+--echo
+--echo ########################################
+--echo # Scenario 31: FORCE INDEX + derived
+--echo # table (should not crash)
+--echo ########################################
+EXPLAIN SELECT * FROM (SELECT * FROM t1 FORCE INDEX(vi)) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM (SELECT * FROM t1 FORCE INDEX(vi)) AS d
+ORDER BY VEC_DISTANCE_EUCLIDEAN(d.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 32: Correlated subquery in
+--echo # WHERE + ORDER BY VEC_DISTANCE + LIMIT
+--echo ########################################
+EXPLAIN SELECT * FROM t1
+WHERE a > (SELECT AVG(t2.t1_id) FROM t2 WHERE t2.t1_id = t1.id)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1
+WHERE a > (SELECT AVG(t2.t1_id) FROM t2 WHERE t2.t1_id = t1.id)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 33: Multi-table DELETE with
+--echo # ORDER BY VEC_DISTANCE (syntax check)
+--echo ########################################
+--error 0,1064
+EXPLAIN DELETE t1 FROM t1 INNER JOIN t2 ON t1.id = t2.t1_id
+WHERE t2.status = 'inactive'
+ORDER BY VEC_DISTANCE_EUCLIDEAN(t1.v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Correctness Verification Section     #
+--echo # Compare vector index results with    #
+--echo # filesort results                     #
+--echo ########################################
+
+--echo # Get baseline ordering using filesort (no vector index)
+--echo # by using a LIMIT larger than rows/SCAN_COST threshold
+
+--echo
+--echo # Correctness test: VEC_DISTANCE values should be monotonically increasing
+--disable_result_log
+SELECT id, VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 10;
+--enable_result_log
+
+--echo
+--echo ########################################
+--echo # Scenario 34: FORCE INDEX for vector  #
+--echo # index (explicit hint to use vidx)    #
+--echo # Expect: vector index USED even when  #
+--echo # LIMIT is large / missing             #
+--echo ########################################
+--echo # 34a: FORCE INDEX(vi) + normal LIMIT
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo # 34b: FORCE INDEX(vi) + no LIMIT (should still use vidx)
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+
+--echo # 34c: FORCE INDEX(vi) + large LIMIT exceeding row count
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 99999;
+
+--echo # 34d: FORCE INDEX(vi) + WHERE filter
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (vi)
+WHERE a > 5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Scenario 35: IGNORE INDEX for vector #
+--echo # index (explicit hint to NOT use vidx)#
+--echo # Expect: vector index NOT used, uses  #
+--echo # filesort instead                     #
+--echo ########################################
+--echo # 35a: IGNORE INDEX(vi) + LIMIT (should NOT use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo # 35b: IGNORE INDEX(vi) + small LIMIT (normally would use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 1;
+
+--echo
+--echo ########################################
+--echo # Scenario 36: FORCE INDEX for non-    #
+--echo # vector index + ORDER BY VEC_DISTANCE #
+--echo # Expect: vidx NOT used (forced to use #
+--echo # a different index for ORDER BY)      #
+--echo ########################################
+EXPLAIN SELECT * FROM t1 FORCE INDEX FOR ORDER BY (idx_a)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Scenario 37: USE INDEX for vector    #
+--echo # index + ORDER BY VEC_DISTANCE        #
+--echo # Expect: vector index preferred       #
+--echo ########################################
+EXPLAIN SELECT * FROM t1 USE INDEX FOR ORDER BY (vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo # 37b: USE INDEX for ORDER BY empty (no indexes for ORDER BY)
+EXPLAIN SELECT * FROM t1 USE INDEX FOR ORDER BY ()
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo
+--echo ########################################
+--echo # Scenario 38: bare FORCE INDEX(vi)    #
+--echo # (without FOR ORDER BY qualifier)     #
+--echo # Affects JOIN + ORDER BY + GROUP BY.  #
+--echo # Expect: vector index USED for ORDER  #
+--echo ########################################
+--echo # 38a: FORCE INDEX(vi) + LIMIT
+EXPLAIN SELECT * FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--disable_result_log
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+--enable_result_log
+
+--echo # 38b: FORCE INDEX(vi) + no LIMIT (forced, should still use vidx)
+EXPLAIN SELECT * FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]"));
+
+--echo
+--echo ########################################
+--echo # Scenario 39: bare IGNORE INDEX(vi)   #
+--echo # (without FOR ORDER BY qualifier)     #
+--echo # Affects JOIN + ORDER BY + GROUP BY.  #
+--echo # Expect: vector index NOT used        #
+--echo ########################################
+--echo # 39a: IGNORE INDEX(vi) + LIMIT (should use filesort)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+
+--echo # 39b: IGNORE INDEX(vi) + small LIMIT (normally would use vidx)
+EXPLAIN SELECT * FROM t1 IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 1;
+
+--echo
+--echo ########################################
+--echo # Scenario 40: Multi-index optimizer   #
+--echo # selection per ORDER BY column        #
+--echo ########################################
+
+CREATE TABLE t_mi (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v1 VECTOR(5),
+  v2 VECTOR(5),
+  VECTOR INDEX vi1(v1),
+  VECTOR INDEX vi2(v2) DISTANCE=cosine
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i=30;
+while ($i)
+{
+  eval INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')), VEC_FROMTEXT(CONCAT('[', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ',', RAND(), ']')));
+  dec $i;
+}
+--enable_query_log
+ANALYZE TABLE t_mi;
+
+--echo # 40a. Auto-select vi1 for v1 ORDER BY
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 40b. Auto-select vi2 for v2 ORDER BY
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 40c. FORCE INDEX(vi1) for v1
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (vi1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 40d. FORCE INDEX(vi2) for v2
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (vi2)
+ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 40e. IGNORE INDEX(vi1) → v1 query uses filesort
+EXPLAIN SELECT * FROM t_mi IGNORE INDEX FOR ORDER BY (vi1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+
+--echo # 40f. Correctness: both indexes return valid results
+--disable_result_log
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 3;
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 3;
+--enable_result_log
+
+DROP TABLE t_mi;
+
+--echo
+--echo ########################################
+--echo # Cleanup                              #
+--echo ########################################
+DROP TABLE t2;
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

@@ -20,7 +20,7 @@
 
 #include <atomic>
 #include <memory>
-#include "consensus.h"
+#include "protocol.h"
 #include "paxos.pb.h"
 
 namespace alisql {
@@ -34,7 +34,7 @@ namespace alisql {
 class MemPaxosLog;
 class LearnerServer;
 
-class SingleLeader : public Consensus {
+class SingleLeader : public Protocol {
  public:
   SingleLeader(uint64_t clusterId);
 

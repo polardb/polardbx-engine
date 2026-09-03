@@ -1,0 +1,193 @@
+SET GLOBAL innodb_purge_stop_now = ON;
+#
+# PART 1: Consistent read sees old version through SPC index
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id   INT PRIMARY KEY,
+c    VARCHAR(120),
+pad  VARCHAR(60),
+KEY  idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 110), REPEAT('x', 60));
+INSERT INTO t1 VALUES (2, REPEAT('a', 110), REPEAT('y', 60));
+INSERT INTO t1 VALUES (3, REPEAT('a', 110), REPEAT('z', 60));
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+# Open a snapshot in con1 before the update
+BEGIN;
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c
+1	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+2	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+3	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# Modify records in default connection
+UPDATE t1 SET c = REPEAT('b', 110) WHERE id = 1;
+UPDATE t1 SET c = REPEAT('b', 110) WHERE id = 2;
+DELETE FROM t1 WHERE id = 3;
+INSERT INTO t1 VALUES (4, REPEAT('a', 110), REPEAT('w', 60));
+# con1 must still see old snapshot through SPC index
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c
+1	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+2	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+3	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+SELECT id, c FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+id	c
+1	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+2	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+3	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# Verify checksum consistency between SPC index and primary key
+WITH
+ck_spc AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)
+),
+ck_pk AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY)
+)
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+COMMIT;
+# After commit, con1 sees current data
+BEGIN;
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c
+1	bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+2	bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+4	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+COMMIT;
+DROP TABLE t1;
+#
+# PART 2: Multiple updates - deep version chain traversal
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+INSERT INTO t1 VALUES (4, REPEAT('a', 100));
+INSERT INTO t1 VALUES (5, REPEAT('a', 100));
+# Open snapshot at version V0
+BEGIN;
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+3
+4
+5
+# Build a deep version chain: 5 updates per row
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('d', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('e', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('f', 100)) WHERE id IN (1,2,3,4,5);
+# con1 must traverse the deep chain back to V0
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c
+1	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+2	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+3	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+4	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+5	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+WITH
+ck_spc AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)
+),
+ck_pk AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY)
+)
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+COMMIT;
+DROP TABLE t1;
+#
+# PART 3: Concurrent write and consistent read
+# con1 holds a snapshot while default updates half the rows.
+# Use a small dataset (20 rows, short values) to avoid page split.
+#
+SET GLOBAL innodb_purge_run_now = ON;
+SET GLOBAL innodb_purge_stop_now = ON;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(30),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+20
+# Open snapshot
+BEGIN;
+# Perform heavy modifications in default
+# con1 must still see snapshot count
+include/assert.inc [Snapshot count must not change during concurrent update]
+WITH
+ck_spc AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)
+),
+ck_pk AS (
+SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY)
+)
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+COMMIT;
+DROP TABLE t1;
+#
+# PART 4: Semi-consistent read through SPC index
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 2;
+UPDATE t1 SET c = REPEAT('c', 100) WHERE id = 2;
+# con2 locks id=2 with an uncommitted update
+BEGIN;
+UPDATE t1 SET c = REPEAT('z', 100) WHERE id = 2;
+# default UPDATE under READ-COMMITTED: semi-consistent read on id=2
+# sees last committed version (c='ccc'), does not match WHERE, skips id=2
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+UPDATE t1 SET c = REPEAT('y', 100) WHERE c = REPEAT('a', 100);
+ROLLBACK;
+SET SESSION transaction_isolation = 'REPEATABLE-READ';
+SELECT id, LEFT(c,3) AS c_prefix FROM t1 ORDER BY id;
+id	c_prefix
+1	yyy
+2	ccc
+3	yyy
+DROP TABLE t1;
+# Cleanup
+SET GLOBAL innodb_purge_run_now = ON;

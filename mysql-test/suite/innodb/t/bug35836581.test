@@ -1,0 +1,84 @@
+# Bug#35836581 Server crashes when adding a fulltext index
+#
+# FTS DDL inserts tuples into the auxiliary index directly through
+# Btree_load::insert(), bypassing Btree_load::build() which used to own
+# the ++m_n_recs counter. With m_n_recs stuck at zero, the release() /
+# latch() suspend-resume pair around log_free_check() was skipped on
+# resume, leaving the page without an active mtr and X-latch.
+#
+# After the fix Btree_load::insert() owns the counter, so FULLTEXT
+# bulk load keeps the release/latch state machine consistent and
+# MATCH ... AGAINST finds the pre-existing rows.
+
+--source include/have_debug.inc
+
+--echo # Test 1: FULLTEXT index creation with existing data
+CREATE TABLE t_fts1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(200),
+  body TEXT
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO t_fts1 VALUES (NULL, CONCAT('Title number ', $i, ' with words'), CONCAT('This is the body text for row number ', $i, ' containing various words for fulltext indexing purposes and token generation'));
+  inc $i;
+}
+--enable_query_log
+
+ALTER TABLE t_fts1 ADD FULLTEXT INDEX ft_body (body);
+
+SELECT COUNT(*) FROM t_fts1 WHERE MATCH(body) AGAINST ('fulltext');
+SELECT COUNT(*) FROM t_fts1 WHERE MATCH(body) AGAINST ('number');
+
+--echo # Test 2: force the release/latch cycle on every bulk insert
+CREATE TABLE t_fts2 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  word VARCHAR(10)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 300) {
+  eval INSERT INTO t_fts2 VALUES (NULL, CONCAT('w', $i));
+  inc $i;
+}
+--enable_query_log
+
+SET SESSION debug = '+d,btree_load_simulate_log_free';
+ALTER TABLE t_fts2 ADD FULLTEXT INDEX ft_word (word);
+SET SESSION debug = '-d,btree_load_simulate_log_free';
+
+SELECT COUNT(*) FROM t_fts2 WHERE MATCH(word) AGAINST ('w100');
+SELECT COUNT(*) FROM t_fts2 WHERE MATCH(word) AGAINST ('w299');
+
+--echo # Test 3: multiple text columns FULLTEXT
+CREATE TABLE t_fts3 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  col_a VARCHAR(100),
+  col_b VARCHAR(100),
+  col_c TEXT
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 150) {
+  eval INSERT INTO t_fts3 VALUES (NULL, CONCAT('alpha ', $i), CONCAT('beta ', $i), CONCAT('gamma delta epsilon ', $i));
+  inc $i;
+}
+--enable_query_log
+
+ALTER TABLE t_fts3 ADD FULLTEXT INDEX ft_multi (col_a, col_b, col_c);
+SELECT COUNT(*) FROM t_fts3 WHERE MATCH(col_a, col_b, col_c) AGAINST ('alpha');
+SELECT COUNT(*) FROM t_fts3 WHERE MATCH(col_a, col_b, col_c) AGAINST ('gamma');
+
+--echo # Test 4: empty table (no records to bulk load)
+CREATE TABLE t_fts4 (
+  id INT PRIMARY KEY,
+  content TEXT
+) ENGINE=InnoDB;
+
+ALTER TABLE t_fts4 ADD FULLTEXT INDEX ft_content (content);
+
+DROP TABLE t_fts1, t_fts2, t_fts3, t_fts4;

@@ -10,6 +10,10 @@ let $restart_file= $MYSQLTEST_VARDIR/tmp/mysqld.1.expect;
 -- enable_reconnect
 -- source include/wait_until_connected_again.inc
 
+# Reset binlog file index so the dynamic binlog.* lookup below is
+# independent of vardir history (e.g. when reusing var_agent).
+reset master;
+
 set global transaction_isolation='READ-COMMITTED';
 set session transaction_isolation='READ-COMMITTED';
 connect(con10,localhost,root,,);
@@ -72,6 +76,7 @@ set debug_sync='leader_done_after_clean_status SIGNAL go2_reset_status WAIT_FOR 
 connection default;
 --reap
 show global status like 'Group_update%';
+--sorted_result
 --replace_column 1 # 6 #
 show processlist;
 

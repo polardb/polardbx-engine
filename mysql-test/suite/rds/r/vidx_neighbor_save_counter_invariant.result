@@ -1,0 +1,18 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+== After 60 single-session INSERTs:
+save_retry_dup_key_eq_0=1
+== After 200 single-session UPDATEs:
+neighbor_save_count_total_gt_0=1
+save_retry_dup_key_eq_0=1
+DELETE FROM t1 WHERE id % 5 = 0;
+== After DELETE: save_retry_dup_key_eq_0=1
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

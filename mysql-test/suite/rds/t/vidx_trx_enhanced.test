@@ -1,0 +1,211 @@
+##########################################
+# Enhanced transaction semantics for     #
+# VECTOR INDEX with independent trx      #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/have_debug.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+
+--echo ########################################
+--echo # Setup
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  data VARCHAR(100),
+  v VECTOR(3),
+  VECTOR INDEX vidx1(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(data, v) VALUES ('seed1', VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(data, v) VALUES ('seed2', VEC_FROMTEXT('[0,1,0]'));
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo ########################################
+--echo # Scenario 1: SAVEPOINT + ROLLBACK TO SAVEPOINT
+--echo # Main table rolled back to savepoint, aux table unaffected (already committed)
+--echo ########################################
+
+SELECT COUNT(*) AS before_main FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS before_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('sp_row1', VEC_FROMTEXT('[1,1,0]'));
+
+SAVEPOINT sp1;
+INSERT INTO t1(data, v) VALUES ('sp_row2', VEC_FROMTEXT('[0,1,1]'));
+INSERT INTO t1(data, v) VALUES ('sp_row3', VEC_FROMTEXT('[1,0,1]'));
+
+SAVEPOINT sp2;
+INSERT INTO t1(data, v) VALUES ('sp_row4', VEC_FROMTEXT('[1,1,1]'));
+
+--echo # Rollback to sp2 — sp_row4 main table rolled back, but aux already committed
+ROLLBACK TO SAVEPOINT sp2;
+
+--echo # Rollback to sp1 — sp_row2, sp_row3 main table rolled back
+ROLLBACK TO SAVEPOINT sp1;
+
+--echo # Insert after rollback
+INSERT INTO t1(data, v) VALUES ('sp_after', VEC_FROMTEXT('[0,0,1]'));
+COMMIT;
+
+--echo # Main table: seed1, seed2, sp_row1, sp_after = 4 rows
+SELECT COUNT(*) AS after_main FROM t1;
+SELECT data FROM t1 ORDER BY id;
+
+--echo # Aux table: has orphan nodes from rolled-back rows (independent commit)
+SET @s = CONCAT('SELECT COUNT(*) AS after_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN still works correctly despite orphan nodes
+--sorted_result
+SELECT id, data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 2: Implicit commit in stored procedure
+--echo ########################################
+
+DELIMITER //;
+CREATE PROCEDURE sp_implicit_commit()
+BEGIN
+  INSERT INTO t1(data, v) VALUES ('sp_proc1', VEC_FROMTEXT('[2,0,0]'));
+  INSERT INTO t1(data, v) VALUES ('sp_proc2', VEC_FROMTEXT('[0,2,0]'));
+  CREATE TEMPORARY TABLE tmp_x (x INT);
+  INSERT INTO t1(data, v) VALUES ('sp_proc3', VEC_FROMTEXT('[0,0,2]'));
+  DROP TEMPORARY TABLE tmp_x;
+END //
+DELIMITER ;//
+
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('before_sp', VEC_FROMTEXT('[3,0,0]'));
+CALL sp_implicit_commit();
+# At this point, the BEGIN was implicitly committed by the DDL in SP
+# Verify all rows are committed
+SELECT COUNT(*) AS after_sp_main FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_sp_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+DROP PROCEDURE sp_implicit_commit;
+
+--echo ########################################
+--echo # Scenario 3: SET autocommit=1 INSERT
+--echo # need_independent_trx=true (non-DDL), uses independent path
+--echo ########################################
+
+SET autocommit = 1;
+SELECT COUNT(*) AS before_autocommit FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS before_ac_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+INSERT INTO t1(data, v) VALUES ('ac_row1', VEC_FROMTEXT('[4,0,0]'));
+INSERT INTO t1(data, v) VALUES ('ac_row2', VEC_FROMTEXT('[0,4,0]'));
+
+SELECT COUNT(*) AS after_autocommit FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_ac_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search works
+--sorted_result
+SELECT id, data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,0,0]')) LIMIT 2;
+
+--echo ########################################
+--echo # Scenario 4: LOCK TABLES WRITE + INSERT
+--echo # Aux table operates normally in attachable trx
+--echo ########################################
+
+LOCK TABLES t1 WRITE;
+INSERT INTO t1(data, v) VALUES ('lock_row1', VEC_FROMTEXT('[5,0,0]'));
+INSERT INTO t1(data, v) VALUES ('lock_row2', VEC_FROMTEXT('[0,5,0]'));
+UNLOCK TABLES;
+
+SELECT COUNT(*) AS after_lock FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_lock_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search after LOCK TABLES INSERT
+--sorted_result
+SELECT id, data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,0,0]')) LIMIT 2;
+
+--echo ########################################
+--echo # Scenario 5: READ ONLY transaction — SELECT with ANN
+--echo # Should not trigger independent DML path, pure read
+--echo ########################################
+
+SET TRANSACTION READ ONLY;
+BEGIN;
+SELECT COUNT(*) FROM t1;
+--sorted_result
+SELECT id, data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 3;
+COMMIT;
+
+--echo # Verify no side effects
+SELECT COUNT(*) AS after_readonly FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_ro_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Scenario 6: SET TRANSACTION READ ONLY + INSERT attempt
+--echo # Expect error, aux table unchanged
+--echo ########################################
+
+SET @s = CONCAT('SELECT COUNT(*) AS before_ro_insert_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET TRANSACTION READ ONLY;
+BEGIN;
+--error ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION
+INSERT INTO t1(data, v) VALUES ('ro_fail', VEC_FROMTEXT('[9,9,9]'));
+COMMIT;
+
+--echo # Aux table unchanged
+SET @s = CONCAT('SELECT COUNT(*) AS after_ro_insert_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Scenario 7: Multiple SAVEPOINTs with UPDATE and DELETE
+--echo ########################################
+
+DELETE FROM t1 WHERE data LIKE 'sp_%' OR data LIKE 'ac_%' OR data LIKE 'lock_%' OR data LIKE 'before_%';
+SELECT COUNT(*) AS cleaned_main FROM t1;
+
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('ms_row1', VEC_FROMTEXT('[6,0,0]'));
+SAVEPOINT sv1;
+
+UPDATE t1 SET v = VEC_FROMTEXT('[6,6,0]') WHERE data = 'ms_row1';
+SAVEPOINT sv2;
+
+DELETE FROM t1 WHERE data = 'seed1';
+SAVEPOINT sv3;
+
+INSERT INTO t1(data, v) VALUES ('ms_row2', VEC_FROMTEXT('[0,6,6]'));
+
+--echo # Rollback the DELETE and ms_row2
+ROLLBACK TO SAVEPOINT sv2;
+
+COMMIT;
+
+--echo # Main table: seed1 restored (rollback), seed2, sp_proc1-3, ms_row1(updated)
+SELECT data FROM t1 ORDER BY id;
+SELECT COUNT(*) AS final_main FROM t1;
+
+--echo # ANN still returns correct results after complex savepoint operations
+--sorted_result
+SELECT id, data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[6,6,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+--enable_warnings
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;

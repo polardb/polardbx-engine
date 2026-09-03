@@ -1,0 +1,78 @@
+#
+# Test LOB prealloc: calc_lob_prealloc_pages() over-estimates.
+#
+# Injects innodb_lob_prealloc_overestimate which adds 5 extra pages per
+# field in calc_lob_prealloc_pages().  After the LOB write succeeds,
+# the leftover pre-allocated (but unused) pages must be reclaimed by
+# Lob_alloc_eager::clear() without crashing.
+#
+# The assertion  ut_ad(expect_unused || m_unused.empty())  in clear() is
+# guarded by DBUG_EVALUATE_IF("innodb_lob_prealloc_overestimate", ...) so
+# that the debug build does not abort.
+#
+# Flow:
+# 1. INSERT large BLOB with overestimate flag -> 5 extra pages freed ->
+#    Lizard_lob_prealloc_overestimate_pages must increase.
+# 2. UPDATE to a new large BLOB with overestimate flag -> same.
+#
+
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+
+CREATE TABLE t1 (id BIGINT PRIMARY KEY, b LONGBLOB);
+
+--echo ####################################################################################
+--echo # 1. INSERT with overestimate: leftover pages are freed by clear()
+--echo ####################################################################################
+
+SET @over_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_overestimate_pages');
+
+SET DEBUG = '+d,innodb_lob_prealloc_overestimate';
+INSERT INTO t1 VALUES (1, REPEAT('x', 65536));
+SET DEBUG = '-d,innodb_lob_prealloc_overestimate';
+
+SET @over_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                   WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_overestimate_pages');
+
+# 5 extra pages were pre-allocated per field but not consumed; must be freed
+if (`SELECT CONVERT(@over_after, SIGNED) <= CONVERT(@over_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_overestimate_pages should have increased."
+  --die
+}
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 2. UPDATE with overestimate: leftover pages are freed by clear()
+--echo ####################################################################################
+
+SET @over_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_overestimate_pages');
+
+SET DEBUG = '+d,innodb_lob_prealloc_overestimate';
+UPDATE t1 SET b = REPEAT('y', 65536) WHERE id = 1;
+SET DEBUG = '-d,innodb_lob_prealloc_overestimate';
+
+SET @over_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                   WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_overestimate_pages');
+
+if (`SELECT CONVERT(@over_after, SIGNED) <= CONVERT(@over_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_overestimate_pages should have increased."
+  --die
+}
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 3. cleanup
+--echo ####################################################################################
+
+DROP TABLE t1;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

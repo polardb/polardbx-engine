@@ -138,7 +138,7 @@ struct z_first_page_t {
   z_first_page_t(buf_block_t *block, mtr_t *mtr, dict_index_t *index)
       : m_block(block), m_mtr(mtr), m_index(index) {}
 
-  buf_block_t *alloc(bool bulk);
+  buf_block_t *alloc(InsertContext *ctx);
 
   void import(trx_id_t trx_id);
 
@@ -516,8 +516,7 @@ struct z_first_page_t {
   /** Allocate a fragment of the given size.  This involves finding a
   fragment page, that has space to store len bytes of data. If necessary,
   allocate a new fragment page.
-  @param[in]    bulk            true if it is bulk operation
-                                  (OPCODE_INSERT_BULK), false otherwise.
+  @param[in]    ctx             insert context providing index/is_bulk.
   @param[in]    len             length of data to be stored in
                                   fragment page.
   @param[out]   frag_page       the fragment page with the needed
@@ -525,20 +524,20 @@ struct z_first_page_t {
   @param[out]   entry           fragment page entry representing frag_page.
   @return fragment identifier within the fragment page.
   @return FRAG_ID_NULL if fragment could not be allocated. */
-  frag_id_t alloc_fragment(bool bulk, ulint len, z_frag_page_t &frag_page,
-                           z_frag_entry_t &entry);
+  frag_id_t alloc_fragment(InsertContext *ctx, ulint len,
+                           z_frag_page_t &frag_page, z_frag_entry_t &entry);
 
   /** Allocate one index entry.  If there is no free index entry,
   allocate an index page (a page full of z_index_entry_t objects)
   and service the request.
   @return the allocated index entry. */
-  z_index_entry_t alloc_index_entry(bool bulk);
+  z_index_entry_t alloc_index_entry(InsertContext *ctx);
 
   /** Allocate one frag page entry.  If there is no free frag
   entry, allocate an frag node page (a page full of z_frag_entry_t
   objects) and service the request.
   @return the allocated frag entry. */
-  z_frag_entry_t alloc_frag_entry(bool bulk);
+  z_frag_entry_t alloc_frag_entry(InsertContext *ctx);
 
   /** Print the index entries. */
   std::ostream &print_index_entries(std::ostream &out) const;

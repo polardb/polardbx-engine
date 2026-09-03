@@ -60,18 +60,20 @@ INSERT INTO t1 (id,val) VALUES (1, "a"),  (3, "c"), (1998,"x"), (2000, "z");
 
 --connection default
   SET DEBUG_SYNC='now WAIT_FOR con4_will_wait';
+  --replace_column 7 #
   CALL show_locks();
 
 
 --connection con3
   --let i=10
-  # 16k page, each record > 200 bytes, so 80 rows should be enough
-  while($i<100){
+  # 16k page, each record == 249 bytes, so 70 rows should be enough
+  while($i<90){
     --eval INSERT INTO t1 (id,val) VALUES ($i,"x")
     --inc $i
   }
 
 --connection default
+  --replace_column 7 #
   CALL show_locks();
 
 --connection con3
@@ -82,6 +84,7 @@ INSERT INTO t1 (id,val) VALUES (1, "a"),  (3, "c"), (1998,"x"), (2000, "z");
   SELECT * FROM t1 WHERE id<=3 FOR SHARE;
 
 --connection default
+  --replace_column 7 #
   CALL show_locks();
 
 --connection con1

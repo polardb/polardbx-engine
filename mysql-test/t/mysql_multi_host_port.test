@@ -1,0 +1,45 @@
+#
+# Test the mysql client with multiple hosts and ports
+#
+
+# 1. Test if the mysql client can parse multiple hosts and ports
+#    Host can always be parsed, but port will be rejected if some 
+#    segment is not a number.
+--error 9
+--exec $MYSQL --host=127.0.0.1,127.0.0.2 --port=65555555,abc -e "select 1 as num"
+--error 1
+--exec $MYSQL --host=127.0.0.1,127.0.0.2 --port=65555555,65555557 --connect-timeout=1 -e "select 2 as num"
+
+# 2. When host and port are both specified, if the number of hosts
+#    is not equal to the number of ports, the mysql client will
+#    reject execute.
+#    However, if either host or port is specified as a single value,
+#    the mysql client will use the same value for all hosts or ports.
+--error 13
+--exec $MYSQL --host=127.0.0.1,127.0.0.2 --port=65555555,65555557,65555558 -e "select 3 as num"
+--error 13
+--exec $MYSQL --host=127.0.0.1,127.0.0.2,127.0.0.3 --port=65555555,65555557 -e "select 4 as num"
+
+--error 1
+--exec $MYSQL --host=127.0.0.1 --port=65555555,65555557 --connect-timeout=1 -e "select 5 as num"
+
+--error 1
+--exec $MYSQL --host=127.0.0.1,127.0.0.2 --port=65555555  --connect-timeout=1 -e "select 6 as num"
+
+# 3. If the address is invalid, the mysql client will try the next address until
+#    the connection is established or all addresses are tried.
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT,
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL --host=$host_list --port=$port_list  --connect-timeout=1 -e "select 7 as num"
+
+
+
+
+
+
+
+
+
+
+

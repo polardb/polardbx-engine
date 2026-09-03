@@ -1,0 +1,60 @@
+DROP TABLE IF EXISTS c1;
+CREATE TABLE c1 (
+id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+call polarx.changeset_start('C1');
+ERROR HY000: ChangeSet command error : changeset open table failed
+call polarx.changeset_start('');
+ERROR HY000: ChangeSet command error : changeset open table failed
+call polarx.changeset_start();
+ERROR HY000: ChangeSet command error : call changeset start failed, illegal table name
+call polarx.changeset_start('c1', -1);
+ERROR HY000: ChangeSet command error : call changeset start failed, illegal memory limit
+call polarx.changeset_stats();
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+call polarx.changeset_stats('');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+call polarx.changeset_stats('C1');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+call polarx.changeset_fetch('C1');
+ERROR HY000: ChangeSet command error : changeset open table failed
+call polarx.changeset_fetch('');
+ERROR HY000: ChangeSet command error : changeset open table failed
+call polarx.changeset_fetch();
+ERROR HY000: ChangeSet command error : call changeset fetch failed, illegal table name
+call polarx.changeset_times('C1');
+ERROR HY000: call changeset times failed
+call polarx.changeset_times('');
+ERROR HY000: call changeset times failed
+call polarx.changeset_times();
+ERROR HY000: ChangeSet command error : call changeset times failed, illegal table name
+call polarx.changeset_finish('C1');
+ERROR HY000: changeset not exists
+call polarx.changeset_finish('');
+ERROR HY000: changeset not exists
+call polarx.changeset_finish();
+ERROR HY000: ChangeSet command error : call changeset finish failed, illegal table name
+call polarx.changeset_finish('c1');
+ERROR HY000: changeset not exists
+call polarx.changeset_backpressure();
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal table name
+call polarx.changeset_backpressure('c1');
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal parameters
+call polarx.changeset_backpressure('c1', 1);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal parameters
+call polarx.changeset_backpressure('c1', 1, 2);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal parameters
+call polarx.changeset_backpressure('c1', -1, 2, 3);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal backpressure threshold
+call polarx.changeset_backpressure('c1', 1, -2, 3);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal bucket capacity
+call polarx.changeset_backpressure('c1', 1, 2, -3);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal bucket fill rate
+call polarx.changeset_backpressure('c1', 'ab', 2, 3);
+ERROR HY000: ChangeSet command error : call changeset backpressure failed, illegal backpressure threshold
+call polarx.changeset_backpressure('c1', 1, 2, 3);
+ERROR HY000: changeset not exists
+DROP TABLE c1;

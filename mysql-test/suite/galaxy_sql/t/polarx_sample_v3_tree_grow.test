@@ -1,0 +1,136 @@
+#
+# Coverage for BlockSampler's pessimistic node-cursor restore.
+#
+# polarx_sample_v3_tree_shrink.test covers the tree shrinking below the sampler's
+# read level. This one covers the opposite direction, which reaches a different
+# and otherwise untested branch.
+#
+# BlockSampler always reads node pointers at level 1 (BlockSampler::init hardcodes
+# m_node_pcur.init(1, index)), and it drops the index SX latch between two calls
+# to fetch_next_leaf_node(). SamplePCursorNonLeaf::restore_position() therefore
+# has to re-find its level-1 record from scratch, and btr_pcur_t::restore_position()
+# offers three ways to do it:
+#
+#   1. optimistic  -- btr_cur_optimistic_latch_leaves() re-latches the remembered
+#                     block, valid only while its modify_clock is unchanged.
+#   2. guess        -- btr_cur_guess_by_gpp_low() re-reads the remembered page_no.
+#                     It refuses any page where page_is_leaf() is false, so for a
+#                     level-1 cursor it always declines.
+#   3. pessimistic  -- open_no_init(), which searches afresh and is the only one
+#                     that honours m_read_level.
+#
+# Every existing sample test runs without concurrent DML, so the remembered page
+# is never modified, path 1 always succeeds and paths 2 and 3 never execute. This
+# test perturbs the page on purpose to force path 3.
+#
+# Growing the tree is the sharpest way to do that. When height goes from 1 to 2,
+# btr_root_raise_and_split() keeps the root page number but rewrites it at level 2
+# and moves the old contents to a fresh level-1 page. So the page the cursor
+# remembers is still resident and still an index page, yet it now sits one level
+# above what the cursor wants. Only a restore that honours m_read_level lands back
+# on level 1; anything that trusted the remembered page would hand
+# btr_node_ptr_get_child() a level-2 record and read a non-leaf page as if it held
+# user rows.
+#
+# The height check at the top of SamplePCursorNonLeaf::restore_position() does not
+# help here: it only rejects a height below the read level, and 2 is above 1.
+#
+# Expected: the statement completes and sees every row, including the rows that
+# appeared while it was parked, because the sampler restarts from the leftmost
+# level-1 record.
+#
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+--source include/count_sessions.inc
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+SET @old_stats_persistent = @@GLOBAL.innodb_stats_persistent;
+SET @old_limit_optimistic = @@GLOBAL.innodb_limit_optimistic_insert_debug;
+SET GLOBAL innodb_stats_persistent = OFF;
+
+--echo # Step 1: build a clustered index of height 1.
+
+CREATE TABLE t1 (id INT PRIMARY KEY) ENGINE = InnoDB;
+
+# Cap every page at two records so the tree changes shape after a handful of rows
+# instead of tens of thousands. suite/innodb/t/innodb_bug14676111.test drives a
+# four level tree off five rows with the same knob.
+SET GLOBAL innodb_limit_optimistic_insert_debug = 2;
+
+# Two rows fill the root, the third splits it and raises a new root, leaving the
+# tree at height 1 with the root itself at level 1.
+INSERT INTO t1 VALUES (10), (20), (30);
+
+# CLUST_INDEX_SIZE counts clustered index pages and is only refreshed by ANALYZE
+# while stats are transient. More than one page means the root is a non-leaf page,
+# i.e. height >= 1, which is what makes create_sampler() choose BlockSampler.
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--let $clust_index_size = `SELECT CLUST_INDEX_SIZE FROM information_schema.INNODB_TABLESTATS WHERE NAME = 'test/t1'`
+--let $assert_text = t1 PRIMARY must be height >= 1 before sampling
+--let $assert_cond = $clust_index_size >= 2
+--source include/assert.inc
+
+--echo # Step 2: park the sampler at the top of fetch_next_leaf_node().
+
+--connect (con_sampler, localhost, root,,)
+
+# Keeps the SQL layer from assigning a read view, so nothing here blocks the
+# concurrent inserts below.
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+
+# create_sampler() derives read_level on this connection's own statement path, so
+# the injection has to be SESSION scoped. Step 1 already guarantees height >= 1,
+# so this only documents the intent.
+SET SESSION debug = "+d,polarx_sample_force_block_mode";
+
+SET DEBUG_SYNC = "polarx_sample_before_fetch_next_leaf_node SIGNAL sampler_parked WAIT_FOR sampler_go";
+--send SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t1
+
+--connection default
+SET DEBUG_SYNC = "now WAIT_FOR sampler_parked";
+
+--echo # Step 3: raise the tree to height 2 behind the parked sampler.
+
+# Sampler::init() already ran open_at_index_left_side(), which stored the node
+# cursor on the first record of the level-1 root and committed its mtr. The
+# sampler now holds no page latch and no active mtr, so these inserts proceed
+# freely.
+#
+# With two records per page these three rows add leaves until the level-1 root
+# itself overflows and splits, which raises a new root and pushes the remembered
+# page to level 2.
+INSERT INTO t1 VALUES (40), (50), (60);
+
+--echo # Step 4: release the sampler; it must re-find level 1, not the stale page.
+
+SET DEBUG_SYNC = "now SIGNAL sampler_go";
+
+--connection con_sampler
+--reap
+
+--connection default
+--disconnect con_sampler
+
+# Confirm the tree really did grow past the read level, so a future change that
+# stops the split from happening cannot turn this test into a silent no-op.
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--let $clust_index_size = `SELECT CLUST_INDEX_SIZE FROM information_schema.INNODB_TABLESTATS WHERE NAME = 'test/t1'`
+--let $assert_text = t1 PRIMARY must have grown while the sampler was parked
+--let $assert_cond = $clust_index_size > 2
+--source include/assert.inc
+
+SET DEBUG_SYNC = "RESET";
+DROP TABLE t1;
+SET GLOBAL innodb_limit_optimistic_insert_debug = @old_limit_optimistic;
+SET GLOBAL innodb_stats_persistent = @old_stats_persistent;
+
+--source include/wait_until_count_sessions.inc

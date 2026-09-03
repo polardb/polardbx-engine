@@ -158,6 +158,41 @@ SEL_ARG *null_element = nullptr;
 }
 using namespace opt_range;
 
+bool opt_unique_key_range_shortcut = false;
+
+/*
+  Return true when a single-table UPDATE/DELETE has already chosen a full
+  unique-key equality range, so later index merge alternatives should not
+  replace it. This keeps the one-row access path stable unless the switch is
+  disabled or an explicit INDEX_MERGE hint asks otherwise.
+*/
+static bool skip_index_merge_for_uk_range(
+    THD *thd, const AccessPath *range_path, bool force_index_merge_hint) {
+  if (range_path == nullptr) {
+    // No range candidate exists to protect from later index merge choices.
+    return false;
+  }
+
+  if (!opt_unique_key_range_shortcut) {
+    // Keep the old range optimizer flow when the shortcut is disabled.
+    return false;
+  }
+
+  if (force_index_merge_hint) {
+    // Respect explicit INDEX_MERGE hints.
+    return false;
+  }
+
+  if (thd->lex->sql_command != SQLCOM_UPDATE &&
+      thd->lex->sql_command != SQLCOM_DELETE) {
+    // The shortcut is limited to single-table UPDATE/DELETE.
+    return false;
+  }
+
+  // Only full unique-key equality ranges are guaranteed to touch at most one row.
+  return unique_key_range(range_path);
+}
+
 void range_optimizer_init() {
   null_element = new SEL_ARG;
   null_element->color =
@@ -724,6 +759,11 @@ int test_quick_select(THD *thd, MEM_ROOT *return_mem_root,
       return 0;
     }
 
+    const bool force_index_merge_hint =
+        hint_table_state(thd, param.table->pos_in_table_list,
+                         INDEX_MERGE_HINT_ENUM, 0);
+    bool skip_index_merge = false;
+
     {
       /*
         Calculate cost of single index range scan and possible
@@ -739,6 +779,8 @@ int test_quick_select(THD *thd, MEM_ROOT *return_mem_root,
       if (range_path) {
         best_path = range_path;
         best_cost = best_path->cost;
+        skip_index_merge = skip_index_merge_for_uk_range(
+            thd, range_path, force_index_merge_hint);
       }
 
       /*
@@ -747,10 +789,8 @@ int test_quick_select(THD *thd, MEM_ROOT *return_mem_root,
         table deletes. Also, ROR-intersection cannot return rows in
         descending order
       */
-      if ((thd->lex->sql_command != SQLCOM_DELETE) &&
-          (index_merge_allowed ||
-           hint_table_state(thd, param.table->pos_in_table_list,
-                            INDEX_MERGE_HINT_ENUM, 0)) &&
+      if (!skip_index_merge && (thd->lex->sql_command != SQLCOM_DELETE) &&
+          (index_merge_allowed || force_index_merge_hint) &&
           interesting_order != ORDER_DESC) {
         /*
           Get best non-covering ROR-intersection plan and prepare data for
@@ -768,11 +808,9 @@ int test_quick_select(THD *thd, MEM_ROOT *return_mem_root,
     }
 
     // Here we calculate cost of union index merge
-    if (!tree->merges.is_empty()) {
+    if (!skip_index_merge && !tree->merges.is_empty()) {
       // Cannot return rows in descending order.
-      if ((index_merge_allowed ||
-           hint_table_state(thd, param.table->pos_in_table_list,
-                            INDEX_MERGE_HINT_ENUM, 0)) &&
+      if ((index_merge_allowed || force_index_merge_hint) &&
           interesting_order != ORDER_DESC && param.table->file->stats.records) {
         /* Try creating index_merge/ROR-union scan. */
         AccessPath *best_conj_path = nullptr, *new_conj_path = nullptr;
@@ -1380,6 +1418,9 @@ int index_next_different(bool is_index_scan, handler *file,
                          KEY_PART_INFO *key_part, uchar *record,
                          const uchar *group_prefix, uint group_prefix_len,
                          uint group_key_parts) {
+  // In order to find next different key value, the old end_range should be
+  // cleared.
+  file->set_end_range(nullptr, handler::RANGE_SCAN_ASC);
   if (is_index_scan) {
     int result = 0;
 
@@ -1487,7 +1528,7 @@ void print_key_value(String *out, const KEY_PART_INFO *key_part,
   }
 }
 
-static bool range_is_equality(const uchar *min_key, const uchar *max_key,
+bool range_is_equality(const uchar *min_key, const uchar *max_key,
                               unsigned store_length, bool is_nullable) {
   if (is_nullable && *min_key && *max_key) {
     // Both keys are NULL, so don't check the rest; they could be uninitialized.

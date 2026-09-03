@@ -41,11 +41,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_prototypes.h"
 #include "lob0lob.h"
 #include "mach0data.h"
+#include "page0types.h"
 #include "que0que.h"
 /*
 #include "read0read.h"
 */
 #include "rem0cmp.h"
+#include "rem0types.h"
 #include "row0ext.h"
 #include "row0mysql.h"
 #include "row0upd.h"
@@ -58,7 +60,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0mem.h"
 
 #include "lizard0data0data.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #include "lizard0row0gpp.h"
+#include "lizard0row0lotus.h"
 
 dtuple_t *row_build_index_entry_low(const dtuple_t *row, const row_ext_t *ext,
                                     const dict_index_t *index, mem_heap_t *heap,
@@ -86,7 +91,7 @@ dtuple_t *row_build_index_entry_low(const dtuple_t *row, const row_ext_t *ext,
   }
 
   if (dict_index_is_ibuf(index)) {
-    ut_ad(index->n_s_gfields == 0);
+    ut_ad(index->n_s_gfields == 0 && index->n_s_tfields == 0);
     dtuple_set_n_fields_cmp(entry, entry_len);
     /* There may only be externally stored columns
     in a clustered index B-tree of a user table. */
@@ -352,35 +357,33 @@ addition of new virtual columns.
                                 the memory needed is allocated
 @return own: row built; */
 static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
-                                      const rec_t *rec, const ulint *offsets,
+                                      creg_t reg, const Slice *slc,
                                       const dict_table_t *col_table,
                                       const dtuple_t *add_cols,
                                       const dict_add_v_col_t *add_v,
                                       const ulint *col_map, row_ext_t **ext,
                                       mem_heap_t *heap) {
-  const byte *copy;
   dtuple_t *row;
   ulint n_ext_cols;
   ulint *ext_cols = nullptr; /* remove warning */
   ulint len;
-  byte *buf;
+  boc_t boc;
   ulint j;
-  mem_heap_t *tmp_heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  DSlice_ctx dsctx;
+  const Slice *copy = nullptr;
 
   ut_ad(index != nullptr);
-  ut_ad(rec != nullptr);
+  ut_ad(reg.is_not_null());
   ut_ad(heap != nullptr);
   ut_ad(index->is_clustered());
   ut_ad(!trx_sys_mutex_own());
   ut_ad(!col_map || col_table);
 
-  if (!offsets) {
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &tmp_heap);
+  if (!slc) {
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
   } else {
-    ut_ad(rec_offs_validate(rec, index, offsets));
+    ut_ad(slc->is_positioned(reg, index));
   }
 
 #if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
@@ -391,27 +394,29 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
   the big_rec. Note that the mini-transaction can be committed multiple
   times, and the cursor restore can happen multiple times for single
   insert or update statement.  */
-  ut_a(!rec_offs_any_null_extern(index, rec, offsets) ||
-       trx_rw_is_active(row_get_rec_trx_id(rec, index, offsets), false));
+  ut_a(!rec_offs_any_null_extern(index, slc) ||
+       trx_rw_is_active(row_get_rec_trx_id(slc, index), false));
 #endif /* UNIV_DEBUG || UNIV_BLOB_LIGHT_DEBUG */
 
   if (type != ROW_COPY_POINTERS) {
     /* Take a copy of rec to heap */
-    buf = static_cast<byte *>(mem_heap_alloc(heap, rec_offs_size(offsets)));
+    boc = mem_heap_alloc_boc(heap, slc->row_size());
 
-    copy = rec_copy(buf, rec, offsets);
+    ut_ad(slc->is_positioned(reg, index));
+
+    copy = row_copy(boc, slc, &dsctx);
   } else {
-    copy = rec;
+    copy = slc;
   }
 
-  n_ext_cols = rec_offs_n_extern(index, offsets);
+  n_ext_cols = rec_offs_n_extern(index, copy->offsets());
   if (n_ext_cols) {
     ext_cols = static_cast<ulint *>(
         mem_heap_alloc(heap, n_ext_cols * sizeof *ext_cols));
   }
 
   /* Avoid a debug assertion in rec_offs_validate(). */
-  rec_offs_make_valid(copy, index, const_cast<ulint *>(offsets));
+  // const_cast<Slice *>(slc)->make_valid(copy, index);
 
   if (!col_table) {
     ut_ad(!col_map);
@@ -443,11 +448,12 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
     dict_table_copy_types(row, col_table);
   }
 
-  dtuple_set_info_bits(row, rec_get_info_bits(copy, rec_offs_comp(offsets)));
+  dtuple_set_info_bits(
+      row, rec_get_info_bits(copy->rec(), rec_offs_comp(copy->offsets())));
 
   j = 0;
 
-  for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
+  for (ulint i = 0; i < rec_offs_n_fields(copy->offsets()); i++) {
     const dict_field_t *ind_field = index->get_field(i);
 
     if (ind_field->prefix_len) {
@@ -456,7 +462,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
       a column prefix, there should also be the full
       field in the clustered index tuple. The row
       tuple comprises full fields, not prefixes. */
-      ut_ad(!rec_offs_nth_extern(index, offsets, i));
+      ut_ad(!rec_offs_nth_extern(index, copy->offsets(), i));
       continue;
     }
 
@@ -481,11 +487,11 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
 
     const byte *field;
 
-    field = rec_get_nth_field_instant(copy, offsets, i, index, &len);
+    field = const_cast<Slice *>(copy)->get_nth_field_instant(index, i, &len);
 
     dfield_set_data(dfield, field, len);
 
-    if (rec_offs_nth_extern(index, offsets, i)) {
+    if (rec_offs_nth_extern(index, copy->offsets(), i)) {
       dfield_set_ext(dfield);
 
       col = col_table->get_col(col_no);
@@ -499,7 +505,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
     }
   }
 
-  rec_offs_make_valid(rec, index, const_cast<ulint *>(offsets));
+  ut_ad(slc->is_positioned(reg, index));
 
   ut_ad(dtuple_check_typed(row));
 
@@ -520,18 +526,14 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
     *ext = nullptr;
   }
 
-  if (tmp_heap) {
-    mem_heap_free(tmp_heap);
-  }
-
   return (row);
 }
 
-dtuple_t *row_build(ulint type, const dict_index_t *index, const rec_t *rec,
-                    const ulint *offsets, const dict_table_t *col_table,
+dtuple_t *row_build(ulint type, const dict_index_t *index, creg_t reg,
+                    const Slice *slc, const dict_table_t *col_table,
                     const dtuple_t *add_cols, const ulint *col_map,
                     row_ext_t **ext, mem_heap_t *heap) {
-  return (row_build_low(type, index, rec, offsets, col_table, add_cols, nullptr,
+  return (row_build_low(type, index, reg, slc, col_table, add_cols, nullptr,
                         col_map, ext, heap));
 }
 
@@ -559,13 +561,13 @@ addition of new virtual columns.
                                 the memory needed is allocated
 @return own: row built */
 dtuple_t *row_build_w_add_vcol(ulint type, const dict_index_t *index,
-                               const rec_t *rec, const ulint *offsets,
+                               creg_t reg, const Slice *slc,
                                const dict_table_t *col_table,
                                const dtuple_t *add_cols,
                                const dict_add_v_col_t *add_v,
                                const ulint *col_map, row_ext_t **ext,
                                mem_heap_t *heap) {
-  return (row_build_low(type, index, rec, offsets, col_table, add_cols, add_v,
+  return (row_build_low(type, index, reg, slc, col_table, add_cols, add_v,
                         col_map, ext, heap));
 }
 
@@ -573,9 +575,8 @@ dtuple_t *row_build_w_add_vcol(ulint type, const dict_index_t *index,
  @return index entry built; does not set info_bits, and the data fields
  in the entry will point directly to rec */
 dtuple_t *row_rec_to_index_entry_low(
-    const rec_t *rec,          /*!< in: record in the index */
+    const Slice *slc,          /*!< in: record in the index */
     const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     mem_heap_t *heap)          /*!< in: memory heap from which
                                the memory needed is allocated */
 {
@@ -586,15 +587,15 @@ dtuple_t *row_rec_to_index_entry_low(
   ulint len;
   ulint rec_len;
 
-  ut_ad(rec != nullptr);
   ut_ad(heap != nullptr);
   ut_ad(index != nullptr);
 
   /* Because this function may be invoked by row0ddl.cc
   on a record whose header is in different format, the check
   rec_offs_validate(rec, index, offsets) must be avoided here. */
+  ut_ad(slc && slc->rec() && slc->offsets());
 
-  rec_len = rec_offs_n_fields(offsets);
+  rec_len = rec_offs_n_fields(slc->offsets());
 
   entry = dtuple_create(heap, rec_len);
 
@@ -613,11 +614,11 @@ dtuple_t *row_rec_to_index_entry_low(
   for (i = 0; i < rec_len; i++) {
     dfield = dtuple_get_nth_field(entry, i);
 
-    field = rec_get_nth_field_instant(rec, offsets, i, index, &len);
+    field = const_cast<Slice *>(slc)->get_nth_field_instant(index, i, &len);
 
     dfield_set_data(dfield, field, len);
 
-    if (rec_offs_nth_extern(index, offsets, i)) {
+    if (rec_offs_nth_extern(index, slc->offsets(), i)) {
       dfield_set_ext(dfield);
     }
   }
@@ -633,32 +634,32 @@ dtuple_t *row_rec_to_index_entry_low(
  stored (often big) fields are NOT copied to heap.
  @return own: index entry built */
 dtuple_t *row_rec_to_index_entry(
-    const rec_t *rec,          /*!< in: record in the index */
+    const Slice *slc,          /*!< in: record in the index */
     const dict_index_t *index, /*!< in: index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec) */
     mem_heap_t *heap)          /*!< in: memory heap from which
                                the memory needed is allocated */
 {
   dtuple_t *entry;
-  byte *buf;
-  const rec_t *copy_rec;
+  boc_t boc;
+  DSlice *copy_slc = nullptr;
+  DSlice_ctx dsctx;
   DBUG_TRACE;
 
-  ut_ad(rec != nullptr);
+  ut_ad(slc != nullptr);
   ut_ad(heap != nullptr);
   ut_ad(index != nullptr);
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
 
   /* Take a copy of rec to heap */
-  buf = static_cast<byte *>(mem_heap_alloc(heap, rec_offs_size(offsets)));
 
-  copy_rec = rec_copy(buf, rec, offsets);
+  boc = mem_heap_alloc_boc(heap, slc->row_size());
 
-  rec_offs_make_valid(copy_rec, index, const_cast<ulint *>(offsets));
-  entry = row_rec_to_index_entry_low(copy_rec, index, offsets, heap);
-  rec_offs_make_valid(rec, index, const_cast<ulint *>(offsets));
+  copy_slc = row_copy(boc, slc, &dsctx);
 
-  dtuple_set_info_bits(entry, rec_get_info_bits(rec, rec_offs_comp(offsets)));
+  entry = row_rec_to_index_entry_low(copy_slc, index, heap);
+
+  dtuple_set_info_bits(
+      entry, rec_get_info_bits(slc->rec(), rec_offs_comp(slc->offsets())));
 
   return entry;
 }
@@ -667,20 +668,20 @@ dtuple_t *row_rec_to_index_entry(
  search the clustered index record.
  @return own: row reference built; see the NOTE below! */
 dtuple_t *row_build_row_ref(
-    ulint type,                /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
-                               the former copies also the data fields to
-                               heap, whereas the latter only places pointers
-                               to data fields on the index page */
-    const dict_index_t *index, /*!< in: secondary index */
-    const rec_t *rec,          /*!< in: record in the index;
-                               NOTE: in the case ROW_COPY_POINTERS
-                               the data fields in the row will point
-                               directly into this record, therefore,
-                               the buffer page of this record must be
-                               at least s-latched and the latch held
-                               as long as the row reference is used! */
-    mem_heap_t *heap)          /*!< in: memory heap from which the memory
-                               needed is allocated */
+    ulint type,                   /*!< in: ROW_COPY_DATA, or ROW_COPY_POINTERS:
+                                  the former copies also the data fields to
+                                  heap, whereas the latter only places pointers
+                                  to data fields on the index page */
+    const dict_index_t *index,    /*!< in: secondary index */
+    creg_t reg, const Slice *slc, /*!< in: record in the index;
+                       NOTE: in the case ROW_COPY_POINTERS
+                       the data fields in the row will point
+                       directly into this record, therefore,
+                       the buffer page of this record must be
+                       at least s-latched and the latch held
+                       as long as the row reference is used! */
+    mem_heap_t *heap)             /*!< in: memory heap from which the memory
+                                  needed is allocated */
 {
   dict_table_t *table;
   dict_index_t *clust_index;
@@ -690,32 +691,35 @@ dtuple_t *row_build_row_ref(
   ulint len;
   ulint ref_len;
   ulint pos;
-  byte *buf;
+  boc_t boc;
   ulint clust_col_prefix_len;
   ulint i;
-  mem_heap_t *tmp_heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  DSlice_ctx dsctx;
 
   ut_ad(index != nullptr);
-  ut_ad(rec != nullptr);
+  ut_ad(reg.is_not_null());
   ut_ad(heap != nullptr);
   ut_ad(!index->is_clustered());
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &tmp_heap);
+  if (slc == nullptr) {
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
+  } else {
+    ut_ad(slc->is_positioned(reg, index));
+  }
+
   /* Secondary indexes must not contain externally stored columns. */
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(!rec_offs_any_extern(slc->offsets()));
 
   if (type == ROW_COPY_DATA) {
     /* Take a copy of rec to heap */
 
-    buf = static_cast<byte *>(mem_heap_alloc(heap, rec_offs_size(offsets)));
+    boc = mem_heap_alloc_boc(heap, slc->row_size());
 
-    rec = rec_copy(buf, rec, offsets);
-    /* Avoid a debug assertion in rec_offs_validate(). */
-    rec_offs_make_valid(rec, index, offsets);
+    ut_ad(slc->is_positioned(reg, index));
+
+    slc = row_copy(boc, slc, &dsctx);
+    reg = slc->reg();
   }
 
   table = index->table;
@@ -735,7 +739,8 @@ dtuple_t *row_build_row_ref(
 
     ut_a(pos != ULINT_UNDEFINED);
 
-    field = rec_get_nth_field(index, rec, offsets, pos, &len);
+    ut_ad(slc->is_positioned(reg, index));
+    field = const_cast<Slice *>(slc)->get_nth_field(index, pos, &len);
 
     dfield_set_data(dfield, field, len);
 
@@ -758,15 +763,13 @@ dtuple_t *row_build_row_ref(
   }
 
   ut_ad(dtuple_check_typed(ref));
-  if (tmp_heap) {
-    mem_heap_free(tmp_heap);
-  }
 
   return (ref);
 }
 
-void row_build_row_ref_in_tuple(dtuple_t *ref, const rec_t *rec,
-                                const dict_index_t *index, ulint *offsets) {
+void row_build_row_ref_in_tuple(dtuple_t *ref, creg_t reg,
+                                const dict_index_t *index, /* ulint *offsets, */
+                                Slice *slc) {
   const dict_index_t *clust_index;
   dfield_t *dfield;
   const byte *field;
@@ -775,28 +778,26 @@ void row_build_row_ref_in_tuple(dtuple_t *ref, const rec_t *rec,
   ulint pos;
   ulint clust_col_prefix_len;
   ulint i;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
 
   ut_a(ref);
   ut_a(index);
-  ut_a(rec);
+  ut_a(reg.is_not_null());
   ut_ad(!index->is_clustered());
   ut_a(index->table);
 
   clust_index = index->table->first_index();
   ut_ad(clust_index);
 
-  if (!offsets) {
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+  if (!slc) {
+    /** TODO: fix it <27-10-25, zanye.zjy> */
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
   } else {
-    ut_ad(rec_offs_validate(rec, index, offsets));
+    ut_ad(slc->is_positioned(reg, index));
   }
 
   /* Secondary indexes must not contain externally stored columns. */
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(!rec_offs_any_extern(slc->offsets()));
   ref_len = dict_index_get_n_unique(clust_index);
 
   ut_ad(ref_len == dtuple_get_n_fields(ref));
@@ -810,7 +811,7 @@ void row_build_row_ref_in_tuple(dtuple_t *ref, const rec_t *rec,
 
     ut_a(pos != ULINT_UNDEFINED);
 
-    field = rec_get_nth_field(index, rec, offsets, pos, &len);
+    field = slc->get_nth_field(index, pos, &len);
 
     dfield_set_data(dfield, field, len);
 
@@ -833,9 +834,6 @@ void row_build_row_ref_in_tuple(dtuple_t *ref, const rec_t *rec,
   }
 
   ut_ad(dtuple_check_typed(ref));
-  if (UNIV_LIKELY_NULL(heap)) {
-    mem_heap_free(heap);
-  }
 }
 
 /** Searches the clustered index record for a row, if we have the row reference.
@@ -877,35 +875,33 @@ bool row_search_on_row_ref(btr_pcur_t *pcur, /*!< out: persistent cursor, which
 /** Fetches the clustered index record for a secondary index record. The latches
  on the secondary index record are preserved.
  @return record or NULL, if no record found */
-rec_t *row_get_clust_rec(
+reg_t row_get_clust_rec(
     ulint mode,                 /*!< in: BTR_MODIFY_LEAF, ... */
-    const rec_t *rec,           /*!< in: record in a secondary index */
+    const Slice *slc,           /*!< in: record in a secondary index */
     const dict_index_t *index,  /*!< in: secondary index */
     dict_index_t **clust_index, /*!< out: clustered index */
-    const ulint *offsets,       /*!< in: rec_get_offsets(rec, index) */
     mtr_t *mtr)                 /*!< in: mtr */
 {
   mem_heap_t *heap;
   dtuple_t *ref;
   dict_table_t *table;
   btr_pcur_t pcur;
-  rec_t *clust_rec;
+  reg_t clust_reg;
 
   ut_ad(!index->is_clustered());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
 
   table = index->table;
 
   heap = mem_heap_create(256, UT_LOCATION_HERE);
 
-  ref = row_build_row_ref(ROW_COPY_POINTERS, index, rec, heap);
+  ref = row_build_row_ref(ROW_COPY_POINTERS, index, slc->reg(), slc, heap);
 
-  auto found =
-      (lizard::row_lock_optimistic_guess_clust(
-           table->first_index(), index, ref, rec, &pcur, offsets, mode, mtr) ||
-       row_search_on_row_ref(&pcur, mode, table, ref, mtr));
+  auto found = (lizard::row_lock_optimistic_guess_clust(
+                    table->first_index(), index, ref, slc, &pcur, mode, mtr) ||
+                row_search_on_row_ref(&pcur, mode, table, ref, mtr));
 
-  clust_rec = found ? pcur.get_rec() : nullptr;
+  clust_reg = found ? pcur.get_reg() : REG_NULL;
 
   mem_heap_free(heap);
 
@@ -913,7 +909,7 @@ rec_t *row_get_clust_rec(
 
   *clust_index = table->first_index();
 
-  return (clust_rec);
+  return (clust_reg);
 }
 
 /** Parse the integer data from specified field, which could be

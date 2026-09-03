@@ -1,0 +1,172 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2, t3, t_partition, t_vector;
+#
+# Scenario 3.1: CREATE TABLE with PARTITION BY HASH + VECTOR INDEX -> error expected
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1),
+VECTOR INDEX vi(v)
+) PARTITION BY HASH(c1) PARTITIONS 3;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+#
+# Scenario 3.2: CREATE TABLE with PARTITION BY RANGE + VECTOR INDEX -> error expected
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1),
+VECTOR INDEX vi(v)
+) PARTITION BY RANGE(c1) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN (200),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+#
+# Scenario 3.3: CREATE TABLE with PARTITION BY LIST + VECTOR INDEX -> error expected
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1),
+VECTOR INDEX vi(v)
+) PARTITION BY LIST(c1) (
+PARTITION p0 VALUES IN (1, 2, 3),
+PARTITION p1 VALUES IN (4, 5, 6),
+PARTITION p2 VALUES IN (7, 8, 9)
+);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+#
+# Scenario 3.4: CREATE TABLE with PARTITION BY KEY + VECTOR INDEX -> error expected
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1),
+VECTOR INDEX vi(v)
+) PARTITION BY KEY(c1) PARTITIONS 4;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+#
+# Scenario 3.5: Create table with vector index first -> ALTER TABLE ADD PARTITION -> error
+#
+CREATE TABLE t_vector (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t_vector;
+Table	Create Table
+t_vector	CREATE TABLE `t_vector` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c1` int DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Attempt to add partition to vector-indexed table
+ALTER TABLE t_vector PARTITION BY HASH(c1) PARTITIONS 2;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+ALTER TABLE t_vector PARTITION BY RANGE(c1) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TABLE t_vector;
+#
+# Scenario 3.6: Create partition table first -> ALTER TABLE ADD VECTOR INDEX -> error expected
+#
+CREATE TABLE t_partition (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+SHOW CREATE TABLE t_partition;
+Table	Create Table
+t_partition	CREATE TABLE `t_partition` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`,`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 2 */
+# Attempt to add vector index to partitioned table
+ALTER TABLE t_partition ADD VECTOR INDEX vi(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+CREATE VECTOR INDEX vi ON t_partition(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TABLE t_partition;
+#
+# Scenario 3.7: CREATE TABLE t2 LIKE t1 (t1 is partition table) -> t2 add vector index -> error
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+v VECTOR(5),
+PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+CREATE TABLE t2 LIKE t1;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`,`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 2 */
+# t2 is also partitioned (copied from t1), so adding vector index should fail
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TABLE t2;
+DROP TABLE t1;
+#
+# Additional test: Verify partition table without vector type column
+#
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT,
+c1 INT,
+data VARCHAR(100),
+PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`,`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 2 */
+# Adding a vector column is allowed
+ALTER TABLE t3 ADD COLUMN v VECTOR(5);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c1` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`,`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+/*!50100 PARTITION BY HASH (`c1`)
+PARTITIONS 2 */
+# But adding vector index on partitioned table should still fail
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TABLE t3;
+# Cleanup
+SET GLOBAL vidx_disabled = ON;

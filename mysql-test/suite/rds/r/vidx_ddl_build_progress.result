@@ -1,0 +1,91 @@
+CREATE DATABASE vidx_ddl_build_progress;
+USE vidx_ddl_build_progress;
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+UPDATE performance_schema.setup_instruments SET ENABLED='YES', TIMED='YES'
+  WHERE NAME='stage/sql/vector index build';
+UPDATE performance_schema.setup_consumers SET ENABLED='YES'
+  WHERE NAME IN ('events_stages_current','events_stages_history_long');
+
+############################################
+# Phase 1: direct path, one slot          #
+############################################
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+completed	estimated
+100	100
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[42,43,44,45,46]')) LIMIT 1;
+id
+42
+DROP TABLE t1;
+
+############################################
+# Phase 2: slot multiplier (two indexes)  #
+############################################
+CREATE TABLE t2 (
+id INT NOT NULL PRIMARY KEY,
+a VECTOR(5),
+b VECTOR(5)
+) ENGINE = InnoDB;
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+ALTER TABLE t2 ADD VECTOR INDEX via(a), ADD VECTOR INDEX vib(b);
+completed	estimated
+100	100
+SELECT id FROM t2 FORCE INDEX(via) ORDER BY VEC_DISTANCE(a, VEC_FROMTEXT('[25,26,27,28,29]')) LIMIT 1;
+id
+25
+SELECT id FROM t2 FORCE INDEX(vib) ORDER BY VEC_DISTANCE(b, VEC_FROMTEXT('[32,25,25,25,25]')) LIMIT 1;
+id
+25
+DROP TABLE t2;
+
+############################################
+# Phase 3: memory-budget windowed build  #
+############################################
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+CREATE TABLE t3 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(1024)
+) ENGINE = InnoDB;
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 1000;
+INSERT INTO t3(id, v)
+WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n < 600)
+SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',7', 1023), ']')) FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+Warnings:
+Warning	7599	Vector index build reached the soft graph-window threshold (vidx_hnsw_cache_size); continuing in bounded windows with on-demand node reloads. In-flight work may temporarily exceed the threshold
+windowed_completed
+600
+SELECT id FROM t3 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', 300, REPEAT(',7', 1023), ']'))) LIMIT 1;
+id
+300
+SET GLOBAL show_vidx_hlindex_tables = ON;
+VERDICT 3 live==600 across windows: PASS
+SET GLOBAL show_vidx_hlindex_tables = default;
+DROP TABLE t3;
+
+############################################
+# Phase 4: NULL rows still complete work  #
+############################################
+CREATE TABLE t4 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t4 VALUES (1, NULL), (2, NULL), (3, NULL);
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+ALTER TABLE t4 ADD VECTOR INDEX vi(v);
+completed	estimated
+3	3
+DROP TABLE t4;
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_build_progress;

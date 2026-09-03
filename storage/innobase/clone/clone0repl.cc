@@ -32,7 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0api.h"
 #include "clone0clone.h"
 #include "lizard0gcs.h"
-#include "sql/consensus/consensus_recovery.h"
+#include "sql/komodo0xlog0recovery.h"
 #include "sql/field.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_gtid_persist.h"
@@ -633,6 +633,12 @@ void Clone_persist_gtid::periodic_write() {
     os_event_reset(m_event);
     /* Write accumulated GTIDs to disk table */
     flush_gtids(thd);
+    /* Memory is allocated from thd->memroot to store the information about the
+    table being locked for flushing gtids. In this case, being a background
+    thread which is flushing the gtids every 100 millisecond, we should release
+    the memory after every cycle of flushing gtids to avoid memory growth in
+    Clone_persist_gtid thread .*/
+    thd->mem_root->ClearForReuse();
   }
 
   /* For slow shutdown, consume remaining GTIDs so that undo can be purged. */

@@ -1,0 +1,131 @@
+# ================================================================
+# Test: AS OF cross-DDL -- logical/physical remap current behavior
+#
+# Purpose:
+#   Verify the current behavior after DDLs that make current logical names
+#   or owners point at existing physical objects. The engine follows the
+#   current mapping, not the logical/name mapping at the AS OF timestamp.
+#
+# This is intentionally a behavior-capture case. If the product
+# decision changes to fail closed across these remap boundaries, this result
+# should be updated to expect ER_AS_OF_TABLE_DEF_CHANGED for the affected
+# paths.
+# ================================================================
+
+--echo # Verify current AS OF behavior after EXCHANGE PARTITION.
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+--disable_warnings
+DROP TABLE IF EXISTS pt_exchange_asof;
+DROP TABLE IF EXISTS st_exchange_asof;
+--enable_warnings
+
+CREATE TABLE pt_exchange_asof (
+  id INT,
+  name VARCHAR(64),
+  PRIMARY KEY(id),
+  INDEX idx_name(name)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+  PARTITION p0 VALUES LESS THAN (10),
+  PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+
+CREATE TABLE st_exchange_asof (
+  id INT,
+  name VARCHAR(64),
+  PRIMARY KEY(id),
+  INDEX idx_name(name)
+) ENGINE=InnoDB;
+
+INSERT INTO pt_exchange_asof VALUES (1, "pt_old"), (11, "pt_p1");
+INSERT INTO st_exchange_asof VALUES (2, "st_old");
+
+--echo # State before EXCHANGE.
+SELECT id, name FROM pt_exchange_asof ORDER BY id;
+SELECT id, name FROM st_exchange_asof ORDER BY id;
+
+sleep 3;
+SET @ts_before_exchange = NOW(6);
+sleep 3;
+
+ALTER TABLE pt_exchange_asof EXCHANGE PARTITION p0 WITH TABLE st_exchange_asof
+WITHOUT VALIDATION;
+
+--echo # Current state after EXCHANGE.
+SELECT id, name FROM pt_exchange_asof ORDER BY id;
+SELECT id, name FROM st_exchange_asof ORDER BY id;
+
+--echo # AS OF before EXCHANGE through PRIMARY follows current physical mapping.
+SELECT id, name FROM pt_exchange_asof AS OF TIMESTAMP @ts_before_exchange
+FORCE INDEX(PRIMARY) ORDER BY id;
+SELECT id, name FROM st_exchange_asof AS OF TIMESTAMP @ts_before_exchange
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # AS OF before EXCHANGE through secondary index follows the same mapping.
+SELECT id, name FROM pt_exchange_asof AS OF TIMESTAMP @ts_before_exchange
+FORCE INDEX(idx_name) WHERE name IN ("pt_old", "st_old", "pt_p1") ORDER BY id;
+SELECT id, name FROM st_exchange_asof AS OF TIMESTAMP @ts_before_exchange
+FORCE INDEX(idx_name) WHERE name IN ("pt_old", "st_old") ORDER BY id;
+
+DROP TABLE pt_exchange_asof;
+DROP TABLE st_exchange_asof;
+
+--echo # Verify current AS OF behavior after atomic RENAME TABLE name swap.
+--disable_warnings
+DROP TABLE IF EXISTS rn_a_asof;
+DROP TABLE IF EXISTS rn_b_asof;
+DROP TABLE IF EXISTS rn_tmp_asof;
+--enable_warnings
+
+CREATE TABLE rn_a_asof (
+  id INT,
+  name VARCHAR(64),
+  PRIMARY KEY(id),
+  INDEX idx_name(name)
+) ENGINE=InnoDB;
+
+CREATE TABLE rn_b_asof (
+  id INT,
+  name VARCHAR(64),
+  PRIMARY KEY(id),
+  INDEX idx_name(name)
+) ENGINE=InnoDB;
+
+INSERT INTO rn_a_asof VALUES (1, "rn_a_old");
+INSERT INTO rn_b_asof VALUES (2, "rn_b_old");
+
+--echo # State before RENAME TABLE name swap.
+SELECT id, name FROM rn_a_asof ORDER BY id;
+SELECT id, name FROM rn_b_asof ORDER BY id;
+
+sleep 3;
+SET @ts_before_rename_swap = NOW(6);
+sleep 3;
+
+RENAME TABLE rn_a_asof TO rn_tmp_asof,
+             rn_b_asof TO rn_a_asof,
+             rn_tmp_asof TO rn_b_asof;
+
+--echo # Current state after RENAME TABLE name swap.
+SELECT id, name FROM rn_a_asof ORDER BY id;
+SELECT id, name FROM rn_b_asof ORDER BY id;
+
+--echo # AS OF before RENAME resolves current names, so it follows swapped objects.
+SELECT id, name FROM rn_a_asof AS OF TIMESTAMP @ts_before_rename_swap
+FORCE INDEX(PRIMARY) ORDER BY id;
+SELECT id, name FROM rn_b_asof AS OF TIMESTAMP @ts_before_rename_swap
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # Secondary index path follows the same current-name mapping.
+SELECT id, name FROM rn_a_asof AS OF TIMESTAMP @ts_before_rename_swap
+FORCE INDEX(idx_name) WHERE name IN ("rn_a_old", "rn_b_old") ORDER BY id;
+SELECT id, name FROM rn_b_asof AS OF TIMESTAMP @ts_before_rename_swap
+FORCE INDEX(idx_name) WHERE name IN ("rn_a_old", "rn_b_old") ORDER BY id;
+
+DROP TABLE rn_a_asof;
+DROP TABLE rn_b_asof;
+
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

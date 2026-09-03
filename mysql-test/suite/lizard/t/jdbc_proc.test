@@ -1,3 +1,31 @@
+--connect(con1,localhost,root)
+--connection con1
+
+--replace_column 1 #
 call dbms_conn.show_connection();
 call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8');
+
+--replace_column 1 #
+call dbms_conn.show_connection();
+
+
+--connect(con2,localhost,root)
+--connection con2
+
+--replace_column 1 #
+call dbms_conn.show_connection();
+call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=1111');
+--replace_column 1 #
+call dbms_conn.show_connection();
+
+
+--connect(con3,localhost,root)
+--connection con3
+
+--replace_column 1 #
+call dbms_conn.show_connection();
+
+call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=222');
+
+--replace_column 1 #
 call dbms_conn.show_connection();

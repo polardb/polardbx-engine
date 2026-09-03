@@ -1,0 +1,37 @@
+# Too long table alias name
+create database long_alias_db;
+create table long_alias_db.t(c1 int auto_increment primary key, c2 blob);
+insert into long_alias_db.t (c1, c2) values(1, repeat('#', 10));
+insert into long_alias_db.t (c2) values(repeat('#', 10000));
+insert into long_alias_db.t (c2) values(repeat('#', 10000));
+explain select c1+c1 from (
+(select c1 from long_alias_db.t order by c1 asc limit 1)
+union all 
+(select c1 from long_alias_db.t order by c1 desc limit 1 )
+)  as `(012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901)` ;
+ERROR 42000: Identifier name '(012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678' is too long
+select c1+c1 from (
+(select c1 from long_alias_db.t order by c1 asc limit 1)
+union all 
+(select c1 from long_alias_db.t order by c1 desc limit 1 )
+)  as `(012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901)` ;
+c1+c1
+2
+6
+show warnings;
+Level	Code	Message
+explain select c1+c1 from (
+(select c1 from long_alias_db.t order by c1 asc limit 1)
+union all 
+(select c1 from long_alias_db.t order by c1 desc limit 1 )
+)  as `(123)` ;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	2	100.00	NULL
+2	DERIVED	t	NULL	index	NULL	PRIMARY	4	NULL	1	100.00	Using index
+3	UNION	t	NULL	index	NULL	PRIMARY	4	NULL	1	100.00	Backward index scan; Using index
+Warnings:
+Note	1003	/* select#1 */ select (`(123)`.`c1` + `(123)`.`c1`) AS `c1+c1` from ((/* select#2 */ select `long_alias_db`.`t`.`c1` AS `c1` from `long_alias_db`.`t` order by `long_alias_db`.`t`.`c1` limit 1) union all (/* select#3 */ select `long_alias_db`.`t`.`c1` AS `c1` from `long_alias_db`.`t` order by `long_alias_db`.`t`.`c1` desc limit 1)) `(123)`
+show warnings;
+Level	Code	Message
+Note	1003	/* select#1 */ select (`(123)`.`c1` + `(123)`.`c1`) AS `c1+c1` from ((/* select#2 */ select `long_alias_db`.`t`.`c1` AS `c1` from `long_alias_db`.`t` order by `long_alias_db`.`t`.`c1` limit 1) union all (/* select#3 */ select `long_alias_db`.`t`.`c1` AS `c1` from `long_alias_db`.`t` order by `long_alias_db`.`t`.`c1` desc limit 1)) `(123)`
+drop database long_alias_db;

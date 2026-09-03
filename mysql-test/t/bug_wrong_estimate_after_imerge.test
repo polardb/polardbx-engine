@@ -1,0 +1,34 @@
+CREATE TABLE `t1` (
+  `a` INT DEFAULT NULL,
+  `b` INT DEFAULT NULL,
+  `c` INT DEFAULT NULL,
+  KEY `idx_ab` (`a`, `b`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB;
+
+DELIMITER //;
+
+DROP PROCEDURE IF EXISTS load_data_t1;
+
+CREATE PROCEDURE load_data_t1()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+
+    WHILE i <= 100 DO
+        INSERT INTO t1 (a, b, c) VALUES (1, i, i);
+        SET i = i + 1;
+    END WHILE;
+
+    COMMIT;
+END//
+
+DELIMITER ;//
+
+CALL load_data_t1();
+
+ANALYZE TABLE t1;
+
+EXPLAIN select * from t1 where ((a = 1 and b = 100) or c = 100) and a = 1;
+
+DROP TABLE t1;
+DROP PROCEDURE load_data_t1;

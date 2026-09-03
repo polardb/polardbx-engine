@@ -25,6 +25,8 @@
 #include "sql/rpl_record.h"  // Bit_reader
 #include "sql/sql_class.h"   // THD
 
+bool opt_polarx_binlog_bitmap_mode = true;
+
 cs::util::ReplicatedColumnsView::ReplicatedColumnsView(THD const *thd)
     : cs::util::ReplicatedColumnsView{nullptr, thd} {}
 
@@ -40,6 +42,23 @@ cs::util::ReplicatedColumnsView::ReplicatedColumnsView(TABLE const *target,
   this->set_thd(thd)       //
       .set_filter(filter)  //
       .set_table(target);
+}
+
+cs::util::ReplicatedColumnsView::ReplicatedColumnsView(
+    TABLE const *target, cs::util::ColumnFilterFactory::ColumnFilterType filter_typ,
+    THD const *thd)
+    : Table_columns_view{} {
+  filter_fn_type filter{nullptr};
+
+  filter = [this](TABLE const *table, size_t column_index) -> bool {
+    return this->execute_filtering(table, column_index);
+  };
+
+  this->set_thd(thd)       //
+      .set_filter(filter);
+
+  this->add_filter(filter_typ);
+  this->set_table(target);
 }
 
 cs::util::ReplicatedColumnsView &cs::util::ReplicatedColumnsView::set_thd(

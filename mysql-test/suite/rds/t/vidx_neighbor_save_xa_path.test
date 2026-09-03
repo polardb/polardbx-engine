@@ -1,0 +1,106 @@
+--source include/have_debug.inc
+
+# save_neighbors_only regression: XA two-phase + one-phase + rollback DML on vector
+# index, exercising the attachable-trx flush and confirming save_neighbors_only path
+# counters advance with no regressions.
+#           Vidx_save_retry_dup_key delta = 0, no XA-side data corruption.
+# Related: save_neighbors_only commit dd578613c1c.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 30)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+
+--echo # XA 2PC: INSERT + UPDATE inside one XA, prepare + commit.
+XA START 'neighbor_save_xa_1';
+INSERT INTO t1(id, v) VALUES (101, VEC_FROMTEXT("[101,101,101,101,101,101,101,101]"));
+INSERT INTO t1(id, v) VALUES (102, VEC_FROMTEXT("[102,102,102,102,102,102,102,102]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[71,71,71,71,71,71,71,71]") WHERE id = 7;
+UPDATE t1 SET v = VEC_FROMTEXT("[91,91,91,91,91,91,91,91]") WHERE id = 9;
+XA END 'neighbor_save_xa_1';
+XA PREPARE 'neighbor_save_xa_1';
+XA COMMIT 'neighbor_save_xa_1';
+
+--echo # XA 1PC: INSERT + UPDATE one-phase commit.
+XA START 'neighbor_save_xa_2';
+INSERT INTO t1(id, v) VALUES (103, VEC_FROMTEXT("[103,103,103,103,103,103,103,103]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[12,12,12,12,12,12,12,12]") WHERE id = 1;
+XA END 'neighbor_save_xa_2';
+XA COMMIT 'neighbor_save_xa_2' ONE PHASE;
+
+--echo # XA prepare + rollback (aux must stay consistent).
+XA START 'neighbor_save_xa_3';
+INSERT INTO t1(id, v) VALUES (104, VEC_FROMTEXT("[104,104,104,104,104,104,104,104]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[15,15,15,15,15,15,15,15]") WHERE id = 5;
+XA END 'neighbor_save_xa_3';
+XA PREPARE 'neighbor_save_xa_3';
+XA ROLLBACK 'neighbor_save_xa_3';
+
+--echo # Drive a second wave of XA UPDATEs to keep save_neighbors_only firing.
+--disable_query_log
+let $k = 0;
+while ($k < 20)
+{
+  let $tag = `SELECT CONCAT('neighbor_save_xa_burst_', $k)`;
+  eval XA START '$tag';
+  eval UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, ",", ($k+50)%200, "]")) WHERE id = ($k % 30) + 1;
+  eval XA END '$tag';
+  eval XA PREPARE '$tag';
+  eval XA COMMIT '$tag';
+  inc $k;
+}
+--enable_query_log
+
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_err   = `SELECT $a_err - $b_err`;
+
+let $ok_nbr = `SELECT $d_nbr > 0`;
+let $ok_dup = `SELECT $d_dup = 0`;
+let $ok_err = `SELECT $d_err = 0`;
+--echo == save_neighbors_only XA-path deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+--echo indep_dml_commit_error_eq_0=$ok_err
+
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 on XA path
+}
+if (`SELECT $d_err != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_indep_dml_commit_error must stay 0 on XA path
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+# Final state — xa_3 must be rolled back.
+let $has_104 = `SELECT COUNT(*) FROM t1 WHERE id = 104`;
+--echo xa_rollback_id104_remaining=$has_104
+if ($has_104 != 0) {
+  --die XA ROLLBACK did not undo the INSERT (id=104 must be gone)
+}
+
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

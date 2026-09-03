@@ -12,7 +12,13 @@ INSERT INTO t1 VALUES(5, repeat('.',12));
 COMMIT WORK;
 
 --echo # Wait for purge to complete
---source include/wait_innodb_all_purged.inc
+
+# Waiting for purge done may lead to batch dblwr, which will cause BP to asynchronously flush dirty pages into batch double write. 
+# The double write page corresponding to test/t1 might be overwritten. 
+# Therefore, we no longer wait here, but rely on the single page double write flush in flush table for export to ensure that the 
+# root page of test/t1 still exists in the dblwr file after restart.
+# --source include/wait_innodb_all_purged.inc
+
 
 --echo # Ensure that dirty pages of table t1 is flushed.
 FLUSH TABLES t1 FOR EXPORT;

@@ -1,0 +1,91 @@
+#
+# Test LOB prealloc: fill() fails mid-way due to out-of-file-space.
+#
+# Uses innodb_alloc_lob_page_failed (fires inside fill_one()) so
+# fill() returns DB_OUT_OF_FILE_SPACE on the very first page.
+# active_lob_page_allocator() returns nullptr; the DML fails with
+# ER_RECORD_FILE_FULL and is rolled back.
+#
+# Flow:
+# 1. INSERT large BLOB with debug flag active -> ER_RECORD_FILE_FULL.
+#    Verify Lizard_lob_prealloc_fail_no_space increases and table is empty.
+# 2. INSERT a good row (no debug), then UPDATE to large BLOB with debug
+#    flag active -> ER_RECORD_FILE_FULL.
+#    Verify fail_no_space increases and the row is unchanged.
+#
+
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+--disable_query_log
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* The table .* is full");
+--enable_query_log
+
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+
+CREATE TABLE t1 (id BIGINT PRIMARY KEY, b LONGBLOB);
+
+--echo ####################################################################################
+--echo # 1. INSERT fails when Lob_alloc_eager::fill() hits out-of-space
+--echo ####################################################################################
+
+SET @fail_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+
+SET DEBUG = '+d,innodb_alloc_lob_page_failed';
+--error ER_RECORD_FILE_FULL
+INSERT INTO t1 VALUES (1, REPEAT('x', 65536));
+SET DEBUG = '-d,innodb_alloc_lob_page_failed';
+
+SET @fail_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                   WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+
+if (`SELECT CONVERT(@fail_after, SIGNED) <= CONVERT(@fail_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_fail_no_space should have increased."
+  --die
+}
+
+# INSERT rolled back, table must be empty
+--let $assert_text = table is empty after failed INSERT
+--let $assert_cond = [SELECT COUNT(*) AS cnt FROM t1, cnt, 1] = 0
+--source include/assert.inc
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 2. UPDATE fails when Lob_alloc_eager::fill() hits out-of-space
+--echo ####################################################################################
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+
+SET @fail_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+
+SET DEBUG = '+d,innodb_alloc_lob_page_failed';
+--error ER_RECORD_FILE_FULL
+UPDATE t1 SET b = REPEAT('y', 65536) WHERE id = 1;
+SET DEBUG = '-d,innodb_alloc_lob_page_failed';
+
+SET @fail_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                   WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_fail_no_space');
+
+if (`SELECT CONVERT(@fail_after, SIGNED) <= CONVERT(@fail_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_fail_no_space should have increased."
+  --die
+}
+
+# UPDATE rolled back, row must be unchanged (100-byte payload)
+SELECT LENGTH(b) AS len_b FROM t1 WHERE id = 1;
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 3. cleanup
+--echo ####################################################################################
+
+DROP TABLE t1;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

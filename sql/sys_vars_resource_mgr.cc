@@ -69,7 +69,7 @@ bool Session_sysvar_resource_manager::init(char **var) {
   Failure - true
 */
 
-bool Session_sysvar_resource_manager::update(char **var, char *val,
+bool Session_sysvar_resource_manager::update(char **var, const char *val,
                                              size_t val_len) {
   char *ptr = nullptr;
 

@@ -26,8 +26,9 @@
 */
 
 #include <assert.h>
+#include <utility>
 #include "my_base.h"  // ha_rows
-
+#include "sql/komodo0handler0types.h"
 /**
   This class represents a buffer that can be used for multi-row reads. It is
   allocated by the executor and given to the storage engine through the
@@ -46,11 +47,15 @@
 class Record_buffer {
   /// The maximum number of records that can be stored in the buffer.
   ha_rows m_max_records;
+  /// The number of bytes available for each record data.
+  size_t m_data_size;
+  /// The number of bytes available for each record extra.
+  size_t m_extra_size;
   /// The number of bytes available for each record.
   size_t m_record_size;
   /// The number of records currently stored in the buffer.
   ha_rows m_count = 0;
-  /// The @c uchar buffer that holds the records.
+  /// The @c uchar buffer that holds the records datas and extras.
   uchar *m_buffer;
   /// Tells if end-of-range was found while filling the buffer.
   bool m_out_of_range = false;
@@ -60,26 +65,20 @@ class Record_buffer {
     Create a new record buffer with the specified size.
 
     @param records      the number of records that can be stored in the buffer
-    @param record_size  the size of each record
+    @param data_size    the size of each record data
+    @param extra_size   the size of each record extra
     @param buffer       the @c uchar buffer that will hold the records (its
                         size should be at least
-                        `Record_buffer::buffer_size(records, record_size)`)
+                        `records * (data_size + extra_size)`)
+    @param gpp_buffer   the @c uint32_t buffer that will hold the GPP_NOs
   */
-  Record_buffer(ha_rows records, size_t record_size, uchar *buffer)
-      : m_max_records(records), m_record_size(record_size), m_buffer(buffer) {}
-
-  /**
-    This function calculates how big the @c uchar buffer provided to
-    Record_buffer's constructor must be, given a number of records and
-    the record size.
-
-    @param records      the maximum number of records in the buffer
-    @param record_size  the size of each record
-    @return the total number of bytes needed for all the records
-  */
-  static constexpr size_t buffer_size(ha_rows records, size_t record_size) {
-    return static_cast<size_t>(records * record_size);
-  }
+  Record_buffer(ha_rows records, size_t data_size, size_t extra_size,
+                uchar *buffer)
+      : m_max_records(records),
+        m_data_size(data_size),
+        m_extra_size(extra_size),
+        m_record_size(data_size + extra_size),
+        m_buffer(buffer) {}
 
   /**
     Get the number of records that can be stored in the buffer.
@@ -88,10 +87,16 @@ class Record_buffer {
   ha_rows max_records() const { return m_max_records; }
 
   /**
-    Get the amount of space allocated for each record in the buffer.
-    @return the record size
+    Get the amount of space allocated for each record data in the buffer.
+    @return the record data size
   */
-  size_t record_size() const { return m_record_size; }
+  size_t data_size() const { return m_data_size; }
+
+  /**
+    Get the amount of space allocated for each record extra in the buffer.
+    @return the record extra size
+  */
+  size_t extra_size() const { return m_extra_size; }
 
   /**
     Get the number of records currently stored in the buffer.

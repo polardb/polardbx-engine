@@ -1,0 +1,253 @@
+####################################################
+# XA + VECTOR INDEX                                #
+# slave applier with xa_detach_on_prepare = OFF    #
+#                                                  #
+# Regression test for the case-4 path missing in   #
+# MHNSW_hton::set_prepared_in_tc:                  #
+#                                                  #
+#   When the applier replays XA PREPARE under      #
+#   xa_detach_on_prepare = OFF,                    #
+#   Sql_cmd_xa_prepare::execute() invokes          #
+#   applier_reset_xa_trans() (sql/xa.cc:576)       #
+#   right after process_xa_prepare().  That        #
+#   helper:                                        #
+#     - resets every SESSION ha_info,              #
+#     - clears m_ha_list[SESSION],                 #
+#     - calls trn_ctx->cleanup() which             #
+#       ClearForReuse()s the transaction memroot,  #
+#   but it does NOT call our commit/rollback hook  #
+#   and does NOT clear ha_data[hnsw_hton.slot].    #
+#                                                  #
+#   Before the fix this left a dangling MHNSW_Trx  #
+#   pointer in thd->ha_data; the next DML on the   #
+#   same worker placement-new'd a fresh trx at the #
+#   same address (block start of the just-reset    #
+#   memroot) and set trx->next = self, tripping    #
+#   assert(trx->next != trx).                      #
+#                                                  #
+#   The fix routes the OFF + applier branch        #
+#   (thd->is_engine_ha_data_detached() == true)    #
+#   into do_commit() inside set_prepared_in_tc,    #
+#   so the trx list is reaped before the memroot   #
+#   gets reset.                                    #
+####################################################
+
+# TEST: vidx_xa_applier_off
+#
+# Requires:
+#   vidx_xa_applier_off-slave.opt
+#       --slave_parallel_workers=0
+#       --vidx_disabled=OFF
+#       --xa_detach_on_prepare=OFF
+#       --transaction_isolation=READ-COMMITTED
+#   vidx_xa_applier_off-master.opt
+#       --vidx_disabled=OFF
+#       --xa_detach_on_prepare=OFF
+#       --transaction_isolation=READ-COMMITTED
+#
+# Covers:
+#   - XA PREPARE replayed by applier (case 4) followed by:
+#       (a) plain INSERT / UPDATE / DELETE
+#       (b) another XA PREPARE on a different XID
+#       (c) XA COMMIT 'xid'
+#       (d) XA ROLLBACK 'xid'
+#   - Repeated cycles to exercise the placement-new address reuse
+#     that triggered the original self-loop assert
+#   - Master ↔ slave row-count parity afterwards
+
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/master-slave.inc
+
+# ---- verify slave is single-threaded so the worker thread that
+#      replays XA PREPARE is the same one that replays the
+#      following row event ----
+--source include/rpl_connection_slave.inc
+--let $workers = `SELECT @@global.slave_parallel_workers`
+--let $assert_text = slave_parallel_workers must be 0
+--let $assert_cond = $workers = 0
+--source include/assert.inc
+
+--let $detach = `SELECT @@global.xa_detach_on_prepare`
+--let $assert_text = xa_detach_on_prepare must be OFF
+--let $assert_cond = "$detach" = "0"
+--source include/assert.inc
+
+--disable_warnings
+
+--echo
+--echo ##############################################
+--echo # 1. Setup: create table + seed data        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+
+--source include/rpl_sync.inc
+
+--echo
+--echo ##############################################
+--echo # 2. XA PREPARE then plain DML on master    #
+--echo #    On the slave the worker first replays  #
+--echo #    XA PREPARE (driving applier_reset_xa_  #
+--echo #    trans), then replays a plain UPDATE.   #
+--echo #    Pre-fix this would self-loop and abort.#
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_off_1';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[1,1,99]") WHERE a = 1;
+XA END 'xa_off_1';
+XA PREPARE 'xa_off_1';
+XA COMMIT 'xa_off_1';
+
+# The plain DML below is the trigger: it lands on the same slave
+# worker right after the XA PREPARE that ran applier_reset_xa_trans.
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT("[20,20,20]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[2,2,98]") WHERE a = 2;
+
+--source include/rpl_sync.inc
+
+--echo # master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS rows_master FROM t1;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 2, 10, 20) ORDER BY a;
+
+--echo # slave (must NOT have crashed)
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS rows_slave FROM t1;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 2, 10, 20) ORDER BY a;
+
+--echo
+--echo ##############################################
+--echo # 3. Back-to-back XA PREPAREs (case 4 twice)#
+--echo #    The second XA PREPARE replays after    #
+--echo #    the first applier_reset_xa_trans       #
+--echo #    already cleaned up the memroot — make  #
+--echo #    sure the freshly-allocated MHNSW_Trx   #
+--echo #    is not poisoned by a stale ha_data.    #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_off_2a';
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT("[30,30,30]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[3,3,97]") WHERE a = 3;
+XA END 'xa_off_2a';
+XA PREPARE 'xa_off_2a';
+XA COMMIT 'xa_off_2a';
+
+XA START 'xa_off_2b';
+INSERT INTO t1(a, v) VALUES (31, VEC_FROMTEXT("[31,31,31]"));
+DELETE FROM t1 WHERE a = 10;
+XA END 'xa_off_2b';
+XA PREPARE 'xa_off_2b';
+XA COMMIT 'xa_off_2b';
+
+INSERT INTO t1(a, v) VALUES (40, VEC_FROMTEXT("[40,40,40]"));
+
+--source include/rpl_sync.inc
+
+--echo # master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS rows_master FROM t1;
+
+--echo # slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS rows_slave FROM t1;
+
+--echo
+--echo ##############################################
+--echo # 4. XA PREPARE then XA ROLLBACK on master  #
+--echo #    Verifies that the eager flush in       #
+--echo #    case 4 still leaves the slave-side     #
+--echo #    graph consistent after the rollback.   #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_off_3';
+INSERT INTO t1(a, v) VALUES (50, VEC_FROMTEXT("[50,50,50]"));
+INSERT INTO t1(a, v) VALUES (51, VEC_FROMTEXT("[51,51,51]"));
+XA END 'xa_off_3';
+XA PREPARE 'xa_off_3';
+XA ROLLBACK 'xa_off_3';
+
+# Plain DML right after the rolled-back XA — the slave-side worker
+# must still arrive in get_from_thd with a clean ha_data.
+UPDATE t1 SET v = VEC_FROMTEXT("[2,2,77]") WHERE a = 2;
+
+--source include/rpl_sync.inc
+
+--echo # master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS rows_master FROM t1;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+# Rolled-back rows should be absent on both sides
+SELECT COUNT(*) AS rolled_back_master FROM t1 WHERE a IN (50, 51);
+
+--echo # slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS rows_slave FROM t1;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+SELECT COUNT(*) AS rolled_back_slave FROM t1 WHERE a IN (50, 51);
+
+--echo
+--echo ##############################################
+--echo # 5. XA COMMIT ONE PHASE (sanity)            #
+--echo #    Goes through trans_xa_commit_one_phase #
+--echo #    and does NOT call applier_reset_xa_    #
+--echo #    trans, so it should still work after   #
+--echo #    the case-4 fix.                        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_off_4';
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT("[60,60,60]"));
+XA END 'xa_off_4';
+XA COMMIT 'xa_off_4' ONE PHASE;
+
+INSERT INTO t1(a, v) VALUES (61, VEC_FROMTEXT("[61,61,61]"));
+
+--source include/rpl_sync.inc
+
+--echo # master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS rows_master FROM t1;
+
+--echo # slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS rows_slave FROM t1;
+
+--echo
+--echo ##############################################
+--echo # 6. ANN search parity                       #
+--echo #    Issue an ANN query on both sides; the   #
+--echo #    aux graph state must agree.             #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+--let $query = SELECT id, a FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,77]")) LIMIT 5
+--eval $query
+
+--source include/rpl_connection_slave.inc
+--eval $query
+
+--echo
+--echo ##############################################
+--echo # 7. Cleanup                                 #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+
+--source include/rpl_sync.inc
+
+--enable_warnings
+
+--source include/rpl_end.inc

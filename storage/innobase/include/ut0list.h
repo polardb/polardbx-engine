@@ -114,6 +114,8 @@ struct ib_list_helper_t {
   void *data;       /*!< user data */
 };
 
+#ifndef INNODB_UT0LIST_IC_STANDALONE
 #include "ut0list.ic"
+#endif /* !INNODB_UT0LIST_IC_STANDALONE */
 
 #endif

@@ -203,7 +203,7 @@ class Filesort_info {
   Filesort_info() : m_using_varlen_keys(false), m_sort_length(0) {}
 
   /** Sort filesort_buffer
-    @return Number of records, after any deduplication
+      @return Number of records, after any deduplication
    */
   size_t sort_buffer(Sort_param *param, size_t num_input_rows,
                      size_t max_output_rows) {

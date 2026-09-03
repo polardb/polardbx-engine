@@ -2,4 +2,15 @@ SET @@SESSION.BINLOG_ROWS_QUERY_LOG_EVENTS = 1;
 CREATE TABLE t1 (a VARCHAR(256));
 INSERT INTO t1 VALUES ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 include/assert.inc [Logged query must match the one issued.]
+SET @saved_binlog_rows_query_key_content =
+@@GLOBAL.binlog_rows_query_key_content;
+SET GLOBAL binlog_rows_query_key_content = ON;
+/*trace_id=key-content*/ INSERT INTO t1 VALUES ('key-content');
+include/assert.inc [Only the first leading comment must be logged.]
+INSERT INTO t1 /*trace_id=embedded*/ VALUES ('full-query');
+include/assert.inc [A query without a leading comment must remain complete.]
+/*trace_id=first*//*trace_id=second*/ INSERT INTO t1 VALUES ('first-comment');
+include/assert.inc [Only the first of multiple leading comments must be logged.]
+SET GLOBAL binlog_rows_query_key_content =
+@saved_binlog_rows_query_key_content;
 DROP TABLE t1;

@@ -88,7 +88,7 @@ class Sql_cmd_license_show_info : public Sql_cmd_license_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 
  private:
-  xlicense::License_show_info m_show_info;
+  komodo::License_show_info m_show_info;
 };
 
 class License_proc_show_info : public License_proc_base {
@@ -103,7 +103,8 @@ class License_proc_show_info : public License_proc_base {
     COLUMN_LICENSE_TYPE = 4,
     COLUMN_CONNS_CONSTRAINS = 5,
     COLUMN_BP_CONSTRAINS = 6,
-    COLUMN_LAST = 7
+    COLUMN_PORT_RANGE = 7,
+    COLUMN_LAST = 8
   };
 
  public:
@@ -116,9 +117,9 @@ class License_proc_show_info : public License_proc_base {
         {MYSQL_TYPE_DATETIME, C_STRING_WITH_LEN("APPLY_TIME"), 64},
         {MYSQL_TYPE_DATETIME, C_STRING_WITH_LEN("EXPIRE_TIME"), 64},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("LICENSE_TYPE"), 64},
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX CONNS"), 32},
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX BP SIZE"), 32},
-    };
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX_CONNS"), 32},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX_BP_SIZE"), 32},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("PORT_RANGE"), 512}};
     for (size_t i = 0; i < COLUMN_LAST; i++) {
       m_columns.assign_at(i, elements[i]);
     }
@@ -156,7 +157,7 @@ class Sql_cmd_license_check_license : public Sql_cmd_license_proc_base {
   virtual void send_result(THD *thd, bool error) override;
 
  private:
-  xlicense::License_show_info m_show_info;
+  komodo::License_show_info m_show_info;
 };
 
 class License_proc_check_license : public License_proc_base {
@@ -174,7 +175,8 @@ class License_proc_check_license : public License_proc_base {
     COLUMN_LICENSE_TYPE = 4,
     COLUMN_CONNS_CONSTRAINS = 5,
     COLUMN_BP_CONSTRAINS = 6,
-    COLUMN_LAST = 7
+    COLUMN_PORT_RANGE = 7,
+    COLUMN_LAST = 8
   };
 
   enum_field_types get_field_type(enum_parameter param) {
@@ -203,8 +205,9 @@ class License_proc_check_license : public License_proc_base {
         {MYSQL_TYPE_DATETIME, C_STRING_WITH_LEN("APPLY_TIME"), 64},
         {MYSQL_TYPE_DATETIME, C_STRING_WITH_LEN("EXPIRE_TIME"), 64},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("LICENSE_TYPE"), 64},
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX CONNS"), 32},
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX BP SIZE"), 32},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX_CONNS"), 32},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MAX_BP_SIZE"), 32},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("PORT_RANGE"), 512},
     };
     for (size_t i = 0; i < COLUMN_LAST; i++) {
       m_columns.assign_at(i, elements[i]);

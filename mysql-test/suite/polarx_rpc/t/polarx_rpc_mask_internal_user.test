@@ -1,0 +1,35 @@
+
+## Verify PolarX RPC authentication still works when mask_internal_user is ON.
+## PolarX RPC reads mysql.user.authentication_string through SQL to verify the
+## password, so its internal system session must bypass password masking.
+
+--let $TEMP_FILE = polarx_rpc_mask_internal_user
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+
+SET GLOBAL mask_internal_user=ON;
+
+--echo #
+--echo # Password is still masked for a normal connection.
+--echo #
+SELECT authentication_string FROM mysql.user WHERE user = 'polarx_root';
+
+--echo #
+--echo # PolarX RPC connection can still authenticate and run statements.
+--echo #
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+-->switchsid -1
+-->sql
+use test;
+-->endsql
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp 2>&1
+
+SET GLOBAL mask_internal_user=OFF;
+
+## Cleanup
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--source include/polarx_rpc_drop_user.inc

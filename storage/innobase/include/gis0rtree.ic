@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2013/03/27 Jimmy Yang and Allen Lai
  ***********************************************************************/
 
+#ifndef gis0rtree_h
+#define INNODB_GIS0RTREE_IC_STANDALONE
+#include "gis0rtree.h"
+#undef INNODB_GIS0RTREE_IC_STANDALONE
+#endif /* !gis0rtree_h */
 /** Sets the child node mbr in a node pointer. */
 static inline void rtr_page_cal_mbr(
     const dict_index_t *index, /*!< in: index */
@@ -39,10 +44,11 @@ static inline void rtr_page_cal_mbr(
                                allocation */
 {
   page_t *page;
-  rec_t *rec;
+  // rec_t *rec;
   const byte *field;
   ulint len;
-  ulint *offsets = nullptr;
+  Slice_ctx slc_ctx(&heap);
+  Slice *slc = nullptr;
   double bmin, bmax;
   double *amin;
   double *amax;
@@ -58,13 +64,16 @@ static inline void rtr_page_cal_mbr(
 
   page = buf_block_get_frame(block);
 
-  rec = page_rec_get_next(page_get_infimum_rec(page));
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  // rec = page_rec_get_next(page_get_infimum_rec(page));
+  // offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
+  //                           UT_LOCATION_HERE, &heap);
+  slc = slc_ctx.get_offsets(page_rec_get_next_reg(page_get_infimum_rec(page)),
+                            index, ULINT_UNDEFINED);
 
   do {
     /* The mbr address is in the first field. */
-    field = rec_get_nth_field(index, rec, offsets, 0, &len);
+    // field = rec_get_nth_field(index, rec, slc, 0, &len);
+    field = slc->get_nth_field(index, 0, &len);
 
     ut_ad(len == DATA_MBR_LEN);
     inc = 0;
@@ -81,12 +90,14 @@ static inline void rtr_page_cal_mbr(
       inc += 2 * sizeof(double);
     }
 
-    rec = page_rec_get_next(rec);
-
-    if (rec == nullptr) {
+    // rec = page_rec_get_next(rec);
+    if (page_rec_get_next_const(slc->rec()) == nullptr) {
       break;
     }
-  } while (!page_rec_is_supremum(rec));
+    slc = slc_ctx.get_offsets(page_rec_get_next_creg(slc->rec()), index,
+                              ULINT_UNDEFINED);
+
+  } while (!page_rec_is_supremum(slc->rec()));
 }
 
 /** push a nonleaf index node to the search path */

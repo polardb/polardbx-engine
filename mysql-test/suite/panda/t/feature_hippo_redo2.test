@@ -1,0 +1,98 @@
+################################################################################
+# HIPPO Index REDO Log Recovery Test - additional scenarios
+#
+# Complements feature_hippo_redo.test with paths it does not exercise:
+#
+#  Test 1: delete-unmark of an existing (delete-marked) hippo record, i.e.
+#          MLOG_REC_UPDATE_IN_PLACE carrying the Lotus (tid) fields
+#          (row_upd_write_lotus_vals_to_log <-> row_upd_rec_lotus_fields_in_recovery).
+#          feature_hippo_redo.test only covers the delete-mark + insert path.
+#  Test 2: crash recovery of a table with MULTIPLE hippo indexes.
+#  Test 3: an uncommitted UPDATE of the indexed column that is rolled back
+#          during recovery (writes tid=0 placeholder), while an interleaved
+#          committed change must survive.
+#
+# Uses the shared harness feature_hippo_redo_func.inc, which:
+#   - disables checkpoint, produces redo,
+#   - restarts once with --debug=d,crash_if_hippo_in_redo (redo-apply
+#     idempotency crash), then restarts cleanly and verifies.
+################################################################################
+
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+
+let $number_of_formats= 3;
+
+--echo ########################################################################
+--echo # Test 1: delete-unmark (in-place Lotus update redo)
+--echo # Delete a row then re-insert the SAME (pk,value) in one transaction so
+--echo # the delete-marked secondary entry is revived in place, exercising the
+--echo # MLOG_REC_UPDATE_IN_PLACE redo path with Lotus tid fields.
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_unmark (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_unmark VALUES (1, 100), (2, 200), (3, 300);
+
+  # Delete then re-insert the same key/value -> revive delete-marked sec entry.
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; DELETE FROM t_hippo_unmark WHERE id = 2; INSERT INTO t_hippo_unmark VALUES (2, 200); COMMIT;
+
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_unmark ORDER BY id; SELECT * FROM t_hippo_unmark USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_unmark;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 2: crash recovery with MULTIPLE hippo indexes
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_multi (id INT PRIMARY KEY, a INT, b INT, INDEX idx_a(a), INDEX idx_b(b)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_multi VALUES (1,10,20),(2,10,30),(3,20,40),(4,30,50);
+
+  # Touch both secondary indexes in one transaction.
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; UPDATE t_hippo_multi SET a=15, b=25 WHERE id=1; DELETE FROM t_hippo_multi WHERE id=3; INSERT INTO t_hippo_multi VALUES (5,10,20); COMMIT;
+
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_multi ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_a) WHERE a=10 ORDER BY id; SELECT id FROM t_hippo_multi USE INDEX(idx_b) WHERE b=20 ORDER BY id; DROP TABLE IF EXISTS t_hippo_multi;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 3: uncommitted indexed UPDATE rolled back during recovery
+--echo # The committed DELETE must survive; the uncommitted UPDATE of the
+--echo # indexed column must be undone (secondary entry restored, tid reset).
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_urb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_urb VALUES (1,100),(2,200),(3,300),(4,400);
+
+  # Commit a DELETE, then leave an indexed UPDATE uncommitted (rolled back at recovery).
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; DELETE FROM t_hippo_urb WHERE id=4; COMMIT; BEGIN; UPDATE t_hippo_urb SET val=999 WHERE id=1;
+
+  # After recovery: id=4 gone; id=1 still val=100 (update undone).
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_urb ORDER BY id; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=100; SELECT id FROM t_hippo_urb USE INDEX(idx_val) WHERE val=999; DROP TABLE IF EXISTS t_hippo_urb;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################

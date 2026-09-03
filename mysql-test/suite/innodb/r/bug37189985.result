@@ -1,0 +1,73 @@
+#
+# Setup: table with spatial column and SPATIAL INDEX, enough rows
+# to force multiple R-tree batch inserts
+#
+CREATE TABLE geo (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+loc GEOMETRY NOT NULL SRID 0,
+SPATIAL INDEX idx_loc (loc)
+) ENGINE=InnoDB;
+#
+# Verify spatial index works before ALTER
+#
+SELECT COUNT(*) FROM geo;
+COUNT(*)
+200
+SELECT id FROM geo WHERE MBRContains(
+ST_GeomFromText('POLYGON((10 10, 10 100, 50 100, 50 10, 10 10))'), loc)
+ORDER BY id LIMIT 5;
+id
+11
+12
+13
+14
+15
+CHECK TABLE geo;
+Table	Op	Msg_type	Msg_text
+test.geo	check	status	OK
+#
+# INPLACE ALTER: add AUTO_INCREMENT column (triggers rebuild with
+# new auto-inc field in the dtuple that R-tree batch caches)
+#
+ALTER TABLE geo ADD COLUMN seq BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+DROP PRIMARY KEY, ADD PRIMARY KEY (seq), ALGORITHM=INPLACE;
+#
+# Verify spatial index integrity after ALTER
+#
+CHECK TABLE geo;
+Table	Op	Msg_type	Msg_text
+test.geo	check	status	OK
+SELECT COUNT(*) FROM geo;
+COUNT(*)
+200
+SELECT id, seq FROM geo WHERE MBRContains(
+ST_GeomFromText('POLYGON((10 10, 10 100, 50 100, 50 10, 10 10))'), loc)
+ORDER BY id LIMIT 5;
+id	seq
+11	11
+12	12
+13	13
+14	14
+15	15
+#
+# Verify we can delete and re-insert without index corruption
+#
+DELETE FROM geo WHERE id <= 10;
+INSERT INTO geo (id, name, loc) VALUES
+(1001, 'new1', ST_GeomFromText('POINT(5 5)')),
+(1002, 'new2', ST_GeomFromText('POINT(15 25)'));
+SELECT id, name FROM geo WHERE MBRContains(
+ST_GeomFromText('POLYGON((0 0, 0 30, 20 30, 20 0, 0 0))'), loc)
+ORDER BY id;
+id	name
+11	point_11
+12	point_12
+13	point_13
+14	point_14
+1001	new1
+1002	new2
+CHECK TABLE geo;
+Table	Op	Msg_type	Msg_text
+test.geo	check	status	OK
+DROP TABLE geo;

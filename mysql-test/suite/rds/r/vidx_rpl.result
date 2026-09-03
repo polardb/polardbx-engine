@@ -1,0 +1,240 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+SET GLOBAL vidx_disabled = OFF;
+[connection master]
+SET GLOBAL vidx_disabled = OFF;
+
+# 1. Test ddl log event
+# a. Show query binlog records vector column as /*!99999 vector(X) */ varbinary(4*X)
+#                              vector index as index not existing
+# b. Check operation of vector index can't be in one query with other operations
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB
+ALTER TABLE t1 ADD COLUMN `v2` vector(10);
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; ALTER TABLE t1 ADD COLUMN `v2` vector(10)
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`, DROP COLUMN `v2`;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`;
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; ALTER TABLE t1 RENAME INDEX `vi` TO `vi2`
+ALTER TABLE t1 DROP INDEX `vi2`, DROP COLUMN `v2`;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+ALTER TABLE t1 DROP INDEX `vi2`;
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; ALTER TABLE t1 DROP INDEX `vi2`
+CREATE VECTOR INDEX `vi` ON t1(v);
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; CREATE VECTOR INDEX `vi` ON t1(v)
+DROP INDEX `vi` ON t1;
+include/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+master-bin.000001	#	Query	#	#	use `test`; DROP INDEX `vi` ON t1
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `v2` vector(10) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+# 2. Test dml in transactions
+# Prepare
+[connection master]
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert data using transactions
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,10]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,9]"));
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,8]"));
+SAVEPOINT sp1;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,7]"));
+SAVEPOINT sp2;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,6]"));
+ROLLBACK TO SAVEPOINT sp2;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+COMMIT;
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,4]"));
+ROLLBACK;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,3]"));
+include/rpl_sync.inc
+
+# Validate data in mater
+SELECT id, VEC_TOTEXT(v) FROM t1;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,10]
+2	[1,2,3,4,9]
+3	[1,2,3,4,8]
+4	[1,2,3,4,7]
+6	[1,2,3,4,5]
+8	[1,2,3,4,3]
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	8	100.00	Using filesort
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	VEC_TOTEXT(v)
+6	[1,2,3,4,5]
+4	[1,2,3,4,7]
+8	[1,2,3,4,3]
+3	[1,2,3,4,8]
+2	[1,2,3,4,9]
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	8	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	VEC_TOTEXT(v)
+6	[1,2,3,4,5]
+4	[1,2,3,4,7]
+8	[1,2,3,4,3]
+3	[1,2,3,4,8]
+2	[1,2,3,4,9]
+
+# Validate data in slave
+[connection slave]
+SET transaction_isolation = 'READ-COMMITTED';
+SELECT id, VEC_TOTEXT(v) FROM t1;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,10]
+2	[1,2,3,4,9]
+3	[1,2,3,4,8]
+4	[1,2,3,4,7]
+6	[1,2,3,4,5]
+8	[1,2,3,4,3]
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	6	100.00	Using filesort
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(PRIMARY) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	VEC_TOTEXT(v)
+6	[1,2,3,4,5]
+4	[1,2,3,4,7]
+8	[1,2,3,4,3]
+3	[1,2,3,4,8]
+2	[1,2,3,4,9]
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	6	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 5;
+id	VEC_TOTEXT(v)
+6	[1,2,3,4,5]
+4	[1,2,3,4,7]
+8	[1,2,3,4,3]
+3	[1,2,3,4,8]
+2	[1,2,3,4,9]
+
+# 2.5 CAST AS VECTOR / JSON input replicate correctly
+[connection master]
+CREATE TABLE t_cast (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t_cast(v) VALUES (CAST('[1,2,3,4,5]' AS VECTOR(5)));
+INSERT INTO t_cast(v) VALUES (CAST(JSON_ARRAY(5,4,3,2,1) AS VECTOR(5)));
+INSERT INTO t_cast(v) VALUES (CAST(JSON_ARRAY(1,1,1,1,1) AS VECTOR));
+include/rpl_sync.inc
+# Master side
+SELECT id, VEC_TOTEXT(v) FROM t_cast ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1,1,1,1,1]
+# Slave side (should match master)
+[connection slave]
+SELECT id, VEC_TOTEXT(v) FROM t_cast ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1,1,1,1,1]
+[connection master]
+DROP TABLE t_cast;
+include/rpl_sync.inc
+
+# 2.6 Multi-index replication
+[connection master]
+CREATE TABLE t_mi (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(4),
+v2 VECTOR(4),
+VECTOR INDEX vi1(v1),
+VECTOR INDEX vi2(v2) DISTANCE=cosine
+) ENGINE=InnoDB;
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[1,0,0,0]'), VEC_FROMTEXT('[0,0,0,1]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[0,1,0,0]'), VEC_FROMTEXT('[0,0,1,0]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[0,0,1,0]'), VEC_FROMTEXT('[0,1,0,0]'));
+include/rpl_sync.inc
+# Master: verify structure and queries
+SHOW CREATE TABLE t_mi;
+Table	Create Table
+t_mi	CREATE TABLE `t_mi` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v1` vector(4) DEFAULT NULL,
+  `v2` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi1` (`v1`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10,
+  VECTOR KEY `vi2` (`v2`) M=6 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 1;
+id
+1
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+id
+1
+# Slave: verify structure matches
+[connection slave]
+SHOW CREATE TABLE t_mi;
+Table	Create Table
+t_mi	CREATE TABLE `t_mi` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v1` vector(4) DEFAULT NULL,
+  `v2` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi1` (`v1`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10,
+  VECTOR KEY `vi2` (`v2`) M=6 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 1;
+id
+1
+SELECT id FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+id
+1
+[connection master]
+DROP TABLE t_mi;
+include/rpl_sync.inc
+
+# 3. Clear
+SET GLOBAL vidx_disabled = ON;
+[connection master]
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+include/rpl_sync.inc
+include/rpl_end.inc

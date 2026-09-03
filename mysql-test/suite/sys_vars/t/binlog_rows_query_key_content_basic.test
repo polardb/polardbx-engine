@@ -1,0 +1,27 @@
+###############################################################################
+# Variable Name: binlog_rows_query_key_content
+# Scope: GLOBAL
+# Access Type: Dynamic
+# Data Type: BOOLEAN
+# Default Value: FALSE
+###############################################################################
+
+SET @saved_binlog_rows_query_key_content =
+  @@GLOBAL.binlog_rows_query_key_content;
+
+SET @@GLOBAL.binlog_rows_query_key_content = DEFAULT;
+SELECT @@GLOBAL.binlog_rows_query_key_content = FALSE;
+
+SET @@GLOBAL.binlog_rows_query_key_content = ON;
+SELECT @@GLOBAL.binlog_rows_query_key_content;
+
+--error ER_GLOBAL_VARIABLE
+SET @@SESSION.binlog_rows_query_key_content = ON;
+
+SELECT IF(@@GLOBAL.binlog_rows_query_key_content, "ON", "OFF") =
+       VARIABLE_VALUE
+  FROM performance_schema.global_variables
+ WHERE VARIABLE_NAME = 'binlog_rows_query_key_content';
+
+SET @@GLOBAL.binlog_rows_query_key_content =
+  @saved_binlog_rows_query_key_content;

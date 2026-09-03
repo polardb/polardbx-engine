@@ -1,0 +1,47 @@
+
+show variables like '%sql_log_bin%';  
+
+set global sql_log_bin_super_modified=0;
+show variables like '%sql_log_bin%';  
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';  
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';  
+
+set global sql_log_bin_super_modified=1;
+show variables like '%sql_log_bin%';
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';
+
+CREATE USER 'hello'@'localhost' IDENTIFIED BY 'abc';
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'hello'@'localhost';
+
+connect(con1,localhost,hello,abc);
+connection con1;
+show variables like '%sql_log_bin%';
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+
+connection default;
+set global sql_log_bin_super_modified=0;
+
+connection con1;
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+
+connection default;
+set global sql_log_bin_super_modified=1;
+
+connection con1;
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';
+disconnect con1;
+
+connection default;
+drop user 'hello'@'localhost';
+set global sql_log_bin_super_modified=0;
+set @@sql_log_bin=DEFAULT;
+show variables like '%sql_log_bin%';

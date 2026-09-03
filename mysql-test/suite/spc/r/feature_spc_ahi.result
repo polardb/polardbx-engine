@@ -1,0 +1,120 @@
+#
+# PART 1: SPC index point lookups with AHI enabled
+#
+SET GLOBAL innodb_adaptive_hash_index = ON;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+# Repeated point lookups to trigger AHI build on SPC pages
+# Checksum after AHI-assisted lookups
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+#
+# PART 2: Toggle AHI off then on - verify SPC data consistency
+#
+# Disable AHI
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+# DML with AHI disabled
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100), LPAD(id, 10, '0')) WHERE id <= 50;
+DELETE FROM t1 WHERE id BETWEEN 51 AND 60;
+INSERT INTO t1 VALUES (201, CONCAT(REPEAT('c', 100), LPAD(201, 10, '0')));
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+# Re-enable AHI
+SET GLOBAL innodb_adaptive_hash_index = ON;
+# Repeated lookups to rebuild AHI
+# Checksum after AHI rebuild
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 3: Concurrent DML with AHI on SPC pages
+#
+SET GLOBAL innodb_adaptive_hash_index = ON;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+# Warm up AHI
+# con1 does DML while default reads via AHI
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('z', 100), LPAD(id, 10, '0')) WHERE id <= 20;
+INSERT INTO t1 VALUES (101, CONCAT(REPEAT('z', 100), LPAD(101, 10, '0')));
+DELETE FROM t1 WHERE id BETWEEN 90 AND 95;
+COMMIT;
+# Checksum after concurrent DML with AHI active
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 4: Disable AHI during active SPC workload
+#
+SET GLOBAL innodb_adaptive_hash_index = ON;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+# Warm up AHI
+# Disable AHI while workload is active
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+# DML after AHI disabled
+# Checksum with AHI off
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+# Re-enable AHI and verify
+SET GLOBAL innodb_adaptive_hash_index = ON;
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+# Cleanup
+SET GLOBAL innodb_adaptive_hash_index = 0;

@@ -167,9 +167,6 @@ struct Key_sort_buffer : private ut::Non_copyable {
   /** @return number of tuples stored so far. */
   [[nodiscard]] size_t size() const noexcept { return m_n_tuples; }
 
-  /** @return true if the buffer is full. */
-  [[nodiscard]] bool full() const noexcept { return size() >= m_max_tuples; }
-
   /** @return true if the buffer is empty. */
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
@@ -184,19 +181,26 @@ struct Key_sort_buffer : private ut::Non_copyable {
   @return an array of n dfields. */
   dfield_t *alloc(size_t n) noexcept {
     const auto sz = sizeof(dfield_t) * n;
+    m_total_size += sz;
     return static_cast<dfield_t *>(mem_heap_alloc(m_heap, sz));
   }
 
-  /** Check if n bytes will fit in the buffer.
+  /** Pops the unfinished tuple which was allocated with alloc(), but
+  deep_copy() wasn't called yet for it yet. */
+  void pop_unfinished_tuple() noexcept {
+    ut_a(m_n_tuples + 1 == m_dtuples.size());
+    m_dtuples.pop_back();
+  }
+
+  /** Check if n bytes will fit in the buffer, or it is the first tuple,
+  in which case we ignore the limit to ensure forward progress.
   @param[in] n                  Number of bytes to check.
-  @return true if n bytes will fit in the buffer. */
+  @return true if n bytes can be added to the buffer. */
   bool will_fit(size_t n) const noexcept {
     /* Reserve one byte for the end marker and adjust for meta-data overhead. */
-    return m_total_size + n +
-               (sizeof(std::remove_pointer<decltype(
-                           m_dtuples)::value_type>::type) *
-                (m_n_tuples + 1)) <=
-           m_buffer_size - 1;
+    return m_n_tuples == 0 ||
+           m_total_size + m_dtuples.size() * 2 * sizeof(m_dtuples[0]) + n <=
+               m_buffer_size - 1;
   }
 
   /** Deep copy the field data starting from the back.
@@ -223,14 +227,18 @@ struct Key_sort_buffer : private ut::Non_copyable {
   /** The index the tuples belong to */
   dict_index_t *m_index{};
 
-  /** Total amount of data bytes */
+  /** Total amount of data allocated from m_heap, which includes:
+    i. one dfield_t[n_fields] array per row, allocated via alloc(n_fields) calls
+    ii. actual field's data cloned into the m_heap, via deep_clone(...,) calls
+  This is updated by alloc() and deep_clone().
+  It should roughly match the value of:
+    mem_heap_get_size(m_heap)-mem_block_get_free(UT_LIST_GET_LAST(m_heap->base)).
+  This, when combined with the memory consumption of m_dtuples, should not
+  exceed the m_buffer_size budget */
   size_t m_total_size{};
 
   /** Number of data tuples */
   size_t m_n_tuples{};
-
-  /** Maximum number of data tuples */
-  size_t m_max_tuples{};
 
   /** Array of data tuples */
   DTuples m_dtuples{};

@@ -196,12 +196,44 @@ MDL_request *lock_request(THD *thd, const schema_map_t &,
   return request;
 }
 
+namespace komodo {
+template <typename T>
+bool is_inert_object(const schema_map_t &, const T *) {
+  assert(false);
+  return false;
+}
+
+template <>
+bool is_inert_object(const schema_map_t &schema_map,
+                     const Abstract_table *object) {
+  const schema_map_t::const_iterator schema_name =
+      schema_map.find(object->schema_id());
+
+  /** Unknown schema name if not in cache */
+  if (schema_name == schema_map.end() || object == nullptr) return false;
+
+  if (strcmp(schema_name->second.c_str(), "mysql") ||
+      strcmp(object->name().c_str(), "consensus_info")) {
+    return false;
+  }
+
+  return true;
+}
+
+template <>
+bool is_inert_object(const schema_map_t &, const Tablespace *) {
+  return false;
+}
+}  // namespace komodo
+
 /*
   Reset the shared map. Delete all objects present after acquiring
   metadata locks. Keep the capacity.
 */
 template <typename T>
 bool Shared_multi_map<T>::reset(THD *thd) {
+  bool skip_inert_object = false;
+
   /*
     Establish a map from schema ids to schema names. Must do this
     before we can lock the cache partition.
@@ -220,9 +252,17 @@ bool Shared_multi_map<T>::reset(THD *thd) {
   MDL_request_list mdl_requests;
   typename Element_map<const T *, Cache_element<T>>::Const_iterator it =
       m_map<const T *>()->begin();
-  for (; it != m_map<const T *>()->end(); it++)
+  for (; it != m_map<const T *>()->end(); it++) {
+    /** CORE: Do not evict inert table objects (like mysql.consensus_info) to
+    avoid deadlocks. */
+    if (komodo::is_inert_object(schema_map, it->second->object())) {
+      skip_inert_object = true;
+      continue;
+    }
+
     mdl_requests.push_front(
         lock_request(thd, schema_map, it->second->object()));
+  }
 
   if (thd->mdl_context.acquire_locks(&mdl_requests,
                                      thd->variables.lock_wait_timeout))
@@ -233,7 +273,7 @@ bool Shared_multi_map<T>::reset(THD *thd) {
     object, no objects should be left.
   */
   evict_all_unused(&lock);
-  if (m_map<const T *>()->size() > 0) {
+  if (m_map<const T *>()->size() > 0 && !skip_inert_object) {
     dump();
     assert(m_map<const T *>()->size() == 0);
     return true;

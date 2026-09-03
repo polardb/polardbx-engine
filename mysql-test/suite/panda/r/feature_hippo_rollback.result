@@ -1,0 +1,397 @@
+SET opt_index_format_hippo_enabled=on;
+########################################################################
+# Setup: Create table with HIPPO index
+########################################################################
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(100),
+value INT,
+KEY idx_name(name) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+########################################################################
+# Path 0: Rollback of fresh INSERT (TRX_UNDO_INSERT_REC)
+# Physical delete of the inserted record
+# row_undo_ins_remove_panda_rec() -> btr_cur_optimistic/pessimistic_delete
+# HIPPO index requires no special trx_id handling here
+########################################################################
+# Fresh INSERT in transaction, then rollback
+BEGIN;
+INSERT INTO t1 VALUES (1, 'zack', 100);
+# Verify data exists before rollback
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'zack';
+id	name	value
+1	zack	100
+# Rollback triggers Path 0: physical delete of sec index record
+# No trx_id assertion needed - just removes the record
+ROLLBACK;
+# Verify rollback removed the record
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'zack';
+id	name	value
+SELECT * FROM t1;
+id	name	value
+########################################################################
+# Path 0 variant: Rollback of multiple fresh INSERTs
+########################################################################
+BEGIN;
+INSERT INTO t1 VALUES (1, 'alpha', 100);
+INSERT INTO t1 VALUES (2, 'beta', 200);
+INSERT INTO t1 VALUES (3, 'gamma', 300);
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name IN ('alpha', 'beta', 'gamma');
+id	name	value
+1	alpha	100
+2	beta	200
+3	gamma	300
+ROLLBACK;
+SELECT * FROM t1;
+id	name	value
+########################################################################
+# Path 1: Rollback of INSERT (TRX_UNDO_UPD_DEL_REC)
+# When INSERT reuses a delete-marked record, rollback will:
+# - delete-mark the record again (1A) or physically delete (1B)
+########################################################################
+# First, insert and delete to create delete-marked record
+INSERT INTO t1 VALUES (1, 'alice', 100);
+DELETE FROM t1 WHERE id = 1;
+# Now INSERT in a transaction that will be rolled back
+# This INSERT may reuse the delete-marked 'alice' record
+BEGIN;
+INSERT INTO t1 VALUES (1, 'alice', 200);
+# Verify data before rollback
+SELECT * FROM t1 WHERE name = 'alice';
+id	name	value
+1	alice	200
+# Rollback triggers Path 1: delete-mark/remove the reused record
+# Assertion: entry->get_trx_id() == 0 (row0umod.cc:955)
+# Assertion: btr_cur_del_mark_set_sec_rec with tid=0
+ROLLBACK;
+# Verify rollback succeeded
+SELECT * FROM t1 WHERE name = 'alice';
+id	name	value
+########################################################################
+# Path 2A: Rollback of DELETE - ROW_NOT_FOUND case
+# Insert new record during rollback when original was purged
+########################################################################
+# Clean state
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'bob', 100);
+# Delete in transaction
+BEGIN;
+DELETE FROM t1 WHERE id = 1;
+# Verify deleted
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'bob';
+id	name	value
+# Rollback triggers Path 2: insert or unmark record
+# Assertion: entry->get_trx_id() == 0 (row0umod.cc:1065)
+ROLLBACK;
+# Verify rollback restored the record
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'bob';
+id	name	value
+1	bob	100
+########################################################################
+# Path 2B: Rollback of DELETE - ROW_FOUND case with update
+# Rollback finds delete-marked record and unmarks it
+# May also need in-place update for case differences
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'Charlie', 100);
+BEGIN;
+DELETE FROM t1 WHERE id = 1;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'Charlie';
+id	name	value
+# Rollback: delete-unmark the record
+# btr_cur_del_mark_set_sec_rec(val=false, tid=0)
+ROLLBACK;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'Charlie';
+id	name	value
+1	Charlie	100
+########################################################################
+# Path 3: Rollback of UPDATE (TRX_UNDO_UPD_EXIST_REC)
+# Two-phase rollback:
+# Step 1: delete-mark new version
+# Step 2: delete-unmark old version
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'david', 100);
+BEGIN;
+# Update indexed column - creates new sec index entry
+UPDATE t1 SET name = 'edward' WHERE id = 1;
+# Verify update
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'edward';
+id	name	value
+1	edward	100
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'david';
+id	name	value
+# Rollback triggers Path 3:
+# Step 1: delete-mark 'edward' entry (assertion at row0umod.cc:1244)
+# Step 2: delete-unmark 'david' entry (assertion at row0umod.cc:1276)
+ROLLBACK;
+# Verify rollback restored original value
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'david';
+id	name	value
+1	david	100
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'edward';
+id	name	value
+########################################################################
+# Path 3 variant: Rollback UPDATE with in-place update
+# Case: update causes ordering key difference only in case
+# e.g., 'ABC' -> 'abc' when collation ignores case
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'FRANK', 100);
+BEGIN;
+# Update to same value with different case
+# Collation may treat as same ordering key
+UPDATE t1 SET name = 'frank' WHERE id = 1;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'frank';
+id	name	value
+1	frank	100
+# Rollback with potential in-place update path
+# btr_cur_optimistic_update with tid=0 (row0umod.cc:791-792)
+ROLLBACK;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'FRANK';
+id	name	value
+1	FRANK	100
+########################################################################
+# Path 3 variant 2: Rollback UPDATE with optimistic non-in-place update
+# Case: field size changes (e.g., '' -> '  ') but page has enough space
+# Rollback uses btr_cur_optimistic_update with tid=0
+# This covers Path 4A rollback scenario
+########################################################################
+DROP TABLE IF EXISTS t_space_rollback;
+Warnings:
+Note	1051	Unknown table 'test.t_space_rollback'
+CREATE TABLE t_space_rollback (
+id BIGINT PRIMARY KEY,
+unit_id BIGINT NOT NULL,
+nick_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+KEY auto_shard_key_nick_name (nick_name) COMMENT 'hippo_index'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
+# Insert a record with empty string (will be updated)
+INSERT INTO t_space_rollback VALUES (1, 100, '');
+# Insert only a few records to keep page sparse (allows optimistic update)
+INSERT INTO t_space_rollback VALUES (2, 100, ''), (3, 100, ''), (4, 100, ''), (5, 100, '');
+BEGIN;
+# UPDATE with spaces - triggers optimistic non-in-place update (Path 4A)
+# UPDATE from '' to '  ' - field size changes from 0 to 2
+# Page has enough space, so btr_cur_optimistic_update succeeds (delete+insert within page)
+UPDATE t_space_rollback SET nick_name = '  ' WHERE id = 1;
+SELECT * FROM t_space_rollback FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='  ';
+id	unit_id	nick_name
+1	100	  
+2	100	
+3	100	
+4	100	
+5	100	
+# Rollback: btr_cur_optimistic_update with tid=0 (row0umod.cc:793-795)
+# Rollback of UPDATE (TRX_UNDO_UPD_EXIST_REC)
+# Step 1: delete-mark '  ' entry (row_undo_mod_del_mark_or_remove_sec)
+# Step 2: delete-unmark '' entry and update field size (row_undo_mod_del_unmark_sec_and_undo_update)
+#   - Finds delete-marked '  ' record (ROW_FOUND)
+#   - Field size changes from '  ' (2 bytes) to '' (0 bytes)
+#   - Page has enough space, so btr_cur_optimistic_update succeeds
+ROLLBACK;
+# Verify rollback restored delete-marked state
+SELECT * FROM t_space_rollback FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='';
+id	unit_id	nick_name
+1	100	
+2	100	
+3	100	
+4	100	
+5	100	
+########################################################################
+# Path 3 variant 3: Rollback UPDATE with pessimistic update (field size change)
+# Case: UPDATE from '' to '  ' with page near threshold
+# UPDATE triggers pessimistic update (Path 4B), rollback also triggers pessimistic update
+# Rollback uses btr_cur_pessimistic_update with tid=0
+# This covers Path 4B rollback scenario
+########################################################################
+TRUNCATE TABLE t_space_rollback;
+# Strategy: Use UPDATE to trigger TRX_UNDO_UPD_EXIST_REC rollback path
+# Step 1: Pre-fill page to near merge threshold (50% of page size)
+# Step 2: Insert a record with empty string
+# Step 3: In transaction, UPDATE from '' to '  ' (triggers pessimistic update)
+# Step 4: After UPDATE, DELETE the record to create delete-marked '  ' record
+# Step 5: In same transaction, continue filling page
+#         This ensures rollback finds delete-marked '  ' record and updates it to ''
+#         Rollback will trigger pessimistic update because page is near threshold
+# Step 1: Pre-fill page to near merge threshold (50% of page size)
+BEGIN;
+INSERT INTO t_space_rollback VALUES 
+(1001, 100, ''), (1002, 100, ''), (1003, 100, ''), (1004, 100, ''), (1005, 100, ''),
+(1006, 100, ''), (1007, 100, ''), (1008, 100, ''), (1009, 100, ''), (1010, 100, ''),
+(1011, 100, ''), (1012, 100, ''), (1013, 100, ''), (1014, 100, ''), (1015, 100, ''),
+(1016, 100, ''), (1017, 100, ''), (1018, 100, ''), (1019, 100, ''), (1020, 100, ''),
+(1021, 100, ''), (1022, 100, ''), (1023, 100, ''), (1024, 100, ''), (1025, 100, ''),
+(1026, 100, ''), (1027, 100, ''), (1028, 100, ''), (1029, 100, ''), (1030, 100, ''),
+(1031, 100, ''), (1032, 100, ''), (1033, 100, ''), (1034, 100, ''), (1035, 100, ''),
+(1036, 100, ''), (1037, 100, ''), (1038, 100, ''), (1039, 100, ''), (1040, 100, ''),
+(1041, 100, ''), (1042, 100, ''), (1043, 100, ''), (1044, 100, ''), (1045, 100, ''),
+(1046, 100, ''), (1047, 100, ''), (1048, 100, ''), (1049, 100, ''), (1050, 100, ''),
+(1051, 100, ''), (1052, 100, ''), (1053, 100, ''), (1054, 100, ''), (1055, 100, ''),
+(1056, 100, ''), (1057, 100, ''), (1058, 100, ''), (1059, 100, ''), (1060, 100, ''),
+(1061, 100, ''), (1062, 100, ''), (1063, 100, ''), (1064, 100, ''), (1065, 100, ''),
+(1066, 100, ''), (1067, 100, ''), (1068, 100, ''), (1069, 100, ''), (1070, 100, ''),
+(1071, 100, ''), (1072, 100, ''), (1073, 100, ''), (1074, 100, ''), (1075, 100, ''),
+(1076, 100, ''), (1077, 100, ''), (1078, 100, ''), (1079, 100, ''), (1080, 100, ''),
+(1081, 100, ''), (1082, 100, ''), (1083, 100, ''), (1084, 100, ''), (1085, 100, ''),
+(1086, 100, ''), (1087, 100, ''), (1088, 100, ''), (1089, 100, ''), (1090, 100, ''),
+(1091, 100, ''), (1092, 100, ''), (1093, 100, ''), (1094, 100, ''), (1095, 100, ''),
+(1096, 100, ''), (1097, 100, ''), (1098, 100, ''), (1099, 100, ''), (1100, 100, '');
+COMMIT;
+# Step 2: Insert a record with empty string (this will be updated)
+BEGIN;
+INSERT INTO t_space_rollback VALUES (2000, 100, '');
+COMMIT;
+begin;
+SELECT * FROM t_space_rollback FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='' AND id=2000;
+id	unit_id	nick_name
+2000	100	
+# Step 3, 4 & 5: In transaction, UPDATE, DELETE, and continue filling page
+# UPDATE from '' to '  ' - field size changes, page near threshold -> pessimistic update
+BEGIN;
+UPDATE t_space_rollback SET nick_name = '  ' WHERE id = 2000;
+# DELETE to create delete-marked '  ' record
+# This ensures rollback will find delete-marked record and update it
+# Continue filling page in same transaction to keep it near threshold
+# This ensures rollback (from '  ' to '') also triggers pessimistic update
+# Rollback: needs to restore '' from '  ' (Path 3: TRX_UNDO_UPD_EXIST_REC)
+# Step 1: delete-mark '  ' entry (already delete-marked by DELETE above)
+#   - row_undo_mod_del_mark_or_remove_sec finds delete-marked record
+# Step 2: delete-unmark '' entry (Path 2: row_undo_mod_del_unmark_sec_and_undo_update)
+#   - Finds delete-marked '  ' record (ROW_FOUND)
+#   - Field size changes from '  ' (2 bytes) to '' (0 bytes)
+#   - First call: BTR_MODIFY_LEAF -> optimistic update fails -> returns DB_FAIL
+#   - Second call: BTR_MODIFY_TREE -> pessimistic update (row0umod.cc:805-808)
+#   - btr_cur_pessimistic_update with tid=0
+ROLLBACK;
+# Verify rollback restored original value
+begin;
+SELECT * FROM t_space_rollback FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='' AND id=2000;
+id	unit_id	nick_name
+2000	100	
+rollback;
+DROP TABLE t_space_rollback;
+########################################################################
+# Complex scenario: Multiple operations then rollback
+# Covers multiple paths in single transaction
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'george', 100);
+INSERT INTO t1 VALUES (2, 'henry', 200);
+INSERT INTO t1 VALUES (3, 'ivan', 300);
+BEGIN;
+# Mix of INSERT, UPDATE, DELETE
+INSERT INTO t1 VALUES (4, 'jack', 400);
+UPDATE t1 SET name = 'george_new' WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+UPDATE t1 SET name = 'ivan_new' WHERE id = 3;
+# Verify changes
+SELECT * FROM t1 ORDER BY id;
+id	name	value
+1	george_new	100
+3	ivan_new	300
+4	jack	400
+# Rollback all changes - exercises multiple paths
+ROLLBACK;
+# Verify all changes reverted
+SELECT * FROM t1 ORDER BY id;
+id	name	value
+1	george	100
+2	henry	200
+3	ivan	300
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'george';
+id	name	value
+1	george	100
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'henry';
+id	name	value
+2	henry	200
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'ivan';
+id	name	value
+3	ivan	300
+########################################################################
+# Nested transaction rollback (SAVEPOINT)
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'kate', 100);
+BEGIN;
+UPDATE t1 SET name = 'kate_v1' WHERE id = 1;
+SAVEPOINT sp1;
+UPDATE t1 SET name = 'kate_v2' WHERE id = 1;
+SAVEPOINT sp2;
+UPDATE t1 SET name = 'kate_v3' WHERE id = 1;
+# Verify current state
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name LIKE 'kate%';
+id	name	value
+1	kate_v3	100
+# Rollback to savepoint - partial rollback
+ROLLBACK TO SAVEPOINT sp1;
+# Verify partial rollback
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name LIKE 'kate%';
+id	name	value
+1	kate_v1	100
+# Full rollback
+ROLLBACK;
+# Verify complete rollback
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'kate';
+id	name	value
+1	kate	100
+########################################################################
+# Concurrent transaction scenario
+########################################################################
+TRUNCATE TABLE t1;
+INSERT INTO t1 VALUES (1, 'lisa', 100);
+# Connection 1: Start transaction and update
+BEGIN;
+UPDATE t1 SET name = 'lisa_con1' WHERE id = 1;
+# Connection 2: Can see original via MVCC
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'lisa';
+id	name	value
+1	lisa	100
+# Connection 1: Rollback
+ROLLBACK;
+# Connection 2: Should still see original (consistent read)
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'lisa';
+id	name	value
+1	lisa	100
+COMMIT;
+# Default: Verify final state
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'lisa';
+id	name	value
+1	lisa	100
+########################################################################
+# Test with multiple HIPPO indexes
+########################################################################
+DROP TABLE t1;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(100),
+city VARCHAR(100),
+KEY idx_name(name) COMMENT 'hippo_index',
+KEY idx_city(city) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 'mike', 'beijing');
+BEGIN;
+UPDATE t1 SET name = 'mike_new', city = 'shanghai' WHERE id = 1;
+SELECT * FROM t1;
+id	name	city
+1	mike_new	shanghai
+# Rollback affects both HIPPO indexes
+ROLLBACK;
+SELECT * FROM t1 FORCE INDEX(idx_name) WHERE name = 'mike';
+id	name	city
+1	mike	beijing
+SELECT * FROM t1 FORCE INDEX(idx_city) WHERE city = 'beijing';
+id	name	city
+1	mike	beijing
+########################################################################
+# Cleanup
+########################################################################
+DROP TABLE t1;
+SET opt_index_format_hippo_enabled=off;
+# Test completed successfully.
+# If we reach here, all DEBUG assertions for HIPPO rollback passed:
+# - entry->get_trx_id() == 0 assertions in row0umod.cc
+# - btr_cur_del_mark_set_sec_rec with tid=0 assertion
+# - row_sec_assert_tid_in_rec allowing tid=0 during rollback

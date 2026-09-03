@@ -212,6 +212,9 @@ struct Srv_threads {
   /** Thread writing recovered pages during recovery. */
   IB_thread m_recv_writer;
 
+  /** Cycle coordinator */
+  IB_thread m_cycle_coordinator;
+
   /** Purge coordinator (also being a worker) */
   IB_thread m_purge_coordinator;
 
@@ -435,6 +438,9 @@ extern char *srv_log_group_home_dir;
 
 /** Enable or Disable Encrypt of REDO tablespace. */
 extern bool srv_redo_log_encrypt;
+
+/** Enable or disable encrypted-page checksum verification before decrypt. */
+extern bool srv_verify_enc_checksum;
 
 /* Maximum number of redo files of a cloned DB. */
 constexpr size_t SRV_N_LOG_FILES_CLONE_MAX = 1000;
@@ -670,6 +676,7 @@ void innobase_set_open_files_limit(long new_limit);
 extern ulong srv_fatal_semaphore_wait_threshold;
 extern uint srv_flush_log_at_timeout;
 extern bool srv_btr_search_enabled;
+extern bool srv_polarx_btree_search_mode;
 extern ulong srv_replication_delay;
 
 extern ulong srv_log_wait_for_write_timeout;
@@ -798,6 +805,8 @@ extern srv_stats_t srv_stats;
 
 extern bool srv_innodb_btree_sampling;
 
+extern ulong srv_spc_analyze_sample_percentage;
+
 /* Keys to register InnoDB threads with performance schema */
 
 #ifdef UNIV_PFS_THREAD
@@ -830,6 +839,7 @@ extern mysql_pfs_key_t srv_error_monitor_thread_key;
 extern mysql_pfs_key_t srv_lock_timeout_thread_key;
 extern mysql_pfs_key_t srv_master_thread_key;
 extern mysql_pfs_key_t srv_monitor_thread_key;
+extern mysql_pfs_key_t srv_cycle_thread_key;
 extern mysql_pfs_key_t srv_purge_thread_key;
 extern mysql_pfs_key_t srv_worker_thread_key;
 extern mysql_pfs_key_t trx_recovery_rollback_thread_key;
@@ -981,8 +991,9 @@ enum srv_thread_type {
               queries and queries released from
               lock wait */
   SRV_PURGE,  /*!< Purge coordinator thread */
-  SRV_MASTER  /*!< the master thread, (whose type
-              number must be biggest) */
+  SRV_MASTER, /*!< the master thread, (whose type
+             number must be biggest) */
+  SRV_CYCLE   // Cycle coordinator thread
 };
 
 /** Boots Innobase server. */
@@ -1161,6 +1172,7 @@ struct export_var_t {
   ulint innodb_buffer_pool_bytes_data;                /*!< File bytes used */
   ulint innodb_buffer_pool_pages_dirty;               /*!< Dirty data pages */
   ulint innodb_buffer_pool_bytes_dirty; /*!< File bytes modified */
+  double innodb_buffer_pool_dirty_ratio;               /*!< Dirty ratio */
   ulint innodb_buffer_pool_pages_misc;  /*!< Miscellaneous pages */
   ulint innodb_buffer_pool_pages_free;  /*!< Free pages */
 #ifdef UNIV_DEBUG
@@ -1242,6 +1254,113 @@ struct export_var_t {
   ulint commit_gcn;
   ulint innodb_polarx_block_mode_sample_records;
   ulint innodb_polarx_rec_mode_sample_records;
+
+
+  /* ========== Page Tracking Statistics - Cumulative Counters ========== */
+  /** Total number of page IDs tracked since archiver started.
+   * Incremented each time a new page ID is added to tracking. */
+  ulonglong innodb_page_track_total_page_ids;
+  
+  /** Total number of blocks flushed to disk (cumulative).
+   * Incremented after each successful block flush operation. */
+  ulonglong innodb_page_track_block_flush_count;
+  
+  /** Number of times buffer became full and waited for flush.
+   * Incremented when tracking buffer reaches capacity. */
+  ulonglong innodb_page_track_buffer_full_wait_flushes;
+  
+  /** Number of successful wait-for-flush operations.
+   * Tracks completed wait operations that successfully flushed data. */
+  ulonglong innodb_page_track_wait_flush_succ_count;
+  
+  /** Number of wait-for-flush timeout events.
+   * Incremented when flush wait exceeds timeout threshold. */
+  ulonglong innodb_page_track_wait_flush_timeout_count;
+  
+  /** Number of failed wait-for-flush operations.
+   * Tracks flush wait operations that encountered errors. */
+  ulonglong innodb_page_track_wait_flush_failed_count;
+  
+  /** Total number of backup read operations.
+   * Incremented each time archived data is read for backup purposes. */
+  ulonglong innodb_page_track_backup_count;
+  
+  /** Total number of purge operations.
+   * Incremented when old archive data is purged. */
+  ulonglong innodb_page_track_purge_count;
+
+  /* ========== Page Tracking Statistics - State Indicators ========== */
+  /** Whether page tracking is currently active (0 or 1).
+   * Set to 1 when arch_page_sys is initialized and active. */
+  ulonglong innodb_page_track_is_active;
+  
+  /** Timestamp of last flush operation (seconds since epoch).
+   * Updated after each successful flush to disk. */
+  ulonglong innodb_page_track_flush_last_time;
+  
+  /** Space ID of the last tracked page.
+   * Updated with each page write operation. */
+  ulonglong innodb_page_track_last_write_space;
+  
+  /** Page number of the last tracked page.
+   * Updated with each page write operation. */
+  ulonglong innodb_page_track_last_write_page;
+  
+  /** Block number where last write occurred in archive buffer.
+   * Monotonically increasing counter for tracking write position. */
+  ulonglong innodb_page_track_last_write_block;
+  
+  /** Block number of last completed flush to disk.
+   * Used with last_write_block to calculate pending data. */
+  ulonglong innodb_page_track_last_flush_block;
+  
+  /** Timestamp of last backup operation (seconds since epoch).
+   * Updated when backup reads archived data. */
+  ulonglong innodb_page_track_backup_last_time;
+  
+  /** Number of pages read in last backup operation.
+   * Records the size of the most recent backup read. */
+  ulonglong innodb_page_track_backup_last_pages;
+  
+  /** LSN up to which data was purged in last purge operation.
+   * Indicates the oldest LSN still available in archives. */
+  ulonglong innodb_page_track_purge_last_lsn;
+  
+  /** Start LSN of current active tracking session.
+   * Updated in Arch_Page_Sys::start() when creating a new archive group.
+   * Represents the beginning of the LSN range being tracked. */
+  ulonglong innodb_page_track_current_start_lsn;
+
+  /* ========== Page Tracking Statistics - Computed Metrics ========== */
+  /** Memory usage percentage of archive buffer (0-100).
+   * Calculated as (pending_bytes * 100) / total_buffer_size. */
+  ulonglong innodb_page_track_memory_usage_pct;
+  
+  /** Number of available (free) blocks in archive buffer.
+   * Approximated as total_blocks - pending_blocks. */
+  ulonglong innodb_page_track_buffer_available_blocks;
+  
+  /** Time elapsed since last flush operation (seconds).
+   * Calculated as current_time - flush_last_time.
+   * Useful for detecting flush stalls or delays. */
+  ulonglong innodb_page_track_flush_lag_seconds;
+  
+  /** Number of blocks written but not yet flushed to disk.
+   * Calculated as last_write_block - last_flush_block. */
+  ulonglong innodb_page_track_pending_flush_blocks;
+  
+  /** Bytes of data written but not yet flushed to disk.
+   * Calculated as pending_blocks * ARCH_PAGE_BLK_SIZE. */
+  ulonglong innodb_page_track_pending_flush_bytes;
+
+  /* ========== Page Tracking Statistics - Error Counters ========== */
+  /** Number of checksum validation errors encountered.
+   * Incremented when archived data fails checksum verification. */
+  ulonglong innodb_page_track_checksum_errors;
+  
+  /** Number of I/O operation errors encountered.
+   * Incremented on file read/write failures. */
+  ulonglong innodb_page_track_io_errors;
 };
 
 #ifndef UNIV_HOTBACKUP
@@ -1280,6 +1399,20 @@ struct srv_slot_t {
   /** Suspended query thread (only used for user threads). */
   que_thr_t *thr;
 };
+
+srv_slot_t *srv_reserve_slot(
+    srv_thread_type type); /*!< in: type of the thread */
+/** Release a thread's slot. */
+void srv_free_slot(srv_slot_t *slot); /*!< in/out: thread slot */
+/**
+Check if purge should stop.
+@return true if it should shutdown. */
+bool srv_purge_should_exit(
+    ulint n_purged); /*!< in: pages purged in last batch */
+int64_t srv_suspend_thread(srv_slot_t *slot); /*!< in/out: thread slot */
+
+extern void srv_wakeup_if_suspend(srv_slot_t *slot);
+
 #endif /* !UNIV_HOTBACKUP */
 
 #endif

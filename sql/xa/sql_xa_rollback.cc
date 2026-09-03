@@ -31,8 +31,10 @@
 #include "sql/tc_log.h"              // tc_log
 #include "sql/transaction.h"  // trans_reset_one_shot_chistics, trans_track_end_trx
 #include "sql/transaction_info.h"  // Transaction_ctx
-#include "sql/bl_consensus_log.h"
-#include "sql/consensus_admin.h"
+#include "sql/komodo0xlog.h"
+#include "sql/serverless/komodo0switchover0manager.h"
+
+#include "sql/xa/komodo0xa.h"
 
 Sql_cmd_xa_rollback::Sql_cmd_xa_rollback(xid_t *xid_arg)
     : Sql_cmd_xa_second_phase{xid_arg} {}
@@ -42,14 +44,14 @@ enum_sql_command Sql_cmd_xa_rollback::sql_command_code() const {
 }
 
 bool Sql_cmd_xa_rollback::execute(THD *thd) {
-  if (check_limit_xa(thd, false)) return true;
-
-  xa_finishing_count++;
+  auto switchover_manager = komodo::xlog_engine_get_switchover_manager();
+  if (switchover_manager->check_xa_limited(thd, false)) return true;
+  auto xa_running_count_guard = create_lock_guard(
+    [&] { switchover_manager->inc_xa_running_count(); },
+    [&] { switchover_manager->dec_xa_running_count(); }
+  );
 
   bool st = trans_xa_rollback(thd);
-
-  xa_finishing_count--;
-  assert(xa_finishing_count >= 0);
 
   if (!st) {
     thd->mdl_context.release_transactional_locks();
@@ -142,6 +144,7 @@ bool Sql_cmd_xa_rollback::process_detached_xa_rollback(THD *thd) {
   if (this->acquire_locks(thd)) return true;
   raii::Sentry<> acquired_locks_guard{
       [this]() -> void { this->release_locks(); }};
+  if (this->load_changeset_context(thd)) return true;
   this->setup_thd_context(thd);
   if (this->enter_commit_order(thd)) return true;
 

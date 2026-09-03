@@ -1,0 +1,215 @@
+##########################################
+# VECTOR INDEX with DISCARD/IMPORT       #
+# TABLESPACE and ALTER TABLE FORCE       #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+CALL mtr.add_suppression("Got error 155 when reading table");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+--let $MYSQLD_DATADIR= `select @@datadir`
+
+--echo #
+--echo # ==========================================================
+--echo # 1. Setup: Create table with VECTOR INDEX and insert data
+--echo # ==========================================================
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  extra INT DEFAULT 0,
+  VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+
+INSERT INTO t1(id, v, extra) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'), 10);
+INSERT INTO t1(id, v, extra) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'), 20);
+INSERT INTO t1(id, v, extra) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'), 30);
+INSERT INTO t1(id, v, extra) VALUES (4, VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'), 40);
+
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # Verify auxiliary tables exist
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo #
+--echo # ==========================================================
+--echo # 2. ALTER TABLE DISCARD TABLESPACE with VECTOR INDEX
+--echo # ==========================================================
+--echo # Risk: DISCARD removes the .ibd file but the code path
+--echo # (mysql_discard_or_import_tablespace) has NO vidx-specific
+--echo # handling. The auxiliary table (vidx_*) may become orphaned.
+--echo #
+--echo # BUG FOUND: DISCARD TABLESPACE succeeds on tables with vector
+--echo # index but does NOT handle the auxiliary tables, leaving them
+--echo # orphaned. The main table enters discarded state while vidx_*
+--echo # auxiliary tables remain intact.
+--echo #
+
+--echo # DISCARD TABLESPACE should be rejected when table has vector index.
+--echo # The fix in mysql_discard_or_import_tablespace() prevents orphaned
+--echo # auxiliary tables and the server crash on subsequent DROP TABLE.
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 DISCARD TABLESPACE;
+
+--echo # Verify table is still intact after rejected DISCARD
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # Verify auxiliary tables still exist
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # ANN search should still work
+--disable_result_log
+SELECT id, VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo # IMPORT TABLESPACE should also be rejected
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t1 IMPORT TABLESPACE;
+
+--echo # Verify table is still intact after rejected IMPORT
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo #
+--echo # ==========================================================
+--echo # 3. ALTER TABLE FORCE with VECTOR INDEX
+--echo # ==========================================================
+--echo # ALTER TABLE FORCE triggers a table rebuild (same as OPTIMIZE).
+--echo # Risk: Same as OPTIMIZE - auxiliary tables must be rebuilt.
+--echo #
+
+--echo # Baseline ANN search
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+ALTER TABLE t1 FORCE;
+
+--echo # 3.1 Verify structure preserved
+SHOW CREATE TABLE t1;
+
+--echo # 3.2 Verify data count
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # 3.3 Verify auxiliary tables
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # 3.4 Verify VECTOR INDEX metadata
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+
+--echo # 3.5 Verify ANN search after FORCE
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo #
+--echo # ==========================================================
+--echo # 4. ALTER TABLE ALGORITHM=COPY explicit with VECTOR INDEX
+--echo # ==========================================================
+--echo # Vector index DDL already forces COPY algorithm internally.
+--echo # Explicitly specifying ALGORITHM=COPY should work fine.
+--echo #
+ALTER TABLE t1 ADD COLUMN c1 INT DEFAULT 0, ALGORITHM=COPY;
+SHOW CREATE TABLE t1;
+
+--echo # Verify ANN search after explicit COPY
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo #
+--echo # ==========================================================
+--echo # 5. ALTER TABLE ALGORITHM=INPLACE with VECTOR INDEX
+--echo # ==========================================================
+--echo # Vector index forces COPY. Requesting INPLACE should either:
+--echo # - Be rejected with error, or
+--echo # - Fall back to COPY silently
+--echo #
+--error 0,ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD COLUMN c2 INT DEFAULT 0, ALGORITHM=INPLACE;
+
+SHOW CREATE TABLE t1;
+
+--echo #
+--echo # ==========================================================
+--echo # 6. ALTER TABLE ALGORITHM=INSTANT with VECTOR INDEX
+--echo # ==========================================================
+--echo # INSTANT should not conflict if the operation itself supports
+--echo # INSTANT and does not touch the vector index.
+--echo #
+--error 0,ER_ALTER_OPERATION_NOT_SUPPORTED
+ALTER TABLE t1 ADD COLUMN c3 INT DEFAULT 0, ALGORITHM=INSTANT;
+
+SHOW CREATE TABLE t1;
+
+--echo #
+--echo # ==========================================================
+--echo # 7. ALTER TABLE ROW_FORMAT with VECTOR INDEX
+--echo # ==========================================================
+--echo # Changing ROW_FORMAT triggers a table rebuild.
+--echo # Risk: auxiliary tables must survive the rebuild.
+--echo #
+ALTER TABLE t1 ROW_FORMAT=COMPRESSED;
+SHOW CREATE TABLE t1;
+
+--echo # Verify ANN search after ROW_FORMAT change
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo # Change back to DYNAMIC
+ALTER TABLE t1 ROW_FORMAT=DYNAMIC;
+SHOW CREATE TABLE t1;
+
+--echo # Verify ANN search
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo # Verify auxiliary tables
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo #
+--echo # ==========================================================
+--echo # 8. Cleanup
+--echo # ==========================================================
+--echo #
+DROP TABLE t1;
+
+--echo # Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+SET GLOBAL vidx_disabled = ON;

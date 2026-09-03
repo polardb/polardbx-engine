@@ -271,7 +271,7 @@ static dberr_t z_replace(InsertContext &ctx, trx_t *trx, dict_index_t *index,
 
       /* Chunk now contains new data to be inserted. */
       ret = z_insert_chunk(index, first_page, trx, chunk, len1, &new_entry, mtr,
-                           false);
+                           &ctx);
 
       if (ret != DB_SUCCESS) {
         return (ret);
@@ -293,7 +293,7 @@ static dberr_t z_replace(InsertContext &ctx, trx_t *trx, dict_index_t *index,
       /* Full chunk is to be replaced. No need to read
       old data. */
       ret = z_insert_chunk(index, first_page, trx, from_ptr, size, &new_entry,
-                           mtr, false);
+                           mtr, &ctx);
 
       if (ret != DB_SUCCESS) {
         return (ret);

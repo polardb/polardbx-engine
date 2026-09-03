@@ -1,0 +1,68 @@
+CREATE DATABASE vidx_ddl_parallel_equivalence;
+USE vidx_ddl_parallel_equivalence;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+
+############################################
+# Phase 1: W=1 serial reference build      #
+############################################
+SET SESSION rand_seed1 = 776433, rand_seed2 = 199081;
+SET SESSION vidx_ddl_threads = 1;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT COUNT(*) INTO @live1 FROM g1;
+VERDICT 1 serial build live==500: PASS
+SELECT COUNT(DISTINCT layer) INTO @layers1 FROM g1;
+VERDICT 1 reference graph is multi-layer: PASS
+SELECT COUNT(*) INTO @nonempty1 FROM g1 WHERE neighbors IS NOT NULL AND LENGTH(neighbors) > 0;
+VERDICT 1 all 500 reference nodes carry neighbors: PASS
+
+############################################
+# Phase 2: W=8 rebuild, same RNG seed      #
+############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET SESSION rand_seed1 = 776433, rand_seed2 = 199081;
+SET SESSION vidx_ddl_threads = 8;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT COUNT(*) INTO @live2 FROM g2;
+VERDICT 2 parallel live==serial live: PASS
+SELECT COUNT(*) INTO @only1 FROM g1 LEFT JOIN g2 ON g1.tref = g2.tref WHERE g2.tref IS NULL;
+SELECT COUNT(*) INTO @only2 FROM g2 LEFT JOIN g1 ON g2.tref = g1.tref WHERE g1.tref IS NULL;
+VERDICT 2 node sets identical: PASS
+SELECT COUNT(*) INTO @layer_diff
+FROM g1 JOIN g2 ON g1.tref = g2.tref WHERE g1.layer <> g2.layer;
+VERDICT 2 layer identical for all 500 nodes: PASS
+SELECT COUNT(*) INTO @len_diff
+FROM g1 JOIN g2 ON g1.tref = g2.tref
+WHERE LENGTH(g1.neighbors) <> LENGTH(g2.neighbors);
+VERDICT 2 per-node adjacency length identical for all 500 nodes: PASS
+SELECT SUM(LENGTH(neighbors)) INTO @bytes1 FROM g1;
+SELECT SUM(LENGTH(neighbors)) INTO @bytes2 FROM g2;
+VERDICT 2 total adjacency bytes identical: PASS
+SET SESSION vidx_hnsw_ef_search = 64;
+VERDICT 2 parallel graph full self-probe 500/500: PASS
+
+############################################
+# Phase 3: W=16 over 5 rows (W >> rows)    #
+############################################
+CREATE TABLE t2 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 16;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+VERDICT 3 W=16 over 5 rows live==5: PASS
+VERDICT 3 W=16 full self-probe 5/5: PASS
+DROP TABLE g1;
+DROP TABLE g2;
+DROP TABLE t1;
+DROP TABLE t2;
+SET SESSION vidx_ddl_threads = default;
+SET SESSION vidx_hnsw_ef_search = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_parallel_equivalence;

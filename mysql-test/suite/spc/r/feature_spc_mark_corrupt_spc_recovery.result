@@ -1,0 +1,129 @@
+#
+# Schema + SPC indexes c1(c1), c2(c2) (redo_simple-style sbtest1 + extra char column)
+#
+DROP DATABASE IF EXISTS sbtest;
+Warnings:
+Note	1008	Can't drop database 'sbtest'; database doesn't exist
+CREATE DATABASE sbtest;
+USE sbtest;
+CREATE TABLE `sbtest1` (
+`id` int NOT NULL AUTO_INCREMENT,
+`k` int NOT NULL DEFAULT '0',
+`c1` char(120) NOT NULL DEFAULT '',
+`c2` char(120) NOT NULL DEFAULT '',
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+set opt_index_format_spc_enabled = 1;
+ALTER TABLE sbtest.sbtest1 ADD INDEX c1(c1);
+ALTER TABLE sbtest.sbtest1 ADD INDEX c2(c2);
+SELECT index_name, index_page_type
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'sbtest' AND TABLE_NAME = 'sbtest1'
+  ORDER BY index_name;
+index_name	index_page_type
+c1	SPC_PAGE
+c2	SPC_PAGE
+PRIMARY	INDEX
+CREATE PROCEDURE sp_insert_random_sbtest_rows(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 0;
+SET @table_size = 2500;
+SET @group_len = 11;
+SET @base_group_string = RPAD('', @group_len, '@');
+WHILE i < num_rows DO
+REPLACE INTO sbtest.sbtest1 (id, k, c1, c2)
+VALUES (
+FLOOR(1 + RAND() * @table_size),
+FLOOR(1 + RAND() * @table_size),
+CONCAT_WS('-',
+(CASE WHEN RAND() < 1.0 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.9 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.8 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.7 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.6 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.5 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.4 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.3 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.2 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.1 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END)
+),
+CONCAT_WS('-',
+(CASE WHEN RAND() < 1.0 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.9 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.8 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.7 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.6 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.5 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.4 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.3 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.2 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.1 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END)
+)
+);
+SET i = i + 1;
+END WHILE;
+END //
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_stats_auto_recalc = OFF;
+SET GLOBAL innodb_change_buffering_debug = 1;
+set global innodb_redo_log_capacity = 4*1024*1024*1024;
+set global innodb_buffer_pool_size = 4303355904;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+SET GLOBAL innodb_page_cleaner_disabled_debug = 1;
+SET GLOBAL innodb_checkpoint_disabled = 1;
+#
+# Data load (redo_simple-style), crash recovery with mark_corrupt knob
+#
+# Load: 2500 rows per session x4 (mysqltest cannot --eval --send; four parallel CALLs below).
+#
+CALL sbtest.sp_insert_random_sbtest_rows(2500);
+CALL sbtest.sp_insert_random_sbtest_rows(2500);
+CALL sbtest.sp_insert_random_sbtest_rows(2500);
+CALL sbtest.sp_insert_random_sbtest_rows(2500);
+#
+# Fingerprint committed rows (via PK) before uncommitted txn — after recovery must match
+#
+#
+# Large open transaction touching c1, c2 (SPC secondaries) and k; not committed
+#
+BEGIN;
+# kill_and_restart on default (reconnect via kill_and_restart_mysqld.inc, same pattern as redo_simple.test)
+# Kill and restart: --loose-innodb-mark-corrupt-spc-by-space-id=SPACE_ID
+#
+# After recovery with knob: SPC indexes are DICT_CORRUPT — only PK checksum vs pre-crash baseline
+#
+USE sbtest;
+include/assert.inc [PK checksum unchanged after recovery vs baseline]
+#
+# Purge + stats. Read SPC indexes get corrupt error.
+#
+SET GLOBAL innodb_purge_run_now = ON;
+ANALYZE TABLE sbtest.sbtest1;
+Table	Op	Msg_type	Msg_text
+sbtest.sbtest1	analyze	status	OK
+SELECT COUNT(*) FROM sbtest.sbtest1 FORCE INDEX (c1);
+ERROR HY000: Index c1 is corrupted
+SELECT COUNT(*) FROM sbtest.sbtest1 FORCE INDEX (c2);
+ERROR HY000: Index c2 is corrupted
+#
+# Drop SPC indexes + DML
+#
+DROP INDEX c1 ON sbtest.sbtest1;
+DROP INDEX c2 ON sbtest.sbtest1;
+CHECK TABLE sbtest.sbtest1;
+Table	Op	Msg_type	Msg_text
+sbtest.sbtest1	check	status	OK
+INSERT INTO sbtest.sbtest1 (id, k, c1, c2)
+VALUES (60001, 0, REPEAT('p', 120), REPEAT('q', 120));
+UPDATE sbtest.sbtest1 SET c2 = REPEAT('r', 120) WHERE id = 60001;
+DELETE FROM sbtest.sbtest1 WHERE id BETWEEN 500 AND 502;
+INSERT INTO sbtest.sbtest1 (k, c1, c2) VALUES (0, REPEAT('s', 120), REPEAT('t', 120));
+#
+# Final restart
+#
+# restart
+DROP PROCEDURE sp_insert_random_sbtest_rows;
+DROP TABLE sbtest.sbtest1;
+DROP DATABASE sbtest;
+SET GLOBAL innodb_change_buffering_debug = default;
+SET GLOBAL innodb_stats_auto_recalc = default;

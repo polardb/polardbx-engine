@@ -1,0 +1,102 @@
+CREATE DATABASE vidx_ddl_build_edge_rows;
+USE vidx_ddl_build_edge_rows;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+############################################
+# Phase A: ADD VECTOR INDEX on 0 rows     #
+############################################
+CREATE TABLE t_empty (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t_empty ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t_empty;
+Table	Create Table
+t_empty	CREATE TABLE `t_empty` (
+  `id` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+VERDICT A no micro-batch on 0 rows: PASS
+VERDICT A no build window on 0 rows: PASS
+# Assert: the auxiliary graph table exists and is empty
+VERDICT A live==0: PASS
+# A single INSERT after the empty build must reach the DML path
+INSERT INTO t_empty VALUES (1, VEC_FROMTEXT('[1,2,3,4,5]'));
+VERDICT A DML after empty build publishes a node: PASS
+
+############################################
+# Phase B: ADD VECTOR INDEX on all-NULL   #
+############################################
+CREATE TABLE t_null (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_null VALUES (1, NULL), (2, NULL), (3, NULL), (4, NULL);
+SELECT COUNT(*) AS total_rows, COUNT(v) AS non_null_rows FROM t_null;
+total_rows	non_null_rows
+4	0
+ALTER TABLE t_null ADD VECTOR INDEX vi(v);
+VERDICT B no micro-batch on NULL-only rows: PASS
+VERDICT B no build window on NULL-only rows: PASS
+VERDICT B live==0: PASS
+# Filling one vector afterwards must seed the still-empty graph
+UPDATE t_null SET v = VEC_FROMTEXT('[9,9,9,9,9]') WHERE id = 2;
+VERDICT B UPDATE seeds the empty graph: PASS
+
+############################################
+# Phase C: exactly one non-NULL row, W=8  #
+############################################
+CREATE TABLE t_one (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_one VALUES (1, NULL), (2, VEC_FROMTEXT('[4,5,6,7,8]')), (3, NULL);
+SET SESSION vidx_ddl_threads = 8;
+ALTER TABLE t_one ADD VECTOR INDEX vi(v);
+VERDICT C seed row uses no parallel slot: PASS
+VERDICT C one window persists the seed: PASS
+VERDICT C live==1: PASS
+
+############################################
+# Phase D: no partial tail batch          #
+# 4 leading NULLs + 17 vectors, W=2 ->    #
+# 16 parallel rows / batch 16 = 2 batches #
+# of which none is partial                #
+############################################
+CREATE TABLE t_exact (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SELECT COUNT(*) AS total_rows, COUNT(v) AS non_null_rows FROM t_exact;
+total_rows	non_null_rows
+21	17
+SET SESSION vidx_ddl_threads = 2;
+ALTER TABLE t_exact ADD VECTOR INDEX vi(v);
+VERDICT D batch-count 16/16==1 exactly: PASS
+VERDICT D live==non-null-base: PASS
+
+############################################
+# Phase E: empty build then DML-only growth #
+############################################
+CREATE TABLE t_grow (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t_grow ADD VECTOR INDEX vi(v);
+VERDICT E live==40 after DML-only growth: PASS
+# Every DML-inserted row must be reachable in the graph the DDL seeded
+VERDICT E full self-probe 40/40: PASS
+
+# No degenerate input may be reported as a build error
+VERDICT build-error-count unchanged: PASS
+DROP TABLE t_empty, t_null, t_one, t_exact, t_grow;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_build_edge_rows;

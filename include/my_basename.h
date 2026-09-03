@@ -38,6 +38,10 @@ static constexpr int basename_index(const char *const path, const int index) {
 
 #define MY_BASENAME (&__FILE__[basename_index(__FILE__, sizeof(__FILE__) - 1)])
 
+/* NOTE::
+  The following code is too poor for "Repl" subsystem, specified subsystem
+  displayed for rpl_* file at compile time offers is better.
+
 #ifndef LOG_SUBSYSTEM_TAG
 constexpr const char *basename_prefix_eval(const char *const path) {
   return (path[0] == 'r' && path[1] == 'p' && path[2] == 'l' && path[3] == '_')
@@ -46,7 +50,7 @@ constexpr const char *basename_prefix_eval(const char *const path) {
 }
 
 constexpr int basename_prefix_find(const char *const path, const int index) {
-  return (path[index] == '/' || path[index] == '\\')
+  return (index >= 0 && (path[index] == '/' || path[index] == '\\'))
              ? index + 1
              : basename_prefix_find(path, index - 1);
 }
@@ -56,5 +60,5 @@ constexpr int basename_prefix_find(const char *const path, const int index) {
       &__FILE__[basename_prefix_find(__FILE__, sizeof(__FILE__) - 1)])
 
 #endif
-
+ */
 #endif  // MY_BASENAME_INCLUDED

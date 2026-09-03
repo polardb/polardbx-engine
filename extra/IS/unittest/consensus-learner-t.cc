@@ -46,7 +46,7 @@ TEST(consensus, learnerSource) {
   std::string strTmp5("127.0.0.1:11006");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -315,7 +315,7 @@ TEST(consensus, follower2learner) {
   std::string strTmp4("127.0.0.1:11005");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -484,7 +484,7 @@ TEST(consensus, downgrade_follower_donnot_recieve_msg) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -565,7 +565,7 @@ TEST(consensus, restart_learner) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -694,7 +694,7 @@ TEST(consensus, restart_follower) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -785,7 +785,7 @@ TEST(consensus, configureChange_affect_learner_meta) {
   std::string strTmp6("127.0.0.1:11006");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog4, rlog5, rlog6;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog4, rlog5, rlog6;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1056,7 +1056,7 @@ TEST(consensus, learner_old_meta_new_version) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1164,7 +1164,7 @@ TEST(consensus, SyncLearnerAll) {
   std::string strTmp5("127.0.0.1:11006");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog6;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog6;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1439,7 +1439,7 @@ TEST(consensus, cctimeout) {
   std::string strTmp3("127.0.0.1:11004");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -1508,7 +1508,7 @@ TEST(consensus, learnerSource4) {
   std::string strTmp7("127.0.0.1:11008");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1731,7 +1731,7 @@ TEST(consensus, concurrent_cc) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -1805,7 +1805,7 @@ TEST(consensus, learner_downgrade_term) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1906,7 +1906,7 @@ TEST(consensus, learner_heartbeat) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 5000;
-  std::shared_ptr<PaxosLog> rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog1, rlog4;
   rlog1 =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -1989,7 +1989,7 @@ TEST(consensus, learnersource_addr) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -2077,7 +2077,7 @@ TEST(consensus, enable_learner_auto_reset_match_index) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   // We init log with mock log in index 1 to make error happend when we send log
@@ -2225,7 +2225,7 @@ TEST(consensus, force_single_learner) {
   std::vector<Paxos::ClusterInfoType> cis;
 
   const uint64_t timeout = 5000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog4;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog4;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);

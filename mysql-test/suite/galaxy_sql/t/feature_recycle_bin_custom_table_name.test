@@ -1,0 +1,219 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+call mtr.add_suppression("Fail to recycle table");
+
+call mtr.add_suppression("The consensus follower is not allowed to to do current operation.");
+
+--source include/paxos.inc
+
+# Connect to 3 server nodes
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+connection conn1;
+create database db_recycle_test;
+
+--echo ------------------------------------------------------
+--echo 1. Test custom table name with session variable
+--echo ------------------------------------------------------
+
+connection conn1;
+set global recycle_scheduler=off;
+use db_recycle_test;
+
+SET SESSION recycle_bin_table_name = 'custom_table_001';
+SET SESSION recycle_bin = ON;
+
+create table t1(id int, name varchar(50));
+insert into t1 values(1, 'test1');
+drop table t1;
+
+# Check recycle bin on node 1
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+create table t2(id int, name varchar(50));
+insert into t2 values(2, 'test2');
+SET SESSION recycle_bin_table_name = 'custom_table_002';
+drop table t2;
+
+show variables like "recycle_bin_table_name";
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--echo -------------------------------------------------------
+--echo 2. Test default table naming (without session variable)
+--echo    -- Drop table without setting custom name
+--echo -------------------------------------------------------
+
+create table t3(id int, name varchar(50));
+insert into t3 values(3, 'test3');
+# Don't set recycle_bin_table_name, should use default naming
+drop table t3;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--echo -----------------------------------------------------------
+--echo 3. Test consistency across 3 nodes
+--echo    -- Verify custom table names are consistent on all nodes
+--echo -----------------------------------------------------------
+
+# Check recycle bin on node 2
+connection conn2;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+# Check recycle bin on node 3
+connection conn3;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--echo ------------------------------------------------------
+--echo 4. Test truncate operations with custom table names
+--echo    -- Mix truncate and drop operations
+--echo ------------------------------------------------------
+
+connection conn1;
+
+# Test truncate with custom table name
+SET SESSION recycle_bin_table_name = 'custom_truncate_001';
+create table t_truncate1(id int, name varchar(50));
+insert into t_truncate1 values(1, 'truncate_test1');
+truncate table t_truncate1;
+
+# Test drop after truncate
+SET SESSION recycle_bin_table_name = 'custom_drop_after_truncate';
+drop table t_truncate1;
+
+# Test mixed operations
+create table t_mixed(id int, name varchar(50));
+insert into t_mixed values(1, 'mixed_test1');
+SET SESSION recycle_bin_table_name = 'custom_mixed_001';
+truncate table t_mixed;
+insert into t_mixed values(2, 'mixed_test2');
+drop table t_mixed;
+
+# Check recycle bin
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+--echo ------------------------------------------------------------------
+--echo 5. Test table name validation
+--echo    -- Verify check_recycle_bin_table_name function works correctly
+--echo ------------------------------------------------------------------
+
+connection conn1;
+
+# Valid table names should work
+SET SESSION recycle_bin_table_name = 'valid_table_name';
+SET SESSION recycle_bin_table_name = 'table123';
+SET SESSION recycle_bin_table_name = 'my_table_001';
+
+# NULL value should be allowed
+SET SESSION recycle_bin_table_name = NULL;
+
+# Invalid table names should be rejected
+--let $error_text=ER_WRONG_TABLE_NAME
+--error ER_WRONG_TABLE_NAME
+SET SESSION recycle_bin_table_name = '';
+
+# Invalid table names should be rejected
+--let $error_text=ER_TOO_LONG_IDENT
+--error ER_TOO_LONG_IDENT
+SET SESSION recycle_bin_table_name = 'this_is_a_very_long_table_name_that_exceeds_the_maximum_length_limit_of_sixty_four_characters';
+
+--echo ------------------------------------------------------
+--echo 6. Test session variable reset behavior
+--echo    -- Verify session variable is reset after each use
+--echo ------------------------------------------------------
+
+connection conn1;
+SET SESSION recycle_bin_table_name = 'test_reset';
+create table t4(id int);
+insert into t4 values(4);
+drop table t4;
+
+# Check that variable is reset (should be NULL)
+create table t5(id int);
+insert into t5 values(5);
+drop table t5;
+
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+# Verify consistency across all nodes after reset test
+connection conn2;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+connection conn3;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+
+--echo ----------------------------------------------------------------------------
+--echo 7. Test recycle_bin_table_name duplicate handling
+--echo    -- Verify warning when using same custom table name for different tables
+--echo ----------------------------------------------------------------------------
+
+connection conn1;
+
+SET SESSION recycle_bin_table_name = 'new_case_table';
+CREATE TABLE t6(id INT);
+INSERT INTO t6 VALUES(1);
+DROP TABLE t6;
+
+SET SESSION recycle_bin_table_name = 'new_case_table'; 
+CREATE TABLE t7(id INT);
+INSERT INTO t7 VALUES(1);
+
+DROP TABLE t7;
+SHOW WARNINGS;
+--echo ----------------------------------------------------------------------------
+--echo 8. Test drop database with custom recycle table name
+--echo    -- Verify database drop operations dosen't work with custom table naming
+--echo ----------------------------------------------------------------------------
+
+connection conn1;
+
+CREATE DATABASE new_db_for_tests;
+USE new_db_for_tests;
+
+CREATE TABLE t8(id INT);
+INSERT INTO t8 VALUES(1);
+
+CREATE TABLE t9(id INT);
+INSERT INTO t9 VALUES(2);
+
+SET SESSION recycle_bin_table_name = 'drop_db';
+
+DROP DATABASE new_db_for_tests;
+
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+--echo ------------------------------------------------------
+--echo 9. Final verification and cleanup
+--echo    -- Final check of all tables in recycle bin
+--echo ------------------------------------------------------
+
+connection conn1;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+connection conn2;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+connection conn3;
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+
+# Clean up
+connection conn1;
+drop database db_recycle_test;

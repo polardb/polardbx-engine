@@ -1,0 +1,54 @@
+DROP TABLE IF EXISTS c_mdl;
+CREATE TABLE c_mdl (
+id INT NOT NULL,
+str VARCHAR(20) NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+begin;
+insert into c_mdl values (1, "abc", "a");
+select * from c_mdl;
+id	str	value
+1	abc	a
+SET lock_wait_timeout = 1;
+call polarx.changeset_start('c_mdl', 10000, 1);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+commit;
+call polarx.changeset_start('c_mdl', 10000, 1);
+TABLE
+c_mdl
+call polarx.changeset_finish('c_mdl');
+SEQ	ROW
+begin;
+select * from c_mdl for update;
+id	str	value
+1	abc	a
+SET lock_wait_timeout = 1;
+call polarx.changeset_start('c_mdl', 10000, 1);
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+commit;
+call polarx.changeset_start('c_mdl', 10000, 1);
+TABLE
+c_mdl
+call polarx.changeset_finish('c_mdl');
+SEQ	ROW
+begin;
+SET lock_wait_timeout = 1;
+select * from c_mdl;
+id	str	value
+1	abc	a
+SET lock_wait_timeout = 1;
+call polarx.changeset_start('c_mdl', 10000, 1);
+TABLE
+c_mdl
+call polarx.changeset_stats('c_mdl');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c_mdl	0	0	0	0	0	0	-	-	-
+insert into c_mdl values (2, "cde", "b");
+commit;
+call polarx.changeset_stats('c_mdl');
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c_mdl	1	0	0	0	64	1	-	-	-
+call polarx.changeset_finish('c_mdl');
+SEQ	ROW
+DROP TABLE c_mdl;

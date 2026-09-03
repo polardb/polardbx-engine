@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created Feb 8, 2013 Marko Makela
  *******************************************************/
 
+#ifndef dict0stats_bg_h
+#define INNODB_DICT0STATS_BG_IC_STANDALONE
+#include "dict0stats_bg.h"
+#undef INNODB_DICT0STATS_BG_IC_STANDALONE
+#endif /* !dict0stats_bg_h */
 #include "dict0dict.h"
 #include "dict0mem.h"
 

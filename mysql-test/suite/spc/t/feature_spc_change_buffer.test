@@ -1,0 +1,264 @@
+### Purpose ###
+#
+# Verify that change buffer (ibuf) operations work correctly with SPC indexes:
+#   - Buffered inserts merge correctly onto SPC-encoded pages
+#   - Buffered delete-marks merge correctly
+#   - Buffered purge operations merge correctly
+#   - Data consistency after ibuf merge (checksum SPC == PK)
+#   - Redo recovery with pending ibuf entries on SPC pages
+#
+# Uses innodb_change_buffering_debug=1 to force secondary index operations
+# through the change buffer path, even when the target page is in buffer pool.
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+--source include/no_valgrind_without_big.inc
+
+--disable_query_log
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET @saved_change_buffering_debug = @@GLOBAL.innodb_change_buffering_debug;
+--enable_query_log
+
+--echo #
+--echo # PART 1: Buffered inserts on SPC index pages
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY AUTO_INCREMENT,
+  c   VARCHAR(120) NOT NULL DEFAULT '',
+  KEY idx_c (c)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+
+--echo # Insert rows: ibuf debug forces secondary index ops through change buffer
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t1;
+
+--echo # Force ibuf merge by reading through SPC index
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--echo # Checksum after ibuf merge
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: Buffered delete-marks and purge on SPC index
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120) NOT NULL DEFAULT '',
+  KEY idx_c (c)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Force ibuf merge for inserts
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--echo # Delete half the rows (delete-marks go through ibuf)
+--disable_query_log
+let $i = 1;
+while ($i <= 100) {
+  eval DELETE FROM t1 WHERE id = $i;
+  inc $i;
+}
+--enable_query_log
+
+--echo # Force ibuf merge for delete-marks
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--let $count_after_delete = `SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c)`
+--let $assert_text = After buffered deletes: 100 rows remain in SPC index
+--let $assert_cond = $count_after_delete = 100
+--source include/assert.inc
+
+--echo # Checksum after buffered delete + merge
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Run purge to clean up delete-marked records
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 0;
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Checksum after purge
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Re-insert purged keys must succeed
+BEGIN;
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('b', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+COMMIT;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: Mixed DML through change buffer on SPC index
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120) NOT NULL DEFAULT '',
+  KEY idx_c (c)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 300) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Mixed operations: update (= delete-mark + insert in secondary), delete, insert
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval UPDATE t1 SET c = CONCAT(REPEAT('z', 100), LPAD($i, 10, '0')) WHERE id = $i;
+  inc $i;
+}
+let $i = 51;
+while ($i <= 100) {
+  eval DELETE FROM t1 WHERE id = $i;
+  inc $i;
+}
+let $i = 301;
+while ($i <= 350) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('n', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Force ibuf merge
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--echo # Checksum after mixed DML through ibuf
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Redo recovery with change buffer entries on SPC pages
+--echo #
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY AUTO_INCREMENT,
+  c   VARCHAR(120) NOT NULL DEFAULT '',
+  KEY idx_c (c)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Force checkpoint
+SET GLOBAL innodb_log_checkpoint_now = 1;
+
+--echo # Disable page cleaner and checkpoint
+SET GLOBAL innodb_page_cleaner_disabled_debug = 1;
+SET GLOBAL innodb_checkpoint_disabled = 1;
+
+--echo # More DML through ibuf (redo written but pages not flushed)
+--disable_query_log
+let $i = 201;
+while ($i <= 300) {
+  eval INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('b', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+let $i = 1;
+while ($i <= 50) {
+  eval DELETE FROM t1 WHERE id = $i;
+  inc $i;
+}
+--enable_query_log
+
+--echo # Kill without flushing; restart to replay redo + ibuf merge
+--source include/kill_and_restart_mysqld.inc
+
+--echo # After recovery: verify SPC index consistency
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+CHECK TABLE t1;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+--disable_query_log
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE,ER_WRONG_TYPE_FOR_VAR
+SET GLOBAL innodb_change_buffering_debug = 0;
+--enable_query_log

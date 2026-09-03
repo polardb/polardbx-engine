@@ -24,7 +24,7 @@ include/assert.inc [expect_gcn == actual_gcn]
 ############################
 set xa_detach_on_prepare = on;
 xa start 'asgc_b1';
-set innodb_commit_seq = expect_gcn
+set innodb_commit_seq = set_gcn
 insert into t1 values (1);
 xa end 'asgc_b1';
 xa prepare 'asgc_b1';
@@ -48,7 +48,7 @@ include/assert.inc [expect_gcn == actual_gcn]
 ############################
 set xa_detach_on_prepare = off;
 xa start 'asgc_b2';
-set innodb_commit_seq = expect_gcn
+set innodb_commit_seq = set_gcn
 insert into t1 values (1);
 xa end 'asgc_b2';
 xa prepare 'asgc_b2';
@@ -87,7 +87,6 @@ set xa_detach_on_prepare = default;
 ############################
 set xa_detach_on_prepare = off;
 xa start 'asgc_b4';
-set innodb_commit_seq = expect_gcn
 insert into t1 values (1);
 xa end 'asgc_b4';
 call dbms_xa.ac_prepare(#gtrid, #bqual, #formatID, #N_BRANCH, #N_LOCAL_BRANCH, #gcn)
@@ -145,7 +144,6 @@ set xa_detach_on_prepare = default;
 connection default;
 set xa_detach_on_prepare = on;
 xa start 'asgc_b5';
-set innodb_commit_seq = expect_gcn
 insert into t1 values (1);
 xa end 'asgc_b5';
 call dbms_xa.ac_prepare(#gtrid, #bqual, #formatID, #N_BRANCH, #N_LOCAL_BRANCH, #gcn)

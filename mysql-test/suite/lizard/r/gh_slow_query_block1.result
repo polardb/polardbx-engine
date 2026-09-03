@@ -6,7 +6,7 @@ insert into test1 select * from test1 limit 1;
 insert into test1 select * from test1 limit 2;
 insert into test1 select * from test1 limit 3;
 insert into test1 select * from test1 limit 4;
-ERROR HY000: Transaction is too big, please split it into smaller transactions.
+ERROR HY000: Transaction is too big, please split it into smaller transactions or change variable max_trx_affected_rows.
 commit;
 select count(*) from test1;
 count(*)

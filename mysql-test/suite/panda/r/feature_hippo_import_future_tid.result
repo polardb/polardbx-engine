@@ -1,0 +1,51 @@
+SET opt_index_format_hippo_enabled = ON;
+SET opt_index_format_panda_enabled = OFF;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+c1 INT NOT NULL,
+c2 VARCHAR(100),
+INDEX idx_c1 (c1) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 100, 'aaa'), (2, 200, 'bbb'), (3, 300, 'ccc');
+# Source index must be HIPPO.
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+FLUSH TABLE t1 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t1;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+c1 INT NOT NULL,
+c2 VARCHAR(100),
+INDEX idx_c1 (c1) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+ALTER TABLE t1 DISCARD TABLESPACE;
+# Force every imported hippo record to carry a future TID.
+SET SESSION debug = '+d,hippo_import_future_tid';
+# Must succeed (previously tripped the trx-id sanity assertion).
+ALTER TABLE t1 IMPORT TABLESPACE;
+SET SESSION debug = '-d,hippo_import_future_tid';
+# Data must be intact and readable via the HIPPO index.
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2
+1	100	aaa
+2	200	bbb
+3	300	ccc
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 = 200;
+c1
+200
+# DML after import still works (TRX_ID reset to a normal value).
+INSERT INTO t1 VALUES (4, 400, 'ddd');
+UPDATE t1 SET c1 = 101 WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+101
+300
+400
+DROP TABLE t1;
+SET opt_index_format_hippo_enabled = default;
+SET opt_index_format_panda_enabled = default;
+# Test completed successfully

@@ -1,0 +1,65 @@
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	OFF
+set global sql_log_bin_super_modified=0;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	OFF
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	OFF
+sql_log_bin_super_modified	OFF
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	OFF
+set global sql_log_bin_super_modified=1;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	ON
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	OFF
+sql_log_bin_super_modified	ON
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	ON
+CREATE USER 'hello'@'localhost' IDENTIFIED BY 'abc';
+GRANT SYSTEM_VARIABLES_ADMIN ON *.* TO 'hello'@'localhost';
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	ON
+set @@sql_log_bin=0;
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	ON
+set global sql_log_bin_super_modified=0;
+set @@sql_log_bin=0;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	OFF
+sql_log_bin_super_modified	OFF
+set global sql_log_bin_super_modified=1;
+set @@sql_log_bin=1;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	ON
+drop user 'hello'@'localhost';
+set global sql_log_bin_super_modified=0;
+set @@sql_log_bin=DEFAULT;
+show variables like '%sql_log_bin%';
+Variable_name	Value
+sql_log_bin	ON
+sql_log_bin_super_modified	OFF

@@ -1,0 +1,115 @@
+message
+Initial GTID end
+message
+Initial GTID end
+message
+Initial GTID end
+# Case 1. Test: Insert data into BLACKHOLE table (single statement transactions)
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave2 GTID status
+message
+GTID end increased
+# Case 2. Test: XA transaction with only BLACKHOLE operations
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave2 GTID status
+message
+GTID end increased
+# Case 3. Test: Transaction with InnoDB first, then BLACKHOLE
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave1 data
+id	data
+10	innodb_in_transaction
+# Verify slave2 GTID status
+message
+GTID end increased
+# Verify slave2 data
+id	data
+10	innodb_in_transaction
+# Case 4. Test: Transaction with BLACKHOLE first, then InnoDB
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave1 data
+id	data
+13	innodb_second_in_transaction
+# Verify slave2 GTID status
+message
+GTID end increased
+# Verify slave2 data
+id	data
+13	innodb_second_in_transaction
+# Case 5 Test: XA transaction with BLACKHOLE first, then InnoDB
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave1 data
+id	data
+21	xa_innodb_second
+# Check slave2 GTID status
+message
+GTID end increased
+# Verify slave2 data
+id	data
+21	xa_innodb_second
+# Case 6. Test: XA transaction with InnoDB first, then BLACKHOLE
+# Wait for slave synchronization
+# Check apply_index
+distinct_apply_index
+1
+# Check master GTID status
+message
+GTID end increased
+# Verify slave1 GTID status
+message
+GTID end increased
+# Verify slave1 data
+id	data
+22	xa_innodb_first
+# Verify slave2 GTID status
+message
+GTID end increased
+# Verify slave2 data
+id	data
+22	xa_innodb_first
+# Clean up test data

@@ -1,7 +1,33 @@
 call dbms_conn.show_connection();
-JDBC_COMMENT
-
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	
 call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8');
 call dbms_conn.show_connection();
-JDBC_COMMENT
-jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+call dbms_conn.show_connection();
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+#	root	localhost	test	
+call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=1111');
+call dbms_conn.show_connection();
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=1111
+call dbms_conn.show_connection();
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=1111
+#	root	localhost	test	
+call dbms_conn.comment_connection('jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=222');
+call dbms_conn.show_connection();
+ID	USER	HOST	DB	JDBC_COMMENT
+#	root	localhost	test	
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=8.8.8.8
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=1111
+#	root	localhost	test	jdbc:polardbx://DnHost0:6991,DnHost1:6991/test?param=xxxx&coreDNS=222

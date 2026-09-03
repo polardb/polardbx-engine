@@ -11,7 +11,7 @@ id	col1
 1	1
 set session debug = "+d,simulate_gcn_def_changed_error";
 select * from t as of gcn 1;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 set session debug = "-d,simulate_gcn_def_changed_error";
 set session debug = "+d, simulate_prev_image_purged_during_query";
 id	col1

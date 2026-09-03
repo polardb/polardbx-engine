@@ -29,11 +29,17 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
  Created 2020-03-27 by Jianwei.zhao
  *******************************************************/
+#include "sql_class.h"
 
+#include "ha_innodb.h"
 #include "trx0rseg.h"
 
+#include "lizard0cmmt0types.h"
+#include "lizard0dbg.h"
+#include "lizard0gcs.h"
+#include "lizard0trx.h"
 #include "lizard0txn.h"
-#include "lizard0scn.h"
+#include "lizard0txn0slot0undo.h"
 #include "lizard0txn0space.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
@@ -43,9 +49,9 @@ void txn_desc_t::assemble(const commit_mark_t &mark,
                           const slot_addr_t &slot_addr, bool is_slave_arg) {
   bool state = (mark.scn != SCN_NULL);
   if (state) {
-    assert_commit_mark_allocated(mark);
+    ut_ad(mark.is_alloced());
   } else {
-    assert_commit_mark_initial(mark);
+    ut_ad(mark.is_initial());
   }
   cmmt = mark;
   undo_addr_t undo_addr(slot_addr, state, mark.csr, is_slave_arg);
@@ -55,43 +61,199 @@ void txn_desc_t::assemble(const commit_mark_t &mark,
 /** assemble undo ptr */
 void txn_desc_t::assemble_undo_ptr(const slot_addr_t &slot_addr) {
   /** Only used to generate raw undo ptr for now */
-  assert_commit_mark_initial(cmmt);
-  assert(cmmt.csr == CSR_AUTOMATIC);
+  ut_ad(cmmt.is_initial());
+  ut_ad(cmmt.csr == CSR_AUTOMATIC);
 
   undo_addr_t undo_addr(slot_addr);
   this->undo_ptr = undo_addr.encode();
 }
 
-void txn_desc_t::resurrect_xa(const proposal_mark_t &txn_pmmt,
-                              const xa_branch_t &txn_branch,
-                              const xa_addr_t &txn_maddr) {
-  pmmt = txn_pmmt;
-  branch = txn_branch;
-  maddr = txn_maddr;
+void txn_desc_t::xa_resurrect(const proposal_mark_t &xa_pmmt,
+                              const xa_branch_t &xa_branch,
+                              const xa_addr_t &xa_maddr) {
+  /**It's already new_proposal() gcn which came from undo header. */
+  pmmt = xa_pmmt;
+
+  m_xa_branch = xa_branch;
+  m_xa_maddr = xa_maddr;
 }
 
-void txn_desc_t::copy_xa_when_prepare(const gcn_tuple_t &xa_gcn,
+void txn_desc_t::xa_copy_when_prepare(const gcn_tuple_t &xa_gcn,
                                       const xa_branch_t &xa_branch) {
-  pmmt.csr = xa_gcn.csr;
-  pmmt.gcn = xa_gcn.gcn;
+  m_xa_pmmt = xa_gcn;
 
   ut_ad(!xa_branch.is_null());
-  branch = xa_branch;
+  m_xa_branch = xa_branch;
 }
 
-void txn_desc_t::copy_xa_when_commit(const gcn_tuple_t &xa_gcn,
+void txn_desc_t::xa_copy_when_commit(const gcn_tuple_t &xa_gcn,
                                      const xa_addr_t &xa_maddr) {
-  cmmt.csr = xa_gcn.csr;
-  cmmt.gcn = xa_gcn.gcn;
-  maddr = xa_maddr;
+  m_xa_gcn = xa_gcn;
+  m_xa_maddr = xa_maddr;
 }
 
 namespace lizard {
 
-slot_addr_t txn_sys_t::SLOT_ADDR_NO_REDO = {
-    SLOT_SPACE_ID_FAKE, SLOT_PAGE_NO_FAKE, SLOT_OFFSET_NO_REDO};
+/**
+  Write the scn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void txn_desc_write_scn(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  ut_ad(txn_desc->is_slot_alloced());
+  trx_write_scn(ptr, txn_desc->cmmt.scn);
+}
 
-slot_addr_t txn_sys_t::SLOT_ADDR_NULL = {0, 0, 0};
+/**
+  Write the UBA into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void txn_desc_write_undo_ptr(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  ut_ad(txn_desc->is_slot_alloced());
+  trx_write_undo_ptr(ptr, txn_desc->undo_ptr);
+}
+
+/**
+  Write the gcn into the buffer
+  @param[in/out]    ptr       buffer
+  @param[in]        txn_desc  txn description
+*/
+void txn_desc_write_gcn(byte *ptr, const txn_desc_t *txn_desc) {
+  ut_ad(ptr && txn_desc);
+  ut_ad(txn_desc->is_slot_alloced());
+  trx_write_gcn(ptr, txn_desc->cmmt.gcn);
+}
+
+/** Get txn undo if allocated. */
+trx_undo_t *trx_get_txn_undo(const trx_t *trx) {
+  if (trx && trx_is_txn_rseg_assigned(trx) && trx_is_txn_rseg_updated(trx))
+    return trx->rsegs.m_txn.txn_undo;
+
+  return nullptr;
+}
+
+/**
+  Always assign a txn undo log for transaction.
+
+  @param[in]        trx         current transaction
+
+  @return           DB_SUCCESS  Success
+*/
+dberr_t trx_always_assign_txn_slot(trx_t *trx) {
+  dberr_t err = DB_SUCCESS;
+  trx_undo_t *undo = nullptr;
+  txn_slot_ptr_t *undo_ptr = nullptr;
+
+  ut_ad(trx);
+  /** Txn rollback segment should have been allocated */
+  ut_ad(trx_is_txn_rseg_assigned(trx));
+
+  /** At least one of m_redo or m_noredo rollback segment has been allocated */
+  ut_ad(trx_is_rseg_assigned(trx));
+
+  ut_ad(mutex_own(&(trx->undo_mutex)));
+
+  undo_ptr = &trx->rsegs.m_txn;
+  ut_ad(undo_ptr);
+
+  if (undo_ptr->txn_undo == nullptr) {
+    /**
+      Update undo will allocated until prepared state for GTID persist,
+      But here we didn't allowed for txn undo.
+    */
+    ut_ad(!(trx_state_eq(trx, TRX_STATE_PREPARED)));
+    ut_ad(trx->txn_desc.is_whole_initial());
+
+    err = txn_slot_assign_undo(trx, undo_ptr, TRX_UNDO_TXN);
+    undo = undo_ptr->txn_undo;
+
+    if (undo == nullptr) {
+      lizard_error(ER_LIZARD) << "Could not allocate transaction undo log";
+      ut_ad(err != DB_SUCCESS);
+    } else {
+      ut_ad(undo->slot_addr.is_redo());
+      /** Only allocate log header, */
+      undo->empty = true;
+
+      ut_ad(undo->slot_addr.equal_with(undo->space, undo->hdr_page_no,
+                                       undo->hdr_offset));
+
+      trx_mutex_enter(trx);
+      trx->txn_desc.assemble_undo_ptr(undo->slot_addr);
+      trx_mutex_exit(trx);
+
+      ut_ad(undo->prev_image.is_alloced());
+    }
+  } else {
+    ut_ad(trx->txn_desc.is_slot_alloced());
+  }
+
+  return err;
+}
+
+/** Allocate txn undo and return transaction slot address.
+ *
+ * @param[in]   trx
+ * @param[out]  Slot address
+ * @param[out]  trx_id
+ *
+ * @retval  DB_SUCCESS
+ * @retval  DB_ERROR
+ **/
+dberr_t trx_assign_txn_slot(trx_t *trx, slot_ptr_t *slot_ptr,
+                                 trx_id_t *trx_id) {
+  dberr_t err = DB_SUCCESS;
+
+  ut_ad(trx_is_registered_for_2pc(trx) && trx_is_started(trx) && trx->id != 0 &&
+        !trx->read_only && !trx->internal);
+
+  ut_ad(trx_is_txn_rseg_assigned(trx));
+
+  auto undo_ptr = &trx->rsegs.m_txn;
+  if (!undo_ptr->txn_undo) {
+    // auto &gtid_persistor = clone_sys->get_gtid_persistor();
+    // gtid_persistor.set_persist_gtid(trx, true);
+    /** For External XA transaction, THD::se_persists_gtid must be always true.
+    That's mean that the GTID is always persisted by SE for External XA
+    transaction.
+
+    Now this function is only used for External XA transaction, so the GTID must
+    be always persisted by SE. If in the future, this function is not only used
+    for External XA transaction, the gtid_persistor.set_persist_gtid might be
+    called to set the SE_GTID_PERSIST flag. */
+    /**
+      Revision:
+      For group update (hotspot), the follower might update nothing but only
+      generate binlog. It means that the GTID might be also assigned but the
+      SE hasn't persist the GTID. We fit it so that the GTID is also persisted
+      by SE.
+    */
+    ut_ad(trx->mysql_thd &&
+          ((trx->mysql_thd->get_transaction() &&
+            !trx->mysql_thd->get_transaction()->xid_state()->has_state(
+                XID_STATE::XA_NOTR)) ||
+           trx->mysql_thd->gu_ctx.is_follower()));
+
+    mutex_enter(&trx->undo_mutex);
+    err = trx_always_assign_txn_slot(trx);
+    mutex_exit(&trx->undo_mutex);
+  }
+
+  if (err == DB_SUCCESS && slot_ptr) {
+    ut_ad(undo_ptr->txn_undo);
+    *slot_ptr = undo_ptr->txn_undo->slot_addr.encode();
+  }
+
+  if (err == DB_SUCCESS && trx_id) {
+    *trx_id = trx->id;
+  }
+
+  return err;
+}
+
 
 /**
  * prepare_in_tc is treated as first phase commit within 2PC, so we should
@@ -105,50 +267,49 @@ slot_addr_t txn_sys_t::SLOT_ADDR_NULL = {0, 0, 0};
  *
  * @retval		proposal commit mark.
  * */
-proposal_mark_t trx_prepare_mark(trx_t *trx, trx_undo_t *undo,
-                                 trx_ulogf_t *log_hdr, mtr_t *mtr) {
-  xa_branch_t branch;
+proposal_mark_t trx_prepare_in_tc_mark(trx_t *trx, trx_undo_t *undo,
+                                       trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  xa_branch_t xa_branch;
+  proposal_mark_t xa_pmmt;
   proposal_mark_t pmmt;
   ut_ad(undo->pmmt.is_null());
 
   /** Only write proposal info in TXN. */
   if (!(undo->flag & TRX_UNDO_FLAG_TXN)) {
-    return pmmt;
+    return xa_pmmt;
   }
 
   /** Write proposal mark. */
-  pmmt = trx->txn_desc.pmmt;
-  branch = trx->txn_desc.branch;
-  if (pmmt.is_null()) {
-    return pmmt;
+  xa_pmmt = trx->txn_desc.xa_pmmt();
+  xa_branch = trx->txn_desc.xa_branch();
+  if (xa_pmmt.is_null()) {
+    return xa_pmmt;
   }
 
   /** Can't be NULL. See Sql_cmd_xa_proc_ac_prepare. */
-  ut_a(!branch.is_null());
+  ut_a(!xa_branch.is_null());
 
   /** Generate proposal gcn */
-  pmmt = gcs->new_prepare(trx, mtr);
+  pmmt = gcs->new_proposal(trx, mtr);
 
   ut_ad(undo->tags_allocated());
   /** 1. Set async commit flag. */
   undo->allocate_ac_prepare();
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_EXT_STORAGE, undo->xes_storage,
-                   MLOG_1BYTE, mtr);
+  txn_slot_hdr_write_ext_storage(log_hdr, undo->xes_storage, mtr);
 
   /** 2. Write proposal mark. */
   undo->pmmt = pmmt;
-  mlog_write_ull(log_hdr + TXN_UNDO_LOG_XES_AC_PROPOSAL_GCN, pmmt.gcn, mtr);
+  txn_slot_hdr_write_ac_proposal_gcn(log_hdr, pmmt.gcn, mtr);
 
   if (pmmt.csr == CSR_ASSIGNED) {
     undo->set_ac_csr_assigned_on_tags();
   } else {
     ut_a(!undo->ac_csr_assigned_on_tags());
   }
-  mlog_write_ulint(log_hdr + TXN_UNDO_LOG_XES_TAGS, undo->tags, MLOG_2BYTES,
-                   mtr);
+  txn_slot_hdr_write_xes_tags(log_hdr, undo->tags, mtr);
 
-  undo->branch = branch;
-  txn_undo_hdr_write_xa_branch(log_hdr, branch, mtr);
+  undo->branch = xa_branch;
+  txn_slot_hdr_write_xa_branch(log_hdr, xa_branch, mtr);
 
   return pmmt;
 }
@@ -189,12 +350,12 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
   ut_ad(trx_state_eq(trx, TRX_STATE_PREPARED) ||
         trx_state_eq(trx, TRX_STATE_ACTIVE));
 
-  trx_undo_page_validation(undo_hdr_page);
+  ut_ad(trx_undo_page_validate(undo_hdr_page));
 
   /** Here we didn't hold trx_sys mutex */
   ut_ad(!trx_sys_mutex_own());
 
-  ut_ad(!cmmt_ptr || commit_mark_state(*cmmt_ptr) == SCN_STATE_ALLOCATED);
+  ut_ad(!cmmt_ptr || cmmt_ptr->is_alloced());
 
   /** Here must hold the X lock on the page */
   ut_ad(mtr_memo_contains_page(mtr, undo_hdr_page, MTR_MEMO_PAGE_X_FIX));
@@ -209,9 +370,7 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
   ut_ad(hdr_offset == mach_read_from_2(seg_hdr + TRX_UNDO_LAST_LOG));
 
   undo_hdr = undo_hdr_page + hdr_offset;
-  ut_ad(!trx_undo_hdr_cmmt_committed(undo_hdr, mtr));
-
-  assert_lizard_min_safe_scn_valid();
+  ut_ad(!trx_undo_hdr_read_cmmt(undo_hdr, mtr).is_alloced());
 
   /* Step 1: modify trx->scn */
   if (cmmt_ptr == nullptr) {
@@ -219,148 +378,23 @@ commit_mark_t trx_commit_mark(trx_t *trx, commit_mark_t *cmmt_ptr,
     *serialised = true;
     cmmt = gcs->new_commit(trx, mtr);
   } else {
-    assert_trx_commit_mark_allocated(trx);
+    ut_ad(trx->txn_desc.is_cmmt_alloced());
+
     cmmt = *cmmt_ptr;
     ut_ad(trx->txn_desc.cmmt.scn == cmmt.scn);
     ut_ad(trx->txn_desc.cmmt.gcn == cmmt.gcn);
   }
-  ut_ad(commit_mark_state(cmmt) == SCN_STATE_ALLOCATED);
+  ut_ad(cmmt.is_alloced());
 
   /* Step 2: modify undo header. */
   trx_undo_hdr_write_cmmt(undo_hdr, cmmt, mtr);
-  ut_ad(trx_undo_hdr_cmmt_committed(undo_hdr, mtr));
+  ut_ad(trx_undo_hdr_read_cmmt(undo_hdr, mtr).is_alloced());
 
   /* Step 3: modify undo->scn */
-  assert_undo_commit_mark_initial(undo);
+  ut_ad(undo->cmmt.is_initial());
   undo->cmmt = cmmt;
 
-  assert_lizard_min_safe_scn_valid();
   return cmmt;
-}
-
-/** Load min active trx id which is cached within trx struct. */
-trx_id_t trx_load_min_active_tid(const trx_t *trx) {
-  return trx->min_active_tid.load();
-}
-
-/** Commit txn memory structure after txn slot mini-transaction commit.
- *
- * @param[in/out]		trx
- * @param[in]			serialised */
-void txn_commit_in_memory(trx_t *trx, bool serialised) {
-  if (serialised) {
-    trx_mutex_enter(trx);
-    /** Commit undo ptr */
-    undo_ptr_set_commit(&trx->txn_desc.undo_ptr, trx->txn_desc.cmmt.csr,
-                        !trx->txn_desc.maddr.is_null());
-    trx_mutex_exit(trx);
-    ut_ad(trx->txn_desc.is_whole_committed());
-
-    /** Update tcn cache. */
-    lizard::trx_cache_tcn(trx, serialised);
-  } else {
-    ut_ad(!trx->txn_desc.alloced());
-  }
-}
-
-/** Get active transaction according to txn rec.
- *
- * @param[in/out]	txn rec
- * @param[in]		increment ref count
- * @param[in]		optional trx which is used to get local min active tid
- *
- * @retval	txn rw object.
- * */
-txn_rw_t txn_rw_is_active(txn_rec_t *txn_rec, bool do_ref_count,
-                          const trx_t *optional_trx) {
-  txn_rw_t txn_rw;
-  buf_block_t *block = nullptr;
-  bool active = false;
-  trx_id_t rec_tid = txn_rec->trx_id;
-
-  ut_ad(rec_tid > 0);
-
-  /** if record tid is less than min active id*/
-  if (optional_trx && rec_tid < trx_load_min_active_tid(optional_trx)) {
-    txn_rw.reset();
-    return txn_rw;
-  }
-
-  /** lookup txn slot. */
-  std::tie(active, block) = txn_slot_is_active(txn_rec, do_ref_count);
-  if (!active) {
-    ut_ad(txn_rec->is_committed());
-    txn_rw.reset();
-    return txn_rw;
-  }
-
-  ut_ad(txn_rec->is_active());
-  ut_ad(block != nullptr || !do_ref_count);
-
-  /** Maybe commit walk here. */
-  trx_t *trx = trx_rw_is_active(txn_rec->trx_id, do_ref_count);
-  txn_rw = {trx, block, txn_rec->undo_ptr};
-
-  /** Find active trx. */
-  if (!trx) {
-    /** Unfix block if has. */
-    txn_rw.release_slot();
-    txn_rw.reset();
-  } else {
-    ut_ad(txn_rw.is_active());
-    ut_ad(txn_rw.was_slot_fixed() || !do_ref_count);
-  }
-
-  return txn_rw;
-}
-
-/** Get active transaction according to txn rw.
- *
- * @param[in]		txn rw
- * @param[in]		increment ref count
- *
- * @retval	txn rw object.
- * */
-txn_rw_t txn_rw_is_active(const txn_rw_t &txn_rw, bool do_ref_count) {
-  ut_ad(txn_rw.is_active());
-
-  txn_rec_t txn_rec = {txn_rw.trx->id, SCN_NULL, txn_rw.undo_ptr, GCN_NULL};
-  return txn_rw_is_active(&txn_rec, do_ref_count, nullptr);
-}
-
-/** Get active transaction according to trx id and slot.
- *
- * @param[in]		txn identity
- * @param[in]		increment ref count
- *
- * @retval	txn rw object.
- * */
-txn_rw_t txn_rw_is_active(const txn_id_t &txn_id, bool do_ref_count) {
-  txn_rw_t rw;
-  if (!undo_ptr_is_active(txn_id.undo_ptr)) {
-    return rw;
-  }
-
-  txn_rec_t txn_rec = {txn_id.trx_id, SCN_NULL, txn_id.undo_ptr, GCN_NULL};
-  return txn_rw_is_active(&txn_rec, do_ref_count, nullptr);
-}
-
-/**
- * Judge transaction have committed through txn slot.
- *
- * @param[in]	txn rw object
- *
- * @retval	true	Committed
- * @retval	false	Active
- * */
-bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw) {
-  ut_ad(txn_rw.is_active());
-  ut_ad(txn_rw.was_slot_fixed());
-
-  txn_rec_t txn_rec = {txn_rw.trx->id, SCN_NULL, txn_rw.undo_ptr, GCN_NULL};
-  ut_ad(txn_rec.is_active());
-
-  return !txn_slot_is_active(&txn_rec, false).first;
 }
 
 /**
@@ -386,8 +420,6 @@ bool txn_rw_is_committed_in_memory(const txn_rw_t &txn_rw) {
 
 */
 void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
-  undo_addr_t undo_addr;
-
   ut_ad(trx->rsegs.m_txn.rseg == nullptr);
   ut_ad(undo->empty);
 
@@ -397,12 +429,12 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     ut_ad(trx->is_recovered);
     if (trx->rsegs.m_redo.update_undo != nullptr &&
         trx->state == TRX_STATE_COMMITTED_IN_MEMORY) {
-      assert_trx_commit_mark_allocated(trx);
-      assert_trx_undo_ptr_initial(trx);
-      lizard_ut_ad(trx->txn_desc.cmmt == undo->cmmt);
+      ut_ad(trx->txn_desc.is_cmmt_alloced());
+      ut_ad(trx->txn_desc.is_slot_initial());
+      ut_ad(trx->txn_desc.cmmt == undo->cmmt);
       ut_ad(trx->rsegs.m_redo.update_undo->slot_addr == undo->slot_addr);
     } else {
-      assert_trx_commit_mark_initial(trx);
+      ut_ad(trx->txn_desc.is_cmmt_initial());
     }
 
     if (trx->rsegs.m_redo.update_undo != nullptr) {
@@ -425,8 +457,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   trx->rsegs.m_txn.txn_undo = undo;
   trx->rsegs.m_txn.xid_for_hash.null();
 
-  assert_commit_mark_allocated(undo->prev_image);
-
+  ut_ad(undo->prev_image.is_alloced());
   /**
      Currently it's impossible only have txn undo for normal transaction.
      But if crashed just after allocated txn undo, here maybe possible.
@@ -440,7 +471,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
     } else {
       /* Can't be TRX_UNDO_CACHED because the undo is in txn_undo_list. */
       ut_a(undo->is_prepared());
-      ++trx_sys->n_prepared_trx;
+      // ++trx_sys->n_prepared_trx;
       trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
     }
 
@@ -449,9 +480,8 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
 
     // trx->no = TRX_ID_MAX;
 
-    assert_undo_commit_mark_initial(undo);
-    assert_trx_commit_mark_initial(trx);
-    assert_txn_desc_initial(trx);
+    ut_ad(undo->cmmt.is_initial());
+    ut_ad(trx->txn_desc.is_whole_initial());
 
   } else {
     /** trx state has been initialized */
@@ -461,7 +491,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
       /** SCN info wasn't written in insert undo. */
       if (trx->state == TRX_STATE_COMMITTED_IN_MEMORY) {
         /** Since the insert undo didn't have valid scn number */
-        assert_undo_commit_mark_allocated(undo);
+        ut_ad(undo->cmmt.is_alloced());
         trx->txn_desc.cmmt = undo->cmmt;
       }
     } else if (trx->rsegs.m_redo.update_undo != nullptr) {
@@ -476,7 +506,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
   trx_mutex_exit(trx);
 
   /** Resurrect XA info. */
-  trx->txn_desc.resurrect_xa(undo->pmmt, undo->branch, undo->maddr);
+  trx->txn_desc.xa_resurrect(undo->pmmt, undo->branch, undo->maddr);
 
   /* trx_start_low() is not called with resurrect, so need to initialize
   start time here.*/
@@ -493,7 +523,7 @@ void trx_resurrect_txn(trx_t *trx, trx_undo_t *undo, trx_rseg_t *rseg) {
  @return lsn_t: lsn assigned for commit of scheduled rollback segment */
 lsn_t txn_prepare_low(
     trx_t *trx,               /*!< in/out: transaction */
-    txn_undo_ptr_t *undo_ptr, /*!< in/out: pointer to rollback
+    txn_slot_ptr_t *undo_ptr, /*!< in/out: pointer to rollback
                               segment scheduled for prepare. */
     mtr_t *mtr) {
   ut_ad(mtr);
@@ -610,6 +640,8 @@ bool trx_is_txn_rseg_assigned(const trx_t *trx) {
   return trx->rsegs.m_txn.rseg != nullptr;
 }
 
+trx_rseg_t *trx_get_txn_rseg(const trx_t *trx) { return trx->rsegs.m_txn.rseg; }
+
 /**
   Whether the txn undo log has modified.
 */
@@ -718,8 +750,8 @@ struct Find_txn_slot_by_xid {
         undo_page, mtr,
         [&](const page_t *undo_page, const trx_ulogf_t *log_hdr,
             mtr_t *mtr) -> bool {
-          return txn_undo_hdr_read_by_xid(m_xid, undo_page, log_hdr, mtr,
-                                          m_txn_slot);
+          return txn_slot_hdr_read_txn_slot_by_xid(m_xid, undo_page, log_hdr, mtr,
+                                               m_txn_slot);
         });
 
     m_searched_pages->insert(page_no);

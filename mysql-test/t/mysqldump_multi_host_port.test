@@ -1,0 +1,155 @@
+#
+# Test mysqldump with multiple hosts and ports functionality
+# Focus on core features and boundary conditions
+#
+
+# Test 1: Basic functionality - mysqldump should connect to first available host/port
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments test
+
+# Test 2: Verify mysqldump can actually dump data when using multiple hosts/ports
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50));
+INSERT INTO t1 VALUES (1, 'test1'), (2, 'test2'), (3, 'test3');
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments test t1
+
+DROP TABLE t1;
+
+# Test 3: Boundary - Single host with multiple ports (should try each port)
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,65555558,$MYSQL_PORT
+--exec $MYSQL_DUMP --host=127.0.0.1 --port=$port_list --connect-timeout=1 --skip-comments test
+
+# Test 4: Boundary - Multiple hosts with single port (should try each host)
+--let $MYSQL_PORT= `SELECT @@port`
+--exec $MYSQL_DUMP --host=127.0.0.1,127.0.0.2,127.0.0.3 --port=$MYSQL_PORT --connect-timeout=1 --skip-comments test
+
+# Test 5: Boundary - All invalid addresses should fail
+--error 2
+--exec $MYSQL_DUMP --host=127.0.0.1,127.0.0.2 --port=65555555,65555556 --connect-timeout=1 test
+
+# Test 6: Boundary - Empty host list (should use default localhost)
+--let $MYSQL_PORT= `SELECT @@port`
+--exec $MYSQL_DUMP --host= --port=$MYSQL_PORT --skip-comments test
+
+# Test 7: Boundary - Empty port list (should fail)
+--error 5
+--exec $MYSQL_DUMP --host=127.0.0.1 --port= --skip-comments test
+
+# Test 8: Boundary - Invalid port format (non-numeric)
+--error 9
+--exec $MYSQL_DUMP --host=127.0.0.1 --port=abc,def test
+
+# Test 9: Boundary - Host and port count mismatch (should fail)
+--error 13
+--exec $MYSQL_DUMP --host=127.0.0.1,127.0.0.2 --port=3306,3307,3308 test
+
+--error 13
+--exec $MYSQL_DUMP --host=127.0.0.1,127.0.0.2,127.0.0.3 --port=3306,3307 test
+
+# Test 10: Boundary - Multiple hosts/ports (reasonable scale test)
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555555,65555556,65555557,65555558,65555559,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2,127.0.0.3,127.0.0.4,127.0.0.5,127.0.0.6
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments test
+
+# Test 11: mysqldump specific - Test with different dump options
+CREATE TABLE t2 (id INT, data TEXT);
+INSERT INTO t2 VALUES (1, 'large text data'), (2, 'more data');
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --compact test t2
+
+DROP TABLE t2;
+
+# Test 12: mysqldump specific - Test with XML output
+CREATE TABLE t3 (id INT, name VARCHAR(20));
+INSERT INTO t3 VALUES (1, 'xml_test');
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--replace_regex /[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{2}/--TIMESTAMP--/ /[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/--TIME--/ /Cardinality=[^ ]*/Cardinality="filtered"/gc
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments -X test t3
+
+DROP TABLE t3;
+
+# Test 13: mysqldump specific - Test with tab output
+CREATE TABLE t4 (id INT, value VARCHAR(10));
+INSERT INTO t4 VALUES (1, 'tab_test'), (2, 'data');
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --tab=$MYSQLTEST_VARDIR/tmp/ test t4
+
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.sql
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.txt
+DROP TABLE t4;
+
+# Test 14: Boundary - Test with very short connect timeout
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments test
+
+# Test 15: Boundary - Test with authentication
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments -u root test
+
+# Test 16: mysqldump specific - Test with routines and triggers
+CREATE TABLE t5 (id INT);
+CREATE PROCEDURE test_proc() SELECT 1;
+CREATE TRIGGER test_trig BEFORE INSERT ON t5 FOR EACH ROW SET NEW.id = 1;
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --routines --triggers test
+
+DROP TRIGGER test_trig;
+DROP PROCEDURE test_proc;
+DROP TABLE t5;
+
+# Test 17: Boundary - Test with SSL options (should not affect multi-host functionality)
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --ssl-mode=DISABLED test
+
+# Test 18: Boundary - Test with compression
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --compress test
+
+# Test 19: Boundary - Test with different character sets
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments --default-character-set=utf8 test
+
+# Test 20: Final verification - Ensure basic functionality still works after all tests
+CREATE TABLE final_test (id INT, name VARCHAR(20));
+INSERT INTO final_test VALUES (1, 'final_test');
+
+--let $MYSQL_PORT= `SELECT @@port`
+--let $port_list = 65555557,$MYSQL_PORT
+--let $host_list = 127.0.0.1,127.0.0.2
+--exec $MYSQL_DUMP --host=$host_list --port=$port_list --connect-timeout=1 --skip-comments test final_test
+
+DROP TABLE final_test;
+
+--echo #
+--echo # mysqldump multi-host multi-port tests completed
+--echo #
+

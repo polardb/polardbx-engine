@@ -433,6 +433,8 @@ struct recv_sys_t {
     const byte *body;
     /* Record size */
     size_t size;
+    /* True if it is spc page */
+    bool is_spc;
   };
 
   using Mlog_records = std::vector<Mlog_record, ut::allocator<Mlog_record>>;
@@ -466,7 +468,7 @@ struct recv_sys_t {
   @param[in]    body            pointer to log record body in recovery buffer
   @param[in]    len             length of the log record */
   void save_rec(size_t rec_num, space_id_t space_id, page_no_t page_no,
-                mlog_id_t type, const byte *body, size_t len) {
+                mlog_id_t type, const byte *body, size_t len, bool is_spc) {
     /* No more space to save log. */
     if (rec_num >= MAX_SAVED_MLOG_RECS) {
       return;
@@ -485,6 +487,7 @@ struct recv_sys_t {
     saved_rec.type = type;
     saved_rec.body = body;
     saved_rec.size = len;
+    saved_rec.is_spc = is_spc;
   }
 
   /** Return saved mlog record information, if there. Works only
@@ -497,7 +500,7 @@ struct recv_sys_t {
   @param[out]   len             length of the log record
   @return true iff saved record data is found. */
   bool get_saved_rec(size_t rec_num, space_id_t &space_id, page_no_t &page_no,
-                     mlog_id_t &type, byte *&body, size_t &len) {
+                     mlog_id_t &type, byte *&body, size_t &len, bool &is_spc) {
     if (rec_num >= MAX_SAVED_MLOG_RECS) {
       return false;
     }
@@ -515,6 +518,7 @@ struct recv_sys_t {
     type = saved_rec.type;
     body = const_cast<byte *>(saved_rec.body);
     len = saved_rec.size;
+    is_spc = saved_rec.is_spc;
 
     return true;
   }
@@ -689,6 +693,8 @@ extern ulint recv_n_pool_free_frames;
 completed before crash. */
 extern std::list<space_id_t> recv_encr_ts_list;
 
+#ifndef INNODB_LOG0RECV_IC_STANDALONE
 #include "log0recv.ic"
+#endif /* !INNODB_LOG0RECV_IC_STANDALONE */
 
 #endif

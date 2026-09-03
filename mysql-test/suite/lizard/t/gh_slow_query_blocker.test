@@ -1,5 +1,14 @@
 --source include/have_debug.inc
 
+# Under ASAN, CPU percentage is diluted by instrumentation overhead,
+# making CPU-based thresholds unreliable. Use relaxed values.
+--let $sqb_cpu_threshold = 60
+--let $sqb_cpu_timeout = 2
+if ($ASAN_OPTIONS) {
+  --let $sqb_cpu_threshold = 10
+  --let $sqb_cpu_timeout = 10
+}
+
 # 启用慢查询阻塞器
 
 --echo # Test 1: Test execution time limit
@@ -15,8 +24,8 @@ SELECT SLEEP(5) FROM t1;
 
 --echo # Test 2: Test CPU and time limit combined
 SET GLOBAL polarx_slow_query_block_exec_timeout = 0;
-SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 60;
-SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 2;
+--eval SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = $sqb_cpu_threshold
+--eval SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = $sqb_cpu_timeout
 
 # 创建一个CPU密集型查询
 --error ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED

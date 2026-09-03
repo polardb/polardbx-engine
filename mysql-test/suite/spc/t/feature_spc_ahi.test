@@ -1,0 +1,243 @@
+### Purpose ###
+#
+# Verify that SPC secondary indexes work correctly with the Adaptive Hash
+# Index (AHI) enabled, disabled, and toggled:
+#   - Point lookups through SPC index with AHI enabled
+#   - Data consistency after toggling AHI on/off
+#   - Concurrent DML + AHI on SPC pages
+#   - Checksum: SPC index == PRIMARY KEY after AHI interactions
+#
+# SPC indexes do NOT set disable_ahi, so AHI can be built on SPC pages.
+# This test verifies the interaction is correct.
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+--disable_query_log
+--let $saved_ahi = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--enable_query_log
+
+--connect(con1, localhost, root,,)
+
+--echo #
+--echo # PART 1: SPC index point lookups with AHI enabled
+--echo #
+
+--connection default
+SET GLOBAL innodb_adaptive_hash_index = ON;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Repeated point lookups to trigger AHI build on SPC pages
+--disable_query_log
+--disable_result_log
+let $j = 1;
+while ($j <= 5) {
+  let $i = 1;
+  while ($i <= 200) {
+    eval SELECT c FROM t1 FORCE INDEX (idx_c) WHERE c = CONCAT(REPEAT('a', 100), LPAD($i, 10, '0'));
+    inc $i;
+  }
+  inc $j;
+}
+--enable_result_log
+--enable_query_log
+
+--echo # Checksum after AHI-assisted lookups
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo #
+--echo # PART 2: Toggle AHI off then on - verify SPC data consistency
+--echo #
+
+--echo # Disable AHI
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+
+--echo # DML with AHI disabled
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100), LPAD(id, 10, '0')) WHERE id <= 50;
+DELETE FROM t1 WHERE id BETWEEN 51 AND 60;
+INSERT INTO t1 VALUES (201, CONCAT(REPEAT('c', 100), LPAD(201, 10, '0')));
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Re-enable AHI
+SET GLOBAL innodb_adaptive_hash_index = ON;
+
+--echo # Repeated lookups to rebuild AHI
+--disable_query_log
+--disable_result_log
+let $j = 1;
+while ($j <= 3) {
+  let $i = 1;
+  while ($i <= 200) {
+    eval SELECT c FROM t1 FORCE INDEX (idx_c) WHERE c = CONCAT(REPEAT('b', 100), LPAD($i, 10, '0'));
+    inc $i;
+  }
+  inc $j;
+}
+--enable_result_log
+--enable_query_log
+
+--echo # Checksum after AHI rebuild
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: Concurrent DML with AHI on SPC pages
+--echo #
+
+--connection default
+SET GLOBAL innodb_adaptive_hash_index = ON;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 100) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Warm up AHI
+--disable_query_log
+--disable_result_log
+let $j = 1;
+while ($j <= 3) {
+  let $i = 1;
+  while ($i <= 100) {
+    eval SELECT c FROM t1 FORCE INDEX (idx_c) WHERE c = CONCAT(REPEAT('a', 100), LPAD($i, 10, '0'));
+    inc $i;
+  }
+  inc $j;
+}
+--enable_result_log
+--enable_query_log
+
+--echo # con1 does DML while default reads via AHI
+--connection con1
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('z', 100), LPAD(id, 10, '0')) WHERE id <= 20;
+INSERT INTO t1 VALUES (101, CONCAT(REPEAT('z', 100), LPAD(101, 10, '0')));
+DELETE FROM t1 WHERE id BETWEEN 90 AND 95;
+COMMIT;
+
+--connection default
+--echo # Checksum after concurrent DML with AHI active
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Disable AHI during active SPC workload
+--echo #
+
+--connection default
+SET GLOBAL innodb_adaptive_hash_index = ON;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 100) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), LPAD($i, 10, '0')));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Warm up AHI
+--disable_query_log
+--disable_result_log
+let $j = 1;
+while ($j <= 3) {
+  let $i = 1;
+  while ($i <= 100) {
+    eval SELECT c FROM t1 FORCE INDEX (idx_c) WHERE c = CONCAT(REPEAT('a', 100), LPAD($i, 10, '0'));
+    inc $i;
+  }
+  inc $j;
+}
+--enable_result_log
+--enable_query_log
+
+--echo # Disable AHI while workload is active
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+
+--echo # DML after AHI disabled
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval UPDATE t1 SET c = CONCAT(REPEAT('m', 100), LPAD($i, 10, '0')) WHERE id = $i;
+  inc $i;
+}
+--enable_query_log
+
+--echo # Checksum with AHI off
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Re-enable AHI and verify
+SET GLOBAL innodb_adaptive_hash_index = ON;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+--connection default
+--eval SET GLOBAL innodb_adaptive_hash_index = $saved_ahi
+
+--disconnect con1

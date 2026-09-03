@@ -1,0 +1,26 @@
+
+--source include/have_binlog_format_row.inc
+set global consensus_enable_reset_master=0;
+
+--error ER_CANT_RESET_MASTER
+RESET MASTER;
+
+--connect(con1, localhost, root,,)
+--connection con1
+set global consensus_enable_reset_master=1;
+
+RESET MASTER;
+
+create database if not exists d1;
+drop table if exists d1.t0;
+create table d1.t0(c1 int , c2 varchar(100));
+
+--replace_column 3 #
+show consensus logs;
+RESET MASTER;
+--replace_column 3 #
+show consensus logs;
+
+drop database if exists d1;
+drop table if exists d1.t0;
+--disconnect con1

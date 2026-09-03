@@ -51,6 +51,7 @@
 #include "mysql_com.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"  // ER_*
+#include "sql/column_encryption/column_encryption_type.h"
 #include "sql/dd/types/column.h"
 #include "sql/field_common_properties.h"
 #include "sql/gis/srid.h"
@@ -60,7 +61,6 @@
 #include "sql/table.h"
 #include "sql_string.h"  // String
 #include "template_utils.h"
-
 class Create_field;
 class Field;
 class Field_bit;
@@ -144,6 +144,7 @@ Field (abstract)
 |  +--Field_longstr
 |  |  +--Field_string
 |  |  +--Field_varstring
+|  |     +--Field_vector
 |  |  +--Field_blob
 |  |     +--Field_geom
 |  |     +--Field_json
@@ -632,6 +633,8 @@ class Field {
     // flag for this.
     return (auto_flags & (GENERATED_FROM_EXPRESSION | DEFAULT_NOW)) == 0;
   }
+
+  virtual bool is_vector() const { return false; }
 
  protected:
   /// Holds the position to the field in record
@@ -1713,6 +1716,9 @@ class Field {
   /* Hash value */
   virtual void hash(ulong *nr, ulong *nr2) const;
 
+  // compatible with polarx CN
+  virtual void polarx_cn_hash(ulong *nr, ulong *nr2) const;
+
   /**
     Get the upper limit of the MySQL integral and floating-point type.
 
@@ -1865,13 +1871,19 @@ class Field {
   void set_implicit() { m_is_implicit = true; }
   bool is_implicit() const { return m_is_implicit; }
 
-  /** Encrypted type of the field. @see sql/column_encrypted_type.h */
  private:
-  uint16 m_encrypted_type;
+  /** Encryption type of the field.
+   *  @see sql/column_encryption/column_encryption_type.h */
+  komodo::Encryption_type m_encryption_type;
 
  public:
-  void set_encrypted_type(uint16 type) { m_encrypted_type = type; }
-  uint16 encrypted_type() const { return m_encrypted_type; }
+  void set_encryption_type(komodo::Encryption_type type) {
+    m_encryption_type = type;
+  }
+  bool has_encryption_type() const {
+    return komodo::has_encryption_type(m_encryption_type);
+  }
+  komodo::Encryption_type encryption_type() const { return m_encryption_type; }
 };
 
 /**
@@ -3156,6 +3168,7 @@ class Field_newdate : public Field_temporal_with_date {
   void sql_type(String &str) const final;
   bool zero_pack() const final { return true; }
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
+  void polarx_cn_hash(ulong *nr, ulong *nr2) const final;
   Field_newdate *clone(MEM_ROOT *mem_root) const final {
     assert(type() == MYSQL_TYPE_DATE);
     assert(real_type() == MYSQL_TYPE_NEWDATE);
@@ -3540,7 +3553,7 @@ class Field_varstring : public Field_longstr {
   uint32 key_length() const final { return (uint32)field_length; }
   type_conversion_status store(const char *to, size_t length,
                                const CHARSET_INFO *charset) override;
-  type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store(longlong nr, bool unsigned_val) override;
   // Inherit the store() overloads that have not been overridden.
   using Field_longstr::store;
   double val_real() const final;
@@ -3555,7 +3568,7 @@ class Field_varstring : public Field_longstr {
   size_t make_sort_key(uchar *to, size_t length, size_t trunc_pos) const final;
   size_t get_key_image(uchar *buff, size_t length, imagetype type) const final;
   void set_key_image(const uchar *buff, size_t length) final;
-  void sql_type(String &str) const final;
+  void sql_type(String &str) const override;
   uchar *pack(uchar *to, const uchar *from, size_t max_length) const final;
   const uchar *unpack(uchar *to, const uchar *from, uint param_data) final;
   int cmp_binary(const uchar *a, const uchar *b,
@@ -3571,16 +3584,17 @@ class Field_varstring : public Field_longstr {
   Field *new_field(MEM_ROOT *root, TABLE *new_table) const final;
   Field *new_key_field(MEM_ROOT *root, TABLE *new_table, uchar *new_ptr,
                        uchar *new_null_ptr, uint new_null_bit) const final;
-  Field_varstring *clone(MEM_ROOT *mem_root) const final {
+  Field_varstring *clone(MEM_ROOT *mem_root) const override {
     assert(type() == MYSQL_TYPE_VARCHAR);
     assert(real_type() == MYSQL_TYPE_VARCHAR);
     return new (mem_root) Field_varstring(*this);
   }
-  uint is_equal(const Create_field *new_field) const final;
+  uint is_equal(const Create_field *new_field) const override;
   void hash(ulong *nr, ulong *nr2) const final;
+  void polarx_cn_hash(ulong *nr, ulong *nr2) const final;
   const uchar *data_ptr() const final { return ptr + length_bytes; }
   bool is_text_key_type() const final { return binary() ? false : true; }
-  uint32 get_length_bytes() const override { return length_bytes; }
+  uint32 get_length_bytes() const final { return length_bytes; }
 
  private:
   /* Store number of bytes used to store length (1 or 2) */
@@ -4526,6 +4540,7 @@ class Field_bit : public Field {
     if (bit_ptr != nullptr) bit_ptr += ptr_diff;
   }
   void hash(ulong *nr, ulong *nr2) const final;
+  void polarx_cn_hash(ulong *nr, ulong *nr2) const final;
   Field_bit *clone(MEM_ROOT *mem_root) const override {
     assert(type() == MYSQL_TYPE_BIT);
     return new (mem_root) Field_bit(*this);
@@ -4572,7 +4587,8 @@ Field *make_field(MEM_ROOT *mem_root_arg, TABLE_SHARE *share, uchar *ptr,
                   TYPELIB *interval, const char *field_name, bool is_nullable,
                   bool is_zerofill, bool is_unsigned, uint decimals,
                   bool treat_bit_as_char, uint pack_length_override,
-                  std::optional<gis::srid_t> srid, bool is_array);
+                  std::optional<gis::srid_t> srid, bool is_array,
+                  bool is_vector);
 
 /**
   Instantiates a Field object with the given name and record buffer values.

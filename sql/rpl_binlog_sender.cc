@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_binlog_sender.h"
 #include "libbinlogevents/include/codecs/factory.h"
 
@@ -69,19 +71,23 @@
 
 #include "mysql/service_thd_wait.h"
 #include "scope_guard.h"  // create_scope_guard
-#include "sql/bl_consensus_log.h"
 #include "sql/consensus_log_manager.h"
-#include "sql/lizard_rpl_binlog_sender.h"
+#include "sql/sys_vars_consensus.h"
+#include "sql/komodo0consensus0xlog.h"
+#include "sql/komodo0xlog.h"
+#include "sql/komodo0rpl0binlog0sender.h"
 
 #define READ_CONSENSUS_LOG()                                        \
   auto consensus_guard = create_lock_guard(                         \
-    [&] { consensus_log_manager.rdlock_consensus_status(); },     \
-    [&] { consensus_log_manager.unlock_consensus_status(); }        \
-  );                                                                \
-  consensus_log =                                                   \
-      consensus_log_manager.get_status() == BINLOG_WORKING          \
+      [&] { komodo::xlog_log_manager_rdlock_consensus_status(); },  \
+      [&] { komodo::xlog_log_manager_unlock_consensus_status(); }); \
+  consensus_log =                                    \
+      komodo::xlog_engine_get_log_manager().get_status() ==         \
+              komodo::Consensus_Log_State::BINLOG_WORKING   \
           ? &mysql_bin_log                                          \
-          : &consensus_log_manager.get_relay_log_info()->relay_log;
+          : &komodo::xlog_engine_get_log_manager()                  \
+                 .get_relay_log_info()                              \
+                 ->relay_log;
 
 #ifndef NDEBUG
 static uint binlog_dump_count = 0;
@@ -648,14 +654,23 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
     if (event_type == binary_log::CONSENSUS_LOG_EVENT) {
       uint64_t next_consensus_index = uint8korr(
           event_ptr + binary_log::Consensus_event::CONSENSUS_INDEX_OFFSET);
-      if (wait_commit_index_update(log_pos, next_consensus_index)) return 1;
+      if (komodo::xlog_wait_commit_index_update(
+              m_thd, log_pos, next_consensus_index, m_heartbeat_period,
+              m_packet, [this]() -> int { return this->flush_net(); },
+              [this](my_off_t pos) -> int {
+                return this->send_heartbeat_event(pos);
+              })) {
+        return 1;
+      }
+    }
+
+    // if event skiped, just continue read next event
+    if (consensus_repl_skip_polarx_event(event_type)) {
+      log_pos = uint4korr(event_ptr + LOG_POS_OFFSET);
+      continue;
     }
 
     log_pos = reader.position();
-
-    /* X-Cluster revises event before send it out */
-    revise_event(event_ptr, event_len, fake_create_time, log_pos);
-
     /*
       TODO: Set m_exclude_gtid to NULL if all gtids in m_exclude_gtid has
       be skipped. and maybe removing the gtid from m_exclude_gtid will make
@@ -684,6 +699,9 @@ int Binlog_sender::send_events(File_reader &reader, my_off_t end_pos) {
 
       m_delay_sender.forget_delay_events();
     } else {
+      /* X-Cluster revises event before send it out */
+      revise_event(event_ptr, event_len, fake_create_time, log_pos);
+
       /*
         A heartbeat is required before sending a event, If some events are
         skipped. It notifies the slave to increase master_log_pos for
@@ -1608,85 +1626,39 @@ uint32 Binlog_sender::find_first_user_event_timestamp(File_reader *reader,
   return create_time;
 }
 
-/*
-  PolarDB-X Engine: checkCommitIndex to make sure only send committed log
-*/
-int Binlog_sender::wait_commit_index_update(my_off_t log_pos, uint64_t index) {
-  if (!consensus_ptr) return 0;
-#ifndef NDEBUG
-  ulong hb_info_counter = 0;
-#endif
-  longlong sec_cnt = 0;
-  bool hb_send = false;
-  String tmp;
-  /* heartbeat period is measured by second */
-  uint ratio =
-      std::max(1000000ULL / opt_consensus_check_commit_index_interval, 1ULL);
-  //TODO@yanhua, need use strong check like check_exec_consensus_log_end_condition
-  while (consensus_ptr->checkCommitIndex(consensus_log_manager.get_current_term()) < index) {
-
-    if (unlikely(flush_net()))
-      return 1;
-
-    my_sleep(opt_consensus_check_commit_index_interval);
-    if (unlikely(m_thd->killed)) return 1;
-    // send heartbeat event
-    if (m_heartbeat_period.count() > 0) {
-      sec_cnt++;
-      if (m_heartbeat_period.count() == (sec_cnt / ratio)) {
-        sec_cnt = 0;
-#ifndef NDEBUG
-        if (hb_info_counter < 3) {
-          xp::info(ER_XP_APPLIER) << "master sends heartbeat message";
-          hb_info_counter++;
-          if (hb_info_counter == 3)
-            xp::info(ER_XP_APPLIER) << "the rest of heartbeat info skipped ...";
-        }
-#endif
-        if (!hb_send) {
-          /* Save a copy of the buffer content. */
-          tmp.copy(m_packet);
-          tmp.length(m_packet.length());
-          hb_send = true;
-        }
-
-        if (send_heartbeat_event(log_pos)) return 1;
-      }
-    }
-  }
-  if (hb_send) {
-    /* Restore the copy back. */
-    m_packet.copy(tmp);
-    m_packet.length(tmp.length());
-  }
-  assert(index <= consensus_ptr->getCommitIndex());
-#ifndef NDEBUG
-  xp::info(ER_XP_APPLIER) << "master sends consensus index " << index;
-#endif
-
-  return 0;
-}
-
 void Binlog_sender::revise_event(uchar *event_ptr, size_t event_len,
                                  uint32 fake_ctime, my_off_t log_pos) {
   Log_event_type event_type = (Log_event_type)event_ptr[EVENT_TYPE_OFFSET];
+  bool need_revise = false;
   /* X-Cluster: hack the timestamp of the first several events in each binlog
    * file */
   if ((event_type == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
        event_type == binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT) &&
       fake_ctime != 0) {
     int4store(event_ptr, fake_ctime);
+    need_revise = true;
   }
 
   /* X-Cluster: unset relay_log flag if exists */
   if (uint2korr(event_ptr + FLAGS_OFFSET) & LOG_EVENT_RELAY_LOG_F) {
     event_ptr[FLAGS_OFFSET] &= ~LOG_EVENT_RELAY_LOG_F;
+    need_revise = true;
   }
 
   /* X-Cluster: reset each binlog event's log_pos (end_log_pos) to the correct
    * value */
-  int4store(event_ptr + LOG_POS_OFFSET, log_pos);
+  if (uint4korr(event_ptr + LOG_POS_OFFSET) != log_pos) {
+    int4store(event_ptr + LOG_POS_OFFSET, log_pos);
+    need_revise = true;
+  }
 
   /* X-Cluster: recalculate the checksum if necessary */
-  if (event_checksum_on()) calc_event_checksum(event_ptr, event_len);
+  if (need_revise && event_checksum_on())
+    calc_event_checksum(event_ptr, event_len);
+}
+
+bool Binlog_sender::consensus_repl_skip_polarx_event(const Log_event_type event_type)
+{
+  return (opt_consensus_repl_skip_polarx_event &&
+          Log_event::is_polarx_event(event_type));
 }

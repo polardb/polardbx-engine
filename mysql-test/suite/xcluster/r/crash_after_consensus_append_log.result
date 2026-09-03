@@ -6,15 +6,15 @@ insert into db_crash_4.t values(0);
 # run cmd: insert into db_crash_4.t values(1)
 xa recover;
 formatID	gtrid_length	bqual_length	data
-# 01. normal commit + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 01. normal commit + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 begin;
 insert into db_crash_4.t values(1);
 commit;
 ERROR HY000: Lost connection to MySQL server during query
 insert into db_crash_4.t values(1);
-# 11. xa prepare + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 11. xa prepare + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa start 'xx';
 insert into db_crash_4.t values(1);
 xa end 'xx';
@@ -24,8 +24,8 @@ xa rollback 'xx';
 xa recover;
 formatID	gtrid_length	bqual_length	data
 insert into db_crash_4.t values(1);
-# 21. xa commit one phase + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 21. xa commit one phase + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa start 'xx';
 insert into db_crash_4.t values(1);
 xa end 'xx';
@@ -34,24 +34,24 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 insert into db_crash_4.t values(1);
-# 31. xa commit + simulate_crash_after_consensus_append_log
+# 31. xa commit + crash_after_append_log_in_sync
 xa start 'xx';
 insert into db_crash_4.t values(1);
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa commit 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 xa commit 'xx';
 xa recover;
 formatID	gtrid_length	bqual_length	data
 insert into db_crash_4.t values(1);
-# 41. xa rollback + simulate_crash_after_consensus_append_log
+# 41. xa rollback + crash_after_append_log_in_sync
 xa start 'xx';
 insert into db_crash_4.t values(1);
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa rollback 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 xa rollback 'xx';
@@ -61,15 +61,15 @@ insert into db_crash_4.t values(1);
 # run cmd: update db_crash_4.t set id = id+1
 xa recover;
 formatID	gtrid_length	bqual_length	data
-# 02. normal commit + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 02. normal commit + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 begin;
 update db_crash_4.t set id = id+1;
 commit;
 ERROR HY000: Lost connection to MySQL server during query
 update db_crash_4.t set id = id+1;
-# 12. xa prepare + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 12. xa prepare + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa start 'xx';
 update db_crash_4.t set id = id+1;
 xa end 'xx';
@@ -79,8 +79,8 @@ xa rollback 'xx';
 xa recover;
 formatID	gtrid_length	bqual_length	data
 update db_crash_4.t set id = id+1;
-# 22. xa commit one phase + simulate_crash_after_consensus_append_log
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+# 22. xa commit one phase + crash_after_append_log_in_sync
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa start 'xx';
 update db_crash_4.t set id = id+1;
 xa end 'xx';
@@ -89,24 +89,24 @@ ERROR HY000: Lost connection to MySQL server during query
 xa recover;
 formatID	gtrid_length	bqual_length	data
 update db_crash_4.t set id = id+1;
-# 32. xa commit + simulate_crash_after_consensus_append_log
+# 32. xa commit + crash_after_append_log_in_sync
 xa start 'xx';
 update db_crash_4.t set id = id+1;
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa commit 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 xa commit 'xx';
 xa recover;
 formatID	gtrid_length	bqual_length	data
 update db_crash_4.t set id = id+1;
-# 42. xa rollback + simulate_crash_after_consensus_append_log
+# 42. xa rollback + crash_after_append_log_in_sync
 xa start 'xx';
 update db_crash_4.t set id = id+1;
 xa end 'xx';
 xa prepare 'xx';
-SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+SET SESSION debug="+d,crash_after_append_log_in_sync";
 xa rollback 'xx';
 ERROR HY000: Lost connection to MySQL server during query
 xa rollback 'xx';

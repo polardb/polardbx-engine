@@ -125,6 +125,8 @@ static inline void ha_storage_free(
 static inline ulint ha_storage_get_size(
     const ha_storage_t *storage); /*!< in: hash storage */
 
+#ifndef INNODB_HA0STORAGE_IC_STANDALONE
 #include "ha0storage.ic"
+#endif /* !INNODB_HA0STORAGE_IC_STANDALONE */
 
 #endif /* ha0storage_h */

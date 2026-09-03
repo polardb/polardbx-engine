@@ -1,0 +1,51 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SHOW GLOBAL VARIABLES LIKE 'vidx_force_non_indep';
+Variable_name	Value
+vidx_force_non_indep	ON
+SET GLOBAL vidx_force_non_indep = OFF;
+ERROR HY000: Variable 'vidx_force_non_indep' is a read only variable
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+data VARCHAR(100),
+v VECTOR(3),
+VECTOR INDEX vidx1(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(data, v) VALUES ('seed1', VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(data, v) VALUES ('seed2', VEC_FROMTEXT('[0,1,0]'));
+# XA 2PC commit under vidx_force_non_indep=ON
+XA START 'xa_force_2pc';
+INSERT INTO t1(data, v) VALUES ('xa_force_2pc_row', VEC_FROMTEXT('[70,0,0]'));
+XA END   'xa_force_2pc';
+XA PREPARE 'xa_force_2pc';
+XA COMMIT  'xa_force_2pc';
+SELECT COUNT(*) FROM t1 WHERE data = 'xa_force_2pc_row';
+COUNT(*)
+1
+# XA 1PC (PREPARE optional path: XA COMMIT ... ONE PHASE) under force=ON
+XA START 'xa_force_1pc';
+INSERT INTO t1(data, v) VALUES ('xa_force_1pc_row', VEC_FROMTEXT('[71,0,0]'));
+XA END   'xa_force_1pc';
+XA COMMIT 'xa_force_1pc' ONE PHASE;
+SELECT COUNT(*) FROM t1 WHERE data = 'xa_force_1pc_row';
+COUNT(*)
+1
+# XA ROLLBACK after PREPARE under force=ON
+XA START 'xa_force_rb';
+INSERT INTO t1(data, v) VALUES ('xa_force_rb_row', VEC_FROMTEXT('[72,0,0]'));
+XA END   'xa_force_rb';
+XA PREPARE 'xa_force_rb';
+XA ROLLBACK 'xa_force_rb';
+# base row must be gone after rollback
+SELECT COUNT(*) FROM t1 WHERE data = 'xa_force_rb_row';
+COUNT(*)
+0
+# ANN search still works after the force=ON XA mix
+SELECT data FROM t1 WHERE data LIKE 'xa_force_%' ORDER BY data;
+data
+xa_force_1pc_row
+xa_force_2pc_row
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

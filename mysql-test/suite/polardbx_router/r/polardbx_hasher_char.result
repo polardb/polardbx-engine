@@ -1,0 +1,466 @@
+
+Test for polardbx_hasher function with fixed length string types
+
+#
+# Test polardbx_hasher function with fixed length string types
+#
+
+Test with utf8mb4_general_ci charset and collation
+
+CREATE TABLE t_char_utf8mb4_general_ci (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_general_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_general_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 25, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 30, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 35, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 40, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 45, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 50, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 55, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 85, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 86, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 87, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_general_ci ORDER BY age, hash_value;
+id	age	hash_value
+	25	19144387141682250
+ABC	30	-4326194196521601902
+abc	35	-4326194196521601902
+中文测试	40	-6780121873020068026
+NULL	45	-2447670524089286488
+	50	19144387141682250
+特殊字符!@#$%^&*()	55	5603957503605849346
+😊🚀🎉	85	-7945522641624101628
+🐱🐶🐭🐹	86	5260194565672231494
+🌍🌎🌏	87	-7945522641624101628
+안녕하세요	614	-8603481799077551072
+
+Test with utf8mb4_bin charset and collation
+
+CREATE TABLE t_char_utf8mb4_bin (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_bin,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_bin (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 125, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 130, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 135, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 140, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 145, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 150, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 155, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 185, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 186, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 187, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_bin ORDER BY age, hash_value;
+id	age	hash_value
+	125	19144387141682250
+ABC	130	4282853122710784245
+abc	135	-6579330030582567211
+中文测试	140	622672607139747104
+NULL	145	-2447670524089286488
+	150	19144387141682250
+特殊字符!@#$%^&*()	155	7669991733685135812
+😊🚀🎉	185	5450385613562737015
+🐱🐶🐭🐹	186	156987378088440607
+🌍🌎🌏	187	-7770043016910920883
+안녕하세요	614	6017965106607909559
+
+Test with utf8mb4_unicode_ci charset and collation
+
+CREATE TABLE t_char_utf8mb4_unicode_ci (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_unicode_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 225, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 230, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 235, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 240, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 245, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 250, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 255, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 285, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 286, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 287, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_unicode_ci ORDER BY age, hash_value;
+id	age	hash_value
+	225	19144387141682250
+ABC	230	5562477067663514029
+abc	235	5562477067663514029
+中文测试	240	1311855300803436977
+NULL	245	-2447670524089286488
+	250	19144387141682250
+特殊字符!@#$%^&*()	255	-7441981837345500159
+😊🚀🎉	285	5282578015433298644
+🐱🐶🐭🐹	286	-3064544972095590166
+🌍🌎🌏	287	5282578015433298644
+안녕하세요	614	-3217716644316472776
+
+Test with utf8mb4_unicode_520_ci charset and collation
+
+CREATE TABLE t_char_utf8mb4_unicode_520_ci (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_unicode_520_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_unicode_520_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 325, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 330, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 335, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 340, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 345, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 350, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 355, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 385, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 386, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 387, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_unicode_520_ci ORDER BY age, hash_value;
+id	age	hash_value
+	325	19144387141682250
+ABC	330	742587506890549627
+abc	335	742587506890549627
+中文测试	340	1311855300803436977
+NULL	345	-2447670524089286488
+	350	19144387141682250
+特殊字符!@#$%^&*()	355	-955400701050099918
+😊🚀🎉	385	-4136639028077604963
+🐱🐶🐭🐹	386	5356042614682425735
+🌍🌎🌏	387	9104968459638888339
+안녕하세요	614	-3217716644316472776
+
+Test with utf8mb4_0900_ai_ci charset and collation
+
+CREATE TABLE t_char_utf8mb4_0900_ai_ci (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_0900_ai_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 425, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 430, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 435, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 440, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 445, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 450, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 455, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 485, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 486, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 487, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_0900_ai_ci ORDER BY age, hash_value;
+id	age	hash_value
+	425	19144387141682250
+ABC	430	5562477067663514029
+abc	435	5562477067663514029
+中文测试	440	1311855300803436977
+NULL	445	-2447670524089286488
+	450	19144387141682250
+特殊字符!@#$%^&*()	455	-7441981837345500159
+😊🚀🎉	485	5282578015433298644
+🐱🐶🐭🐹	486	-3064544972095590166
+🌍🌎🌏	487	5282578015433298644
+안녕하세요	614	-3217716644316472776
+
+Test with ascii_bin charset and collation
+
+CREATE TABLE t_char_ascii_bin (
+id CHAR(64) CHARSET ascii COLLATE ascii_bin,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_ascii_bin (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 525, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 530, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 535, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 545, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 550, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 555, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 534, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 535, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 536, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 537, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_ascii_bin ORDER BY age, hash_value;
+id	age	hash_value
+	525	19144387141682250
+ABC	530	4282853122710784245
+user001	534	4856591959794680995
+abc	535	-6579330030582567211
+USER001	535	2179644378054182135
+test_user	536	5019292321820820263
+test-user	537	6564260919299265690
+NULL	545	-2447670524089286488
+	550	19144387141682250
+!@#$%^&*()	555	6542289561606592444
+
+Test with latin1_danish_ci charset and collation
+
+CREATE TABLE t_char_latin1_danish_ci (
+id CHAR(64) CHARSET latin1 COLLATE latin1_danish_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_latin1_danish_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 625, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 630, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 635, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 645, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 650, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 655, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 634, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 635, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 636, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 637, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_latin1_danish_ci ORDER BY age, hash_value;
+id	age	hash_value
+	625	19144387141682250
+ABC	630	4282853122710784245
+user001	634	2179644378054182135
+USER001	635	2179644378054182135
+abc	635	4282853122710784245
+test_user	636	8793911973766652370
+test-user	637	-6122643817391560983
+NULL	645	-2447670524089286488
+	650	19144387141682250
+!@#$%^&*()	655	6542289561606592444
+
+Test with latin1_bin charset and collation
+
+CREATE TABLE t_char_latin1_bin (
+id CHAR(64) CHARSET latin1 COLLATE latin1_bin,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_latin1_bin (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 725, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 730, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 735, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 745, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 750, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 755, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 734, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 735, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 736, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 737, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_latin1_bin ORDER BY age, hash_value;
+id	age	hash_value
+	725	19144387141682250
+ABC	730	4282853122710784245
+user001	734	4856591959794680995
+abc	735	-6579330030582567211
+USER001	735	2179644378054182135
+test_user	736	5019292321820820263
+test-user	737	6564260919299265690
+NULL	745	-2447670524089286488
+	750	19144387141682250
+!@#$%^&*()	755	6542289561606592444
+
+Test with latin1_general_ci charset and collation
+
+CREATE TABLE t_char_latin1_general_ci (
+id CHAR(64) CHARSET latin1 COLLATE latin1_general_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_latin1_general_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 825, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 830, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 835, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 845, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 850, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 855, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 834, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 835, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 836, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 837, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_latin1_general_ci ORDER BY age, hash_value;
+id	age	hash_value
+	825	19144387141682250
+ABC	830	-7870566577942193566
+user001	834	-6728740179340890329
+abc	835	-7870566577942193566
+USER001	835	-6728740179340890329
+test_user	836	-2353558947185474875
+test-user	837	6826876667754724746
+NULL	845	-2447670524089286488
+	850	19144387141682250
+!@#$%^&*()	855	-9165294051019797684
+
+Test with latin1_general_cs charset and collation
+
+CREATE TABLE t_char_latin1_general_cs (
+id CHAR(64) CHARSET latin1 COLLATE latin1_general_cs,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_latin1_general_cs (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 925, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 930, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 935, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 945, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 950, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 955, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 934, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 935, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 936, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 937, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_latin1_general_cs ORDER BY age, hash_value;
+id	age	hash_value
+	925	19144387141682250
+ABC	930	-7870566577942193566
+user001	934	2906119689915943855
+USER001	935	-6728740179340890329
+abc	935	7444899589604399472
+test_user	936	180119444882024080
+test-user	937	7266920090617062142
+NULL	945	-2447670524089286488
+	950	19144387141682250
+!@#$%^&*()	955	-9165294051019797684
+
+Test with latin1_spanish_ci charset and collation
+
+CREATE TABLE t_char_latin1_spanish_ci (
+id CHAR(64) CHARSET latin1 COLLATE latin1_spanish_ci,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_latin1_spanish_ci (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 1025, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 1030, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 1035, 70000.75, '2023-01-01 00:00:02', true),
+(NULL, 'actual null', 1045, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 1050, 95000.00, '2023-01-01 00:00:05', false),
+('!@#$%^&*()', 'special chars', 1055, 100000.00, '2023-01-01 00:00:06', true),
+('user001', 'numeric suffix id', 1034, 59000.00, '2023-01-01 00:00:15', false),
+('USER001', 'upper numeric id', 1035, 60000.00, '2023-01-01 00:00:16', true),
+('test_user', 'underscore id', 1036, 61000.00, '2023-01-01 00:00:17', false),
+('test-user', 'hyphen id', 1037, 62000.00, '2023-01-01 00:00:18', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_latin1_spanish_ci ORDER BY age, hash_value;
+id	age	hash_value
+	1025	19144387141682250
+ABC	1030	-7870566577942193566
+user001	1034	-6728740179340890329
+abc	1035	-7870566577942193566
+USER001	1035	-6728740179340890329
+test_user	1036	-2353558947185474875
+test-user	1037	6826876667754724746
+NULL	1045	-2447670524089286488
+	1050	19144387141682250
+!@#$%^&*()	1055	-9165294051019797684
+
+Test with utf8mb4_zh_0900_as_cs charset and collation
+
+CREATE TABLE t_char_utf8mb4_zh_0900_as_cs (
+id CHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_zh_0900_as_cs,
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_utf8mb4_zh_0900_as_cs (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 1125, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 1130, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 1135, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 1140, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 1145, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 1150, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 1155, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 1185, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 1186, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 1187, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_utf8mb4_zh_0900_as_cs ORDER BY age, hash_value;
+id	age	hash_value
+안녕하세요	614	-8164821178020044318
+	1125	8980685485080686903
+ABC	1130	1695757134324181888
+abc	1135	-5111020047556357446
+中文测试	1140	-3280088649713580152
+NULL	1145	-2447670524089286488
+	1150	8980685485080686903
+特殊字符!@#$%^&*()	1155	9030262665961955488
+😊🚀🎉	1185	-7835382163341226289
+🐱🐶🐭🐹	1186	5764895086465016422
+🌍🌎🌏	1187	8389551613321663557
+
+Test with binary charset and collation
+
+CREATE TABLE t_char_binary (
+id BINARY(64),
+name VARCHAR(64),
+age INT,
+salary DECIMAL(10,2),
+create_time DATETIME,
+is_active BOOLEAN
+);
+INSERT INTO t_char_binary (id, name, age, salary, create_time, is_active) VALUES
+('', 'empty string', 1225, 50000.00, '2023-01-01 00:00:00', true),
+('ABC', 'uppercase', 1230, 60000.50, '2023-01-01 00:00:01', false),
+('abc', 'lowercase', 1235, 70000.75, '2023-01-01 00:00:02', true),
+('中文测试', 'chinese string', 1240, 80000.00, '2023-01-01 00:00:03', false),
+(NULL, 'actual null', 1245, 90000.25, '2023-01-01 00:00:04', true),
+('   ', 'spaces', 1250, 95000.00, '2023-01-01 00:00:05', false),
+('特殊字符!@#$%^&*()', 'special chars', 1255, 100000.00, '2023-01-01 00:00:06', true),
+('😊🚀🎉', 'emoji id 1', 1285, 110000.00, '2023-01-01 00:01:06', true),
+('🐱🐶🐭🐹', 'emoji id 2', 1286, 111000.00, '2023-01-01 00:01:07', false),
+('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+('🌍🌎🌏', 'emoji id 3', 1287, 112000.00, '2023-01-01 00:01:08', true);
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_char_binary ORDER BY age, hash_value;
+id	age	hash_value
+안녕하세요                                                 	614	-8375548705266531699
+                                                                	1225	19144387141682250
+ABC                                                             	1230	-6959205894004967839
+abc                                                             	1235	-5145654076413464905
+中文测试                                                    	1240	8306891666244252257
+NULL	1245	-2447670524089286488
+                                                                	1250	-8653565530509192281
+特殊字符!@#$%^&*()                                          	1255	-3049930506409725638
+😊🚀🎉                                                    	1285	4600000403583194582
+🐱🐶🐭🐹                                                	1286	7466696755998085725
+🌍🌎🌏                                                    	1287	-49206226110796183
+#
+# Clean up
+#
+DROP TABLE t_char_utf8mb4_general_ci, t_char_utf8mb4_bin, t_char_utf8mb4_unicode_ci, t_char_utf8mb4_unicode_520_ci, t_char_utf8mb4_0900_ai_ci, t_char_ascii_bin, t_char_latin1_danish_ci, t_char_latin1_bin, t_char_latin1_general_ci, t_char_latin1_general_cs, t_char_latin1_spanish_ci, t_char_utf8mb4_zh_0900_as_cs, t_char_binary;

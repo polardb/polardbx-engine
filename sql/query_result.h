@@ -179,6 +179,17 @@ class Query_result_interceptor : public Query_result {
     return false;
   }
   bool is_interceptor() const final { return true; }
+
+ protected:
+  /**
+   * @brief Reject transfer of encrypted/masked column values.
+   *
+   * Default implementation rejects any encrypted/masked column values if
+   * visible. Subclasses with target-aware checks (e.g. INSERT ... SELECT where
+   * the target column may also be encrypted) should override this method.
+   */
+  virtual bool reject_encryption_transfer(THD *thd,
+                                          const mem_root_deque<Item *> &values);
 };
 
 class Query_result_send : public Query_result {
@@ -195,7 +206,8 @@ class Query_result_send : public Query_result {
                                 uint flags) override;
   bool send_data(THD *thd, const mem_root_deque<Item *> &items) override;
   /* Used by dbms_trans.returning_all. */
-  bool send_returning_data(THD *thd, const mem_root_deque<Item *> &items, bool is_before, ptrdiff_t diff);
+  bool send_returning_data(THD *thd, const mem_root_deque<Item *> &items,
+                           bool is_before, ptrdiff_t diff);
   bool send_eof(THD *thd) override;
   bool check_supports_cursor() const override { return false; }
   void abort_result_set(THD *thd) override;

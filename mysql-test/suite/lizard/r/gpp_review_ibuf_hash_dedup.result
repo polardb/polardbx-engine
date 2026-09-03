@@ -1,0 +1,21 @@
+#
+# P1-3: ibuf_get_volume_buffered_hash() hashes every user field of a
+# buffered entry, including the stored GPP column which is excluded
+# from ordered comparison. A buffered INSERT carries the real
+# clustered page number while the DELETE_MARK for the very same
+# record carries FIL_NULL, so the pair is wrongly counted as two
+# distinct records. That satisfies the min_n_recs >= 2 guard and lets
+# a purge IBUF_OP_DELETE be buffered on evidence of only one record.
+#
+# Expected (fixed) behaviour: the guard sees one record, refuses to
+# buffer the purge DELETE, and purge removes the record in place, so
+# no purge operation is ever merged from the change buffer.
+#
+diag after DML before purge: merged ins=0 dmk=0 del=0
+diag after purge before select: merged ins=1 dmk=1 del=0
+SELECT COUNT(*) AS visible_rows FROM t1 FORCE INDEX (idx_k) WHERE k <= 2;
+visible_rows
+0
+include/assert.inc [the insert of the probe row must have been buffered]
+include/assert.inc [the delete-mark of the probe row must have been buffered]
+include/assert.inc [purge DELETE must not be buffered on evidence of a single record]

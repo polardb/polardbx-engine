@@ -27,6 +27,7 @@ source_downloads
 
 # Configuration files for Visual Studio Code
 .vscode/
+.cursor/rules/
 
 build/
 datatool/
@@ -81,6 +82,7 @@ include/binlog_config.h
 include/config.h
 include/installed_headers.cc
 include/my_config.h
+include/mysql_build_info.h
 include/mysql_version.h
 include/mysqlclient_ername.h
 include/mysqld_ername.h
@@ -555,3 +557,6 @@ router/tests/data/
 .idea
 cmake-build-debug*/
 cmake-build*/
+sysbench_test/*
+.cursor/*
+.qoder/*

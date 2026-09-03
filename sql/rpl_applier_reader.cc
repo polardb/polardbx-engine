@@ -19,6 +19,7 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+#define LOG_SUBSYSTEM_TAG "Repl"
 
 #include "sql/rpl_applier_reader.h"
 #include "include/mutex_lock.h"
@@ -29,8 +30,7 @@
 #include "sql/rpl_rli.h"
 #include "sql/rpl_rli_pdb.h"
 #include "sql/sql_backup_lock.h"
-#include "sql/consensus_admin.h"
-#include "sql/bl_consensus_log.h"
+#include "sql/komodo0xlog.h"
 
 /**
    It manages a stage and the related mutex and makes the process of
@@ -421,7 +421,12 @@ bool Rpl_applier_reader::purge_applied_logs() {
   DBUG_TRACE;
   mysql_mutex_assert_owner(&m_rli->data_lock);
 
-  if (!relay_log_purge) return false;
+  //for xpaxos use opt_binlog_expire_logs_auto_purge instead of relay_log_purge
+  if (m_rli->relay_log.is_xpaxos_log) {
+    if (!opt_binlog_expire_logs_auto_purge) return false;
+  } else {
+    if (!relay_log_purge) return false;
+  }
 
   Is_instance_backup_locked_result is_instance_locked =
       is_instance_backup_locked(m_rli->info_thd);
@@ -592,6 +597,6 @@ void Rpl_applier_reader::reset_seconds_behind_master() {
   */
   if (!m_rli->is_parallel_exec() || m_rli->gaq->empty()) {
     m_rli->last_master_timestamp = 0;
-    if (consensus_ptr) consensus_ptr->updateApplyDelaySeconds(0);
+    komodo::xlog_update_apply_delay_seconds(0);
   }
 }

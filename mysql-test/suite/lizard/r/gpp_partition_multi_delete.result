@@ -1,0 +1,101 @@
+#
+# Test GPP (Guess Primary Page) support for multi-table DELETE on
+# partitioned tables. When multi-table DELETE uses the delayed delete
+# path (buffering rowids in Unique then calling ha_rnd_pos), GPP should
+# speed up clustered index lookups across all partitions.
+#
+set global innodb_lizard_stat_enabled=on;
+set global innodb_index_pos_guess_clust_enabled=on;
+set opt_index_format_gpp_enabled=true;
+# -----------------------------------------------------------------------
+# Create a driver table t_drv and a HASH-partitioned target table tp.
+# tp has LONGTEXT and composite PK.
+# -----------------------------------------------------------------------
+CREATE TABLE t_drv (
+id INT NOT NULL PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+CREATE TABLE tp (
+id INT NOT NULL,
+name VARCHAR(50) NOT NULL,
+c INT NOT NULL,
+data LONGTEXT,
+PRIMARY KEY (id, name),
+KEY idx_c (c)
+) ENGINE=InnoDB
+PARTITION BY HASH(id) PARTITIONS 4;
+# -----------------------------------------------------------------------
+# Helper: populate both tables with 100 rows each.
+# -----------------------------------------------------------------------
+CREATE PROCEDURE populate_tables()
+BEGIN
+TRUNCATE TABLE t_drv;
+TRUNCATE TABLE tp;
+INSERT INTO t_drv (id, val)
+WITH RECURSIVE seq AS (
+SELECT 1 AS i
+UNION ALL
+SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT i, i * 10 FROM seq;
+INSERT INTO tp (id, name, c, data)
+WITH RECURSIVE seq AS (
+SELECT 1 AS i
+UNION ALL
+SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT
+i,
+CONCAT('user_', LPAD(i, 5, '0')),
+100 - i,
+REPEAT(CHAR(65 + (i MOD 26) USING ascii), 1500)
+FROM seq;
+END//
+CALL populate_tables();
+SELECT COUNT(*) AS drv_rows FROM t_drv;
+drv_rows
+100
+SELECT COUNT(*) AS tp_rows FROM tp;
+tp_rows
+100
+# -----------------------------------------------------------------------
+# Test 1: Multi-table DELETE — delete from tp via JOIN with t_drv.
+# This triggers the delayed delete path: rowids of tp are buffered in
+# a Unique, then ha_rnd_pos is called with GM_MULTI_DELETE to read back.
+# -----------------------------------------------------------------------
+call dbms_stat.flush_gpp();
+DELETE tp FROM t_drv JOIN tp ON t_drv.id = tp.id;
+include/assert.inc [[partition multi_delete] gpp total (hit+miss) should be 100]
+include/assert.inc [[partition multi_delete] gpp hit should be > 0]
+SELECT COUNT(*) AS remaining_rows FROM tp;
+remaining_rows
+0
+# -----------------------------------------------------------------------
+# Test 2: Multi-table DELETE with WHERE clause (partial: 50 rows).
+# -----------------------------------------------------------------------
+CALL populate_tables();
+call dbms_stat.flush_gpp();
+DELETE tp FROM t_drv JOIN tp ON t_drv.id = tp.id
+WHERE t_drv.val <= 500;
+include/assert.inc [[partition multi_delete] gpp total (hit+miss) should be 50 with WHERE]
+SELECT COUNT(*) AS remaining_rows FROM tp;
+remaining_rows
+50
+# -----------------------------------------------------------------------
+# Test 3: Verify no multi_delete GPP stat when GPP is disabled.
+# -----------------------------------------------------------------------
+CALL populate_tables();
+set global innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+DELETE tp FROM t_drv JOIN tp ON t_drv.id = tp.id;
+include/assert.inc [[partition multi_delete GPP disabled] gpp hit should be 0]
+include/assert.inc [[partition multi_delete GPP disabled] gpp miss should be 0]
+set global innodb_index_pos_guess_clust_enabled=on;
+# -----------------------------------------------------------------------
+# Clean up
+# -----------------------------------------------------------------------
+DROP PROCEDURE populate_tables;
+DROP TABLE t_drv, tp;
+SET opt_index_format_gpp_enabled = 1;
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_index_pos_guess_clust_enabled = 1;

@@ -101,7 +101,6 @@ Relay_log_info *Rpl_info_factory::new_rli_object(bool is_slave_recovery,
         &key_relay_log_info_stop_cond, &key_relay_log_info_sleep_cond,
 #endif
         instances, channel, is_rli_fake);
-
   } else {
     rli = new Relay_log_info(
         is_slave_recovery,
@@ -126,7 +125,6 @@ Consensus_info *Rpl_info_factory::create_consensus_info() {
   Consensus_info *consensus_info = nullptr;
   Rpl_info_handler *handler_src = nullptr;
   Rpl_info_handler *handler_dest = nullptr;
-  // uint instances = 1;
   const char *msg =
       "Failed to allocate memory for consensus info "
       "structure";

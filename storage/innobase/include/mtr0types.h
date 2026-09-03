@@ -284,11 +284,31 @@ enum mlog_id_t {
   /** create a panda compact index page */
   MLOG_COMP_PAGE_CREATE_PANDA = 86,
 
+  /** Lizard: SCN metadata when commit. */
+  MLOG_SCN_METADATA = 87,
+
+  /** Create a hippo index page */
+  MLOG_PAGE_CREATE_HIPPO = 88,
+  /** Create a hippo compact index page */
+  MLOG_COMP_PAGE_CREATE_HIPPO = 89,
+
+  /** Lizard: mark secondary index record with tid column deleted */
+  MLOG_REC_SEC_HIPPO_DELETE_MARK = 90,
+
   /** Lizard: update clover fields (scn, uba, gcn) after 8029 */
   MLOG_REC_CLUST_CLOVER_UPDATE = 100,
 
+  /** Lizard: create a SPC index page */
+  MLOG_PAGE_CREATE_SPC = 101,
+
+  /** Lizard: Encode page for spc. */
+  MLOG_COMP_PAGE_ENCODE = 102,
+
+  /** Lizard: create page dict in spc page. */
+  MLOG_SPC_PAGE_CREATE_DICT = 103,
+
   /** biggest value (used in assertions) */
-  MLOG_BIGGEST_TYPE = MLOG_REC_CLUST_CLOVER_UPDATE
+  MLOG_BIGGEST_TYPE = MLOG_SPC_PAGE_CREATE_DICT
 };
 
 /** @} */

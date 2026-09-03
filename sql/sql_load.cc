@@ -93,6 +93,7 @@
 #include "thr_lock.h"
 
 #include "sql/sql_implicit_common.h"
+#include "sql/raii/sentry.h"
 
 class READ_INFO;
 
@@ -251,7 +252,6 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
 
   THD_STAGE_INFO(thd, stage_executing);
   if (select->setup_tables(thd, table_list, false)) return true;
-
   if (run_before_dml_hook(thd)) return true;
 
   if (table_list->is_view() && select->resolve_placeholder_tables(thd, false))
@@ -282,7 +282,6 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
         table_list->prepare_replace_filter(thd))
       return true;
   }
-
   // Pass the check option down to the underlying table:
   insert_table_ref->check_option = table_list->check_option;
   /*
@@ -559,7 +558,7 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
     table->next_number_field = table->found_next_number_field;
     if (thd->lex->is_ignore() || handle_duplicates == DUP_REPLACE)
       table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
-    if (handle_duplicates == DUP_REPLACE &&
+    if (handle_duplicates == DUP_REPLACE && !table->entity_guard &&
         (!table->triggers || !table->triggers->has_delete_triggers()))
       table->file->ha_extra(HA_EXTRA_WRITE_CAN_REPLACE);
     if (thd->locked_tables_mode <= LTM_LOCK_TABLES)
@@ -774,6 +773,13 @@ bool Sql_cmd_load_table::read_fixed_length(THD *thd, COPY_INFO &info,
   bool err;
   DBUG_TRACE;
 
+  cs::util::ReplicatedColumnsView replicated_col_view{
+      table,
+      cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index};
+  table->cached_rcv =
+      opt_polarx_binlog_bitmap_mode ? &replicated_col_view : nullptr;
+  raii::Sentry<> guard([&table]() { table->cached_rcv = nullptr; });
+
   while (!read_info.read_fixed_length()) {
     if (thd->killed) {
       thd->send_kill_message();
@@ -940,6 +946,13 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
   DBUG_TRACE;
 
   enclosed_length = enclosed.length();
+
+  cs::util::ReplicatedColumnsView replicated_col_view{
+      table,
+      cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index};
+  table->cached_rcv =
+      opt_polarx_binlog_bitmap_mode ? &replicated_col_view : nullptr;
+  raii::Sentry<> guard([&table]() { table->cached_rcv = nullptr; });
 
   for (;;) {
     if (thd->killed) {
@@ -1153,6 +1166,13 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
   TABLE *table = table_list->table;
   const CHARSET_INFO *cs = read_info.read_charset;
   DBUG_TRACE;
+
+  cs::util::ReplicatedColumnsView replicated_col_view{
+      table,
+      cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index};
+  table->cached_rcv =
+      opt_polarx_binlog_bitmap_mode ? &replicated_col_view : nullptr;
+  raii::Sentry<> guard([&table]() { table->cached_rcv = nullptr; });
 
   for (;;) {
     if (thd->killed) {

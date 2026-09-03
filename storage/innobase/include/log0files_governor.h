@@ -65,6 +65,9 @@ inline bool log_files_governor_is_active() {
 
 #endif /* !UNIV_HOTBACKUP */
 
+/** Percentage of redo log file cache used for redo log governor. */
+extern ulong redo_log_file_cache_pct;
+
 /** Creates a new set of redo log files.
 @remarks
 Before creating the new log files, function asserts that there are no existing

@@ -32,6 +32,26 @@
   @{
 */
 
+/** Atomically consume capacity and return the unconsumed amount. */
+static size_t consume_capacity(std::atomic<size_t> &capacity,
+                               size_t requested) {
+  if (requested == 0) {
+    return 0;
+  }
+
+  size_t available = capacity.load();
+
+  while (available != 0) {
+    const size_t consumed = std::min(available, requested);
+
+    if (capacity.compare_exchange_weak(available, available - consumed)) {
+      return requested - consumed;
+    }
+  }
+
+  return requested;
+}
+
 void PFS_memory_safe_stat::reset() {
   m_used = false;
 
@@ -176,23 +196,8 @@ void PFS_memory_shared_stat::count_builtin_alloc(size_t size) {
   m_alloc_size += size;
   m_free_size_capacity += size;
 
-  size_t old_value;
-
-  /* Optimistic */
-  old_value = m_alloc_count_capacity.fetch_sub(1);
-
-  /* Adjustment */
-  if (old_value <= 0) {
-    m_alloc_count_capacity++;
-  }
-
-  /* Optimistic */
-  old_value = m_alloc_size_capacity.fetch_sub(size);
-
-  /* Adjustment */
-  if (old_value < size) {
-    m_alloc_size_capacity = 0;
-  }
+  (void)consume_capacity(m_alloc_count_capacity, 1);
+  (void)consume_capacity(m_alloc_size_capacity, size);
 
   return;
 }
@@ -205,23 +210,8 @@ void PFS_memory_shared_stat::count_builtin_free(size_t size) {
   m_free_size += size;
   m_alloc_size_capacity += size;
 
-  size_t old_value;
-
-  /* Optimistic */
-  old_value = m_free_count_capacity.fetch_sub(1);
-
-  /* Adjustment */
-  if (old_value <= 0) {
-    m_free_count_capacity++;
-  }
-
-  /* Optimistic */
-  old_value = m_free_size_capacity.fetch_sub(size);
-
-  /* Adjustment */
-  if (old_value < size) {
-    m_free_size_capacity = 0;
-  }
+  (void)consume_capacity(m_free_count_capacity, 1);
+  (void)consume_capacity(m_free_size_capacity, size);
 
   return;
 }
@@ -235,26 +225,17 @@ PFS_memory_stat_alloc_delta *PFS_memory_shared_stat::count_alloc(
   m_alloc_size += size;
   m_free_size_capacity += size;
 
-  if ((m_alloc_count_capacity >= 1) && (m_alloc_size_capacity >= size)) {
-    m_alloc_count_capacity--;
-    m_alloc_size_capacity -= size;
+  const size_t remaining_alloc_count =
+      consume_capacity(m_alloc_count_capacity, 1);
+  const size_t remaining_alloc_size =
+      consume_capacity(m_alloc_size_capacity, size);
+
+  if ((remaining_alloc_count == 0) && (remaining_alloc_size == 0)) {
     return nullptr;
   }
 
-  if (m_alloc_count_capacity >= 1) {
-    m_alloc_count_capacity--;
-    delta->m_alloc_count_delta = 0;
-  } else {
-    delta->m_alloc_count_delta = 1;
-  }
-
-  if (m_alloc_size_capacity >= size) {
-    m_alloc_size_capacity -= size;
-    delta->m_alloc_size_delta = 0;
-  } else {
-    delta->m_alloc_size_delta = size - m_alloc_size_capacity;
-    m_alloc_size_capacity = 0;
-  }
+  delta->m_alloc_count_delta = remaining_alloc_count;
+  delta->m_alloc_size_delta = remaining_alloc_size;
 
   return delta;
 }
@@ -268,26 +249,17 @@ PFS_memory_stat_free_delta *PFS_memory_shared_stat::count_free(
   m_free_size += size;
   m_alloc_size_capacity += size;
 
-  if ((m_free_count_capacity >= 1) && (m_free_size_capacity >= size)) {
-    m_free_count_capacity--;
-    m_free_size_capacity -= size;
+  const size_t remaining_free_count =
+      consume_capacity(m_free_count_capacity, 1);
+  const size_t remaining_free_size =
+      consume_capacity(m_free_size_capacity, size);
+
+  if ((remaining_free_count == 0) && (remaining_free_size == 0)) {
     return nullptr;
   }
 
-  if (m_free_count_capacity >= 1) {
-    m_free_count_capacity--;
-    delta->m_free_count_delta = 0;
-  } else {
-    delta->m_free_count_delta = 1;
-  }
-
-  if (m_free_size_capacity >= size) {
-    m_free_size_capacity -= size;
-    delta->m_free_size_delta = 0;
-  } else {
-    delta->m_free_size_delta = size - m_free_size_capacity;
-    m_free_size_capacity = 0;
-  }
+  delta->m_free_count_delta = remaining_free_count;
+  delta->m_free_size_delta = remaining_free_size;
 
   return delta;
 }
@@ -295,38 +267,14 @@ PFS_memory_stat_free_delta *PFS_memory_shared_stat::count_free(
 PFS_memory_stat_alloc_delta *PFS_memory_shared_stat::apply_alloc_delta(
     const PFS_memory_stat_alloc_delta *delta,
     PFS_memory_stat_alloc_delta *delta_buffer) {
-  size_t val;
-  size_t remaining_alloc_count = 0;
-  size_t remaining_alloc_size = 0;
-  bool has_remaining = false;
-
   m_used = true;
 
-  val = delta->m_alloc_count_delta;
-  if (val > 0) {
-    if (val <= m_alloc_count_capacity) {
-      m_alloc_count_capacity -= val;
-      remaining_alloc_count = 0;
-    } else {
-      remaining_alloc_count = val - m_alloc_count_capacity;
-      m_alloc_count_capacity = 0;
-      has_remaining = true;
-    }
-  }
+  const size_t remaining_alloc_count = consume_capacity(
+      m_alloc_count_capacity, delta->m_alloc_count_delta);
+  const size_t remaining_alloc_size =
+      consume_capacity(m_alloc_size_capacity, delta->m_alloc_size_delta);
 
-  val = delta->m_alloc_size_delta;
-  if (val > 0) {
-    if (val <= m_alloc_size_capacity) {
-      m_alloc_size_capacity -= val;
-      remaining_alloc_size = 0;
-    } else {
-      remaining_alloc_size = val - m_alloc_size_capacity;
-      m_alloc_size_capacity = 0;
-      has_remaining = true;
-    }
-  }
-
-  if (!has_remaining) {
+  if ((remaining_alloc_count == 0) && (remaining_alloc_size == 0)) {
     return nullptr;
   }
 
@@ -338,38 +286,14 @@ PFS_memory_stat_alloc_delta *PFS_memory_shared_stat::apply_alloc_delta(
 PFS_memory_stat_free_delta *PFS_memory_shared_stat::apply_free_delta(
     const PFS_memory_stat_free_delta *delta,
     PFS_memory_stat_free_delta *delta_buffer) {
-  size_t val;
-  size_t remaining_free_count = 0;
-  size_t remaining_free_size = 0;
-  bool has_remaining = false;
-
   m_used = true;
 
-  val = delta->m_free_count_delta;
-  if (val > 0) {
-    if (val <= m_free_count_capacity) {
-      m_free_count_capacity -= val;
-      remaining_free_count = 0;
-    } else {
-      remaining_free_count = val - m_free_count_capacity;
-      m_free_count_capacity = 0;
-      has_remaining = true;
-    }
-  }
+  const size_t remaining_free_count =
+      consume_capacity(m_free_count_capacity, delta->m_free_count_delta);
+  const size_t remaining_free_size =
+      consume_capacity(m_free_size_capacity, delta->m_free_size_delta);
 
-  val = delta->m_free_size_delta;
-  if (val > 0) {
-    if (val <= m_free_size_capacity) {
-      m_free_size_capacity -= val;
-      remaining_free_size = 0;
-    } else {
-      remaining_free_size = val - m_free_size_capacity;
-      m_free_size_capacity = 0;
-      has_remaining = true;
-    }
-  }
-
-  if (!has_remaining) {
+  if ((remaining_free_count == 0) && (remaining_free_size == 0)) {
     return nullptr;
   }
 

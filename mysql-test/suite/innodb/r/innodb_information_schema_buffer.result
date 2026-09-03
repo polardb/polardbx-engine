@@ -23,7 +23,7 @@ FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
 WHERE TABLE_NAME like "%infoschema_buffer_test%"
     and PAGE_STATE="file_page" and INDEX_NAME = "idx" and PAGE_TYPE="index";
 TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE	PAGE_STATE	PAGE_TYPE
-`test`.`infoschema_buffer_test`	idx	2	40	FILE_PAGE	INDEX
+`test`.`infoschema_buffer_test`	idx	2	52	FILE_PAGE	INDEX
 SELECT space, is_stale FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
 WHERE space = {space_id} GROUP BY space, is_stale;;
 space	is_stale

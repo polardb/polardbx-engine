@@ -904,6 +904,17 @@ static bool AddPathCosts(const AccessPath *path,
       error |= AddMemberToObject<Json_null>(obj, "actual_rows");
       error |= AddMemberToObject<Json_null>(obj, "actual_loops");
     }
+
+    if (path->type == AccessPath::INDEX_SCAN) {
+      TABLE *table = path->index_scan().table;
+      const KEY *key = &table->key_info[path->index_scan().idx];
+      if ((key->flags & HA_VECTOR) &&
+          table->hlindex_search_stats.nodes_visited > 0) {
+        error |= AddMemberToObject<Json_int>(
+            obj, "vector_nodes_visited",
+            table->hlindex_search_stats.nodes_visited);
+      }
+    }
   }
   return error;
 }
@@ -1973,6 +1984,14 @@ void Explain_format_tree::ExplainPrintCosts(const Json_object *obj,
                llrintf(static_cast<double>(actual_rows)), actual_loops);
       *explain += str;
     }
+  }
+  if (obj->get("vector_nodes_visited") != nullptr) {
+    int64_t nodes =
+        down_cast<Json_int *>(obj->get("vector_nodes_visited"))->value();
+    char str[128];
+    snprintf(str, sizeof(str), " (vector: algo=HNSW, nodes_visited=%lld)",
+             static_cast<long long>(nodes));
+    *explain += str;
   }
   *explain += "\n";
 }

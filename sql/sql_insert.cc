@@ -1,5 +1,6 @@
 /*
-   Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+   Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -111,8 +112,10 @@
 #include "template_utils.h"
 #include "thr_lock.h"
 
+#include "sql/column_encryption/column_encryption_type.h"
 #include "sql/sql_implicit_common.h"
 #include "sql/sql_update.h"
+#include "sql/item_timefunc.h"  // Item_func_mod_onupd
 
 namespace dd {
 class Table;
@@ -122,6 +125,55 @@ static bool check_view_insertability(THD *thd, Table_ref *view,
                                      const Table_ref *insert_table_ref);
 
 static void prepare_for_positional_update(TABLE *table, Table_ref *tables);
+
+/**
+  Compare records excluding MODIFY_ON_UPDATE fields.
+  Used by REPLACE to determine if non-conditional columns have changed.
+
+  @param table               The table to compare.
+  @param mod_onupd_fields    Fields to exclude from comparison.
+
+  @return true  if any non-excluded field has changed.
+  @return false if all non-excluded fields are identical.
+*/
+static bool compare_records_excluding_mod_onupd(
+    const TABLE *table,
+    const std::map<uint, Item_func_mod_onupd *> &mod_onupd_fields) {
+  for (Field **ptr = table->field; *ptr; ptr++) {
+    Field *f = *ptr;
+    if (mod_onupd_fields.count(f->field_index())) continue;
+    if (f->is_nullable()) {
+      uchar null_byte_index = f->null_offset();
+      if (((table->record[0][null_byte_index]) & f->null_bit) !=
+          ((table->record[1][null_byte_index]) & f->null_bit))
+        return true;
+    }
+    if (f->cmp_binary_offset(table->s->rec_buff_length)) return true;
+  }
+  return false;
+}
+
+/**
+  Copy a single field's value from record[1] (old row) to record[0] (new row).
+  Handles both data bytes and the NULL bit.
+
+  @param table  The table containing the records.
+  @param f      The field to copy.
+*/
+static void copy_field_from_old_record(TABLE *table, Field *f) {
+  // Copy NULL bit
+  if (f->is_nullable()) {
+    uint null_offset = f->null_offset();
+    uchar null_bit = f->null_bit;
+    table->record[0][null_offset] =
+        (table->record[0][null_offset] & ~null_bit) |
+        (table->record[1][null_offset] & null_bit);
+  }
+  // Copy field data
+  memcpy(f->field_ptr(),
+         f->field_ptr() + table->s->rec_buff_length,
+         f->pack_length());
+}
 
 /**
   Check that insert fields are from a single table of a multi-table view.
@@ -559,7 +611,7 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
     }
 
     THD_STAGE_INFO(thd, stage_update);
-    if (duplicates == DUP_REPLACE &&
+    if (duplicates == DUP_REPLACE && !insert_table->entity_guard &&
         (!insert_table->triggers ||
          !insert_table->triggers->has_delete_triggers()))
       insert_table->file->ha_extra(HA_EXTRA_WRITE_CAN_REPLACE);
@@ -655,10 +707,6 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
         // continue when IGNORE clause is used.
         continue;
       }
-      if (im::guard_record(thd, insert_table, im::Guard_type::GUARD_INSERT)) {
-        has_error = true;
-        break;
-      }
       if (write_record(thd, insert_table, &info, &update, &returning_stmt)) {
         has_error = true;
         break;
@@ -666,7 +714,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
 
       /* Send data if it is returning clause */
       if (returning_stmt.is_backfill_returning()) {
-        if ((info.prev_errno == 0 && info.backfill_dup == 1 && thd->lex->is_ignore()) && 
+        if ((info.prev_errno == 0 && info.backfill_dup == 1 &&
+             thd->lex->is_ignore()) &&
             returning_stmt.send_data(thd)) {
           has_error = true;
           break;
@@ -796,7 +845,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
                ? info.stats.touched
                : info.stats.updated));
     } else {
-      has_error = set_my_ok(thd,
+      has_error = set_my_ok(
+          thd,
           info.stats.copied + info.stats.deleted +
               (thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
                    ? info.stats.touched
@@ -824,7 +874,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
       returning_stmt.send_eof(thd);
       thd->set_row_count_func(info.stats.copied + info.stats.deleted + updated);
     } else {
-      has_error= set_my_ok(thd, info.stats.copied + info.stats.deleted + updated, id, buff);
+      has_error = set_my_ok(
+          thd, info.stats.copied + info.stats.deleted + updated, id, buff);
       if (has_error) return true;
     }
   }
@@ -1884,7 +1935,11 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
 
   const enum_duplicates duplicate_handling = info->get_duplicate_handling();
 
-  if (duplicate_handling == DUP_REPLACE || duplicate_handling == DUP_UPDATE || is_backfill_returning) {
+  if (im::guard_record(thd, table, im::Guard_type::GUARD_INSERT))
+    goto before_trg_err;
+
+  if (duplicate_handling == DUP_REPLACE || duplicate_handling == DUP_UPDATE ||
+      is_backfill_returning) {
     assert(duplicate_handling != DUP_UPDATE || update != nullptr);
     while ((error = table->file->ha_write_row(table->record[0]))) {
       uint key_nr;
@@ -1950,7 +2005,8 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
           key_nr == table->s->next_number_index && (insert_id_for_cur_row > 0))
         goto err;
       if (table->file->ha_table_flags() & HA_DUPLICATE_POS) {
-        if (table->file->ha_rnd_pos(table->record[1], table->file->dup_ref))
+        if (table->file->ha_rnd_pos(table->record[1], table->file->dup_ref,
+                                    komodo::GM_NONE))
           goto err;
       }
       /*
@@ -1990,9 +2046,10 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
         error = HA_ERR_FOUND_DUPP_KEY; /* Database can't find key */
         goto err;
       }
-      if (is_backfill_returning && duplicate_handling != DUP_UPDATE && duplicate_handling != DUP_REPLACE)
-      {
-        if (!records_are_comparable(table) || compare_records_for_backfill(table)) {
+      if (is_backfill_returning && duplicate_handling != DUP_UPDATE &&
+          duplicate_handling != DUP_REPLACE) {
+        if (!records_are_comparable(table) ||
+            compare_records_for_backfill(table)) {
           info->backfill_dup = 1;
         }
         goto ok_or_after_trg_err;
@@ -2034,8 +2091,8 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
         if (returning_stmt != nullptr && returning_stmt->is_full_image()) {
           /* Dont support trigger. */
           if (table->triggers != nullptr) return true;
-          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) 
-              && returning_stmt->send_data(thd, true)) {
+          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) &&
+              returning_stmt->send_data(thd, true)) {
             return true;
           }
         }
@@ -2045,6 +2102,9 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
                 thd, update, *update->get_changed_columns(),
                 *update->update_values, table, TRG_EVENT_UPDATE, 0, true,
                 &is_row_changed))
+          goto before_trg_err;
+
+        if (im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE))
           goto before_trg_err;
 
         bool insert_id_consumed = false;
@@ -2153,9 +2213,9 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
         if (returning_stmt != nullptr && returning_stmt->is_full_image()) {
           ptrdiff_t diff = (table->record[1] - table->record[0]);
           /* Dont support trigger. */
-          if (table->triggers != nullptr) return true; 
-          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) 
-              && returning_stmt->send_data(thd, true, diff)) {
+          if (table->triggers != nullptr) return true;
+          if ((info->prev_errno == 0 || !thd->lex->is_ignore()) &&
+              returning_stmt->send_data(thd, true, diff)) {
             return true;
           }
         }
@@ -2207,9 +2267,41 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
           we just should not expose this fact to users by invoking
           ON UPDATE triggers.
         */
+
+        /*
+          MODIFY_ON_UPDATE conditional logic for REPLACE:
+          At this point record[0] has new values (MOD_ONUPD evaluated),
+          record[1] has the old conflicting row.
+          If non-MOD_ONUPD fields haven't changed, revert MOD_ONUPD
+          fields to their old values.
+        */
+        auto &replace_mod_onupd = info->get_mod_onupd_items_for_replace();
+        if (!replace_mod_onupd.empty()) {
+          /*
+            Re-evaluate MOD_ONUPD expressions to restore originally
+            evaluated values (needed for correctness in multi-conflict
+            retry scenarios where a previous iteration may have reverted).
+          */
+          for (auto &[idx, func] : replace_mod_onupd) {
+            if (func->set_mod_onupd(table->field[idx]))
+              goto before_trg_err;
+          }
+          bool other_changed =
+              compare_records_excluding_mod_onupd(table, replace_mod_onupd);
+          if (!other_changed) {
+            // Revert MOD_ONUPD fields to old row values
+            for (auto &[idx, func] : replace_mod_onupd) {
+              copy_field_from_old_record(table, table->field[idx]);
+            }
+          }
+        }
+
         if (last_uniq_key(table, key_nr) &&
             !table->s->is_referenced_by_foreign_key() &&
             (!table->triggers || !table->triggers->has_delete_triggers())) {
+          if (im::guard_record(thd, table, im::Guard_type::GUARD_UPDATE))
+            goto before_trg_err;
+
           if ((error = table->file->ha_update_row(table->record[1],
                                                   table->record[0])) &&
               error != HA_ERR_RECORD_IS_THE_SAME)
@@ -2230,6 +2322,9 @@ bool write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update,
               table->triggers->process_triggers(thd, TRG_EVENT_DELETE,
                                                 TRG_ACTION_BEFORE, true))
             goto before_trg_err;
+          if (im::guard_record(thd, table, im::Guard_type::GUARD_DELETE, 1))
+            goto before_trg_err;
+
           if ((error = table->file->ha_delete_row(table->record[1]))) goto err;
           info->stats.deleted++;
           if (!table->file->has_transactions())
@@ -2295,7 +2390,7 @@ ok_or_after_trg_err:
         Transaction_ctx::STMT);
   return trg_error;
 
-err : {
+err: {
   myf error_flags = MYF(0); /**< Flag for fatal errors */
   info->last_errno = error;
   info->prev_errno = error;
@@ -2417,7 +2512,7 @@ bool Query_result_insert::start_execution(THD *thd) {
   thd->num_truncated_fields = 0;
   if (thd->lex->is_ignore() || duplicate_handling != DUP_ERROR)
     table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
-  if (duplicate_handling == DUP_REPLACE &&
+  if (duplicate_handling == DUP_REPLACE && !table->entity_guard &&
       (!table->triggers || !table->triggers->has_delete_triggers()))
     table->file->ha_extra(HA_EXTRA_WRITE_CAN_REPLACE);
   if (duplicate_handling == DUP_UPDATE)
@@ -2457,10 +2552,43 @@ void Query_result_insert::cleanup() {
   current_thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
 }
 
+/**
+ * For INSERT ... SELECT, check that each source value's encryption type
+ * either is NONE or matches the target field's encryption type.
+ * This allows encrypted-to-encrypted transfers of the same type.
+ */
+bool Query_result_insert::reject_encryption_transfer(
+    THD *thd, const mem_root_deque<Item *> &values) {
+  DBUG_TRACE;
+
+  if (!thd->enable_column_encryption && !thd->enable_mask_internal_user &&
+      !thd->enable_mask_ai_model_config_api_key)
+    return false;
+
+  auto value_it = VisibleFields(values).begin();
+  for (Item *fld : VisibleFields(*fields)) {
+    Item *value = *value_it++;
+    auto value_type =
+        komodo::get_real_encryption_type(value->encryption_type());
+    auto fld_type = komodo::get_real_encryption_type(fld->encryption_type());
+
+    if (komodo::has_encryption_type(value_type) && value_type != fld_type) {
+      my_error(ER_COLUMNS_ENCRYPTION_TRANSFER, MYF(0));
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool Query_result_insert::send_data(THD *thd,
                                     const mem_root_deque<Item *> &values) {
   DBUG_TRACE;
   bool error = false;
+
+  if (reject_encryption_transfer(thd, values)) {
+    return true;
+  }
 
   Autoinc_field_has_explicit_non_null_value_reset_guard after_each_row(table);
   thd->check_for_truncated_fields = CHECK_FIELD_WARN;
@@ -3005,7 +3133,6 @@ bool Query_result_create::start_execution(THD *thd) {
   MYSQL_LOCK *extra_lock = nullptr;
 
   table->reginfo.lock_type = TL_WRITE;
-
   /*
     mysql_lock_tables() below should never fail with request to reopen table
     since it won't wait for the table lock (we have exclusive metadata lock on
@@ -3050,7 +3177,7 @@ bool Query_result_create::start_execution(THD *thd) {
 
   if (thd->lex->is_ignore() || duplicate_handling != DUP_ERROR)
     table->file->ha_extra(HA_EXTRA_IGNORE_DUP_KEY);
-  if (duplicate_handling == DUP_REPLACE &&
+  if (duplicate_handling == DUP_REPLACE && !table->entity_guard &&
       (!table->triggers || !table->triggers->has_delete_triggers()))
     table->file->ha_extra(HA_EXTRA_WRITE_CAN_REPLACE);
   if (duplicate_handling == DUP_UPDATE)
@@ -3071,6 +3198,18 @@ bool Query_result_create::start_execution(THD *thd) {
 
   table->mark_columns_needed_for_insert(thd);
   return false;
+}
+
+/**
+ * For CREATE TABLE ... SELECT, targets have no encryption -- reject any
+ * encrypted source values. Delegates to the common check in
+ * Query_result_interceptor rather than using the pair-check inherited from
+ * Query_result_insert (which would compare each value with itself and
+ * therefore never reject).
+ */
+bool Query_result_create::reject_encryption_transfer(
+    THD *thd, const mem_root_deque<Item *> &values) {
+  return Query_result_interceptor::reject_encryption_transfer(thd, values);
 }
 
 /*

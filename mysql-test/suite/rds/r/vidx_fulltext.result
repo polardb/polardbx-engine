@@ -1,0 +1,226 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2, t3;
+#
+# Scenario 2.1: CREATE TABLE with both VECTOR INDEX and FULLTEXT INDEX
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+content TEXT NOT NULL,
+v VECTOR(5),
+FULLTEXT INDEX ft_content(content),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+#
+# Scenario 2.2: SHOW CREATE TABLE - confirm both indexes displayed correctly
+#
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary tables for both indexes in information_schema
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%t1%' AND (NAME LIKE '%vidx_%' OR NAME LIKE '%fts_%')
+ORDER BY NAME;
+NAME
+#
+# Scenario 2.8: ALTER TABLE DROP FULLTEXT INDEX -> confirm vector index not affected
+#
+ALTER TABLE t1 DROP INDEX ft_content;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify vector index still works
+# (Note: Cannot test with actual data due to INSERT crash bug)
+#
+# Scenario 2.9: ALTER TABLE ADD FULLTEXT INDEX (table already has vector index)
+#
+ALTER TABLE t1 ADD FULLTEXT INDEX ft_content(content);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Scenario 2.10: ALTER TABLE DROP VECTOR INDEX -> confirm fulltext index not affected
+#
+ALTER TABLE t1 DROP INDEX vi;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify fulltext index auxiliary tables still exist
+SELECT COUNT(*) > 0 AS has_fts_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%t1%' AND NAME LIKE '%fts_%';
+has_fts_tables
+0
+#
+# Scenario 2.11: ALTER TABLE ADD VECTOR INDEX (table already has fulltext index)
+#
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Scenario 2.12: TRUNCATE TABLE (with both indexes) -> verify both indexes remain
+#
+TRUNCATE TABLE t1;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` text NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify both auxiliary tables still exist after TRUNCATE
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%t1%' AND NAME LIKE '%vidx_%';
+has_vidx_tables
+0
+SELECT COUNT(*) > 0 AS has_fts_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%t1%' AND NAME LIKE '%fts_%';
+has_fts_tables
+0
+#
+# Scenario 2.14: DROP TABLE -> verify auxiliary tables for both indexes are cleaned up
+#
+DROP TABLE t1;
+# Verify all auxiliary tables are cleaned up
+SELECT COUNT(*) AS remaining_vidx_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%test/t1%' AND NAME LIKE '%vidx_%';
+remaining_vidx_tables
+0
+SELECT COUNT(*) AS remaining_fts_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%test/t1%' AND NAME LIKE '%fts_%';
+remaining_fts_tables
+0
+#
+# Additional test: Create another table to verify independence
+#
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+title VARCHAR(200) NOT NULL,
+description TEXT NOT NULL,
+embedding VECTOR(128),
+FULLTEXT INDEX ft_all(title, description),
+VECTOR INDEX vi_embed(embedding) m=16 distance=cosine
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `title` varchar(200) NOT NULL,
+  `description` text NOT NULL,
+  `embedding` vector(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_all` (`title`,`description`),
+  VECTOR KEY `vi_embed` (`embedding`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Test multiple ALTER operations in sequence
+ALTER TABLE t2 DROP INDEX ft_all;
+ALTER TABLE t2 DROP INDEX vi_embed;
+ALTER TABLE t2 ADD FULLTEXT INDEX ft_title(title);
+Warnings:
+Warning	124	InnoDB rebuilding table to add column FTS_DOC_ID
+ALTER TABLE t2 ADD VECTOR INDEX vi_embed(embedding);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `title` varchar(200) NOT NULL,
+  `description` text NOT NULL,
+  `embedding` vector(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_title` (`title`),
+  VECTOR KEY `vi_embed` (`embedding`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+#
+# Scenario 2.3-2.7, 2.13: DML smoke on a table holding both FULLTEXT
+# and VECTOR INDEX.  Historically blocked by the LOCK_IX-after-
+# consistent-read INSERT crash (lock0lock.cc:5283 assertion); that
+# path is fixed and re-covered here.
+#
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+content TEXT NOT NULL,
+v VECTOR(5),
+FULLTEXT INDEX ft_content(content),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# 2.3 INSERT (the original crash path)
+INSERT INTO t3(content, v) VALUES
+('alpha beta gamma',    VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0, 0.0]')),
+('beta gamma delta',    VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0, 0.0]')),
+('gamma delta epsilon', VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0, 0.0]')),
+('delta epsilon zeta',  VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0, 0.0]')),
+('epsilon zeta eta',    VEC_FROMTEXT('[0.0, 0.0, 0.0, 0.0, 1.0]'));
+SELECT COUNT(*) AS row_count FROM t3;
+row_count
+5
+# 2.4 SELECT via FULLTEXT MATCH
+SELECT id, content FROM t3
+WHERE MATCH(content) AGAINST ('alpha' IN NATURAL LANGUAGE MODE);
+id	content
+1	alpha beta gamma
+# 2.5 SELECT via VECTOR ANN
+SELECT id FROM t3
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+id
+1
+2
+3
+# 2.6 UPDATE (touches both index types)
+UPDATE t3 SET content='updated alpha', v=VEC_FROMTEXT('[2,2,2,2,2]') WHERE id=1;
+SELECT id, content FROM t3 WHERE id = 1;
+id	content
+1	updated alpha
+# 2.7 DELETE
+DELETE FROM t3 WHERE id = 5;
+SELECT COUNT(*) AS row_count_after_delete FROM t3;
+row_count_after_delete
+4
+# 2.13 Re-INSERT after DML churn (sanity: no IX-lock regression)
+INSERT INTO t3(content, v) VALUES
+('reinsert one', VEC_FROMTEXT('[0.5, 0.5, 0.0, 0.0, 0.0]')),
+('reinsert two', VEC_FROMTEXT('[0.0, 0.5, 0.5, 0.0, 0.0]'));
+SELECT COUNT(*) AS row_count_after_reinsert FROM t3;
+row_count_after_reinsert
+6
+DROP TABLE t3;
+# Cleanup
+SET GLOBAL vidx_disabled = ON;

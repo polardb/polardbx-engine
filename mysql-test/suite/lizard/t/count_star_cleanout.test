@@ -1,0 +1,92 @@
+set global innodb_commit_cleanout_max_rows=0;
+set global innodb_lizard_stat_enabled=true;
+set global innodb_txn_cleanout_disable=true;
+set global innodb_count_star_cleanout_disable=false;
+
+set @saved_innodb_parallel_read_threads=@@global.innodb_parallel_read_threads;
+set global innodb_parallel_read_threads=4;
+
+CREATE TABLE t1 (c1 INT, c2 int default 10);
+
+--echo # Create big enough table to ensure another call to Builder::insert_direct
+DELIMITER |;
+CREATE PROCEDURE populate_t1(IN BASE INT, IN SIZE INT)
+BEGIN
+  DECLARE i INT DEFAULT BASE;
+  WHILE (i + 10 <= SIZE) DO
+    INSERT INTO t1 values (i, i), (i+1, i+1), (i+2, i+2), (i+3, i+3), (i+4, i+4), (i+5, i+5), (i+6, i+6), (i+7, i+7), (i+8, i+8), (i+9, i+9);
+    SET i = i + 10;
+  END WHILE;
+END|
+DELIMITER ;|
+
+# Note that inserting anything less than 10700 doesn't cause key_buffer to
+# overflow on 32 bit platforms - this causes a single call to
+# Builder::insert_direct. In case of 64 bit platforms, this number is 9892. The
+# reason for this difference is because of different values for sizeof the
+# Key_sort_buffer::m_dtuples on different architecture. Kept at 11000 just to be
+# ensure second call to Builder::insert_direct
+CALL populate_t1(0, 31000);
+
+set global innodb_inject_stress_test_for_panda=false;
+
+SELECT COUNT(*) FROM t1;
+
+
+#ALTER TABLE t1 add index idx_c(c2);
+
+--let $var_value=query_get_value(show status like "lizard_pread_cleanout_clean", Value, 1)
+--let $assert_text= pread_cleanout should make sense.
+--let $assert_cond= $var_value > 0
+--source include/assert.inc
+
+
+DROP PROCEDURE populate_t1;
+DROP TABLE t1;
+
+
+CREATE TABLE large_table (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    age INT,
+    city VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+DELIMITER |;
+CREATE PROCEDURE insert_data()
+BEGIN
+    DECLARE i INT DEFAULT 0;
+    WHILE i < 1000 DO
+        INSERT INTO large_table (name, age, city) 
+        VALUES (
+            CONCAT('Name', i),
+            FLOOR(18 + (i * 62)),
+            'New York'
+        );
+        SET i = i + 1;
+    END WHILE;
+END |
+DELIMITER ;|
+CALL insert_data();
+
+#show status like '%pread_cleanout_clean%';
+#ALTER TABLE large_table ADD INDEX idx_name (name);
+select count(*) from large_table;
+#show status like '%pread_cleanout_clean%';
+
+
+--let $var_value1=query_get_value(show status like 'lizard_pread_cleanout_clean', Value, 1)
+--let $assert_text= pread_cleanout should make sense.
+--let $assert_cond= $var_value1 > $var_value
+--source include/assert.inc
+
+set global innodb_commit_cleanout_max_rows=3;
+set global innodb_lizard_stat_enabled=false;
+
+set global innodb_inject_stress_test_for_panda=true;
+set global innodb_count_star_cleanout_disable=true;
+set global innodb_txn_cleanout_disable=false;
+set global innodb_parallel_read_threads=@saved_innodb_parallel_read_threads;
+
+DROP PROCEDURE insert_data;
+DROP TABLE large_table;

@@ -32,7 +32,11 @@ INSERT INTO t2 SELECT * FROM t1;
 
 select * from information_schema.innodb_table_status where table_name='t1' or table_name='t2';
 
+--sleep 10
+# truncate every time will make wait_innodb_all_purged difficult to get out of the loop.
+set global innodb_purge_rseg_truncate_frequency = default;
 --source include/wait_innodb_all_purged.inc
+set global innodb_purge_rseg_truncate_frequency = 1;
 set global innodb_purge_stop_now=ON;
 
 begin;
@@ -92,7 +96,11 @@ update t2 set pad = LEFT(REPEAT('B', 4000), CHAR_LENGTH(REPEAT('A', 4000)));
 commit;
 
 set global innodb_purge_run_now=ON;
+--sleep 10
+# truncate every time will make wait_innodb_all_purged difficult to get out of the loop.
+set global innodb_purge_rseg_truncate_frequency = default;
 --source include/wait_innodb_all_purged.inc
+set global innodb_purge_rseg_truncate_frequency = 1;
 set global innodb_purge_stop_now=ON;
 
 begin;
@@ -125,12 +133,14 @@ update t2 set pad = LEFT(REPEAT('B', 4000), CHAR_LENGTH(REPEAT('A', 4000)));
 commit;
 
 set global innodb_purge_run_now=ON;
+--sleep 10
+# truncate every time will make wait_innodb_all_purged difficult to get out of the loop.
+set global innodb_purge_rseg_truncate_frequency = default;
 --source include/wait_innodb_all_purged.inc
 
 set opt_flashback_area = default;
 set global innodb_undo_retention = default;
 set global innodb_txn_retention = default;
-set global innodb_purge_rseg_truncate_frequency = default;
 set global innodb_undo_log_truncate = default;
 set global innodb_purge_batch_size = default;
 set global innodb_trx_rseg_n_slots_debug = default;

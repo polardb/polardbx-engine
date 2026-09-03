@@ -23,7 +23,7 @@ ALTER TABLE t1 CHANGE d d2 LONGBLOB;
 ALTER TABLE t1 CHANGE e e2 MEDIUMBLOB;
 ALTER TABLE t1 CHANGE f f2 TINYBLOB;
 
-SET GLOBAL DEBUG= '+d, skip_purge_check_shutdown';
+SET GLOBAL DEBUG= '+d,skip_purge_check_shutdown';
 --source include/shutdown_mysqld.inc
 
 --replace_regex $ibd2sdi_pattern

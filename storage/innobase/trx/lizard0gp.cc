@@ -32,14 +32,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <mysql/service_thd_wait.h>
 
+#include "lizard0btr0pcur.h"
 #include "lizard0gp.h"
 #include "lizard0row.h"
+#include "lizard0trx.h"
 #include "lizard0txn0rec.h"
-#include "lizard0undo.h"
-#include "lizard0btr0pcur.h"
 
 #include "page0page.h"
-#include "row0row.h"
 #include "srv0conc.h"
 #include "srv0srv.h"
 #include "srv0start.h"
@@ -175,7 +174,7 @@ static void gp_build_wait_state(trx_t *query_trx, trx_t *blocking_trx) {
   trx_mutex_enter(query_trx);
 
   /** Query state must be initial */
-  assert_gp_state_initial(query_trx);
+  ut_ad(gp_state_is_initial(query_trx));
 
   trx_gp_state(query_trx)->build(blocking_trx);
 
@@ -303,6 +302,9 @@ void gp_wait_check_and_cancel(gp_slot_t *slot) {
 
     gp_mutex_exit();
     trx_mutex_exit(trx);
+
+    /** Aggregate query timeout. */
+    lizard::generic_stats.query_wait_timeout.inc();
   }
 }
 /**----------------------- GP transaction ----------------------------*/
@@ -344,7 +346,7 @@ gp_slot_t *gp_reserve_slot(trx_t *trx,
       gp_sys->n_waiting++;
 
       /** GP state has been allocated */
-      assert_gp_state_allocated(trx);
+      ut_ad(gp_state_is_allocated(trx));
 
       /** Under the protect of gq trx mutex */
       trx->gp_state.slot = slot;
@@ -390,7 +392,7 @@ void gp_release_slot(gp_slot_t *slot) {
     Other state attributes which are protected by gp_sys->mutex
     has been cleared by timeout thread or XA transaction.
   */
-  assert_gp_state_initial(slot->query_trx);
+  ut_ad(gp_state_is_initial(slot->query_trx));
   trx_mutex_exit(slot->query_trx);
 
   slot->in_use = false;
@@ -408,6 +410,7 @@ void gp_release_slot(gp_slot_t *slot) {
 void gp_wait_suspend_thread(trx_t *trx) {
   gp_slot_t *slot;
   gp_state_t *gp_state;
+  std::chrono::steady_clock::time_point start_time;
 
   const auto wait_timeout = trx_gp_wait_timeout_get(trx);
 
@@ -427,13 +430,17 @@ void gp_wait_suspend_thread(trx_t *trx) {
     return;
   }
   /** GP state has been allocated */
-  assert_gp_state_allocated(trx);
+  ut_ad(gp_state_is_allocated(trx));
 
   /** Request wait slot */
   slot = gp_reserve_slot(trx, wait_timeout);
 
   gp_wait_mutex_exit();
   trx_mutex_exit(trx);
+
+  /**Aggregate wait count. */
+  lizard::generic_stats.query_wait_count.inc();
+  start_time = std::chrono::steady_clock::now();
 
   bool was_declared_inside_innodb = trx->declared_to_be_inside_innodb;
   if (was_declared_inside_innodb) {
@@ -451,9 +458,16 @@ void gp_wait_suspend_thread(trx_t *trx) {
   }
 
   /** Wakeup by timeout or XA commit */
-  assert_gp_state_initial(trx);
+  ut_ad(gp_state_is_initial(trx));
 
   gp_release_slot(slot);
+
+  /** Aggregate wait time. */
+  const auto diff_time = std::chrono::steady_clock::now() - start_time;
+  lizard::generic_stats.query_wait_time.add(
+      std::chrono::duration_cast<std::chrono::microseconds>(diff_time).count());
+  /* Record the lock wait time for this thread */
+  thd_set_lock_wait_time(trx->mysql_thd, diff_time);
 
   ut_a(trx->gp_error_state != DB_GP_WAIT);
 }
@@ -471,24 +485,25 @@ void gp_wait_suspend_thread(trx_t *trx) {
   @retval         true    visible = true
   @retval         false
 */
-bool gp_clust_or_panda_rec_cons_read_sees(
-    trx_t *trx, const rec_t *rec, dict_index_t *index, const ulint *offsets,
-    btr_pcur_t *pcur, lizard::Vision *vision, dberr_t *error) {
+bool gp_clust_or_panda_rec_cons_read_sees(trx_t *trx, const Slice *slc,
+                                          dict_index_t *index, btr_pcur_t *pcur,
+                                          lizard::Vision *vision,
+                                          dberr_t *error) {
 #ifdef UNIV_DEBUG
   bool looped = false;
 #endif
   ut_ad(!index->table->is_temporary());
   ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(page_rec_is_user_rec(rec));
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->is_positioned(index));
   ut_ad(vision->is_asof_gcn());
-  ut_ad(lizard::pcur_position_validate(pcur, rec, index));
+  ut_ad(lizard::pcur_position_validate(pcur, slc->rec(), index));
 
   const txn_layout_t layout = dict_index_txn_layout(index);
   ut_ad(txn_layout_is_arranged(layout));
 
-  txn_rec_t txn_rec(rec, index, offsets, layout);
-  Cleanout_ctx_t cctx(pcur);
+  txn_rec_t txn_rec(slc, index, layout);
+  Cleanout_ctx_t cctx(trx, pcur);
 
   /** Try to see optimistically. */
   if (txn_rec_try_see(&txn_rec, layout, vision, cctx(MTR_LOG_NONE))) {

@@ -357,7 +357,9 @@ const LEX_CSTRING plugin_type_names[MYSQL_MAX_PLUGIN_TYPE_NUM] = {
     {STRING_WITH_LEN("KEYRING")},
     {STRING_WITH_LEN("CLONE")},
     {STRING_WITH_LEN("PERFORMANCE POINT")},
-    {STRING_WITH_LEN("POLARX LICENSE")}};
+    {STRING_WITH_LEN("POLARX LICENSE")},
+    {STRING_WITH_LEN("")}, /* MYSQL_ENCRYPT_DB_PLUGIN */
+    {STRING_WITH_LEN("ENC CHECKSUM")}};
 
 extern int initialize_schema_table(st_plugin_int *plugin);
 extern int finalize_schema_table(st_plugin_int *plugin);
@@ -1640,8 +1642,11 @@ bool plugin_register_builtin_and_init_core_se(int *argc, char **argv) {
           !my_strcasecmp(&my_charset_latin1, plugin->name, "MyISAM");
       bool is_innodb =
           !my_strcasecmp(&my_charset_latin1, plugin->name, "InnoDB");
+      bool is_sequence =
+          !my_strcasecmp(&my_charset_latin1, plugin->name, "Sequence");
       if ((!is_daemon_keyring_proxy || is_help_or_validate_option()) &&
           !is_myisam && (!is_innodb || is_help_or_validate_option()) &&
+          (!is_sequence || is_help_or_validate_option()) &&
           my_strcasecmp(&my_charset_latin1, plugin->name, "CSV") &&
           my_strcasecmp(&my_charset_latin1, plugin->name, "POLARX_LICENSE"))
         continue;
@@ -3051,6 +3056,13 @@ void plugin_thdvar_init(THD *thd, bool enable_plugins) {
 
   // @@session.client_endpoint_ip
   thd->session_sysvar_res_mgr.init(&thd->variables.client_endpoint_ip);
+
+  // @@session.recycle_bin_table_name
+  thd->session_sysvar_res_mgr.init(&thd->variables.recycle_bin_table_name);
+
+  // @@session.polarx_slow_query_pushdown_username
+  thd->session_sysvar_res_mgr.init(
+      &thd->variables.polarx_slow_query_pushdown_username);
 }
 
 /*
@@ -3079,6 +3091,11 @@ static void cleanup_variables(THD *thd, struct System_variables *vars) {
     thd->variables.track_sysvars_ptr = nullptr;
     /* Remove references to client_endpoint_ip memory before freeing it. */
     thd->variables.client_endpoint_ip = nullptr;
+    /* Remove references to recycle_bin_table_name memory before freeing it. */
+    thd->variables.recycle_bin_table_name = nullptr;
+    /* Remove references to polarx_slow_query_pushdown_username memory before
+     * freeing it. */
+    thd->variables.polarx_slow_query_pushdown_username = nullptr;
     thd->session_sysvar_res_mgr.deinit();
   }
   assert(vars->table_plugin == nullptr);

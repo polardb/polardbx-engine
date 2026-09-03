@@ -46,13 +46,13 @@ if( $REFUSE != 0 )
   --echo # Refuse to authenticate the password
   if ($USE_AUTH_PLUGIN == 0)
   {
-    --error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
-    connect(fail_con_u1, localhost, $USER,$PASSWORD,,,,);
+    --error 1
+    --exec $MYSQL -u$USER -p$PASSWORD -e "SELECT 1;" 2>&1
   }
   if ($USE_AUTH_PLUGIN == 1)
   {
-    --error ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
-    connect(fail_con_u1, localhost, $USER,$PASSWORD,,,,);
+    --error 1
+    --exec $MYSQL -u$USER $CLIENT_AUTH_PLUGIN -p$PASSWORD -e "SELECT 1;" 2>&1
   }
 }
 enable_result_log;

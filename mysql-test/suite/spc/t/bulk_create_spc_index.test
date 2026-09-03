@@ -1,0 +1,147 @@
+#
+# Test for bulk creating SPC index.
+#
+
+-- source include/have_innodb_max_16k.inc
+
+--echo # Prepare the table.
+
+--disable_query_log
+DROP TABLE IF EXISTS spc_table;
+--enable_query_log
+
+CREATE TABLE spc_table (
+  id INT,
+  name VARCHAR(200),
+  address VARCHAR(200),
+  PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+--echo # Create Insert Procedure
+DELIMITER |;
+CREATE PROCEDURE populate_spc_table(IN max_rows INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE name_prefix VARCHAR(200) DEFAULT REPEAT('a', 190);
+
+  START TRANSACTION;
+  WHILE (i <= max_rows) DO
+    INSERT INTO spc_table VALUES (i, CONCAT(name_prefix, i), CONCAT('address', i));
+    SET i = i + 1;
+  END WHILE;
+  COMMIT;
+END|
+DELIMITER ;|
+
+--echo # Test 1: Bulk create SPC index. The index only have one page, and the page 
+--echo # have been encoded by using Prefix Compression. 
+
+SET GLOBAL innodb_fill_factor = 10;
+
+--echo # Rough calculation for compression threshold with fill_factor=10:
+--echo # 6-8 records without compression will trigger the first page split.
+--echo # After the first page have been compressed, about 6 records will 
+--echo # trigger the second page split. So, we just insert 10 records to 
+--echo # make sure only one page is used.
+
+--disable_query_log
+CALL populate_spc_table(10);
+--enable_query_log
+
+SELECT COUNT(*) FROM spc_table;
+
+CREATE INDEX idx_name ON spc_table(name, address) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+
+CHECK TABLE spc_table;
+
+--echo # Select by index.
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE name like '%1';
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE name like '%3';
+
+--echo # Insert/update/delete.
+DELETE FROM spc_table WHERE name like '%1';
+INSERT INTO spc_table VALUES (16, 'aaaaaaaaaaa16', 'address16');
+UPDATE spc_table SET address = CONCAT('address', 'test') WHERE name like '%5';
+
+--echo # Clean up this index.
+DROP INDEX idx_name ON spc_table;
+
+TRUNCATE TABLE spc_table;
+
+--echo # Test 2: Bulk create SPC index. The index have multiple pages.
+# Calculation for 16KB page (16384 bytes) with SPC compression and fill_factor=10:
+# Index is on (name, address) - SPC compresses the entire index key as one unit:
+#   - Common prefix: ~190 bytes (REPEAT('a', 190) from name field)
+#   - Page header: ~120 bytes
+#   - Page dict (storing one prefix): ~190 + metadata ≈ ~200 bytes
+#   - Page directory slots: ~2 bytes per record
+#   - Fill factor = 10: only 10% of page space is used = 16384 * 0.1 = 1638 bytes
+#   - Available space for records: 1638 - 120 - 200 - (2 * N) bytes, where N = records per page
+#   - Compressed record: ~5-10 bytes (difference suffix) + ~5 bytes (metadata) = ~10-15 bytes
+#   - For 100 records per page: 1638 - 120 - 200 - 200 = 1118 bytes available
+#   - Records per page: 1118 / 15 ≈ 74 records
+# To ensure multiple pages, we need at least 200+ records.
+# Using 500 records to ensure at least 6-7 pages after compression.
+
+--disable_query_log 
+CALL populate_spc_table(500);
+--enable_query_log
+
+SELECT COUNT(*) FROM spc_table;
+
+CREATE INDEX idx_name ON spc_table(name, address) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+
+CHECK TABLE spc_table;
+
+--echo # Select by index.
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE name like '%1';
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE name like '%3';
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE address = 'address100';
+SELECT * FROM spc_table FORCE INDEX (idx_name) WHERE address = 'address120';
+
+--echo # Insert/update/delete.
+DELETE FROM spc_table WHERE name like '%1';
+INSERT INTO spc_table VALUES (501, 'aaaaaaaaaaa501', 'address501');
+UPDATE spc_table SET address = CONCAT('address', 'test') WHERE name like '%5';
+
+DELETE FROM spc_table WHERE name like '%3';
+INSERT INTO spc_table VALUES (503, 'aaaaaaaaaaa503', 'address503');
+UPDATE spc_table SET address = CONCAT('address', 'test') WHERE name like '%8';
+
+--echo # Clean up this index.
+DROP INDEX idx_name ON spc_table;
+
+--echo # Test 3: Bulk create SPC prefix index.
+TRUNCATE TABLE spc_table;
+
+--disable_query_log
+CALL populate_spc_table(500);
+--enable_query_log
+
+CREATE INDEX idx_name_prefix ON spc_table(name(32), address(16)) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+
+--let $TABLE_NAME = spc_table
+--let $INDEX_NAME = idx_name_prefix
+--let $IS_SPC = 1
+--source suite/spc/include/spc_dd_consistent.inc
+
+CHECK TABLE spc_table;
+
+--echo # Prefix collision: all rows share the indexed name prefix.
+SELECT id, address FROM spc_table FORCE INDEX (idx_name_prefix)
+WHERE name = CONCAT(REPEAT('a', 190), '100');
+
+UPDATE spc_table SET address = 'prefix-updated'
+WHERE name = CONCAT(REPEAT('a', 190), '100');
+SELECT id, address FROM spc_table FORCE INDEX (idx_name_prefix)
+WHERE name = CONCAT(REPEAT('a', 190), '100');
+
+CHECK TABLE spc_table;
+DROP INDEX idx_name_prefix ON spc_table;
+
+
+--echo #Clean up 
+SET GLOBAL innodb_fill_factor = default;
+DROP PROCEDURE populate_spc_table;
+
+DROP TABLE spc_table;

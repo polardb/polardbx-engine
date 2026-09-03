@@ -1,0 +1,354 @@
+# Make sure that connection_control plugin can be loaded
+--source ../inc/have_connection_control_plugin.inc
+
+# Save the initial number of concurrent sessions
+--source include/count_sessions.inc
+
+--echo # Connection control procedure tests for valid user accounts
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Setup
+--echo # Install connection_control plugin
+--source ../inc/install_connection_control_plugin.inc
+
+--echo # Create user accounts for testing
+CREATE USER u1 IDENTIFIED BY 'abcd';
+CREATE USER u2 IDENTIFIED BY 'abcd';
+CREATE USER u3 IDENTIFIED BY 'abcd';
+
+--echo # Save original values of connection_control variables
+SET @saved_connections_threshold = @@global.connection_control_failed_connections_threshold;
+SET @saved_refuse_period = @@global.connection_control_refuse_connection_period;
+SET @saved_max_delay = @@global.connection_control_max_connection_delay;
+SET @saved_min_delay = @@global.connection_control_min_connection_delay;
+
+# We don't need to use client side authentication plugin for this test.
+let $USE_AUTH_PLUGIN= 0;
+
+
+--echo 
+--echo # ------------------ Test 1 : for connection refuse --------------------------------------
+--echo
+
+--echo # Set small values for connection_control variables
+SET @@global.connection_control_failed_connections_threshold = 3;
+SET @@global.connection_control_refuse_connection_period = 10000;
+
+--echo # Make enough failed attempts to trigger refuse
+
+disable_result_log;
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+enable_result_log;
+
+--echo
+--echo # Following attempts will be refused to authenticate the password.
+--echo # The connection will not be held
+
+# Trying with invalid passwords, no authentication will be done
+
+let $USER=u1;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=1;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u2;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=2;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u3;
+let $PASSWORD=hoho;
+let $REFUSE=1;
+let $SUCCESS=0;
+let $REFUSE_STATS=3;
+--source ../inc/check_connection_refuse.inc
+
+# Trying with valid passwords, no authentication will be done
+# Valid passwords will not reset the refuse period
+
+let $USER=u3;
+let $PASSWORD=abcd;
+let $REFUSE=1;
+let $SUCCESS=1;
+let $REFUSE_STATS=4;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u2;
+let $PASSWORD=abcd;
+let $REFUSE=1;
+let $SUCCESS=1;
+let $REFUSE_STATS=5;
+--source ../inc/check_connection_refuse.inc
+
+let $USER=u1;
+let $PASSWORD=abcd;
+let $REFUSE=1;
+let $SUCCESS=1;
+let $REFUSE_STATS=6;
+--source ../inc/check_connection_refuse.inc
+
+--echo
+--echo # Unlock the user u1@%, different ip address should be remove totally
+--echo
+
+# Simulate different ip address
+Set GLOBAL debug ='+d, simulate_connection_refuse_event_ip';
+disable_result_log;
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+
+enable_result_log;
+
+Set GLOBAL debug ='-d, simulate_connection_refuse_event_ip';
+
+--sorted_result
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+
+--echo # Unlock the user u1@%
+ALTER USER u1 ACCOUNT UNLOCK;
+
+--sorted_result
+SELECT USERHOST, IP, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+
+# Trying with valid passwords, should connect successfully
+let $USER=u1;
+let $PASSWORD=abcd;
+let $REFUSE=0;
+let $SUCCESS=1;
+let $REFUSE_STATS=6;
+--source ../inc/check_connection_refuse.inc
+
+# Trying with valid passwords, no authentication will be done
+let $USER=u2;
+let $PASSWORD=abcd;
+let $REFUSE=1;
+let $SUCCESS=1;
+let $REFUSE_STATS=7;
+--source ../inc/check_connection_refuse.inc
+
+# Trying with valid passwords, no authentication will be done
+let $USER=u3;
+let $PASSWORD=abcd;
+let $REFUSE=1;
+let $SUCCESS=1;
+let $REFUSE_STATS=8;
+--source ../inc/check_connection_refuse.inc
+
+--echo # Unlock all users
+ALTER USER u1 ACCOUNT UNLOCK;
+ALTER USER u2 ACCOUNT UNLOCK;
+ALTER USER u3 ACCOUNT UNLOCK;
+
+
+
+--echo # ------------------ Test 2 : for connection delay --------------------------------------
+--echo
+
+--echo # Disable connection refuse, change mode to delay from refuse
+SET @@global.connection_control_refuse_connection_period = 0;
+
+--echo # Set small values for connection_control variables
+SET @@global.connection_control_max_connection_delay = 4000;
+SET @@global.connection_control_min_connection_delay = 2000;
+
+--echo # Failed attempts should have been reset to zero
+--sorted_result
+SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+
+
+--echo # Make enough failed attempts to trigger delay
+
+disable_result_log;
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u2, localhost, u2,,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u1, localhost, u1,haha,,,,);
+--replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
+--error ER_ACCESS_DENIED_ERROR
+connect(fail_con_u3, localhost, u3,efgh,,,,);
+
+enable_result_log;
+
+--echo
+--echo # Following attempts will experience delay in server response
+
+# Trying with invalid passwords,
+
+let $USER=u1;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=1;
+--source ../inc/check_connection_delay.inc
+
+let $USER=u2;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=2;
+--source ../inc/check_connection_delay.inc
+
+let $USER=u3;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=3;
+--source ../inc/check_connection_delay.inc
+
+--echo # Unlock the user u1@%
+--echo
+
+--sorted_result
+SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+
+ALTER USER u1 ACCOUNT UNLOCK;
+
+--sorted_result
+SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+
+# Trying with invalid passwords, it will not experience delay
+
+let $USER=u1;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=3;
+--source ../inc/check_connection_delay.inc
+
+# Trying with invalid passwords, it will experience delay
+let $USER=u2;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=4;
+--source ../inc/check_connection_delay.inc
+
+# Trying with invalid passwords, it will experience delay
+let $USER=u3;
+let $PASSWORD=hoho;
+let $SUCCESS=0;
+let $DELAY_STATS=5;
+--source ../inc/check_connection_delay.inc
+
+--echo # Unlock all users
+--echo
+
+ALTER USER u1 ACCOUNT UNLOCK;
+ALTER USER u2 ACCOUNT UNLOCK;
+ALTER USER u3 ACCOUNT UNLOCK;
+
+--sorted_result
+SELECT * FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+
+# Trying with valid passwords, it will not experience delay
+let $USER=u1;
+let $PASSWORD=abcd;
+let $SUCCESS=1;
+let $DELAY_STATS=5;
+--source ../inc/check_connection_delay.inc
+
+# Trying with valid passwords, it will not experience delay
+let $USER=u2;
+let $PASSWORD=abcd;
+let $SUCCESS=1;
+let $DELAY_STATS=5;
+--source ../inc/check_connection_delay.inc
+
+# Trying with invalid passwords, it will not experience delay
+let $USER=u3;
+let $PASSWORD=abcd;
+let $SUCCESS=1;
+let $DELAY_STATS=5;
+--source ../inc/check_connection_delay.inc
+
+
+--echo
+--echo # ----------------------------------------------------------------------
+--echo
+
+--echo # Cleanup
+
+connection default;
+
+--echo # Restore original values of conenction_control variables
+SET @@global.connection_control_failed_connections_threshold = @saved_connections_threshold;
+SET @@global.connection_control_refuse_connection_period = @saved_refuse_period;
+SET @@global.connection_control_max_connection_delay = @saved_max_delay;
+SET @@global.connection_control_min_connection_delay = @saved_min_delay;
+
+--echo # Remove user accounts created for the test
+DROP USER u1;
+DROP USER u2;
+DROP USER u3;
+
+--echo # Uninstall connection_control plugin
+--source ../inc/uninstall_connection_control_plugin.inc
+
+# Wait till all disconnects are completed.
+--source include/wait_until_count_sessions.inc
+
+--echo
+--echo # ----------------------------------------------------------------------

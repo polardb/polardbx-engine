@@ -9,6 +9,7 @@
 set global innodb_lizard_stat_enabled=on;
 create database gpp_options;
 set opt_index_format_gpp_enabled=true;
+set opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_options.t1 (
   a int NOT NULL,
   b int NOT NULL,
@@ -76,6 +77,7 @@ CREATE INDEX b_c ON gpp_options.t1(b,c);
 CREATE DATABASE gpp_tmp;
 # First, create a table with index b and b_c both gpp enabled.
 set opt_index_format_gpp_enabled=true;
+set opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_tmp.t1 (
   a int NOT NULL,
   b int NOT NULL,
@@ -168,6 +170,7 @@ ALTER TABLE gpp_options.t1 TRUNCATE PARTITION p2;
 
 --echo # Test REORGANIZE PARTITION
 SET opt_index_format_gpp_enabled=false;
+set opt_index_format_hippo_enabled=false;
 ALTER TABLE gpp_options.t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LESS THAN (4), PARTITION p1a VALUES LESS THAN (5));
 --let $INDEX_NAME=b
 --let $CONTAIN_GPP=1
@@ -177,7 +180,7 @@ ALTER TABLE gpp_options.t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LES
 --source suite/lizard/include/gpp_has_options.inc
 
 --echo # Test EXCHANGE PARTITION
-#Before exchange, p2's indexes all have gpp.
+#Before exchange, p2's index b has gpp, b_c does not.
 insert into gpp_options.t1 values (9,9,9,'99999');
 --let $FULL_TABLE_NAME=t1#p#p2
 --let $TABLE_NAME=t1
@@ -187,7 +190,7 @@ insert into gpp_options.t1 values (9,9,9,'99999');
 --let $CONTAIN_GPP=1
 --source suite/lizard/include/gpp_has_options.inc
 --let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
+--let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
 
 SET opt_index_format_gpp_enabled=false;
@@ -202,7 +205,7 @@ ALTER TABLE gpp_options.t1 EXCHANGE PARTITION p2 WITH TABLE gpp_options.exchange
 --let $CONTAIN_GPP=1
 --source suite/lizard/include/gpp_has_options.inc
 --let $INDEX_NAME=b_c
---let $CONTAIN_GPP=1
+--let $CONTAIN_GPP=0
 --source suite/lizard/include/gpp_has_options.inc
 
 --let $FULL_TABLE_NAME=t1#p#p2

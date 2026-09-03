@@ -1,0 +1,11 @@
+!include suite/xcluster/my.cnf
+
+[mysqld.1]
+max_binlog_size=4096
+
+[mysqld.2]
+max_binlog_size=4096
+
+[mysqld.3]
+max_binlog_size=4096
+cluster-log-type-node=ON

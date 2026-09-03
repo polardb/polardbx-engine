@@ -1,0 +1,17 @@
+CREATE TABLE `foo_t` (
+`id` bigint unsigned NOT NULL AUTO_INCREMENT,
+`schema_id` bigint unsigned NOT NULL,
+`name` varchar(64),
+`type` enum('BASE TABLE','VIEW','SYSTEM VIEW'),
+`engine` varchar(64),
+PRIMARY KEY (`id`),
+UNIQUE KEY `schema_id` (`schema_id`,`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 STATS_PERSISTENT=0;
+count(*)
+4
+insert into foo_t (schema_id, name, type, engine)
+values (670 % 6, CONCAT("name_", 670), 'SYSTEM VIEW', repeat('a', 60));
+insert into foo_t (schema_id, name, type, engine)
+values (675 % 6, CONCAT("name_", 675), 'SYSTEM VIEW', repeat('a', 60));
+include/assert.inc [Assert value should be same]
+drop table foo_t;

@@ -1,0 +1,68 @@
+create table t1 (c1 longblob);
+
+--echo ###################
+--echo # Case: Resize
+--echo ###################
+call dbms_consensus.force_purge_cache(4611686018427387904);
+set global consensus_log_cache_size = 2*1024*1024;
+
+set debug = "+d,fifo_cache_disable_evicit_oldest_try";
+
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+
+show global status like "consensus_fifo_cache_log_count";
+
+set global consensus_log_cache_size = 4*1024*1024;
+
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+
+show global status like "consensus_fifo_cache_log_count";
+
+set global consensus_log_cache_size = 2*1024*1024;
+show global status like "consensus_fifo_cache_log_count";
+
+set debug = "-d,fifo_cache_disable_evicit_oldest_try";
+
+--echo ###################
+--echo # Case: Handle error
+--echo ###################
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+set debug = "+d,fifo_cache_simulate_write_error";
+--error ER_BINLOG_LOGGING_IMPOSSIBLE, 2013
+insert into t1 values (repeat('a', 255*1024));
+
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--echo ###################
+--echo # Cleanup
+--echo ###################
+drop table t1;
+
+

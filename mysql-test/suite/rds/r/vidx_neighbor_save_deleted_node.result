@@ -1,0 +1,20 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+DELETE FROM t1 WHERE id % 2 = 0;
+SELECT COUNT(*) AS rows_after_delete FROM t1;
+rows_after_delete
+25
+== save_neighbors_only deleted-neighbor deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+deleted_rows_resurrected=0
+total_live_rows=225
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

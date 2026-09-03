@@ -10,6 +10,8 @@
   CALL register_connection("con3");
 
 --connection default
+SET GLOBAL innodb_purge_stop_now=ON;
+
 CREATE TABLE t1 (id INT PRIMARY KEY);
 INSERT INTO t1 (id) VALUES (1);
 # Simplest scenario:
@@ -193,6 +195,7 @@ INSERT INTO t1 (id) VALUES (1);
   COMMIT;
 
 --connection default
+SET GLOBAL innodb_purge_run_now=ON;
 --disconnect con1
 --disconnect con2
 --disconnect con3

@@ -315,6 +315,7 @@ select VARIABLE_NAME, VARIABLE_SOURCE,
   from performance_schema.variables_info
   where VARIABLE_NAME = 'foreign_key_checks';
 
+--replace_column 1 NULL
 select SET_TIME
   from performance_schema.variables_info
   where VARIABLE_NAME = 'sql_log_bin';
@@ -326,6 +327,7 @@ sleep 1;
 --error ER_LOCAL_VARIABLE
 SET @@persist.sql_log_bin=0;
 
+--replace_column 1 NULL
 select SET_TIME
   from performance_schema.variables_info
   where VARIABLE_NAME = 'sql_log_bin';

@@ -1,5 +1,6 @@
 --source include/no_valgrind_without_big.inc
 --source include/skip_flashback_area.inc
+--source include/have_debug.inc
 
 CREATE TABLE `t`
 (`id` INT NOT NULL AUTO_INCREMENT,
@@ -25,6 +26,9 @@ START TRANSACTION;
 CALL p(20);
 COMMIT;
 
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
+--source include/wait_innodb_all_purged.inc
+
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;
 
@@ -34,6 +38,9 @@ SET @fs1 = (SELECT file_size FROM information_schema.innodb_tablespaces
 START TRANSACTION;
 CALL p(20);
 COMMIT;
+
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
+--source include/wait_innodb_all_purged.inc
 
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;
@@ -53,6 +60,9 @@ if (`SELECT @growing > 0`) {
 START TRANSACTION;
 CALL p(20);
 ROLLBACK;
+
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
+--source include/wait_innodb_all_purged.inc
 
 FLUSH TABLES `t` FOR EXPORT;
 UNLOCK TABLES;

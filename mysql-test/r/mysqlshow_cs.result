@@ -97,6 +97,7 @@ Database: information_schema
 | COLUMN_PRIVILEGES                          |
 | COLUMN_STATISTICS                          |
 | CONSENSUS_COMMIT_POSITION                  |
+| CONSENSUS_HA_HISTORY                       |
 | ENABLED_ROLES                              |
 | ENGINES                                    |
 | EVENTS                                     |
@@ -141,6 +142,7 @@ Database: information_schema
 | IO_STATISTICS                              |
 | KEYWORDS                                   |
 | KEY_COLUMN_USAGE                           |
+| MILLI_PROCESSLIST                          |
 | OPTIMIZER_TRACE                            |
 | PARAMETERS                                 |
 | PARTITIONS                                 |
@@ -171,6 +173,7 @@ Database: information_schema
 | TRIGGERS                                   |
 | USER_ATTRIBUTES                            |
 | USER_PRIVILEGES                            |
+| VECTOR_INDEXES                             |
 | VIEWS                                      |
 | VIEW_ROUTINE_USAGE                         |
 | VIEW_TABLE_USAGE                           |
@@ -197,6 +200,7 @@ Database: INFORMATION_SCHEMA
 | COLUMN_PRIVILEGES                          |
 | COLUMN_STATISTICS                          |
 | CONSENSUS_COMMIT_POSITION                  |
+| CONSENSUS_HA_HISTORY                       |
 | ENABLED_ROLES                              |
 | ENGINES                                    |
 | EVENTS                                     |
@@ -241,6 +245,7 @@ Database: INFORMATION_SCHEMA
 | IO_STATISTICS                              |
 | KEYWORDS                                   |
 | KEY_COLUMN_USAGE                           |
+| MILLI_PROCESSLIST                          |
 | OPTIMIZER_TRACE                            |
 | PARAMETERS                                 |
 | PARTITIONS                                 |
@@ -271,6 +276,7 @@ Database: INFORMATION_SCHEMA
 | TRIGGERS                                   |
 | USER_ATTRIBUTES                            |
 | USER_PRIVILEGES                            |
+| VECTOR_INDEXES                             |
 | VIEWS                                      |
 | VIEW_ROUTINE_USAGE                         |
 | VIEW_TABLE_USAGE                           |

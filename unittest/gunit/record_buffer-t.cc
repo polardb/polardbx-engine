@@ -47,13 +47,14 @@ class RecordBufferTestP : public ::testing::TestWithParam<Buffer_param> {};
 
 TEST_P(RecordBufferTestP, BasicTest) {
   const auto param = GetParam();
-  const auto bufsize =
-      Record_buffer::buffer_size(param.m_records, param.m_record_size);
+
+  const size_t bufsize =
+      static_cast<size_t>(param.m_records * param.m_record_size);
   std::unique_ptr<uchar[]> ptr(new uchar[bufsize]);
 
-  Record_buffer buf(param.m_records, param.m_record_size, ptr.get());
+  Record_buffer buf(param.m_records, param.m_record_size, 0, ptr.get());
   EXPECT_EQ(param.m_records, buf.max_records());
-  EXPECT_EQ(param.m_record_size, buf.record_size());
+  EXPECT_EQ(param.m_record_size, buf.data_size());
   EXPECT_EQ(0U, buf.records());
   EXPECT_FALSE(buf.is_out_of_range());
 
@@ -67,7 +68,7 @@ TEST_P(RecordBufferTestP, BasicTest) {
     EXPECT_NE(nullptr, rec);
     EXPECT_EQ(rec, buf.record(i));
     EXPECT_EQ(param.m_records, buf.max_records());
-    EXPECT_EQ(param.m_record_size, buf.record_size());
+    EXPECT_EQ(param.m_record_size, buf.data_size());
 
     /*
       Remove the last added record, and see that the record count
@@ -92,7 +93,7 @@ TEST_P(RecordBufferTestP, BasicTest) {
   EXPECT_FALSE(buf.is_out_of_range());
   EXPECT_EQ(0U, buf.records());
   EXPECT_EQ(param.m_records, buf.max_records());
-  EXPECT_EQ(param.m_record_size, buf.record_size());
+  EXPECT_EQ(param.m_record_size, buf.data_size());
 }
 
 INSTANTIATE_TEST_SUITE_P(Test, RecordBufferTestP, ::testing::ValuesIn(PARAMS));
@@ -100,8 +101,8 @@ INSTANTIATE_TEST_SUITE_P(Test, RecordBufferTestP, ::testing::ValuesIn(PARAMS));
 TEST(RecordBufferTest, Clear) {
   constexpr ha_rows rows = 10;
   constexpr size_t row_size = 10;
-  uchar ch[Record_buffer::buffer_size(rows, row_size)];
-  Record_buffer buf(rows, row_size, ch);
+  uchar ch[static_cast<size_t>(rows * row_size)];
+  Record_buffer buf(rows, row_size, 0, ch);
   buf.add_record();
   buf.add_record();
   buf.set_out_of_range(true);
@@ -119,8 +120,8 @@ TEST(RecordBufferTest, Clear) {
 TEST(RecordBufferTest, Reset) {
   constexpr ha_rows rows = 10;
   constexpr size_t row_size = 10;
-  uchar ch[Record_buffer::buffer_size(rows, row_size)];
-  Record_buffer buf(rows, row_size, ch);
+  uchar ch[static_cast<size_t>(rows * row_size)];
+  Record_buffer buf(rows, row_size, 0, ch);
   buf.add_record();
   buf.add_record();
   buf.set_out_of_range(true);

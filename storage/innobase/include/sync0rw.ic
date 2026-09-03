@@ -37,6 +37,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 9/11/1995 Heikki Tuuri
  *******************************************************/
 
+#if !defined(UNIV_LIBRARY) && !defined(UNIV_HOTBACKUP)
+#ifndef sync0rw_h
+#define INNODB_SYNC0RW_IC_STANDALONE
+#include "sync0rw.h"
+#undef INNODB_SYNC0RW_IC_STANDALONE
+#endif /* !sync0rw_h */
 #include "os0event.h"
 
 /** Lock an rw-lock in shared mode for the current thread. If the rw-lock is
@@ -729,3 +735,4 @@ void pfs_rw_lock_s_unlock_func(IF_DEBUG(ulint pass, ) rw_lock_t *lock) {
   rw_lock_s_unlock_func(IF_DEBUG(pass, ) lock);
 }
 #endif /* UNIV_PFS_RWLOCK */
+#endif /* !defined(UNIV_LIBRARY) && !defined(UNIV_HOTBACKUP) */

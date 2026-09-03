@@ -1,0 +1,573 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test row_search_mvcc and row_search_no_mvcc with GPP paths
+--echo # This test covers prefetch cache, ICP, and various code paths
+--echo #
+
+# Note on the assertions below:
+#
+# 1) Every block resets the GPP counters with dbms_stat.flush_gpp() before it
+#    runs its queries, so each assertion is satisfied by that block alone and
+#    never by what an earlier block happened to leave behind.
+#
+# 2) A guess is accounted to the counter of the path that issued it. The plain
+#    secondary index -> clustered index lookup feeds
+#    Lizard_index_scan_guess_clust_*, while index merge / rowid union / MRR
+#    fetch their rows through ha_rnd_pos() with a guess mode and feed their own
+#    counters (Lizard_rowid_intersection_gpp_*, Lizard_rowid_union_gpp_*, ...).
+#    Read back the counter that belongs to the path being exercised.
+#
+# 3) A clustered index scan reaches its rows directly and therefore must not
+#    consume any GPP guess at all. Such blocks assert hit + miss = 0, which is
+#    a real check: it would catch a guess leaking into the clustered path.
+#
+# 4) t1 holds 5000 rows spread over 5 partitions of 1000 rows each so that the
+#    clustered index of every partition spans several leaf pages. This matters:
+#    btr_cur_guess_by_gpp_low() rejects a leaf page without siblings, so a table
+#    (or partition) whose clustered index fits in a single root page can only
+#    ever miss. Keep the partitions fat enough when touching the data set,
+#    otherwise the hit > 0 assertions below turn into false failures.
+
+# Save original values
+--let $orig_opt_index_format_gpp_enabled = `SELECT @@global.opt_index_format_gpp_enabled`
+--let $orig_innodb_lizard_stat_enabled = `SELECT @@global.innodb_lizard_stat_enabled`
+--let $orig_innodb_index_purge_guess_clust_enabled = `SELECT @@global.innodb_index_purge_guess_clust_enabled`
+--let $orig_innodb_index_scan_guess_clust_enabled = `SELECT @@global.innodb_index_scan_guess_clust_enabled`
+--let $orig_innodb_adaptive_hash_index = `SELECT @@global.innodb_adaptive_hash_index`
+
+# Enable GPP and statistics
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET opt_index_format_gpp_enabled=true;
+
+--echo # Create table for testing
+CREATE TABLE t1 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    a VARCHAR(20) NOT NULL,
+    b INT NOT NULL,
+    c INT NOT NULL,
+    d CHAR(1) NOT NULL DEFAULT 'X',
+    e TEXT
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (1000),
+    PARTITION p1 VALUES LESS THAN (2000),
+    PARTITION p2 VALUES LESS THAN (3000),
+    PARTITION p3 VALUES LESS THAN (4000),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+
+--echo # Insert test data
+delimiter |;
+CREATE PROCEDURE insert_t1_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(20);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('VAL', LPAD(i, 5, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t1 (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END|
+delimiter ;|
+
+CALL insert_t1_data(5000);
+
+CREATE INDEX idx_a on t1(a);
+CREATE INDEX idx_b on t1(b);
+CREATE INDEX idx_cd on t1(c, d);
+
+--echo # Warm up GPP info by accessing records
+--echo # First, do some range scans to populate cleanout with GPP info
+SELECT * FROM t1 WHERE a >= 'VAL00001' AND a < 'VAL00010' ORDER BY a;
+SELECT * FROM t1 WHERE b >= 10 AND b < 100 ORDER BY b;
+SELECT * FROM t1 WHERE c >= 50 AND c < 500 ORDER BY c, d;
+--echo # Then access individual records
+SELECT * FROM t1 WHERE a = 'VAL00001' LIMIT 1;
+SELECT * FROM t1 WHERE b = 10 LIMIT 1;
+SELECT * FROM t1 WHERE c = 50 AND d = 'A' LIMIT 1;
+
+--echo # ============================================================
+--echo # Test 1: Prefetch cache path without ICP (clustered index)
+--echo # ============================================================
+--echo # This should trigger prefetch cache and test GPP storage/retrieval
+call dbms_stat.flush_gpp();
+explain SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan cluster] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 2: Prefetch cache path without ICP (secondary index)
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+explain SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan secondary] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+# The secondary indexes were built after the data load, so every gpp_no is
+# exact and nothing has modified the table yet: no guess may miss here.
+--let $assert_text= [scan secondary] gpp miss should be 0 on a freshly built index
+--let $assert_cond= $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 3: Prefetch cache path with ICP (secondary index)
+--echo # ============================================================
+--echo # Test ICP path where records are enqueued to cache
+--echo # Use index condition that can be pushed down
+call dbms_stat.flush_gpp();
+explain SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 5 AND b < 500 ORDER BY a;
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 5 AND b < 500 ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan ICP] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 4: Single row fetch (no prefetch)
+--echo # ============================================================
+# Only the second query reaches the clustered index through idx_a.
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id = 100;
+SELECT * FROM t1 WHERE a = 'VAL00100';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [single row fetch] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 5: Range scan with end_range condition
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100 AND id < 50 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [range scan] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 6: Secondary index with clustered access
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE a = 'VAL00050';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary to cluster] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 7: Composite index access
+--echo # ============================================================
+# d is derived from ELT(((id - 1) % 3) + 1, 'A', 'B', 'C'), so the row with
+# c = 250 (id = 5) carries d = 'B'. Probing c = 250 AND d = 'A' would find no
+# entry in idx_cd at all and would never reach the clustered index.
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE c = 250 AND d = 'B';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [composite index] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 8: Multiple rows with prefetch (trigger cache fill)
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 200 ORDER BY id LIMIT 100;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [prefetch multiple rows] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 9: Direction change (should clear cache)
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id DESC;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [direction change] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 10: Empty result set
+--echo # ============================================================
+# Neither probe finds an index entry, so the clustered index is never reached
+# and no guess is attempted.
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id = 99999;
+SELECT * FROM t1 WHERE a = 'NONEXISTENT';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [empty result] no gpp guess without a matching index entry
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 11: Large result set (multiple cache fills)
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT COUNT(*) FROM t1 WHERE id BETWEEN 1 AND 300;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 300 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [large result set] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 12: Temporary table (row_search_no_mvcc path)
+--echo # ============================================================
+--echo # Note: Temporary tables cannot be partitioned in MySQL
+CREATE TEMPORARY TABLE t2 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    a VARCHAR(20) NOT NULL,
+    b INT NOT NULL,
+    c INT NOT NULL,
+    d CHAR(1) NOT NULL DEFAULT 'X',
+    e TEXT
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+INSERT INTO t2 SELECT * FROM t1 WHERE id <= 100;
+call dbms_stat.flush_gpp();
+SELECT * FROM t2 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t2 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+# Secondary indexes of temporary tables carry no GPP field, so the
+# row_search_no_mvcc path never attempts a guess.
+--let $assert_text= [temporary table] no gpp guess on a temporary table
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+DROP TEMPORARY TABLE t2;
+
+--echo # ============================================================
+--echo # Test 13: GPP invalidation scenario
+--echo # ============================================================
+--echo # Invalidate GPP info and test fallback
+SET DEBUG='+d,set_gpp_null';
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE a = 'VAL00050';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+# The debug flag forces gpp_no to FIL_NULL, so the single lookup of this block
+# has to fall back to a full B-tree search and is counted as a miss.
+--let $assert_text= [GPP invalidation] gpp hit should be 0
+--let $assert_cond= $scan_hit = 0
+--source include/assert.inc
+
+--let $assert_text= [GPP invalidation] gpp miss should be 1
+--let $assert_cond= $scan_miss = 1
+--source include/assert.inc
+
+SET DEBUG='-d,set_gpp_null';
+
+--echo # ============================================================
+--echo # Test 14: Index condition pushdown with prefetch
+--echo # ============================================================
+--echo # Test ICP with range condition that triggers prefetch
+call dbms_stat.flush_gpp();
+explain SELECT * FROM t1 WHERE a LIKE 'VAL00%' AND b > 100 AND b < 400 ORDER BY a LIMIT 50;
+SELECT * FROM t1 WHERE a LIKE 'VAL00%' AND b > 100 AND b < 400 ORDER BY a LIMIT 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [ICP prefetch] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 15: Clustered index range scan
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 50 AND 150 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [clustered range scan] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 16: Secondary index with range and filter
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00010' AND 'VAL00090' AND b BETWEEN 100 AND 900 ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary range filter] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 17: Multiple index access patterns
+--echo # ============================================================
+# The OR is resolved by index_merge union(idx_a, idx_b): rows are fetched with
+# ha_rnd_pos() in guess mode GM_ROWID_UNION, which feeds the rowid union
+# counters instead of the scan guess ones.
+call dbms_stat.flush_gpp();
+explain SELECT * FROM t1 WHERE a = 'VAL00025' OR b = 250 ORDER BY id LIMIT 10;
+SELECT * FROM t1 WHERE a = 'VAL00025' OR b = 250 ORDER BY id LIMIT 10;
+
+--let $ru_hit= query_get_value(show global status like "Lizard_rowid_union_gpp_hit", Value, 1)
+--let $ru_miss= query_get_value(show global status like "Lizard_rowid_union_gpp_miss", Value, 1)
+
+--let $assert_text= [rowid union] gpp hit should be > 0
+--let $assert_cond= $ru_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 18: Deleted record handling
+--echo # ============================================================
+# After the DELETE the subquery yields NULL and both probes find nothing, so
+# the clustered index is never reached through a secondary entry.
+call dbms_stat.flush_gpp();
+DELETE FROM t1 WHERE id = 50;
+SELECT * FROM t1 WHERE a = (SELECT a FROM t1 WHERE id = 50);
+SELECT * FROM t1 WHERE id = 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [deleted record] no gpp guess when nothing matches
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 19: Record buffer path (server-provided buffer)
+--echo # ============================================================
+--echo # This tests the record_buffer != nullptr path
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [record buffer path] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 20: Check table path (ROW_MYSQL_DUMMY_TEMPLATE)
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+CHECK TABLE t1;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [check table] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 21: Optimistic guess clust path
+--echo # ============================================================
+--echo # Test row_pos_optimistic_guess_clust function
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id = 25;
+SELECT * FROM t1 WHERE a = 'VAL00025';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [optimistic guess clust] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 22: Large prefix length path
+--echo # ============================================================
+--echo # Test path where mysql_prefix_len > 63
+call dbms_stat.flush_gpp();
+SELECT a, b, c, d, CONCAT(a, b, c, d, a, b, c, d) as long_field 
+FROM t1 WHERE id BETWEEN 1 AND 20 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [large prefix length] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 23: Blob field handling (should not cache)
+--echo # ============================================================
+# Growing e by 1000 bytes for the first rows splits clustered pages of p0, which
+# is what makes the gpp of some neighbour rows stale for Test 24 below.
+call dbms_stat.flush_gpp();
+UPDATE t1 SET e = REPEAT('X', 1000) WHERE id <= 10;
+SELECT id, a, LEFT(e, 10) as e_preview FROM t1 WHERE id <= 10 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [blob field handling] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 24: Unique search path
+--echo # ============================================================
+# Exactly one guess is attempted, by the lookup through idx_a. Its outcome is
+# not asserted on purpose: the blob update of Test 23 may have moved this row to
+# another clustered page, in which case the guess misses once and the stale
+# gpp_no gets repaired by cleanout (Test 29 hits again).
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id = 100;
+SELECT * FROM t1 WHERE a = 'VAL00100';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [unique search] exactly one gpp guess should be attempted
+--let $assert_cond= $scan_hit + $scan_miss = 1
+--source include/assert.inc
+
+
+--echo # ============================================================
+--echo # Test 25: Composite index with prefix
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE c = 250 ORDER BY c, d;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [composite index prefix] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 26: Secondary index with clustered template
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT id, a, b FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary with cluster template] gpp hit should be > 0
+--let $assert_cond= $scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 27: End range check with prefetch
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 200 AND id < 150 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [end range check] a clustered scan must not consume any gpp guess
+--let $assert_cond= $scan_hit + $scan_miss = 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 28: Rowid ordered retrieval with GPP
+--echo # ============================================================
+# Reset all GPP counters so that the assertion below can only be satisfied by
+# the index merge query that follows. Note that this query retrieves its rows
+# through ha_rnd_pos() with guess mode GM_ROWID_INTERSECTION, therefore it feeds
+# Lizard_rowid_intersection_gpp_* only and leaves
+# Lizard_index_scan_guess_clust_* at zero.
+call dbms_stat.flush_gpp();
+
+explain SELECT /*+ INDEX_MERGE(t1 idx_a, idx_b) */ * FROM t1 
+WHERE a = 'VAL00025' AND b = 250;
+SELECT /*+ INDEX_MERGE(t1 idx_a, idx_b) */ * FROM t1 
+WHERE a = 'VAL00025' AND b = 250;
+
+--let $ri_hit= query_get_value(show global status like "Lizard_rowid_intersection_gpp_hit", Value, 1)
+--let $ri_miss= query_get_value(show global status like "Lizard_rowid_intersection_gpp_miss", Value, 1)
+--let $assert_text= [rowid intersection] gpp hit should be > 0
+--let $assert_cond= $ri_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 29: Final statistics check
+--echo # ============================================================
+# Test 28 flushed every GPP counter and the index merge query only fed the
+# rowid intersection ones, so exercise the plain secondary index -> clustered
+# index lookup once more before checking the scan guess counters.
+SELECT * FROM t1 WHERE a = 'VAL00100';
+
+--let $final_scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $final_scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [final stats] scan_guess hit should be > 0
+--let $assert_cond= $final_scan_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Cleanup
+--echo # ============================================================
+DROP TABLE t1;
+DROP PROCEDURE insert_t1_data;
+--eval SET opt_index_format_gpp_enabled = $orig_opt_index_format_gpp_enabled
+--eval SET GLOBAL innodb_lizard_stat_enabled = $orig_innodb_lizard_stat_enabled
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $orig_innodb_index_scan_guess_clust_enabled
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $orig_innodb_index_purge_guess_clust_enabled
+--eval SET GLOBAL innodb_adaptive_hash_index = $orig_innodb_adaptive_hash_index
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';
+
+
+
+

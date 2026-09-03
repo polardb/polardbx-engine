@@ -16,15 +16,17 @@
  **/
 
 #include "paxos.h"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 
 namespace alisql {
 
-Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
+Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLogHandler> log,
              uint64_t purgeLogTimeout)
     : debugMaxSendLogIndex(0),
-      config_(new StableConfiguration()) /*TODO:*/
-      ,
+      config_(),
       log_(log),
       clusterId_(0),
       myServerId_(0),
@@ -53,6 +55,7 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       consensusAsync_(false),
       replicateWithCacheLog_(false),
       optimisticHeartbeat_(false),
+      disableElection_(false),
       autoPurge_(false),
       useAppliedIndex_(true),
       minMatchIndex_(0),
@@ -71,8 +74,6 @@ Paxos::Paxos(uint64_t electionTimeout, std::shared_ptr<PaxosLog> log,
       enableAutoResetMatchIndex_(false),
       enableLearnerAutoResetMatchIndex_(false),
       stateChangeCb_(nullptr),
-      checksumCb_(nullptr),
-      checksum_mode_(false),
       port_(0) {}
 
 Paxos::~Paxos() {
@@ -95,8 +96,9 @@ void Paxos::AsyncThread::close() {
 void Paxos::shutdown() {
   /* We should stop all ThreadTimer before close ThreadTimerService in
    * Service::shutdown */
+  if (shutdown_.load()) return;
   lock_.lock();
-  if (state_ == LEADER) {
+  if (log_.get() != nullptr && state_ == LEADER) {
     log_->setMetaData(keyLastLeaderTerm, currentTerm_);
     log_->setMetaData(keyLastLeaderLogIndex, commitIndex_);
   }
@@ -116,16 +118,13 @@ void Paxos::shutdown() {
   changeStateQueue_.stop();
   appendLogQueue_.stop();
   commitDepQueue_.stop();
-  if (config_.get() != nullptr) {
-    config_->forEach(&Server::stop, NULL);
-    config_->forEachLearners(&Server::stop, NULL);
-  }
+  config_.forEach(&Server::stop, NULL);
+  config_.forEachLearners(&Server::stop, NULL);
   appendLogDelay_.close();
 
-  srv_->shutdown();
-  /* When Service::shutdown return, there is not backend worker left, so we can
-   * release config_ now. */
-  config_.reset();
+  if (srv_.get() != nullptr) {
+    srv_->shutdown();
+  }
 
   if (threadHook != nullptr) {
     delete threadHook;
@@ -139,7 +138,6 @@ void Paxos::stop() {
   electionTimer_->stop();
   epochTimer_->stop();
   purgeLogTimer_->stop();
-  config_.reset();
   srv_->stop();
 }
 
@@ -184,10 +182,13 @@ void Paxos::changeState_(enum State newState) {
   log_->resetMetaCache();
 
   if (stateChangeCb_) {
-    if (changeStateQueue_.push(
-            new ChangeStateArgType(state_, currentTerm_, commitIndex_, this)))
+    ChangeStateArgType *arg = new ChangeStateArgType(state_, currentTerm_,
+                                                     commitIndex_, this);
+    if (changeStateQueue_.push(arg))
       srv_->sendAsyncEvent(&SingleProcessQueue<ChangeStateArgType>::process,
                            &changeStateQueue_, Paxos::execStateChangeCb);
+    if (arg != nullptr)
+      delete arg;
   }
 
   cond_.notify_all();
@@ -195,23 +196,118 @@ void Paxos::changeState_(enum State newState) {
 
 void Paxos::membershipChangeHistoryUpdate_(const MembershipChangeType &mc) {
   if (membershipChangeHistory_.size() >= 10)
-    membershipChangeHistory_.erase(membershipChangeHistory_.begin());
+    membershipChangeHistory_.pop_front();
   membershipChangeHistory_.push_back(mc);
+}
+
+/** Add HA info to the HA history list. */
+void Paxos::HaHistoryUpdate_(const HaInfo &sc) {
+  std::unique_lock<std::shared_mutex> lg(haHistoryLock_);
+  if (HaHistory_.size() >= HA_HISTORY_MAX_SIZE) HaHistory_.pop_front();
+  HaHistory_.push_back(sc);
+}
+
+std::string formatTime(std::chrono::system_clock::time_point &tp) {
+  auto cur_time_t = std::chrono::system_clock::to_time_t(tp);
+  struct tm *tm_info = localtime(&cur_time_t);
+  char buffer[100];
+  memset(buffer, 0, sizeof(buffer));
+
+  /** Get the time in milliseconds */
+  auto duration = tp.time_since_epoch();
+  auto millis =
+      std::chrono::duration_cast<std::chrono::milliseconds>(duration) % 1000;
+
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+  std::string result(buffer);
+
+  /** Add milliseconds to the time string */
+  char ms_buffer[10];
+  sprintf(ms_buffer, "%06ld", millis.count());
+  result += "." + std::string(ms_buffer);
+  return result;
+}
+
+/** Create HA info entry and add it to the HA history list. */
+/** When success if false, add last HA item. */
+void Paxos::HaHistoryAdd(const bool success) {
+  HaInfo sc;
+
+  auto cur_time = std::chrono::system_clock::now();
+  sc.finishTimestamp = formatTime(cur_time);
+  sc.sourceAddress = localHaInfo_.sourceAddress;
+  sc.targetAddress = localServer_->strAddr;
+  sc.haSucess = success;
+  sc.currentTerm = currentTerm_.load();
+  sc.haType = localHaInfo_.haType;
+
+  if (localHaInfo_.haType == HA_TYPE_INVALID) return;
+  uint64_t durationInLocal;
+  /** requestVoteStartTs:
+   *    Switchover: is the time when current node on leader command.
+   *    Failover: is the time when current node request vote.
+   *
+   * durationInLocal:
+   *    duration from requestVoteStartTs to current time.
+   *
+   * durationBeforeRequestVote:
+   *    Switchover: get from leader command which is the duration in last
+   * leader.
+   *    Failover: is the duration when current node find election timeout.
+   *
+   * totalDuration:
+   *    HA total duration = durationInLocal + durationBeforeRequestVote.
+   */
+
+  /** Special case: first election dont have last election start time */
+  if (localHaInfo_.requestVoteStartTs ==
+      std::chrono::system_clock::time_point()) {
+    durationInLocal = 0;
+  } else {
+    durationInLocal = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          cur_time - localHaInfo_.requestVoteStartTs)
+                          .count();
+  }
+
+  auto totalDuration = durationInLocal + localHaInfo_.durationBeforeRequestVote;
+  sc.totalDuration = totalDuration;
+  if (success) {
+    sc.localConsensusDuration = localHaInfo_.localConsensusDuration;
+    sc.localServerDuration =
+        totalDuration - localHaInfo_.localConsensusDuration;
+  } else {
+    sc.localConsensusDuration = 0;
+    sc.localServerDuration = 0;
+  }
+
+  HaHistoryUpdate_(sc);
+  resetLocalHaInfo();
+
+  easy_system_log(
+      "HaHistoryAdd: HaFinishTime(%s), sourceAddress(%s), "
+      "targetAddress(%s), currentTerm(%llu), durationInLocal(%s), "
+      "localConsensusDuration(%s), HaDuration(%s), HaType(%d)",
+      sc.finishTimestamp.c_str(), sc.sourceAddress.c_str(),
+      sc.targetAddress.c_str(), sc.currentTerm,
+      std::to_string(durationInLocal).c_str(),
+      std::to_string(localHaInfo_.localConsensusDuration).c_str(),
+      std::to_string(localHaInfo_.durationBeforeRequestVote).c_str(),
+      sc.haType);
 }
 
 void Paxos::applyOneConfigureNode(std::string &addr, uint64_t serverId,
   bool forceSync, uint electionWeight)
 {
   if (state_ != LEARNER) {
-    auto server = config_->getServer(serverId);
+    auto server = config_.getServer(serverId);
     if (server == nullptr || addr != server->strAddr) {
       easy_error_log(
           "Server %d : Can't find the target server(id:%llu, addr:%s) in "
           "the configure!! Current member configure:%s\n",
           localServer_->serverId, serverId, addr.c_str(),
-          config_->membersToString(localServer_->strAddr).c_str());
+          config_.membersToString(localServer_->strAddr).c_str());
     } else {
-      config_->configureMember(serverId, forceSync,
+      config_.configureMember(serverId, forceSync,
                                 electionWeight, this);
       if (serverId == localServer_->serverId)
         electionTimer_->setRandWeight(electionWeight);
@@ -247,7 +343,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
       const std::string &addr = *(val.addrs().begin());
       assert(val.addrs_size() == 1);
       if (state_ != LEARNER)
-        config_->addMember(addr, this);
+        config_.addMember(addr, this);
       else if (addr == localServer_->strAddr) {
         /* learner change to follower */
         std::vector<std::string> strConfig;
@@ -261,9 +357,8 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
 
         /* The learner's localServer may be AliSQLServer, we should pass it to
          * installConfig. */
-        std::dynamic_pointer_cast<StableConfiguration>(config_)->installConfig(
-            strConfig, index, this, localServer_);
-        config_->forEach(&Server::connect, (void *)NULL);
+        config_.installConfig(strConfig, index, this, localServer_);
+        config_.forEach(&Server::connect, (void *)NULL);
         changeState_(FOLLOWER);
         electionTimer_->start();
 
@@ -273,13 +368,13 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
           if (addr != localServer_->strAddr)
             strConfigL.push_back(std::move(addr));
         }
-        config_->delAllLearners();
-        config_->addLearners(strConfigL, this, true);
+        config_.delAllLearners();
+        config_.addLearners(strConfigL, this, true);
 
         log_->setMetaData(Paxos::keyLearnerConfigure,
-                          config_->learnersToString());
+                          config_.learnersToString());
         log_->setMetaData(Paxos::keyMemberConfigure,
-                          config_->membersToString(localServer_->strAddr));
+                          config_.membersToString(localServer_->strAddr));
 
         /* Print Log */
         std::string logBuf;
@@ -299,7 +394,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
       } else {
         std::vector<std::string> strConfig;
         strConfig.push_back(std::move(addr));
-        config_->delLearners(strConfig, this);
+        config_.delLearners(strConfig, this);
       }
       if (ccMgr_.autoChangeAddr == addr) {
         ccMgr_.autoChangeAddr = "";
@@ -310,7 +405,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
       const std::string &addr = *(val.addrs().begin());
       if (state_ != LEARNER) {
         if (addr != localServer_->strAddr)
-          config_->delMember(addr, this);
+          config_.delMember(addr, this);
         else {
           /* This node is removed from the cluster, shutdown myself */
           easy_system_log(
@@ -328,22 +423,21 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
       strConfig.push_back(addr);
       if (state_ != LEARNER) {
         if (addr != localServer_->strAddr) {
-          config_->delMember(addr, this);
-          config_->addLearners(strConfig, this);
+          config_.delMember(addr, this);
+          config_.addLearners(strConfig, this);
           // if (state_ == LEADER)
-          //   config_->forEachLearners(&Server::connect, (void *)NULL);
+          //   config_.forEachLearners(&Server::connect, (void *)NULL);
         } else {
           auto oldId = localServer_->serverId;
           std::shared_ptr<LocalServer> localServer =
-              std::dynamic_pointer_cast<LocalServer>(config_->getServer(oldId));
+              std::dynamic_pointer_cast<LocalServer>(config_.getServer(oldId));
           assert(localServer != nullptr);
-          std::dynamic_pointer_cast<StableConfiguration>(config_)
-              ->installConfig(strConfig, 1, this, localServer);
-          config_->addLearners(strConfig, this);
+          config_.installConfig(strConfig, 1, this, localServer);
+          config_.addLearners(strConfig, this);
           log_->setMetaData(Paxos::keyLearnerConfigure,
-                            config_->learnersToString());
+                            config_.learnersToString());
           log_->setMetaData(Paxos::keyMemberConfigure,
-                            config_->membersToString());
+                            config_.membersToString());
           /* We set the init serverId to 100 for tmp, this serverId will change
            * when we  */
           localServer_->serverId = 100;
@@ -355,7 +449,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
               localServer_->serverId, oldId, localServer_->serverId);
         }
       } else {
-        config_->addLearners(strConfig, this);
+        config_.addLearners(strConfig, this);
       }
     } else if (val.optype() == CCConfigureNode) {
       if (val.addrs().size()) {
@@ -387,13 +481,13 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         strLearners.push_back(std::move(addr));
       if (StableConfiguration::isServerInVector(localServer_->strAddr,
                                                 strConfig)) {
-        config_->delAllLearners();
-        config_->addLearners(strLearners, this, true);
+        config_.delAllLearners();
+        config_.addLearners(strLearners, this, true);
       }
-      config_->addLearners(strConfig, this);
+      config_.addLearners(strConfig, this);
       /* The old learner will skip the connect call. */
       if (state_ == LEADER)
-        config_->forEachLearners(&Server::connect, (void *)NULL);
+        config_.forEachLearners(&Server::connect, (void *)NULL);
       if (val.optype() == CCAddLearnerAutoChange) {
         // strConfig.size is 1 in this case
         ccMgr_.autoChangeAddr = strConfig[0];
@@ -401,7 +495,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
     } else if (val.optype() == CCDelNode) {
       std::vector<std::string> strConfig;
       for (auto &addr : val.addrs()) strConfig.push_back(std::move(addr));
-      config_->delLearners(strConfig, this);
+      config_.delLearners(strConfig, this);
       /* autoChange case, wakeup addFollower if deleted */
       auto findret =
           std::find(strConfig.begin(), strConfig.end(), ccMgr_.autoChangeAddr);
@@ -411,8 +505,8 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
         ccMgr_.condChangeDone.notify_all();
       }
     } else if (val.optype() == CCConfigureNode) {
-      auto server = config_->getServer(val.serverid());
-      auto source = config_->getServer(val.learnersource());
+      auto server = config_.getServer(val.serverid());
+      auto source = config_.getServer(val.learnersource());
       const std::string &addr = *(val.addrs().begin());
       mc.learnerSource = (source ? source->strAddr : "");
       mc.sendByAppliedIndex = val.applymode();
@@ -422,12 +516,12 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
             "Server %d : Can't find the target server(id:%llu, addr:%s) in the "
             "configure!! Current learner configure:%s\n",
             localServer_->serverId, val.serverid(), addr.c_str(),
-            config_->learnersToString().c_str());
+            config_.learnersToString().c_str());
       } else {
         if (server->learnerSource == localServer_->serverId) {
           server->stepDown(nullptr);
         }
-        config_->configureLearner(val.serverid(), val.learnersource(), this);
+        config_.configureLearner(val.serverid(), val.learnersource(), this);
         server->sendByAppliedIndex = val.applymode();
         /* We should also init learner if we're leader and learner source is 0.
          */
@@ -450,7 +544,7 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
 
       if (strServers.size() > 0) strServers.resize(strServers.size() - 1);
 
-      auto strLearners = config_->learnersToString();
+      auto strLearners = config_.learnersToString();
       if (strServers != strLearners) {
         easy_error_log(
             "Server %d : Error: local learner meta error local:%s "
@@ -460,11 +554,11 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
             "Server %d : SyncLearnerAll: update local learner config from %s "
             "to %s\n",
             localServer_->serverId, strLearners.c_str(), strServers.c_str());
-        config_->delAllLearners();
-        config_->addLearners(strConfig, this, true);
+        config_.delAllLearners();
+        config_.addLearners(strConfig, this, true);
 
         log_->setMetaData(Paxos::keyLearnerConfigure,
-                          config_->learnersToString());
+                          config_.learnersToString());
       } else {
         easy_system_log(
             "Server %d : SyncLearnerAll: local learner is match with leader "
@@ -496,15 +590,16 @@ int Paxos::applyConfigureChangeNoLock_(uint64_t logIndex) {
   return 0;
 }
 
-int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
+int Paxos::leaderTransferPrecheck_(uint64_t targetId,
+                                   bool bypassDisableElection) {
 
   if (state_ != LEADER) return PaxosErrorCode::PE_NOTLEADR;
 
-  if (preState != log_->getLeaderTransferState() && log_->isInLeaderTransfer()) {
+  if (log_->isInLeaderTransfer()) {
     easy_warn_log(
         "Server %d : leaderTransfer to server(%ld), Now we're in another "
-        "leader transfer(%ld-%ld), skip this action!",
-        localServer_->serverId, targetId, preState, log_->getLeaderTransferState());
+        "leader transfer(%ld), skip this action!",
+        localServer_->serverId, targetId, log_->getLeaderTransferState());
     return PaxosErrorCode::PE_CONFLICTS;
   }
 
@@ -525,7 +620,7 @@ int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
   }
 
   std::shared_ptr<RemoteServer> server =
-    std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+    std::dynamic_pointer_cast<RemoteServer>(config_.getServer(targetId));
 
   if (nullptr == server || targetId == 0) {
     easy_warn_log(
@@ -559,32 +654,39 @@ int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
     return PaxosErrorCode::PE_WEIGHT_FOLLOWER;
   }
 
-  if (server->disableElection) {
-    easy_warn_log(
-        "Server %d : leaderTransfer to server(%ld), skip this action "
-        "because target disable election",
-        localServer_->serverId, targetId);
-    return PaxosErrorCode::PE_DISABLE_ELECTION;
+  if (server->disableElection && !bypassDisableElection) {
+    if (bypassDisableElection) {
+      easy_warn_log(
+          "Server %d : skip disableElection and do force leaderTransfer to server(%ld)",
+          localServer_->serverId, targetId);
+    } else {
+      easy_warn_log(
+          "Server %d : leaderTransfer to server(%ld), skip this action "
+          "because target disable election",
+          localServer_->serverId, targetId);
+      return PaxosErrorCode::PE_DISABLE_ELECTION;
+    }
   }
 
   //only print warning into log
-  if (config_->needWeightElection(server->electionWeight)) {
+  if (config_.needWeightElection(server->electionWeight)) {
     easy_warn_log(
         "Server %d : leaderTransfer to server(%ld) maybe rollback to another server, "
         "because there electionWeight bigger then it %lu",
         localServer_->serverId, targetId, server->electionWeight);
   }
 
+  //only print warning into log
   if (server->applyThreadRunning
+      && server->getAppliedIndex() < getAppliedIndex()
       && maxDelaySeconds4NewLeader_ > 0
       && server->applyDelaySeconds > maxDelaySeconds4NewLeader_) {
     easy_warn_log(
-        "Server %d : leaderTransfer to server(%ld), skip because "
-        "applyDelaySeconds delay too much %llu > %llu",
+        "Server %d : leaderTransfer to server(%ld) maybe cost long time, "
+        "because applyDelaySeconds delay too much %llu > %llu",
         localServer_->serverId, targetId,
         server->applyDelaySeconds,
         maxDelaySeconds4NewLeader_);
-    return PaxosErrorCode::PE_DELAY;
   }
 
   //only print warning into log
@@ -604,13 +706,7 @@ int Paxos::leaderTransferPrecheck_(uint64_t targetId, uint64_t preState) {
 
 int Paxos::leaderTransfer_(uint64_t targetId) {
   int ret = PaxosErrorCode::PE_NONE;
-  if (targetId == localServer_->serverId) return ret;
-
-  ret = leaderTransferPrecheck_(targetId, log_->getLimitNewTrxState());
-  if (ret != PaxosErrorCode::PE_DEFAULT)
-    return ret;
-
-  auto server = config_->getServer(targetId);
+  auto server = config_.getServer(targetId);
   assert(server != nullptr);
   ++(stats_.countLeaderTransfer);
 
@@ -627,11 +723,15 @@ int Paxos::leaderTransfer_(uint64_t targetId) {
   membershipChangeHistoryUpdate_(mc);
   lock_.unlock();
 
-  log_->waitOldXaFinish();
+  auto wait_time_ms_xa = log_->waitOldXaFinish();
+  addBeforeRequestVote(wait_time_ms_xa);
   log_->setLimitAll();
 
-  auto slli = log_->waitOldBgcFinish();
-  ret = leaderTransferSend_(targetId, currentTerm_.load(), slli, 5);
+  auto [slli, wait_time_ms_binlog] = log_->waitOldBgcFinish(this);
+  addBeforeRequestVote(wait_time_ms_binlog);
+
+  ret = leaderTransferSend_(targetId, currentTerm_.load(), slli, 
+                            LEADER_TRANSFER_MAX_RETRY_CNT);
   return ret;
 }
 
@@ -642,12 +742,12 @@ int Paxos::leaderTransfer(uint64_t targetId) {
 
 int Paxos::leaderTransferPrecheck(uint64_t targetId) {
   std::lock_guard<std::mutex> lg(lock_);
-  return leaderTransferPrecheck_(targetId, log_->getLimitNoneState());
+  return leaderTransferPrecheck_(targetId, true);
 }
 
 int Paxos::leaderTransfer(const std::string &addr) {
   std::lock_guard<std::mutex> lg(lock_);
-  uint64_t targetId = config_->getServerIdFromAddr(addr);
+  uint64_t targetId = config_.getServerIdFromAddr(addr);
   return leaderTransfer_(targetId);
 }
 
@@ -658,7 +758,7 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
 
   --leftCnt;
   std::shared_ptr<RemoteServer> server =
-    std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+    std::dynamic_pointer_cast<RemoteServer>(config_.getServer(targetId));
   uint64_t lastLogIndex = log_->getLastLogIndex();
 
   if (server == nullptr) {
@@ -681,7 +781,7 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
 
   if (state_ == LEADER && term == currentTerm_) {
     if (leftCnt == 0) {
-      easy_error_log(
+      easy_system_log(
           "Server %d : LeaderTransfer to server %ld fail "
           "because of timeout currentTerm(%llu), lli(%llu)\n",
           localServer_->serverId, targetId, term, logIndex);
@@ -718,6 +818,10 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
   }
 
   if (commitIndex_ == logIndex && commitIndex_ == server->matchIndex) {
+    /** Calculate commit index match time. */
+    auto leader_trans_time = (LEADER_TRANSFER_MAX_RETRY_CNT - leftCnt) *
+                             getLeaderTransferInterval_();
+    addBeforeRequestVote(leader_trans_time);
     leaderCommand(LeaderTransfer, server);
   } else {
     easy_system_log(
@@ -737,10 +841,50 @@ int Paxos::leaderTransferSend_(uint64_t targetId, uint64_t term,
   return PaxosErrorCode::PE_NONE;
 }
 
+/**
+ * @brief Check if the address is local.
+ *
+ * @note Currently consensus_proc only support IPV4 address.
+ * look at consensus_proc.cc function check_addr_format for more details.
+ *
+ * @param addr
+ * @return true if the address is local.
+ * @return false if the address is not local.
+ */
+std::pair<bool, size_t> check_addr_is_local(const std::string &addr) {
+  size_t start = 0;
+  size_t end = addr.find(':');
+  auto ip_addr = addr.substr(start, end - start);
+  struct in_addr addr4;
+  if (inet_pton(AF_INET, ip_addr.c_str(), &addr4) == 1) {
+    /** IPv4 loopback address */
+    return {(ntohl(addr4.s_addr) >> 24) == 127, end};
+  }
+  return {false, end};
+}
+
+/**
+ * @brief Rewrite the address if it is local.
+ *
+ * @param addr The address to be rewritten.
+ */
+void Paxos::rewrite_addr_if_local(std::string &addr) {
+  size_t start = 0;
+  size_t local_end = localServer_->strAddr.find(':');
+  assert(local_end != std::string::npos);
+
+  auto local_ip_addr = localServer_->strAddr.substr(start, local_end - start);
+  auto [is_local, pos] = check_addr_is_local(addr);
+  if (is_local) {
+    addr = local_ip_addr + addr.substr(pos);
+  }
+}
+
 int Paxos::checkConfigure_(
     CCOpTypeT cctype, CCOpTypeT type, std::vector<std::string> &strConfig,
-    const std::vector<Configuration::ServerRef> &servers) {
+    const std::vector<StableConfiguration::ServerRef> &servers) {
   for (auto it = strConfig.begin(); it != strConfig.end();) {
+    rewrite_addr_if_local(*it);
     if (type == CCAddNode || type == CCAddLearnerAutoChange) {
       bool dup = false;
       for (auto &server : servers) {
@@ -752,7 +896,7 @@ int Paxos::checkConfigure_(
       }
       /* In add learner case we should also check servers */
       if (!dup && cctype == CCLearnerOp) {
-        auto &members = config_->getServers();
+        auto &members = config_.getServers();
         for (auto &server : members) {
           if (server && server->strAddr == *it) {
             it = strConfig.erase(it);
@@ -878,7 +1022,7 @@ void Paxos::setConfigureChangeTimeout(uint64_t t) {
 
 int Paxos::configureChange_(
     CCOpTypeT cctype, CCOpTypeT optype, std::vector<std::string> &strConfigArg,
-    const std::vector<Configuration::ServerRef> &servers) {
+    const std::vector<StableConfiguration::ServerRef> &servers) {
   if (cctype != CCMemberOp && cctype != CCLearnerOp)
     return PaxosErrorCode::PE_INVALIDARGUMENT;
   if (optype != CCAddNode && optype != CCDelNode &&
@@ -940,7 +1084,7 @@ int Paxos::configureChange_(
   if (cctype == CCMemberOp && optype == CCAddNode) {
     auto &newServerAddr = *(strConfig.begin());
     bool addNew = false;
-    auto newServer = config_->getLearnerByAddr(newServerAddr);
+    auto newServer = config_.getLearnerByAddr(newServerAddr);
     if (newServer == nullptr) {
       easy_error_log(
           "Server %d : Try to add member from learner %s which is not "
@@ -968,7 +1112,7 @@ int Paxos::configureChange_(
       }
     }
     if (!addNew) val.add_allservers(newServerAddr);
-    for (auto &learner : config_->getLearners()) {
+    for (auto &learner : config_.getLearners()) {
       if (learner && newServerAddr != learner->strAddr)
         val.add_alllearners(StableConfiguration::learnerToString(learner));
       else
@@ -977,7 +1121,7 @@ int Paxos::configureChange_(
   } else if (cctype == CCLearnerOp &&
              (optype == CCAddNode || optype == CCAddLearnerAutoChange ||
               optype == CCSyncLearnerAll)) {
-    for (auto &learner : config_->getLearners()) {
+    for (auto &learner : config_.getLearners()) {
       if (learner)
         val.add_alllearners(StableConfiguration::learnerToString(learner));
       else
@@ -1006,7 +1150,7 @@ int Paxos::configureChange_(
 }
 
 int Paxos::changeLearners(CCOpTypeT type, std::vector<std::string> &strConfig) {
-  return configureChange_(CCLearnerOp, type, strConfig, config_->getLearners());
+  return configureChange_(CCLearnerOp, type, strConfig, config_.getLearners());
 }
 
 int Paxos::changeMember(CCOpTypeT type, std::string &strAddr) {
@@ -1015,7 +1159,7 @@ int Paxos::changeMember(CCOpTypeT type, std::string &strAddr) {
     /* addFollower procedure: add learner -> wait recv log -> change to follower
      */
     int ret = configureChange_(CCLearnerOp, CCAddLearnerAutoChange, tmpConfig,
-                               config_->getLearners());
+                               config_.getLearners());
     if (ret != 0) {
       easy_error_log(
           "Server %d : addFollower configChange stage 1 fail, error code %d.\n",
@@ -1039,7 +1183,7 @@ int Paxos::changeMember(CCOpTypeT type, std::string &strAddr) {
     }
     return ccMgr_.autoChangeRet;
   } else {
-    return configureChange_(CCMemberOp, type, tmpConfig, config_->getServers());
+    return configureChange_(CCMemberOp, type, tmpConfig, config_.getServers());
   }
 }
 
@@ -1051,7 +1195,7 @@ int Paxos::autoChangeLearnerAction() {
     tmpConfig.push_back(ccMgr_.autoChangeAddr);
   }
   int ret =
-      configureChange_(CCMemberOp, CCAddNode, tmpConfig, config_->getServers());
+      configureChange_(CCMemberOp, CCAddNode, tmpConfig, config_.getServers());
   if (ccMgr_.autoChangeAddr != "") {
     ccMgr_.autoChangeAddr = "";
     ccMgr_.autoChangeRet = ret;
@@ -1062,7 +1206,7 @@ int Paxos::autoChangeLearnerAction() {
 
 int Paxos::configureLearner_(uint64_t serverId, uint64_t source, bool applyMode,
                              std::unique_lock<std::mutex> &ul) {
-  auto server = config_->getServer(serverId);
+  auto server = config_.getServer(serverId);
   int ret = PaxosErrorCode::PE_NONE;
 
   if (!server) {
@@ -1113,8 +1257,8 @@ int Paxos::configureLearner(uint64_t serverId, uint64_t source,
 int Paxos::configureLearner(const std::string &addr,
                             const std::string &sourceAddr, bool applyMode) {
   std::unique_lock<std::mutex> ul(lock_);
-  uint64_t serverId = config_->getServerIdFromAddr(addr);
-  uint64_t source = config_->getServerIdFromAddr(sourceAddr);
+  uint64_t serverId = config_.getServerIdFromAddr(addr);
+  uint64_t source = config_.getServerIdFromAddr(sourceAddr);
   if (serverId < 100 || source == 0) return PaxosErrorCode::PE_NOTFOUND;
   /* We make a trick here: If you want to clear the current learner source, just
    * source the address to itself */
@@ -1131,7 +1275,7 @@ int Paxos::configureMember_(uint64_t serverId, bool forceSync,
         localServer_->serverId);
     return PaxosErrorCode::PE_INVALIDARGUMENT;
   }
-  auto server = config_->getServer(serverId);
+  auto server = config_.getServer(serverId);
   int ret = PaxosErrorCode::PE_NONE;
 
   if (!server) {
@@ -1186,7 +1330,7 @@ int Paxos::configureMember(uint64_t serverId, bool forceSync,
 int Paxos::configureMember(const std::string &addr, bool forceSync,
                            uint electionWeight) {
   std::unique_lock<std::mutex> ul(lock_);
-  uint64_t serverId = config_->getServerIdFromAddr(addr);
+  uint64_t serverId = config_.getServerIdFromAddr(addr);
   return configureMember_(serverId, forceSync, electionWeight, ul);
 }
 
@@ -1208,10 +1352,9 @@ int Paxos::configureMembers(std::vector<uint64_t> &serverIds,
       easy_error_log(
           "Server %d : Fail to change electionWeight. Max electionWeight is 9, but input is %d",
           localServer_->serverId, electionWeight);
-      abort();
       return PaxosErrorCode::PE_INVALIDARGUMENT;
     }
-    auto server = config_->getServer(serverId);
+    auto server = config_.getServer(serverId);
 
     if (!server) {
       easy_error_log("Server %d : can't find server %llu in configureMember\n",
@@ -1257,7 +1400,7 @@ int Paxos::configureMembers(std::vector<uint64_t> &serverIds,
 
 int Paxos::downgradeMember_(uint64_t serverId,
                             std::unique_lock<std::mutex> &ul) {
-  auto server = config_->getServer(serverId);
+  auto server = config_.getServer(serverId);
   int ret = 0;
 
   if (serverId >= 100) {
@@ -1304,7 +1447,7 @@ int Paxos::downgradeMember(uint64_t serverId) {
 
 int Paxos::downgradeMember(const std::string &addr) {
   std::unique_lock<std::mutex> ul(lock_);
-  uint64_t serverId = config_->getServerIdFromAddr(addr);
+  uint64_t serverId = config_.getServerIdFromAddr(addr);
   return downgradeMember_(serverId, ul);
 }
 
@@ -1318,7 +1461,7 @@ void Paxos::becameLeader_() {
           "Server %d: fail to get log entry when become leader to find out "
           "commit dependency, index %llu",
           localServer_->serverId, tmpIndex);
-      exit(1);
+      _exit(1);  // Using _exit(), since exit() is not async signal safe
     }
     if (tmpEntry.optype() == kCommitDep) {
       cdrMgr_.inRecovery = true;
@@ -1334,7 +1477,7 @@ void Paxos::becameLeader_() {
         getNextEpochCheckStatemachine_(currentEpoch_.load());
 
     /* Deal with the election weight things. */
-    if (config_->needWeightElection(localServer_->electionWeight)) {
+    if (config_.needWeightElection(localServer_->electionWeight)) {
       easy_system_log(
           "Server %d : Try do weight election for this leaderTransfer "
           "term(%llu), weight(%llu) after %llu ms, skip LimitNewTrx!!\n",
@@ -1343,15 +1486,15 @@ void Paxos::becameLeader_() {
       new ThreadTimer(srv_->getThreadTimerService(), srv_, electionTimeout_,
                       ThreadTimer::Oneshot, &Paxos::electionWeightAction, this,
                       currentTerm_.load(), currentEpoch_.fetch_add(1),
-                      log_->getLimitNoneState(), UINT64_MAX);
+                      UINT64_MAX);
     }
     /* become leader. */
     changeState_(LEADER);
 
     /* We change timer form election to heartbeat type. */
     electionTimer_->stop();
-    config_->forEach(&Server::beginLeadership, NULL);
-    config_->forEachLearners(&Server::beginLeadership, NULL);
+    config_.forEach(&Server::beginLeadership, NULL);
+    config_.forEachLearners(&Server::beginLeadership, NULL);
     /* we start epochTimer_ when we became candidate to detect all node when we
      * became leader. */
     /* epochTimer_ will stop when we became follower. */
@@ -1363,11 +1506,14 @@ void Paxos::becameLeader_() {
       log_->getEmptyEntry(entry1);
       replicateLog_(entry1, false);
     } else {
+      commitDepArgType *arg = new commitDepArgType(cdrMgr_.lastLogIndex,
+                                                  currentTerm_.load(), this);
       /* in commit dependency recovery */
-      if (commitDepQueue_.push(new commitDepArgType(cdrMgr_.lastLogIndex,
-                                                    currentTerm_.load(), this)))
+      if (commitDepQueue_.push(arg))
         srv_->sendAsyncEvent(&SingleProcessQueue<commitDepArgType>::process,
                              &commitDepQueue_, Paxos::commitDepResetLog);
+      if (arg != nullptr)
+        delete arg;
     }
 
     uint64_t lastLogIndex = log_->getLastLogIndex();
@@ -1396,7 +1542,7 @@ void Paxos::cdrClear(commitDepArgType *arg) {
 
 void Paxos::commitDepResetLog(commitDepArgType *arg) {
   if (!arg->paxos->cdrIsValid(arg)) return;
-  std::shared_ptr<PaxosLog> log = arg->paxos->getLog();
+  std::shared_ptr<PaxosLogHandler> log = arg->paxos->getLog();
   std::shared_ptr<LocalServer> localServer = arg->paxos->getLocalServer();
   easy_system_log("Server %d : start reset log because of commit dependency.\n",
                  localServer->serverId);
@@ -1408,7 +1554,7 @@ void Paxos::commitDepResetLog(commitDepArgType *arg) {
           "Server %d: fail to get log entry when reset commit dependency, "
           "index %llu",
           localServer->serverId, tmpIndex);
-      exit(1);
+      _exit(1);  // Using _exit(), since exit() is not async signal safe
     }
     if (tmpEntry.optype() != kCommitDep) break;
   }
@@ -1482,15 +1628,6 @@ uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock) {
   easy_info_log("Server %d : replicateLog write start logTerm(%ld)\n",
                 localServer_->serverId, term);
 
-  /* Traditional Path: write checksum before wirteLog, which is different from
-   * X-Cluster */
-  /* if checksum not 0, use the checksum from outside (for ut now) */
-  if (checksumCb_ && checksum_mode_ && entry.checksum() == 0) {
-    const unsigned char *buf =
-        reinterpret_cast<const unsigned char *>(entry.value().c_str());
-    entry.set_checksum((uint64_t)checksumCb_(0, buf, entry.value().size()));
-  }
-
   auto logIndex = localServer_->writeLog(entry);
   entry.set_index(logIndex);
   if (entry.optype() != kCommitDep && logIndex > 0)
@@ -1506,15 +1643,19 @@ uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock) {
    * to appendLog and be blocked by mutex. So we use sendAsyncEvent only after
    * we have the Group appnedLog function !!
    */
-  if (logIndex > 0)
+  if (logIndex > 0) {
     // appendLog(false);
     // srv_->sendAsyncEvent(AEAppendLog, NULL);
     // srv_->sendAsyncEvent(&Paxos::appendLog, this, true);
-    if (appendLogQueue_.push(new (Paxos *)(this)))
+    Paxos **arg = new (Paxos*)(this);
+    if (appendLogQueue_.push(arg))
       srv_->sendAsyncEvent(&SingleProcessQueue<Paxos *>::mergeableSameProcess,
                            &appendLogQueue_, Paxos::appendLogCb);
+    if (arg != nullptr)
+      delete arg;
+  }
 
-  if (!shutdown_.load() && config_->getServerNumLockFree() == 1) {
+  if (!shutdown_.load() && config_.getServerNumLockFree() == 1) {
     if (needLock)
       tryUpdateCommitIndex();
     else
@@ -1524,6 +1665,26 @@ uint64_t Paxos::replicateLog_(LogEntry &entry, const bool needLock) {
   return logIndex;
 }
 
+void Paxos::failOverProcess() {
+  /** If the HA type is fail over, reset the HA info and set the source
+   * address, start time. */
+  if (localHaInfo_.haType == HA_TYPE_FAILOVER) {
+    auto cur_time = std::chrono::system_clock::now();
+    auto find_election_timeout =
+        electionTimer_->getStageExtraTime() + electionTimeout_;
+    /** Last HA failed and restart election, add last HA info to history */
+    if (!localHaInfo_.haSucess) {
+      /** Special case: first election dont have last election start time */
+      HaHistoryAdd(false);
+    }
+    /** New HA start, reset local HA info. */
+    resetLocalHaInfo();
+    localHaInfo_.haType = HA_TYPE_FAILOVER;
+    localHaInfo_.sourceAddress = leaderAddr_;
+    localHaInfo_.durationBeforeRequestVote = find_election_timeout;
+    localHaInfo_.requestVoteStartTs = cur_time;
+  }
+}
 int Paxos::requestVote(bool force) {
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
@@ -1543,7 +1704,7 @@ int Paxos::requestVote(bool force) {
       log_->getEntry(lastLogIndex, entry, false);
       msg.set_lastlogterm(entry.term());
       msg.set_myserverid(getMyServerId());
-      config_->forEachLearners(&Server::sendMsg, (void *)&msg);
+      config_.forEachLearners(&Server::sendMsg, (void *)&msg);
     }
     return -1;
   }
@@ -1562,12 +1723,18 @@ int Paxos::requestVote(bool force) {
   }
 
   /* For debug */
-  if (debugDisableElection) {
-    easy_system_log(
-        "Server %d : Skip requestVote because of debugDisableElection "
-        "currentTerm(%ld)\n",
-        localServer_->serverId, currentTerm_.load());
-    return -2;
+  if (disableElection_) {
+    if (force) {
+      easy_warn_log(
+          "Server %d : Skip disableElection and force requestVote, currentTerm(%ld)",
+          localServer_->serverId, currentTerm_.load());
+    } else {
+      easy_system_log(
+          "Server %d : Skip requestVote because of disableElection "
+          "currentTerm(%ld)\n",
+          localServer_->serverId, currentTerm_.load());
+      return -2;
+    }
   }
 
   uint64_t lastLogIndex = log_->getLastLogIndex();
@@ -1577,6 +1744,7 @@ int Paxos::requestVote(bool force) {
         "Server %d: fail to get log entry when request vote, index %llu",
         localServer_->serverId, lastLogIndex);
   } else {
+    failOverProcess();
     ++currentTerm_;
     log_->setTerm(currentTerm_);
     log_->setMetaData(keyCurrentTerm, currentTerm_);
@@ -1585,7 +1753,7 @@ int Paxos::requestVote(bool force) {
     leaderIp_ = "";
     leaderPort_ = 0;
     option.extraStore->setRemote("");
-    config_->forEach(&Server::beginRequestVote, NULL);
+    config_.forEach(&Server::beginRequestVote, NULL);
     forceRequestMode_ = force;
     changeState_(CANDIDATE);
     easy_info_log(
@@ -1608,12 +1776,12 @@ int Paxos::requestVote(bool force) {
     msg.set_lastlogterm(entry.term());
     msg.set_myserverid(getMyServerId());
 
-    config_->forEach(&Server::sendMsg, (void *)&msg);
+    config_.forEach(&Server::sendMsg, (void *)&msg);
   }
 
   electionTimer_->restart(electionTimeout_, true);
 
-  if (config_->getServerNum() == 1) {
+  if (config_.getServerNum() == 1) {
     /* Only me in the cluster, became leader immediately. */
     becameLeader_();
   }
@@ -1625,13 +1793,14 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
 
   rsp->set_msgid(msg->msgid());
   rsp->set_msgtype(RequestVoteResponce);
+  rsp->set_term(currentTerm_);
+  rsp->set_votegranted(0);
+
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
   rsp->set_serverid(localServer_->serverId);
 
   if (msg->myserverid() == getMyServerId()) {
-    rsp->set_term(currentTerm_);
-    rsp->set_votegranted(0);
     easy_error_log(
         "Server %d : reject RequestVote because this server has same mysql server_id(%llu)"
         ", server(id:%llu, addr:%s).\n",
@@ -1641,7 +1810,6 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
 
   if (state_ == LEARNER) {
     rsp->set_term(msg->term());
-    rsp->set_votegranted(0);
     easy_system_log(
         "Server %d : Receive a RequestVote from server %d, term(%llu) when I'm "
         "LEARNER!! Just reject!!\n",
@@ -1649,11 +1817,26 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
     return 0;
   }
 
+  if (disableElection_) {
+    if (msg->force()) {
+      easy_system_log(
+          "Server %d : Receive a RequestVote from server %d, term(%llu) when I'm in "
+          "disableElection!! But force and skip reject. currentTerm(%ld) \n",
+          localServer_->serverId, msg->myserverid(), msg->candidateid(),
+          msg->addr().c_str(), currentTerm_.load());
+    } else {
+      easy_system_log(
+          "Server %d : Receive a RequestVote from server %d, term(%llu) when I'm in "
+          "disableElection!! Just reject!! currentTerm(%ld) \n",
+          localServer_->serverId, msg->myserverid(), msg->candidateid(),
+          msg->addr().c_str(), currentTerm_.load());
+      return 0;
+    }
+  }
+
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->candidateid()));
+      config_.getServer(msg->candidateid()));
   if (server == nullptr || server->strAddr != msg->addr()) {
-    rsp->set_term(currentTerm_);
-    rsp->set_votegranted(0);
     easy_system_log(
         "Server %d : reject RequestVote because this server is not in the "
         "current configure, server(id:%llu, addr:%s).\n",
@@ -1662,10 +1845,8 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   }
 
   if (msg->term() < currentTerm_) {
-    rsp->set_term(currentTerm_);
-    rsp->set_votegranted(0);
     easy_system_log(
-        "Server %d : Receive an old RequestVote from server %d msg term(%d) "
+        "Server %d : Receive an old RequestVote from server %d msg term(%lu) "
         "current term(%d) reject!!\n",
         localServer_->serverId, msg->serverid(), msg->term(),
         currentTerm_.load());
@@ -1675,8 +1856,6 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   uint64_t lastLogIndex = log_->getLastLogIndex();
   LogEntry entry;
   if (log_->getEntry(lastLogIndex, entry, false)) {
-    rsp->set_term(currentTerm_);
-    rsp->set_votegranted(0);
     easy_error_log(
         "Server %d: fail to get log entry when on request vote, index %llu",
         localServer_->serverId, lastLogIndex);
@@ -1700,10 +1879,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
   if (!msg->force() &&
       (state_ == LEADER ||
        (state_ == FOLLOWER &&
-        (electionTimer_->getCurrentStage() == 0 && leaderId_ != 0) &&
-        !Paxos::debugDisableElection))) {
-    rsp->set_term(currentTerm_);
-    rsp->set_votegranted(0);
+        (electionTimer_->getCurrentStage() == 0 && leaderId_ != 0)))) {
     easy_system_log(
         "Server %d : reject RequestVote because of leaderStickiness, "
         "local(lli:%ld, llt:%ld); msg(candidateid: %d, term: %ld lli:%ld, "
@@ -1722,7 +1898,7 @@ int Paxos::onRequestVote(PaxosMsg *msg, PaxosMsg *rsp) {
         "bigger than me(%d).\n",
         localServer_->serverId, msg->candidateid(), msg->term(),
         currentTerm_.load());
-    //TODO::@yanhua check debugDisableStepDown??
+
     newTerm(msg->term());
 
     // TODO handle leader case. need stepDown ?
@@ -1750,7 +1926,7 @@ int Paxos::onClusterIdNotMatch(PaxosMsg *msg) {
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->serverid()));
+      config_.getServer(msg->serverid()));
   if (server == nullptr) {
     easy_error_log(
         "Server %d : onClusterIdNotMatch receive a msg msgId(%llu) from server "
@@ -1777,7 +1953,7 @@ int Paxos::onMsgPreCheck(PaxosMsg *msg, PaxosMsg *rsp) {
         "msg type(%d), these nodes belong to different clusters.\n",
         localServer_->serverId, msg->clusterid(), clusterId_.load(),
         msg->msgtype());
-    rsp->set_msgtype(Consensus::ClusterIdNotMatch);
+    rsp->set_msgtype(Protocol::ClusterIdNotMatch);
     rsp->set_serverid(msg->serverid());
     rsp->set_term(msg->term());
     rsp->set_msgid(msg->msgid());
@@ -1789,7 +1965,7 @@ int Paxos::onMsgPreCheck(PaxosMsg *msg, PaxosMsg *rsp) {
         "Server %d: msgId(%llu) onMsgPreCheck, entries pre-check is failed, "
         "msg type(%d), skip AppendLog.\n",
         localServer_->serverId, msg->msgid(), msg->msgtype());
-    rsp->set_msgtype(Consensus::PreCheckFailedResponce);
+    rsp->set_msgtype(Protocol::PreCheckFailedResponce);
     rsp->set_serverid(msg->serverid());
     rsp->set_term(msg->term());
     rsp->set_msgid(msg->msgid());
@@ -1810,7 +1986,7 @@ int Paxos::onMsgPreCheckFailed(PaxosMsg *msg) {
   if (shutdown_.load()) return -1;
 
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->serverid()));
+      config_.getServer(msg->serverid()));
   if (server != nullptr) server->disconnect(nullptr);
 
   easy_error_log(
@@ -1820,12 +1996,20 @@ int Paxos::onMsgPreCheckFailed(PaxosMsg *msg) {
   return 0;
 }
 
+void consensusDurationInLocal(Paxos::HaInfo &localHaInfo_) {
+  auto cur_time = std::chrono::system_clock::now();
+  auto durationInLocal = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             cur_time - localHaInfo_.requestVoteStartTs)
+                             .count();
+  localHaInfo_.localConsensusDuration = durationInLocal;
+}
+
 int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
   assert(msg->msgtype() == RequestVoteResponce);
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->serverid()));
+      config_.getServer(msg->serverid()));
   if (server == nullptr) {
     easy_error_log(
         "Server %d : onRequestVoteResponce receive a msg msgId(%llu) from "
@@ -1873,8 +2057,9 @@ int Paxos::onRequestVoteResponce(PaxosMsg *msg) {
         "Server %d : server %d (term:%ld) vote me to became leader.\n",
         localServer_->serverId, msg->serverid(), msg->term());
 
-    if (config_->quorumAll(&Server::haveVote)) {
+    if (config_.quorumAll(&Server::haveVote)) {
       becameLeader_();
+      consensusDurationInLocal(localHaInfo_);
     }
   } else
     easy_system_log("Server %d : server %d refuse to let me became leader.\n",
@@ -1904,7 +2089,7 @@ int Paxos::appendLog(const bool needLock) {
    * Some fields of msg are filled by appendLogFillForEach,
    * called by RemoteServer::sendMsg.
    */
-  config_->forEach(&Server::sendMsg, (void *)&msg);
+  config_.forEach(&Server::sendMsg, (void *)&msg);
 
   if (needLock) lock_.unlock();
   return 0;
@@ -1931,7 +2116,7 @@ int Paxos::appendLogToLearner(std::shared_ptr<RemoteServer> server,
   msg.set_commitindex(commitIndex_);
 
   if (server == nullptr)
-    config_->forEachLearners(&Server::sendMsg, (void *)&msg);
+    config_.forEachLearners(&Server::sendMsg, (void *)&msg);
   else {
     server->sendMsg((void *)&msg);
   }
@@ -2063,7 +2248,7 @@ bool Paxos::onHeartbeatOptimistically_(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_appliedindex(appliedIndex_.load());
   rsp->set_applydelayseconds(applyDelaySeconds_.load());
   rsp->set_applythreadrunning(applyThreadRunning_.load());
-  rsp->set_disableelection(debugDisableElection);
+  rsp->set_disableelection(disableElection_.load());
   return true;
 }
 
@@ -2089,7 +2274,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   uint64_t prevLogIndex = msg->prevlogindex();
   bool newTermFlag = false;
 
-  if (1 == config_->getServerNumLockFree() && state_.load() != LEARNER) {
+  if (1 == config_.getServerNumLockFree() && state_.load() != LEARNER) {
     easy_error_log(
         "Server %d : reject onAppendLog because this server is not in the "
         "current configure, server %llu\n",
@@ -2101,7 +2286,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     rsp->set_lastlogindex(lastLogIndex);
     rsp->set_applydelayseconds(applyDelaySeconds_.load());
     rsp->set_applythreadrunning(applyThreadRunning_.load());
-    rsp->set_disableelection(debugDisableElection);
+    rsp->set_disableelection(disableElection_.load());
     rsp->set_ignorecheck(true);
     rsp->set_term(currentTerm_);
     rsp->set_appliedindex(0);
@@ -2157,7 +2342,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
 
   easy_info_log(
       "Server %d : msgId(%llu) onAppendLog start, receive logs from "
-      "leader(%d), msg.term(%d), msg.commitindex(%llu), msg.prevlogindex(%llu), entries_size(%llu), lli(%llu)\n",
+      "leader(%d), msg.term(%lu), msg.commitindex(%llu), msg.prevlogindex(%llu), entries_size(%llu), lli(%llu)\n",
       localServer_->serverId, msg->msgid(), msg->leaderid(), msg->term(),
       msg->commitindex(), msg->prevlogindex(), msg->entries_size(),
       lastLogIndex);
@@ -2176,7 +2361,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_appliedindex(appliedIndex_.load());
   rsp->set_applydelayseconds(applyDelaySeconds_.load());
   rsp->set_applythreadrunning(applyThreadRunning_.load());
-  rsp->set_disableelection(debugDisableElection);
+  rsp->set_disableelection(disableElection_.load());
 
   /* in some case we should step down */
   if (msg->term() > currentTerm_) {
@@ -2211,13 +2396,18 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     } else {
       easy_warn_log(
           "Server %d : msgId(%llu) receive logs from old leader(%ld) current "
-          "leader(%ld). localTerm(%ld),msg.term(%d) \n",
+          "leader(%ld). localTerm(%ld),msg.term(%lu) \n",
           localServer_->serverId, msg->msgid(), msg->leaderid(),
           leaderId_.load(), currentTerm_.load(), msg->term());
       rsp->set_term(currentTerm_);
       return -1;
     }
   } else if (state_ != FOLLOWER && state_ != LEARNER) {
+    easy_warn_log(
+        "Server %d : msgId(%llu) receive logs from other leader(%ld) current "
+        "leader(%ld). localTerm(%ld), msg.term(%lu), state(%d). Change state to FOLLOWER\n",
+        localServer_->serverId, msg->msgid(), msg->leaderid(),
+        leaderId_.load(), currentTerm_.load(), msg->term(), state_.load());
     changeState_(FOLLOWER);
   }
   rsp->set_term(currentTerm_);
@@ -2228,7 +2418,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     if (leaderId_ != 0 && leaderId_ != msg->leaderid())
       easy_warn_log(
           "Server %d : receive logs from different leader. old(%d),new(%d), "
-          "term(%ld),msg.term(%d) \n",
+          "term(%ld),msg.term(%lu) \n",
           localServer_->serverId, leaderId_.load(), msg->leaderid(),
           currentTerm_.load(), msg->term());
     leaderId_.store(msg->leaderid());
@@ -2260,7 +2450,7 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     rsp->set_ignorecheck(true);
     easy_info_log(
         "Server %d : msgId(%llu) receive logs without prevlogterm. from server "
-        "%ld, localTerm(%ld),msg.term(%d) lli:%ld\n",
+        "%ld, localTerm(%ld),msg.term(%lu) lli:%ld\n",
         localServer_->serverId, msg->msgid(), msg->leaderid(),
         currentTerm_.load(), msg->term(), lastLogIndex);
     return 0;
@@ -2318,16 +2508,22 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     {
       if (error) {
         easy_warn_log(
-            "Server %d: fail to get log entry on append log, index %llu",
-            localServer_->serverId, prevLogIndex);
+            "Server %d: fail to get log entry on append log, "
+            "prevLogIndex(%llu), lastLogInde(%llu), binlog maybe purged",
+            localServer_->serverId, prevLogIndex, lastLogIndex);
       } else {
+        rsp->set_prevlogterm(prevLogEntry.term());
+        rsp->set_prevlogindex(log_->getFirstIndexOfLastFileTerm(prevLogEntry.term()));
+
         /* log is not match, reject it. the leader will send the correct log
          * again. */
         easy_warn_log(
             "Server %d : msgId(%llu) msg's prevlogterm(%llu) is not match with "
-            "local log's prevlogterm(%llu) with index(%llu) reject!",
+            "local log's prevlogterm(%llu) with index(%llu) reject! "
+            "Response prevlogterm(%llu) prevlogindex(%llu)",
             localServer_->serverId, msg->msgid(), msg->prevlogterm(),
-            prevLogEntry.term(), prevLogIndex);
+            prevLogEntry.term(), prevLogIndex,
+            rsp->prevlogterm(), rsp->prevlogindex());
       }
       if (state_ == FOLLOWER) {
         /*
@@ -2346,17 +2542,6 @@ int Paxos::onAppendLog(PaxosMsg *msg, PaxosMsg *rsp) {
     with local log's prevlogterm(%llu) pass.", localServer_->serverId,
     msg->msgid(), msg->prevlogterm(), prevLogEntry.term());
       */
-
-    // checksum test
-    if (checksum_mode_) {
-      for (auto &entry : msg->entries()) {
-        if (log_checksum_test(entry)) {
-          easy_error_log("Server %d: msgId(%llu) log index %llu checksum fail(expect %llu).",
-                         localServer_->serverId, msg->msgid(), entry.index(), entry.checksum());
-          return -1;
-        }
-      }
-    }
 
     rsp->set_issuccess(true);
     enableLogCache_ = true;
@@ -2566,7 +2751,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
   if (state_ != LEADER && state_ != FOLLOWER && state_ != LEARNER) return -1;
 
   easy_info_log(
-      "Server %d : onAppendLogResponce msgId(%llu)"
+      "Server %d : onAppendLogResponce msgId(%llu), "
       "server %d, lastlogindex(%ld)\n",
       localServer_->serverId, msg->msgid(), msg->serverid(), msg->lastlogindex());
 
@@ -2576,7 +2761,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
   std::lock_guard<std::mutex> lg(lock_);
   if (shutdown_.load()) return -1;
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->serverid()));
+      config_.getServer(msg->serverid()));
   auto wserver = std::weak_ptr<RemoteServer>(server);
   // easy_warn_log("Server %d : onAppendLogResponce receive a msg msgId(%llu)
   // from server %llu\n", localServer_->serverId, msg->msgid(),
@@ -2622,7 +2807,6 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         localServer_->serverId, msg->msgid(), msg->serverid(), msg->term(),
         currentTerm_.load());
     if (state_.load() != LEADER) {
-      //TODO::@yanhua check debugDisableStepDown??
       newTerm(msg->term());
     } else {
       if (server->matchIndex.load() != 0) {
@@ -2728,7 +2912,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
 
       /* Update meta for learner source */
       if (msg->cientries_size() > 0) {
-        config_->mergeFollowerMeta(msg->cientries());
+        config_.mergeFollowerMeta(msg->cientries());
         easy_warn_log(
             "Server %d : msgId(%llu) mergeFollowerMeta from server %d\n",
             localServer_->serverId, msg->msgid(), msg->serverid());
@@ -2779,7 +2963,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
             easy_error_log(
                 "Server %d : follower(%d) might lost some logs. "
                 "matchIndex(%llu) is greater than follower's lli(%llu), we "
-                "reset matchIndex to 0!",
+                "reset matchIndex to 0!\n",
                 localServer_->serverId, msg->serverid(),
                 server->matchIndex.load(), msg->lastlogindex());
             server->resetMatchIndex(0);
@@ -2791,7 +2975,14 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         } else {
           /* send correct log for this RemoteServer. */
           if (server->nextIndex > 1) {
-            --(server->nextIndex);
+            // if leader has same term logs, use self lastIndex of term
+            // otherwise, use follower's first index of term
+            if (msg->has_prevlogterm() && msg->has_prevlogindex() && msg->prevlogindex() > 0) {
+              auto lastIndex = log_->getLastIndexOfTerm(msg->prevlogterm());
+              server->nextIndex = (lastIndex > 0 ? lastIndex : msg->prevlogindex());
+            } else {
+              --server->nextIndex;
+            }
           }
 
           /* XXX if the follower lost many logs, decrement nextIndex once. */
@@ -2807,18 +2998,28 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
         easy_warn_log(
             "Server %d : msgId(%llu) AppendLog to server %d failed, msg error "
             "%d, "
-            "lastlogindex(%ld) is not match with the local nextIndex(%ld), "
-            "set local nextIndex to %ld, matchIndex(%llu).\n",
+            "lastlogindex(%ld) is not match with the local nextIndex(%llu), "
+            "set local nextIndex to %llu, matchIndex(%llu), "
+            "msg.prevlogterm(%llu), msg.prevlogindex(%llu)\n",
             localServer_->serverId, msg->msgid(), msg->serverid(),
             msg->has_msgerror() ? msg->msgerror() : 0, msg->lastlogindex(),
-            oldNextIndex, server->nextIndex.load(), server->matchIndex.load());
+            oldNextIndex, server->nextIndex.load(), server->matchIndex.load(),
+            msg->has_prevlogterm()? msg->prevlogterm() : 0, 
+            msg->has_prevlogindex() ? msg->prevlogindex() : 0);
       } else {
         if (enableLearnerAutoResetMatchIndex_) {
           server->resetMatchIndex(0);
 
           // decrease next index until log match, treat learner like follower
           if (server->nextIndex > 1) {
-            --server->nextIndex;
+            // if leader has same term logs, use self lastIndex of term
+            // otherwise, use learner's first index of term
+            if (msg->has_prevlogterm() && msg->has_prevlogindex() && msg->prevlogindex() > 0) {
+              auto lastIndex = log_->getLastIndexOfTerm(msg->prevlogterm());
+              server->nextIndex = (lastIndex > 0 ? lastIndex : msg->prevlogindex());
+            } else {
+              --server->nextIndex;
+            }
           }
 
           if (server->nextIndex > msg->lastlogindex() + 1) {
@@ -2827,9 +3028,12 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
 
           easy_warn_log(
               "Server %d : Learner(%d) match index reset to 0, nextIndex set "
-              "to %llu.",
+              "to %llu -> %llu. "
+              "msg.prevlogterm(%llu), msg.prevlogindex(%llu)\n",
               localServer_->serverId, msg->serverid(),
-              server->nextIndex.load());
+              oldNextIndex, server->nextIndex.load(),
+              msg->has_prevlogterm()? msg->prevlogterm() : 0, 
+              msg->has_prevlogindex() ? msg->prevlogindex() : 0);
 
           appendLogToLearner(wserver.lock());
         } else {
@@ -2852,7 +3056,7 @@ int Paxos::onAppendLogResponce(PaxosMsg *msg) {
             easy_warn_log(
                 "Server %d : Learner(%d) change its local log position or "
                 "term, which is not correct !! current matchIndex(%llu) "
-                "nextIndex(%llu).",
+                "nextIndex(%llu).\n",
                 localServer_->serverId, msg->serverid(),
                 server->matchIndex.load(), server->nextIndex.load());
           }
@@ -2880,7 +3084,7 @@ int Paxos::onAppendLogSendFail(PaxosMsg *msg, uint64_t *newId) {
 
   lock_.lock();
   auto server = std::dynamic_pointer_cast<RemoteServer>(
-      config_->getServer(msg->serverid()));
+      config_.getServer(msg->serverid()));
   auto wserver = std::weak_ptr<RemoteServer>(server);
   if (server == nullptr) {
     easy_warn_log(
@@ -2913,6 +3117,14 @@ int Paxos::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
   rsp->set_msgtype(LeaderCommandResponce);
   rsp->set_serverid(localServer_->serverId);
   rsp->set_term(currentTerm_);
+  /** If type is switch over, update durationBeforeRequestVote and
+   * requestVoteStartTs. */
+  if (msg->has_durationbeforevote()) {
+    localHaInfo_.durationBeforeRequestVote = msg->durationbeforevote();
+    localHaInfo_.requestVoteStartTs = std::chrono::system_clock::now();
+    localHaInfo_.sourceAddress = leaderAddr_;
+    localHaInfo_.haType = HA_TYPE_SWITCHOVER;
+  }
 
   if (msg->lctype() == LeaderTransfer) {
     /* Update commitIndex. */
@@ -2935,7 +3147,7 @@ int Paxos::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
         msg->lastlogindex() == commitIndex_) {
       rsp->set_issuccess(true);
       lock_.unlock();
-      requestVote();
+      requestVote(true);
     } else {
       rsp->set_issuccess(false);
       lock_.unlock();
@@ -2944,11 +3156,14 @@ int Paxos::onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp) {
     /* check for purge log */
     easy_warn_log("Server %d : prepare to purge log, minMatchIndex %ld \n",
                   localServer_->serverId, msg->minmatchindex());
-    purgeLogQueue_.push(new purgeLogArgType(msg->minmatchindex(), this));
+    purgeLogArgType *arg = new purgeLogArgType(msg->minmatchindex(), this);
+    purgeLogQueue_.push(arg);
     srv_->sendAsyncEvent(&SingleProcessQueue<purgeLogArgType>::process,
                          &purgeLogQueue_, Paxos::doPurgeLog);
     rsp->set_issuccess(true);
     lock_.unlock();
+    if (arg != nullptr)
+      delete arg;
   }
 
   easy_warn_log(
@@ -2973,6 +3188,7 @@ int Paxos::leaderCommand(LcTypeT type, std::shared_ptr<RemoteServer> server) {
   msg.set_msgtype(LeaderCommand);
   msg.set_serverid(localServer_->serverId);
   msg.set_lctype(type);
+  msg.set_durationbeforevote(localHaInfo_.durationBeforeRequestVote);
 
   ++(stats_.countLeaderCommand);
 
@@ -2996,10 +3212,10 @@ int Paxos::leaderCommand(LcTypeT type, std::shared_ptr<RemoteServer> server) {
   if (server != nullptr)
     server->sendMsg((void *)&msg);
   else
-    config_->forEach(&Server::sendMsg, (void *)&msg);
+    config_.forEach(&Server::sendMsg, (void *)&msg);
 
   if (debugWitnessTest)
-    config_->forEachLearners(&Server::sendMsg, (void *)&msg);
+    config_.forEachLearners(&Server::sendMsg, (void *)&msg);
 
   return 0;
 }
@@ -3021,17 +3237,17 @@ int Paxos::forceSingleLeader() {
 
     localServer_->serverId = 1;
     changeState_(FOLLOWER);
-    config_->delAllLearners();
+    config_.delAllLearners();
   } else {
     easy_error_log("Server %d : Execute forceSingleLeader for this server!!",
                    localServer_->serverId);
 
-    config_->delAllRemoteServer(localServer_->strAddr, this);
+    config_.delAllRemoteServer(localServer_->strAddr, this);
   }
 
-  log_->setMetaData(Paxos::keyLearnerConfigure, config_->learnersToString());
+  log_->setMetaData(Paxos::keyLearnerConfigure, config_.learnersToString());
   log_->setMetaData(Paxos::keyMemberConfigure,
-                    config_->membersToString(localServer_->strAddr));
+                    config_.membersToString(localServer_->strAddr));
 
   srv_->sendAsyncEvent(&Paxos::requestVote, this, true);
 
@@ -3050,11 +3266,11 @@ int Paxos::forceSingleLearner() {
     easy_error_log("Server %d : Execute forceSingleLearner for this server!!",
                    localServer_->serverId);
 
-    config_->delAllLearners();
-    config_->delAllRemoteServer(localServer_->strAddr, this);
+    config_.delAllLearners();
+    config_.delAllRemoteServer(localServer_->strAddr, this);
   }
 
-  log_->setMetaData(Paxos::keyLearnerConfigure, config_->membersToString());
+  log_->setMetaData(Paxos::keyLearnerConfigure, config_.membersToString());
   log_->setMetaData(Paxos::keyMemberConfigure, localServer_->strAddr);
 
   changeState_(LEARNER);
@@ -3137,9 +3353,9 @@ void Paxos::newTerm(uint64_t newTerm) {
   logRecvCache_.clear();
 
   /* TODO only step down when we are Leader */
-  config_->forEach(&Server::stepDown, NULL);
-  config_->forEachLearners(&Server::stepDown, NULL);
-  config_->forEachLearners(&Server::disconnect, NULL);
+  config_.forEach(&Server::stepDown, NULL);
+  config_.forEachLearners(&Server::stepDown, NULL);
+  config_.forEachLearners(&Server::disconnect, NULL);
   epochTimer_->stop();
 }
 
@@ -3352,8 +3568,8 @@ int Paxos::tryUpdateCommitIndex_() {
   if (state_ != LEADER) return -1;
   if (shutdown_.load()) return -1;
 
-  uint64_t newCommitIndex = config_->quorumMin(&Server::getMatchIndex);
-  uint64_t forceCommitIndex = config_->forceMin(&Server::getMatchIndex);
+  uint64_t newCommitIndex = config_.quorumMin(&Server::getMatchIndex);
+  uint64_t forceCommitIndex = config_.forceMin(&Server::getMatchIndex);
   if (forceCommitIndex < newCommitIndex && leaderForceSyncStatus_.load())
     newCommitIndex = forceCommitIndex;
 
@@ -3422,6 +3638,21 @@ int Paxos::tryUpdateCommitIndex_() {
 
   appendLogToLearner();
   return 0;
+}
+
+uint64_t Paxos::getMinMatchIndex() {
+  std::lock_guard<std::mutex> lg(lock_);
+  uint64_t min_of_follower;
+  uint64_t min_of_learner;
+  uint64_t minMatchIndex;
+
+  minMatchIndex = config_.allMin(&Server::getMatchIndex);
+  if (config_.getLearnerNum() > 0) {
+    minMatchIndex =
+        std::min(minMatchIndex, config_.allMinLeraner(&Server::getMatchIndex));
+  }
+
+  return minMatchIndex;
 }
 
 static void *asyncAppendLogDelaytHandler(void *args) {
@@ -3527,7 +3758,7 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
         LogEntry entry;
         if (log_->getEntry(i, entry, false)) {
           easy_error_log("Fail to get log on startup, index %llu", i);
-          exit(1);
+          _exit(1);  // Using _exit(), since exit() is not async signal safe
         }
         if (entry.optype() == kConfigureChange) {
           if (ccMgr_.prepared == 0) {
@@ -3572,7 +3803,7 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
   int error = 0;
   if ((error = srv_->start(port_))) {
     easy_error_log("Fail to start libeasy service, error(%d).", error);
-    abort();
+    _exit(2);  // Using _exit(), since exit() is not async signal safe
   }
 
   electionTimer_ = std::make_shared<ThreadTimer>(
@@ -3591,15 +3822,14 @@ int Paxos::init(const std::vector<std::string> &strConfig /*start 0*/,
    */
 
   /* Init Configuration */
-  std::dynamic_pointer_cast<StableConfiguration>(config_)->installConfig(
-      (*pConfig), index, this, localServer);
-  config_->forEach(&Server::connect, (void *)NULL);
-  config_->addLearners(strLearners, this, true);
+  config_.installConfig((*pConfig), index, this, localServer);
+  config_.forEach(&Server::connect, (void *)NULL);
+  config_.addLearners(strLearners, this, true);
 
   if (needSetMeta) {
-    log_->setMetaData(Paxos::keyLearnerConfigure, config_->learnersToString());
+    log_->setMetaData(Paxos::keyLearnerConfigure, config_.learnersToString());
     log_->setMetaData(Paxos::keyMemberConfigure,
-                      config_->membersToString(localServer_->strAddr));
+                      config_.membersToString(localServer_->strAddr));
   }
 
   pthread_create(&appendLogDelay_.tid_, NULL, asyncAppendLogDelaytHandler, (void *)this);
@@ -3696,7 +3926,7 @@ int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
   int error = 0;
   if ((error = srv_->start(port_))) {
     easy_error_log("Fail to start libeasy service on port(%u), error(%d).", port_, error);
-    abort();
+    _exit(2);  // Using _exit(), since exit() is not async signal safe
   }
 
   /*
@@ -3706,21 +3936,21 @@ int Paxos::initAsLearner(std::string &strConfig, uint64_t myServerId,
   /* Init Configuration */
   std::vector<std::string> tmpConfig;
   tmpConfig.push_back(strMember);
-  std::dynamic_pointer_cast<StableConfiguration>(config_)->installConfig(
-      tmpConfig, 1, this, localServer);
+  config_.installConfig(tmpConfig, 1, this, localServer);
   localServer_->serverId += 100;
 
   /* Learner has all other learner's info now. */
-  // config_->forEachLearners(&Server::connect, (void *)NULL);
-  config_->addLearners(strLearners, this, true);
+  // config_.forEachLearners(&Server::connect, (void *)NULL);
+  config_.addLearners(strLearners, this, true);
 
   if (needSetMeta) {
-    log_->setMetaData(Paxos::keyLearnerConfigure, config_->learnersToString());
-    log_->setMetaData(Paxos::keyMemberConfigure, config_->membersToString());
+    log_->setMetaData(Paxos::keyLearnerConfigure, config_.learnersToString());
+    log_->setMetaData(Paxos::keyMemberConfigure, config_.membersToString());
   }
 
   pthread_create(&appendLogDelay_.tid_, NULL, asyncAppendLogDelaytHandler, (void *)this);
   pthread_setname_np(appendLogDelay_.tid_, "appendlog_delay");
+
   return 0;
 }
 
@@ -3735,6 +3965,7 @@ void Paxos::msleep(uint64_t t) {
 void Paxos::startElectionCallback() {
   easy_warn_log("Server %d : Enter startElectionCallback\n",
                 localServer_->serverId);
+  localHaInfo_.haType = HA_TYPE_FAILOVER;
   requestVote(false);
 }
 
@@ -3750,7 +3981,7 @@ void Paxos::heartbeatCallback(std::weak_ptr<RemoteServer> wserver) {
 }
 
 uint64_t Paxos::getLeaderTransferInterval_() {
-  return heartbeatInterval_ / 4;
+  return heartbeatInterval_ + 100;
 }
 
 uint64_t Paxos::getNextEpochCheckStatemachine_(uint64_t epoch) {
@@ -3798,7 +4029,7 @@ uint64_t Paxos::leaderTransferIfNecessary_(uint64_t epoch) {
 
   run = false;
 
-  auto servers = config_->getServers();
+  auto servers = config_.getServers();
   std::vector<uint64_t> choices;
   for (auto &e : servers) {
     if (e == nullptr || e->serverId == localServer_->serverId) continue;
@@ -3837,8 +4068,8 @@ void Paxos::epochTimerCallback() {
     currentEpoch_.fetch_add(1);
     return;
   }
-  uint64_t forceMinEpoch = config_->forceMin(&Server::getLastAckEpoch);
-  uint64_t quorumEpoch = config_->quorumMin(&Server::getLastAckEpoch);
+  uint64_t forceMinEpoch = config_.forceMin(&Server::getLastAckEpoch);
+  uint64_t quorumEpoch = config_.quorumMin(&Server::getLastAckEpoch);
 
   easy_info_log(
       "Server %d : Epoch task currentEpoch(%llu) quorumEpoch(%llu) "
@@ -3868,13 +4099,7 @@ void Paxos::epochTimerCallback() {
     easy_error_log(
         "Server %d : lost connect with major followers, stepdown myself\n",
         localServer_->serverId);
-    if (debugDisableStepDown) {
-      easy_warn_log(
-          "Server %d : Skip step down because of debugDisableStepDown "
-          "currentTerm(%ld)\n",
-          localServer_->serverId, currentTerm_.load());
-      return;
-    }
+    //TODO:: term no need + 1, raft and other raft implementation use currentTerm @yanhua
     newTerm(currentTerm_ + 1);
     electionTimer_->start();
   } else {
@@ -3884,7 +4109,7 @@ void Paxos::epochTimerCallback() {
     uint64_t targetId = leaderTransferIfNecessary_(prevEpoch);
 
     if (targetId
-        && PaxosErrorCode::PE_DEFAULT == leaderTransferPrecheck_(targetId, log_->getLeaderTransferState())) {
+        && PaxosErrorCode::PE_DEFAULT == leaderTransferPrecheck_(targetId)) {
       easy_system_log(
           "Server %d : Try do auto leaderTransfer term(%llu), targetId(%llu), wait %llums!!\n",
           localServer_->serverId, currentTerm_.load(), targetId, waitMilliseconds4OldTrxFinish);
@@ -3898,7 +4123,7 @@ void Paxos::epochTimerCallback() {
       new ThreadTimer(srv_->getThreadTimerService(), srv_, waitMilliseconds4OldTrxFinish,
                       ThreadTimer::Oneshot, &Paxos::electionWeightAction, this,
                       currentTerm_.load(), currentEpoch_.load(),
-                      log_->getLeaderTransferState(), targetId);
+                      targetId);
     }
   }
 }
@@ -3993,9 +4218,12 @@ int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
       "Server %d : Prepare to purge log to %s, update minMatchIndex %ld\n",
       localServer_->serverId, local ? "local" : "cluster", minMatchIndex_);
   /* leader */
-  purgeLogQueue_.push(new purgeLogArgType(minMatchIndex_, this));
+  purgeLogArgType *arg = new purgeLogArgType(minMatchIndex_, this);
+  purgeLogQueue_.push(arg);
   srv_->sendAsyncEvent(&SingleProcessQueue<purgeLogArgType>::process,
                        &purgeLogQueue_, Paxos::doPurgeLog);
+  if (arg != nullptr)
+    delete arg;
   if (local == false) {
     /* follower */
     std::lock_guard<std::mutex> lg(lock_);
@@ -4005,8 +4233,7 @@ int Paxos::forcePurgeLog(bool local, uint64_t forceIndex) {
   }
 }
 
-void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch,
-  uint64_t preState, uint64_t targetId)
+void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch, uint64_t targetId)
 {
   easy_system_log("Server %d : leaderTransfer electionWeightAction start, term:%llu epoch:%llu",
                  localServer_->serverId, term, baseEpoch);
@@ -4020,21 +4247,22 @@ void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch,
     return;
   }
 
-  if (targetId == UINT64_MAX)
-    targetId = config_->getMaxWeightServerId(baseEpoch, localServer_);
+  if (targetId == UINT64_MAX) {
+    targetId = config_.getMaxWeightServerId(baseEpoch, localServer_);
 
-  auto ret = leaderTransferPrecheck_(targetId, preState);
+    auto ret = leaderTransferPrecheck_(targetId);
 
-  if (ret == PaxosErrorCode::PE_NONE) {
-    easy_system_log("Server %d : leaderTransfer electionWeightAction finish as it is myself",
-                  localServer_->serverId);
-    log_->setLimitNone();
-    return;
-  }
+    if (ret == PaxosErrorCode::PE_NONE) {
+      easy_system_log("Server %d : leaderTransfer electionWeightAction finish as it is myself",
+                    localServer_->serverId);
+      log_->setLimitNone();
+      return;
+    }
 
-  if (ret != PaxosErrorCode::PE_DEFAULT) {
-    log_->setLimitNone();
-    return;
+    if (ret != PaxosErrorCode::PE_DEFAULT) {
+      log_->setLimitNone();
+      return;
+    }
   }
 
   easy_system_log(
@@ -4048,7 +4276,7 @@ void Paxos::electionWeightAction(uint64_t term, uint64_t baseEpoch,
   log_->waitOldXaFinish();
   log_->setLimitAll();
 
-  auto slli = log_->waitOldBgcFinish();
+  auto [slli, wait_time_ms] = log_->waitOldBgcFinish(this);
   leaderTransferSend_(targetId, term, slli, 5);
   return;
 }
@@ -4077,7 +4305,7 @@ bool Paxos::tryFillFollowerMeta_(
   uint64_t localFollowerMetaNo = followerMetaNo_.fetch_add(0);
   if (localFollowerMetaNo > lastSyncMetaNo_ + syncMetaInterval_) {
     lastSyncMetaNo_ = localFollowerMetaNo;
-    config_->forEachLearners(&Server::fillFollowerMeta, (void *)ciEntries);
+    config_.forEachLearners(&Server::fillFollowerMeta, (void *)ciEntries);
   }
   return ciEntries->size() != 0;
 }
@@ -4089,8 +4317,8 @@ void Paxos::setAlertLogLevel(AlertLogLevelType level) {
 int Paxos::getClusterInfo(std::vector<ClusterInfoType> &cis) {
   cis.clear();
 
-  config_->forEach(&Server::fillInfo, (void *)&cis);
-  config_->forEachLearners(&Server::fillInfo, (void *)&cis);
+  config_.forEach(&Server::fillInfo, (void *)&cis);
+  config_.forEachLearners(&Server::fillInfo, (void *)&cis);
 
   return 0;
 }
@@ -4112,7 +4340,7 @@ int Paxos::getClusterHealthInfo(std::vector<HealthInfoType> &healthInfo) {
     if (e.serverId != localServer_->serverId) {
       std::shared_ptr<RemoteServer> server =
           std::dynamic_pointer_cast<RemoteServer>(
-              config_->getServer(e.serverId));
+              config_.getServer(e.serverId));
       if (server) {
         hi.connected = !(server->lostConnect || server->netError);
       } else {
@@ -4175,7 +4403,7 @@ void Paxos::getMemberInfo(MemberInfoType *mi) {
 
 uint64_t Paxos::getServerIdFromAddr(const std::string &strAddr) {
   std::unique_lock<std::mutex> ul(lock_);
-  return config_->getServerIdFromAddr(strAddr);
+  return config_.getServerIdFromAddr(strAddr);
 }
 
 // override default compress option for address, if address is empty, override
@@ -4185,18 +4413,18 @@ int Paxos::setMsgCompressOption(int type, size_t threshold, bool checksum,
   std::unique_lock<std::mutex> ul(lock_);
   MsgCompressOption option((MsgCompressionType)type, threshold, checksum);
 
-  if (shutdown_.load() || config_ == nullptr) {
+  if (shutdown_.load()) {
     easy_error_log("set MsgCompressOption fail, Paxos is stopped.\n");
     return 1;
   }
 
   if (strAddr == "") {
-    config_->forEach(&Server::setMsgCompressOption, &option);
-    config_->forEachLearners(&Server::setMsgCompressOption, &option);
+    config_.forEach(&Server::setMsgCompressOption, &option);
+    config_.forEachLearners(&Server::setMsgCompressOption, &option);
   } else {
-    uint64_t id = config_->getServerIdFromAddr(strAddr);
-    Configuration::ServerRef server;
-    if (id == 0 || ((server = config_->getServer(id)) == nullptr)) {
+    uint64_t id = config_.getServerIdFromAddr(strAddr);
+    StableConfiguration::ServerRef server;
+    if (id == 0 || ((server = config_.getServer(id)) == nullptr)) {
       easy_error_log(
           "Server %d : can't find server %s in setMsgCompressOption\n",
           localServer_->serverId, strAddr.c_str());
@@ -4223,21 +4451,24 @@ int Paxos::setClusterId(uint64_t ci) {
   return ret;
 }
 
-void Paxos::setSendTimeout(uint64_t t) {
-  assert(heartbeatInterval_ > 0);
-  sendTimeout_ = (t == 0 ? heartbeatInterval_ : t);
-  if (srv_) srv_->setSendTimeout(sendTimeout_);
-}
+void Paxos::updateHeartbeatTimers_() {
+  // Must be called while holding lock_ to ensure thread safety.
+  // Only LEADER sends heartbeats; FOLLOWER/CANDIDATE do not.
+  if (state_ != LEADER) return;
 
-void Paxos::setConnectTimeout(uint64_t t) {
-  assert(heartbeatInterval_ > 0);
-  connectTimeout_ = (t == 0 ? heartbeatInterval_ / 4 : t);
-  if (srv_) srv_->setConnectTimeout(connectTimeout_);
-}
-
-void Paxos::setHeartbeatInterval(uint64_t t) {
-  assert(electionTimeout_ > 0);
-  heartbeatInterval_ = (t == 0 ? electionTimeout_ / 5 : t);
+  double newInterval = (double)heartbeatInterval_ / 1000.0;
+  for (auto &server : config_.getServers()) {
+    auto remoteServer = std::dynamic_pointer_cast<RemoteServer>(server);
+    if (remoteServer && remoteServer->heartbeatTimer) {
+      remoteServer->heartbeatTimer->restart(newInterval);
+    }
+  }
+  for (auto &server : config_.getLearners()) {
+    auto remoteServer = std::dynamic_pointer_cast<RemoteServer>(server);
+    if (remoteServer && remoteServer->heartbeatTimer) {
+      remoteServer->heartbeatTimer->restart(newInterval);
+    }
+  }
 }
 
 void Paxos::setWeakReadRefreshTimeout(int64_t value)
@@ -4250,12 +4481,140 @@ void Paxos::setWeakReadRefreshTimeout(int64_t value)
   }
 }
 
+/* ========== Internal helpers (must be called with lock_ held) ========== */
+
+bool Paxos::refreshHeartbeatInterval_() {
+  uint64_t effective_hb;
+  const auto hb_opt = heartbeatIntervalOpt_;
+  if (hb_opt == 0 || hb_opt > electionTimeout_)
+    effective_hb = electionTimeout_ / 5;
+  else
+    effective_hb = hb_opt;
+
+  if (effective_hb == heartbeatInterval_) return false;
+
+  uint64_t old_hb = heartbeatInterval_;
+  heartbeatInterval_ = effective_hb;
+
+  easy_system_log(
+      "Server %d: Applied heartbeat interval: %lu ms (old: %lu, opt: %lu, "
+      "effective: %lu)",
+      localServer_->serverId, heartbeatInterval_, old_hb, hb_opt, effective_hb);
+
+  // Cascade: heartbeat change may affect default send/connect timeouts
+  refreshSendTimeout_();
+  refreshConnectTimeout_();
+  return true;
+}
+
+void Paxos::refreshSendTimeout_() {
+  const auto send_opt = sendTimeoutOpt_;
+  uint64_t effective = (send_opt == 0 ? heartbeatInterval_ : send_opt);
+  if (effective == sendTimeout_) return;
+
+  uint64_t old_val = sendTimeout_;
+  sendTimeout_ = effective;
+  if (srv_) srv_->setSendTimeout(effective);
+  easy_system_log("Server %d: Applied send timeout: %lu ms (old: %lu, opt: %lu)",
+                  localServer_->serverId, sendTimeout_, old_val, send_opt);
+}
+
+void Paxos::refreshConnectTimeout_() {
+  const auto conn_opt = connectTimeoutOpt_;
+  uint64_t effective = (conn_opt == 0 ? heartbeatInterval_ / 4 : conn_opt);
+  if (effective == connectTimeout_) return;
+
+  uint64_t old_val = connectTimeout_;
+  connectTimeout_ = effective;
+  if (srv_) srv_->setConnectTimeout(effective);
+  easy_system_log(
+      "Server %d: Applied connect timeout: %lu ms (old: %lu, opt: %lu)",
+      localServer_->serverId, connectTimeout_, old_val, conn_opt);
+}
+
+/* ========== Per-parameter public apply methods ========== */
+
+void Paxos::applyElectionTimeout(uint64_t new_val) {
+  std::unique_lock<std::mutex> ul(lock_);
+  if (new_val == 0 || new_val == electionTimeout_) return;
+
+  uint64_t old_val = electionTimeout_;
+  electionTimeout_ = new_val;
+
+  if (electionTimer_ && state_ != LEADER)
+    electionTimer_->restart(electionTimeout_, true);
+  if (epochTimer_ && (state_ == LEADER || state_ == CANDIDATE))
+    epochTimer_->restart(electionTimeout_, true);
+
+  easy_system_log("Server %d: Applied election timeout: %lu ms (old: %lu)",
+                  localServer_->serverId, electionTimeout_, old_val);
+
+  // election_timeout change may cascade to heartbeat → send/connect
+  refreshHeartbeatInterval_();
+  updateHeartbeatTimers_();
+}
+
+void Paxos::applyHeartbeatInterval(uint64_t hb_opt) {
+  std::unique_lock<std::mutex> ul(lock_);
+  heartbeatIntervalOpt_ = hb_opt;
+  if (refreshHeartbeatInterval_()) {
+    updateHeartbeatTimers_();
+  }
+}
+
+void Paxos::applyVoteBackoffTimeout(uint64_t new_val) {
+  std::unique_lock<std::mutex> ul(lock_);
+  if (electionTimer_ &&
+      new_val / 1000 != (uint64_t)(electionTimer_->getBackoffTimeout())) {
+    double old_backoff = electionTimer_->getBackoffTimeout();
+    electionTimer_->setBackoffTimeout(new_val);
+    electionTimer_->updateStageExtraTime();
+
+    easy_system_log(
+        "Server %d: Applied vote backoff timeout: %lu ms (old: %.3f)",
+        localServer_->serverId, new_val, old_backoff);
+  }
+}
+
+void Paxos::applySendTimeout(uint64_t send_opt) {
+  std::unique_lock<std::mutex> ul(lock_);
+  sendTimeoutOpt_ = send_opt;
+  refreshSendTimeout_();
+}
+
+void Paxos::applyConnectTimeout(uint64_t conn_opt) {
+  std::unique_lock<std::mutex> ul(lock_);
+  connectTimeoutOpt_ = conn_opt;
+  refreshConnectTimeout_();
+}
+
+void Paxos::applyForcePromote(bool force) {
+  std::unique_lock<std::mutex> ul(lock_);
+  if (force) {
+    srv_->sendAsyncEvent(&Paxos::requestVote, this, true);
+    easy_system_log("Server %d: Triggered force promote",
+                    localServer_->serverId);
+  }
+}
+
+/* Apply all parameters (used at startup) */
+void Paxos::applyConf(uint64_t election_timeout, uint64_t hb_opt,
+                       uint64_t vote_backoff, uint64_t send_opt,
+                       uint64_t conn_opt, bool force_promote) {
+  applyElectionTimeout(election_timeout);
+  applyHeartbeatInterval(hb_opt);
+  applyVoteBackoffTimeout(vote_backoff);
+  applySendTimeout(send_opt);
+  applyConnectTimeout(conn_opt);
+  applyForcePromote(force_promote);
+}
+
 void Paxos::forceFixMatchIndex(uint64_t targetId, uint64_t newIndex) {
   std::unique_lock<std::mutex> ul(lock_);
   if (state_ != LEADER || targetId == 0 || targetId == localServer_->serverId)
     return;
   std::shared_ptr<RemoteServer> server =
-      std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+      std::dynamic_pointer_cast<RemoteServer>(config_.getServer(targetId));
   if (!server) {
     easy_warn_log("Server %d : can't find server %llu in forceFixMatchIndex\n",
                   localServer_->serverId, targetId);
@@ -4270,11 +4629,11 @@ void Paxos::forceFixMatchIndex(uint64_t targetId, uint64_t newIndex) {
 
 void Paxos::forceFixMatchIndex(const std::string &addr, uint64_t newIndex) {
   std::unique_lock<std::mutex> ul(lock_);
-  uint64_t targetId = config_->getServerIdFromAddr(addr);
+  uint64_t targetId = config_.getServerIdFromAddr(addr);
   if (state_ != LEADER || targetId == 0 || targetId == localServer_->serverId)
     return;
   std::shared_ptr<RemoteServer> server =
-      std::dynamic_pointer_cast<RemoteServer>(config_->getServer(targetId));
+      std::dynamic_pointer_cast<RemoteServer>(config_.getServer(targetId));
   if (!server) {
     easy_warn_log("Server %d : can't find server %llu in forceFixMatchIndex\n",
                   localServer_->serverId, targetId);
@@ -4287,22 +4646,9 @@ void Paxos::forceFixMatchIndex(const std::string &addr, uint64_t newIndex) {
   server->resetMatchIndex(newIndex);
 }
 
-int Paxos::log_checksum_test(const LogEntry &le) {
-  if (checksumCb_ && checksum_mode_ && le.checksum() != 0) {
-    const unsigned char *buf =
-        reinterpret_cast<const unsigned char *>(le.value().c_str());
-    uint64_t cs = checksumCb_(0, buf, le.value().size());
-    if (cs == le.checksum())
-      return 0;
-    else
-      return -1;
-  }
-  return 0;
-}
-
 void Paxos::reset_flow_control() {
   std::unique_lock<std::mutex> ul(lock_);
-  config_->reset_flow_control();
+  config_.reset_flow_control();
 }
 
 void Paxos::set_flow_control(uint64_t serverId, int64_t fc) {
@@ -4314,8 +4660,9 @@ void Paxos::set_flow_control(uint64_t serverId, int64_t fc) {
    * <-1  never send log
    */
   std::unique_lock<std::mutex> ul(lock_);
-  config_->set_flow_control(serverId, fc);
+  config_.set_flow_control(serverId, fc);
 }
+
 
 void Paxos::truncateBackward_(uint64_t firstIndex) {
   if (ccMgr_.prepared && ccMgr_.preparedIndex >= firstIndex) {
@@ -4348,8 +4695,6 @@ const std::string Paxos::keyScanIndex = "@keyScanIndex_@";
 const std::string Paxos::keyClusterId = "@keyClusterId_@";
 const uint64_t Paxos::maxSystemPacketSize_ = 50000000;
 
-bool Paxos::debugDisableElection = false;
-bool Paxos::debugDisableStepDown = false;
 bool Paxos::debugWitnessTest = false;
 bool Paxos::debugResetLogSlow = false;
 bool Paxos::debugSkipUpdateCommitIndex = false;

@@ -72,6 +72,7 @@ idle	YES
 memory/performance_schema/accounts	NULL
 memory/performance_schema/cond_class	NULL
 memory/performance_schema/cond_instances	NULL
+memory/performance_schema/data_container	NULL
 memory/performance_schema/events_errors_summary_by_account_by_error	NULL
 memory/performance_schema/events_errors_summary_by_host_by_error	NULL
 memory/performance_schema/events_errors_summary_by_thread_by_error	NULL
@@ -241,9 +242,10 @@ innodb/scn_history_thread	BACKGROUND
 rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
-sql/consensus_stage_change	BACKGROUND
+sql/consensus_state_change	BACKGROUND
+sql/disk_hang_sentinel	BACKGROUND
+sql/disk_writeable_sentinel	BACKGROUND
 sql/event_scheduler	FOREGROUND
-sql/fifo_cleaner	BACKGROUND
 sql/main	BACKGROUND
 CALL sys.ps_setup_show_enabled(TRUE, TRUE);
 performance_schema_enabled
@@ -297,15 +299,17 @@ innodb/scn_history_thread	BACKGROUND
 rds_audit/flush_thread	BACKGROUND
 root@localhost	FOREGROUND
 sql/compress_gtid_table	FOREGROUND
-sql/consensus_stage_change	BACKGROUND
+sql/consensus_state_change	BACKGROUND
+sql/disk_hang_sentinel	BACKGROUND
+sql/disk_writeable_sentinel	BACKGROUND
 sql/event_scheduler	FOREGROUND
-sql/fifo_cleaner	BACKGROUND
 sql/main	BACKGROUND
 enabled_instruments	timed
 idle	YES
 memory/performance_schema/accounts	NULL
 memory/performance_schema/cond_class	NULL
 memory/performance_schema/cond_instances	NULL
+memory/performance_schema/data_container	NULL
 memory/performance_schema/events_errors_summary_by_account_by_error	NULL
 memory/performance_schema/events_errors_summary_by_host_by_error	NULL
 memory/performance_schema/events_errors_summary_by_thread_by_error	NULL

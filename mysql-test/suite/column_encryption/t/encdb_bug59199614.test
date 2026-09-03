@@ -1,0 +1,46 @@
+--source include/master-slave.inc
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+set global column_encryption = on;
+
+select encdb_rule_op('add','{"name":"all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+
+# 1. Test out-of-range DATETIME (format error, year exceeds 4 digits). Should throw error.;
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"10000-01-01 00:00:00"}');
+select * from mysql.encdb_auth_users;
+
+# 2. Test zero timestamp. No longer a valid value under DATETIME range. Should throw error.;
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"0000-00-00 00:00:00"}');
+select * from mysql.encdb_auth_users;
+
+# 3. Test fullAccess grant without expired field. Should default to 9999-12-31 23:59:59 (never expires).;
+create table test(a int);
+insert into test values (1);
+--disable_result_log
+--source include/sync_slave_sql_with_master.inc
+connection slave;
+select * from test;
+connection master;
+select * from test;
+--enable_result_log
+
+select encdb_rule_op('grant','{"fullAccess":["root"]}');
+select * from test;
+--source include/sync_slave_sql_with_master.inc
+connection slave;
+select * from test;
+connection master;
+select * from test;
+
+# 4. Test a DATETIME value beyond old TIMESTAMP limit. Should succeed.;
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"2050-01-01 00:00:00"}');
+select * from test;
+
+drop table test;
+set global column_encryption = off;
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_end.inc

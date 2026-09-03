@@ -1,0 +1,102 @@
+#
+# Test for Polardbx B-tree search mode and traditional AHI dual-mode system
+#
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+# Test 1: Verify innodb_metrics are accessible
+SELECT COUNT(*) FROM information_schema.innodb_metrics WHERE name LIKE '%adaptive_hash_search%';
+COUNT(*)
+2
+# Test 2: Test actual AHI functionality with table operations
+# Create a table and insert data to trigger AHI
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50), value INT);
+INSERT INTO t1 VALUES (1, 'test1', 100), (2, 'test2', 200), (3, 'test3', 300);
+# Test with both parameters ON first - both should work
+SET GLOBAL innodb_adaptive_hash_index = ON;
+SET GLOBAL innodb_polarx_btree_search_mode = ON;
+SELECT SLEEP(1);
+SLEEP(1)
+0
+# Get initial metrics for both traditional AHI and Polardbx
+# Perform some point lookups that would normally use AHI
+SELECT * FROM t1 WHERE id = 1;
+id	name	value
+1	test1	100
+SELECT * FROM t1 WHERE id = 2;
+id	name	value
+2	test2	200
+SELECT * FROM t1 WHERE id = 3;
+id	name	value
+3	test3	300
+# Check both metrics - both should change
+# Assert: Both metrics should change when both modes are ON
+include/assert.inc [Traditional AHI metrics should change when both modes are ON]
+include/assert.inc [Polardbx metrics should change when both modes are ON]
+# Test: Close only innodb_adaptive_hash_index, AHI should still work
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SELECT SLEEP(1);
+SLEEP(1)
+0
+# Get metrics before operations
+# Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+id	name	value
+1	test1	100
+SELECT * FROM t1 WHERE id = 2;
+id	name	value
+2	test2	200
+SELECT * FROM t1 WHERE id = 3;
+id	name	value
+3	test3	300
+# Check metrics - traditional AHI should not change, Polardbx should still change
+# Assert: Traditional AHI metrics should not change, but Polardbx should still work
+include/assert.inc [Traditional AHI metrics should not change when only traditional AHI is OFF]
+include/assert.inc [Polardbx metrics should still change when only traditional AHI is OFF]
+# Test: Close only innodb_polarx_btree_search_mode, AHI should still work
+SET GLOBAL innodb_adaptive_hash_index = ON;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+SELECT SLEEP(1);
+SLEEP(1)
+0
+# Get metrics before operations
+# Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+id	name	value
+1	test1	100
+SELECT * FROM t1 WHERE id = 2;
+id	name	value
+2	test2	200
+SELECT * FROM t1 WHERE id = 3;
+id	name	value
+3	test3	300
+# Check metrics - Polardbx should not change, traditional AHI should still change
+# Assert: Polardbx metrics should not change, but traditional AHI should still work
+include/assert.inc [Polardbx metrics should not change when only Polardbx mode is OFF]
+include/assert.inc [Traditional AHI metrics should still change when only Polardbx mode is OFF]
+# Test with both parameters OFF - AHI should be completely disabled
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SELECT SLEEP(1);
+SLEEP(1)
+0
+# Get metrics before operations
+# Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+id	name	value
+1	test1	100
+SELECT * FROM t1 WHERE id = 2;
+id	name	value
+2	test2	200
+SELECT * FROM t1 WHERE id = 3;
+id	name	value
+3	test3	300
+# Check both metrics - should not change (both parameters OFF)
+# Assert: Both traditional AHI and Polardbx metrics should not change when both parameters are OFF
+include/assert.inc [Traditional AHI hit metrics should not change when both parameters are OFF]
+include/assert.inc [Traditional AHI miss metrics should not change when both parameters are OFF]
+include/assert.inc [Polardbx hit metrics should not change when both parameters are OFF]
+include/assert.inc [Polardbx miss metrics should not change when both parameters are OFF]
+# Cleanup
+DROP TABLE t1;
+# Restore original settings
+SET GLOBAL innodb_adaptive_hash_index = 0;;
+SET GLOBAL innodb_polarx_btree_search_mode = 1;;
+SET GLOBAL innodb_lizard_stat_enabled = 0;;

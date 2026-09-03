@@ -1,0 +1,101 @@
+# Test page_encoder capacity boundary
+# Case 1: Normal operation with page_encoder_fill_pd_capacity debug point
+# Case 2: Test capacity boundary by adding back the 500 bytes safety margin
+# Case 3: Test capacity overflow by exceeding the safety margin by 1 byte (should crash)
+
+--source include/have_debug.inc
+
+--echo #
+--echo # Case 1: Normal page split with page_encoder_fill_pd_capacity
+--echo #
+
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET opt_index_format_spc_enabled = 1;
+ALTER TABLE t1 ADD INDEX c(c);
+
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+
+INSERT INTO t1 (c) VALUES (REPEAT('a', 120));         # First record, page has 1 record
+INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 119), 'b')); # Second record, page has 2 records
+INSERT INTO t1 (c) VALUES (REPEAT('x', 120));         # Third record triggers encode (n_recs=2 >= 2)
+INSERT INTO t1 (c) VALUES (REPEAT('y', 120));         # Fourth record, should succeed
+
+SELECT COUNT(*) FROM t1;
+
+# Cleanup
+SET SESSION debug = '-d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 0;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Case 2: Test capacity boundary with safety margin added back (should succeed)
+--echo #
+
+CREATE TABLE t2 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET opt_index_format_spc_enabled = 1;
+
+# Set pd_capacity to calculated value + 500 (removing the hardcoded safety margin)
+SET SESSION debug = '+d,set_pd_capacity_specified';
+SET GLOBAL innodb_dbug_pd_capacity = 15482 + 500;
+
+ALTER TABLE t2 ADD INDEX c(c);
+
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+
+INSERT INTO t2 (c) VALUES (REPEAT('a', 120));         # First record, page has 1 record
+INSERT INTO t2 (c) VALUES (CONCAT(REPEAT('a', 119), 'b')); # Second record, page has 2 records
+INSERT INTO t2 (c) VALUES (REPEAT('x', 120));         # Third record triggers encode (n_recs=2 >= 2)
+INSERT INTO t2 (c) VALUES (REPEAT('y', 120));         # Fourth record, should succeed with safety margin
+
+SELECT COUNT(*) FROM t2;
+
+# Cleanup
+SET SESSION debug = '-d,page_encoder_fill_pd_capacity';
+SET SESSION debug = '-d,set_pd_capacity_specified';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 0;
+
+DROP TABLE t2;
+
+--echo #
+--echo # Case 3: Test capacity overflow (should crash with assertion failure)
+--echo #
+
+--source include/expect_crash.inc
+
+CREATE TABLE t3 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET opt_index_format_spc_enabled = 1;
+
+# Set pd_capacity to calculated value + 501 (exceeding the safety margin by 1)
+SET SESSION debug = '+d,set_pd_capacity_specified';
+SET GLOBAL innodb_dbug_pd_capacity = 15482 + 501;
+
+# Save the crash pd_capacity value for restart
+--let $crash_pd_capacity = `SELECT @@GLOBAL.innodb_dbug_pd_capacity`
+
+ALTER TABLE t3 ADD INDEX c(c);
+
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+
+INSERT INTO t3 (c) VALUES (REPEAT('a', 120));         # First record, page has 1 record
+INSERT INTO t3 (c) VALUES (CONCAT(REPEAT('a', 119), 'b')); # Second record, page has 2 records
+INSERT INTO t3 (c) VALUES (REPEAT('x', 120));         # Third rocord triggers encode (n_recs=2 >= 2)
+--source include/expect_crash.inc
+--error CR_SERVER_LOST
+INSERT INTO t3 (c) VALUES (REPEAT('y', 120));         # Fourth record should crash due to capacity overflow
+
+--let $restart_parameters = restart: --debug=+d,set_pd_capacity_specified --debug=+d,page_encoder_fill_pd_capacity --innodb_dbug_pd_capacity=$crash_pd_capacity
+--source include/start_mysqld.inc
+
+SET GLOBAL debug='-d,set_pd_capacity_specified';
+SET GLOBAL DEBUG='-d,page_encoder_fill_pd_capacity';
+DROP TABLE t3;

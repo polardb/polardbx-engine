@@ -57,6 +57,14 @@ SET GLOBAL polarx_slow_query_block_exec_timeout = 5;
 SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 60;
 SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 2;
 
+# Under ASAN, queries run 3-5x slower; increase exec_timeout to avoid
+# killing normal queries that happen to exceed 5s wall-clock time.
+if ($ASAN_OPTIONS) {
+  SET GLOBAL polarx_slow_query_block_exec_timeout = 60;
+  SET GLOBAL polarx_slow_query_block_cpu_percent_threshold = 10;
+  SET GLOBAL polarx_slow_query_block_exec_timeout_for_cpu_exceed = 10;
+}
+
 
 --echo # Test 1: IO密集型查询 - 大表JOIN + 文件排序
 SELECT 

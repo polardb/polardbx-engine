@@ -1,0 +1,221 @@
+--echo #
+--echo # Test case for column encryption in xcluster
+--echo #
+
+--source include/have_binlog_format_row.inc
+
+--echo #
+--echo # Test there is no binlog for udf creation during startup.
+--echo #
+--let $master_binlog= query_get_value(SHOW MASTER STATUS, File, 1)
+--let $MYSQLD_DATADIR= `select @@datadir`
+--let $mysqlbinlog_output= $MYSQLTEST_VARDIR/tmp/mysqlbinlog_output
+--let $mysqlbinlog_parameters= --base64-output=decode-rows -v -v $MYSQLD_DATADIR/$master_binlog
+--let $mysqlbinlog_pipe= > $mysqlbinlog_output
+--source include/mysqlbinlog.inc
+
+--let $assert_file = $mysqlbinlog_output
+--let $assert_text = CREATE FUNCTION encdb_rule_op RETURNS STRING SONAME
+--let $assert_count = 0
+--let $assert_select = FUNCTION
+--source include/assert_grep.inc
+
+create user aurora@`%` identified by '123456';
+grant all privileges on *.* to aurora@`%` with grant option;
+create user noAccess@`%` identified by '123456';
+grant all privileges on test.* to aurora@`%` with grant option;
+grant all privileges on mysql.cipher_text to noAccess@`%` with grant option;
+flush privileges;
+
+--echo # Connect 3 server. must have test database
+--connect (leader,127.0.0.1,aurora,123456,test,$MYPORT_1)
+--connect (leader_no_access,127.0.0.1,noAccess,123456,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,aurora,123456,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,aurora,123456,test,$MYPORT_3)
+
+# Create UDFs for test.
+--connection leader
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_reload_rules returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+
+use test;
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+echo #Turn off ONLY_FULL_GROUP_BY mode in order to test aggregation functions.;
+set sql_mode = "";
+
+create table t1 (c_int_null int,
+                 c_tinyint tinyint, c_smallint smallint,
+                 c_mediumint mediumint, c_int int, c_bigint bigint,
+                 c_float float(10), c_double double, c_decimal decimal(10,3),
+                 c_bit bit(64),
+                 c_year year(4), c_date date, c_time time(3),
+                 c_datetime datetime(6), c_timestamp timestamp,
+                 c_char char(10) charset latin1,
+                 c_varchar varchar(100) charset utf8mb4,
+                 c_binary binary(10), c_varbinary varbinary(100),
+                 c_text text, c_blob blob,
+                 c_enum enum('one', 'two', 'three'),
+                 c_set set('red', 'blue', 'yellow'), c_json json);
+
+insert into t1 set
+  c_tinyint = -1, c_smallint = 10000, c_mediumint = 50000, c_int = 1000000,
+  c_bigint = 100000000000,
+  c_float = 1.1111, c_double = 1000.00001, c_decimal = 1.234,
+  c_bit = b'1000001',
+  c_year = 2023, c_date = "2023-10-1", c_time = "15:24:25.123",
+  c_datetime = "2023-10-1 15:24:25.123456",
+  c_timestamp = "2023-10-1 15:24:25.123456",
+  c_char = "0123456789", c_varchar = repeat("a", 100),
+  c_binary = "0123456789", c_varbinary = repeat("A", 20),
+  c_text = repeat("A", 300), c_blob = repeat("A", 1000),
+  c_enum = 'two', c_set = 'red,blue',
+  c_json = '{"key1": "value1", "key2": "value2"}';
+
+create table mysql.cipher_text(
+               c0 text, c1 text, c2 text, c3 text,
+               c4 text, c5 text, c6 text, c7 text,
+               c8 text, c9 text, c10 text, c11 text,
+               c12 text, c13 text, c14 text, c15 text,
+               c16 text, c17 text, c18 text, c19 text,
+               c20 text, c21 text, c22 text, c23 text);
+
+
+select encdb_rule_op('add', '{"name": "rule1","enabled": true,"meta": {"databases": ["test"],"tables": ["test"],"columns": ["a","b"]}}');
+select encdb_rule_op('grant', '{"restrictedAccess":["root","aurora"]}');
+--source suite/xcluster/t/check_encdb_rule.inc
+
+--echo #
+--echo # Test invalid param for rule deletion.;
+--echo #
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('delete', 'rule1');
+select encdb_rule_export();
+--source suite/xcluster/t/check_encdb_rule.inc
+
+
+--echo #
+--echo # Test correct rule deletion.;
+--echo #
+select encdb_rule_op('delete', '"rule1"');
+--source suite/xcluster/t/check_encdb_rule.inc
+
+
+--echo #
+--echo # Test invalid param for user auth grant.;
+--echo #
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('grant', '[{"user":"root", "access":"noneAccess"}, {"user":"aurora", "access":"noneAccess"}]');
+select encdb_userauth_export();
+--source suite/xcluster/t/check_encdb_rule.inc
+
+
+--echo #
+--echo # Test successful user auth grant.;
+--echo #
+select encdb_rule_op('grant', '[{"username":"root", "access":"noneAccess"}, {"username":"aurora", "access":"noneAccess"}]');
+--source suite/xcluster/t/check_encdb_rule.inc
+
+
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+                                                        '00112233445566778899aabbccddeeff')));
+select encdb_rule_export();
+select encdb_userauth_export();
+select encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}');
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+select encdb_userauth_export();
+--source suite/xcluster/t/check_encdb_rule.inc
+
+--echo #
+--echo # Test user without privileges to tables will fail to execute encdb_rule_op UDF;
+--echo #
+connection leader_no_access;
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('grant','{"restrictedAccess": ["noAccess"]}');
+--replace_regex /INSERT INTO mysql\.encdb_sensitive_rules.*$/<rule SQL>" with error code 1142"/
+--error ER_ENCDB_UDF_ERROR
+select encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+select encdb_rule_export();
+select encdb_userauth_export();
+--source suite/xcluster/t/check_encdb_rule.inc
+
+
+--echo #
+--echo # Test effectiveness of plugin encryption rules.
+--echo #
+# As we have already test full effectiveness in suite/column_encryption/t/encdb.test,
+# we just test if the rule and user auth are exported correctly.
+connection conn2;
+let $select_stmt = select * from t1;
+let $diff_file_prev=$MYSQL_TMP_DIR/encdb_unencrypted_data.txt;
+let $diff_file_after=$MYSQL_TMP_DIR/encdb_original_data.txt;
+let $default_decrypt_sql=select encdb_decrypt(c0, 'aurora'), encdb_decrypt(c1, 'aurora'),
+                                encdb_decrypt(c2, 'aurora'), encdb_decrypt(c3, 'aurora'),
+                                encdb_decrypt(c4, 'aurora'), encdb_decrypt(c5, 'aurora'),
+                                encdb_decrypt(c6, 'aurora'), encdb_decrypt(c7, 'aurora'),
+                                encdb_decrypt(c8, 'aurora'), encdb_decrypt(c9, 'aurora'),
+                                encdb_decrypt(c10, 'aurora'), encdb_decrypt(c11, 'aurora'),
+                                encdb_decrypt(c12, 'aurora'), encdb_decrypt(c13, 'aurora'),
+                                encdb_decrypt(c14, 'aurora'), encdb_decrypt(c15, 'aurora'),
+                                encdb_decrypt(c16, 'aurora'), encdb_decrypt(c17, 'aurora'),
+                                encdb_decrypt(c18, 'aurora'), encdb_decrypt(c19, 'aurora'),
+                                encdb_decrypt(c20, 'aurora'), encdb_decrypt(c21, 'aurora'),
+                                encdb_decrypt(c22, 'aurora'), encdb_decrypt(c23, 'aurora')
+                                from mysql.cipher_text;
+set force_revise = ON;
+set sql_log_bin = 0;
+--exec $MYSQL --skip-column-names -uaurora -p123456 -P$MYPORT_2 -e "$select_stmt" test > $MYSQL_TMP_DIR/encrypt_data.txt;
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+eval load data local infile "$MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+--exec $MYSQL --skip-column-names -uaurora -p123456 -P$MYPORT_2 -e "$default_decrypt_sql" test > $diff_file_prev;
+--exec $MYSQL --skip-column-names -uroot -P$MYPORT_2 -e "$select_stmt_orgdata" test > $diff_file_after;
+diff_files $diff_file_prev $diff_file_after;
+delete from mysql.cipher_text;
+remove_file $diff_file_prev;
+remove_file $diff_file_after;
+remove_file $MYSQL_TMP_DIR/encrypt_data.txt;
+set sql_log_bin = 1;
+set force_revise = OFF;
+
+--echo #
+--echo # Clean up
+--echo #
+connection leader;
+drop database test;
+drop table mysql.cipher_text;
+create database test;
+drop function encdb_decrypt;
+drop function encdb_reload_rules;
+drop function encdb_generate_mek_request;
+drop user aurora@`%`;
+drop user noAccess@`%`;
+--remove_file $mysqlbinlog_output
+--source include/wait_follower_catchup.inc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,78 @@
+CREATE DATABASE vidx_ddl_direct_build;
+USE vidx_ddl_direct_build;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t1(v) VALUES (NULL), (NULL);
+
+############################################
+# Phase A: ADD VECTOR INDEX — direct build #
+############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT A direct path bypassed per-row construction: PASS
+VERDICT A live==non-null-base (NULLs skipped): PASS
+# ANN self-probes right after the DDL, no flush needed
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[25,26,27,28,29]')) LIMIT 1;
+id
+25
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[50,51,52,53,54]')) LIMIT 1;
+id
+50
+
+############################################
+# Phase B: OPTIMIZE TABLE — direct rebuild #
+############################################
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+vidx_ddl_direct_build.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+vidx_ddl_direct_build.t1	optimize	status	OK
+VERDICT B direct rebuild bypassed per-row construction: PASS
+VERDICT B live==non-null-base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[10,11,12,13,14]')) LIMIT 1;
+id
+10
+
+############################################
+# Phase C: post-DDL synchronous DML still works #
+############################################
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[99,99,99,99,99]'));
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[99,99,99,99,99]')) LIMIT 1;
+id
+53
+
+############################################
+# Phase D: empty and all-NULL boundaries   #
+############################################
+CREATE TABLE t2 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+ALTER TABLE t2 ADD VECTOR INDEX vi2(v);
+SELECT COUNT(*) AS empty_rows FROM t2 FORCE INDEX(vi2);
+empty_rows
+0
+CREATE TABLE t3 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t3 VALUES (1, NULL), (2, NULL), (3, NULL);
+ALTER TABLE t3 ADD VECTOR INDEX vi3(v);
+SELECT COUNT(v) AS indexed_vectors FROM t3 FORCE INDEX(vi3);
+indexed_vectors
+0
+# A non-vector COPY ALTER on an indexed table rebuilds synchronously.
+ALTER TABLE t1 ADD COLUMN c INT DEFAULT 0, ALGORITHM=COPY;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+DROP TABLE t1, t2, t3;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_direct_build;

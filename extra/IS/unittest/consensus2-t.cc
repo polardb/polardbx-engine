@@ -39,7 +39,7 @@ TEST(consensus, paxos_leader_state_order) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -80,7 +80,7 @@ TEST(consensus, paxos_group_send) {
   // strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir1");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);

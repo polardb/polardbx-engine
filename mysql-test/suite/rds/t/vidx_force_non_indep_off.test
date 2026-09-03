@@ -1,0 +1,71 @@
+##############################################################
+# vidx_force_non_indep = OFF (production default).            #
+#                                                              #
+# Layered semantics of need_independent_trx (see               #
+# sql/vidx/vidx_aux_dml.cc):                                   #
+#                                                              #
+#   force_non_indep = OFF (this file):                         #
+#     - DML  → indep path  (Vidx_indep_dml_commit grows)       #
+#     - DDL  → legacy non-indep path (counter flat)            #
+#                                                              #
+#   force_non_indep = ON  (vidx_force_non_indep_on.test):      #
+#     - DML  → legacy non-indep path (counter flat)            #
+#     - DDL  → legacy non-indep path (counter flat)            #
+#                                                              #
+# The variable is PLUGIN_VAR_READONLY (see vidx_index.cc       #
+# MYSQL_SYSVAR_BOOL block).  Mid-run SET GLOBAL would fail —   #
+# the two states live in two separate test files so each       #
+# starts mysqld with the right config.                         #
+##############################################################
+
+SET GLOBAL vidx_disabled = OFF;
+
+# Variable type + default verification — must be OFF and READ-ONLY.
+SHOW GLOBAL VARIABLES LIKE 'vidx_force_non_indep';
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL vidx_force_non_indep = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+--echo
+--echo ##############################################
+--echo # OFF: DML must use the indep path           #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[5,5,5]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[5,5,6]') WHERE id = 10;
+DELETE FROM t1 WHERE id = 1;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 > @ic0 AS dml_indep_when_off;
+
+--echo
+--echo ##############################################
+--echo # OFF: ANN search and base table consistent  #
+--echo ##############################################
+
+SELECT COUNT(*) AS rows_visible FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[6,6,6]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

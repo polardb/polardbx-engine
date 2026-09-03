@@ -1,0 +1,880 @@
+--echo #
+--echo # Test for PolarDB-X readonly feature via SECONDARY_ENGINE_ATTRIBUTE
+--echo #
+
+--echo #
+--echo # Test 1: Create table with polarx.readonly = false (default behavior)
+--echo #
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t1 VALUES (1, 'test data');
+UPDATE t1 SET data = 'updated data' WHERE id = 1;
+DELETE FROM t1 WHERE id = 1;
+SELECT * FROM t1;
+DROP TABLE t1;
+
+--echo #
+--echo # Test 2: Create table with polarx.readonly = true (DML should fail)
+--echo #
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo # Test INSERT should fail
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t2 VALUES (1, 'test data');
+
+--echo # Test UPDATE should fail
+--error ER_TABLE_READONLY_ERROR
+UPDATE t2 SET data = 'updated data' WHERE id = 1;
+
+--echo # Test DELETE should fail
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM t2 WHERE id = 1;
+
+--echo # Test SELECT should work
+SELECT * FROM t2;
+
+--echo # Test DDL operations should work
+ALTER TABLE t2 ADD COLUMN new_col VARCHAR(50);
+SHOW CREATE TABLE t2;
+
+DROP TABLE t2;
+
+--echo #
+--echo # Test 3: Modify SECONDARY_ENGINE_ATTRIBUTE from readonly=false to readonly=true
+--echo #
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Should work initially
+INSERT INTO t3 VALUES (1, 'test data');
+SELECT * FROM t3;
+
+--echo Modify to readonly
+ALTER TABLE t3 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Now DML should fail
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t3 VALUES (2, 'test data 2');
+
+--error ER_TABLE_READONLY_ERROR
+UPDATE t3 SET data = 'updated data' WHERE id = 1;
+
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM t3 WHERE id = 1;
+
+--echo But SELECT and DDL should still work
+SELECT * FROM t3;
+ALTER TABLE t3 ADD COLUMN new_col2 VARCHAR(50);
+
+DROP TABLE t3;
+
+--echo #
+--echo # Test 4: Modify SECONDARY_ENGINE_ATTRIBUTE from readonly=true to readonly=false
+--echo #
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo DML should fail initially
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t4 VALUES (1, 'test data');
+
+--echo Modify to writable
+ALTER TABLE t4 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Now DML should work
+INSERT INTO t4 VALUES (1, 'test data');
+UPDATE t4 SET data = 'updated data' WHERE id = 1;
+DELETE FROM t4 WHERE id = 1;
+SELECT * FROM t4;
+
+DROP TABLE t4;
+
+--echo #
+--echo # Test 5: Test with different data types
+--echo #
+CREATE TABLE t5 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  age INT,
+  salary DECIMAL(10,2),
+  created_at TIMESTAMP
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo DML should fail
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t5 VALUES (1, 'John Doe', 30, 50000.00, NOW());
+
+--echo DDL should work
+ALTER TABLE t5 ADD INDEX idx_name (name);
+SHOW CREATE TABLE t5;
+
+--echo SELECT should work
+SELECT * FROM t5;
+
+DROP TABLE t5;
+
+--echo #
+--echo # Test 6: Test edge cases with malformed JSON
+--echo #
+CREATE TABLE t6 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true, "other_key": "value"}';
+
+--echo Should still be readonly
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t6 VALUES (1, 'test data');
+
+DROP TABLE t6;
+
+CREATE TABLE t7 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": "invalid"}';
+
+--echo Should not be readonly (invalid value should be ignored)
+INSERT INTO t7 VALUES (1, 'test data');
+SELECT * FROM t7;
+DROP TABLE t7;
+
+--echo #
+--echo # Test 7: Test with transactions
+--echo #
+CREATE TABLE t8 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Start transaction
+BEGIN;
+
+--echo DML should fail even in transaction
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t8 VALUES (1, 'test data');
+
+--echo SELECT should work
+SELECT * FROM t8;
+
+COMMIT;
+
+DROP TABLE t8;
+
+--echo #
+--echo # Test 8: Test with multi-table operations
+--echo #
+CREATE TABLE t9_readonly (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+CREATE TABLE t9_writable (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t9_writable VALUES (1, 'writable data');
+
+--echo INSERT should fail if table is readonly
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t9_readonly VALUES (1, 'readonly data');
+
+--echo Multi-table UPDATE should fail if any table is readonly
+--error ER_TABLE_READONLY_ERROR
+UPDATE t9_readonly r, t9_writable w SET r.data = 'updated', w.data = 'also updated' WHERE r.id = 1 AND w.id = 1;
+
+--echo Multi-table DELETE should fail if any table is readonly
+--error ER_TABLE_READONLY_ERROR
+DELETE r, w FROM t9_readonly r, t9_writable w WHERE r.id = 1 AND w.id = 1;
+
+--echo But SELECT from both tables should work
+SELECT * FROM t9_readonly r, t9_writable w WHERE r.id = 1 AND w.id = 1;
+
+DROP TABLE t9_readonly, t9_writable;
+
+--echo #
+--echo # Test 9: Test with REPLACE and INSERT IGNORE
+--echo #
+CREATE TABLE t10 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo REPLACE should fail
+--error ER_TABLE_READONLY_ERROR
+REPLACE INTO t10 VALUES (1, 'test data');
+
+--echo INSERT IGNORE should fail
+--error ER_TABLE_READONLY_ERROR
+INSERT IGNORE INTO t10 VALUES (1, 'test data');
+
+DROP TABLE t10;
+
+--echo #
+--echo # Test 10: Test with LOAD DATA
+--echo #
+CREATE TABLE t11 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Create a sample data file
+--write_file $MYSQL_TMP_DIR/sample_data.csv
+1,test_data_1
+2,test_data_2
+3,test_data_3
+EOF
+
+--echo LOAD DATA should fail
+--error ER_TABLE_READONLY_ERROR
+LOAD DATA INFILE '$MYSQL_TMP_DIR/sample_data.csv' INTO TABLE t11 FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n';
+
+DROP TABLE t11;
+--remove_file $MYSQL_TMP_DIR/sample_data.csv
+
+--echo #
+--echo # Test 11: Additional ALTER TABLE SECONDARY_ENGINE_ATTRIBUTE scenarios
+--echo #
+CREATE TABLE t12 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+);
+
+--echo Initially should be writable
+INSERT INTO t12 VALUES (1, 'initial data');
+SELECT * FROM t12;
+
+--echo Alter to make it readonly
+ALTER TABLE t12 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Show the table structure to confirm the change
+SHOW CREATE TABLE t12;
+
+--echo DML should now fail
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t12 VALUES (2, 'new data');
+
+--error ER_TABLE_READONLY_ERROR
+UPDATE t12 SET data = 'updated data' WHERE id = 1;
+
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM t12 WHERE id = 1;
+
+--echo SELECT should still work
+SELECT * FROM t12;
+
+--echo DDL should still work
+ALTER TABLE t12 ADD COLUMN new_col VARCHAR(50);
+
+--echo Alter back to make it writable
+ALTER TABLE t12 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Show the table structure to confirm the change
+SHOW CREATE TABLE t12;
+
+--echo DML should now work again
+INSERT INTO t12 VALUES (2, 'new data after writable', 'new col data');
+UPDATE t12 SET data = 'updated data after writable' WHERE id = 1;
+SELECT * FROM t12;
+
+DROP TABLE t12;
+
+--echo #
+--echo # Test 12: Test ALTER TABLE with complex JSON attributes
+--echo #
+CREATE TABLE t13 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+);
+
+--echo Add multiple attributes including readonly
+ALTER TABLE t13 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true, "other_attr": "value"}';
+
+--echo DML should fail
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t13 VALUES (1, 'test data');
+
+--echo SELECT should work
+SELECT * FROM t13;
+
+--echo Alter to remove readonly attribute (set to false)
+ALTER TABLE t13 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false, "other_attr": "value"}';
+
+--echo DML should now work
+INSERT INTO t13 VALUES (1, 'test data after alter');
+SELECT * FROM t13;
+
+DROP TABLE t13;
+
+--echo #
+--echo # Test 13: Test consecutive ALTER TABLE operations
+--echo #
+CREATE TABLE t14 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+);
+CREATE TABLE t15 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+);
+
+--echo Multiple consecutive alters
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo DML should fail as the last alter set it to readonly
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t14 VALUES (1, 'test data');
+
+--echo SELECT should work
+SELECT * FROM t14;
+
+--echo One more alter to make it writable
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo DML should now work
+INSERT INTO t14 VALUES (1, 'test data after final alter');
+SELECT * FROM t14;
+ALTER TABLE t14 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+INSERT INTO t15 SELECT * FROM t14;
+
+--echo do copy readonly attribute
+CREATE TABLE t16 LIKE t14;
+SHOW CREATE TABLE t16;
+
+--echo DML should fail as the last alter set it to readonly
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t16 VALUES (1, 'test data');
+
+--echo do not copy readonly attribute
+CREATE TABLE t17 as select * from t14;
+INSERT INTO t17 VALUES (10, 'test data');
+SHOW CREATE TABLE t17;
+
+DROP TABLE t14;
+DROP TABLE t15;
+DROP TABLE t16;
+DROP TABLE t17;
+
+--echo #
+--echo # Test 14: Test with Views - Basic View Creation and DML Operations
+--echo #
+CREATE TABLE t18_base (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t18_base VALUES (1, 'base data 1'), (2, 'base data 2');
+
+--echo Create a simple view
+CREATE VIEW v1_simple AS SELECT * FROM t18_base;
+
+--echo Test SELECT on view (should work)
+SELECT * FROM v1_simple;
+
+--echo Test INSERT on simple view (should work as base table is not readonly)
+INSERT INTO v1_simple VALUES (3, 'view data 3');
+
+--echo Test UPDATE on simple view (should work as base table is not readonly)
+UPDATE v1_simple SET data = 'updated view data' WHERE id = 3;
+
+--echo Test DELETE on simple view (should work as base table is not readonly)
+DELETE FROM v1_simple WHERE id = 3;
+
+--echo Make base table readonly
+ALTER TABLE t18_base SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on view (should still work)
+SELECT * FROM v1_simple;
+
+--echo Test INSERT on simple view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO v1_simple VALUES (4, 'view data 4');
+
+--echo Test UPDATE on simple view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+UPDATE v1_simple SET data = 'updated view data 4' WHERE id = 1;
+
+--echo Test DELETE on simple view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM v1_simple WHERE id = 1;
+
+DROP VIEW v1_simple;
+DROP TABLE t18_base;
+
+--echo #
+--echo # Test 15: Test with Views - Complex Views with Joins
+--echo #
+CREATE TABLE t19_base1 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+CREATE TABLE t19_base2 (
+  id INT PRIMARY KEY,
+  t19_base1_id INT,
+  description VARCHAR(100),
+  FOREIGN KEY (t19_base1_id) REFERENCES t19_base1(id)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t19_base1 VALUES (1, 'Product A'), (2, 'Product B');
+INSERT INTO t19_base2 VALUES (1, 1, 'Description for Product A'), (2, 2, 'Description for Product B');
+
+--echo Create a complex view with join
+CREATE VIEW v2_complex AS
+SELECT b1.id, b1.name, b2.description
+FROM t19_base1 b1
+JOIN t19_base2 b2 ON b1.id = b2.t19_base1_id;
+
+--echo Test SELECT on complex view (should work)
+SELECT * FROM v2_complex;
+
+--echo Make one base table readonly
+ALTER TABLE t19_base1 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on complex view (should still work)
+SELECT * FROM v2_complex;
+
+--echo Test INSERT on complex view (should fail with ER_VIEW_MULTIUPDATE as it's a join view)
+--error ER_VIEW_MULTIUPDATE
+INSERT INTO v2_complex (id, name, description) VALUES (3, 'Product C', 'Description for Product C');
+
+--echo Test UPDATE on complex view (should fail with ER_TABLE_READONLY_ERROR)
+--error ER_TABLE_READONLY_ERROR
+UPDATE v2_complex SET name = 'Updated Product A' WHERE id = 3;
+
+--echo Test DELETE on complex view (should fail with ER_VIEW_DELETE_MERGE_VIEW as it's a join view)
+--error ER_VIEW_DELETE_MERGE_VIEW
+DELETE FROM v2_complex WHERE id = 1;
+
+--echo Test direct INSERT on base tables (should fail for readonly table)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t19_base1 (id, name) VALUES (3, 'Product C');
+
+--echo Test direct INSERT on base tables (should work for writable table)
+INSERT INTO t19_base2 (id, t19_base1_id, description) VALUES (3, 2, 'Description for Product C');
+
+DROP VIEW v2_complex;
+DROP TABLE t19_base2;
+DROP TABLE t19_base1;
+
+--echo #
+--echo # Test 16: Test with Views - Updatable Views with Conditions
+--echo #
+CREATE TABLE t20_products (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  price DECIMAL(10,2),
+  category VARCHAR(30)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t20_products VALUES
+(1, 'Laptop', 1200.00, 'Electronics'),
+(2, 'Mouse', 25.00, 'Electronics'),
+(3, 'Book', 15.00, 'Education');
+
+--echo Create an updatable view with condition
+CREATE VIEW v3_electronics AS
+SELECT id, name, price
+FROM t20_products
+WHERE category = 'Electronics';
+
+--echo Test SELECT on conditional view (should work)
+SELECT * FROM v3_electronics;
+
+--echo Make base table readonly
+ALTER TABLE t20_products SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on conditional view (should still work)
+SELECT * FROM v3_electronics;
+
+--echo Test INSERT on conditional view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO v3_electronics (id, name, price) VALUES (4, 'Keyboard', 50.00);
+
+--echo Test UPDATE on conditional view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+UPDATE v3_electronics SET price = 30.00 WHERE id = 2;
+
+--echo Test DELETE on conditional view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM v3_electronics WHERE id = 2;
+
+DROP VIEW v3_electronics;
+DROP TABLE t20_products;
+
+--echo #
+--echo # Test 17: Test with Views - CREATE VIEW AS SELECT from readonly table
+--echo #
+CREATE TABLE t21_source (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t21_source VALUES (1, 'source data 1'), (2, 'source data 2');
+
+--echo Try to create view as select from readonly table (should work for CREATE VIEW)
+CREATE VIEW v4_from_readonly AS SELECT * FROM t21_source;
+
+--echo Test SELECT on view created from readonly table (should work)
+SELECT * FROM v4_from_readonly;
+
+--echo Test attempting to insert into view created from readonly table (should fail)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO v4_from_readonly VALUES (3, 'new data');
+
+DROP VIEW v4_from_readonly;
+DROP TABLE t21_source;
+
+--echo #
+--echo # Test 18: Test with Views - Nested Views
+--echo #
+CREATE TABLE t22_base (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t22_base VALUES (1, 'base data'), (2, 'more base data');
+
+--echo Create base view
+CREATE VIEW v5_base AS SELECT * FROM t22_base;
+
+--echo Create nested view
+CREATE VIEW v6_nested AS SELECT * FROM v5_base WHERE id > 1;
+
+--echo Test SELECT on nested view (should work)
+SELECT * FROM v6_nested;
+
+--echo Make base table readonly
+ALTER TABLE t22_base SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on nested view (should still work)
+SELECT * FROM v6_nested;
+
+--echo Test INSERT on nested view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO v6_nested VALUES (3, 'nested view data');
+
+--echo Test UPDATE on nested view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+UPDATE v6_nested SET data = 'updated nested data' WHERE id = 2;
+
+--echo Test DELETE on nested view (should fail as base table is readonly)
+--error ER_TABLE_READONLY_ERROR
+DELETE FROM v6_nested WHERE id = 2;
+
+DROP VIEW v6_nested;
+DROP VIEW v5_base;
+DROP TABLE t22_base;
+
+--echo #
+--echo # Test 19: Test with Views - Views with Aggregation (Non-updatable)
+--echo #
+CREATE TABLE t23_sales (
+  id INT PRIMARY KEY,
+  product_id INT,
+  amount DECIMAL(10,2),
+  sale_date DATE
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t23_sales VALUES
+(1, 1, 100.00, '2023-01-01'),
+(2, 1, 150.00, '2023-01-02'),
+(3, 2, 200.00, '2023-01-03');
+
+--echo Create view with aggregation (non-updatable)
+CREATE VIEW v7_summary AS
+SELECT product_id, SUM(amount) as total_sales, COUNT(*) as num_sales
+FROM t23_sales
+GROUP BY product_id;
+
+--echo Test SELECT on aggregated view (should work)
+SELECT * FROM v7_summary;
+
+--echo Make base table readonly
+ALTER TABLE t23_sales SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on aggregated view (should still work)
+SELECT * FROM v7_summary;
+
+--echo Test attempting INSERT on aggregated view (should fail - not updatable)
+--error ER_NON_INSERTABLE_TABLE
+INSERT INTO v7_summary (product_id, total_sales, num_sales) VALUES (3, 300.00, 1);
+
+DROP VIEW v7_summary;
+DROP TABLE t23_sales;
+
+--echo #
+--echo # Test 20: Test with Views - UNION Views
+--echo #
+CREATE TABLE t24_customers (
+  id INT PRIMARY KEY,
+  name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+CREATE TABLE t25_suppliers (
+  id INT PRIMARY KEY,
+  name VARCHAR(50)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+INSERT INTO t24_customers VALUES (1, 'Customer A'), (2, 'Customer B');
+INSERT INTO t25_suppliers VALUES (1, 'Supplier X'), (2, 'Supplier Y');
+
+--echo Create UNION view
+CREATE VIEW v8_parties AS
+SELECT id, name, 'customer' as party_type FROM t24_customers
+UNION
+SELECT id, name, 'supplier' as party_type FROM t25_suppliers;
+
+--echo Test SELECT on UNION view (should work)
+SELECT * FROM v8_parties ORDER BY id, party_type;
+
+--echo Make one base table readonly
+ALTER TABLE t24_customers SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test SELECT on UNION view (should still work)
+SELECT * FROM v8_parties ORDER BY id, party_type;
+
+--echo Test attempting INSERT on UNION view (should fail - not updatable)
+--error ER_NON_INSERTABLE_TABLE
+INSERT INTO v8_parties (id, name, party_type) VALUES (3, 'Party Z', 'customer');
+
+DROP VIEW v8_parties;
+DROP TABLE t25_suppliers;
+DROP TABLE t24_customers;
+
+--echo #
+--echo # Test 21: Test with Stored Procedures - Basic Procedure with DML Operations
+--echo #
+CREATE TABLE t26_procedure_test (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Insert initial data
+INSERT INTO t26_procedure_test VALUES (1, 'initial data');
+
+--echo Create a stored procedure that performs DML operations
+--delimiter |
+CREATE PROCEDURE proc_insert_data(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+  INSERT INTO t26_procedure_test VALUES (p_id, p_data);
+END |
+--delimiter ;
+
+--echo Test procedure execution (should work as table is not readonly)
+CALL proc_insert_data(2, 'data from procedure');
+
+--echo Verify data was inserted
+SELECT * FROM t26_procedure_test;
+
+--echo Make table readonly
+ALTER TABLE t26_procedure_test SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test procedure execution (should fail as table is now readonly)
+--error ER_TABLE_READONLY_ERROR
+CALL proc_insert_data(3, 'data from procedure readonly');
+
+--echo Verify no new data was inserted
+SELECT * FROM t26_procedure_test;
+
+DROP PROCEDURE proc_insert_data;
+DROP TABLE t26_procedure_test;
+
+--echo #
+--echo # Test 22: Test with Stored Procedures - Procedure with Multiple DML Operations
+--echo #
+CREATE TABLE t27_proc_multi1 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+CREATE TABLE t27_proc_multi2 (
+  id INT PRIMARY KEY,
+  description VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Insert initial data
+INSERT INTO t27_proc_multi1 VALUES (1, 'multi table data 1'), (2, 'multi table data 2');
+INSERT INTO t27_proc_multi2 VALUES (1, 'description 1'), (2, 'description 2');
+
+--echo Create a stored procedure that performs operations on multiple tables
+--delimiter |
+CREATE PROCEDURE proc_multi_table_ops(IN p_id INT, IN p_data VARCHAR(100), IN p_desc VARCHAR(100))
+BEGIN
+  INSERT INTO t27_proc_multi1 VALUES (p_id, p_data);
+  INSERT INTO t27_proc_multi2 VALUES (p_id, p_desc);
+  UPDATE t27_proc_multi1 SET data = CONCAT(data, ' - updated') WHERE id = 1;
+  DELETE FROM t27_proc_multi2 WHERE id = 2;
+END |
+--delimiter ;
+
+--echo Test procedure execution (should work as tables are not readonly)
+CALL proc_multi_table_ops(3, 'new data', 'new description');
+
+--echo Verify operations were successful
+SELECT * FROM t27_proc_multi1;
+SELECT * FROM t27_proc_multi2;
+
+--echo Make one table readonly
+ALTER TABLE t27_proc_multi1 SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test procedure execution (should fail as one table is now readonly)
+--error ER_TABLE_READONLY_ERROR
+CALL proc_multi_table_ops(4, 'new data readonly', 'new description readonly');
+
+--echo Verify no changes were made due to rollback
+SELECT * FROM t27_proc_multi1;
+SELECT * FROM t27_proc_multi2;
+
+DROP PROCEDURE proc_multi_table_ops;
+DROP TABLE t27_proc_multi2;
+DROP TABLE t27_proc_multi1;
+
+--echo #
+--echo # Test 23: Test with Stored Procedures - Procedure with SELECT Operations Only
+--echo #
+CREATE TABLE t28_proc_select (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Insert initial data (directly, as we're testing procedure SELECTs)
+--error ER_TABLE_READONLY_ERROR
+INSERT INTO t28_proc_select VALUES (1, 'select test data');
+
+--echo Actually insert data by temporarily making it writable
+ALTER TABLE t28_proc_select SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+INSERT INTO t28_proc_select VALUES (1, 'select test data');
+ALTER TABLE t28_proc_select SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Create a stored procedure that only performs SELECT operations
+--delimiter |
+CREATE PROCEDURE proc_select_only()
+BEGIN
+  SELECT * FROM t28_proc_select;
+  SELECT COUNT(*) as total_rows FROM t28_proc_select;
+END |
+--delimiter ;
+
+--echo Test procedure execution (should work as it only does SELECT operations)
+CALL proc_select_only();
+
+DROP PROCEDURE proc_select_only;
+DROP TABLE t28_proc_select;
+
+--echo #
+--echo # Test 24: Test with Stored Procedures - Procedure with Conditional Logic Based on Table State
+--echo #
+CREATE TABLE t29_conditional (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Insert initial data
+INSERT INTO t29_conditional VALUES (1, 'conditional test data');
+
+--echo Create a stored procedure with conditional logic
+--delimiter |
+CREATE PROCEDURE proc_conditional_insert(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+  DECLARE table_readonly INT DEFAULT 0;
+
+  -- Simple procedure that tries to insert data
+  INSERT INTO t29_conditional VALUES (p_id, p_data);
+
+  -- Return success message
+  SELECT CONCAT('Successfully inserted row with id ', p_id) as result;
+END |
+--delimiter ;
+
+--echo Test procedure execution (should work as table is not readonly)
+CALL proc_conditional_insert(2, 'conditional data 2');
+
+--echo Make table readonly
+ALTER TABLE t29_conditional SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test procedure execution (should fail as table is now readonly)
+--error ER_TABLE_READONLY_ERROR
+CALL proc_conditional_insert(3, 'conditional data 3');
+
+--echo Verify data
+SELECT * FROM t29_conditional;
+
+DROP PROCEDURE proc_conditional_insert;
+DROP TABLE t29_conditional;
+
+--echo #
+--echo # Test 25: Test with Stored Procedures - Procedure with Transaction Control
+--echo #
+CREATE TABLE t30_transaction (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+) SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": false}';
+
+--echo Insert initial data
+INSERT INTO t30_transaction VALUES (1, 'transaction test data');
+
+--echo Create a stored procedure that uses transactions
+--delimiter |
+CREATE PROCEDURE proc_with_transaction(IN p_id INT, IN p_data VARCHAR(100))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
+
+  INSERT INTO t30_transaction VALUES (p_id, p_data);
+  UPDATE t30_transaction SET data = CONCAT(data, ' - transaction updated') WHERE id = 1;
+
+  COMMIT;
+
+  SELECT 'Transaction completed successfully' as result;
+END |
+--delimiter ;
+
+--echo Test procedure execution (should work as table is not readonly)
+CALL proc_with_transaction(2, 'transaction data 2');
+
+--echo Verify transaction was successful
+SELECT * FROM t30_transaction;
+
+--echo Make table readonly
+ALTER TABLE t30_transaction SECONDARY_ENGINE_ATTRIBUTE='{"polarx.readonly": true}';
+
+--echo Test procedure execution (should fail as table is now readonly)
+--error ER_TABLE_READONLY_ERROR
+CALL proc_with_transaction(3, 'transaction data 3');
+
+--echo Verify no changes were made
+SELECT * FROM t30_transaction;
+
+DROP PROCEDURE proc_with_transaction;
+DROP TABLE t30_transaction;
+
+create table t31_test(a int) engine=MyISAM;
+insert into t31_test values(1),(2),(3),(4),(5),(6);
+alter table t31_test add column b int;
+drop table t31_test;
+
+create table t32_test(a int);
+insert into t32_test values(1),(2),(3),(4),(5),(6);
+alter table t32_test add column b int, ALGORITHM=COPY;
+drop table t32_test;
+
+CREATE TEMPORARY TABLE t33_test AS SELECT 1 AS f1;
+ALTER TABLE t33_test ADD COLUMN b INT;

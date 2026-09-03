@@ -1,0 +1,14 @@
+#### precondition: performance_schema must be ON and the table non-empty
+# performance_schema: 1
+SELECT COUNT(*) INTO @n FROM performance_schema.innodb_redo_log_files;
+#### a single scan is harmless
+SELECT COUNT(*) > 0 AS single_scan_ok FROM performance_schema.innodb_redo_log_files;
+single_scan_ok
+1
+#### two scan handles inside ONE statement must not share the cursor
+SELECT /*+ NO_BNL(a, b) */ COUNT(*) > 0 AS joined_ok
+FROM performance_schema.innodb_redo_log_files a
+STRAIGHT_JOIN performance_schema.innodb_redo_log_files b
+ON b.file_id >= a.file_id;
+joined_ok
+1

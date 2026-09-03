@@ -28,6 +28,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <memory>
 
 #include "changeset.h"
+#include "sql/komodo0xlog.h"
 
 namespace im {
 
@@ -36,7 +37,7 @@ LEX_CSTRING POLARX_PROC_SCHEMA = {C_STRING_WITH_LEN("polarx")};
 int Changeset::init(const DBTableName &full_table_name) {
   MutexLock lock(&mutex);
 
-  this->stop = false;
+  this->backpressure = false;
   this->imm_empty = true;
   this->full_table_name = full_table_name;
   sql_print_information("init changeset for table %s.%s",
@@ -56,28 +57,6 @@ void Changeset::close() {
 }
 
 /**
- * @brief Clear stats info
- */
-void Changeset::clear() {
-  MutexLock lock(&mutex);
-
-  stats_.insert_count = 0;
-  stats_.delete_count = 0;
-  stats_.update_count = 0;
-}
-
-/**
- * swap of pk map
- */
-void Changeset::swap_pk() {
-  mem_pk_map.swap(tmp_map);
-
-  tmp_memory_size.store(memory_size);
-  memory_size.store(0);
-  primary_key_nums.store(0);
-}
-
-/**
  * session changeset ---> global changeset
  * when trans commit
  * may be called by muti thread
@@ -94,11 +73,9 @@ void Changeset::append_changeset(std::unique_ptr<ChangeSetCache> &cache) {
   for (auto &it : cache->current_pks) {
     auto &change = it.second;
     if (change->get_change_type() == DELETE) {
-      // include memory info
-      pk_map_delete(change, true);
+      pk_map_delete(change);
     } else if (change->get_change_type() == INSERT) {
-      // include memory info
-      pk_map_insert(change, true);
+      pk_map_insert(change);
     } else {
       sql_print_information(
           "changeset commit error, type is not insert nor delete");
@@ -106,9 +83,9 @@ void Changeset::append_changeset(std::unique_ptr<ChangeSetCache> &cache) {
   }
 
   // only normal stats
-  stats_.insert_count += cache->insert_count;
-  stats_.delete_count += cache->delete_count;
-  stats_.update_count += cache->update_count;
+  stats_info.insert_count += cache->insert_count;
+  stats_info.delete_count += cache->delete_count;
+  stats_info.update_count += cache->update_count;
 }
 
 /**
@@ -137,8 +114,9 @@ void flush_imm_table(void *changeset) {
   sql_print_information("changeset flush start, file name: %s, size: %ld, pk nums: %ld",
                         file_name,
                         cs->imm_memory_size.load(std::memory_order_acquire),
-                        cs->imm_primary_key_nums.load(std::memory_order_acquire));
+                        cs->imm_primary_key_num.load(std::memory_order_acquire));
 
+  uint64_t pk_num = 0;
   {
     cs->mutex.Unlock();
 
@@ -149,11 +127,10 @@ void flush_imm_table(void *changeset) {
       return;
     }
 
-    FileHeader file_header{cs->imm_primary_key_nums.load(std::memory_order_acquire)};
+    FileHeader file_header{cs->imm_primary_key_num.load(std::memory_order_acquire)};
     my_write(fd, reinterpret_cast<const uchar *>(&file_header),
              sizeof(file_header), MYF(MY_NABP));
 
-    unsigned int pk_num = 0;
     for (auto &item : cs->imm_pk_map) {
       auto pk = item.first;
       auto change = item.second.get();
@@ -183,13 +160,13 @@ void flush_imm_table(void *changeset) {
   sql_print_information("changeset flush finish, file name: %s, size: %ld, pk nums: %ld",
                         file_name,
                         cs->imm_memory_size.load(std::memory_order_acquire),
-                        cs->imm_primary_key_nums.load(std::memory_order_acquire));
+                        cs->imm_primary_key_num.load(std::memory_order_acquire));
 
-  cs->file_list.emplace_back(file_name, true);
+  cs->file_list.emplace_back(file_name, pk_num);
   cs->imm_empty.store(true);
   // memory info
   cs->imm_memory_size.store(0);
-  cs->imm_primary_key_nums.store(0);
+  cs->imm_primary_key_num.store(0);
 
   // signal wait
   cs->cv.SignalAll();
@@ -216,8 +193,8 @@ void Changeset::memory_check_and_flush() {
     memory_size.store(0);
 
     // swap primary key nums
-    imm_primary_key_nums.store(primary_key_nums);
-    primary_key_nums.store(0);
+    imm_primary_key_num.store(primary_key_num);
+    primary_key_num.store(0);
 
     if (thread_pool) {
       sql_print_information("add background flush task");
@@ -259,9 +236,9 @@ void Changeset::rm_all_changeset_files() {
 
   for (auto &file_name : file_list) {
     /* Remove the changeset file */
-    my_delete(file_name.first, MYF(0));
+    my_delete(file_name.file_name, MYF(0));
     // free file name ptr
-    my_free(const_cast<char *>(file_name.first));
+    my_free(const_cast<char *>(file_name.file_name));
   }
 }
 
@@ -287,15 +264,10 @@ void Changeset::fetch_pk(bool delete_last_cs,
     get_result_list(tmp_map, res, table);
   } else if (!file_list.empty()) {
     auto &item = file_list.front();
-
-    assert(item.second);
-
-    item.second = false;
-
-    tmp_file_name = item.first;
-
+    tmp_file_name = item.file_name;
     get_result_list(tmp_file_name, res, table);
-
+    // update all primary key num
+    all_primary_key_num.fetch_sub(item.pk_nums);
     file_list.pop_front();
   } else if (!imm_empty.load(std::memory_order_acquire)) {
     // wait imm background flush
@@ -306,19 +278,19 @@ void Changeset::fetch_pk(bool delete_last_cs,
     assert(file_list.size() == 1);
 
     auto &item = file_list.front();
-
-    assert(item.second);
-
-    item.second = false;
-
-    tmp_file_name = item.first;
-
+    tmp_file_name = item.file_name;
     get_result_list(tmp_file_name, res, table);
 
+    // update all primary key num
+    all_primary_key_num.fetch_sub(item.pk_nums);
     file_list.pop_front();
   } else {
     // swap tmp
-    swap_pk();
+    mem_pk_map.swap(tmp_map);
+    tmp_memory_size.store(memory_size);
+    memory_size.store(0);
+    all_primary_key_num.fetch_sub(primary_key_num);
+    primary_key_num.store(0);
 
     get_result_list(tmp_map, res, table);
   }
@@ -372,10 +344,9 @@ void Changeset::get_result_list(const char *file_name,
       (uchar *)my_malloc(key_memory_CS_RESULT_BUFFER, row_header.length,
                          MYF(MY_WME | ME_FATALERROR));
     
-    my_read(fd, reinterpret_cast<uchar *>(buffer), row_header.length, MYF(0));
+    my_read(fd, buffer, row_header.length, MYF(0));
 
-    std::list<Field *> pk_field =
-        make_pk_fields(table, buffer, current_thd->mem_root);
+    std::list<Field *> pk_field = make_pk_fields(table, buffer, current_thd->mem_root);
 
     res.push_back(new ChangesetResult(row_header.type, pk_field));
 
@@ -414,22 +385,24 @@ uint64_t Changeset::get_approximate_memory_size() const {
 
 Changeset::Changeset()
     : memory_limit(MAX_MEMORY_SIZE),
-      stop(false),
+      backpressure(false),
+      token_bucket(BUCKET_CAPACITY, BUCKET_FILL_RATE),
       file_name_num(0),
       tmp_file_name(nullptr),
       cv(&mutex) {
   memory_size.store(0);
   imm_memory_size.store(0);
-  primary_key_nums.store(0);
-  imm_primary_key_nums.store(0);
-  memset(&stats_, 0, sizeof(stats_));
+  primary_key_num.store(0);
+  imm_primary_key_num.store(0);
+  tmp_memory_size.store(0);
+  backpressure_trigger = 0;
 }
 
 Changeset::~Changeset() { close(); }
 
 uint Changeset::my_get_key_length(KEY_PART_INFO * key_part_info, uchar const *key) {
   uint length = key_part_info->length;
-  switch ((enum ha_base_keytype) key_part_info->type) {
+  switch (static_cast<enum ha_base_keytype>(key_part_info->type)) {
   case HA_KEYTYPE_NUM:
   case HA_KEYTYPE_TEXT:
   case HA_KEYTYPE_BINARY:
@@ -487,9 +460,10 @@ std::list<Field *> Changeset::make_pk_fields(TABLE *table, uchar *pk,
   return ret;
 }
 
-void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
+void Changeset::pk_map_delete(std::unique_ptr<Change> &change) {
   auto &pk = change->get_primary_key();
-  auto it = mem_pk_map.find(pk);
+  const auto it = mem_pk_map.find(pk);
+  int64_t var = 0;
 
   if (it != mem_pk_map.end()) {
     auto cur = (*it).second.get();
@@ -497,25 +471,24 @@ void Changeset::pk_map_delete(std::unique_ptr<Change> &change, bool mem_c) {
       cur = cur->get_next();
       // memory info
       memory_size.fetch_sub(pk.length() + CHANGESET_PK_HEADER_SIZE);
-      primary_key_nums.fetch_sub(1);
+      --var;
     }
     mem_pk_map.erase(it);
   }
 
   // memory info
-  if (mem_c) {
-    memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
-    primary_key_nums.fetch_add(1);
-    if (change->get_next() != nullptr) {
-      memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
-      primary_key_nums.fetch_add(1);
-    }
+  memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+  ++var;
+  if (change->get_next() != nullptr) {
+    ++var;
   }
+  primary_key_num.fetch_add(var);
+  all_primary_key_num.fetch_add(var);
 
   mem_pk_map.emplace(pk, std::move(change));
 }
 
-void Changeset::pk_map_insert(std::unique_ptr<Change> &change, bool mem_c) {
+void Changeset::pk_map_insert(std::unique_ptr<Change> &change) {
   auto &pk = change->get_primary_key();
   auto it = mem_pk_map.find(pk);
 
@@ -535,44 +508,36 @@ void Changeset::pk_map_insert(std::unique_ptr<Change> &change, bool mem_c) {
   }
 
   // memory info
-  if (mem_c) {
-    memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
-    primary_key_nums.fetch_add(1);
-  }
-}
-
-void Changeset::add_delete(const std::string &pk) {
-  auto change = std::unique_ptr<Change>(new Change(DELETE, pk));
-
-  pk_map_delete(change);
-  stats_.delete_count++;
-}
-
-void Changeset::add_insert(const std::string &pk) {
-  auto change = std::unique_ptr<Change>(new Change(INSERT, pk));
-
-  pk_map_insert(change);
-  stats_.insert_count++;
-}
-
-void Changeset::add_update(const std::string &pk_before,
-                           const std::string &pk_after) {
-  auto change_delete = std::unique_ptr<Change>(new Change(DELETE, pk_before));
-  auto change_insert = std::unique_ptr<Change>(new Change(INSERT, pk_after));
-
-  pk_map_delete(change_delete);
-  pk_map_insert(change_insert);
-  stats_.update_count++;
+  memory_size.fetch_add(pk.length() + CHANGESET_PK_HEADER_SIZE);
+  primary_key_num.fetch_add(1);
+  all_primary_key_num.fetch_add(1);
 }
 
 Changeset::Stats Changeset::update_stats() {
   MutexLock lock(&mutex);
-  stats_.memory_size = get_approximate_memory_size();
-  stats_.file_count = file_list.size();
+  stats_info.memory_size = get_approximate_memory_size();
+  stats_info.current_pk_num = all_primary_key_num.load(std::memory_order_acquire);
+  stats_info.file_count = file_list.size();
   if (tmp_file_name != nullptr) {
-    stats_.file_count += 1;
+    stats_info.file_count += 1;
   }
-  return stats_;
+  if (backpressure) {
+    stats_info.bucket_available_tokens = std::to_string(token_bucket.available_tokens());
+    stats_info.bucket_fill_rate = std::to_string(token_bucket.get_fill_rate());
+    stats_info.backpressure_trigger = std::to_string(backpressure_trigger);
+  } else {
+    stats_info.bucket_available_tokens.assign("-");
+    stats_info.bucket_fill_rate.assign("-");
+    stats_info.backpressure_trigger.assign("-");
+  }
+  return stats_info;
+}
+
+void Changeset::do_backpressure(double tokens) {
+  uint64_t current_pk_num = all_primary_key_num.load(std::memory_order_acquire);
+  if (backpressure && current_pk_num >= backpressure_trigger) {
+    token_bucket.consume(tokens);
+  }
 }
 
 }  // namespace im

@@ -689,6 +689,7 @@ MySQL clients support the protocol:
 #include <malloc.h>
 #include <memory>
 #include "consensus_admin.h"
+#include "sys_vars_consensus.h"
 #define LOG_SUBSYSTEM_TAG "Server"
 
 #include "sql/mysqld.h"
@@ -696,6 +697,7 @@ MySQL clients support the protocol:
 #include "my_config.h"
 
 #include "errmsg.h"  // init_client_errs
+#include "enc_checksum/enc_checksum.h"
 #include "ft_global.h"
 #ifdef _WIN32
 #include "jemalloc_win.h"
@@ -893,6 +895,7 @@ MySQL clients support the protocol:
 #include "plugin/performance_point/pps_server.h"
 #include "sql/ccl/ccl_interface.h"
 #include "sql/outline/outline_interface.h"
+#include "sql/ai/ai_cache.h"
 #include "sql/package/package_interface.h"
 #include "sql/sequence_common.h"
 #include "sys_vars_ext.h"
@@ -986,13 +989,13 @@ MySQL clients support the protocol:
 #include "sql/server_component/persistent_dynamic_loader_imp.h"
 #include "sql/srv_session.h"
 
-#include "sql/binlog/lizard0recovery.h"
-#include "sql/bl_consensus_log.h"
+#include "extra/IS/src/algorithm/paxos.h"
+#include "sql/binlog/komodo0recovery.h"
 #include "sql/consensus/consensus_err.h"
-#include "sql/consensus/consensus_recovery.h"
+#include "sql/komodo0xlog0recovery.h"
 #include "sql/consensus_info.h"
-#include "sql/consensus_log_index.h"
-#include "sql/consensus_log_manager.h"
+#include "sql/consensus_logindex_manager.h"
+#include "sql/komodo0xlog.h"
 #include "sql/consensus_prefetch_manager.h"
 #include "sql/consensus_recovery_manager.h"
 #include "sql/sys_vars_consensus.h"
@@ -1002,6 +1005,7 @@ MySQL clients support the protocol:
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_scheduler.h"
 #include "sql/recycle_bin/recycle_table.h"
+#include "sql/disk_sentinel.h"
 
 #include "sql/gh_slow_query_block/slow_query_block.h"
 
@@ -1009,8 +1013,11 @@ MySQL clients support the protocol:
 #include "sql/sql_jemalloc.h"
 #endif
 
-#include "sql/lizard/lizard_hb_freezer.h"
-#include "sql/xa/lizard_xa_trx.h"
+#include "sql/xa/komodo0xa0trx.h"
+#include "sql/transaction/komodo0hb0freezer.h"
+#include "sql/xa/komodo0xa.h"
+#include "sql/consensus/komodo0fifo0cache.h"
+#include "sql/komodo0mon.h"
 
 using std::max;
 using std::min;
@@ -1417,6 +1424,9 @@ bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
 ulonglong sqb_max_trx_affected_rows=0;
 char *sqb_user_pattern = nullptr;
+char *ai_gateway_endpoint = nullptr;
+char *ai_gateway_key = nullptr;
+bool ai_gateway_enabled = false;
 ulong sqb_exec_timeout = 0;
 ulong sqb_exec_timeout_for_cpu_exceed = 0;
 ulong sqb_cpu_percent_threshold = 0;
@@ -1440,6 +1450,10 @@ std::atomic<ulonglong> group_update_ignore_count{0};
 std::atomic<ulonglong> group_update_group_same_count{0};
 /* RDS Variables End */
 
+/* PolarDB-X Variables */
+ulong show_single_shard_read_gcn_too_old = 0;
+/* PolarDB-X Variables End */
+
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_mem_counter = 0;
 
@@ -1449,9 +1463,15 @@ ulong writeset_cannot_use_count = 0;
 ulong writeset_exceeds_max_size_count = 0;
 ulong writeset_has_missing_keys_count = 0;
 ulong writeset_has_related_foreign_keys_count = 0;
+ulong writeset_has_hlindex_count = 0;
 ulong writeset_was_write_set_limit_reached_count = 0;
 ulong writeset_max_size_in_history = 0;
 ulong writeset_max_size_in_trx = 0;
+
+//discard now
+char *opt_cluster_purged_gtid;
+bool opt_cluster_dump_meta;
+bool opt_recover_snapshot;
 
 /**
   This variable holds handle to the object that's responsible
@@ -1466,6 +1486,9 @@ bool opt_enable_changeset;
 
 /* bloomfilter udf hash implementation */
 bool opt_support_bloomfilter_xxhash = true;
+
+/* polarx security enhancement mode */
+bool opt_polarx_security_enhancement_mode = false;
 
 /**
   Limit of the total number of prepared statements in the server.
@@ -1506,6 +1529,8 @@ bool persisted_globals_load = true;
 bool opt_keyring_operations = true;
 
 bool opt_table_encryption_privilege_check = false;
+
+bool opt_show_vidx_hlindex_tables = false;
 
 const double log_10[] = {
     1e000, 1e001, 1e002, 1e003, 1e004, 1e005, 1e006, 1e007, 1e008, 1e009, 1e010,
@@ -1639,6 +1664,7 @@ SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 SHOW_COMP_OPTION have_compress;
 SHOW_COMP_OPTION have_profiling;
 SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
+SHOW_COMP_OPTION have_ftrunc_lock;
 
 /* Thread specific variables */
 
@@ -2405,11 +2431,7 @@ static void close_connections(void) {
   thd_manager->do_for_all_thd(&set_kill_conn);
 
   xp::info(ER_XP_0) << "Shutting down consensus module in close_connections";
-  consensus_log_manager.stop_consensus_commit_pos_watcher();
-  // set close flag to stop workers and apply thread
-  if (consensus_ptr && !opt_consensus_force_recovery) {
-    consensus_ptr->shutdown();
-  }
+  komodo::xlog_shutdown();
 
   LogErr(INFORMATION_LEVEL, ER_SHUTTING_DOWN_SLAVE_THREADS);
   end_slave();
@@ -2565,10 +2587,7 @@ void unireg_abort(int exit_code) {
   }
 #endif
   xp::info(ER_XP_0) << "Shutting down consensus module in unireg_abort";
-  consensus_log_manager.stop_consensus_commit_pos_watcher();
-  if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
-    consensus_ptr->shutdown();
-  }
+  komodo::xlog_shutdown();
 
   clean_up(!is_help_or_validate_option() && !daemon_launcher_quiet &&
            (exit_code || !opt_initialize)); /* purecov: inspected */
@@ -2672,13 +2691,11 @@ static void clean_up(bool print_message) {
   dd::shutdown();
 
   Events::deinit();
+  global_disk_sentinel.cleanup();
+
   xp::info(ER_XP_0) << "Shutting down consensus module in clean_up";
-  consensus_log_manager.stop_consensus_commit_pos_watcher();
-  my_sleep(5000);
-  if (consensus_ptr && !opt_consensus_force_recovery && !opt_recover_snapshot) {
-    delete consensus_ptr;
-    consensus_ptr = NULL;
-  }
+  komodo::xlog_shutdown();
+
   stop_handle_manager();
 
   memcached_shutdown();
@@ -2718,7 +2735,7 @@ static void clean_up(bool print_message) {
   delegates_shutdown();
   plugin_shutdown();
   gtid_server_cleanup();  // after plugin_shutdown
-  consensus_log_manager.cleanup();
+  komodo::xlog_destroy();
   delete_optimizer_cost_module();
   ha_end();
   if (tc_log) {
@@ -2731,6 +2748,8 @@ static void clean_up(bool print_message) {
   Recovered_xa_transactions::destroy();
   delegates_destroy();
   xa::Transaction_cache::dispose();
+  /** XA manager instance destroy */
+  komodo::XA_manager::destroy_instance();
   MDL_context_backup_manager::destroy();
   table_def_free();
   mdl_destroy();
@@ -2816,6 +2835,7 @@ static void clean_up(bool print_message) {
   im::ccl_destroy();
   im::recycle_bin::recycle_deinit();
   im::outline_destroy();
+  im::ai_cache_destroy();
   im::internal_account_ctx_destroy();
   im::internal_guard_strategy_shutdown();
 
@@ -2888,7 +2908,7 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_diagnose_excluded_vars_list);
   mysql_mutex_destroy(&LOCK_global_conn_mem_limit);
   mysql_mutex_destroy(&im::LOCK_internal_account_string);
-  mysql_mutex_destroy(&polarx::LOCK_slow_query_user_pattern);
+  mysql_mutex_destroy(&polarx::LOCK_slow_query_user_config);
 }
 
 /****************************************************************************
@@ -5005,6 +5025,8 @@ int init_common_variables() {
     */
     opt_bin_log = false;
     opt_initialize = true;
+    opt_enable_consensus = false;
+
   }
 
   strmake(pidfile_name, default_logfile_name, sizeof(pidfile_name) - 5);
@@ -5525,8 +5547,8 @@ static int init_thread_environment() {
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(im::key_LOCK_internal_account_string,
                    &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(polarx::key_LOCK_slow_query_user_pattern,
-                   &polarx::LOCK_slow_query_user_pattern, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(polarx::key_LOCK_slow_query_user_config,
+                   &polarx::LOCK_slow_query_user_config, MY_MUTEX_INIT_FAST);
   return 0;
 }
 
@@ -6355,6 +6377,8 @@ static int init_server_components() {
   is_killed_hook = thd_killed;
 
   xa::Transaction_cache::initialize();
+  /** Create xa manager instance */
+  komodo::XA_manager::create_instance();
 
   /*
     Try to read the previous run's error log and make it available in
@@ -6387,15 +6411,6 @@ static int init_server_components() {
     been reported in the function
   */
   if (delegates_init()) unireg_abort(MYSQLD_ABORT_EXIT);
-
-  /* need to configure logging for xpaxos */
-  if (!opt_bin_log &&
-      !opt_initialize &&
-      ConsensusLogManager::enable_consensus()) {
-    xp::error(ER_XP_0) << "PolarDB-X Engine log_bin must be set to ON";
-    LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--log-bin");
-    unireg_abort(MYSQLD_ABORT_EXIT);
-  }
 
   /* need to configure logging before initializing storage engines */
   if (opt_log_replica_updates && !opt_bin_log) {
@@ -6499,24 +6514,17 @@ static int init_server_components() {
         rpl_make_log_name(key_memory_MYSQL_BIN_LOG_index, opt_binlog_index_name,
                           log_bin_basename, ".index");
 
-    /*
-      XPAXOS_RESOLVE : don't set opt_binlog_index_name, otherwise, incorrect
-      file name would be used in following call path,
-        Relay_log_info::rli_init_info() -> MYSQL_BIN_LOG::open_index_file()
-    */
-    if (!ConsensusLogManager::enable_consensus()) {
-      if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
-          log_bin_index) {
-        strmake(default_binlog_index_name,
-                log_bin_index + dirname_length(log_bin_index),
-                FN_REFLEN + index_ext_length - 1);
-        opt_binlog_index_name = default_binlog_index_name;
-      }
+    if ((!opt_binlog_index_name || !opt_binlog_index_name[0]) &&
+        log_bin_index) {
+      strmake(default_binlog_index_name,
+              log_bin_index + dirname_length(log_bin_index),
+              FN_REFLEN + index_ext_length - 1);
+      opt_binlog_index_name = default_binlog_index_name;
+    }
 
-      if (log_bin_basename == nullptr || log_bin_index == nullptr) {
-        LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN,
-        (int)FN_LEN); unireg_abort(MYSQLD_ABORT_EXIT);
-      }
+    if (log_bin_basename == nullptr || log_bin_index == nullptr) {
+      LogErr(ERROR_LEVEL, ER_RPL_CANT_MAKE_PATHS, (int)FN_REFLEN, (int)FN_LEN);
+      unireg_abort(MYSQLD_ABORT_EXIT);
     }
   }
 
@@ -7046,13 +7054,15 @@ static int init_server_components() {
       tc_log = &tc_log_mmap;
   }
 
-  // init and bind binlog to consensus log
-  if (consensus_log_manager.init(opt_consensus_log_cache_size,
-                                 opt_consensus_prefetch_cache_size,
-                                 opt_consensus_start_index))
+  // init io state
+  if (!opt_initialize && global_disk_sentinel.init())
     unireg_abort(MYSQLD_ABORT_EXIT);
-  consensus_log_manager.set_binlog(&mysql_bin_log);
-  mysql_bin_log.is_xpaxos_log = ConsensusLogManager::enable_consensus();
+
+  if (komodo::xlog_create(
+          opt_initialize, innodb_hton->ext.has_enabled_force_recovery(),
+          opt_enable_consensus, opt_bin_log, opt_cluster_learner_node,
+          opt_cluster_log_type_instance, &mysql_bin_log))
+    unireg_abort(MYSQLD_ABORT_EXIT);
 
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
@@ -7065,58 +7075,9 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (ConsensusLogManager::enable_consensus()) {
-    if (opt_bin_log) {
-      if (!opt_consensus_force_recovery) {
-        std::vector<std::string> binlog_file_list;
-        mysql_bin_log.get_consensus_log_file_list(binlog_file_list);
-
-        if (binlog_file_list.empty()) {
-          /*
-            Configures what object is used by the current log to store processed
-            gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
-            correctly compute the set of previous gtids.
-          */
-          assert(!mysql_bin_log.is_relay_log);
-          mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
-          mysql_mutex_lock(log_lock);
-
-          if (mysql_bin_log.open_binlog(opt_bin_logname, nullptr, max_binlog_size,
-                                        false, true /*need_lock_index=true*/,
-                                        true /*need_sid_lock=true*/, nullptr)) {
-            mysql_mutex_unlock(log_lock);
-            unireg_abort(MYSQLD_ABORT_EXIT);
-          }
-          mysql_mutex_unlock(log_lock);
-        } else if (opt_initialize) {
-          // in boostrap case but binlog_file_list is not empty
-          xp::error(ER_XP_0)
-              << "--initialize specified but the binlog index file '"
-              << mysql_bin_log.get_index_fname() << "' is not empty.";
-          unireg_abort(MYSQLD_ABORT_EXIT);
-        }
-      }
-    }
-
-    ReplicaInitializer replica_initializer(
-        opt_initialize, /*opt_skip_replica_start*/ true, rpl_channel_filters,
-        &opt_replica_skip_errors);
-
-    /* If running with --initialize, do not start replication. */
-    if (!opt_initialize && !opt_consensus_force_recovery &&
-        consensus_log_manager.init_consensus_info())
-      unireg_abort(MYSQLD_ABORT_EXIT);
-
-    /* Save pid of this process in a file, because init_service maybe wait long time*/
-    if (!opt_initialize && create_pid_file()) {
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-
-    int consensus_error = consensus_log_manager.init_service();
-    if (consensus_error < 0)
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    else if (consensus_error > 0)
-      unireg_abort(MYSQLD_SUCCESS_EXIT);
+  if (komodo::xlog_start_in_recovery(
+    []() -> int { return create_pid_file(); })) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
   if (dd::reset_tables_and_tablespaces()) {
@@ -7147,25 +7108,9 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (!ConsensusLogManager::enable_consensus() && opt_bin_log) {
-    /*
-      Configures what object is used by the current log to store processed
-      gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
-      correctly compute the set of previous gtids.
-    */
-    assert(!mysql_bin_log.is_relay_log);
-    mysql_mutex_t *log_lock = mysql_bin_log.get_log_lock();
-    mysql_mutex_lock(log_lock);
-
-    if (mysql_bin_log.open_binlog(opt_bin_logname, nullptr, max_binlog_size,
-                                  false, true /*need_lock_index=true*/,
-                                  true /*need_sid_lock=true*/, nullptr)) {
-      mysql_mutex_unlock(log_lock);
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-    mysql_mutex_unlock(log_lock);
+  if (komodo::xlog_start_after_recovery()) {
+    unireg_abort(MYSQLD_ABORT_EXIT);
   }
-
 
   /*
     When we pass non-zero values for both expire_logs_days and
@@ -7187,10 +7132,6 @@ static int init_server_components() {
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--binlog-expire-logs-seconds");
     if (expire_logs_days_supplied)
       LogErr(WARNING_LEVEL, ER_NEED_LOG_BIN, "--expire_logs_days");
-  }
-
-  if (opt_bin_log && !opt_initialize && ConsensusLogManager::enable_consensus()) {
-    mysql_bin_log.close(LOG_CLOSE_INDEX | LOG_CLOSE_TO_BE_OPENED, true, true);
   }
 
   if (opt_myisam_log) (void)mi_log(1);
@@ -7803,6 +7744,8 @@ int mysqld_main(int argc, char **argv)
   im::recycle_bin::recycle_init();
   /* Init outline system */
   im::outline_init();
+  /* Init AI model cache */
+  im::ai_cache_init();
 
   object_statistics_context_init();
 
@@ -8155,142 +8098,13 @@ int mysqld_main(int argc, char **argv)
     // Initialize executed_gtids from mysql.gtid_executed table.
     if (gtid_state->read_gtid_executed_from_table() == -1) unireg_abort(1);
 
-    binlog::log_gtid_set(
+    komodo::log_gtid_set(
         const_cast<Gtid_set *>(gtid_state->get_executed_gtids()), true,
         "Gtid_in_table");
   }
 
-  if (opt_bin_log &&
-      !opt_initialize &&
-      !ConsensusLogManager::enable_consensus()) {
-    /*
-      Initialize GLOBAL.GTID_EXECUTED and GLOBAL.GTID_PURGED from
-      gtid_executed table and binlog files during server startup.
-    */
-    Gtid_set *executed_gtids =
-        const_cast<Gtid_set *>(gtid_state->get_executed_gtids());
-    Gtid_set *lost_gtids = const_cast<Gtid_set *>(gtid_state->get_lost_gtids());
-    Gtid_set *gtids_only_in_table =
-        const_cast<Gtid_set *>(gtid_state->get_gtids_only_in_table());
-    Gtid_set *previous_gtids_logged =
-        const_cast<Gtid_set *>(gtid_state->get_previous_gtids_logged());
-
-    Gtid_set purged_gtids_from_binlog(global_sid_map, global_sid_lock);
-    Gtid_set gtids_in_binlog(global_sid_map, global_sid_lock);
-    Gtid_set gtids_in_binlog_not_in_table(global_sid_map, global_sid_lock);
-
-    if (mysql_bin_log.init_gtid_sets(
-            &gtids_in_binlog, &purged_gtids_from_binlog,
-            opt_source_verify_checksum, true /*true=need lock*/,
-            nullptr /*trx_parser*/, nullptr /*partial_trx*/,
-            true /*is_server_starting*/))
-      unireg_abort(MYSQLD_ABORT_EXIT);
-
-    global_sid_lock->wrlock();
-
-    purged_gtids_from_binlog.dbug_print("purged_gtids_from_binlog");
-    gtids_in_binlog.dbug_print("gtids_in_binlog");
-    binlog::log_gtid_set(&purged_gtids_from_binlog, false,
-                         "purged_gtids_from_binlog");
-    binlog::log_gtid_set(&gtids_in_binlog, false, "gtids_in_binlog");
-
-    if (!gtids_in_binlog.is_empty() &&
-        !gtids_in_binlog.is_subset(executed_gtids)) {
-      gtids_in_binlog_not_in_table.add_gtid_set(&gtids_in_binlog);
-      if (!executed_gtids->is_empty())
-        gtids_in_binlog_not_in_table.remove_gtid_set(executed_gtids);
-
-      binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false,
-                           "gtids_in_binlog_not_in_table");
-
-      /*
-        Save unsaved GTIDs into gtid_executed table, in the following
-        four cases:
-          1. the upgrade case.
-          2. the case that a slave is provisioned from a backup of
-             the master and the slave is cleaned by RESET MASTER
-             and RESET SLAVE before this.
-          3. the case that no binlog rotation happened from the
-             last RESET MASTER on the server before it crashes.
-          4. The set of GTIDs of the last binlog is not saved into the
-             gtid_executed table if server crashes, so we save it into
-             gtid_executed table and executed_gtids during recovery
-             from the crash.
-      */
-      if (gtid_state->save(&gtids_in_binlog_not_in_table) == -1) {
-        global_sid_lock->unlock();
-        unireg_abort(MYSQLD_ABORT_EXIT);
-      }
-      executed_gtids->add_gtid_set(&gtids_in_binlog_not_in_table);
-    }
-
-    binlog::log_gtid_set(&gtids_in_binlog, false, "Gtid_in_binlog");
-    binlog::log_gtid_set(&gtids_in_binlog_not_in_table, false,
-                         "Gtid_in_binlog_not_in_table");
-
-    /* gtids_only_in_table= executed_gtids - gtids_in_binlog */
-    if (gtids_only_in_table->add_gtid_set(executed_gtids) != RETURN_STATUS_OK) {
-      global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-    gtids_only_in_table->remove_gtid_set(&gtids_in_binlog);
-    /*
-      lost_gtids = executed_gtids -
-                   (gtids_in_binlog - purged_gtids_from_binlog)
-                 = gtids_only_in_table + purged_gtids_from_binlog;
-    */
-    assert(lost_gtids->is_empty());
-    if (lost_gtids->add_gtid_set(gtids_only_in_table) != RETURN_STATUS_OK ||
-        lost_gtids->add_gtid_set(&purged_gtids_from_binlog) !=
-            RETURN_STATUS_OK) {
-      global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-
-    /* Prepare previous_gtids_logged for next binlog */
-    if (previous_gtids_logged->add_gtid_set(&gtids_in_binlog) !=
-        RETURN_STATUS_OK) {
-      global_sid_lock->unlock();
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-
-    /*
-      Write the previous set of gtids at this point because during
-      the creation of the binary log this is not done as we cannot
-      move the init_gtid_sets() to a place before opening the binary
-      log. This requires some investigation.
-
-      /Alfranio
-    */
-    Previous_gtids_log_event prev_gtids_ev(&gtids_in_binlog);
-
-    global_sid_lock->unlock();
-
-    (prev_gtids_ev.common_footer)->checksum_alg =
-        static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
-
-    if (mysql_bin_log.write_event_to_binlog_and_sync(&prev_gtids_ev))
-      unireg_abort(MYSQLD_ABORT_EXIT);
-
-    // run auto purge member function. It will evaluate auto purge controls
-    // and configuration, calculate which log files are to be purged, and
-    // if any file is to be purged, it will purge it. This is all encapsulated
-    // insiude the auto purge member function.
-    //
-    // Note on the DBUG_EVALUATE_IF usage below:
-    // - when compiling it out: the condition evaluates to true, thus
-    //   mysql_bin_log.auto_purge_at_server_startup() runs
-    // - when "expire_logs_always_at_start" is set: evaluates to false,
-    //   thus mysql_bin_log.purge_logs_before_date() runs
-    // - when "expire_logs_always_at_start" is not set: evaluates to true,
-    //   this mysql_bin_log.auto_purge_at_server_startup() runs
-    if (DBUG_EVALUATE_IF("expire_logs_always_at_start", false, true))
-      mysql_bin_log.auto_purge_at_server_startup();
-    else if (expire_logs_days > 0 || binlog_expire_logs_seconds > 0)
-      mysql_bin_log.purge_logs_before_date(time(nullptr), true);
-
-    (void)RUN_HOOK(server_state, after_engine_recovery, (nullptr));
-  }
+  if (komodo::xlog_init_gtid_set_after_recovery())
+    unireg_abort(MYSQLD_ABORT_EXIT);
 
   if (init_ssl_communication()) unireg_abort(MYSQLD_ABORT_EXIT);
   if (network_init()) unireg_abort(MYSQLD_ABORT_EXIT);
@@ -8315,7 +8129,7 @@ int mysqld_main(int argc, char **argv)
   bool abort = false;
 
   /* Save pid of this process in a file */
-  if (!opt_initialize && !ConsensusLogManager::enable_consensus()) {
+  if (!opt_initialize) {
     if (create_pid_file()) abort = true;
   }
 
@@ -8410,16 +8224,7 @@ int mysqld_main(int argc, char **argv)
 
   binlog_unsafe_map_init();
 
-  if (ConsensusLogManager::enable_consensus()) {
-    xpaxos_set_privilege_checks_user();
-
-    if (!opt_initialize && !opt_consensus_force_recovery && !opt_cluster_log_type_instance)
-      start_consensus_apply_threads();
-  } else {
-    ReplicaInitializer replica_initializer(opt_initialize, opt_skip_replica_start,
-                                          rpl_channel_filters,
-                                          &opt_replica_skip_errors);
-  }
+  komodo::xlog_start_apply_threads_after_recovery();
 
 #ifdef WITH_LOCK_ORDER
   if (!opt_initialize) {
@@ -8439,11 +8244,13 @@ int mysqld_main(int argc, char **argv)
 
   im::statement_outline_init(opt_initialize);
 
+  im::ai_models_init(opt_initialize);
+
   im::ACL_inner_schema_register(opt_initialize);
 
   im::internal_account_ctx_init();
 
-  lizard::init_server_start_time_for_txn();
+  komodo::init_server_start_time_for_txn();
 
   (void)RUN_HOOK(server_state, after_recovery, (nullptr));
 
@@ -8508,8 +8315,6 @@ int mysqld_main(int argc, char **argv)
   InitChangesetThreadPool(opt_changeset_threads);
 
   polarx::create_background_poller();
-
-  if (!opt_initialize)  malloc_stats();
 
   LogEvent()
       .type(LOG_TYPE_ERROR)
@@ -8982,6 +8787,8 @@ static void process_bootstrap() {
         unireg_abort(MYSQLD_ABORT_EXIT);
       }
 
+      // Init consensus_info cluster_info filed if use --cluster-info
+      komodo::xlog_meta_try_init_consensus_info();
       unireg_abort(MYSQLD_SUCCESS_EXIT);
     }
   }
@@ -9034,7 +8841,10 @@ static int handle_early_options() {
     remaining_argc++;
     remaining_argv--;
 
-    if (opt_initialize_insecure) opt_initialize = true;
+    if (opt_initialize_insecure) {
+      opt_initialize = true;
+      opt_enable_consensus = false;
+    }
   }
 
   // Swap with an empty vector, i.e. delete elements and free allocated space.
@@ -9220,6 +9030,9 @@ struct my_option my_long_early_options[] = {
      "Validate the server configuration specified by the user.",
      &opt_validate_config, &opt_validate_config, nullptr, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, nullptr},
+    {"enable-consensus", OPT_CLUSTER,
+     "whether enable consensus mode", &opt_enable_consensus,
+     &opt_enable_consensus, 0, GET_BOOL, REQUIRED_ARG, 1, 0, 0, 0, 0, 0},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
 
@@ -9346,7 +9159,7 @@ struct my_option my_long_options[] = {
     {"cluster-info", OPT_CLUSTER, "Cluster nodes ip-port information",
      &opt_cluster_info, &opt_cluster_info, 0, GET_STR, REQUIRED_ARG, 0, 0, 0, 0,
      0, 0},
-    {"cluster-purged-gtid", OPT_CLUSTER, "Cluster set the purged gtid",
+    {"cluster-purged-gtid", OPT_CLUSTER, "discard now",
      &opt_cluster_purged_gtid, &opt_cluster_purged_gtid, 0, GET_STR,
      REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
     {"cluster-current-term", OPT_CLUSTER,
@@ -9358,17 +9171,20 @@ struct my_option my_long_options[] = {
      GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
     {"cluster-follower-force-recover-index", OPT_CLUSTER,
      "Cluster restore from follower set apply index point",
-     &opt_cluster_follower_force_recover_index, &opt_cluster_follower_force_recover_index, 0,
-     GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+     &opt_cluster_follower_force_recover_index,
+     &opt_cluster_follower_force_recover_index, 0, GET_ULL, REQUIRED_ARG, 0, 0,
+     0, 0, 0, 0},
     {"cluster-force-change-meta", OPT_CLUSTER, "Cluster force to change meta",
      &opt_cluster_force_change_meta, &opt_cluster_force_change_meta, 0,
      GET_BOOL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-    {"consensus-mts-force-apply-index", OPT_CLUSTER, "Update consensus_apply_index in slave_relay_log_info",
-     &opt_consensus_mts_force_apply_index, &opt_consensus_mts_force_apply_index, 0,
-     GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
-    {"consensus-reset-mts-info", OPT_CLUSTER, "reset mts info when force change meta",
-     &opt_consensus_reset_mts_info, &opt_consensus_reset_mts_info, 0, GET_BOOL,
-     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"consensus-mts-force-apply-index", OPT_CLUSTER,
+     "Update consensus_apply_index in slave_relay_log_info",
+     &opt_consensus_mts_force_apply_index, &opt_consensus_mts_force_apply_index,
+     0, GET_ULL, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"consensus-reset-mts-info", OPT_CLUSTER,
+     "reset mts info when force change meta", &opt_consensus_reset_mts_info,
+     &opt_consensus_reset_mts_info, 0, GET_BOOL, REQUIRED_ARG, 0, 0, 0, 0, 0,
+     0},
     {"cluster-dump-meta", OPT_CLUSTER, "Cluster dump meta, discard now",
      &opt_cluster_dump_meta, &opt_cluster_dump_meta, 0, GET_BOOL, REQUIRED_ARG,
      0, 0, 0, 0, 0, 0},
@@ -9382,12 +9198,14 @@ struct my_option my_long_options[] = {
     {"cluster-start-index", OPT_CLUSTER, "Cluster start valid index",
      &opt_consensus_start_index, &opt_consensus_start_index, 0, GET_ULL,
      REQUIRED_ARG, 1, 1, ULLONG_MAX, 0, 0, 0},
-    {"consensus-max-wait-seconds-for-next-trx-index", OPT_CLUSTER, "wait timeout for get_next_trx_index",
-     &opt_consensus_max_wait_seconds_for_next_trx_index, &opt_consensus_max_wait_seconds_for_next_trx_index, 0,
-     GET_ULL, REQUIRED_ARG, 10, 0, 0, 0, 0, 0},
+    {"consensus-max-wait-seconds-for-next-trx-index", OPT_CLUSTER,
+     "wait timeout for get_next_trx_index",
+     &opt_consensus_max_wait_seconds_for_next_trx_index,
+     &opt_consensus_max_wait_seconds_for_next_trx_index, 0, GET_ULL,
+     REQUIRED_ARG, 10, 0, 0, 0, 0, 0},
 
     {"recover-snapshot", 0,
-     "recover from the backup of cloud storage and output the committed index",
+     "discard now",
      &opt_recover_snapshot, &opt_recover_snapshot, 0, GET_BOOL, NO_ARG, 0, 0, 0,
      0, 0, 0},
     {"log-bin", OPT_BIN_LOG,
@@ -9986,6 +9804,36 @@ static int show_resource_group_support(THD *, SHOW_VAR *var, char *buf) {
   return 0;
 }
 
+uint64 show_consensus_in_leader_transfer(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_LONGLONG;
+  var->value = buff;
+  long *value = reinterpret_cast<long *>(buff);
+  *value = mysql_bin_log.is_in_switchover() ? 1 : 0;
+  return 0;
+}
+
+uint64 show_consensus_mock_start_index(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_LONGLONG;
+  var->value = buff;
+  long *value = reinterpret_cast<long *>(buff);
+  *value = komodo::xlog_engine_get_mock_start_index();
+  return 0;
+}
+
+int show_appliedindex_checker_queue(THD *, SHOW_VAR *var, char *) {
+  var->type = SHOW_CHAR;
+  var->value = const_cast<char *>(
+      komodo::xlog_engine_applied_index_checker_get_group_queue_status());
+  return 0;
+}
+
+static int show_enc_checksum_active(THD *, SHOW_VAR *var, char *buf) {
+  var->type = SHOW_BOOL;
+  var->value = buf;
+  *(pointer_cast<bool *>(buf)) = enc_checksum::Enc_checksum_is_active();
+  return 0;
+}
+
 SHOW_VAR status_vars[] = {
     {"Aborted_clients", (char *)&aborted_threads, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"Aborted_connects", (char *)&show_aborted_connects, SHOW_FUNC,
@@ -10366,37 +10214,45 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Reload_slave", (char *)im::reload_entry_status, SHOW_ARRAY,
      SHOW_SCOPE_ALL},
-    {"consensus_fifo_cache_used_size", (char *)&show_fifo_cache_size, SHOW_FUNC,
-     SHOW_SCOPE_GLOBAL},
-    {"consensus_fifo_cache_first_index",
-     (char *)&show_fifo_cache_first_index, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"consensus_fifo_cache_log_count", (char *)&show_log_count_in_fifo_cache,
-     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"consensus_appliedindex_checker_queue", (char *)&show_appliedindex_checker_queue,
-     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"consensus_appliedindex_checker_queue",
+     (char *)&show_appliedindex_checker_queue, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"consensus_easy_pool_size",
      reinterpret_cast<char *>(
          const_cast<long int *>(&alisql::easy_pool_alloc_byte)),
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"consensus_in_leader_transfer", (char *)&show_consensus_in_leader_transfer,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
-    {"writeset_current_history_size", (char *)&writeset_current_history_size, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
-    {"writeset_history_clear_count", (char *)&writeset_history_clear_count, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
+    {"writeset_current_history_size", (char *)&writeset_current_history_size,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"writeset_history_clear_count", (char *)&writeset_history_clear_count,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"writeset_cannot_use_count", (char *)&writeset_cannot_use_count, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
-    {"writeset_exceeds_max_size_count", (char *)&writeset_exceeds_max_size_count, SHOW_LONG,
+    {"writeset_exceeds_max_size_count",
+     (char *)&writeset_exceeds_max_size_count, SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"writeset_has_missing_keys_count",
+     (char *)&writeset_has_missing_keys_count, SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"writeset_has_related_foreign_keys_count",
+     (char *)&writeset_has_related_foreign_keys_count, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
-    {"writeset_has_missing_keys_count", (char *)&writeset_has_missing_keys_count, SHOW_LONG,
+    {"writeset_has_hlindex_count", (char *)&writeset_has_hlindex_count,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"writeset_was_write_set_limit_reached_count",
+     (char *)&writeset_was_write_set_limit_reached_count, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
-    {"writeset_has_related_foreign_keys_count", (char *)&writeset_has_related_foreign_keys_count, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
-    {"writeset_was_write_set_limit_reached_count", (char *)&writeset_was_write_set_limit_reached_count, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
-    {"writeset_max_size_in_history", (char *)&writeset_max_size_in_history, SHOW_LONG,
-     SHOW_SCOPE_GLOBAL},
+    {"writeset_max_size_in_history", (char *)&writeset_max_size_in_history,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"writeset_max_size_in_trx", (char *)&writeset_max_size_in_trx, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"Single_shard_read_gcn_too_old", (char *)&show_single_shard_read_gcn_too_old,
+      SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"consensus_mock_start_index", (char *)&show_consensus_mock_start_index,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Consensus", (char *)komodo::consensus_status, SHOW_ARRAY, SHOW_SCOPE_ALL},
+    {"net_buff_stat_shrink_count",
+     (char *)offsetof(System_status_var, net_buff_stat_shrink_count),
+     SHOW_LONGLONG_STATUS, SHOW_SCOPE_ALL},
+    {"enc_checksum_active", (char *)&show_enc_checksum_active, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
 
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_ALL}};
@@ -10565,12 +10421,15 @@ static int mysql_init_variables() {
 #endif /* defined(ENABLED_DEBUG_SYNC) */
   server_uuid[0] = 0;
 
+  show_single_shard_read_gcn_too_old = 0;
+
   writeset_current_history_size = 0;
   writeset_history_clear_count = 0;
   writeset_cannot_use_count = 0;
   writeset_exceeds_max_size_count = 0;
   writeset_has_missing_keys_count = 0;
   writeset_has_related_foreign_keys_count = 0;
+  writeset_has_hlindex_count = 0;
   writeset_was_write_set_limit_reached_count = 0;
   writeset_max_size_in_history = 0;
   writeset_max_size_in_trx = 0;
@@ -10644,13 +10503,16 @@ static int mysql_init_variables() {
 
   /* Always true */
   have_compress = SHOW_OPTION_YES;
+
+  have_ftrunc_lock = SHOW_OPTION_YES;
 #if defined(_WIN32)
   shared_memory_base_name = default_shared_memory_base_name;
 #endif
 
-  lizard::have_xa_prepare_with_trx_slot = SHOW_OPTION_YES;
-  lizard::have_xa_async_commit = SHOW_OPTION_YES;
-  lizard::have_xa_find_by_xid_with_hint = SHOW_OPTION_YES;
+  komodo::have_xa_prepare_with_trx_slot = SHOW_OPTION_YES;
+  komodo::have_xa_async_commit = SHOW_OPTION_YES;
+  komodo::have_xa_find_by_xid_with_hint = SHOW_OPTION_YES;
+  komodo::have_xa_advance_retention_gcn = SHOW_OPTION_YES;
   return 0;
 }
 
@@ -11570,7 +11432,7 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   read_only = super_read_only ? super_read_only : read_only;
   opt_readonly = read_only;
 
-  lizard::opt_no_heartbeat_freeze = lizard::no_heartbeat_freeze;
+  komodo::opt_no_heartbeat_freeze = komodo::no_heartbeat_freeze;
   return 0;
 }
 
@@ -12170,7 +12032,7 @@ PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
-PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
+PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_state_change;
 PSI_cond_key key_COND_ConsensusLog_catchup;
 PSI_cond_key key_COND_Consensus_state_change;
 PSI_thread_key key_thread_consensus_commit_pos_watcher;
@@ -12199,6 +12061,7 @@ PSI_mutex_key key_mutex_slave_parallel_worker_count;
 PSI_mutex_key key_mutex_slave_parallel_worker;
 PSI_mutex_key key_structure_guard_mutex;
 PSI_mutex_key key_TABLE_SHARE_LOCK_ha_data;
+PSI_mutex_key key_TABLE_SHARE_LOCK_share;
 PSI_mutex_key key_LOCK_query_plan;
 PSI_mutex_key key_LOCK_thd_query;
 PSI_mutex_key key_LOCK_cost_const;
@@ -12290,6 +12153,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_mutex_slave_parallel_worker_count, "Relay_log_info::exit_count_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_mutex_slave_parallel_worker, "Worker_info::jobs_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_TABLE_SHARE_LOCK_ha_data, "TABLE_SHARE::LOCK_ha_data", 0, 0, PSI_DOCUMENT_ME},
+  { &key_TABLE_SHARE_LOCK_share, "TABLE_SHARE::LOCK_share", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_error_messages, "LOCK_error_messages", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_log_throttle_qni, "LOCK_log_throttle_qni", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_gtid_ensure_index_mutex, "Gtid_state", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
@@ -12319,23 +12183,24 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_global_conn_mem_limit, "LOCK_global_conn_mem_limit", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &im::key_LOCK_internal_account_string, "LOCK_internal_account_string", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_tx_commit_pending_mutex, "LOCK_tx_commit_pending_mutex", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &polarx::key_LOCK_slow_query_user_pattern, "LOCK_slow_query_user_pattern", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-
+  { &polarx::key_LOCK_slow_query_user_config, "LOCK_slow_query_user_config", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  
   { &key_consensus_info_data_lock, "consensus_info::data_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_run_lock, "consensus_info::run_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_sleep_lock, "consensus_info::sleep_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_thd_lock, "consensus_info::info_thd_lock", 0, 0, PSI_DOCUMENT_ME},
-  { &key_consensus_info_lock, "consensus_info::lock", 
-	  0, 0, PSI_DOCUMENT_ME},
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_index, "ConsensusLogIndex::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "Consensus_recovery_manager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
+  { &key_consensus_info_lock, "consensus_info::lock", 0, 0, PSI_DOCUMENT_ME},
+  { &komodo::key_CONSENSUSLOG_LOCK_ConsensusLog_index, "Consensus_logindex_manager::LOCK_consensuslog_index", 0, 0, PSI_DOCUMENT_ME },
+  { &komodo::key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock, "Consensus_recovery_manager::LOCK_consensuslog_recover_hash", 0, 0, PSI_DOCUMENT_ME},
   { &key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock, "ConsensusLogManager::LOCK_consensuslog_sequence_stage1", 0, 0, PSI_DOCUMENT_ME},
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "ConsensusLogManager::LOCK_consensus_log_term", 0, 0, PSI_DOCUMENT_ME },
-  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "ConsensusLogManager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
-  { &key_CONSENSUSLOG_LOCK_Consensus_stage_change, "ConsensusLogManager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
-  { &key_CONSENSUSLOG_LOCK_commit_pos, "ConsensusLogManager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
-  { &key_fifo_cache_cleaner, "fifo_cache_cleaner", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock, "Consensus_log_manager::LOCK_consensus_log_term", 0, 0, PSI_DOCUMENT_ME },
+  { &key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock, "Consensus_log_manager::LOCK_consensuslog_apply", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_Consensus_state_change, "Consensus_log_manager::LOCK_consnesus_state_change", 0, 0, PSI_DOCUMENT_ME},
+  { &key_CONSENSUSLOG_LOCK_commit_pos, "Consensus_log_manager::LOCK_consensus_commit_pos", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_diagnose_excluded_vars_list, "LOCK_diagnose_excluded_vars_list", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_disk_writeable_sentinel, "disk_writeable_sentinel", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_disk_hang_sentinel, "disk_hang_sentinel", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &komodo::key_mutex_FIFO_CACHE, "komodo::key_LOCK_fifo_cache_mutex", 0, 0, PSI_DOCUMENT_ME },
 };
 /* clang-format on */
 
@@ -12351,6 +12216,7 @@ PSI_rwlock_key key_rwlock_Server_state_delegate_lock;
 PSI_rwlock_key key_rwlock_Binlog_storage_delegate_lock;
 PSI_rwlock_key key_rwlock_Binlog_transmit_delegate_lock;
 PSI_rwlock_key key_rwlock_Binlog_relay_IO_delegate_lock;
+PSI_rwlock_key key_rwlock_Encdb_delegate_lock;
 PSI_rwlock_key key_rwlock_resource_group_mgr_map_lock;
 
 /* clang-format off */
@@ -12373,15 +12239,15 @@ static PSI_rwlock_info all_server_rwlocks[]=
   { &key_rwlock_rpl_filter_lock, "rpl_filter_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_channel_to_filter_lock, "channel_to_filter_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_resource_group_mgr_map_lock, "Resource_group_mgr::m_map_rwlock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_Encdb_delegate_lock, "Encdb_delegate::lock", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 #ifdef _WIN32
   { &key_rwlock_LOCK_named_pipe_full_access_group, "LOCK_named_pipe_full_access_group", PSI_FLAG_SINGLETON, 0,
      "This lock protects named pipe security attributes, preventing their "
      "simultaneous application and modification."},
 #endif // _WIN32
-  { &key_rwlock_ConsensusLog_status_lock, "ConsensusLogManager::LOCK_consensuslog_status", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_rwlock_ConsensusLog_log_cache_lock, "ConsensusLogManager::LOCK_consensuslog_cache", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_rwlock_ConsensusLog_prefetch_channels_hash, "ConsensusPreFetchManager::LOCK_prefetch_channels_hash", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_rwlock_ConsensusLog_log_cache_lock, "ConsensusLogManager::LOCK_consensuslog_cache", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_ConsensusLog_status_lock, "Consensus_log_manager::LOCK_consensuslog_status", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &komodo::key_rwlock_ConsensusLog_prefetch_channels_hash, "Consensus_prefetch_manager::LOCK_prefetch_channels_hash", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &komodo::key_rwlock_FIFO_RESIZE, "komodo:::Fifo_cache_resize:rwlock", 0, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -12469,8 +12335,8 @@ static PSI_cond_info all_server_conds[]=
   { &key_consensus_info_stop_cond, "Consensus_info::stop_cond", 0, 0, PSI_DOCUMENT_ME},
   { &key_consensus_info_sleep_cond, "Consensus_info::sleep_cond", 0, 0, PSI_DOCUMENT_ME},
 
-  { &key_COND_ConsensusLog_catchup, "ConsensusLogManager::cond_consensuslog_catchup", 0, 0, PSI_DOCUMENT_ME},
-  { &key_COND_Consensus_state_change, "ConsensusLogManager::cond_consensus_state_change", 0, 0, PSI_DOCUMENT_ME},
+  { &key_COND_ConsensusLog_catchup, "Consensus_log_manager::cond_consensuslog_catchup", 0, 0, PSI_DOCUMENT_ME},
+  { &key_COND_Consensus_state_change, "Consensus_log_manager::cond_consensus_state_change", 0, 0, PSI_DOCUMENT_ME},
 }; /* clang-format on */
 
 PSI_thread_key key_thread_bootstrap;
@@ -12479,7 +12345,7 @@ PSI_thread_key key_thread_one_connection;
 PSI_thread_key key_thread_compress_gtid_table;
 PSI_thread_key key_thread_parser_service;
 PSI_thread_key key_thread_handle_con_admin_sockets;
-PSI_thread_key key_thread_consensus_stage_change;
+PSI_thread_key key_thread_consensus_state_change;
 
 /* clang-format off */
 static PSI_thread_info all_server_threads[]=
@@ -12499,12 +12365,13 @@ PSI_FLAG_USER | PSI_FLAG_NO_SEQNUM, 0, PSI_DOCUMENT_ME},
   { &key_thread_compress_gtid_table, "compress_gtid_table", "gtid_zip", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_parser_service, "parser_service", "parser_srv", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_handle_con_admin_sockets, "admin_interface", "con_admin", PSI_FLAG_USER, 0, PSI_DOCUMENT_ME},
-  { &key_thread_consensus_stage_change,  "consensus_stage_change","cstage_change", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_consensus_state_change,  "consensus_state_change","cstage_change", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 
   // CONSENSUS
-  { &key_thread_cleaner, "fifo_cleaner", "fifo_cleaner", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_thread_prefetch, "run_prefetch", "run_prefetch", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &komodo::key_thread_prefetch, "run_prefetch", "run_prefetch", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_thread_consensus_commit_pos_watcher, "consensus_commit_pos_watcher", "ccommit_watcher", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_disk_writeable_sentinel, "disk_writeable_sentinel", "disk_checker", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_thread_disk_hang_sentinel, "disk_hang_sentinel", "disk_watcher", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 /* clang-format on */
 
@@ -12644,6 +12511,7 @@ PSI_stage_info stage_updating_hotspot_collecting= { 0, "updating hotspot collect
 PSI_stage_info stage_updating_main_table= { 0, "updating main table", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_updating_reference_tables= { 0, "updating reference tables", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_user_sleep= { 0, "User sleep", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_vector_index_build= { 0, "vector index build", PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
 PSI_stage_info stage_verifying_table= { 0, "verifying table", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_waiting_for_gtid_to_be_committed= { 0, "Waiting for GTID to be committed", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_waiting_for_handler_commit= { 0, "waiting for handler commit", 0, PSI_DOCUMENT_ME};
@@ -12750,6 +12618,7 @@ PSI_stage_info *all_server_stages[] = {
     &stage_updating_main_table,
     &stage_updating_reference_tables,
     &stage_user_sleep,
+    &stage_vector_index_build,
     &stage_verifying_table,
     &stage_waiting_for_gtid_to_be_committed,
     &stage_waiting_for_handler_commit,

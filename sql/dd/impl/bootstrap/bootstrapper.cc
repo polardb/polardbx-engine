@@ -57,7 +57,7 @@
 #include "sql/dd/impl/upgrade/dd.h"             // dd::upgrade::upgrade_tables
 #include "sql/dd/impl/upgrade/server.h"  // dd::upgrade::do_server_upgrade_checks
 #include "sql/dd/impl/utils.h"           // dd::execute_query
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 #include "sql/dd/object_id.h"
 #include "sql/dd/properties.h"
 #include "sql/dd/types/abstract_table.h"
@@ -1705,10 +1705,10 @@ bool update_properties(THD *thd, const std::set<String_type> *create_set,
         tbl_props->set(ss.str().c_str(),
                        (*idx)->se_private_data().raw_string());
         /* Check dd table not contains panda */
-        if ((*idx)->se_private_data().exists(lizard::PAGE_TYPE_STR)) {
+        if ((*idx)->se_private_data().exists(komodo::PAGE_TYPE_STR)) {
           uint16_t page_type = 0;
-          (*idx)->se_private_data().get(lizard::PAGE_TYPE_STR, &page_type);
-          assert(page_type != lizard::PANDA_PAGE_TYPE);
+          (*idx)->se_private_data().get(komodo::PAGE_TYPE_STR, &page_type);
+          assert(page_type != komodo::PANDA_PAGE_TYPE);
         }
 
         /* Deal with IFT option. */
@@ -1716,13 +1716,13 @@ bool update_properties(THD *thd, const std::set<String_type> *create_set,
         options_ss << DD_properties::dd_key(DD_properties::DD_property::IDX)
                    << count << "options";
         ulonglong IFT_option = 0;
-        if ((*idx)->options().exists(lizard::OPTION_IFT)) {
-          (*idx)->options().get(lizard::OPTION_IFT, &IFT_option);
+        if ((*idx)->options().exists(komodo::OPTION_IFT)) {
+          (*idx)->options().get(komodo::OPTION_IFT, &IFT_option);
         }
         assert(DBUG_EVALUATE_IF("allow_dd_tables_have_gpp", true,
                                 IFT_option == 0));
         std::unique_ptr<Properties> options(Properties::parse_properties(""));
-        options->set(lizard::OPTION_IFT, IFT_option);
+        options->set(komodo::OPTION_IFT, IFT_option);
         tbl_props->set(options_ss.str().c_str(), options->raw_string());
       }
 

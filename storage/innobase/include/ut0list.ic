@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 4/26/2006 Osku Salerma
  ************************************************************************/
 
+#ifndef IB_LIST_H
+#define INNODB_UT0LIST_IC_STANDALONE
+#include "ut0list.h"
+#undef INNODB_UT0LIST_IC_STANDALONE
+#endif /* !IB_LIST_H */
 /** Get the first node in the list.
  @return first node, or NULL */
 static inline ib_list_node_t *ib_list_get_first(

@@ -31,22 +31,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "btr0pcur.h"
-#include "btr0sea.h"
-#include "trx0rec.h"
+#include "data0data.h"
+#include "page0types.h"
 #include "row0upd.h"
+#include "trx0rec.h"
 
 #include "lizard0btr0cur.h"
-#include "lizard0dbg.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0dict0mem.h"
 #include "lizard0fil0types.h"
 #include "lizard0mtr0log.h"
 #include "lizard0row.h"
 #include "lizard0row0bamboo.h"
-#include "lizard0row0clover.h"
 #include "lizard0row0gpp.h"
-#include "lizard0undo0rec0types.h"
+#include "lizard0row0lotus.h"
+#include "lizard0trx.h"
 #include "lizard0undo.h"
+#include "lizard0undo0rec0types.h"
 
 namespace lizard {
 /**
@@ -57,16 +58,64 @@ namespace lizard {
  */
 std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
     dict_index_t *clust_idx, const dict_index_t *sec_idx,
-    const dtuple_t *clust_ref, const rec_t *sec_rec, btr_pcur_t *clust_pcur,
-    const ulint *sec_offsets, ulint latch_mode, mtr_t *mtr) {
+    const dtuple_t *clust_ref, const Slice *sec_slc, btr_pcur_t *clust_pcur,
+    page_cur_mode_t mode, ulint latch_mode,
+    mtr_t *mtr) {
   ut_ad(sec_idx->n_s_gfields > 0);
-  ut_ad(sec_offsets && sec_offsets[1] == sec_idx->n_fields);
+  ut_ad(sec_slc && sec_slc->offsets()[1] == sec_idx->n_fields);
+  ut_ad(mode == PAGE_CUR_LE || mode == PAGE_CUR_GE);
   ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
-  ut_ad(rec_offs_validate(sec_rec, sec_idx, sec_offsets));
+  ut_ad(sec_slc->is_positioned(sec_idx));
   ut_ad(sec_idx->table == nullptr || !sec_idx->table->is_compressed());
 
-  /** Phase 1: read gpp no from the sec rec. */
+  /** Read gpp no from the sec rec. */
   bool clust_found = false;
+  page_no_t gpp_no = FIL_NULL;
+  ulint gpp_no_offset = ULINT_UNDEFINED;
+
+  std::tie(gpp_no, gpp_no_offset) = row_get_gpp_no(sec_idx, sec_slc);
+  ut_ad(gpp_no != 0);
+
+  clust_pcur->m_search_mode = mode;
+  clust_pcur->m_latch_mode = latch_mode;
+  clust_pcur->m_old_stored = false;
+
+  clust_found = btr_cur_guess_by_gpp_low(gpp_no, clust_idx, clust_ref,
+                                         clust_pcur->get_btr_cur(), mode,
+                                         latch_mode, mtr);
+
+  if (clust_found) {
+    clust_pcur->m_pos_state = BTR_PCUR_IS_POSITIONED;
+    clust_pcur->m_btr_cur.index = clust_idx;
+    clust_pcur->m_btr_cur.flag = BTR_CUR_BINARY;
+  }
+
+  sec_idx->gpp_stat(clust_found);
+
+  return {clust_found, gpp_no_offset};
+}
+
+/**
+ * Attempts to position a persistent cursor on a index record
+ * based on the gpp_no.
+ *
+ * @param[in]     idx             Index
+ * @param[in]     ref             Reference tuple for the index
+ * @param[in,out] btr_cur         Cursor for the index
+ * @param[in]     mode            search mode
+ * @param[in]     latch_mode      latching mode
+ * @param[in]     mtr             Mini-transaction handle
+ *
+ * @return        True if successful positioning, False otherwise
+ */
+bool btr_cur_guess_by_gpp_low(gpp_no_t gpp_no, dict_index_t *idx,
+                              const dtuple_t *ref, btr_cur_t *btr_cur,
+                              page_cur_mode_t mode, ulint latch_mode,
+                              mtr_t *mtr) {
+  ut_ad(mode == PAGE_CUR_LE || mode == PAGE_CUR_GE);
+  ut_ad(latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF);
+
+  bool found = false;
   ulint up_match = 0;
   ulint low_match = 0;
   buf_block_t *block = nullptr;
@@ -74,12 +123,6 @@ std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
   ulint cur_savepoint = 0;
   ulint savepoints[2];
   ulint n_savepoint = 0;
-  page_no_t gpp_no = FIL_NULL;
-  ulint gpp_no_offset = ULINT_UNDEFINED;
-
-  std::tie(gpp_no, gpp_no_offset) =
-      row_get_gpp_no(sec_rec, sec_idx, sec_offsets);
-  ut_ad(gpp_no != 0);
 
 #ifdef UNIV_DEBUG
   DBUG_EXECUTE_IF("set_gpp_null", gpp_no = FIL_NULL;);
@@ -87,7 +130,7 @@ std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
   DBUG_EXECUTE_IF("set_gpp_random", {
     page_no_t space_size = 100;
     if (fil_space_t *space =
-            fil_space_acquire_silent(dict_index_get_space(clust_idx))) {
+            fil_space_acquire_silent(dict_index_get_space(idx))) {
       space_size = space->size;
 
       fil_space_release(space);
@@ -97,19 +140,18 @@ std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
   });
 #endif /* UNIV_DEBUG */
 
-  if (gpp_no == FIL_NULL || clust_idx->table->is_compressed()) {
+  if (gpp_no == FIL_NULL || idx->table->is_compressed()) {
     goto func_exit;
   }
 
-  /** Phase 2: fetch the page according to gpp_no. */
+  /** Phase 1: fetch the page according to gpp_no. */
   /** Fetch the page in Page_fetch::IGNORE_MISSING mode because the page may
    * have already been freed or out of tablespace. */
   cur_savepoint = mtr_set_savepoint(mtr);
-  if ((block =
-           buf_page_get_gen(page_id_t{dict_index_get_space(clust_idx), gpp_no},
-                            dict_table_page_size(clust_idx->table), RW_NO_LATCH,
-                            nullptr, Page_fetch::IGNORE_MISSING_NOWAIT,
-                            UT_LOCATION_HERE, mtr)) == nullptr) {
+  if ((block = buf_page_get_gen(page_id_t{dict_index_get_space(idx), gpp_no},
+                                dict_table_page_size(idx->table), RW_NO_LATCH,
+                                nullptr, Page_fetch::IGNORE_MISSING_NOWAIT,
+                                UT_LOCATION_HERE, mtr)) == nullptr) {
     goto func_exit;
   }
   savepoints[n_savepoint++] = cur_savepoint;
@@ -125,7 +167,7 @@ std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
   if (!fil_page_index_page_check(
           buf_block_get_frame(block)) /* page is not index page */
       || btr_page_get_index_id(buf_block_get_frame(block)) !=
-             clust_idx->id /* page is not clust index page */
+             idx->id /* page is not clust index page */
       || !page_is_leaf(buf_block_get_frame(block)) /* page is not leaf page */
       || !page_has_siblings(
              buf_block_get_frame(block)) /* page has siblings (for excluding
@@ -138,39 +180,47 @@ std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
   ut_ad(!block->page.file_page_was_freed);
   ut_d(buf_page_mutex_exit(block));
 
-  /** Phase 3: search the clust rec in the target page. */
-  clust_pcur->m_latch_mode = latch_mode;
-  clust_pcur->m_search_mode = PAGE_CUR_LE;
-  clust_pcur->m_old_stored = false;
+  /** Phase 2: search the clust rec in the target page. */
+  page_cur_search_with_match(block, idx, ref, mode, &up_match, &low_match,
+                             btr_cur_get_page_cur(btr_cur), nullptr);
 
-  page_cur_search_with_match(block, clust_idx, clust_ref,
-                             clust_pcur->m_search_mode, &up_match, &low_match,
-                             clust_pcur->get_page_cur(), nullptr);
-
-  clust_pcur->m_pos_state = BTR_PCUR_IS_POSITIONED;
-  clust_pcur->m_btr_cur.index = clust_idx;
-  clust_pcur->m_btr_cur.flag = BTR_CUR_BINARY;
-
-  /** Phase 4: rec validation. */
-  if (!page_rec_is_user_rec(clust_pcur->get_rec()) ||
-      low_match < dict_index_get_n_unique(clust_idx)) {
-    clust_pcur->reset_btr_cur();
+  /** Phase 3: rec validation. */
+  if (!page_rec_is_user_rec(btr_cur_get_rec((btr_cur)))) {
     goto func_exit;
   }
 
-  clust_found = true;
+  /** Phase 4: match validation. */
+  switch (mode) {
+    case PAGE_CUR_LE:
+      if (low_match < dtuple_get_n_fields_cmp(ref)) {
+        goto func_exit;
+      }
+      break;
+    case PAGE_CUR_GE:
+      if (up_match < dtuple_get_n_fields_cmp(ref)) {
+        goto func_exit;
+      }
+      break;
+    default:
+      ut_error;
+  }
+
+  found = true;
 
 func_exit:
-  if (!clust_found) {
+  if (!found) {
+    btr_cur->index = nullptr;
+    btr_cur->flag = BTR_CUR_UNSET;
+    btr_cur->page_cur.rec = nullptr;
+    btr_cur->page_cur.block = nullptr;
+
     /** Release the page if the found rec is mismatched. */
     for (ulint i = 0; i < n_savepoint; ++i) {
       mtr_release_block_at_savepoint(mtr, savepoints[i], block);
     }
   }
 
-  sec_idx->gpp_stat(clust_found);
-
-  return {clust_found, gpp_no_offset};
+  return found;
 }
 
 /** Writes the redo log record for a delete mark setting of a normal secondary
@@ -179,10 +229,9 @@ func_exit:
   @param[in]      val        value to set
   @param[in]      mtr        mtr
 */
-static inline void btr_cur_del_mark_set_ancient_sec_rec_log(
-    rec_t *rec, /*!< in: record */
-    bool val,   /*!< in: value to set */
-    mtr_t *mtr) /*!< in: mtr */
+void btr_cur_del_mark_set_ancient_sec_rec_log(rec_t *rec, /*!< in: record */
+                                              bool val, /*!< in: value to set */
+                                              mtr_t *mtr) /*!< in: mtr */
 {
   byte *log_ptr = nullptr;
 
@@ -246,36 +295,203 @@ static void btr_cur_del_mark_set_panda_sec_rec_log(
   mlog_close(mtr, log_ptr);
 }
 
-/** Writes the redo log record for a delete mark setting of
-  secondary index record.
-  @param[in,out]  rec        record
-  @param[in]      val        value to set
+/** Writes the redo log record for delete marking of a
+  secondary index rec with tid column.
+  @param[in]      rec        record
   @param[in]      index      index of the record
   @param[in]      trx_id     transaction id
-  @param[in]      roll_ptr   roll ptr to the undo log record
-  @param[in]      txn_rec    txn record info
-  @param[in]      offsets    offsets of the record
-  @param[in]      layout     txn layout
-  @param[in]      page_zip   compressed page
+  @param[in]      trx_id_pos position of the trx_id in the record
   @param[in]      mtr        mtr
 */
-void btr_cur_del_mark_set_sec_rec_log(rec_t *rec, bool val, dict_index_t *index,
-                                      trx_id_t trx_id, roll_ptr_t roll_ptr,
-                                      const txn_rec_t *txn_rec, ulint *offsets,
-                                      const txn_layout_t &layout,
-                                      page_zip_des_t *page_zip, mtr_t *mtr) {
-  ut_ad(layout == TL_NONE || layout == TL_BAMBOO);
-  switch (layout) {
-    case TL_NONE:
-      btr_cur_del_mark_set_ancient_sec_rec_log(rec, val, mtr);
-      break;
-    case TL_BAMBOO:
-      btr_cur_del_mark_set_panda_sec_rec_log(rec, index, trx_id, roll_ptr,
-                                             txn_rec, mtr);
-      break;
-    default:
-      ut_error;
+void btr_cur_del_mark_set_hippo_sec_rec_log(rec_t *rec,
+                                            const dict_index_t *index, bool val,
+                                            trx_id_t trx_id, ulint trx_id_pos,
+                                            mtr_t *mtr) {
+  ut_ad(index->is_hippo());
+  byte *log_ptr = nullptr;
+
+  ut_ad(page_rec_is_comp(rec) == dict_table_is_comp(index->table));
+
+  const bool opened =
+      mlog_open_and_write_index(mtr, rec, index, MLOG_REC_SEC_HIPPO_DELETE_MARK,
+                                1 + 1 + REDO_SYS_TID_LEN + 2, log_ptr);
+
+  if (!opened) {
+    /* Logging in mtr is switched off during crash recovery */
+    return;
   }
+
+  /** flag */
+  *log_ptr++ = 0;
+  /** value */
+  *log_ptr++ = val;
+
+  log_ptr += mach_write_compressed(log_ptr, trx_id_pos);
+
+  log_ptr += mach_u64_write_compressed(log_ptr, trx_id);
+
+  mach_write_to_2(log_ptr, page_offset(rec));
+  log_ptr += 2;
+
+  mlog_close(mtr, log_ptr);
+}
+
+/** Sets a secondary panda index record delete mark to true or false.
+  @param[in]      layout     txn layout
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
+  @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_panda_sec_rec_low(const txn_layout_t &layout,
+                                               btr_cur_t *cursor,
+                                               que_thr_t *thr, ulint flags,
+                                               bool val, mtr_t *mtr) {
+  dberr_t err;
+  roll_ptr_t roll_ptr;
+  txn_rec_t txn_rec;
+  Slice_ctx slc_ctx;
+  Slice *slc;
+  buf_block_t *block = btr_cur_get_block(cursor);
+  reg_t reg = btr_cur_get_reg(cursor);
+  page_zip_des_t *page_zip = buf_block_get_page_zip(block);
+  trx_t *trx = thr_get_trx(thr);
+  dict_index_t *index = cursor->index;
+
+  ut_ad(trx_state_eq(trx, TRX_STATE_ACTIVE));
+  ut_ad(page_rec_is_comp(reg.rec) == dict_table_is_comp(index->table));
+  ut_ad(index->is_panda());
+  ut_a(val == true); /* val must be true for panda. */
+  ut_ad(thr);
+
+  err = lock_sec_rec_modify_check_and_lock(flags, block, reg, index, thr, mtr);
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  DBUG_PRINT("ib_cur",
+             ("delete-mark=%u sec %u:%u:%u in %s(" IB_ID_FMT ") by " TRX_ID_FMT,
+              unsigned(val), block->page.id.space(), block->page.id.page_no(),
+              unsigned(page_rec_get_heap_no(reg.rec)), index->name(), index->id,
+              trx_get_id_for_print(trx)));
+
+  slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+  ut_ad(row_txn_is_valid(slc, index, layout));
+
+  /** Lizard: Do the cleanout. */
+  if (!(flags & BTR_NO_UNDO_LOG_FLAG)) {
+    ut_ad(!index->table->is_intrinsic());
+    txn_rec_cleanout_when_modify(trx->id, slc, index, layout, block, mtr);
+  }
+
+  err =
+      trx_undo_report_row_operation(flags, layout, TRX_UNDO_MODIFY_OP, trx,
+                                    index, nullptr, nullptr, 0, slc, &roll_ptr);
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  btr_rec_set_deleted_flag(slc->rec(), page_zip, val);
+
+  txn_rec.copy_from_txn_desc(trx);
+  row_upd_rec_sys_fields(slc, page_zip, index, trx, roll_ptr);
+  row_upd_rec_txn_fields(slc, page_zip, index, layout, &trx->txn_desc);
+
+  btr_cur_del_mark_set_panda_sec_rec_log(slc->rec(), index, trx->id, roll_ptr,
+                                         &txn_rec, mtr);
+  commit_cleanout_collect(thr, cursor, slc->rec(), flags, layout);
+
+  return (DB_SUCCESS);
+}
+
+/** Sets a secondary hippo index record delete mark to true or false.
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
+  @param[in]      sec_tid    secondary transaction id
+  @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_hippo_sec_rec_low(btr_cur_t *cursor,
+                                               que_thr_t *thr, ulint flags,
+                                               bool val, trx_id_t sec_tid,
+                                               mtr_t *mtr) {
+  dberr_t err;
+  Slice_ctx slc_ctx;
+  Slice *slc;
+  buf_block_t *block = btr_cur_get_block(cursor);
+  reg_t reg = btr_cur_get_reg(cursor);
+  dict_index_t *index = cursor->index;
+
+  ut_ad(buf_block_get_page_zip(block) == nullptr);
+  ut_ad(trx_state_eq(thr_get_trx(thr), TRX_STATE_ACTIVE) ||
+        trx_state_eq(thr_get_trx(thr), TRX_STATE_PREPARED));
+  /** sec_tid equals 0 iff in rollback. */
+  ut_ad(sec_tid != 0 ||
+        (thr_get_trx(thr)->in_rollback && (flags & BTR_NO_UNDO_LOG_FLAG)));
+  ut_ad(page_rec_is_comp(reg.rec) == dict_table_is_comp(index->table));
+
+  err = lock_sec_rec_modify_check_and_lock(flags, block, reg, index, thr, mtr);
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  DBUG_PRINT("ib_cur",
+             ("delete-mark=%u sec %u:%u:%u in %s(" IB_ID_FMT ") by " TRX_ID_FMT,
+              unsigned(val), block->page.id.space(), block->page.id.page_no(),
+              unsigned(page_rec_get_heap_no(reg.rec)), index->name(), index->id,
+              trx_get_id_for_print(thr_get_trx(thr))));
+
+  slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+
+  btr_rec_set_deleted_flag(reg.rec, nullptr, val);
+
+  row_upd_rec_lotus_fields_low(slc, nullptr, index, sec_tid);
+
+  HIPPO_ASSERT_TID_DML_REC(index, slc, thr);
+
+  btr_cur_del_mark_set_hippo_sec_rec_log(slc->rec(), index, val, sec_tid,
+                                         index->get_sys_col_pos(DATA_TRX_ID),
+                                         mtr);
+
+  return (DB_SUCCESS);
+}
+
+/** Sets a secondary ancient index record delete mark to true or false.
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
+  @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_ancient_sec_rec_low(btr_cur_t *cursor,
+                                                 que_thr_t *thr, ulint flags,
+                                                 bool val, mtr_t *mtr) {
+  dberr_t err;
+  buf_block_t *block = btr_cur_get_block(cursor);
+  reg_t reg = btr_cur_get_reg(cursor);
+
+  ut_ad(page_rec_is_comp(reg.rec) == dict_table_is_comp(cursor->index->table));
+
+  err = lock_sec_rec_modify_check_and_lock(flags, block, reg, cursor->index,
+                                           thr, mtr);
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
+
+  DBUG_PRINT("ib_cur",
+             ("delete-mark=%u sec %u:%u:%u in %s(" IB_ID_FMT ") by " TRX_ID_FMT,
+              unsigned(val), block->page.id.space(), block->page.id.page_no(),
+              unsigned(page_rec_get_heap_no(reg.rec)), cursor->index->name(),
+              cursor->index->id, trx_get_id_for_print(thr_get_trx(thr))));
+
+  /* We do not need to reserve search latch, as the delete-mark flag is being
+   * updated in place and the adaptive hash index does not depend on it. */
+  btr_rec_set_deleted_flag(reg.rec, buf_block_get_page_zip(block), val);
+  btr_cur_del_mark_set_ancient_sec_rec_log(reg.rec, val, mtr);
+
+  return (DB_SUCCESS);
 }
 
 /** Parses the redo log record for delete marking or unmarking of a panda
@@ -294,7 +510,7 @@ byte *btr_cur_parse_del_mark_set_panda_sec_rec(byte *ptr, byte *end_ptr,
   trx_id_t trx_id;
   roll_ptr_t roll_ptr;
   ulint offset;
-  rec_t *rec;
+  reg_t reg;
   ulint txn_pos;
   scn_t scn;
   undo_ptr_t undo_ptr;
@@ -333,34 +549,89 @@ byte *btr_cur_parse_del_mark_set_panda_sec_rec(byte *ptr, byte *end_ptr,
   ut_a(offset <= UNIV_PAGE_SIZE);
 
   if (page) {
-    rec = page + offset;
+    reg = {page + offset, MLOC_IN_PAGE};
 
     /* We do not need to reserve search latch, as the page
     is only being recovered, and there cannot be a hash index to
     it. Besides, these fields are being updated in place
     and the adaptive hash index does not depend on them. */
 
-    btr_rec_set_deleted_flag(rec, page_zip, val);
+    btr_rec_set_deleted_flag(reg.rec, page_zip, val);
 
     if (!(flags & BTR_KEEP_SYS_FLAG)) {
-      mem_heap_t *heap = nullptr;
-      ulint offsets_[REC_OFFS_NORMAL_SIZE];
-      ulint *offsets = offsets_;
-      rec_offs_init(offsets_);
-      offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+      Slice_ctx slc_ctx;
+      Slice *slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-      row_upd_rec_sys_fields_in_recovery(rec, page_zip, offsets, pos, trx_id,
-                                         roll_ptr);
+      row_upd_rec_sys_fields_in_recovery(slc, page_zip, pos, trx_id, roll_ptr);
 
-      lizard::row_upd_rec_bamboo_fields_in_recovery(
-          rec, page_zip, index, txn_pos, offsets, scn, undo_ptr);
-
-      /** TODO: Check it */
-      if (UNIV_LIKELY_NULL(heap)) {
-        mem_heap_free(heap);
-      }
+      lizard::row_upd_rec_bamboo_fields_in_recovery(slc, page_zip, index,
+                                                    txn_pos, scn, undo_ptr);
     }
+  }
+
+  return (ptr);
+}
+
+
+/** Parses the redo log record for delete marking or unmarking of a
+  secondary index rec with tid column.
+  @param[in]      ptr         buffer
+  @param[in]      end_ptr     buffer end
+  @param[in,out]  page        page or NULL
+  @param[in,out]  page_zip    compressed page, or NULL
+  @param[in]      index       index corresponding to page
+ @return end of log record or NULL */
+byte *btr_cur_parse_del_mark_set_hippo_sec_rec(byte *ptr, byte *end_ptr,
+                                               page_t *page,
+                                               page_zip_des_t *page_zip,
+                                               dict_index_t *index) {
+  ulint pos;
+  trx_id_t rec_tid;
+  ulint offset;
+  reg_t reg;
+
+  ut_ad(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+  ut_ad(index->is_hippo());
+
+  if (end_ptr < ptr + 2) {
+    return (nullptr);
+  }
+
+  auto flags = mach_read_from_1(ptr);
+  ptr++;
+  auto val = mach_read_from_1(ptr);
+  ptr++;
+  ut_a(flags == 0);
+
+  ptr = row_upd_parse_lotus_vals(ptr, end_ptr, &pos, &rec_tid);
+
+  if (ptr == nullptr) {
+    return (nullptr);
+  }
+
+  if (end_ptr < ptr + 2) {
+    return (nullptr);
+  }
+
+  offset = mach_read_from_2(ptr);
+  ptr += 2;
+
+  ut_a(offset <= UNIV_PAGE_SIZE);
+
+  if (page) {
+    reg = {page + offset, MLOC_IN_PAGE};
+
+    /* We do not need to reserve search latch, as the page
+    is only being recovered, and there cannot be a hash index to
+    it. Besides, these fields are being updated in place
+    and the adaptive hash index does not depend on them. */
+
+    btr_rec_set_deleted_flag(reg.rec, page_zip, val);
+
+    Slice_ctx slc_ctx;
+    Slice *slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+
+    row_upd_rec_lotus_fields_in_recovery(slc, page_zip, pos, rec_tid);
   }
 
   return (ptr);
@@ -425,7 +696,7 @@ void btr_cur_print_duplicate_error_in_uk_online(btr_cur_t *btr_cur,
   @param[in]      trx     transaction
   @param[in/out]  entry   The entry to be inserted
   @param[in]      flags   care flags: BTR_NO_UNDO_LOG_FLAG, BTR_KEEP_SYS_FLAG
-  @param[in]      layout  TL_BAMBOO or TL_NONE
+  @param[in]      layout  TL_BAMBOO or TL_NONE or TL_LOTUS
 */
 void btr_cur_rlog_insert(dict_index_t *index, trx_t *trx, dtuple_t *entry,
                          ulint flags, const txn_layout_t &layout) {
@@ -447,7 +718,7 @@ void btr_cur_rlog_insert(dict_index_t *index, trx_t *trx, dtuple_t *entry,
   if (dict_index_is_panda(index)) {
     err = trx_undo_report_rlog_operation(flags, layout, TRX_UNDO_INSERT_OP, trx,
                                          index, entry, nullptr, 0, nullptr,
-                                         nullptr, &urec_trx, &roll_ptr);
+                                         &urec_trx, &roll_ptr);
 
     if (err != DB_SUCCESS) {
       row_log_set_error(index, err);
@@ -476,7 +747,7 @@ void btr_cur_rlog_insert(dict_index_t *index, trx_t *trx, dtuple_t *entry,
   @param[in]      trx     transaction
   @param[in/out]  entry   The entry to be deleted
   @param[in]      flags   care flags: BTR_NO_UNDO_LOG_FLAG, BTR_KEEP_SYS_FLAG
-  @param[in]      layout  TL_BAMBOO or TL_NONE
+  @param[in]      layout  TL_BAMBOO or TL_NONE or TL_LOTUS
 */
 void btr_cur_rlog_delete(dict_index_t *index, trx_t *trx, dtuple_t *entry,
                          ulint flags, const txn_layout_t &layout) {
@@ -530,7 +801,7 @@ void btr_cur_rlog_delete(dict_index_t *index, trx_t *trx, dtuple_t *entry,
 
     err = trx_undo_report_rlog_operation(flags, layout, TRX_UNDO_MODIFY_OP, trx,
                                          index, entry, nullptr, 0, nullptr,
-                                         nullptr, &urec_trx, &roll_ptr);
+                                         &urec_trx, &roll_ptr);
 
     if (err != DB_SUCCESS) {
       row_log_set_error(index, err);

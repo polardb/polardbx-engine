@@ -33,6 +33,7 @@
 #include "sql/package/package_parse.h"
 #include "sql/package/proc.h"
 #include "sql/package/proc_conn.h"
+#include "sql/package/proc_ftrunc_lock.h"
 #include "sql/recycle_bin/recycle_proc.h"
 #include "sql/sp_head.h"
 #include "sql/trans_proc/implicit_savepoint.h"
@@ -40,6 +41,8 @@
 #include "sql/tso/tso_proc.h"
 
 #include "sql/consensus/consensus_proc.h"
+#include "sql/package/proc_checkpoint.h"
+
 
 #ifndef NDEBUG
 #include "sql/package/proc_dummy.h"
@@ -47,10 +50,10 @@
 
 #include "sql/package/show_native_procedure.h"
 
-#include "sql/lizard/undo_proc.h"
 #include "sql/pli/license_proc.h"
 #include "sql/proxy/proxy_proc.h"
-#include "sql/xa/lizard_xa_proc.h"
+#include "sql/transaction/komodo0undo0proc.h"
+#include "sql/xa/komodo0xa0proc.h"
 #include "sql/xrpc/xrpc_proc.h"
 
 #include "sql/polarx_proc/changeset_proc.h"
@@ -58,9 +61,11 @@
 #ifdef RDS_HAVE_JEMALLOC
 #include "sql/sql_jemalloc.h"
 #endif
-#include "sql/package/proc_gpp.h"
 #include "sql/package/proc_cleanout.h"
-
+#include "sql/package/proc_gpp.h"
+#include "sql/ai/proc_ai.h"
+#include "sql/package/proc_spc_analyze.h"
+#include "sql/vidx/vidx_proc.h"
 namespace im {
 
 /* All package memory usage aggregation point */
@@ -150,25 +155,31 @@ void package_context_init() {
   register_package<Proc, Proc_get_timestamp>(TSO_PROC_SCHEMA);
 
   /* dbms_xa.find_by_xid("$gtrid", "$bqual", "$formatID") */
-  register_package<Proc, Xa_proc_find_by_xid>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_find_by_xid>(komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.find_by_xid("$gtrid", "$bqual", "$formatID", "$uba_hint") */
-  register_package<Proc, Xa_proc_find_by_xid_with_hint>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_find_by_xid_with_hint>(
+      komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.prepare_with_trx_slot */
-  register_package<Proc, Xa_proc_prepare_with_trx_slot>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_prepare_with_trx_slot>(komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.send_heartbeat() */
-  register_package<Proc, Xa_proc_send_heartbeat>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_send_heartbeat>(komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.advance_gcn_no_flush() */
-  register_package<Proc, Xa_proc_advance_gcn_no_flush>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_advance_gcn_no_flush>(
+      komodo::XA_PROC_SCHEMA);
+
+  /* dbms_xa.advance_retention_gcn_no_flush() */
+  register_package<Proc, komodo::Xa_proc_advance_retention_gcn_no_flush>(
+      komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.ac_prepare */
-  register_package<Proc, Xa_proc_ac_prepare>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_ac_prepare>(komodo::XA_PROC_SCHEMA);
 
   /* dbms_xa.ac_commit */
-  register_package<Proc, Xa_proc_ac_commit>(XA_PROC_SCHEMA);
+  register_package<Proc, komodo::Xa_proc_ac_commit>(komodo::XA_PROC_SCHEMA);
 
   /* dbms_trans.returning() */
   register_package<Proc, Trans_proc_returning>(TRANS_PROC_SCHEMA);
@@ -181,9 +192,9 @@ void package_context_init() {
 
 
   /* dbms_undo.trunc_status() */
-  register_package<Proc, Proc_trunc_status>(PROC_UNDO_SCHEMA);
+  register_package<Proc, komodo::Proc_trunc_status>(komodo::PROC_UNDO_SCHEMA);
   /* dbms_undo.purge_status() */
-  register_package<Proc, Proc_purge_status>(PROC_UNDO_SCHEMA);
+  register_package<Proc, komodo::Proc_purge_status>(komodo::PROC_UNDO_SCHEMA);
 
   /* dbms_ccl.add_ccl_rule(...) */
   register_package<Proc, Ccl_proc_add>(CCL_PROC_SCHEMA);
@@ -193,11 +204,16 @@ void package_context_init() {
   register_package<Proc, Ccl_proc_del>(CCL_PROC_SCHEMA);
   /* dbms_ccl.show_ccl_rule(...) */
   register_package<Proc, Ccl_proc_show>(CCL_PROC_SCHEMA);
-
   /* dbms_ccl.flush_ccl_queue(...) */
   register_package<Proc, Ccl_proc_flush_queue>(CCL_PROC_SCHEMA);
   /* dbms_ccl.show_ccl_queue(...) */
   register_package<Proc, Ccl_proc_show_queue>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.del_all_ccl_rule(...) */
+  register_package<Proc, Ccl_proc_del_all>(CCL_PROC_SCHEMA);
+  /* dbms_ccl.add_ccl_rule_returning(...) */
+  register_package<Proc, Ccl_proc_add_returning>(CCL_PROC_SCHEMA);
+  /** dbms_ccl.del_ccl_rule_batch(...) */
+  register_package<Proc, Ccl_proc_del_batch>(CCL_PROC_SCHEMA);
 
   /* dbms_recycle.show_tables() */
   register_package<Proc, im::recycle_bin::Recycle_proc_show>(
@@ -257,6 +273,7 @@ void package_context_init() {
   register_package<Proc, Consensus_proc_show_global>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_show_local>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_show_logs>(CONSENSUS_PROC_SCHEMA);
+  register_package<Proc, Consensus_proc_get_cidx>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_local_purge_log>(CONSENSUS_PROC_SCHEMA);
   register_package<Proc, Consensus_proc_force_purge_log>(CONSENSUS_PROC_SCHEMA);
@@ -281,7 +298,7 @@ void package_context_init() {
   register_package<Proc, Changeset_proc_start>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_stats>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_fetch>(POLARX_PROC_SCHEMA);
-  register_package<Proc, Changeset_proc_stop>(POLARX_PROC_SCHEMA);
+  register_package<Proc, Changeset_proc_backpressure>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_finish>(POLARX_PROC_SCHEMA);
   register_package<Proc, Changeset_proc_times>(POLARX_PROC_SCHEMA);
 
@@ -306,6 +323,44 @@ void package_context_init() {
   register_package<Proc, Conn_proc_show>(PROC_CONN_SCHEMA);
   /* dbms_conn.show_client_error_code(...) */
   register_package<Proc, Conn_proc_show_client_error_code>(PROC_CONN_SCHEMA);
+
+  /* dbms_checkpoint.advance_checkpoint(...) */
+  register_package<Proc, Advance_checkpoint_proc>(PROC_CHECKPOINT_SCHEMA);
+
+  /* dbms_lock.acquire_s_ftrunc() */
+  register_package<Proc, im::ftrunc_lock::Ftrunc_lock_proc_acquire_shared>(
+      im::ftrunc_lock::FTRUNC_LOCK_PROC_SCHEMA);
+  /* dbms_lock.acquire_x_ftrunc() */
+  register_package<Proc, im::ftrunc_lock::Ftrunc_lock_proc_acquire_exclusive>(
+      im::ftrunc_lock::FTRUNC_LOCK_PROC_SCHEMA);
+  /* dbms_lock.release_ftrunc() */
+  register_package<Proc, im::ftrunc_lock::Ftrunc_lock_proc_release>(
+      im::ftrunc_lock::FTRUNC_LOCK_PROC_SCHEMA);
+
+  /* dbms_ai.register_model(...) */
+  register_package<Proc, Ai_proc_register_model>(AI_PROC_SCHEMA);
+  /* dbms_ai.list_models() */
+  register_package<Proc, Ai_proc_list_models>(AI_PROC_SCHEMA);
+  /* dbms_ai.describe_model(...) */
+  register_package<Proc, Ai_proc_describe_model>(AI_PROC_SCHEMA);
+  /* dbms_ai.update_model(...) */
+  register_package<Proc, Ai_proc_update_model>(AI_PROC_SCHEMA);
+  /* dbms_ai.update_function(...) */
+  register_package<Proc, Ai_proc_update_function>(AI_PROC_SCHEMA);
+  /* dbms_ai.show_ai_function() */
+  register_package<Proc, Ai_proc_show_ai_function>(AI_PROC_SCHEMA);
+  /* dbms_ai.drop_model(...) */
+  register_package<Proc, Ai_proc_drop_model>(AI_PROC_SCHEMA);
+
+  /* dbms_spc.analyze_table(table_name) */
+  register_package<Proc, Proc_spc_analyze_table>(SPC_PROC_SCHEMA);
+
+  /* dbms_vidx.preload(db, table, vector_column) */
+  register_package<Proc, Vidx_proc_preload>(VIDX_PROC_SCHEMA);
+  /* dbms_vidx.preload_check(db, table, vector_column) */
+  register_package<Proc, Vidx_proc_preload_check>(VIDX_PROC_SCHEMA);
+  /* dbms_vidx.prebuild_check(db, table[, m]) */
+  register_package<Proc, Vidx_proc_prebuild_check>(VIDX_PROC_SCHEMA);
 }
 
 } /* namespace im */

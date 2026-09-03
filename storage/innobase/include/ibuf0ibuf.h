@@ -70,7 +70,8 @@ enum ibuf_use_t {
 
 /** Operations that can currently be buffered. */
 extern ulong innodb_change_buffering;
-
+/** Flag to control whether purge operations on hippo index can be buffered. */
+extern bool ibuf_hippo_purge_enabled;
 /** The insert buffer control structure */
 extern ibuf_t *ibuf;
 
@@ -289,6 +290,14 @@ to the buffer pool.
 @returns number of pages merged.*/
 ulint ibuf_merge_space(space_id_t space); /*!< in: space id */
 
+static inline bool ibuf_hippo_purge_possible(const dict_index_t *index) {
+  if (index->is_hippo()) {
+    return ibuf_hippo_purge_enabled;
+  }
+
+  return true;
+}
+
 #endif /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of an ibuf bitmap page init.
 @param[in] ptr Buffer.
@@ -352,6 +361,8 @@ constexpr uint32_t IBUF_HEADER = PAGE_DATA;
 /** fseg header for ibuf tree */
 constexpr uint32_t IBUF_TREE_SEG_HEADER = 0;
 
+#ifndef INNODB_IBUF0IBUF_IC_STANDALONE
 #include "ibuf0ibuf.ic"
+#endif /* !INNODB_IBUF0IBUF_IC_STANDALONE */
 
 #endif

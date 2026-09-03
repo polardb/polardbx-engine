@@ -68,11 +68,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  secondary index entry after purge has removed it and released the leaf
  page latch.
  @return true if the secondary index record can be purged */
-[[nodiscard]] bool row_purge_poss_sec(
-    purge_node_t *node,     /*!< in/out: row purge node */
-    dict_index_t *index,    /*!< in: secondary index */
-    const dtuple_t *entry,  /*!< in: secondary index entry */
-    btr_cur_t *cur);        /*!< in: cursor on secondary index */
+[[nodiscard]] bool row_purge_poss_sec_slow(
+    purge_node_t *node,    /*!< in/out: row purge node */
+    dict_index_t *index,   /*!< in: secondary index */
+    const dtuple_t *entry, /*!< in: secondary index entry */
+    btr_cur_t *cur);       /*!< in: cursor on secondary index */
 /***************************************************************
 Does the purge operation for a single undo log record. This is a high-level
 function used in an SQL execution graph.

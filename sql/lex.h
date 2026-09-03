@@ -453,6 +453,7 @@ static const SYMBOL symbols[] = {
     {SYM("MODE", MODE_SYM)},
     {SYM("MODIFIES", MODIFIES_SYM)},
     {SYM("MODIFY", MODIFY_SYM)},
+    {SYM("MODIFY_ON_UPDATE", MODIFY_ON_UPDATE_SYM)},
     {SYM("MONTH", MONTH_SYM)},
     {SYM("MULTILINESTRING", MULTILINESTRING_SYM)},
     {SYM("MULTIPOINT", MULTIPOINT_SYM)},
@@ -833,6 +834,13 @@ static const SYMBOL symbols[] = {
     {SYM("ZEROFILL", ZEROFILL_SYM)},
     {SYM("ZONE", ZONE_SYM)},
     {SYM("||", OR_OR_SYM)},
+    {SYM("VECTOR", VECTOR_SYM)},
+    {SYM("M", M_SYM)},
+    {SYM("DISTANCE", DISTANCE_SYM)},
+    {SYM("EUCLIDEAN", EUCLIDEAN_SYM)},
+    {SYM("COSINE", COSINE_SYM)},
+    {SYM("INNER_PRODUCT", INNER_PRODUCT_SYM)},
+    {SYM("EF_CONSTRUCTION", EF_CONSTRUCTION_SYM)},
     /*
       Place keywords that accept optimizer hints below this comment.
     */

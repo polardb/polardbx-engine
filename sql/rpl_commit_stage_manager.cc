@@ -30,7 +30,7 @@
 #include "sql/rpl_commit_stage_manager.h"
 #include "sql/rpl_replica_commit_order_manager.h"  // Commit_order_manager
 #include "sql/rpl_rli_pdb.h"                       // Slave_worker
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0xlog.h"
 
 class Slave_worker;
 class Commit_order_manager;
@@ -367,7 +367,7 @@ bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
       caused by logging incident log event, since it is already locked.
     */
     need_lock_enter_mutex = !(mysql_bin_log.is_rotating_caused_by_incident
-                              && enter_mutex == consensus_log_manager.get_sequence_stage1_lock());
+                              && enter_mutex == komodo::xlog_log_manager_get_sequence_stage1_lock());
 
     if (need_lock_enter_mutex)
       mysql_mutex_lock(enter_mutex);

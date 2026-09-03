@@ -120,6 +120,8 @@ void dict_stats_thread();
 /** Shutdown the dict stats thread. */
 void dict_stats_shutdown();
 
+#ifndef INNODB_DICT0STATS_BG_IC_STANDALONE
 #include "dict0stats_bg.ic"
+#endif /* !INNODB_DICT0STATS_BG_IC_STANDALONE */
 
 #endif /* dict0stats_bg_h */

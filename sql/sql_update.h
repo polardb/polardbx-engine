@@ -121,6 +121,9 @@ class Query_result_update final : public Query_result_interceptor {
   unique_ptr_destroy_only<RowIterator> create_iterator(
       THD *thd, MEM_ROOT *mem_root,
       unique_ptr_destroy_only<RowIterator> source);
+
+  bool reject_encryption_transfer(
+      THD *thd, const mem_root_deque<Item *> &values) override;
 };
 
 class Sql_cmd_update final : public Sql_cmd_dml {

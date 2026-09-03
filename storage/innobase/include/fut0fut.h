@@ -52,7 +52,9 @@ bufferfixed and latched */
     space_id_t space, const page_size_t &page_size, fil_addr_t addr,
     rw_lock_type_t rw_latch, mtr_t *mtr, buf_block_t **ptr_block = nullptr);
 
+#ifndef INNODB_FUT0FUT_IC_STANDALONE
 #include "fut0fut.ic"
+#endif /* !INNODB_FUT0FUT_IC_STANDALONE */
 #endif /* !UNIV_HOTBACKUP */
 
 #endif /* fut0fut_h */

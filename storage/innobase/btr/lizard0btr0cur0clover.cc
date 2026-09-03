@@ -33,7 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0btr0cur0clover.h"
 #include "lizard0dbg.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0mtr0log.h"
 #include "lizard0row0clover.h"
 
@@ -88,7 +88,6 @@ byte *btr_cur_parse_clover_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
   undo_ptr_t undo_ptr;
   gcn_t gcn;
   ulint rec_offset;
-  rec_t *rec;
 
   ut_ad(!page || !!page_is_comp(page) == dict_table_is_comp(index->table));
 
@@ -109,30 +108,23 @@ byte *btr_cur_parse_clover_fields_upd_clust_rec(byte *ptr, byte *end_ptr,
   ut_a(rec_offset <= UNIV_PAGE_SIZE);
 
   if (page) {
-    mem_heap_t *heap = nullptr;
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
-    rec = page + rec_offset;
+    Slice_ctx slc_ctx;
+    Slice *slc = nullptr;
+    slc = slc_ctx.get_offsets({page + rec_offset, MLOC_IN_PAGE}, index,
+                              ULINT_UNDEFINED);
 
-    rec_offs_init(offsets_);
-
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
-
-    if (page_is_comp(page) || rec_offs_comp(offsets)) {
-      assert_lizard_dict_index_check_no_check_table(index);
+    if (page_is_comp(page) || rec_offs_comp(slc->offsets())) {
+      ut_ad(lizard::dict_index_check_valid(index, false));
     } else {
       /** If it's non-compact, the info of index will not be written in redo
       log, but it can be self-explanatory because there is a offsets array in
       physical record. See the function **rec_get_offsets** */
       lizard_ut_ad(index && index->table && !index->table->col_names);
-      lizard_ut_ad(!rec_offs_comp(offsets));
+      lizard_ut_ad(!rec_offs_comp(slc->offsets()));
     }
 
-    row_upd_rec_clover_fields_in_recovery(rec, page_zip, index, pos, offsets,
-                                          scn, undo_ptr, gcn);
-
-    if (UNIV_LIKELY_NULL(heap)) mem_heap_free(heap);
+    row_upd_rec_clover_fields_in_recovery(slc, page_zip, index, pos, scn,
+                                          undo_ptr, gcn);
   }
 
   return ptr;

@@ -401,6 +401,8 @@ void fts_cache_node_add_positions(
     const char *param,          /*!< in: base name of param */
     const dict_index_t *index); /*!< in: index for config */
 
+#ifndef INNODB_FTS0PRIV_IC_STANDALONE
 #include "fts0priv.ic"
+#endif /* !INNODB_FTS0PRIV_IC_STANDALONE */
 
 #endif /* INNOBASE_FTS0PRIV_H */

@@ -3762,12 +3762,7 @@ inline void assign_priv_user_host(Security_context *sctx, ACL_USER *user) {
   is set in Diagnostics_area.
 */
 static inline bool check_restrictions_for_com_connect_command(THD *thd) {
-  /** Check the License file first. */
-  if (!(xlicense::POLARX_LICENSE_CALL(verify_license_conns_constrains(
-          Connection_handler_manager::get_instance()
-              ->get_connection_count())))) {
-    return true;
-  }
+  komodo::Connection_count curr_conns;
 
   if (thd->is_admin_connection() &&
       !thd->m_main_security_ctx
@@ -3785,11 +3780,19 @@ static inline bool check_restrictions_for_com_connect_command(THD *thd) {
         thd->m_main_security_ctx
             .has_global_grant(STRING_WITH_LEN("SERVICE_CONNECTION_ADMIN"))
             .first)) {
-    if (!Connection_handler_manager::get_instance()
-             ->valid_connection_count()) {  // too many connections
+    auto [is_accepted, res_conns] =
+        Connection_handler_manager::get_instance()->valid_connection_count();
+    curr_conns.init(res_conns);
+    if (!is_accepted) {  // too many connections
       my_error(ER_CON_COUNT_ERROR, MYF(0));
       return true;
     }
+  }
+
+  /** Check the License file . */
+  if (!(komodo::POLARX_LICENSE_CALL(
+          verify_license_conns_constrains(curr_conns)))) {
+    return true;
   }
 
   return false;
@@ -3841,6 +3844,14 @@ static void check_and_update_password_lock_state(MPVIO_EXT &mpvio, THD *thd,
       res = CR_ERROR;
     } else
       acl_cache_lock.unlock();
+  } else if (initialized && mpvio.can_authenticate()) {
+    const ACL_USER *acl_user = mpvio.acl_user;
+    if (mysql_audit_notify(
+            thd, AUDIT_EVENT(MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CHECK),
+            acl_user->user, acl_user->host.get_host(), mpvio.ip,
+            res == CR_OK)) {
+      res = CR_ERROR;
+    }
   }
 }
 
@@ -4259,6 +4270,8 @@ int acl_authenticate(THD *thd, enum_server_command command) {
       my_error(ER_CON_COUNT_ERROR, MYF(0));
       return 1;
     }
+
+    im::apply_polarx_specific_user_default(thd);
 
     /*
       This is the default access rights for the current database.  It's

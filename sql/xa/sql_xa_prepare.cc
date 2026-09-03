@@ -100,6 +100,7 @@ enum_sql_command Sql_cmd_xa_prepare::sql_command_code() const {
 }
 
 bool Sql_cmd_xa_prepare::execute(THD *thd) {
+  thd->cpolicy_ctx.activate_xa_prepare();
   bool st = trans_xa_prepare(thd);
 
   if (!st) {
@@ -112,6 +113,8 @@ bool Sql_cmd_xa_prepare::execute(THD *thd) {
       }
     }
   }
+
+  thd->cpolicy_ctx.reset();
 
   return st;
 }
@@ -160,10 +163,9 @@ bool Sql_cmd_xa_prepare::trans_xa_prepare(THD *thd) {
     cleanup_trans_state(thd);
     xid_state->reset();
     tran->cleanup();
+    thd->reset_trans_policy();
     my_error(ER_XA_RBROLLBACK, MYF(0));
   });
-
-  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
 
   /*
     Acquire metadata lock which will ensure that XA PREPARE is blocked
@@ -195,6 +197,8 @@ bool Sql_cmd_xa_prepare::trans_xa_prepare(THD *thd) {
   if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_xa_prepare(thd))
     LogErr(WARNING_LEVEL, ER_TRX_GTID_COLLECT_REJECT);
 
+  on_xa_prepare_success(thd);
+
   // Use old style prepare unless xa_detach_on_prepare==true
   if (!is_xa_tran_detached_on_prepare(thd)) {
     rollback_xa_tran.commit();
@@ -206,6 +210,38 @@ bool Sql_cmd_xa_prepare::trans_xa_prepare(THD *thd) {
   ::reset_xa_connection(thd);
 
   return false;
+}
+
+Sql_cmd_ac_prepare::Sql_cmd_ac_prepare(xid_t *xid_arg, gcn_t pre_commit_gcn_arg,
+                                       xa_branch_t *xa_branch)
+    : Sql_cmd_xa_prepare(xid_arg),
+      m_pre_commit_gcn(pre_commit_gcn_arg),
+      m_xa_branch(xa_branch),
+      m_pmmt() {}
+
+bool Sql_cmd_ac_prepare::execute(THD *thd) {
+  thd->cpolicy_ctx.activate_ac_prepare(m_pre_commit_gcn, *m_xa_branch);
+
+  bool st = trans_xa_prepare(thd);
+
+  if (!st) {
+    if (!thd->is_engine_ha_data_detached() ||
+        !(st = applier_reset_xa_trans(thd))) {
+      if (!m_delay_ok) {
+        my_ok(thd);
+      }
+    }
+  }
+
+  thd->cpolicy_ctx.reset();
+
+  return st;
+}
+
+void Sql_cmd_ac_prepare::on_xa_prepare_success(THD *thd) {
+  komodo::AC_prepare_policy *policy = dynamic_cast<komodo::AC_prepare_policy *>(
+      thd->cpolicy_ctx.current_policy());
+  m_pmmt = policy->clone_pmmt();
 }
 
 namespace {
@@ -286,6 +322,9 @@ bool detach_xa_transaction(THD *thd) {
     if (::detach_native_trx_one_ht(thd, ht)) return true;
   }
 
+  // save changeset context
+  thd_save_prepared_changeset_map(thd, xid_state->get_xid());
+
   return false;
 }
 
@@ -346,6 +385,8 @@ void reset_xa_connection(THD *thd) {
   // Needed to clear out savepoints, and to clear transaction context memory
   // root.
   trn_ctx->cleanup();
+
+  thd->reset_trans_policy();
 
   assert(xid_state->has_state(XID_STATE::XA_NOTR));
 

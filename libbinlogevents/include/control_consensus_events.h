@@ -61,6 +61,7 @@ class Consensus_event : public Binary_log_event {
         index(index_arg),
         length(length_arg),
         reserve(0) {}
+  ~Consensus_event() override = default;
 
  protected:
   static const int ENCODED_FLAG_LENGTH = 4;
@@ -97,6 +98,7 @@ class Previous_consensus_index_event : public Binary_log_event {
   explicit Previous_consensus_index_event(unsigned long long int index_arg)
       : Binary_log_event(PREVIOUS_CONSENSUS_INDEX_LOG_EVENT),
         index(index_arg) {}
+  ~Previous_consensus_index_event() override = default;
 
  protected:
   static const int ENCODED_INDEX_LENGTH = 8;
@@ -117,10 +119,8 @@ class Consensus_cluster_info_event : public Binary_log_event {
   Constructor.
   */
   explicit Consensus_cluster_info_event(unsigned int info_length_arg,
-                                        const char *info_arg)
-      : Binary_log_event(CONSENSUS_CLUSTER_INFO_EVENT),
-        info_length(info_length_arg),
-        info(info_arg) {}
+                                        const char *info_arg);
+  ~Consensus_cluster_info_event() override;
 
  protected:
   static const int ENCODED_INFO_LENGTH_LENGTH = 4;
@@ -140,6 +140,7 @@ class Consensus_empty_event : public Binary_log_event {
   Constructor.
   */
   explicit Consensus_empty_event() : Binary_log_event(CONSENSUS_EMPTY_EVENT) {}
+  ~Consensus_empty_event() override = default;
 };
 
 }  // end namespace binary_log

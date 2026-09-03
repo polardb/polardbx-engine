@@ -42,7 +42,7 @@
 #include "sql/sql_plugin_ref.h"    // plugin_ref
 #include "sql/xa_aux.h"            // serialize_xid
 
-#include "sql/lizard/lizard_service.h"
+#include "komodo0service.h"
 
 class Protocol;
 class THD;

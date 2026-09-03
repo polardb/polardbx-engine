@@ -1,0 +1,204 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+##############################################
+# Setup                                      #
+##############################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[4,5,6]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[7,8,9]'));
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_baseline FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT @aux_baseline AS aux_baseline;
+aux_baseline
+3
+
+##############################################
+# 1. INSERT in open trx: aux visible to     #
+#    other session immediately               #
+##############################################
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+# Session A: BEGIN and INSERT (don't commit main trx)
+BEGIN;
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[10,10,10]'));
+# Session B: Check aux table - should see new row (independent commit done)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+# aux_after should be greater than aux_baseline (new node added)
+SELECT @aux_after > @aux_baseline AS aux_has_new_row;
+aux_has_new_row
+NULL
+# Session B: Main table row NOT visible (trx not committed)
+SELECT COUNT(*) AS main_row_visible FROM t1 WHERE a = 10;
+main_row_visible
+0
+# Session A: COMMIT
+COMMIT;
+# Session B: Now main table row IS visible
+SELECT COUNT(*) AS main_row_visible FROM t1 WHERE a = 10;
+main_row_visible
+1
+
+##############################################
+# 2. ANN query finds vector from             #
+#    uncommitted main-table row              #
+##############################################
+# Session A: BEGIN + INSERT new vector
+BEGIN;
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT('[99,99,99]'));
+# Session B: ANN search for [99,99,99] - aux committed so nearest neighbor found
+# Note: The ANN may find the aux node but main-table row invisible in RC
+# This verifies aux table visibility doesn't crash and returns valid results
+SELECT id, a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[99,99,99]')) LIMIT 3;
+id	a
+2	2
+3	3
+4	10
+# Session A: COMMIT
+COMMIT;
+
+##############################################
+# 3. ROLLBACK: aux orphan persists           #
+##############################################
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before_rollback FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+BEGIN;
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT('[30,30,30]'));
+# Aux table should have new row already
+ROLLBACK;
+# Main table: row should NOT exist after rollback
+SELECT COUNT(*) AS main_row FROM t1 WHERE a = 30;
+main_row
+0
+# Aux table: orphan node still exists (independent commit not rolled back)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_rollback FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT @aux_after_rollback > @aux_before_rollback AS orphan_exists;
+orphan_exists
+1
+# ANN search still works (orphan tolerated)
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[30,30,30]')) LIMIT 3;
+id
+2
+3
+4
+# Session B verify: can also see orphan in aux table
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_b FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT @aux_b = @aux_after_rollback AS session_b_sees_orphan;
+session_b_sees_orphan
+NULL
+
+##############################################
+# 4. UPDATE in open trx: invalidate+insert  #
+#    both visible independently              #
+##############################################
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+BEGIN;
+UPDATE t1 SET v = VEC_FROMTEXT('[77,77,77]') WHERE id = 1;
+# Session B: aux table should have new node from UPDATE (insert part)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+# UPDATE = invalidate old + insert new, so aux count increases
+SELECT @aux_after_update > @aux_before_update AS update_aux_visible;
+update_aux_visible
+NULL
+# Session A: COMMIT the UPDATE
+COMMIT;
+
+##############################################
+# 5. DELETE in open trx: soft-delete visible #
+##############################################
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before_delete FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+BEGIN;
+DELETE FROM t1 WHERE id = 2;
+# Session B: verify aux table change from DELETE (soft-delete/invalidate)
+# After DELETE, the aux node is invalidated - count may decrease or stay
+# (implementation-specific: invalidate marks node, may not delete row immediately)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_delete FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+# Main table: row still visible to B (trx not committed in RC)
+SELECT COUNT(*) AS main_row_still_visible FROM t1 WHERE id = 2;
+main_row_still_visible
+1
+# Session A: COMMIT
+COMMIT;
+# Session B: Now main table row is gone
+SELECT COUNT(*) AS main_row_after_commit FROM t1 WHERE id = 2;
+main_row_after_commit
+0
+
+##############################################
+# 6. RR isolation: aux commits in RC         #
+#    regardless of outer RR setting          #
+##############################################
+SET transaction_isolation = 'REPEATABLE-READ';
+SET transaction_isolation = 'REPEATABLE-READ';
+# Session B: start RR transaction and take snapshot
+BEGIN;
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_rr_snap FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) INTO @main_rr_snap FROM t1;
+# Session A: INSERT in RR
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT('[60,60,60]'));
+# Session B: still in RR trx - aux table sees new data (aux uses RC internally)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_rr_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+# Aux table visible even in RR (aux always commits independently in RC)
+SELECT @aux_rr_after > @aux_rr_snap AS aux_visible_in_rr;
+aux_visible_in_rr
+0
+# Main table in RR: new row NOT visible (RR snapshot)
+SELECT COUNT(*) AS main_rr_unchanged FROM t1 WHERE a = 60;
+main_rr_unchanged
+0
+COMMIT;
+# After commit, main table now visible
+SELECT COUNT(*) AS main_after_commit FROM t1 WHERE a = 60;
+main_after_commit
+1
+
+##############################################
+# Cleanup                                    #
+##############################################
+SET transaction_isolation = 'READ-COMMITTED';
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

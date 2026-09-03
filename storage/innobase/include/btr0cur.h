@@ -96,6 +96,9 @@ static inline rec_t *btr_cur_get_rec(
 #define btr_cur_get_block(cursor) ((cursor)->page_cur.block)
 #define btr_cur_get_rec(cursor) ((cursor)->page_cur.rec)
 #endif /* UNIV_DEBUG */
+
+static inline reg_t btr_cur_get_reg(const btr_cur_t *cursor);
+
 /** Returns the compressed page on which the tree cursor is positioned.
  @return pointer to compressed page, or NULL if the page is not compressed */
 static inline page_zip_des_t *btr_cur_get_page_zip(
@@ -239,11 +242,10 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
     const txn_layout_t &layout, /*!< in: txn layout */
     btr_cur_t *cursor,          /*!< in: cursor on page after which to insert;
                                 cursor stays valid */
-    ulint **offsets,            /*!< out: offsets on *rec */
+    Slice **slc,                /*!< out: offsets on *rec */
+    Slice_ctx *sctx,            /*!< in: slice context. */
     mem_heap_t **heap,          /*!< in/out: pointer to memory heap, or NULL */
     dtuple_t *entry,            /*!< in/out: entry to insert */
-    rec_t **rec,                /*!< out: pointer to inserted record if
-                                succeed */
     big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
                                 be stored externally by the caller, or
                                 NULL */
@@ -270,12 +272,11 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
     const txn_layout_t &layout, /*!< in: txn layout */
     btr_cur_t *cursor,          /*!< in: cursor after which to insert;
                                 cursor stays valid */
-    ulint **offsets,            /*!< out: offsets on *rec */
+    Slice **slc,                /*!< out: offsets on *rec */
+    Slice_ctx *sctx,            /*!< in: slice context. */
     mem_heap_t **heap,          /*!< in/out: pointer to memory heap
                                 that can be emptied, or NULL */
     dtuple_t *entry,            /*!< in/out: entry to insert */
-    rec_t **rec,                /*!< out: pointer to inserted record if
-                                succeed */
     big_rec_t **big_rec,        /*!< out: big rec vector whose fields have to
                                 be stored externally by the caller, or
                                 NULL */
@@ -299,16 +300,18 @@ bool btr_cur_open_at_rnd_pos(dict_index_t *index, /*!< in: index */
  a secondary index leaf page. This has to be done either within the
  same mini-transaction, or by invoking ibuf_reset_free_bits() before
  mtr_commit(mtr). */
-[[nodiscard]] bool btr_cur_update_alloc_zip_func(
-    page_zip_des_t *page_zip, page_cur_t *cursor, dict_index_t *index,
-    IF_DEBUG(ulint *offsets, ) ulint length, bool create, mtr_t *mtr);
+[[nodiscard]] bool btr_cur_update_alloc_zip_func(page_zip_des_t *page_zip,
+                                                 page_cur_t *cursor,
+                                                 dict_index_t *index,
+                                                 Slice *slc, ulint length,
+                                                 bool create, mtr_t *mtr);
 
 inline bool btr_cur_update_alloc_zip(page_zip_des_t *page_zip,
                                      page_cur_t *cursor, dict_index_t *index,
-                                     ulint *offsets [[maybe_unused]], ulint len,
-                                     bool cr, mtr_t *mtr) {
-  return btr_cur_update_alloc_zip_func(page_zip, cursor, index,
-                                       IF_DEBUG(offsets, ) len, cr, mtr);
+                                     Slice *slc, ulint len, bool cr,
+                                     mtr_t *mtr) {
+  return btr_cur_update_alloc_zip_func(page_zip, cursor, index, slc, len, cr,
+                                       mtr);
 }
 
 /** Updates a record when the update causes no size changes in its fields.
@@ -330,7 +333,7 @@ must mtr_commit(mtr) before latching any further pages
 on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
 [[nodiscard]] dberr_t btr_cur_update_in_place(ulint flags,
                                               const txn_layout_t &layout,
-                                              btr_cur_t *cursor, ulint *offsets,
+                                              btr_cur_t *cursor, Slice *slc,
                                               const upd_t *update,
                                               ulint cmpl_info, que_thr_t *thr,
                                               trx_id_t trx_id, mtr_t *mtr);
@@ -379,9 +382,9 @@ caller must mtr_commit(mtr) before latching any further pages
 @retval DB_ZIP_OVERFLOW if there is not enough space left
 on the compressed page (IBUF_BITMAP_FREE was reset outside mtr) */
 [[nodiscard]] dberr_t btr_cur_optimistic_update(
-    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, ulint **offsets,
-    mem_heap_t **heap, const upd_t *update, ulint cmpl_info, que_thr_t *thr,
-    trx_id_t trx_id, mtr_t *mtr);
+    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, Slice **slc,
+    Slice_ctx *sctx, mem_heap_t **heap, const upd_t *update, ulint cmpl_info,
+    que_thr_t *thr, trx_id_t trx_id, mtr_t *mtr);
 
 /** Performs an update of a record on a page of a tree. It is assumed
 that mtr holds an x-latch on the tree and on the cursor page. If the
@@ -416,10 +419,10 @@ latching any further pages
 @param[in]     pcur          The persistent cursor on the record to update.
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t btr_cur_pessimistic_update(
-    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, ulint **offsets,
-    mem_heap_t **offsets_heap, mem_heap_t *entry_heap, big_rec_t **big_rec,
-    upd_t *update, ulint cmpl_info, que_thr_t *thr, trx_id_t trx_id,
-    undo_no_t undo_no, mtr_t *mtr, btr_pcur_t *pcur = nullptr);
+    ulint flags, const txn_layout_t &layout, btr_cur_t *cursor, Slice **slc,
+    Slice_ctx *sctx, mem_heap_t **offsets_heap, mem_heap_t *entry_heap,
+    big_rec_t **big_rec, upd_t *update, ulint cmpl_info, que_thr_t *thr,
+    trx_id_t trx_id, undo_no_t undo_no, mtr_t *mtr, btr_pcur_t *pcur = nullptr);
 
 /** Marks a clustered index record deleted. Writes an undo log record to
  undo log on this delete marking. Writes in the trx id field the id
@@ -430,20 +433,20 @@ latching any further pages
     ulint flags,                /*!< in: undo logging and locking flags */
     const txn_layout_t &layout, /*!< in: txn layout */
     buf_block_t *block,         /*!< in/out: buffer block of the record */
-    rec_t *rec,                 /*!< in/out: record */
+    Slice *slc,                 /*!< in/out: lizard rec */
     dict_index_t *index,        /*!< in: clustered index of the record */
-    const ulint *offsets,       /*!< in: rec_get_offsets(rec) */
     que_thr_t *thr,             /*!< in: query thread */
     const dtuple_t *entry,      /*!< in: dtuple for the deleting record */
     mtr_t *mtr);                /*!< in/out: mini-transaction */
 /** Sets a secondary index record delete mark to true or false.
  @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
-[[nodiscard]] dberr_t btr_cur_del_mark_set_sec_rec(
+[[nodiscard]] dberr_t btr_cur_del_mark_set_sec_rec_func(
     ulint flags,                /*!< in: locking flag */
     const txn_layout_t &layout, /*!< in: txn layout */
     btr_cur_t *cursor,          /*!< in: cursor */
     bool val,                   /*!< in: value to set */
     que_thr_t *thr,             /*!< in: query thread */
+    trx_id_t sec_tid,           /*!< in: transaction id */
     mtr_t *mtr);                /*!< in/out: mini-transaction */
 /** Tries to compress a page of the tree if it seems useful. It is assumed
  that mtr holds an x-latch on the tree and on the cursor page. To avoid
@@ -582,19 +585,21 @@ bool btr_estimate_number_of_different_key_vals(
 @param[in,out]  heap            mem heap
 @return the field copied to heap, or NULL if the field is incomplete */
 byte *btr_rec_copy_externally_stored_field_func(
-    trx_t *trx, dict_index_t *index, const rec_t *rec, const ulint *offsets,
+    trx_t *trx, dict_index_t *index, const Slice *slc,
     const page_size_t &page_size, ulint no, ulint *len, size_t *lob_version,
     IF_DEBUG(bool is_sdi, ) mem_heap_t *heap);
 
 /** Sets a secondary index record's delete mark to the given value. This
  function is only used by the insert buffer merge mechanism. */
 void btr_cur_set_deleted_flag_for_ibuf(
-    rec_t *rec,               /*!< in/out: record */
-    page_zip_des_t *page_zip, /*!< in/out: compressed page
-                              corresponding to rec, or NULL
-                              when the tablespace is uncompressed */
-    bool val,                 /*!< in: value to set */
-    mtr_t *mtr);              /*!< in/out: mini-transaction */
+    const dict_index_t *index, /*!< in: index */
+    reg_t reg,                 /*!< in/out: record */
+    page_zip_des_t *page_zip,  /*!< in/out: compressed page
+                               corresponding to rec, or NULL
+                               when the tablespace is uncompressed */
+    const dtuple_t *entry,     /*!< in: entry recorded in ibuf */
+    bool val,                  /*!< in: value to set */
+    mtr_t *mtr);               /*!< in/out: mini-transaction */
 
 /** The following function is used to set the deleted bit of a record.
 @param[in,out]  rec             physical record
@@ -797,6 +802,8 @@ extern uint btr_cur_limit_optimistic_insert_debug;
 @return true if instant add column(s) to be materialized. */
 bool materialize_instant_default(const dict_index_t *index, const rec_t *rec);
 
+#ifndef INNODB_BTR0CUR_IC_STANDALONE
 #include "btr0cur.ic"
+#endif /* !INNODB_BTR0CUR_IC_STANDALONE */
 
 #endif

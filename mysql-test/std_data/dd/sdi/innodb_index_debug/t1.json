@@ -347,7 +347,7 @@
                 "ordinal_position": 1,
                 "comment": "",
                 "options": "IFT=0;flags=0;",
-                "se_private_data": "gcn=F;id=A;page_type=G;root=B;space_id=C;table_id=D;trx_id=E",
+                "se_private_data": "creator_gcn=K;creator_scn=L;creator_trx_id=I;creator_uba=J;gcn=F;id=A;page_dict_capacity=H;page_type=G;root=B;space_id=C;table_id=D;trx_id=E",
                 "type": 1,
                 "algorithm": 2,
                 "is_algorithm_explicit": false,

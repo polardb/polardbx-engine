@@ -329,7 +329,7 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
       number, then first page is already loaded. Just update
       the pointer. */
       first_page.set_block(tmp_block);
-      new_block = first_page.replace(trx, page_offset, ptr, want, mtr);
+      new_block = first_page.replace(trx, page_offset, ptr, want, &ctx, mtr);
 
       if (new_block == nullptr) {
         ret = DB_OUT_OF_FILE_SPACE;
@@ -342,7 +342,7 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
       first_page.load_x(first_page_id, page_size);
       data_page_t page(mtr, index);
       page.load_x(cur_page_no);
-      new_block = page.replace(trx, page_offset, ptr, want, mtr);
+      new_block = page.replace(trx, page_offset, ptr, want, &ctx, mtr);
 
       if (new_block == nullptr) {
         ret = DB_OUT_OF_FILE_SPACE;
@@ -354,7 +354,8 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
     data_page_t new_page(new_block, mtr, index);
 
     /* Allocate a new index entry.  First page is loaded by now. */
-    flst_node_t *new_node = first_page.alloc_index_entry(false);
+    ut_ad(!ctx.is_bulk());
+    flst_node_t *new_node = first_page.alloc_index_entry(&ctx);
 
     if (new_node == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;
@@ -405,7 +406,8 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
     read old page. */
     data_page_t new_page(mtr, index);
 
-    if (new_page.alloc(mtr, false) == nullptr) {
+    ut_ad(!ctx.is_bulk());
+    if (new_page.alloc(&ctx, mtr) == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;
       goto error;
     }
@@ -413,7 +415,8 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
     new_page.write(ptr, want);
 
     /* Allocate a new index entry */
-    flst_node_t *new_node = first_page.alloc_index_entry(false);
+    ut_ad(!ctx.is_bulk());
+    flst_node_t *new_node = first_page.alloc_index_entry(&ctx);
 
     if (new_node == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;
@@ -451,17 +454,18 @@ dberr_t replace(InsertContext &ctx, trx_t *trx, dict_index_t *index, ref_t ref,
     buf_block_t *new_block = nullptr;
 
     if (cur_page_no == first_page_no) {
-      new_block = first_page.replace(trx, 0, ptr, want, mtr);
+      new_block = first_page.replace(trx, 0, ptr, want, &ctx, mtr);
     } else {
       data_page_t page(mtr, index);
       page.load_x(cur_page_no);
-      new_block = page.replace(trx, 0, ptr, want, mtr);
+      new_block = page.replace(trx, 0, ptr, want, &ctx, mtr);
     }
 
     data_page_t new_page(new_block, mtr, index);
 
     /* Allocate a new index entry */
-    flst_node_t *new_node = first_page.alloc_index_entry(false);
+    ut_ad(!ctx.is_bulk());
+    flst_node_t *new_node = first_page.alloc_index_entry(&ctx);
 
     if (new_node == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;

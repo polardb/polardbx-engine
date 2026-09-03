@@ -47,10 +47,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0sys.h"
 #endif /* UNIV_HOTBACKUP */
 
-#include "lizard0purge.h"
-#include "lizard0read0types.h"
-#include "lizard0scn.h"
-#include "lizard0undo0types.h"
+#include "lizard0trx0purge.h"
+#include "lizard0gcs0read0types.h"
+#include "lizard0cmmt0types.h"
+
+/* Current number of working purge threads */
+extern ulint current_n_purge_threads;
 
 /** The global data structure coordinating a purge */
 extern trx_purge_t *purge_sys;
@@ -77,9 +79,6 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
 
 /** Frees the global purge system control structure. */
 void trx_purge_sys_close(void);
-
-/** Get current purged GCN number */
-gcn_t gcs_get_purged_gcn();
 
 /************************************************************************
 Adds the update undo log as the first log in the history list. Removes the
@@ -123,7 +122,7 @@ enum purge_state_t {
 purge_state_t trx_purge_state(void);
 
 namespace lizard {
-struct TxnUndoRsegsIterator;
+struct purge_rsegs_iterator_t;
 }  // namespace lizard
 
 /** This is the purge pointer/iterator. We need both the undo no and the
@@ -1069,7 +1068,7 @@ struct trx_purge_t {
   que_t *query;
 
   /** The purge will not remove undo logs which are >= this view (purge view) */
-  lizard::Vision vision;
+  lizard::purge_vision_t pvision;
 
   /** true if view is active */
   bool view_active;
@@ -1119,7 +1118,7 @@ struct trx_purge_t {
   ulint hdr_offset;
 
   /** Iterator to get the next rseg to process */
-  lizard::TxnUndoRsegsIterator *rseg_iter;
+  lizard::purge_rsegs_iterator_t *rseg_iter;
 
   /** Binary min-heap, ordered on TrxUndoRsegs::trx_no. It is protected
   by the pq_mutex */
@@ -1137,15 +1136,8 @@ struct trx_purge_t {
   /** Set of all THDs allocated by the purge system. */
   ut::unordered_set<THD *> thds;
 
-  /** Set of all rseg queue. */
-  std::vector<trx_rseg_t *> rsegs_queue;
-
-  /** All transactions whose scn <= purged_scn must have been purged.
-  Only the purge sys coordinator thread and recover thread can modify it. */
-  std::atomic<scn_t> purged_scn;
-
-  /** Similar with purged_scn */
-  lizard::Purged_gcn purged_gcn;
+  ///** Set of all rseg queue. */
+  // std::vector<trx_rseg_t *> rsegs_queue;
 
   /** The transactions whose scn < truncating_list_scn.get_min() have been
    * truncated. */
@@ -1154,6 +1146,8 @@ struct trx_purge_t {
   void push_purged(const commit_order_t &ommt);
 };
 
+#ifndef INNODB_TRX0PURGE_IC_STANDALONE
 #include "trx0purge.ic"
+#endif /* !INNODB_TRX0PURGE_IC_STANDALONE */
 
 #endif /* trx0purge_h */

@@ -1023,6 +1023,56 @@ class Consensus_proc_drop_prefetch_channel final : public Consensus_proc {
   }
 };
 
+
+/**
+  dbms_consensus.get_cidx(...)
+*/
+class Sql_cmd_consensus_proc_get_cidx : public Sql_cmd_admin_proc {
+ public:
+  Sql_cmd_consensus_proc_get_cidx(THD *thd, mem_root_deque<Item *> *list,
+                                  const Consensus_proc *proc)
+      : Sql_cmd_admin_proc(thd, list, proc) {}
+  bool pc_execute(THD *) override { return false; }
+  void send_result(THD *thd, bool error) override;
+};
+
+class Consensus_proc_get_cidx final : public Consensus_proc {
+ private:
+  using Sql_cmd_type = Sql_cmd_consensus_proc_get_cidx;
+
+  enum enum_column {
+    COLUMN_CIDX = 0,
+    COLUMN_LAST = 1
+  };
+
+ public:
+  explicit Consensus_proc_get_cidx(PSI_memory_key key) : Consensus_proc(key) {
+    m_result_type = Result_type::RESULT_SET;
+
+    Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("CIDX"), 0},
+    };
+
+    for (size_t i = 0; i < COLUMN_LAST; i++) {
+      m_columns.push_back(elements[i]);
+    }
+  }
+
+  ~Consensus_proc_get_cidx() override = default;
+
+  static Proc *instance();
+
+  Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
+
+  const std::string qname() const override {
+    std::stringstream ss;
+    ss << CONSENSUS_PROC_SCHEMA.str << "." << str();
+    return ss.str();
+  }
+
+  const std::string str() const override { return std::string("get_cidx"); }
+};
+
 } /* namespace im */
 
 #endif

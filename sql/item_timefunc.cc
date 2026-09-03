@@ -3791,3 +3791,74 @@ bool Item_func_internal_check_time::get_date(MYSQL_TIME *ltime,
   null_value = true;
   return true;
 }
+
+bool Item_func_mod_onupd::itemize(Parse_context *pc, Item **res) {
+  if (skip_itemize(res)) return false;
+  if (Item_func::itemize(pc, res)) return true;
+  pc->thd->lex->set_has_mod_onupd();
+  return false;
+}
+
+bool Item_func_mod_onupd::resolve_type(THD *thd) {
+  if (param_type_is_default(thd, 0, 1)) return true;
+
+  set_data_type(args[0]->data_type());
+  set_nullable(args[0]->is_nullable());
+  max_length = args[0]->max_length;
+  decimals = args[0]->decimals;
+  unsigned_flag = args[0]->unsigned_flag;
+  collation.set(args[0]->collation);
+  return false;
+}
+
+double Item_func_mod_onupd::val_real() {
+  double val = args[0]->val_real();
+  null_value = args[0]->null_value;
+  return val;
+}
+
+longlong Item_func_mod_onupd::val_int() {
+  longlong val = args[0]->val_int();
+  null_value = args[0]->null_value;
+  return val;
+}
+
+String *Item_func_mod_onupd::val_str(String *str) {
+  String *val = args[0]->val_str(str);
+  null_value = args[0]->null_value;
+  return val;
+}
+
+my_decimal *Item_func_mod_onupd::val_decimal(my_decimal *dec) {
+  my_decimal *val = args[0]->val_decimal(dec);
+  null_value = args[0]->null_value;
+  return val;
+}
+
+bool Item_func_mod_onupd::get_date(MYSQL_TIME *ltime,
+                                   my_time_flags_t fuzzy_date) {
+  bool err = args[0]->get_date(ltime, fuzzy_date);
+  null_value = args[0]->null_value;
+  return err || null_value;
+}
+
+bool Item_func_mod_onupd::get_time(MYSQL_TIME *ltime) {
+  bool err = args[0]->get_time(ltime);
+  null_value = args[0]->null_value;
+  return err;
+}
+
+/**
+ * Evaluate the argument and store its value into the target field.
+ * Uses save_in_field() for type-agnostic storage, supporting all
+ * column types (INT, VARCHAR, DATETIME, DECIMAL, BLOB, etc.).
+ *
+ * @param field  The field to store the value into
+ *
+ * @retval false  Success
+ * @retval true   Error occurred
+ */
+bool Item_func_mod_onupd::set_mod_onupd(Field *field) {
+  type_conversion_status status = args[0]->save_in_field(field, false);
+  return (status >= TYPE_ERR_NULL_CONSTRAINT_VIOLATION);
+}

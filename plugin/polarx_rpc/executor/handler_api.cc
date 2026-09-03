@@ -186,7 +186,7 @@ int handler_open_table(THD *thd, const char *db_name, const char *table_name,
           ret, db_name, table_name, lock_type);
     } else {
 #ifdef MYSQL8
-      lizard::simulate_snapshot_clause(thd, &tables);
+      komodo::simulate_snapshot_clause(thd, &tables);
       /// set vision manually
       auto hint = tables.snapshot_hint;
       if (hint != nullptr) hint->invoke_vision(tables.table, thd);

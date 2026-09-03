@@ -1,0 +1,22 @@
+# Step 1: Start a logger-learner node
+# start a new learner
+# Step 2: Add logger-learner to cluster
+call dbms_consensus.add_learner(learner_cluster_info);
+select role, instance_type from information_schema.alisql_cluster_local;
+role	instance_type
+Learner	Log
+# Step 3: Upgrade learner to follower
+call dbms_consensus.upgrade_learner(learner_cluster_info);
+select role, instance_type from information_schema.alisql_cluster_local;
+role	instance_type
+Follower	Log
+# Step 4: Verify logger-follower can become leader and transfer back
+set global consensus_force_promote=1;
+select role, instance_type from information_schema.alisql_cluster_local;
+role	instance_type
+Leader	Log
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");
+# Verify node1 resumed leadership
+# Cleanup
+call dbms_consensus.downgrade_follower(learner_cluster_info);
+call dbms_consensus.drop_learner(learner_cluster_info);

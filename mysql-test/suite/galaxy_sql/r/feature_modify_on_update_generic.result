@@ -1,0 +1,310 @@
+#
+# Test MODIFY_ON_UPDATE with generic column types (not just DATETIME)
+# This test validates the extended MODIFY_ON_UPDATE support for
+# INT, VARCHAR, BIGINT, DECIMAL, TEXT columns without ON UPDATE attribute.
+#
+# -------------------------------------------------------
+# 1. INT column: version counter with MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_int (
+id INT PRIMARY KEY,
+val VARCHAR(50),
+version INT DEFAULT 0
+);
+INSERT INTO t_int VALUES (1, 'hello', 1);
+# Update with actual change - version should increment
+UPDATE t_int SET val = 'world', version = MODIFY_ON_UPDATE(version + 1) WHERE id = 1;
+SELECT id, val, version FROM t_int WHERE id = 1;
+id	val	version
+1	world	2
+# Update without actual change - version should NOT increment
+UPDATE t_int SET val = 'world', version = MODIFY_ON_UPDATE(version + 1) WHERE id = 1;
+SELECT id, val, version FROM t_int WHERE id = 1;
+id	val	version
+1	world	2
+DROP TABLE t_int;
+# -------------------------------------------------------
+# 2. VARCHAR column: modifier tracking with MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_varchar (
+id INT PRIMARY KEY,
+val INT,
+modifier VARCHAR(100) DEFAULT 'system'
+);
+INSERT INTO t_varchar VALUES (1, 100, 'init_user');
+# Update with actual change - modifier should update
+UPDATE t_varchar SET val = 200, modifier = MODIFY_ON_UPDATE('user_abc') WHERE id = 1;
+SELECT id, val, modifier FROM t_varchar WHERE id = 1;
+id	val	modifier
+1	200	user_abc
+# Update without actual change - modifier should remain
+UPDATE t_varchar SET val = 200, modifier = MODIFY_ON_UPDATE('user_xyz') WHERE id = 1;
+SELECT id, val, modifier FROM t_varchar WHERE id = 1;
+id	val	modifier
+1	200	user_abc
+DROP TABLE t_varchar;
+# -------------------------------------------------------
+# 3. BIGINT column: UNIX_TIMESTAMP tracking
+# -------------------------------------------------------
+CREATE TABLE t_bigint (
+id INT PRIMARY KEY,
+val INT,
+update_ts BIGINT DEFAULT 0
+);
+INSERT INTO t_bigint VALUES (1, 100, 0);
+SET TIMESTAMP = 1000000;
+# Update with actual change
+UPDATE t_bigint SET val = 200, update_ts = MODIFY_ON_UPDATE(UNIX_TIMESTAMP()) WHERE id = 1;
+SELECT id, val, update_ts != 0 AS ts_updated FROM t_bigint WHERE id = 1;
+id	val	ts_updated
+1	200	1
+# Update without actual change
+UPDATE t_bigint SET val = 200, update_ts = MODIFY_ON_UPDATE(9999999) WHERE id = 1;
+SELECT id, val, update_ts FROM t_bigint WHERE id = 1;
+id	val	update_ts
+1	200	1000000
+DROP TABLE t_bigint;
+# -------------------------------------------------------
+# 4. DECIMAL column: price adjustment
+# -------------------------------------------------------
+CREATE TABLE t_decimal (
+id INT PRIMARY KEY,
+quantity INT,
+unit_price DECIMAL(10, 2) DEFAULT 0.00
+);
+INSERT INTO t_decimal VALUES (1, 10, 99.99);
+# Update with actual change
+UPDATE t_decimal SET quantity = 20, unit_price = MODIFY_ON_UPDATE(unit_price * 1.10) WHERE id = 1;
+Warnings:
+Note	1265	Data truncated for column 'unit_price' at row 1
+SELECT id, quantity, unit_price FROM t_decimal WHERE id = 1;
+id	quantity	unit_price
+1	20	109.99
+# Update without actual change
+UPDATE t_decimal SET quantity = 20, unit_price = MODIFY_ON_UPDATE(0.01) WHERE id = 1;
+SELECT id, quantity, unit_price FROM t_decimal WHERE id = 1;
+id	quantity	unit_price
+1	20	109.99
+DROP TABLE t_decimal;
+# -------------------------------------------------------
+# 5. TEXT column: audit log with MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_text (
+id INT PRIMARY KEY,
+val INT,
+audit_note TEXT
+);
+INSERT INTO t_text VALUES (1, 100, 'created');
+# Update with actual change
+UPDATE t_text SET val = 200, audit_note = MODIFY_ON_UPDATE('modified by admin') WHERE id = 1;
+SELECT id, val, audit_note FROM t_text WHERE id = 1;
+id	val	audit_note
+1	200	modified by admin
+# Update without actual change
+UPDATE t_text SET val = 200, audit_note = MODIFY_ON_UPDATE('should not appear') WHERE id = 1;
+SELECT id, val, audit_note FROM t_text WHERE id = 1;
+id	val	audit_note
+1	200	modified by admin
+DROP TABLE t_text;
+# -------------------------------------------------------
+# 6. Mixed types: INT + VARCHAR + DATETIME all MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_mixed (
+id INT PRIMARY KEY,
+val INT,
+version INT DEFAULT 0,
+modifier VARCHAR(50) DEFAULT 'system',
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t_mixed VALUES (1, 100, 0, 'init', '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Update with actual change - all MODIFY_ON_UPDATE columns should fire
+UPDATE t_mixed SET
+val = 200,
+version = MODIFY_ON_UPDATE(version + 1),
+modifier = MODIFY_ON_UPDATE('admin'),
+ts = MODIFY_ON_UPDATE(NOW())
+WHERE id = 1;
+SELECT id, val, version, modifier, ts != '2020-01-01 00:00:00' AS ts_changed FROM t_mixed WHERE id = 1;
+id	val	version	modifier	ts_changed
+1	200	1	admin	1
+# Update without actual change - none should fire
+UPDATE t_mixed SET
+val = 200,
+version = MODIFY_ON_UPDATE(version + 1),
+modifier = MODIFY_ON_UPDATE('other_user'),
+ts = MODIFY_ON_UPDATE(NOW())
+WHERE id = 1;
+SELECT id, val, version, modifier FROM t_mixed WHERE id = 1;
+id	val	version	modifier
+1	200	1	admin
+DROP TABLE t_mixed;
+# -------------------------------------------------------
+# 7. NULL handling: various types with MODIFY_ON_UPDATE(NULL)
+# -------------------------------------------------------
+CREATE TABLE t_null (
+id INT PRIMARY KEY,
+val INT,
+opt_int INT NULL,
+opt_str VARCHAR(50) NULL
+);
+INSERT INTO t_null VALUES (1, 100, 42, 'hello');
+# Update with change, set to NULL
+UPDATE t_null SET val = 200, opt_int = MODIFY_ON_UPDATE(NULL), opt_str = MODIFY_ON_UPDATE(NULL) WHERE id = 1;
+SELECT id, val, opt_int IS NULL AS int_null, opt_str IS NULL AS str_null FROM t_null WHERE id = 1;
+id	val	int_null	str_null
+1	200	1	1
+# Update without change - NULLs should remain from previous
+UPDATE t_null SET val = 200, opt_int = MODIFY_ON_UPDATE(999), opt_str = MODIFY_ON_UPDATE('new') WHERE id = 1;
+SELECT id, val, opt_int IS NULL AS int_null, opt_str IS NULL AS str_null FROM t_null WHERE id = 1;
+id	val	int_null	str_null
+1	200	1	1
+DROP TABLE t_null;
+# -------------------------------------------------------
+# 8. All SET columns are MODIFY_ON_UPDATE (no regular columns)
+# -------------------------------------------------------
+CREATE TABLE t_allmod (
+id INT PRIMARY KEY,
+version INT DEFAULT 0,
+modifier VARCHAR(50) DEFAULT 'system'
+);
+INSERT INTO t_allmod VALUES (1, 0, 'init');
+# No regular column changes - MODIFY_ON_UPDATE should NOT fire
+UPDATE t_allmod SET version = MODIFY_ON_UPDATE(version + 1), modifier = MODIFY_ON_UPDATE('admin') WHERE id = 1;
+SELECT id, version, modifier FROM t_allmod WHERE id = 1;
+id	version	modifier
+1	0	init
+DROP TABLE t_allmod;
+# -------------------------------------------------------
+# 9. INSERT uses MODIFY_ON_UPDATE as regular expression
+# -------------------------------------------------------
+CREATE TABLE t_insert (
+id INT PRIMARY KEY,
+val INT,
+version INT
+);
+INSERT INTO t_insert VALUES (1, 100, MODIFY_ON_UPDATE(42));
+SELECT id, val, version FROM t_insert WHERE id = 1;
+id	val	version
+1	100	42
+DROP TABLE t_insert;
+# -------------------------------------------------------
+# 10. UPSERT: INSERT ... ON DUPLICATE KEY UPDATE with generic types
+# -------------------------------------------------------
+CREATE TABLE t_upsert (
+id INT PRIMARY KEY,
+val INT,
+version INT DEFAULT 0
+);
+INSERT INTO t_upsert VALUES (1, 100, 1);
+# Duplicate key, val changed -> version should increment
+INSERT INTO t_upsert VALUES (1, 999, 0)
+ON DUPLICATE KEY UPDATE val = VALUES(val), version = MODIFY_ON_UPDATE(version + 1);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, version FROM t_upsert WHERE id = 1;
+id	val	version
+1	999	2
+# Duplicate key, val unchanged -> version should NOT increment
+INSERT INTO t_upsert VALUES (1, 999, 0)
+ON DUPLICATE KEY UPDATE val = VALUES(val), version = MODIFY_ON_UPDATE(version + 1);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, version FROM t_upsert WHERE id = 1;
+id	val	version
+1	999	2
+# New row: INSERT path
+INSERT INTO t_upsert VALUES (2, 200, MODIFY_ON_UPDATE(10))
+ON DUPLICATE KEY UPDATE val = VALUES(val), version = MODIFY_ON_UPDATE(version + 1);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, version FROM t_upsert WHERE id = 2;
+id	val	version
+2	200	10
+DROP TABLE t_upsert;
+# -------------------------------------------------------
+# 11. Multi-table UPDATE with generic MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_main (
+id INT PRIMARY KEY,
+val INT,
+version INT DEFAULT 0
+);
+CREATE TABLE t_ref (
+id INT PRIMARY KEY,
+new_val INT
+);
+INSERT INTO t_main VALUES (1, 100, 0);
+INSERT INTO t_ref VALUES (1, 999);
+UPDATE t_main m JOIN t_ref r ON m.id = r.id
+SET m.val = r.new_val, m.version = MODIFY_ON_UPDATE(m.version + 1);
+# val changed from 100 to 999, version should increment
+SELECT m.id, m.val, m.version FROM t_main m;
+id	val	version
+1	999	1
+DROP TABLE t_main, t_ref;
+# -------------------------------------------------------
+# 12. Multiple rows: only actually changed rows affected
+# -------------------------------------------------------
+CREATE TABLE t_multi (
+id INT PRIMARY KEY,
+val INT,
+version INT DEFAULT 0
+);
+INSERT INTO t_multi VALUES (1, 100, 0);
+INSERT INTO t_multi VALUES (2, 200, 0);
+INSERT INTO t_multi VALUES (3, 300, 0);
+# Update all rows, but only some actually change val
+UPDATE t_multi SET val = 100, version = MODIFY_ON_UPDATE(version + 1);
+# Only rows where val was != 100 should have version incremented
+SELECT id, val, version FROM t_multi ORDER BY id;
+id	val	version
+1	100	0
+2	100	1
+3	100	1
+DROP TABLE t_multi;
+# -------------------------------------------------------
+# 13. Type conversion: string value into INT column
+# -------------------------------------------------------
+CREATE TABLE t_conv (
+id INT PRIMARY KEY,
+val INT,
+counter INT DEFAULT 0
+);
+INSERT INTO t_conv VALUES (1, 100, 0);
+# String '42' should be converted to INT 42
+UPDATE t_conv SET val = 200, counter = MODIFY_ON_UPDATE('42') WHERE id = 1;
+SELECT id, val, counter FROM t_conv WHERE id = 1;
+id	val	counter
+1	200	42
+DROP TABLE t_conv;
+# -------------------------------------------------------
+# 14. Partitioned table with generic MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t_part (
+id INT,
+val INT,
+version INT DEFAULT 0,
+PRIMARY KEY (id)
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t_part VALUES (1, 100, 0);
+INSERT INTO t_part VALUES (15, 150, 0);
+# Update in p0 with change
+UPDATE t_part SET val = 101, version = MODIFY_ON_UPDATE(version + 1) WHERE id = 1;
+SELECT id, val, version FROM t_part WHERE id = 1;
+id	val	version
+1	101	1
+# Update in p1 without change
+UPDATE t_part SET val = 150, version = MODIFY_ON_UPDATE(version + 1) WHERE id = 15;
+SELECT id, val, version FROM t_part WHERE id = 15;
+id	val	version
+15	150	0
+DROP TABLE t_part;
+# -------------------------------------------------------
+# End of generic MODIFY_ON_UPDATE tests
+# -------------------------------------------------------

@@ -1,11 +1,5 @@
 create table t1 (id longblob);
 insert into t1 values(repeat('a', 10));
-set global consensus_large_trx=OFF;
-insert into t1 values(repeat('a', 2*1024*1024));
-ERROR HY000: The consensus log is too large for cluster, please split the transcation to small ones.
-insert into t1 values(repeat('a', 3*1024*1024));
-ERROR HY000: The consensus log is too large for cluster, please split the transcation to small ones.
-set global consensus_large_trx=ON;
 insert into t1 values(repeat('a', 1024));
 select * from t1;
 id

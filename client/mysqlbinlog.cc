@@ -1376,12 +1376,17 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
   IO_CACHE *const head = &print_event_info->head_cache;
 
 #ifndef NDEBUG
+  // Debug check for consensuslog revise correctness: verify that events are
+  // ordered by both timestamp and log_pos. Use return ERROR_STOP instead of
+  // exit(1) so that stack-allocated objects (e.g. PRINT_EVENT_INFO with its
+  // table_mapping) are properly destructed, preventing LeakSanitizer reports
+  // from masking this intentional failure in ASan builds.
   if (debug_consensuslog_revise_check) {
     uint32 tt_now = (uint32)ev->common_header->when.tv_sec;
     if (tt_guard > tt_now + 1)  // only allow 1 sec diff
     {
       error("Error check timestamp, current_index %llu", current_index);
-      exit(1);
+      return ERROR_STOP;
     }
     tt_guard = tt_now;
     uint32 pos_now = ev->common_header->log_pos;
@@ -1389,7 +1394,7 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
       error(
           "Error check position, current_index %llu, pos_guard %u, pos_now %u",
           current_index, pos_guard, pos_now);
-      exit(1);
+      return ERROR_STOP;
     }
     pos_guard = pos_now;
   }

@@ -1,0 +1,1104 @@
+#
+# Test case for column encryption
+#
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+#
+# Test there is no binlog for udf creation during startup.
+#
+include/mysqlbinlog.inc
+include/assert_grep.inc [CREATE FUNCTION encdb_rule_op RETURNS STRING SONAME]
+create user aurora@`%` identified by '123456';
+grant all privileges on *.* to aurora@`%` with grant option;
+create user noAccess@`%` identified by '123456';
+grant all privileges on test.* to aurora@`%` with grant option;
+grant all privileges on mysql.cipher_text to noAccess@`%` with grant option;
+flush privileges;
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_reload_rules returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+use test;
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+#Turn off ONLY_FULL_GROUP_BY mode in order to test aggregation functions.
+set sql_mode = "";
+create table t1 (c_int_null int,
+c_tinyint tinyint, c_smallint smallint,
+c_mediumint mediumint, c_int int, c_bigint bigint,
+c_float float(10), c_double double, c_decimal decimal(10,3),
+c_bit bit(64),
+c_year year(4), c_date date, c_time time(3),
+c_datetime datetime(6), c_timestamp timestamp,
+c_char char(10) charset latin1,
+c_varchar varchar(100) charset utf8mb4,
+c_binary binary(10), c_varbinary varbinary(100),
+c_text text, c_blob blob,
+c_enum enum('one', 'two', 'three'),
+c_set set('red', 'blue', 'yellow'), c_json json);
+Warnings:
+Warning	1287	'YEAR(4)' is deprecated and will be removed in a future release. Please use YEAR instead
+insert into t1 set
+c_tinyint = -1, c_smallint = 10000, c_mediumint = 50000, c_int = 1000000,
+c_bigint = 100000000000,
+c_float = 1.1111, c_double = 1000.00001, c_decimal = 1.234,
+c_bit = b'1000001',
+c_year = 2023, c_date = "2023-10-1", c_time = "15:24:25.123",
+c_datetime = "2023-10-1 15:24:25.123456",
+c_timestamp = "2023-10-1 15:24:25.123456",
+c_char = "0123456789", c_varchar = repeat("a", 100),
+c_binary = "0123456789", c_varbinary = repeat("A", 20),
+c_text = repeat("A", 300), c_blob = repeat("A", 1000),
+c_enum = 'two', c_set = 'red,blue',
+c_json = '{"key1": "value1", "key2": "value2"}';
+insert into t1 set
+c_tinyint = -2, c_smallint = 20000, c_mediumint = 20000, c_int = 2000000,
+c_bigint = 200000000000,
+c_float = 2.2222, c_double = 2000.00002, c_decimal = 2.345,
+c_bit = b'1000010',
+c_year = 2023, c_date = "2023-11-11", c_time = "18:18:18.123",
+c_datetime = "2023-11-11 18:18:18.123456",
+c_timestamp = "2023-11-11 18:18:18.123456",
+c_char = "012345678", c_varchar = repeat("b", 100),
+c_binary = "012345678", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'three', c_set = 'red,yellow',
+c_json = '{"key1": "v1", "key2": "v2"}';
+create table t2 like t1;
+insert into t2 set
+c_tinyint = -3, c_smallint = 3000, c_mediumint = 30000, c_int = 1000000,
+c_bigint = 300000000000,
+c_float = 3.3333, c_double = 3000.00003, c_decimal = 3.456,
+c_bit = b'1000011',
+c_year = 2024, c_date = "2024-10-1", c_time = "15:24:25.123",
+c_datetime = "2024-10-1 15:24:25.123456",
+c_timestamp = "2024-10-1 15:24:25.123456",
+c_char = "01234567", c_varchar = repeat("b", 100),
+c_binary = "01234567", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'one', c_set = 'blue,yellow',
+c_json = '{"k1": "value1", "k2": "value2"}';
+insert into t2 set 
+c_tinyint = -4, c_smallint = 4000, c_mediumint = 40000, c_int = 4000000,
+c_bigint = 400000000000,
+c_float = 4.4444, c_double = 2000.00002, c_decimal = 2.345,
+c_bit = b'1000100',
+c_year = 2024, c_date = "2024-11-11", c_time = "18:18:18.123",
+c_datetime = "2024-11-11 18:18:18.123456",
+c_timestamp = "2024-11-11 18:18:18.123456",
+c_char = "0123456", c_varchar = repeat("d", 100),
+c_binary = "0123456", c_varbinary = repeat("D", 20),
+c_text = repeat("D", 300), c_blob = repeat("D", 1000),
+c_enum = 'one', c_set = 'blue,yellow',
+c_json = '{"k1": "v1", "k2": "v2"}';
+create table t3 like t1;
+insert into t3 set
+c_tinyint = -3, c_smallint = 3000, c_mediumint = 30000, c_int = 1000000,
+c_bigint = 300000000000,
+c_float = 3.3333, c_double = 3000.00003, c_decimal = 3.456,
+c_bit = b'1000011',
+c_year = 2024, c_date = "2024-10-1", c_time = "15:24:25.123",
+c_datetime = "2024-10-1 15:24:25.123456",
+c_timestamp = "2024-10-1 15:24:25.123456",
+c_char = "01234567", c_varchar = repeat("b", 100),
+c_binary = "01234567", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'one', c_set = 'blue,yellow',
+c_json = '{"k1": "value1", "k2": "value2"}';
+create table t4 like t1;
+insert into t4 set
+c_tinyint = -3, c_smallint = 3000, c_mediumint = 30000, c_int = 1000000,
+c_bigint = 300000000000,
+c_float = 3.3333, c_double = 3000.00003, c_decimal = 3.456,
+c_bit = b'1000011',
+c_year = 2024, c_date = "2024-10-1", c_time = "15:24:25.123",
+c_datetime = "2024-10-1 15:24:25.123456",
+c_timestamp = "2024-10-1 15:24:25.123456",
+c_char = "01234567", c_varchar = repeat("b", 100),
+c_binary = "01234567", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'one', c_set = 'blue,yellow',
+c_json = '{"k1": "value1", "k2": "value2"}';
+create ALGORITHM = MERGE view v1_merge as select * from t1;
+create ALGORITHM = TEMPTABLE view v1_tmptable as select * from t1;
+create table mysql.cipher_text(
+c0 text, c1 text, c2 text, c3 text,
+c4 text, c5 text, c6 text, c7 text,
+c8 text, c9 text, c10 text, c11 text,
+c12 text, c13 text, c14 text, c15 text,
+c16 text, c17 text, c18 text, c19 text,
+c20 text, c21 text, c22 text, c23 text);
+create database test2;
+create table test2.t1 like test.t1;
+insert into test2.t1 set
+c_tinyint = -3, c_smallint = 3000, c_mediumint = 30000, c_int = 1000000,
+c_bigint = 300000000000,
+c_float = 3.3333, c_double = 3000.00003, c_decimal = 3.456,
+c_bit = b'1000011',
+c_year = 2024, c_date = "2024-10-1", c_time = "15:24:25.123",
+c_datetime = "2024-10-1 15:24:25.123456",
+c_timestamp = "2024-10-1 15:24:25.123456",
+c_char = "01234567", c_varchar = repeat("b", 100),
+c_binary = "01234567", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'one', c_set = 'blue,yellow',
+c_json = '{"k1": "value1", "k2": "value2"}';
+select encdb_rule_op('add', '{"name": "rule1","enabled": true,"meta": {"databases": ["test"],"tables": ["test"],"columns": ["a","b"]}}');
+encdb_rule_op('add', '{"name": "rule1","enabled": true,"meta": {"databases": ["test"],"tables": ["test"],"columns": ["a","b"]}}')
+OK
+select encdb_rule_op('grant', '{"restrictedAccess":["root","aurora"]}');
+encdb_rule_op('grant', '{"restrictedAccess":["root","aurora"]}')
+OK
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["a", "b"],
+      "databases" : ["test"],
+      "tables" : ["test"]
+    },
+    "name" : "rule1"
+  }]
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "root"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# Test invalid param for rule deletion.;
+#
+select encdb_rule_op('delete', 'rule1');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "JSON parse error"
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["a", "b"],
+      "databases" : ["test"],
+      "tables" : ["test"]
+    },
+    "name" : "rule1"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# Test correct rule deletion.;
+#
+select encdb_rule_op('delete', '"rule1"');
+encdb_rule_op('delete', '"rule1"')
+OK
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# Test invalid param for user auth grant.;
+#
+select encdb_rule_op('grant', '[{"user":"root", "access":"noneAccess"}, {"user":"aurora", "access":"noneAccess"}]');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "json object '{
+  "access" : "noneAccess",
+  "user" : "root"
+}' does not have username field"
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "root"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# Test successful user auth grant.;
+#
+select encdb_rule_op('grant', '[{"username":"root", "access":"noneAccess"}, {"username":"aurora", "access":"noneAccess"}]');
+encdb_rule_op('grant', '[{"username":"root", "access":"noneAccess"}, {"username":"aurora", "access":"noneAccess"}]')
+OK
+include/rpl_diff.inc
+include/rpl_diff.inc
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff')))
+{
+  "body" : "",
+  "status" : 0
+}
+select encdb_rule_export();
+encdb_rule_export()
+[]
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "noneAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "noneAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "root"
+  }]
+select encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}');
+encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}')
+OK
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}')
+OK
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "fullAccess",
+    "expired" : "2038-01-18 03:14:07",
+    "username" : "root"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# Test user without privileges to tables will fail to execute encdb_rule_op UDF;
+#
+select encdb_rule_op('grant','{"restrictedAccess": ["noAccess"]}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "failed to execute "INSERT INTO mysql.encdb_auth_users VALUES ('noAccess', '', 1, '9999-12-31 23:59:59') ON DUPLICATE KEY UPDATE accs_type = 1, expire_time = '9999-12-31 23:59:59'" with error code 1142"
+select encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "failed to execute "<rule SQL>" with error code 1142"
+select encdb_rule_export();
+encdb_rule_export()
+[]
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "fullAccess",
+    "expired" : "2038-01-18 03:14:07",
+    "username" : "root"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+#
+# 1. Test effectiveness of plugin encryption rules.;
+#
+# Test 1.1 : Add rules to encrypt all tables, columns in database test. Rules should be seen in both master and slave.
+select encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}')
+OK
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["*"],
+      "databases" : ["test"],
+      "tables" : ["*"]
+    },
+    "name" : "newrule1"
+  }]
+include/rpl_diff.inc
+include/rpl_diff.inc
+# Test 1.2 : Grant noneAccess to aurora, the returned packet couldn't be decrypted cause that server encrypt it by random key.
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff', 'SM4_128_CBC')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff', 'SM4_128_CBC')))
+{
+  "body" : "",
+  "status" : 0
+}
+select encdb_rule_op('grant','{"noneAccess": ["aurora"]}');
+encdb_rule_op('grant','{"noneAccess": ["aurora"]}')
+OK
+create table t0 (a int);
+insert into t0 values (1);
+# Test 1.3 : Grant restrictedAccess to aurora, the returned packet could be decrypted. We check if the decrypted data is correct
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}')
+OK
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t3
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t3;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 1.4 : Update newrule1 to encrypt all columns in table t1 whatever the database is. 
+SELECT encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["*"],"tables":["t1"],"columns":["*"]}}');
+encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["*"],"tables":["t1"],"columns":["*"]}}')
+OK
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["*"],
+      "databases" : ["*"],
+      "tables" : ["t1"]
+    },
+    "name" : "newrule1"
+  }]
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from test2.t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from test2.t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 1.5: Test that encryption rules will not be applied to tables;
+# in same database with same column definitions but different name.
+# Verify data correctness in plain SQL.
+select * from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 1.6: Update newrule1 to encrypt column named c_tinyint in all tables of all databases.
+SELECT encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["*"],"tables":["*"],
+                             "columns":["c_tinyint"]}}');
+encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["*"],"tables":["*"],
+                             "columns":["c_tinyint"]}}')
+OK
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["c_tinyint"],
+      "databases" : ["*"],
+      "tables" : ["*"]
+    },
+    "name" : "newrule1"
+  }]
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from test2.t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from test2.t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 1.7 : Update newrule1 to encrypt all columns in table test.t1.
+#            Add newrule2 to encrypt part of columns in table test.t2.
+#            Only sensitive columns in table are expected to be encrypted.
+select encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["t1"],
+                             "columns":["c_int_null", "c_tinyint", "c_smallint", "c_mediumint", "c_int",
+                                        "c_bigint", "c_float", "c_double", "c_decimal", "c_bit", "c_year",
+                                        "c_date", "c_time", "c_datetime", "c_timestamp", "c_char", "c_varchar",
+                                        "c_binary", "c_varbinary", "c_text", "c_blob", "c_enum", "c_set", "c_json"]}}');
+encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["t1"],
+                             "columns":["c_int_null", "c_tinyint", "c_smallint", "c_mediumint", "c_int",
+                                        "c_bigint
+OK
+select encdb_rule_op('add','{"name":"newrule2","enabled":true,"meta":{"databases":["test"],"tables":["t2"],
+                             "columns":["c_tinyint", "c_mediumint", "c_bigint", "c_double", "c_bit", "c_date",
+                                        "c_datetime", "c_char", "c_binary", "c_text", "c_enum", "c_json"]}}');
+encdb_rule_op('add','{"name":"newrule2","enabled":true,"meta":{"databases":["test"],"tables":["t2"],
+                             "columns":["c_tinyint", "c_mediumint", "c_bigint", "c_double", "c_bit", "c_date",
+                                        "c_
+OK
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["c_int_null", "c_tinyint", "c_smallint", "c_mediumint", "c_int", "c_bigint", "c_float", "c_double", "c_decimal", "c_bit", "c_year", "c_date", "c_time", "c_datetime", "c_timestamp", "c_char", "c_varchar", "c_binary", "c_varbinary", "c_text", "c_blob", "c_enum", "c_set", "c_json"],
+      "databases" : ["test"],
+      "tables" : ["t1"]
+    },
+    "name" : "newrule1"
+  }, {
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["c_tinyint", "c_mediumint", "c_bigint", "c_double", "c_bit", "c_date", "c_datetime", "c_char", "c_binary", "c_text", "c_enum", "c_json"],
+      "databases" : ["test"],
+      "tables" : ["t2"]
+    },
+    "name" : "newrule2"
+  }]
+# Verify data correctness in plain SQL.
+select * from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 1.8 : These rules should not be applied to test2.t1, even though they have the same name and column definitions.
+# Verify data correctness in plain SQL.
+select * from test2.t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from test2.t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# 2. Test effectiveness of server layer sensitive column detection.
+# Test 2.0 : Test encryption for all MySQL built-in types.
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test2.1 : Test encryption for all MySQL built-in types in slave.;
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.2 : Test whether sensitive columns in view using MERGE algorithm will be encrypted.
+# Verify data correctness in plain SQL.
+select * from v1_merge
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from v1_merge;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.3 : Test whether sensitive columns in view using TEMPTABLE algorithm will be encrypted.
+# Verify data correctness in plain SQL.
+select * from v1_tmptable
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from v1_tmptable;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.4 : Test whether output_fields are encrypted when executing multiple SQL statements in one row.;
+# Verify data correctness in plain SQL.
+PREPARE stmt_2 FROM 'select * from t1';select * from t1;EXECUTE stmt_2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+PREPARE stmt_2 FROM 'select * from t1';select * from t1;EXECUTE stmt_2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.5 : Test whether output_fields containing alias will be encrypted.
+# Verify data correctness in plain SQL.
+select c_int_null as c0, c_tinyint as c1, c_smallint as c2,
+c_mediumint as c3, c_int as c4, c_bigint as c5,
+c_float as c6, c_double as c7, c_decimal as c8,
+c_bit as c9, c_year as c10, c_date as c11, c_time as c12,
+c_datetime as c13, c_timestamp as c14, c_char as c15,
+c_varchar as c16, c_binary as c17, c_varbinary as c18,
+c_text as c19, c_blob as c20, c_enum as c21,
+c_set as c22, c_json as c23 from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select c_int_null as c0, c_tinyint as c1, c_smallint as c2,
+c_mediumint as c3, c_int as c4, c_bigint as c5,
+c_float as c6, c_double as c7, c_decimal as c8,
+c_bit as c9, c_year as c10, c_date as c11, c_time as c12,
+c_datetime as c13, c_timestamp as c14, c_char as c15,
+c_varchar as c16, c_binary as c17, c_varbinary as c18,
+c_text as c19, c_blob as c20, c_enum as c21,
+c_set as c22, c_json as c23 from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.6 : Test whether output_fields and derived_table containing alias will be encrypted.
+# Verify data correctness in plain SQL.
+select c0 as cc0, c1 as cc1, c2 as cc2, c3 as cc3, c4 as cc4,
+c5 as cc5, c6 as cc6, c7 as cc7, c8 as cc8, c9 as cc9,
+c10 as cc10, c11 as cc11, c12 as cc12, c13 as cc13,
+c14 as cc14, c15 as cc15, c16 as cc16, c17 as cc17,
+c18 as cc18, c19 as cc19, c20 as cc20, c21 as cc21,
+c22 as cc22, c23 as cc23 from
+(select c_int_null as c0, c_tinyint as c1, 
+c_smallint as c2, c_mediumint as c3, c_int as c4,
+c_bigint as c5, c_float as c6, c_double as c7,
+c_decimal as c8, c_bit as c9, c_year as c10, c_date as c11,
+c_time as c12, c_datetime as c13, c_timestamp as c14,
+c_char as c15, c_varchar as c16, c_binary as c17,
+c_varbinary as c18, c_text as c19, c_blob as c20,
+c_enum as c21, c_set as c22, c_json as c23 from t1) t
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select c0 as cc0, c1 as cc1, c2 as cc2, c3 as cc3, c4 as cc4,
+c5 as cc5, c6 as cc6, c7 as cc7, c8 as cc8, c9 as cc9,
+c10 as cc10, c11 as cc11, c12 as cc12, c13 as cc13,
+c14 as cc14, c15 as cc15, c16 as cc16, c17 as cc17,
+c18 as cc18, c19 as cc19, c20 as cc20, c21 as cc21,
+c22 as cc22, c23 as cc23 from
+(select c_int_null as c0, c_tinyint as c1, 
+c_smallint as c2, c_mediumint as c3, c_int as c4,
+c_bigint as c5, c_float as c6, c_double as c7,
+c_decimal as c8, c_bit as c9, c_year as c10, c_date as c11,
+c_time as c12, c_datetime as c13, c_timestamp as c14,
+c_char as c15, c_varchar as c16, c_binary as c17,
+c_varbinary as c18, c_text as c19, c_blob as c20,
+c_enum as c21, c_set as c22, c_json as c23 from t1) t;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.7 : Test whether the order of union will affect the encryption results.
+# Verify data correctness in plain SQL.
+select * from t1 union select * from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1 union select * from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t2 union select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2 union select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t2 union distinct select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2 union distinct select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+select * from t3 union select * from t1 union select * from t4
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t3 union select * from t1 union select * from t4;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.8 : Test whether built-in functions containing sensitive_fields will be encrypted.;
+# Verify data correctness in plain SQL.
+select c_tinyint=0, (select c_tinyint from t1 limit 1), abs(c_tinyint), floor(c_double),
+char(c_int+c_mediumint), sqrt(c_bigint), mod(c_bigint, c_int), date(c_datetime),
+time(c_datetime), week(c_datetime), length(c_char), concat(c_char, "123456789"),
+substring(c_text, 10, 8), strcmp(c_varchar, c_char), strcmp(c_text, c_varchar),
+ascii(c_char), charset(c_char), md5(c_text), substring(c_char,1,2), space(c_tinyint),
+hex(c_bit), cast(c_binary as char(10)), cast(c_enum as unsigned),
+cast(c_json as char(50))  from t2
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select c_tinyint=0, (select c_tinyint from t1 limit 1), abs(c_tinyint), floor(c_double),
+char(c_int+c_mediumint), sqrt(c_bigint), mod(c_bigint, c_int), date(c_datetime),
+time(c_datetime), week(c_datetime), length(c_char), concat(c_char, "123456789"),
+substring(c_text, 10, 8), strcmp(c_varchar, c_char), strcmp(c_text, c_varchar),
+ascii(c_char), charset(c_char), md5(c_text), substring(c_char,1,2), space(c_tinyint),
+hex(c_bit), cast(c_binary as char(10)), cast(c_enum as unsigned),
+cast(c_json as char(50))  from t2;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.9 : Test whether sensitive columns will be encrypted after semi-join.
+# Verify data correctness in plain SQL.
+select * from t2 where c_tinyint in (select c_tinyint from t1 group by c_int)
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2 where c_tinyint in (select c_tinyint from t1 group by c_int);
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.10 : Test whether output_fields containing table aliases will be encrypted.
+insert into t2 set
+c_tinyint = -1, c_smallint = 10000, c_mediumint = 50000, c_int = 1000000,
+c_bigint = 100000000000,
+c_float = 1.1111, c_double = 1000.00001, c_decimal = 1.234,
+c_bit = b'1000001',
+c_year = 2023, c_date = "2023-10-1", c_time = "15:24:25.123",
+c_datetime = "2023-10-1 15:24:25.123456",
+c_timestamp = "2023-10-1 15:24:25.123456",
+c_char = "0123456789", c_varchar = repeat("a", 100),
+c_binary = "0123456789", c_varbinary = repeat("A", 20),
+c_text = repeat("A", 300), c_blob = repeat("A", 1000),
+c_enum = 'two', c_set = 'red,blue',
+c_json = '{"key1": "value1", "key2": "value2"}';
+# Verify data correctness in plain SQL.
+SELECT table2.c_int_null, table2.c_tinyint, table2.c_smallint, table2.c_mediumint,
+table2.c_int, table2.c_bigint, table2.c_float, table2.c_double, table2.c_decimal,
+table2.c_bit, table2.c_year, table2.c_date, table2.c_time, table2.c_datetime,
+table2.c_timestamp, table2.c_char, table2.c_varchar, table2.c_binary, table2.c_varbinary,
+table2.c_text, table2.c_blob, table2.c_enum, table2.c_set, table2.c_json
+FROM t1 table1, t2 table2 WHERE table1.c_tinyint = table2.c_tinyint
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+SELECT table2.c_int_null, table2.c_tinyint, table2.c_smallint, table2.c_mediumint,
+table2.c_int, table2.c_bigint, table2.c_float, table2.c_double, table2.c_decimal,
+table2.c_bit, table2.c_year, table2.c_date, table2.c_time, table2.c_datetime,
+table2.c_timestamp, table2.c_char, table2.c_varchar, table2.c_binary, table2.c_varbinary,
+table2.c_text, table2.c_blob, table2.c_enum, table2.c_set, table2.c_json
+FROM t1 table1, t2 table2 WHERE table1.c_tinyint = table2.c_tinyint;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+delete from t2 where c_tinyint = -1;
+# Test 2.11 : Test whether aggregation functions containing sensitive_fields will be encrypted.
+# Verify data correctness in plain SQL.
+select sum(c_tinyint), min(c_mediumint), max(c_bigint), avg(c_double), count(c_bit) from t1 group by c_int
+union
+select sum(c_tinyint), min(c_mediumint), max(c_bigint), avg(c_double), count(c_bit) from t2 group by c_int
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select sum(c_tinyint), min(c_mediumint), max(c_bigint), avg(c_double), count(c_bit) from t1 group by c_int
+union
+select sum(c_tinyint), min(c_mediumint), max(c_bigint), avg(c_double), count(c_bit) from t2 group by c_int;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Test 2.12 : Test whether sensitive columns will be encrypted after join.
+create table mysql.cipher_text_join(
+c0 text, c1 text, c2 text, c3 text,
+c4 text, c5 text, c6 text, c7 text,
+c8 text, c9 text, c10 text, c11 text,
+c12 text, c13 text, c14 text, c15 text,
+c16 text, c17 text, c18 text, c19 text,
+c20 text, c21 text, c22 text, c23 text,
+c24 text, c25 text, c26 text, c27 text,
+c28 text, c29 text, c30 text, c31 text,
+c32 text, c33 text, c34 text, c35 text,
+c36 text, c37 text, c38 text, c39 text,
+c40 text, c41 text, c42 text, c43 text,
+c44 text, c45 text, c46 text, c47 text);
+# Verify data correctness in plain SQL.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text_join;
+delete from mysql.cipher_text_join;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text_join;
+delete from mysql.cipher_text_join;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t2 join t1 on t1.c_int = t2.c_int;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text_join;
+drop procedure encdb_proc;
+delete from mysql.cipher_text_join;
+drop table mysql.cipher_text_join;
+# Test 2.13 : Test whether timestamp columns with 0 length will be encrypted properly.
+insert into t1 set
+c_tinyint = 1, c_smallint = 20000, c_mediumint = 20000, c_int = 2000000,
+c_bigint = 200000000000,
+c_float = 2.2222, c_double = 2000.00002, c_decimal = 2.345,
+c_bit = b'1000010',
+c_year = 2023, c_date = "", c_time = "",
+c_datetime = "",
+c_timestamp = "",
+c_char = "012345678", c_varchar = repeat("b", 100),
+c_binary = "012345678", c_varbinary = repeat("B", 20),
+c_text = repeat("B", 300), c_blob = repeat("B", 1000),
+c_enum = 'three', c_set = 'red,yellow',
+c_json = '{"key1": "v1", "key2": "v2"}';
+# Verify data correctness in plain SQL.
+select * from t1 where c_tinyint = 1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1 where c_tinyint = 1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+delete from t1 where c_tinyint = 1;
+# Test 2.14 : Test that select runs as expected after set encdb to off.
+set global column_encryption = off;
+# Verify data correctness in plain SQL.
+select * from t1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+select * from t1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+select * from mysql.encdb_auth_users;
+user	salt_mac	accs_type	expire_time
+aurora	#	1	#
+root	#	2	#
+select * from mysql.encdb_sensitive_rules;
+sensitive_databases	sensitive_tables	sensitive_columns	algos	default_algo	endpoints	rule_name	enabled	rule_type	description
+["test"]	["t1"]	["c_int_null", "c_tinyint", "c_smallint", "c_mediumint", "c_int", "c_bigint", "c_float", "c_double", "c_decimal", "c_bit", "c_year", "c_date", "c_time", "c_datetime", "c_timestamp", "c_char", "c_varchar", "c_binary", "c_varbinary", "c_text", "c_blob", "c_enum", "c_set", "c_json"]	[]		[]	newrule1	1	0	#
+["test"]	["t2"]	["c_tinyint", "c_mediumint", "c_bigint", "c_double", "c_bit", "c_date", "c_datetime", "c_char", "c_binary", "c_text", "c_enum", "c_json"]	[]		[]	newrule2	1	0	#
+# Test 2.15 : Test encryption scope with mixed columns and constants.
+set global column_encryption = ON;
+# Verify data correctness in plain SQL.
+SELECT c_int + 1 AS calculated FROM t1 LIMIT 1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+SELECT c_int + 1 AS calculated FROM t1 LIMIT 1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in plain SQL.
+SELECT CONCAT(c_char, CHAR(95,115,117,102,102,105,120)) FROM t1 LIMIT 1
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in prepared staments.
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+# Verify data correctness in store procedure.
+CREATE PROCEDURE `encdb_proc` ()
+BEGIN
+SELECT CONCAT(c_char, CHAR(95,115,117,102,102,105,120)) FROM t1 LIMIT 1;
+END |
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+drop procedure encdb_proc;
+delete from mysql.cipher_text;
+delete from mysql.cipher_text;
+# 3. Test if the encrypted data should never be transferred to unencrypted tables.
+set global column_encryption = ON;
+# 3.1 Test if insert encrypted data to unencrypted table will fail.
+insert into t4 select * from t1;
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.2 Test if replace into encrypted data to unencrypted table will fail.
+replace into t4 select * from t1;
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.3 Test if create unencrypted table with the encrypted data from encrypted table will fail.
+create table t5 select * from t1;
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.4 Test if select encrypted columns into user variables will fail.
+SELECT c_tinyint INTO @a FROM t1 LIMIT 1;
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.5 Test if select encrypted columns into outfile will fail.
+SELECT c_tinyint FROM t1 INTO OUTFILE '$MYSQLTEST_VARDIR/tmp/encdb_outfile_test.txt';
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.6 Test if select encrypted columns into dumpfile will fail.
+SELECT c_tinyint FROM t1 LIMIT 1 INTO DUMPFILE '$MYSQLTEST_VARDIR/tmp/encdb_dumpfile_test.txt';
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.7 Test if multi-table update with encrypted source to unencrypted target will fail.
+UPDATE t4 JOIN t1 ON t4.c_int = t1.c_int SET t4.c_tinyint = t1.c_tinyint;
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+# 3.8 Test if fetch cursor into sp variables with encrypted columns will fail.
+CREATE PROCEDURE test_fetch_encrypted()
+BEGIN
+DECLARE v TINYINT;
+DECLARE cur CURSOR FOR SELECT c_tinyint FROM t1;
+OPEN cur;
+FETCH cur INTO v;
+CLOSE cur;
+END|
+CALL test_fetch_encrypted();
+ERROR HY000: Transfer of encrypted or masked columns is not allowed in this statement.
+DROP PROCEDURE IF EXISTS test_fetch_encrypted;
+#
+# Clean up
+#
+drop database test;
+drop database test2;
+drop table mysql.cipher_text;
+create database test;
+drop function encdb_decrypt;
+drop function encdb_reload_rules;
+drop function encdb_generate_mek_request;
+drop user aurora@`%`;
+drop user noAccess@`%`;
+set global column_encryption = on;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+include/rpl_end.inc

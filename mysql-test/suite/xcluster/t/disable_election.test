@@ -1,0 +1,1035 @@
+--source include/have_debug.inc
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+let $MYPORT_CONSENSUS_3 = query_get_value("select $MYPORT_3+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+40 as c1", c1, 1);
+
+--connection conn1
+--enable_reconnect
+create table test.t1(id int);
+insert into test.t1 values(1);
+xa start 'x1';
+insert into test.t1 values(1);
+xa end 'x1';
+xa prepare 'x1';
+xa commit 'x1';
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+
+
+
+--echo ###################### CASE 1: only leader(node1) disable_election=1
+
+--connection conn1
+set global consensus_disable_election=1;
+--sleep 2
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 1.1: change_leader  node1(leader,disable_election=1) -> node2(follower)
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+--sleep 8
+
+--echo #### check target: node2 -> leader
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 1.1 rollback: restore node1 as leader for case 1.2
+
+# node1 has disable_election=1 and cannot accept leadership, reset it first
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=0;
+--sleep 2
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 7
+
+--echo #### check self:   node2 -> follower
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check target: node1 -> leader
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+# re-enable disable_election on node1(leader) to prepare for case 1.2
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=1;
+--sleep 2
+
+--echo ###################### CASE 1.2: force_promote  node3(follower) -> leader,  node1 has disable_election=1
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node3 -> leader
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node2 -> follower
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 1.2 rollback: restore node1 as leader, reset disable_election
+
+# node1 has disable_election=1 and cannot accept leadership, reset it first
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=0;
+--sleep 2
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 7
+
+--echo #### check target: node1 -> leader
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+
+--echo #### check other:  node2 -> follower
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+
+
+
+--echo ###################### CASE 2: only follower(node2) disable_election=1
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=1;
+--sleep 2
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.1: change_leader  node1(leader) -> node2(follower,disable_election=1),  expected: node2 becomes leader (operator-initiated bypasses disableElection)
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+--sleep 8
+
+--echo #### check target: node2 -> leader(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.1 rollback: restore node1 as leader for case 2.2
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 2.2: change_leader  node1(leader) -> node3(follower),  node2 has disable_election=1
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_3");
+--sleep 7
+
+--echo #### check target: node3 -> leader
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+
+--echo #### check other:  node2 -> follower(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.2 rollback: change_leader  node3(leader) -> node1(follower)
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 7
+
+--echo #### check target: node1 -> leader
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node2 -> follower(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.3: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader (force bypasses disableElection)
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.3 rollback: restore node1 as leader for case 2.4
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 2.4: force_promote  node3(follower) -> leader,  node2 has disable_election=1
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node3 -> leader
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node2 -> follower(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 2.4 rollback: restore node1 as leader, reset disable_election
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 7
+
+--echo #### check target: node1 -> leader
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+
+--echo #### check self:   node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+
+--echo #### check other:  node2 -> follower
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+--sleep 2
+
+
+
+--echo ###################### CASE 3: both followers(node2, node3) disable_election=1
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=1;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_disable_election=1;
+--sleep 2
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 3.1: change_leader  node1(leader) -> node2(follower,disable_election=1),  expected: succeeds (operator-initiated bypasses disableElection)
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+--sleep 8
+
+--echo #### check target: node2 -> leader(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower(disable_election=1)
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 3.1 rollback: restore node1 as leader for case 3.2
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 3.2: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader (force bypasses disableElection)
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower(disable_election=1)
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 3.2 rollback: restore node1 as leader, reset disable_election
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_disable_election=0;
+--sleep 2
+
+
+
+--echo ###################### CASE 4: leader(node1) + follower(node2) disable_election=1
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=1;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=1;
+--sleep 2
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 4.1: change_leader  node1(leader,disable_election=1) -> node2(follower,disable_election=1),  expected: succeeds
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+--sleep 8
+
+--echo #### check target: node2 -> leader(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 4.1 rollback: restore node1 as leader for case 4.2
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 4.2: change_leader  node1(leader,disable_election=1) -> node3(follower),  expected: succeeds (voters bypass disableElection for force request)
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_3");
+--sleep 8
+
+--echo #### check target: node3 -> leader
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node2 -> follower(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 4.2 rollback: restore node1 as leader for case 4.3
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 4.3: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 4.3 rollback: restore node1 as leader for case 4.4
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 4.4: force_promote  node3(follower),  expected: succeeds (voters with disableElection grant vote for force request)
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node3 -> leader
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node2 -> follower(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 4.4 rollback: restore node1 as leader, reset disable_election
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=0;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+--sleep 2
+
+
+
+--echo ###################### CASE 5: all nodes(node1, node2, node3) disable_election=1
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=1;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=1;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_disable_election=1;
+--sleep 2
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 5.1: change_leader  node1(leader,disable_election=1) -> node2(follower,disable_election=1),  expected: succeeds
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+--sleep 8
+
+--echo #### check target: node2 -> leader(disable_election=1)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check self:   node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower(disable_election=1)
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 5.1 rollback: restore node1 as leader for case 5.2
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+--echo ###################### CASE 5.2: force_promote  node2(follower,disable_election=1),  expected: node2 becomes leader
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_force_promote=1;
+--sleep 7
+
+--echo #### check self:   node2 -> leader(disable_election=1, force_promote succeeded)
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node1 -> follower(disable_election=1)
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo #### check other:  node3 -> follower(disable_election=1)
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1 $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2 $MYPORT_CONSENSUS_3 MYPORT_CONSENSUS_3
+select SERVER_ID, CURRENT_LEADER, ROLE, SERVER_READY_FOR_RW, DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_local;
+
+--echo ###################### CASE 5.2 rollback: restore node1 as leader
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+--sleep 8
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+set global consensus_disable_election=0;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+
+--disconnect conn3
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+set global consensus_disable_election=0;
+--sleep 2
+
+
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+drop table test.t1;
+--source include/wait_follower_catchup.inc
+

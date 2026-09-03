@@ -21,7 +21,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/recycle_bin/recycle.h"
-
+#include "sql/recycle_bin/recycle_table.h"
 #include "sql/sql_class.h"
 
 namespace im {
@@ -36,6 +36,15 @@ Recycle_process_context::Recycle_process_context(THD *thd)
 
 /* Restore recycle state */
 Recycle_process_context::~Recycle_process_context() {
+  /* reset recycle_bin_table_name when drop(truncate) is done */
+  if (m_thd->recycle_state->is_set()) {
+    /* Increment recycle bin version number to trigger a round of recycle
+     * scheduler detect */
+    im::recycle_bin::recycle_bin_version.fetch_add(1);
+  }
+  if (m_thd->recycle_state->has_name()) {
+    m_thd->set_recycle_name(nullptr, 0);
+  }
   m_thd->recycle_state = m_saved_recycle_state;
 }
 

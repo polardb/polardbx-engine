@@ -48,6 +48,9 @@ namespace dd {
 class Spatial_reference_system;
 }
 
+class Slice;
+class DSlice;
+
 /** Returns true if two columns are equal for comparison purposes.
 @param[in] col1 Column to compare.
 @param[in] col2 Column to compare.
@@ -100,8 +103,8 @@ field, while the second one must be one field from multi-value index
 @param[in] mode compare mode
 @param[in] srs Spatial reference system of R-tree
 @retval negative if dtuple is less than rec */
-int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const rec_t *rec,
-                            const ulint *offsets, page_cur_mode_t mode,
+int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const Slice *slc,
+                            page_cur_mode_t mode,
                             const dd::Spatial_reference_system *srs);
 
 /** Compare a GIS data tuple to a physical record in rtree non-leaf node.
@@ -112,8 +115,7 @@ rtree non-leaf node.
 @param[in]      offsets rec_get_offsets(rec)
 @param[in]  srs Spatial referenxe system
 @retval negative if dtuple is less than rec */
-int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const rec_t *rec,
-                                     const ulint *offsets,
+int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const Slice *slc,
                                      const dd::Spatial_reference_system *srs);
 
 /** Compare a data tuple to a physical record.
@@ -127,10 +129,9 @@ int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const rec_t *rec,
 @retval 0 if dtuple is equal to rec
 @retval negative if dtuple is less than rec
 @retval positive if dtuple is greater than rec */
-int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple, const rec_t *rec,
-                                  const dict_index_t *index,
-                                  const ulint *offsets, ulint n_cmp,
-                                  ulint *matched_fields);
+int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple,
+                                  const dict_index_t *index, const Slice *slc,
+                                  ulint n_cmp, ulint *matched_fields);
 
 /** Compare a data tuple to a physical record.
 @param[in]      dtuple          data tuple
@@ -144,9 +145,11 @@ field that is not matched
 @retval 0 if dtuple is equal to rec
 @retval negative if dtuple is less than rec
 @retval positive if dtuple is greater than rec */
-[[nodiscard]] int cmp_dtuple_rec_with_match_bytes(
-    const dtuple_t *dtuple, const rec_t *rec, const dict_index_t *index,
-    const ulint *offsets, ulint *matched_fields, ulint *matched_bytes);
+[[nodiscard]] int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple,
+                                                  const dict_index_t *index,
+                                                  const Slice *slc,
+                                                  ulint *matched_fields,
+                                                  ulint *matched_bytes);
 /** Compare a data tuple to a physical record.
 @see cmp_dtuple_rec_with_match
 @param[in]      dtuple  data tuple
@@ -157,9 +160,9 @@ field that is not matched
 @retval 0 if dtuple is equal to rec
 @retval negative if dtuple is less than rec
 @retval positive if dtuple is greater than rec */
-[[nodiscard]] int cmp_dtuple_rec(const dtuple_t *dtuple, const rec_t *rec,
-                                 const dict_index_t *index,
-                                 const ulint *offsets);
+[[nodiscard]] int cmp_dtuple_rec(const dtuple_t *dtuple,
+                                 const dict_index_t *index, const Slice *slc);
+
 /** Check if a dtuple is a prefix of a record.
 @param[in]      dtuple  data tuple
 @param[in]      rec     B-tree record
@@ -167,9 +170,8 @@ field that is not matched
 @param[in]      offsets rec_get_offsets(rec)
 @return true if prefix */
 [[nodiscard]] bool cmp_dtuple_is_prefix_of_rec(const dtuple_t *dtuple,
-                                               const rec_t *rec,
                                                const dict_index_t *index,
-                                               const ulint *offsets);
+                                               const Slice *slc);
 /** Compare two physical records that contain the same number of columns,
 none of which are stored externally.
 @param[in] rec1 Physical record 1 to compare
@@ -182,9 +184,7 @@ or nullptr
 @retval positive if rec1 (including non-ordering columns) is greater than rec2
 @retval negative if rec1 (including non-ordering columns) is less than rec2
 @retval 0 if rec1 is a duplicate of rec2 */
-[[nodiscard]] int cmp_rec_rec_simple(const rec_t *rec1, const rec_t *rec2,
-                                     const ulint *offsets1,
-                                     const ulint *offsets2,
+[[nodiscard]] int cmp_rec_rec_simple(const Slice *slc1, const Slice *slc2,
                                      const dict_index_t *index,
                                      struct TABLE *table);
 /** Compare two B-tree records.
@@ -204,8 +204,7 @@ within the first field not completely matched
 @retval 0 if rec1 is equal to rec2
 @retval negative if rec1 is less than rec2
 @retval positive if rec2 is greater than rec2 */
-int cmp_rec_rec_with_match(const rec_t *rec1, const rec_t *rec2,
-                           const ulint *offsets1, const ulint *offsets2,
+int cmp_rec_rec_with_match(const Slice *slc1, const Slice *slc2,
                            const dict_index_t *index,
                            bool spatial_index_non_leaf, bool nulls_unequal,
                            ulint *matched_fields, bool cmp_btree_recs = true);
@@ -224,8 +223,7 @@ within the first field not completely matched
 @param[in]  cmp_btree_recs  true if the both the records are b-tree records
 @return positive, 0, negative if rec1 is greater, equal, less, than rec2,
 respectively */
-static inline int cmp_rec_rec(const rec_t *rec1, const rec_t *rec2,
-                              const ulint *offsets1, const ulint *offsets2,
+static inline int cmp_rec_rec(const Slice *slc1, const Slice *slc2,
                               const dict_index_t *index,
                               bool spatial_index_non_leaf,
                               ulint *matched_fields = nullptr,
@@ -242,6 +240,8 @@ static inline int cmp_rec_rec(const rec_t *rec1, const rec_t *rec2,
     const dfield_t *dfield1, const dfield_t *dfield2);
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_REM0CMP_IC_STANDALONE
 #include "rem0cmp.ic"
+#endif /* !INNODB_REM0CMP_IC_STANDALONE */
 
 #endif

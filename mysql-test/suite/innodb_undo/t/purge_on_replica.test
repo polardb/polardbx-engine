@@ -1,0 +1,69 @@
+--source include/have_debug.inc
+# The test requires a debug build, in order to trigger
+# a purge using innodb_purge_run_now=ON .
+
+# PolarX: single server mode, no master-slave
+--source include/have_innodb_default_undo_tablespaces.inc
+
+--echo # 1: Set parameters
+set @orig_max_undo_log_size = @@innodb_max_undo_log_size;
+set @orig_truncate_frequency = @@innodb_purge_rseg_truncate_frequency;
+set @orig_log_error_verbosity = @@global.log_error_verbosity;
+
+set global innodb_max_undo_log_size=10485760;
+set global innodb_purge_rseg_truncate_frequency=1;
+set global log_error_verbosity=3;
+
+--echo
+--echo # 2: Block purge, fill undo with single large transaction
+set global innodb_purge_stop_now=ON;
+
+# Only innodb_undo_005 and innodb_undo_006 are truncated (001-004 are txn).
+# PK includes varchar(700): non-PK cols don't record undo on insert, PK does.
+# utf8mb4: 700*4=2800B+4B≈2.8KB/row. 16MB/2.8KB≈6k rows, use 12000.
+create table t1(c1 int, c2 varchar(700), primary key(c1, c2)) engine=InnoDB;
+
+delimiter $$;
+create procedure insert_data()
+begin
+  declare i int default 1;
+  while (i <= 12000) do
+    insert into t1 values (i, repeat('x', 700));
+    set i = i + 1;
+  end while;
+end;$$
+delimiter ;$$
+
+begin;
+call insert_data();
+commit;
+
+--echo # 3: Set super_read_only, then release purge
+set global super_read_only=1;
+set global innodb_purge_stop_now=OFF;
+
+# Wait for purge and truncate to complete
+--let $wait_timeout=600
+--source include/wait_innodb_all_purged.inc
+
+--echo # 4: Verify truncate ran via error log
+let SEARCH_FILE = $MYSQLTEST_VARDIR/log/mysqld.1.err;
+let SEARCH_PATTERN = Completed truncate of undo tablespace;
+--source include/search_pattern.inc
+
+--echo # 5: Verify no trunc.log residue
+select tablespace_name, file_name from information_schema.files
+  where file_name like "%undo%";
+select name, row_format from information_schema.innodb_tablespaces
+  where name like '%undo%';
+
+let $MYSQLD_DATADIR = `select @@datadir`;
+list_files $MYSQLD_DATADIR undo_0*;
+
+set global innodb_max_undo_log_size=@orig_max_undo_log_size;
+set global innodb_purge_rseg_truncate_frequency=@orig_truncate_frequency;
+set global log_error_verbosity=@orig_log_error_verbosity;
+set global super_read_only = 0;
+set global read_only = 0;
+drop procedure insert_data;
+drop table t1;

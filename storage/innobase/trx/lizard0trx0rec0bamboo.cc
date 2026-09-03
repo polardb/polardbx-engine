@@ -30,11 +30,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-10-31 by Yichang Song
  *******************************************************/
 #include "row0upd.h"
-#include "trx0rec.h"
 
-#include "lizard0trx0rec.h"
+#include "lizard0trx.h"
 #include "lizard0trx0rec0bamboo.h"
-#include "lizard0undo.h"
 
 namespace lizard {
 /**
@@ -53,30 +51,26 @@ byte *trx_undo_update_rec_get_bamboo_cols(const byte *ptr,
 }
 
 /** Write Bamboo layout transactional columns into undo record.
- * @param[in/out]  ptr             pointer to undo record
- * @param[in]      index           index handler
- * @param[in]      rec             record
- * @param[in]      offsets         offsets
- * @return         pointer to current position
- */
-byte *trx_undo_update_rec_write_bamboo_cols(byte *ptr,
-                                            const dict_index_t *index,
-                                            const rec_t *rec,
-                                            const ulint *offsets) {
+ * @param[in/out]	ptr             pointer to undo record
+ * @param[in]		slc             record
+ * @param[in]		index           index handler
+ *
+ * @revtal	pointer to current position */
+byte *trx_undo_update_rec_write_bamboo_cols(byte *ptr, const Slice *slc,
+                                            const dict_index_t *index) {
   ut_ad(dict_index_is_panda(index));
   ut_ad(!index->table->is_temporary());
+  ut_ad(slc->contiguous());
   const byte *field;
   ulint flen;
 
-  /* Write scn. */
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            index->get_sys_col_pos(DATA_SCN_ID), &flen);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, index->get_sys_col_pos(DATA_SCN_ID), &flen);
   ut_ad(flen == DATA_SCN_ID_LEN);
   ptr += mach_u64_write_compressed(ptr, lizard::trx_read_scn(field));
 
-  /* Write uba. */
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            index->get_sys_col_pos(DATA_UNDO_PTR), &flen);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, index->get_sys_col_pos(DATA_UNDO_PTR), &flen);
   ut_ad(flen == DATA_UNDO_PTR_LEN);
   ptr += mach_u64_write_compressed(ptr, lizard::trx_read_undo_ptr(field));
 

@@ -1,0 +1,179 @@
+##########################################
+# FLUSH TABLES with VECTOR INDEX          #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare - Create table with vector index and insert data
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[4,5,6,7,8]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[5,6,7,8,9]'));
+
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo
+--echo # 2. Execute ANN query (to establish cache)
+--echo # First query
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo
+--echo # 3. FLUSH TABLES - then execute same ANN query
+FLUSH TABLES;
+
+--echo # Query after FLUSH TABLES - should return same results
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo
+--echo # 4. FLUSH TABLE t1 - single table flush
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,2,3,4]'));
+
+FLUSH TABLE t1;
+
+--echo # Query after single table flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0,1,2,3,4]')) LIMIT 3;
+
+--echo
+--echo # 5. FLUSH TABLES WITH READ LOCK
+FLUSH TABLES WITH READ LOCK;
+
+--echo # ANN query under read lock should succeed (read-only operation)
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo # Multiple ANN queries under read lock
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,4,5,6,7]')) LIMIT 3;
+
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,6,7,8,9]')) LIMIT 3;
+
+--echo # Regular SELECT under read lock should also succeed
+SELECT COUNT(*) FROM t1;
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id <= 3;
+
+--echo
+--echo # 6. INSERT under read lock should fail
+--error ER_CANT_UPDATE_WITH_READLOCK
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'));
+
+--echo # UPDATE under read lock should fail
+--error ER_CANT_UPDATE_WITH_READLOCK
+UPDATE t1 SET v = VEC_FROMTEXT('[10,10,10,10,10]') WHERE id = 1;
+
+--echo # DELETE under read lock should fail
+--error ER_CANT_UPDATE_WITH_READLOCK
+DELETE FROM t1 WHERE id = 1;
+
+--echo
+--echo # 7. UNLOCK TABLES and resume normal operations
+UNLOCK TABLES;
+
+--echo # INSERT should succeed after unlock
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'));
+
+--echo # UPDATE should succeed after unlock
+UPDATE t1 SET v = VEC_FROMTEXT('[10,10,10,10,10]') WHERE id = 1;
+
+--echo # Verify data
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo # ANN query should work normally
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 3;
+
+--echo
+--echo # 8. Multiple FLUSH operations
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[11,11,11,11,11]'));
+FLUSH TABLES;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[12,12,12,12,12]'));
+FLUSH TABLES;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[13,13,13,13,13]'));
+FLUSH TABLES;
+
+--echo # Verify all data persisted correctly
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # ANN query after multiple flushes
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[12,12,12,12,12]')), id LIMIT 3;
+
+--echo
+--echo # 9. FLUSH TABLES t1 FOR EXPORT (if supported)
+--disable_abort_on_error
+FLUSH TABLES t1 FOR EXPORT;
+UNLOCK TABLES;
+--enable_abort_on_error
+
+--echo # Verify table is still accessible
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo # 10. FLUSH with multiple tables
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[2,2,2,2,2]'));
+
+FLUSH TABLES t1, t2;
+
+--echo # ANN queries on both tables after flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+
+SELECT id, VEC_TOTEXT(v) FROM t2 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1,1]')) LIMIT 2;
+
+--echo
+--echo # 11. Transaction with FLUSH
+START TRANSACTION;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[20,20,20,20,20]'));
+
+--echo # Query within transaction before commit
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 1;
+
+COMMIT;
+
+FLUSH TABLES;
+
+--echo # Query after commit and flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 1;
+
+--echo
+--echo # 12. FLUSH TABLES followed by DDL
+FLUSH TABLES;
+
+ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0;
+
+SHOW CREATE TABLE t1;
+
+--echo # ANN query after DDL
+SELECT id, VEC_TOTEXT(v), extra FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo
+--echo # 13. Cleanup
+DROP TABLE t2;
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

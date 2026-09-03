@@ -53,6 +53,7 @@
 #include "mysqld_error.h"
 #include "scope_guard.h"
 #include "sql/check_stack.h"
+#include "sql/column_encryption/column_encryption.h"
 #include "sql/current_thd.h"  // current_thd
 #include "sql/debug_sync.h"   // DEBUG_SYNC
 #include "sql/derror.h"       // ER_THD
@@ -238,6 +239,7 @@ void Item_subselect::accumulate_properties() {
 void Item_subselect::accumulate_properties(Query_block *select) {
   for (Item *item : select->visible_fields()) {
     accumulate_expression(item);
+    add_encryption_type(item->encryption_type());
   }
 
   if (select->where_cond()) accumulate_condition(select->where_cond());

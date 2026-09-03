@@ -145,7 +145,7 @@ class Sql_cmd_recycle_proc_purge : public Sql_cmd_recycle_proc_base {
  public:
   explicit Sql_cmd_recycle_proc_purge(THD *thd, mem_root_deque<Item *> *list,
                                       const Proc *proc)
-      : Sql_cmd_recycle_proc_base(thd, list, proc) {}
+      : Sql_cmd_recycle_proc_base(thd, list, proc), m_table_name(nullptr) {}
 
   /**
     Implementation of Proc execution body.
@@ -162,6 +162,9 @@ class Sql_cmd_recycle_proc_purge : public Sql_cmd_recycle_proc_base {
 
   /* Require DROP_ACL privilege on purge table */
   virtual bool check_access(THD *thd) override;
+
+ private:
+  const char *m_table_name;
 };
 
 class Recycle_proc_purge : public Recycle_proc_base {

@@ -98,6 +98,7 @@
 #include "sql/dd/types/function.h"
 #include "sql/dd/types/procedure.h"
 #include "sql/dd/types/resource_group.h"
+#include "sql/common/secondary_engine_attrs.h"  // komodo::check_table_readonly_for_dml
 #include "sql/debug_sync.h"
 #include "sql/handler.h"
 #include "sql/mysqld.h"  // opt_readonly
@@ -185,6 +186,11 @@ static int lock_tables_check(THD *thd, TABLE **tables, size_t count,
 
       if (t->db_stat & HA_READ_ONLY) {
         my_error(ER_OPEN_AS_READONLY, MYF(0), t->alias);
+        return 1;
+      }
+
+      // Call komodo namespace function for readonly check
+      if (komodo::check_table_readonly_for_dml(thd, t)) {
         return 1;
       }
     }

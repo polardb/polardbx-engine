@@ -35,6 +35,7 @@
 #include "map_helpers.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/field.h"
+#include "sql/sql_lex.h"  // LEX::sql_command, SQLCOM_* (distinguish direct DML)
 
 /**
   @addtogroup Internal Account Management
@@ -309,48 +310,32 @@ bool Dynamic_privilege_entity_guard::guard_insert(THD *thd, TABLE *) {
 }
 
 /**
-  Guard the inner accounts and privileges from modify.
+  Forbid normal user to update any record of global_grants.
+
+  Consistent with guard_insert: non-SUPER users must not directly modify the
+  dynamic privilege table via DML.  The previous implementation only checked
+  the USER field, leaving the PRIV column unguarded — an attacker could
+  UPDATE PRIV from a low-privilege value (e.g. CONNECTION_ADMIN) to a high-
+  privilege value (e.g. SYSTEM_VARIABLES_ADMIN) and escalate to SUPER/FILE.
+
+  Legitimate privilege management (GRANT/REVOKE) goes through internal ACL
+  functions that call ha_update_row() directly, bypassing sql_update.cc's
+  guard_record() entry point, so this blanket block does not affect them.
 
   @param[in]    thd     connection context
-  @param[in]    table   target table object
+  @param[in]    table   target table object (unused)
 
   @retval       true    not allowed
   @retval       false   success
 */
-bool Dynamic_privilege_entity_guard::guard_update(THD *thd, TABLE *table) {
-  ptrdiff_t ptrdiff;
-  const uchar *old_data;
-  const uchar *new_data;
-  char *new_name;
-  char *old_name;
-  Field *field;
+bool Dynamic_privilege_entity_guard::guard_update(THD *thd, TABLE *) {
   DBUG_ENTER("Dynamic_privilege_entity_guard::guard_update");
 
   if (thd && thd->security_context()->check_access(SUPER_ACL))
     DBUG_RETURN(false);
 
-  Auto_bitmap helper(table);
-  assert(helper.effect());
-
-  old_data = table->record[1];
-  new_data = table->record[0];
-  ptrdiff = old_data - new_data;
-
-  /* Step 1: confirm the reserved user */
-  field = table->field[MYSQL_DYNAMIC_PRIV_FIELD_USER];
-
-  new_name = get_field(thd->mem_root, field);
-  field->move_field_offset(ptrdiff);
-  old_name = get_field(thd->mem_root, field);
-  field->move_field_offset(-ptrdiff);
-
-  if (internal_account_need_protected(old_name) ||
-      internal_account_need_protected(new_name)) {
-    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
-    DBUG_RETURN(true);
-  }
-
-  DBUG_RETURN(false);
+  my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+  DBUG_RETURN(true);
 }
 
 /**
@@ -530,6 +515,203 @@ bool Role_entity_guard::guard_update(THD *thd, TABLE *table) {
 
   DBUG_RETURN(false);
 }
+/**
+  Copy constructor
+*/
+Proxies_priv_entity_guard::Proxies_priv_entity_guard(
+    const Proxies_priv_entity_guard &src)
+    : Entity_guard(src) {}
+/**
+  The singleton instance for Proxies_priv_entity_guard entity guard
+*/
+Proxies_priv_entity_guard *Proxies_priv_entity_guard::instance() {
+  static Proxies_priv_entity_guard guard;
+  return &guard;
+}
+/**
+  The proxies_priv table key
+*/
+const String_type Proxies_priv_entity_guard::object_name() {
+  return String_type(proxies_priv_key, key_len);
+}
+
+/* Clone the guard instance dynamically */
+Proxies_priv_entity_guard *Proxies_priv_entity_guard::clone() const {
+  return new Proxies_priv_entity_guard(*this);
+}
+
+Proxies_priv_entity_guard *Proxies_priv_entity_guard::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) Proxies_priv_entity_guard(*this);
+}
+/**
+  Destrutor if placement new object
+*/
+void Proxies_priv_entity_guard::destroy() const {
+  this->~Proxies_priv_entity_guard();
+}
+
+/*
+  True if the current statement is a direct DML (INSERT/REPLACE/UPDATE/DELETE/
+  LOAD) against the visible mysql.* table. Internal ACL maintenance (GRANT/
+  REVOKE PROXY, CREATE/ALTER/DROP/RENAME USER) reaches the guarded tables
+  through replace_proxies_priv_table()/modify_grant_table() carrying its own DDL
+  sql_command; only direct DML on proxies_priv is an attack surface with no
+  legitimate non-SUPER use.
+*/
+static inline bool guard_is_direct_dml(const THD *thd) {
+  if (thd == nullptr) return false;
+  switch (thd->lex->sql_command) {
+    case SQLCOM_INSERT:
+    case SQLCOM_INSERT_SELECT:
+    case SQLCOM_REPLACE:
+    case SQLCOM_REPLACE_SELECT:
+    case SQLCOM_UPDATE:
+    case SQLCOM_UPDATE_MULTI:
+    case SQLCOM_DELETE:
+    case SQLCOM_DELETE_MULTI:
+    case SQLCOM_LOAD:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+  Block a non-SUPER user from creating a proxies_priv row via direct DML.
+
+  A per-field Proxied_user check is bypassable: an empty/NULL/'%'/mixed-case
+  Proxied_user slips past the reserved-name test yet acts as an "any user"
+  wildcard in ACL_PROXY_USER::matches() (it short-circuits on !proxied_user),
+  letting the grantee authenticate AS any account, e.g. a reserved one such as
+  aurora. So block ALL direct DML here instead of checking the field value.
+  GRANT PROXY populates this table via replace_proxies_priv_table() ->
+  ha_write_row() (bypassing guard_record), so legitimate proxy management is
+  unaffected; the selective reserved-name check is kept as a fallback for any
+  internal ACL path that reaches this guard with a non-DML sql_command.
+
+  @param[in]    thd     connection context
+  @param[in]    table   target table object
+
+  @retval       true    not allowed
+  @retval       false   success
+*/
+bool Proxies_priv_entity_guard::guard_insert(THD *thd, TABLE *table) {
+  char *proxied_user;
+  DBUG_ENTER("Proxies_priv_entity_guard::guard_insert");
+
+  if (thd && thd->security_context()->check_access(SUPER_ACL))
+    DBUG_RETURN(false);
+
+  if (guard_is_direct_dml(thd)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  Auto_bitmap_helper helper(table);
+  assert(helper.effect());
+
+  proxied_user = get_field(thd->mem_root,
+                           table->field[MYSQL_PROXIES_PRIV_FIELD_PROXIED_USER]);
+  if (internal_account_need_protected(proxied_user)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    DBUG_RETURN(true);
+  }
+  DBUG_RETURN(false);
+}
+
+/**
+  Guard the proxies_priv update: forbid normal user to point Proxied_user to a
+  reserved/internal account (old or new). Kept selective (like Role_entity_guard)
+  so RENAME USER cleanup of non-reserved accounts through modify_grant_table() ->
+  guard_record(UPDATE) is not affected.
+
+  @param[in]    thd     connection context
+  @param[in]    table   target table object
+
+  @retval       true    not allowed
+  @retval       false   success
+*/
+bool Proxies_priv_entity_guard::guard_update(THD *thd, TABLE *table) {
+  ptrdiff_t ptrdiff;
+  const uchar *old_data;
+  const uchar *new_data;
+  char *new_proxied_user;
+  char *old_proxied_user;
+  Field *field;
+  DBUG_ENTER("Proxies_priv_entity_guard::guard_update");
+
+  if (thd && thd->security_context()->check_access(SUPER_ACL))
+    DBUG_RETURN(false);
+
+  /*
+    Block direct UPDATE DML (which could point/redirect Proxied_user to an
+    empty/wildcard value). RENAME USER cleanup reaches here via
+    modify_grant_table() with sql_command=SQLCOM_RENAME_USER (not direct DML)
+    and keeps working through the selective reserved-name check below.
+  */
+  if (guard_is_direct_dml(thd)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  Auto_bitmap helper(table);
+  assert(helper.effect());
+
+  old_data = table->record[1];
+  new_data = table->record[0];
+  ptrdiff = old_data - new_data;
+
+  field = table->field[MYSQL_PROXIES_PRIV_FIELD_PROXIED_USER];
+
+  new_proxied_user = get_field(thd->mem_root, field);
+  field->move_field_offset(ptrdiff);
+  old_proxied_user = get_field(thd->mem_root, field);
+  field->move_field_offset(-ptrdiff);
+
+  if (internal_account_need_protected(old_proxied_user) ||
+      internal_account_need_protected(new_proxied_user)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  DBUG_RETURN(false);
+}
+
+/**
+  Guard the proxies_priv delete: only protect rows whose Proxied_user is a
+  reserved/internal account. Kept selective so DROP USER cleanup of non-reserved
+  accounts through modify_grant_table() -> guard_record(DELETE) still works.
+
+  @param[in]    thd         connection context
+  @param[in]    table       target table object
+  @param[in]    record_pos  which record will be used
+
+  @retval       true    not allowed
+  @retval       false   success
+*/
+bool Proxies_priv_entity_guard::guard_delete(THD *thd, TABLE *table,
+                                             uint record_pos) {
+  bool err;
+  DBUG_ENTER("Proxies_priv_entity_guard::guard_delete");
+
+  if (thd && thd->security_context()->check_access(SUPER_ACL))
+    DBUG_RETURN(false);
+
+  /*
+    Block direct DELETE DML. DROP USER cleanup reaches here via
+    modify_grant_table() with sql_command=SQLCOM_DROP_USER (not direct DML) and
+    keeps working through the selective reserved-name check below.
+  */
+  if (guard_is_direct_dml(thd)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  err = protect_record_from_delete(thd, table, table->record[record_pos],
+                                   MYSQL_PROXIES_PRIV_FIELD_PROXIED_USER);
+  DBUG_RETURN(err);
+}
 /* Global guard singleton instance */
 Internal_guard_strategy *Internal_guard_strategy::instance() {
   static Internal_guard_strategy guard;
@@ -570,6 +752,11 @@ void internal_guard_strategy_init(bool bootstrap) {
     Internal_guard_strategy::instance()->register_guard<Entity_guard>(
         Role_entity_guard::instance()->object_name(),
         Role_entity_guard::instance());
+
+    /* 4. Proxies_priv table record guard */
+    Internal_guard_strategy::instance()->register_guard<Entity_guard>(
+        Proxies_priv_entity_guard::instance()->object_name(),
+        Proxies_priv_entity_guard::instance());
   }
 }
 

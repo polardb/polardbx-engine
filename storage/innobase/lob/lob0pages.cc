@@ -53,17 +53,22 @@ with data.
 @param[in]      offset  Offset where replace begins.
 @param[in,out]  ptr     Pointer to new data.
 @param[in]      want    Amount of data the caller wants to replace.
+@param[in]      ctx     insert context providing index/is_bulk for new page
+                        allocation.
 @param[in]      mtr     Mini-transaction context.
 @return the buffer block of the new data page. */
 buf_block_t *data_page_t::replace(trx_t *trx, ulint offset, const byte *&ptr,
-                                  ulint &want, mtr_t *mtr) {
+                                  ulint &want, InsertContext *ctx,
+                                  mtr_t *mtr) {
   ulint cur_data_len = get_data_len();
   ut_a(offset > 0 || want < cur_data_len);
   buf_block_t *new_block = nullptr;
 
   /** Allocate a new data page. */
   data_page_t new_page(mtr, m_index);
-  new_block = new_page.alloc(mtr, false);
+  ut_ad(ctx != nullptr);
+  ut_ad(!ctx->is_bulk());
+  new_block = new_page.alloc(ctx, mtr);
 
   if (new_block == nullptr) {
     return (nullptr);
@@ -139,7 +144,7 @@ ulint data_page_t::append(trx_id_t trxid, byte *&data, ulint &len) {
 
 ulint data_page_t::space_left() const { return (payload() - get_data_len()); }
 
-buf_block_t *data_page_t::alloc(mtr_t *alloc_mtr, bool is_bulk) {
+buf_block_t *data_page_t::alloc(InsertContext *ctx, mtr_t *alloc_mtr) {
   ut_ad(m_block == nullptr);
   ut_ad(m_index != nullptr);
   ut_ad(m_mtr != nullptr);
@@ -150,7 +155,9 @@ buf_block_t *data_page_t::alloc(mtr_t *alloc_mtr, bool is_bulk) {
   /* For testing purposes, pretend that the LOB page allocation failed.*/
   DBUG_EXECUTE_IF("innodb_lob_data_page_alloc_failed", return (nullptr););
 
-  m_block = alloc_lob_page(m_index, alloc_mtr, hint, is_bulk);
+  ut_ad(ctx != nullptr);
+  ut_ad(m_index == ctx->index());
+  m_block = ctx->alloc_lob_page(hint, alloc_mtr);
 
   if (m_block == nullptr) {
     return (m_block);

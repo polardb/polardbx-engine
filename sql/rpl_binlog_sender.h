@@ -37,7 +37,7 @@
 #include "sql/rpl_gtid.h"
 #include "sql/sql_error.h"  // Diagnostics_area
 
-#include "sql/lizard_rpl_binlog_sender.h"
+#include "sql/komodo0rpl0binlog0sender.h"
 
 class String;
 class THD;
@@ -125,6 +125,7 @@ class Binlog_sender {
   const char *m_last_file;
   my_off_t m_last_pos;
 
+  /** TODO need refacotr */
   // current MYSQL_BIN_LOG being processed
   MYSQL_BIN_LOG *consensus_log;
 
@@ -519,11 +520,14 @@ class Binlog_sender {
   void revise_event(uchar *event_ptr, size_t event_len, uint32 fake_ctime,
                     my_off_t log_pos);
 
+  /* Check event whether need repl to slave node for compatibility */
+  bool consensus_repl_skip_polarx_event(const Log_event_type event_type);
+
  public:
-  friend class lizard::Delay_binlog_sender;
+  friend class komodo::Delay_binlog_sender;
 
  private:
-  lizard::Delay_binlog_sender m_delay_sender;
+  komodo::Delay_binlog_sender m_delay_sender;
 };
 
 #endif  // DEFINED_RPL_BINLOG_SENDER

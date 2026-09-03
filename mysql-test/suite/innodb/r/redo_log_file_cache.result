@@ -1,0 +1,56 @@
+#
+# Test 1: Verify variable affects redo log file consumption rate
+#
+# Reset to default value
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;
+# Prepare test environment with small redo log capacity
+# Save bootstrap.sql state before test
+# Saved bootstrap.sql state
+# Initialize new data directory...
+# restart: --datadir=DATADIR --log-error=ERROR_LOG --innodb-redo-log-capacity=8388608 --innodb_page_size=INNODB_PAGE_SIZE
+# Prepare schema for generating redo log
+CREATE TABLE t (a INT) ENGINE=InnoDB;
+# Ensure checkpoint is enabled and force consumption
+SET GLOBAL innodb_log_checkpoint_now = ON;
+SET GLOBAL DEBUG = '+d,log_force_consumption';
+# Wait until we have exactly 1 redo log file
+There are <= 1 non-temporary redo log files.
+# Test with max_unused_redo_prepare_count = 1 (default, slow consumption)
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;
+# Disable checkpoint to generate multiple redo files
+SET GLOBAL innodb_checkpoint_disabled = ON;
+# Generate redo log to create multiple files
+CALL log_spammer();
+# Wait until we have at least 3 redo log files
+There are <= 1 non-temporary redo log files.
+# Count current redo log files
+# Current redo log files: 1
+# Re-enable checkpoint and force consumption
+SET GLOBAL innodb_checkpoint_disabled = OFF;
+SET GLOBAL innodb_log_checkpoint_now = ON;
+# Stop log spammer
+UPDATE test.log_spam_controller SET status = 'Stopping' WHERE id = 1;
+# Wait a bit for consumption to start
+# Count current redo log files before consumption
+# Redo log files before consumption: 1
+# Test with max_unused_redo_prepare_count = 5 (faster consumption)
+SET GLOBAL innodb_redo_log_file_cache_pct = 5;
+# Generate more redo log
+CALL log_spammer();
+# Wait until we have at least 3 redo log files again
+There are <= 1 non-temporary redo log files.
+# Re-enable checkpoint
+SET GLOBAL innodb_checkpoint_disabled = OFF;
+SET GLOBAL innodb_log_checkpoint_now = ON;
+# Stop log spammer
+UPDATE test.log_spam_controller SET status = 'Stopping' WHERE id = 1;
+# Wait for consumption with higher limit (should be faster)
+# Count redo log files after consumption
+# Redo log files after consumption: 1
+# Verify variable is still set correctly
+SELECT @@global.innodb_redo_log_file_cache_pct AS 'Current Value';
+Current Value
+5
+# restart: --datadir=/flash3/jyc/work/backup/polardbx-engine/mysql-test/var/tmp/redo_consume_test --log-error=/flash3/jyc/work/backup/polardbx-engine/mysql-test/var/tmp/my_restart.err --innodb-redo-log-capacity=8388608 --innodb_page_size=16384
+# Reset to default
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;

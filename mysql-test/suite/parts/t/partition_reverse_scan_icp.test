@@ -1,3 +1,4 @@
+--source include/have_debug.inc
 --echo #
 --echo # Bug #24929748	REVERSE SCAN ON A PARTITIONED TABLE DOES ICP CHECK INCORRECTLY, CAUSING SLOWDOWN
 --echo #
@@ -34,7 +35,11 @@ select @cnt;
 #Mutiple partittion scan 
 
 #delete some records in p1 ,then  only it will go to QUICK_SELECT_DESC with ICP 
-delete from t1 where date_col>='2015-01-01' and date_col<='2016-01-06' limit 500;
+delete from t1 where date_col>='2015-01-01' and date_col<='2016-01-06' order by date_col ASC limit 500;
+
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
+--source include/wait_innodb_all_purged.inc
+-- sleep 3
 
 #Range condition spans multiple partitions  
 set @cnt=1;

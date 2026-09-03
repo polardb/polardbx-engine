@@ -1,0 +1,107 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+--echo # Reproduce GPP purge delete merge using change buffer
+
+--disable_query_log
+--let $orig_innodb_change_buffering = `SELECT @@GLOBAL.innodb_change_buffering`
+--let $orig_innodb_change_buffering_debug = `SELECT @@GLOBAL.innodb_change_buffering_debug`
+--let $orig_innodb_disable_background_merge = `SELECT @@GLOBAL.innodb_disable_background_merge`
+--let $orig_innodb_change_buffer_max_size = `SELECT @@GLOBAL.innodb_change_buffer_max_size`
+--let $orig_innodb_change_buffering_hippo_purge_enabled = `SELECT @@GLOBAL.innodb_change_buffering_hippo_purge_enabled`
+SET SESSION opt_index_format_gpp_enabled=ON;
+SET GLOBAL innodb_change_buffering='all';
+SET GLOBAL innodb_change_buffering_debug=1;
+SET GLOBAL innodb_disable_background_merge=ON;
+SET GLOBAL innodb_change_buffer_max_size=50;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled=ON;
+SET GLOBAL innodb_purge_stop_now=ON;
+SET GLOBAL innodb_monitor_enable='ibuf_merges_delete';
+SET GLOBAL innodb_monitor_enable='ibuf_merges_delete_mark';
+SET GLOBAL innodb_monitor_reset='ibuf_merges_delete';
+SET GLOBAL innodb_monitor_reset='ibuf_merges_delete_mark';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  KEY idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+INSERT INTO t1 VALUES (1,'p',1);
+INSERT INTO t1 SELECT id + 1, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 2, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 4, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 8, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 16, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 32, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 64, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 128, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 256, val, padding FROM t1;
+INSERT INTO t1 SELECT id + 512, val, padding FROM t1;
+--enable_query_log
+
+SELECT COUNT(*) AS initial_rows FROM t1 FORCE INDEX(PRIMARY);
+SELECT i.N_FIELDS AS idx_val_fields
+FROM INFORMATION_SCHEMA.INNODB_TABLES t
+JOIN INFORMATION_SCHEMA.INNODB_INDEXES i ON i.TABLE_ID = t.TABLE_ID
+WHERE t.NAME = 'test/t1' AND i.NAME = 'idx_val';
+
+--disable_query_log
+SET GLOBAL innodb_monitor_reset='ibuf_merges_delete';
+SET GLOBAL innodb_monitor_reset='ibuf_merges_delete_mark';
+DELETE FROM t1 WHERE id <= 512;
+--enable_query_log
+
+SELECT COUNT_RESET = 0 AS delete_mark_not_merged_before_purge
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_merges_delete_mark';
+SELECT COUNT > 1 AS change_buffer_not_empty_before_purge
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_size';
+
+--disable_query_log
+SET GLOBAL DEBUG = '+d,purge_del_mark_pause_after_sec_index';
+SET GLOBAL innodb_monitor_reset='ibuf_merges_delete';
+SET GLOBAL innodb_purge_run_now=ON;
+SET DEBUG_SYNC = 'now WAIT_FOR purge_processed_sec_index';
+SET GLOBAL DEBUG = '-d,purge_del_mark_pause_after_sec_index';
+SET DEBUG_SYNC = 'now SIGNAL purge_continue_after_sec_index';
+--let $wait_timeout=10
+--source include/wait_innodb_all_purged.inc
+
+--disable_query_log
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+--enable_query_log
+
+SELECT COUNT(*) AS final_rows FROM t1 FORCE INDEX(idx_val);
+SELECT COALESCE(SUM(ROWS_READ_DELETE_MARK), 0) = 0 AS final_scan_saw_no_delete_mark
+FROM performance_schema.events_statements_summary_by_digest_supplement
+WHERE DIGEST_TEXT LIKE 'SELECT COUNT%FROM `t1` FORCE INDEX%';
+SELECT COUNT_RESET > 0 AS ibuf_delete_merged
+FROM INFORMATION_SCHEMA.INNODB_METRICS
+WHERE NAME = 'ibuf_merges_delete';
+
+--disable_query_log
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL DEBUG = '-d,purge_del_mark_pause_after_sec_index';
+DROP TABLE t1;
+--eval SET GLOBAL innodb_change_buffering_debug=$orig_innodb_change_buffering_debug
+--eval SET GLOBAL innodb_disable_background_merge=$orig_innodb_disable_background_merge
+--eval SET GLOBAL innodb_change_buffering='$orig_innodb_change_buffering'
+--eval SET GLOBAL innodb_change_buffer_max_size=$orig_innodb_change_buffer_max_size
+--eval SET GLOBAL innodb_change_buffering_hippo_purge_enabled=$orig_innodb_change_buffering_hippo_purge_enabled
+--disable_warnings
+SET GLOBAL innodb_monitor_reset=default;
+SET GLOBAL innodb_monitor_enable=default;
+--enable_warnings
+SET SESSION opt_index_format_gpp_enabled=DEFAULT;
+SET GLOBAL innodb_purge_run_now=ON;
+--source include/wait_innodb_all_purged.inc
+--enable_query_log
+
+--source include/wait_until_count_sessions.inc

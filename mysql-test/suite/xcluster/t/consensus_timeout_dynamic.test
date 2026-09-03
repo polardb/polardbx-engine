@@ -1,0 +1,138 @@
+# Test dynamic modification of consensus_election_timeout,
+# consensus_heartbeat_interval, and consensus_vote_backoff_timeout
+# without server restart.
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+
+--echo #
+--echo # 1. Verify default values
+--echo #
+SELECT @@global.consensus_election_timeout;
+SELECT @@global.consensus_heartbeat_interval;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+--echo #
+--echo # 2. Dynamic SET consensus_election_timeout
+--echo #
+SET GLOBAL consensus_election_timeout = 10000;
+SELECT @@global.consensus_election_timeout;
+
+SET GLOBAL consensus_election_timeout = 2000;
+SELECT @@global.consensus_election_timeout;
+
+--echo #
+--echo # 3. Dynamic SET consensus_heartbeat_interval
+--echo #
+SET GLOBAL consensus_heartbeat_interval = 2000;
+SELECT @@global.consensus_heartbeat_interval;
+
+# Set back to auto mode (0 means election_timeout / 5)
+SET GLOBAL consensus_heartbeat_interval = 0;
+SELECT @@global.consensus_heartbeat_interval;
+
+--echo #
+--echo # 4. heartbeat_interval exceeding election_timeout is clamped internally
+--echo #
+SET GLOBAL consensus_election_timeout = 5000;
+SET GLOBAL consensus_heartbeat_interval = 6000;
+# System variable stores user value; Paxos internally uses election_timeout/5
+SELECT @@global.consensus_heartbeat_interval;
+
+--echo #
+--echo # 5. Reducing election_timeout: Paxos internally auto-adjusts heartbeat
+--echo #
+SET GLOBAL consensus_election_timeout = 10000;
+SET GLOBAL consensus_heartbeat_interval = 8000;
+SELECT @@global.consensus_heartbeat_interval;
+
+# Reduce election_timeout below heartbeat_interval.
+# System variable keeps user value; Paxos internally clamps to election_timeout/5.
+SET GLOBAL consensus_election_timeout = 3000;
+SELECT @@global.consensus_election_timeout;
+SELECT @@global.consensus_heartbeat_interval;
+
+--echo #
+--echo # 6. Boundary values (out-of-range values are clamped with warnings)
+--echo #
+SET GLOBAL consensus_election_timeout = 200000;
+SELECT @@global.consensus_election_timeout;
+
+# Below minimum (2000): clamped to 2000
+SET GLOBAL consensus_election_timeout = 1000;
+SELECT @@global.consensus_election_timeout;
+
+# Above maximum (200000): clamped to 200000
+SET GLOBAL consensus_election_timeout = 300000;
+SELECT @@global.consensus_election_timeout;
+
+--echo #
+--echo # 7. Verify parameter changes take effect in the Paxos layer
+--echo #    (heartbeat counter must grow after setting a fast heartbeat_interval).
+--echo #
+
+# Set a fast heartbeat interval to generate observable heartbeat traffic.
+SET GLOBAL consensus_election_timeout = 10000;
+SET GLOBAL consensus_heartbeat_interval = 500;
+
+# Allow heartbeat timers to restart with the new interval.
+--sleep 2
+
+# Record baseline heartbeat count from the consensus status table.
+--let $hb_before = query_get_value(SELECT COUNT_HEARTBEAT FROM information_schema.alisql_cluster_consensus_status, COUNT_HEARTBEAT, 1)
+
+# Wait for heartbeats to accumulate.
+# With 500ms interval and 2 followers, expect ~20 heartbeats in 5 seconds.
+--sleep 5
+
+--let $hb_after = query_get_value(SELECT COUNT_HEARTBEAT FROM information_schema.alisql_cluster_consensus_status, COUNT_HEARTBEAT, 1)
+
+# Assert: heartbeat count must have grown, proving Paxos applied the new interval.
+--let $hb_delta = `SELECT $hb_after - $hb_before`
+
+if ($hb_delta < 5) {
+  --echo FAIL: Expected heartbeat count to grow by at least 5, but got $hb_delta
+  --die Paxos layer heartbeat_interval change not effective
+}
+
+--echo # OK: Heartbeat counter grew, confirming Paxos layer applied the new heartbeat_interval.
+
+--echo #
+--echo # 8. Dynamic SET consensus_vote_backoff_timeout
+--echo #
+
+# Default is 0 (use election_timeout)
+SELECT @@global.consensus_vote_backoff_timeout;
+
+SET GLOBAL consensus_vote_backoff_timeout = 3000;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+SET GLOBAL consensus_vote_backoff_timeout = 8000;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+# Set back to 0 (use election_timeout)
+SET GLOBAL consensus_vote_backoff_timeout = 0;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+--echo #
+--echo # 9. vote_backoff_timeout boundary values
+--echo #
+
+# Maximum value: 1000000
+SET GLOBAL consensus_vote_backoff_timeout = 1000000;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+# Above maximum: clamped to 1000000
+SET GLOBAL consensus_vote_backoff_timeout = 2000000;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+--echo #
+--echo # 10. Restore defaults
+--echo #
+SET GLOBAL consensus_election_timeout = 5000;
+SET GLOBAL consensus_heartbeat_interval = 0;
+SET GLOBAL consensus_vote_backoff_timeout = 0;
+SELECT @@global.consensus_election_timeout;
+SELECT @@global.consensus_heartbeat_interval;
+SELECT @@global.consensus_vote_backoff_timeout;
+
+--disconnect conn1

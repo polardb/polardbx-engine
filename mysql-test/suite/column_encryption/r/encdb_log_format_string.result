@@ -1,0 +1,29 @@
+#
+# Crash regression: encdb_elog built the final log message (which may
+# embed user data containing '%', e.g. a rule name inside a failed SQL
+# text) and then passed it to encdb_log_message as the FORMAT string.
+# The second vsnprintf consumed nonexistent varargs for each '%s' and
+# crashed mysqld with signal 11.
+#
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+create user noAccess@'%' identified by '123456';
+grant all privileges on test.* to noAccess@'%';
+# The internal INSERT fails with error 1142 (no privilege on
+# mysql.encdb_sensitive_rules) and its SQL text, carrying the '%s'
+# rule name, goes through the encdb error-log path.  Before the fix
+# this crashed the server instead of returning an error.
+select encdb_rule_op('add', '{"name":"%s%s%s%s%s%s%s%s%s%s","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "failed to execute "<rule SQL>" with error code 1142"
+# Server must still be alive.
+select 1;
+1
+1
+# A rule name containing '%' must also work on the success path.
+select encdb_rule_op('add', '{"name":"%s%s%s%s%s%s%s%s%s%s","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+encdb_rule_op('add', '{"name":"%s%s%s%s%s%s%s%s%s%s","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}')
+OK
+select encdb_rule_op('delete', '"%s%s%s%s%s%s%s%s%s%s"');
+encdb_rule_op('delete', '"%s%s%s%s%s%s%s%s%s%s"')
+OK
+drop user noAccess@'%';

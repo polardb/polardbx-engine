@@ -347,7 +347,9 @@ constexpr uint64_t MEM_FREED_BLOCK_MAGIC_N = 0xBBAA998877665544;
 #define MEM_BLOCK_HEADER_SIZE \
   ut_calc_align(sizeof(mem_block_info_t), UNIV_MEM_ALIGNMENT)
 
+#ifndef INNODB_MEM0MEM_IC_STANDALONE
 #include "mem0mem.ic"
+#endif /* !INNODB_MEM0MEM_IC_STANDALONE */
 
 /** A C++ wrapper class to the mem_heap_t routines, so that it can be used
 as an STL allocator */

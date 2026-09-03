@@ -1,0 +1,180 @@
+SET GLOBAL innodb_txn_retention = 36000;
+SET GLOBAL innodb_purge_stop_now = ON;
+#
+# PART 1: Basic flashback read through SPC index
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('b', 100));
+INSERT INTO t1 VALUES (3, REPEAT('c', 100));
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+SET @ts_before_update = NOW();
+# Modify data after recording timestamp
+UPDATE t1 SET c = REPEAT('x', 100) WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+INSERT INTO t1 VALUES (4, REPEAT('d', 100));
+# Current state: id=1 updated, id=2 deleted, id=4 inserted
+SELECT id, LEFT(c,1) AS cp FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	cp
+1	x
+3	c
+4	d
+# Flashback via PK should see old data
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (PRIMARY) ORDER BY id;
+id	cp
+1	a
+2	b
+3	c
+# Flashback via SPC index should see old data
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (idx_c) ORDER BY id;
+id	cp
+1	a
+2	b
+3	c
+# Flashback checksum: SPC == PK at the flashback point
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 2: Flashback after multiple updates - deep version chain
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+# Ensure SPC conversion is complete before recording timestamp
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+SET @ts_v0 = NOW();
+# Update round 1
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100), id) WHERE id <= 10;
+SET @ts_v1 = NOW();
+# Update round 2
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100), id) WHERE id <= 10;
+# Flashback to V0: all rows should have 'a' prefix
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_v0 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_v0 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+# Flashback to V1: id<=10 should have 'b' prefix
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_v1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_v1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 3: Flashback with concurrent snapshot
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+# Ensure SPC conversion is complete before recording timestamp
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+CREATE TABLE ts_share (ts TIMESTAMP NOT NULL);
+INSERT INTO ts_share VALUES (NOW());
+# con1 opens a snapshot via BEGIN
+SET @ts_snap = (SELECT ts FROM ts_share);
+BEGIN;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+3
+# default modifies data
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+INSERT INTO t1 VALUES (4, REPEAT('d', 100));
+# con1 flashback query should see old data through SPC
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (idx_c) ORDER BY id;
+id	cp
+1	a
+2	a
+3	a
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+COMMIT;
+DROP TABLE ts_share;
+DROP TABLE t1;
+#
+# PART 4: Flashback after purge - Snapshot too old
+#
+SET GLOBAL innodb_txn_retention = 0;
+SET GLOBAL innodb_purge_run_now = ON;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+SET @ts_old = NOW();
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 1;
+# Run purge to remove old version
+SET GLOBAL innodb_purge_run_now = ON;
+# Flashback to purged timestamp should fail with Snapshot too old
+SELECT * FROM t1 AS OF TIMESTAMP @ts_old FORCE INDEX (idx_c);
+ERROR HY000: Snapshot too old
+DROP TABLE t1;
+# Cleanup
+SET GLOBAL innodb_txn_retention = DEFAULT;
+SET GLOBAL innodb_purge_run_now = ON;

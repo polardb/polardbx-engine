@@ -179,4 +179,6 @@ extern PSI_memory_key key_memory_CS_PRIMARY_KEY;
 extern PSI_memory_key key_memory_CS_RESULT_BUFFER;
 extern PSI_memory_key key_memory_CS_FILE_NAME;
 
+extern PSI_memory_key key_memory_vidx_mem;
+
 #endif  // PSI_MEMORY_KEY_INCLUDED

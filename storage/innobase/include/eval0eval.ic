@@ -31,6 +31,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/29/1997 Heikki Tuuri
  *******************************************************/
 
+#ifndef eval0eval_h
+#define INNODB_EVAL0EVAL_IC_STANDALONE
+#include "eval0eval.h"
+#undef INNODB_EVAL0EVAL_IC_STANDALONE
+#endif /* !eval0eval_h */
 #include "pars0grm.h"
 #include "que0que.h"
 #include "rem0cmp.h"

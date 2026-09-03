@@ -1,0 +1,429 @@
+
+###########################################################
+# dbms_vidx.preload() / preload_check() — coverage        #
+#                                                         #
+# Code-path matrix:                                       #
+#  A. Parameter count / type (framework check_parameter)  #
+#  B. Parameter value validation (pc_execute)             #
+#  C. Table resolution (open_and_lock_tables)             #
+#  D. No vector index (mhnsw_preload step 1)              #
+#  E. resolve_vector_key (by-col / sole / ambiguous)      #
+#  F. Empty graph (trivial success)                       #
+#  G. Full preload — euclidean / cosine / inner_product   #
+#  H. preload_check mode                                  #
+#  I. Cache capacity gate (Gate 1 — OOM)                  #
+#  J. Idempotency (consecutive preloads)                  #
+#  K. Post-preload correctness (ANN / DML / re-preload)   #
+#  L. Column-name case insensitivity                      #
+#  M. Distance metric: inner_product                       #
+#  N. Multiple vector indexes                             #
+#                                                         #
+#  preload() and preload_check() share one 5-column set:   #
+#    Index | Total_rows | Estimated_bytes |               #
+#    Cache_used_bytes | Cache_limit_bytes                  #
+###########################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2, t3, t_multi;
+DROP DATABASE IF EXISTS no_such_db;
+--enable_warnings
+
+--echo ###############################################################
+--echo # A. Wrong argument count — ER_SP_WRONG_NO_OF_ARGS
+--echo #    Both preload() and preload_check() take exactly 3 args.
+--echo ###############################################################
+
+--echo # preload: 0 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload();
+
+--echo # preload: 1 arg
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload('test');
+
+--echo # preload: 2 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload('test', 't1');
+
+--echo # preload: 4 args (the old check_only flag is gone)
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload('test', 't1', 'v', 0);
+
+--echo # preload_check: 2 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload_check('test', 't1');
+
+--echo # preload_check: 4 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.preload_check('test', 't1', 'v', 0);
+
+--echo ###############################################################
+--echo # B. Empty-string parameters — ER_WRONG_PARAMETERS_TO_PROCEDURE
+--echo #    3-arg signature matches by type; pc_execute rejects empty.
+--echo ###############################################################
+
+--echo # Empty db
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.preload('', 't1', 'v');
+
+--echo # Empty table
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.preload('test', '', 'v');
+
+--echo # Empty column
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.preload('test', 't1', '');
+
+--echo # All empty
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.preload('', '', '');
+
+--echo # preload_check with empty db
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.preload_check('', 't1', 'v');
+
+--echo ###############################################################
+--echo # C. Non-existent database / table
+--echo #    open_and_lock_tables surfaces the standard MySQL error.
+--echo ###############################################################
+
+--echo # Non-existent database
+--error ER_BAD_DB_ERROR
+CALL dbms_vidx.preload('no_such_db_xyz', 't1', 'v');
+
+--echo # Non-existent table in test schema
+--error ER_NO_SUCH_TABLE
+CALL dbms_vidx.preload('test', 'no_such_table_xyz', 'v');
+
+--echo ###############################################################
+--echo # D. Table without any vector index
+--echo #    mhnsw_preload step 1: hlindexes() < 1 → HA_ERR_UNSUPPORTED
+--echo ###############################################################
+
+CREATE TABLE t1 (id INT PRIMARY KEY, data VARCHAR(50)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 'hello');
+
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't1', 'data');
+
+DROP TABLE t1;
+
+--echo ###############################################################
+--echo # E. resolve_vector_key — column matching
+--echo ###############################################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=8 DISTANCE=euclidean
+) ENGINE=InnoDB;
+
+--echo # Column name that does not match any vector index
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't1', 'nonexistent');
+
+--echo # Another wrong column name
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't1', 'id');
+
+--echo ###############################################################
+--echo # F. Empty table — trivial success (empty graph path)
+--echo #    acquire() returns HA_ERR_END_OF_FILE or vec_len == 0.
+--echo ###############################################################
+
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # preload_check on empty table
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't1', 'v');
+
+--echo ###############################################################
+--echo # G. Normal preload (full load) — euclidean
+--echo ###############################################################
+
+INSERT INTO t1(id, v) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO t1(id, v) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+INSERT INTO t1(id, v) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'));
+INSERT INTO t1(id, v) VALUES (4, VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'));
+INSERT INTO t1(id, v) VALUES (5, VEC_FROMTEXT('[1.0, 1.0, 0.0, 0.0]'));
+INSERT INTO t1(id, v) VALUES (6, VEC_FROMTEXT('[0.0, 1.0, 1.0, 0.0]'));
+INSERT INTO t1(id, v) VALUES (7, VEC_FROMTEXT('[0.0, 0.0, 1.0, 1.0]'));
+INSERT INTO t1(id, v) VALUES (8, VEC_FROMTEXT('[1.0, 0.0, 0.0, 1.0]'));
+
+--echo # 3-arg form: full preload
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo ###############################################################
+--echo # H. preload_check mode
+--echo #    Nodes_loaded must be 0; Total_rows still reflects the scan.
+--echo ###############################################################
+
+--echo # preload_check
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't1', 'v');
+
+--echo ###############################################################
+--echo # J. Idempotency — consecutive preloads
+--echo #    Second preload on a warm cache must also succeed.
+--echo ###############################################################
+
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo ###############################################################
+--echo # K. Post-preload correctness
+--echo ###############################################################
+
+--echo # K.1 ANN search still returns correct nearest neighbour
+--disable_result_log
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 1;
+--enable_result_log
+
+--echo # K.2 INSERT after preload
+INSERT INTO t1(id, v) VALUES (9, VEC_FROMTEXT('[0.5, 0.5, 0.5, 0.5]'));
+
+--echo # K.3 ANN search sees the new row
+--disable_result_log
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5, 0.5, 0.5, 0.5]'))
+LIMIT 1;
+--enable_result_log
+
+--echo # K.4 Re-preload after INSERT picks up the new row (total_rows=9)
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # K.5 DELETE after preload
+DELETE FROM t1 WHERE id = 9;
+
+--echo # K.6 Re-preload after DELETE (total_rows back to 8)
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # K.7 UPDATE after preload
+UPDATE t1 SET v = VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]') WHERE id = 8;
+
+--echo # K.8 ANN search reflects the update
+--disable_result_log
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]'))
+LIMIT 1;
+--enable_result_log
+
+--echo # K.9 Re-preload after UPDATE
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+DROP TABLE t1;
+
+--echo ###############################################################
+--echo # L. Column-name case insensitivity
+--echo #    my_strcasecmp(system_charset_info, ...) is used.
+--echo ###############################################################
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  embedding VECTOR(4),
+  VECTOR INDEX vi_emb(embedding) M=8 DISTANCE=cosine
+) ENGINE=InnoDB;
+
+INSERT INTO t2(id, embedding) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO t2(id, embedding) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+INSERT INTO t2(id, embedding) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'));
+
+--echo # Exact case
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't2', 'embedding');
+
+--echo # Uppercase
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't2', 'EMBEDDING');
+
+--echo # Mixed case
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't2', 'Embedding');
+
+--echo # Wrong column name
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't2', 'emb');
+
+DROP TABLE t2;
+
+--echo ###############################################################
+--echo # M. Distance metric: inner_product
+--echo ###############################################################
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi_ip(v) M=8 DISTANCE=inner_product
+) ENGINE=InnoDB;
+
+INSERT INTO t3(id, v) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO t3(id, v) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+INSERT INTO t3(id, v) VALUES (3, VEC_FROMTEXT('[0.7, 0.7, 0.0, 0.0]'));
+INSERT INTO t3(id, v) VALUES (4, VEC_FROMTEXT('[0.5, 0.5, 0.5, 0.5]'));
+
+--echo # Full preload
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't3', 'v');
+
+--echo # ANN search with inner_product distance
+--disable_result_log
+SELECT id FROM t3
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 2;
+--enable_result_log
+
+--echo # preload_check
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't3', 'v');
+
+DROP TABLE t3;
+
+--echo ###############################################################
+--echo # N. Multiple vector indexes
+--echo #    Preload routes to the correct hlindex per column name.
+--echo ###############################################################
+
+CREATE TABLE t_multi (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v1 VECTOR(4),
+  v2 VECTOR(4),
+  VECTOR INDEX vi1(v1) M=8 DISTANCE=euclidean,
+  VECTOR INDEX vi2(v2) M=8 DISTANCE=cosine
+) ENGINE=InnoDB;
+
+INSERT INTO t_multi(v1, v2) VALUES (VEC_FROMTEXT('[1,0,0,0]'), VEC_FROMTEXT('[0,0,0,1]'));
+INSERT INTO t_multi(v1, v2) VALUES (VEC_FROMTEXT('[0,1,0,0]'), VEC_FROMTEXT('[0,0,1,0]'));
+INSERT INTO t_multi(v1, v2) VALUES (VEC_FROMTEXT('[0,0,1,0]'), VEC_FROMTEXT('[0,1,0,0]'));
+INSERT INTO t_multi(v1, v2) VALUES (VEC_FROMTEXT('[0,0,0,1]'), VEC_FROMTEXT('[1,0,0,0]'));
+
+--echo # Preload v1 (euclidean index)
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't_multi', 'v1');
+
+--echo # Preload v2 (cosine index)
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't_multi', 'v2');
+
+--echo # preload_check for each column
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't_multi', 'v1');
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't_multi', 'v2');
+
+--echo # ANN search on v1 after preload
+SELECT id FROM t_multi
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 1;
+
+--echo # ANN search on v2 after preload
+SELECT id FROM t_multi
+ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+
+--echo # Column that has no vector index → error
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't_multi', 'id');
+
+DROP TABLE t_multi;
+
+--echo ###############################################################
+--echo # O. Large dataset — cache capacity gate (Gate 1) + scaling
+--echo #    vidx_hnsw_cache_size minimum is 1 MB (1048576).
+--echo #    M=100 → large neighbor arrays.
+--echo #    800 rows × ~2 KB ≈ 1.6 MB estimate → exceeds 1 MB cap.
+--echo ###############################################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=100 DISTANCE=euclidean
+) ENGINE=InnoDB;
+
+--echo # Insert 800 rows with 4-dim vectors
+--disable_query_log
+--let $i = 1
+while ($i <= 800) {
+  --eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, '.0, 0.0, 0.0, 0.0]')))
+  --inc $i
+}
+--enable_query_log
+
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # Preload 800-row graph (should succeed with default 16 MB cache)
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # Save current cache size
+--let $saved_cache = `SELECT @@GLOBAL.vidx_hnsw_cache_size`
+
+--echo # Shrink cache to minimum (1 MB) — estimate should exceed this
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+
+--replace_regex /estimated [0-9]+ bytes/estimated # bytes/
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # preload_check also fails when estimate > cap
+--replace_regex /estimated [0-9]+ bytes/estimated # bytes/
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.preload_check('test', 't1', 'v');
+
+--echo # Restore cache size
+--eval SET GLOBAL vidx_hnsw_cache_size = $saved_cache
+
+--echo # Preload succeeds again after restoring cache
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # preload_check on 800-row graph
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload_check('test', 't1', 'v');
+
+--echo # ANN search on preloaded 800-row table
+--disable_result_log
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # DML mix after preload
+DELETE FROM t1 WHERE id BETWEEN 795 AND 800;
+INSERT INTO t1(id, v) VALUES (1000, VEC_FROMTEXT('[999.0, 0.0, 0.0, 0.0]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[0.5, 0.5, 0.0, 0.0]') WHERE id = 1;
+
+--echo # Re-preload after mixed DML
+--replace_column 3 # 4 #
+CALL dbms_vidx.preload('test', 't1', 'v');
+
+--echo # Verify ANN still works
+--disable_result_log
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5, 0.5, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+DROP TABLE t1;
+
+--echo ###############################################################
+--echo # P. Cleanup
+--echo ###############################################################
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2, t3, t_multi;
+--enable_warnings
+
+SET GLOBAL vidx_disabled = ON;

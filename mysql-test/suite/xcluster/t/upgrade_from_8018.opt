@@ -1,0 +1,5 @@
+# upgrade_from_8018 is a slow test: mysqld must complete a full schema upgrade
+# from 8018 to 8032 (DD upgrade ~1min + Server upgrade ~1min) before the
+# force-change-meta step, and wait_apply_catchup needs extra time after the
+# upgrade. Allow 900 seconds for this test.
+--testcase-timeout=900

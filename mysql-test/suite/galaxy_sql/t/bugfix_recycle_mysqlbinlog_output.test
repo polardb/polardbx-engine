@@ -1,0 +1,61 @@
+--source include/have_binlog_format_row.inc
+--source include/have_grep.inc
+
+CREATE DATABASE recycle_mysqlbinlog;
+USE recycle_mysqlbinlog;
+CREATE TABLE t_unused(id INT);
+CREATE TABLE t_unsafe(id INT);
+CREATE TABLE t_max(id INT);
+CREATE TABLE t_repeat_1(id INT);
+CREATE TABLE t_repeat_2(id INT);
+CREATE TABLE t_no_name(id INT);
+SET SESSION recycle_bin = ON;
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+
+FLUSH LOGS;
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+
+# A name not consumed by ALTER must not enter its Query_event.
+SET SESSION recycle_bin_table_name = 'unused_by_alter';
+ALTER TABLE t_unused ADD COLUMN c1 INT;
+
+# Quotes, newlines and comment terminators must not appear verbatim in output.
+SET SESSION recycle_bin_table_name =
+    CONCAT('quote''*/line', CHAR(10), 'tail');
+DROP TABLE t_unsafe;
+
+# Longest multibyte name that still materializes as an encoded file name:
+# each U+4E2D becomes "@4e2d" on disk, 50 * 5 + len(".ibd") = 254 <= 255.
+SET SESSION recycle_bin_table_name = REPEAT('中', 50);
+TRUNCATE TABLE t_max;
+
+# A one-shot name must be printed for every event, even when unchanged.
+SET SESSION recycle_bin_table_name = 'repeat_name';
+DROP TABLE t_repeat_1;
+SET SESSION recycle_bin_table_name = 'repeat_name';
+DROP TABLE t_repeat_2;
+
+# An event without a recycle name must not print a NULL assignment.
+ALTER TABLE t_no_name ADD COLUMN c1 INT;
+FLUSH LOGS;
+
+--let $output_file= $MYSQLTEST_VARDIR/tmp/recycle_mysqlbinlog.sql
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/$binlog_file > $output_file
+
+--echo # Unsafe bytes are encoded only when a DDL consumes the name.
+--exec $GREP 'recycle_bin_table_name=0x71756f7465272a2f6c696e650a7461696c' $output_file
+
+--echo # Identical one-shot names are printed for both Query_events.
+--exec $GREP -c 'recycle_bin_table_name=0x7265706561745f6e616d65' $output_file
+
+--echo # ALTER and missing event state do not emit recycle name assignments.
+--error 1
+--exec $GREP -E '0x756e757365645f62795f616c746572|recycle_bin_table_name=NULL' $output_file
+
+--remove_file $output_file
+# Native procedure parameters must be plain literals, not expressions.
+CALL dbms_recycle.purge_table('quote''*/line\ntail');
+CALL dbms_recycle.purge_table('中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中');
+CALL dbms_recycle.purge_table('repeat_name');
+SET SESSION recycle_bin = OFF;
+DROP DATABASE recycle_mysqlbinlog;

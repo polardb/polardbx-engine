@@ -41,16 +41,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 static_assert(false, "No again use the file!!");
 
-/** The MVCC read view manager */
-class MVCC {
+/** The XVCC read view manager */
+class XVCC {
  public:
   /** Constructor
   @param size           Number of views to pre-allocate */
-  explicit MVCC(ulint size);
+  explicit XVCC(ulint size);
 
   /** Destructor.
   Free all the views in the m_free list */
-  ~MVCC();
+  ~XVCC();
 
   /** Allocate and create a view.
   @param view   View owned by this class created for the caller. Must be
@@ -122,8 +122,8 @@ class MVCC {
 
  private:
   // Prevent copying
-  MVCC(const MVCC &);
-  MVCC &operator=(const MVCC &);
+  XVCC(const XVCC &);
+  XVCC &operator=(const XVCC &);
 
  private:
   typedef UT_LIST_BASE_NODE_T(ReadView, m_view_list) view_list_t;

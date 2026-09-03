@@ -1,0 +1,187 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# Cleanup before test
+#
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+#
+# 7.1 Create db1.t1 with VECTOR INDEX (no INSERT due to crash bug)
+#
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+CREATE TABLE db1.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=10 distance=euclidean
+) ENGINE=InnoDB;
+SHOW CREATE TABLE db1.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary tables in db1
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+#
+# 7.2 RENAME TABLE within same database (db1.t1 -> db1.t2)
+#
+RENAME TABLE db1.t1 TO db1.t2;
+SHOW CREATE TABLE db1.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary tables still in db1 (with new table name)
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+#
+# 7.3 RENAME TABLE cross database (db1.t2 -> db2.t1)
+#
+RENAME TABLE db1.t2 TO db2.t1;
+SHOW CREATE TABLE db2.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary tables migrated to db2
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%' ORDER BY NAME;
+NAME
+db2/vidx_XXXXX_0
+# Verify db1 has no more vidx tables
+SELECT COUNT(*) AS db1_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%';
+db1_vidx_count
+0
+#
+# 7.4 Verify VECTOR INDEX is still functional after cross-db rename
+#
+SHOW CREATE TABLE db2.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW INDEX FROM db2.t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=10, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+#
+# 7.5 INSERT test (Blocked by INSERT crash bug)
+#
+#
+# 7.6 RENAME back to db1 - verify round-trip rename correctness
+#
+RENAME TABLE db2.t1 TO db1.t1;
+SHOW CREATE TABLE db1.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify auxiliary tables back in db1
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+# Verify db2 has no more vidx tables
+SELECT COUNT(*) AS db2_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%';
+db2_vidx_count
+0
+#
+# 7.7 Multiple consecutive cross-database renames - verify auxiliary table consistency
+#
+# Rename 1: db1 -> db2
+RENAME TABLE db1.t1 TO db2.t1;
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+NAME
+db2/vidx_XXXXX_0
+# Rename 2: db2 -> db1 
+RENAME TABLE db2.t1 TO db1.t1;
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+# Rename 3: db1 -> db2 (different table name)
+RENAME TABLE db1.t1 TO db2.t2;
+SELECT NAME FROM information_schema.INNODB_TABLES WHERE NAME LIKE '%/vidx_%' ORDER BY NAME;
+NAME
+db2/vidx_XXXXX_0
+# Final verification
+SHOW CREATE TABLE db2.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Additional: Test RENAME with multiple VECTOR INDEX tables
+#
+CREATE TABLE db1.t_multi1 (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=cosine
+) ENGINE=InnoDB;
+CREATE TABLE db1.t_multi2 (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=8 distance=euclidean
+) ENGINE=InnoDB;
+# Verify both tables have auxiliary tables
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db1/vidx_%' ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+db1/vidx_XXXXX_0
+# Rename both tables to db2
+RENAME TABLE db1.t_multi1 TO db2.t_multi1, db1.t_multi2 TO db2.t_multi2;
+# Verify auxiliary tables migrated
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db2/vidx_%' ORDER BY NAME;
+NAME
+db2/vidx_XXXXX_0
+db2/vidx_XXXXX_0
+db2/vidx_XXXXX_0
+SHOW CREATE TABLE db2.t_multi1;
+Table	Create Table
+t_multi1	CREATE TABLE `t_multi1` (
+  `id` int NOT NULL,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE db2.t_multi2;
+Table	Create Table
+t_multi2	CREATE TABLE `t_multi2` (
+  `id` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Cleanup
+#
+DROP DATABASE db1;
+DROP DATABASE db2;
+SET GLOBAL vidx_disabled = ON;

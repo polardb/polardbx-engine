@@ -60,6 +60,7 @@
 #include "sql/dd/impl/system_views/tables.h"               // Tables
 #include "sql/dd/impl/system_views/triggers.h"             // Triggers
 #include "sql/dd/impl/system_views/user_attributes.h"
+#include "sql/dd/impl/system_views/vector_indexes.h"       // Vector_indexes
 #include "sql/dd/impl/system_views/view_routine_usage.h"  // View_routine_usage
 #include "sql/dd/impl/system_views/view_table_usage.h"    // View_table_usage
 #include "sql/dd/impl/system_views/views.h"               // Views
@@ -257,6 +258,8 @@ void System_tables::add_remaining_dd_tables() {
   register_table("user_backup", system);
   register_table("concurrency_control", system);
   register_table("outline", system);
+  register_table("ai_model_config", system);
+  register_table("ai_function_config", system);
 }
 
 void System_views::init() {
@@ -306,6 +309,7 @@ void System_views::init() {
   register_view<dd::system_views::Tables_extensions>(is);
   register_view<dd::system_views::Tablespaces_extensions>(is);
   register_view<dd::system_views::Triggers>(is);
+  register_view<dd::system_views::Vector_indexes>(is);
   register_view<dd::system_views::View_routine_usage>(is);
   register_view<dd::system_views::View_table_usage>(is);
   register_view<dd::system_views::Views>(is);

@@ -1,0 +1,79 @@
+--connection default
+SET @saved_xa_detach_on_prepare = @@GLOBAL.xa_detach_on_prepare;
+SET GLOBAL xa_detach_on_prepare = OFF;
+--disable_warnings
+DROP TABLE IF EXISTS c2;
+--enable_warnings
+
+CREATE TABLE c2 (
+id INT NOT NULL,
+str VARCHAR(20) NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+insert into c2 values (1, "abc", "a");
+insert into c2 values (3, "abc", "a");
+insert into c2 values (5, "abc", "a");
+insert into c2 values (7, "abc", "a");
+insert into c2 values (9, "abc", "a");
+
+call polarx.changeset_start('c2');
+
+connect (conn1,localhost,root,,);
+connect (conn2,localhost,root,,);
+connect (conn3,localhost,root,,);
+connect (conn4,localhost,root,,);
+connect (conn5,localhost,root,,);
+
+connection conn1;
+begin;
+insert into c2 values (2, "abc1", "a1");
+
+connection conn2;
+xa begin "tt1";
+insert into c2 values (4, "abc2", "a2");
+xa end "tt1";
+
+connection conn3;
+xa begin "tt2";
+insert into c2 values (6, "abc2", "a2");
+xa end "tt2";
+
+connection conn4;
+xa begin "tt3";
+insert into c2 values (8, "abc3", "a3");
+xa end "tt3";
+
+connection conn5;
+xa begin "tt4";
+insert into c2 values (10, "abc4", "a4");
+xa end "tt4";
+
+connection conn1;
+commit;
+
+connection conn2;
+xa commit "tt1" one phase;
+
+connection conn4;
+xa rollback "tt3";
+
+connection conn3;
+xa prepare "tt2";
+xa commit "tt2";
+
+connection conn5;
+xa prepare "tt4";
+xa rollback "tt4";
+
+select * from c2;
+
+--connection default
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+call polarx.changeset_stats('c2');
+call polarx.changeset_finish('c2');
+DROP TABLE c2;
+
+SET GLOBAL xa_detach_on_prepare = @saved_xa_detach_on_prepare;

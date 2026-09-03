@@ -28,6 +28,7 @@ extern ST_FIELD_INFO alisql_cluster_learner_source_fields_info[];
 extern ST_FIELD_INFO alisql_cluster_prefetch_channel_info[];
 extern ST_FIELD_INFO alisql_cluster_consensus_status_fields_info[];
 extern ST_FIELD_INFO alisql_cluster_consensus_membership_change_fields_info[];
+extern ST_FIELD_INFO consensus_ha_history_fields_info[];
 
 extern int fill_consensus_commit_pos(THD *thd, Table_ref *tables, Item *);
 extern int fill_alisql_cluster_global(THD *thd, Table_ref *tables, Item *);
@@ -42,5 +43,6 @@ extern int fill_alisql_cluster_consensus_status(THD *thd, Table_ref *tables,
 extern int fill_alisql_cluster_consensus_membership_change(THD *thd,
                                                            Table_ref *tables,
                                                            Item *);
+extern int fill_consensus_ha_history(THD *thd, Table_ref *tables, Item *);
 
 #endif

@@ -37,8 +37,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0mem.h"
 #include "fil0fil.h"
 
-#include "lizard0btr0types.h"
-#include "lizard0fil0types.h"
+namespace lizard {
+class Page_encoder;
+}
 
 namespace lizard {
 
@@ -77,6 +78,20 @@ extern page_type_t btr_page_upgrade_not_root(const page_type_t root_page_type,
  * @param[in] mtr     Mini-transaction, can be NULL if redo log is not needed
  */
 extern void btr_page_reset_index_id(buf_block_t *block, mtr_t *mtr = nullptr);
+
+/** TODO: fix it <08-01-26, zanye.zjy> */
+extern bool btr_page_encode_low(bool recovery, page_cur_t *cursor,
+                                dict_index_t *index, Page_encoder *page_encoder,
+                                ulint n_ins_recs, ulint max_ins_size_expect,
+                                mtr_t *mtr);
+
+extern bool btr_page_encode(page_cur_t *cursor, dict_index_t *index,
+                            Page_encoder *page_encoder, ulint n_ins_recs,
+                            ulint max_ins_size, mtr_t *mtr);
+
+extern byte *btr_parse_page_encode(byte *ptr, byte *end_ptr,
+                                   dict_index_t *index, buf_block_t *block,
+                                   mtr_t *mtr);
 
 }  // namespace lizard
 

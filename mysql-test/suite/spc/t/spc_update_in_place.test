@@ -1,0 +1,84 @@
+# Repro for both paths:
+# 1) default path (without enabling innodb_change_buffering_debug)
+# 2) explicit ibuf debug path (innodb_change_buffering_debug=1)
+--source include/no_valgrind_without_big.inc
+--source include/have_innodb_max_16k.inc
+
+--disable_query_log
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET @innodb_change_buffering_debug_orig = @@innodb_change_buffering_debug;
+--enable_query_log
+
+# path I: normal update-in-place path
+--echo # default-path-begin
+
+CREATE TABLE bug56680(
+       a INT AUTO_INCREMENT PRIMARY KEY,
+       b CHAR(1),
+       c INT,
+       INDEX(b))
+ENGINE=InnoDB STATS_PERSISTENT=0;
+
+INSERT INTO bug56680 VALUES(0,'x',1);
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+
+SELECT COUNT(*) FROM bug56680;
+
+BEGIN;
+DELETE FROM bug56680 WHERE a=1;
+INSERT INTO bug56680 VALUES(1,'X',1);
+SELECT a,b,c FROM bug56680 WHERE a=1;
+SELECT COUNT(*) FROM bug56680;
+CHECK TABLE bug56680;
+ROLLBACK;
+DROP TABLE bug56680;
+--echo # default-path-end
+
+# path II: change buffer update-in-place path
+--echo # ibuf-debug-path-begin
+-- error 0,ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = 1;
+CREATE TABLE bug56680(
+       a INT AUTO_INCREMENT PRIMARY KEY,
+       b CHAR(1),
+       c INT,
+       INDEX(b))
+ENGINE=InnoDB STATS_PERSISTENT=0;
+
+INSERT INTO bug56680 VALUES(0,'x',1);
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+INSERT INTO bug56680 SELECT 0,b,c FROM bug56680;
+
+BEGIN;
+DELETE FROM bug56680 WHERE a=1;
+INSERT INTO bug56680 VALUES(1,'X',1);
+SELECT a,b,c FROM bug56680 WHERE a=1;
+SELECT COUNT(*) FROM bug56680;
+CHECK TABLE bug56680;
+ROLLBACK;
+
+DROP TABLE bug56680;
+--echo # ibuf-debug-path-end
+
+--disable_query_log
+-- error 0, ER_UNKNOWN_SYSTEM_VARIABLE
+SET GLOBAL innodb_change_buffering_debug = @innodb_change_buffering_debug_orig;

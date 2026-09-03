@@ -1,0 +1,123 @@
+####################################################################
+# DDL graph-build error propagation.                               #
+#                                                                  #
+# A. An ordinary pass-2 NEIGHBORS write error must fail the direct #
+#    ALTER; the #sql table is discarded and a clean retry works.   #
+# B. W=1 serial reverse-edge failure must fail the direct ALTER,    #
+#    matching the strict parallel stage-3a contract.               #
+# Mutations caught:                                                #
+#  - ignoring non-lock errors in bulk_write_neighbor_fixup;        #
+#  - changing the serial reverse failure back to break/continue;   #
+####################################################################
+--source include/have_debug.inc
+--source include/have_binlog_format_mixed_or_row.inc
+
+--disable_query_log
+CREATE DATABASE vidx_ddl_error_propagation;
+USE vidx_ddl_error_propagation;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 1;
+
+CREATE TABLE t_bulk (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_bulk VALUES
+  (1, VEC_FROMTEXT('[1,2,3,4,5]')),
+  (2, VEC_FROMTEXT('[2,3,4,5,6]')),
+  (3, VEC_FROMTEXT('[3,4,5,6,7]'));
+--enable_query_log
+
+--echo # Phase A: ordinary pass-2 write error fails direct ALTER
+--disable_query_log
+SET SESSION debug = '+d,vidx_ddl_inject_neighbor_fixup_error';
+--disable_result_log
+--error ER_VECTOR_INDEX_FAILED
+ALTER TABLE t_bulk ADD VECTOR INDEX vi(v);
+--enable_result_log
+SET SESSION debug = '-d,vidx_ddl_inject_neighbor_fixup_error';
+let $idx_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_error_propagation' AND TABLE_NAME = 't_bulk' AND INDEX_NAME = 'vi', c, 1);
+if ($idx_count != 0) {
+  --die failed direct ALTER left the vector index behind
+}
+let $base_count = query_get_value(SELECT COUNT(*) AS c FROM t_bulk, c, 1);
+if ($base_count != 3) {
+  --die failed direct ALTER changed rows in the original table
+}
+let $orphan_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE 'vidx_ddl_error_propagation/vidx_%', c, 1);
+if ($orphan_count != 0) {
+  --die failed direct ALTER left an orphan auxiliary table
+}
+ALTER TABLE t_bulk ADD VECTOR INDEX vi(v);
+let $idx_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_error_propagation' AND TABLE_NAME = 't_bulk' AND INDEX_NAME = 'vi', c, 1);
+if ($idx_count != 1) {
+  --die clean retry after pass-2 failure did not create the vector index
+}
+let $bulk_id = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_error_propagation/t_bulk', TABLE_ID, 1);
+--disable_result_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @bulk_live FROM `vidx_', $bulk_id, '_0` WHERE TREF IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_result_log
+if (`SELECT @bulk_live <> 3`) {
+  --die clean retry did not build exactly three live rows
+}
+--enable_query_log
+--echo VERDICT A failed ALTER rolled back; clean retry succeeded: PASS
+
+--disable_query_log
+CREATE TABLE t_reverse (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_reverse VALUES
+  (1, VEC_FROMTEXT('[10,11,12,13,14]')),
+  (2, VEC_FROMTEXT('[20,21,22,23,24]')),
+  (3, VEC_FROMTEXT('[30,31,32,33,34]'));
+--enable_query_log
+
+--echo # Phase B: ordinary serial reverse-edge error fails direct ALTER
+--disable_query_log
+SET SESSION debug = '+d,vidx_ddl_inject_reverse_error';
+--disable_result_log
+--error ER_VECTOR_INDEX_FAILED
+ALTER TABLE t_reverse ADD VECTOR INDEX vi(v);
+--enable_result_log
+SET SESSION debug = '-d,vidx_ddl_inject_reverse_error';
+let $idx_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_error_propagation' AND TABLE_NAME = 't_reverse' AND INDEX_NAME = 'vi', c, 1);
+if ($idx_count != 0) {
+  --die serial reverse-edge failure left the vector index behind
+}
+let $base_count = query_get_value(SELECT COUNT(*) AS c FROM t_reverse, c, 1);
+if ($base_count != 3) {
+  --die serial reverse-edge failure changed the original table rows
+}
+let $orphan_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE 'vidx_ddl_error_propagation/vidx_%', c, 1);
+if ($orphan_count != 1) {
+  --die serial reverse-edge failure left an orphan auxiliary table
+}
+ALTER TABLE t_reverse ADD VECTOR INDEX vi(v);
+let $idx_count = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_error_propagation' AND TABLE_NAME = 't_reverse' AND INDEX_NAME = 'vi', c, 1);
+if ($idx_count != 1) {
+  --die clean retry after serial reverse-edge failure did not create the index
+}
+let $reverse_id = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_error_propagation/t_reverse', TABLE_ID, 1);
+--disable_result_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @reverse_live FROM `vidx_', $reverse_id, '_0` WHERE TREF IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_result_log
+if (`SELECT @reverse_live <> 3`) {
+  --die serial retry did not build exactly three live rows
+}
+--enable_query_log
+--echo VERDICT B failed ALTER rolled back; clean retry succeeded: PASS
+
+--disable_query_log
+DROP TABLE t_bulk, t_reverse;
+SET SESSION vidx_ddl_threads = DEFAULT;
+SET SESSION debug = '';
+SET GLOBAL show_vidx_hlindex_tables = DEFAULT;
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_ddl_error_propagation;
+--enable_query_log

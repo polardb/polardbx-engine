@@ -1,0 +1,77 @@
+# ==== Purpose ====
+# Verify that a logger node started as learner has logType correctly
+# initialized (instance_type = 'Log'), proving the fix for the bug where
+# logger node started via learner path missed setAsLogType() call.
+#
+# ==== Steps ====
+# 1. Start a new learner node with --cluster-log-type-node=ON
+# 2. Add it to cluster as learner → verify instance_type = 'Log'
+# 3. Upgrade to follower → verify instance_type = 'Log' persists
+# 4. Verify the node can successfully become leader and transfer back
+
+--source include/paxos.inc
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+
+--echo # Step 1: Start a logger-learner node
+let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
+--let $learner_log_type = 1
+--source include/start_new_learner.inc
+
+--echo # Step 2: Add logger-learner to cluster
+--connection conn1
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.add_learner($learner_cluster_info);
+--sleep 5
+
+--connect (conn_logger,127.0.0.1,root,,test,$learner_port)
+--connection conn_logger
+--source include/wait_apply_catchup.inc
+
+# Key verification: learner started with log-type-node has instance_type = Log
+select role, instance_type from information_schema.alisql_cluster_local;
+
+--echo # Step 3: Upgrade learner to follower
+--connection conn1
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.upgrade_learner($learner_cluster_info);
+--sleep 5
+
+--disconnect conn_logger
+--connect (conn_logger,127.0.0.1,root,,test,$learner_port)
+--connection conn_logger
+--source include/wait_apply_catchup.inc
+
+# Key verification: instance_type = Log persists after upgrade
+select role, instance_type from information_schema.alisql_cluster_local;
+
+--echo # Step 4: Verify logger-follower can become leader and transfer back
+--connection conn_logger
+--enable_reconnect
+# force_promote triggers requestVote with force=true
+set global consensus_force_promote=1;
+let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='Leader';
+--source include/wait_condition.inc
+
+select role, instance_type from information_schema.alisql_cluster_local;
+
+# Transfer leadership back to node 1
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1
+eval call dbms_consensus.change_leader("127.0.0.1:$PAXOS_PORT_1");
+
+--echo # Verify node1 resumed leadership
+--connection conn1
+--enable_reconnect
+let $wait_condition= select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local where role='Leader';
+--source include/wait_condition.inc
+
+--echo # Cleanup
+# Remove the logger node from cluster (node1 is the real leader)
+--connection conn1
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.downgrade_follower($learner_cluster_info);
+--replace_result $learner_cluster_info learner_cluster_info
+eval call dbms_consensus.drop_learner($learner_cluster_info);
+
+--source include/stop_new_learner.inc
+--source include/wait_follower_catchup.inc

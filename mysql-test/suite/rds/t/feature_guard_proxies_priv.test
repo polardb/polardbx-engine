@@ -1,0 +1,237 @@
+# ============================================================================
+# #85237119 mysql.proxies_priv empty/wildcard Proxied_user proxy escalation.
+#
+# Proxies_priv_entity_guard now blocks ALL direct DML (INSERT/UPDATE/DELETE/
+# REPLACE/LOAD) on mysql.proxies_priv by a non-SUPER user (guard_is_direct_dml
+# gate) instead of a bypassable per-field Proxied_user check. An empty/NULL/
+# '%'/mixed-case Proxied_user slips past a reserved-name test yet acts as an
+# "any user" wildcard in ACL_PROXY_USER::matches() (short-circuit on
+# !proxied_user), letting a proxy account authenticate AS a reserved account
+# (aurora) via test_plugin_server.
+#
+#   P  - positive control: the empty-Proxied_user wildcard escalation is real
+#        when the row exists (created here by root, who is SUPER-exempt)
+#   A  - attacker's direct proxies_priv DML is fully blocked (all field shapes)
+#   B  - NO false positive: GRANT/REVOKE PROXY, DROP USER, RENAME USER still
+#        work for a non-SUPER admin (they reach the table via the handler /
+#        modify_grant_table with a non-DML sql_command, not direct DML)
+#   C  - end-to-end: attacker cannot plant any row -> proxy login denied
+#   E  - guard switched off -> DML allowed again
+#
+# test_plugin_server is preloaded via the companion -master.opt.
+# ============================================================================
+--source include/have_plugin_auth.inc
+
+CALL mtr.add_suppression("Wrong password supplied");
+
+--echo ######## SETUP ########
+SET GLOBAL opt_enable_rds_priv_strategy = ON;
+SET GLOBAL maintain_user_list = 'aurora';
+
+CREATE USER 'aurora'@'%' IDENTIFIED BY 'aurorapass';
+GRANT ALL PRIVILEGES ON *.* TO 'aurora'@'%' WITH GRANT OPTION;
+
+# attacker: broad DML + CREATE USER + GRANT OPTION, but NO SUPER
+CREATE USER 'lintong'@'%' IDENTIFIED BY 'lintongpass';
+GRANT SELECT, INSERT, UPDATE, DELETE, RELOAD, CREATE USER
+  ON *.* TO 'lintong'@'%' WITH GRANT OPTION;
+
+# helpers
+CREATE USER 'proxy_esc'@'%' IDENTIFIED WITH test_plugin_server AS 'aurora';
+CREATE USER 'ptarget'@'%' IDENTIFIED BY 'x';
+CREATE USER 'padmin'@'%'  IDENTIFIED BY 'x';
+CREATE USER 'pgrantee'@'%' IDENTIFIED BY 'x';
+
+# a pre-existing NON-protected proxy row (root is SUPER -> guard exempt)
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','benign','%','harmless',0,'root@localhost');
+FLUSH PRIVILEGES;
+
+connect(atk, localhost, lintong, lintongpass);
+
+--echo
+--echo ######## P: positive control - empty-wildcard escalation is real ########
+--echo # root (SUPER, exempt) plants the empty-Proxied_user row the attacker is
+--echo # otherwise blocked from creating (group A). This proves the chain:
+--echo # proxy login -> identity becomes aurora -> aurora (SUPER) escalates a victim.
+connection default;
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','',0,'root@localhost');
+FLUSH PRIVILEGES;
+CREATE USER 'victim'@'%' IDENTIFIED BY 'x';
+SELECT Super_priv FROM mysql.user WHERE user='victim';
+
+connect(pwin, localhost, proxy_esc, aurora);
+connection pwin;
+--echo # empty Proxied_user wildcard maps proxy_esc -> aurora
+SELECT CURRENT_USER();
+--echo # as aurora (SUPER) the guard is exempt -> escalation succeeds
+UPDATE mysql.user SET Super_priv='Y' WHERE user='victim';
+
+connection default;
+FLUSH PRIVILEGES;
+--echo # victim is escalated (attack works when the row is present)
+SELECT Super_priv FROM mysql.user WHERE user='victim';
+disconnect pwin;
+DELETE FROM mysql.proxies_priv WHERE User='proxy_esc';
+DROP USER 'victim'@'%';
+FLUSH PRIVILEGES;
+
+--echo
+--echo ######## A: attacker's direct proxies_priv DML is fully blocked ########
+connection atk;
+
+--echo # A1 INSERT Proxied_user='aurora' (reserved) -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','aurora',0,'lintong@%');
+
+--echo # A2 INSERT Proxied_user='' (empty wildcard) -> blocked  [#85237119]
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','',0,'lintong@%');
+
+--echo # A3 INSERT Proxied_user='%' (wildcard) -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','%',0,'lintong@%');
+
+--echo # A4 INSERT Proxied_user='Aurora' (mixed-case evasion) -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','Aurora',0,'lintong@%');
+
+--echo # A5 INSERT Proxied_user='harmless' (non-reserved) -> blocked (full-block)
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','harmless',0,'lintong@%');
+
+--echo # A6 INSERT ... SELECT cannot smuggle a wildcard row -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  SELECT '%','proxy_esc','%','',0,'lintong@%';
+
+--echo # A7 REPLACE -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+REPLACE INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','',0,'lintong@%');
+
+--echo # A8 UPDATE existing row -> Proxied_user='' (create wildcard) -> blocked
+--error ER_RESERVED_USER_OR_PRIVS
+UPDATE mysql.proxies_priv SET Proxied_user='' WHERE User='benign';
+
+--echo # A9 UPDATE non-Proxied_user field on a benign row -> blocked (direct DML)
+--error ER_RESERVED_USER_OR_PRIVS
+UPDATE mysql.proxies_priv SET With_grant=1 WHERE User='benign';
+
+--echo # A10 DELETE a benign (non-reserved) row -> blocked (direct DML)
+--error ER_RESERVED_USER_OR_PRIVS
+DELETE FROM mysql.proxies_priv WHERE User='benign';
+
+--echo # A11 nothing was planted by the attacker
+SELECT COUNT(*) AS attacker_rows FROM mysql.proxies_priv WHERE User='proxy_esc';
+
+--echo # A12 SUPER is exempt: root may INSERT/UPDATE/DELETE proxies_priv freely
+connection default;
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','root_made','%','',0,'root@localhost');
+UPDATE mysql.proxies_priv SET Proxied_user='aurora' WHERE User='root_made';
+DELETE FROM mysql.proxies_priv WHERE User='root_made';
+
+--echo
+--echo ######## B: NO false positive - internal ACL management still works ########
+--echo # B1 non-SUPER GRANT PROXY (delegated WITH GRANT OPTION) -> allowed
+--echo #    (replace_proxies_priv_table -> ha_write_row, bypasses guard_record)
+GRANT PROXY ON 'ptarget'@'%' TO 'padmin'@'%' WITH GRANT OPTION;
+connect(padm, localhost, padmin, x);
+connection padm;
+GRANT PROXY ON 'ptarget'@'%' TO 'pgrantee'@'%';
+--echo # B2 non-SUPER REVOKE PROXY -> allowed
+REVOKE PROXY ON 'ptarget'@'%' FROM 'pgrantee'@'%';
+connection default;
+disconnect padm;
+
+--echo # B3 non-SUPER DROP USER owning a (non-protected) proxy row -> allowed
+--echo #    (modify_grant_table -> guard_record(DELETE) with SQLCOM_DROP_USER,
+--echo #     not direct DML -> selective reserved-name check -> allowed)
+CREATE USER 'dropme'@'%' IDENTIFIED BY 'x';
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','dropme','%','harmless',0,'root@localhost');
+FLUSH PRIVILEGES;
+connection atk;
+DROP USER 'dropme'@'%';
+connection default;
+--echo # cleanup DELETE succeeded (row gone)
+SELECT COUNT(*) AS dropme_rows FROM mysql.proxies_priv WHERE User='dropme';
+
+--echo # B4 non-SUPER RENAME USER owning a (non-protected) proxy row -> allowed
+--echo #    (modify_grant_table -> guard_record(UPDATE) with SQLCOM_RENAME_USER)
+CREATE USER 'renameme'@'%' IDENTIFIED BY 'x';
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','renameme','%','harmless',0,'root@localhost');
+FLUSH PRIVILEGES;
+connection atk;
+RENAME USER 'renameme'@'%' TO 'renamed'@'%';
+connection default;
+--echo # rename rewrote the row (User=renamed)
+SELECT COUNT(*) AS renamed_rows FROM mysql.proxies_priv
+  WHERE User='renamed' AND Proxied_user='harmless';
+
+--echo # B5 non-SUPER DROP USER cleaning MULTIPLE (non-protected) proxy rows -> allowed
+CREATE USER 'multi'@'%' IDENTIFIED BY 'x';
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','multi','h1','t1',0,'root@localhost'),
+         ('%','multi','h2','t2',0,'root@localhost');
+FLUSH PRIVILEGES;
+connection atk;
+DROP USER 'multi'@'%';
+connection default;
+--echo # every row for 'multi' was cleaned (guard_delete selective, not full-block)
+SELECT COUNT(*) AS multi_rows FROM mysql.proxies_priv WHERE User='multi';
+
+--echo # B6 non-SUPER ALTER USER of an account owning a proxy row -> allowed
+--echo #    (ALTER USER does search-only handle_grant_data; never hits guard_record)
+CREATE USER 'altme'@'%' IDENTIFIED BY 'x';
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','altme','%','harmless',0,'root@localhost');
+FLUSH PRIVILEGES;
+connection atk;
+ALTER USER 'altme'@'%' IDENTIFIED BY 'y';
+connection default;
+--echo # the proxy row is untouched by ALTER USER
+SELECT COUNT(*) AS altme_rows FROM mysql.proxies_priv WHERE User='altme';
+DROP USER 'altme'@'%';
+FLUSH PRIVILEGES;
+
+--echo
+--echo ######## C: end-to-end - attacker can never become aurora ########
+--echo # attacker cannot plant any proxies_priv row (group A), so proxy login
+--echo # (authenticated_as=aurora, but no matching proxy grant) is denied.
+connection default;
+--disable_query_log
+--error ER_ACCESS_DENIED_ERROR
+connect(prox, localhost, proxy_esc, aurora);
+--enable_query_log
+SELECT Super_priv FROM mysql.user WHERE user='lintong';
+
+--echo
+--echo ######## E: guard disabled -> direct DML allowed again ########
+connection default;
+SET GLOBAL opt_enable_rds_priv_strategy = OFF;
+connection atk;
+INSERT INTO mysql.proxies_priv (Host,User,Proxied_host,Proxied_user,With_grant,Grantor)
+  VALUES ('%','proxy_esc','%','',0,'lintong@%');
+connection default;
+DELETE FROM mysql.proxies_priv WHERE User='proxy_esc';
+SET GLOBAL opt_enable_rds_priv_strategy = ON;
+
+--echo
+--echo ######## CLEANUP ########
+connection default;
+disconnect atk;
+DELETE FROM mysql.proxies_priv WHERE User='benign';
+DROP USER 'aurora'@'%','lintong'@'%','proxy_esc'@'%',
+          'ptarget'@'%','padmin'@'%','pgrantee'@'%','renamed'@'%';
+SET GLOBAL maintain_user_list = '';
+SET GLOBAL opt_enable_rds_priv_strategy = OFF;
+FLUSH PRIVILEGES;

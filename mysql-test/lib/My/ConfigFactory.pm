@@ -335,6 +335,7 @@ my @mysqld_rules = (
   { 'tmpdir'                                       => \&fix_tmpdir },
   { 'loose-sha256_password_auto_generate_rsa_keys' => "0" },
   { 'loose-caching_sha2_password_auto_generate_rsa_keys' => "0" },
+  { 'opt_index_format_hippo_enabled' => "1" },
 
   { '#mtr_basedir' => sub { return shift->{ARGS}->{basedir}; }
   },

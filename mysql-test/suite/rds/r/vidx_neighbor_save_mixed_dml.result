@@ -1,0 +1,58 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE PROCEDURE p_upd(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 1500 DO
+UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")) WHERE id = (j % 60) + 1;
+SET j = j + 1;
+END WHILE;
+END$$
+CREATE PROCEDURE p_ins(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 500 DO
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")));
+SET j = j + 1;
+END WHILE;
+END$$
+CREATE PROCEDURE p_del(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 800 DO
+DELETE FROM t1 WHERE id = ((j + p_offset) % 60) + 1;
+INSERT INTO t1(id, v) VALUES (((j + p_offset) % 60) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")));
+SET j = j + 1;
+END WHILE;
+END$$
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_upd(11);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_upd(23);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_ins(7);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_del(31);
+== save_neighbors_only mixed-DML deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+indep_dml_deadlock_eq_0=1
+indep_dml_commit_error_eq_0=1
+DROP PROCEDURE p_upd;
+DROP PROCEDURE p_ins;
+DROP PROCEDURE p_del;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

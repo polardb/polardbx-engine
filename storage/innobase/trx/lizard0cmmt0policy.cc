@@ -29,44 +29,50 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
  Created 2024-10-31 by Jiyang.zhang
  *******************************************************/
-#include "sql/tc_log.h"
 #include "sql/binlog.h"
+#include "sql/gcn_log_event.h"
+#include "sql/mysqld.h"
+#include "sql/tc_log.h"
+#include "sql/xa/komodo0cmmt0policy.h"
 
 #include "handler/lizard0ha_innodb.h"
+#include "lizard0gcs.h"
+#include "lizard0undo.h"
 
 #include "trx0trx.h"
 
-#include "sql/xa/lizard_cmmt_policy.h"
-#include "sql/gcn_log_event.h"
-
-#include "lizard0gcs.h"
-#include "lizard0undo.h"
-#include "lizard0undo0retent.h"
-#include "sql/mysqld.h"
-
 using namespace binary_log;
 
-namespace lizard {
+namespace komodo {
 
 /*-----------------------------------------------------------------------------*/
 /** Single_shard_policy */
 /*-----------------------------------------------------------------------------*/
-void Single_shard_policy::decide(THD *thd) {
-  if (m_decided) return;
-
-  /** Although the external gcn is not needed for single shard policy,
-   * we will set it if it is specified by users. */
-  if (thd->variables.innodb_commit_gcn != GCN_NULL) {
-    m_commit_gcn = {thd->variables.innodb_commit_gcn, CSR_ASSIGNED};
-    gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
-  } else {
-    m_commit_gcn = {gcs_load_gcn(), CSR_AUTOMATIC};
+void Single_shard_policy::decide(THD *thd, bool order_commit) {
+  if (!m_decided) {
+    /** Although the external gcn is not needed for single shard policy,
+     * we will set it if it is specified by users. */
+    if (thd->variables.innodb_commit_gcn != GCN_NULL) {
+      m_commit_gcn = {thd->variables.innodb_commit_gcn, CSR_ASSIGNED};
+      lizard::gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
+    } else {
+      m_commit_gcn = {lizard::gcs_load_gcn(), CSR_AUTOMATIC};
+    }
+    m_decided = true;
+  } else if (order_commit) {
+    static uint64_t warn_count = 0;
+    const uint64_t WARN_INTERVAL = 100;
+    if (warn_count % WARN_INTERVAL == 0) {
+      lizard_warn(ER_LIZARD)
+          << "Single_shard_policy already decided when order commit";
+    }
+    warn_count++;
+    ut_ad(false);
   }
-  m_decided = true;
 }
 
 void Single_shard_policy::copy_to_trx(trx_t *trx) const {
-  trx->txn_desc.copy_xa_when_commit(m_commit_gcn, XA_ADDR_NULL);
+  trx->txn_desc.xa_copy_when_commit(m_commit_gcn, XA_ADDR_NULL);
 }
 
 void Single_shard_policy::build_gcn_event(Gcn_event *event) const {
@@ -88,6 +94,36 @@ void Single_shard_policy::reset() {
 }
 
 /*-----------------------------------------------------------------------------*/
+/** XA_prepare_policy */
+/*-----------------------------------------------------------------------------*/
+void XA_prepare_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
+
+  m_prepare_gcn = {lizard::gcs_load_gcn(), CSR_AUTOMATIC};
+  m_decided = true;
+}
+
+void XA_prepare_policy::copy_to_trx(trx_t *trx) const {}
+
+void XA_prepare_policy::build_gcn_event(Gcn_event *event) const {
+  event->build_gcn(m_prepare_gcn, false);
+}
+
+void XA_prepare_policy::reset() {
+  m_prepare_gcn.reset();
+  m_decided = false;
+}
+
+[[nodiscard]] Commit_policy *XA_prepare_policy::clone() const {
+  return new XA_prepare_policy(*this);
+}
+
+[[nodiscard]] Commit_policy *XA_prepare_policy::clone(
+    MEM_ROOT *mem_root) const {
+  return new (mem_root) XA_prepare_policy(*this);
+}
+
+/*-----------------------------------------------------------------------------*/
 /** XA_commit_policy */
 /*-----------------------------------------------------------------------------*/
 
@@ -99,21 +135,21 @@ void XA_commit_policy::init(gcn_t commit_gcn) {
     m_commit_gcn = {commit_gcn, CSR_ASSIGNED};
   }
 }
-void XA_commit_policy::decide(THD *thd) {
-  if (m_decided) return;
+void XA_commit_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
 
   if (!m_commit_gcn.is_null()) {
-    gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
+    lizard::gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
   } else {
     /** If commit_gcn has not been specified, load it from gcs */
-    m_commit_gcn = {gcs_load_gcn(), CSR_AUTOMATIC};
+    m_commit_gcn = {lizard::gcs_load_gcn(), CSR_AUTOMATIC};
   }
   m_decided = true;
 }
 void XA_commit_policy::copy_to_trx(trx_t *trx) const {
   ut_ad(trx);
   ut_ad(!m_commit_gcn.is_null());
-  trx->txn_desc.copy_xa_when_commit(m_commit_gcn, XA_ADDR_NULL);
+  trx->txn_desc.xa_copy_when_commit(m_commit_gcn, XA_ADDR_NULL);
 }
 
 void XA_commit_policy::build_gcn_event(Gcn_event *event) const {
@@ -142,14 +178,14 @@ void AC_prepare_policy::init(gcn_t pre_commit_gcn, const xa_branch_t &branch) {
   m_branch = branch;
 }
 
-void AC_prepare_policy::decide(THD *thd) {
-  if (m_decided) return;
+void AC_prepare_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
 
   gcn_t sys_gcn;
 
   ut_a(m_proposal_gcn.is_null());
 
-  sys_gcn = gcs_load_gcn();
+  sys_gcn = lizard::gcs_load_gcn();
   if (sys_gcn > m_pre_commit_gcn) {
     m_proposal_gcn = {sys_gcn, CSR_AUTOMATIC};
   } else {
@@ -157,7 +193,7 @@ void AC_prepare_policy::decide(THD *thd) {
   }
 
   if (m_proposal_gcn.csr == CSR_ASSIGNED) {
-    gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
+    lizard::gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
   }
   m_decided = true;
 }
@@ -166,9 +202,9 @@ void AC_prepare_policy::copy_to_trx(trx_t *trx) const {
   ut_a(!m_proposal_gcn.is_null());
   ut_a(!m_branch.is_null());
 
-  ut_a(trx->txn_desc.pmmt.is_null());
+  ut_a(trx->txn_desc.xa_pmmt().is_null());
 
-  trx->txn_desc.copy_xa_when_prepare(m_proposal_gcn, m_branch);
+  trx->txn_desc.xa_copy_when_prepare(m_proposal_gcn, m_branch);
 }
 
 void AC_prepare_policy::build_gcn_event(Gcn_event *event) const {
@@ -201,8 +237,8 @@ void AC_commit_policy::init(gcn_t hlc_gcn, const xa_addr_t &master_addr) {
   m_master_addr = master_addr;
 }
 
-void AC_commit_policy::decide(THD *thd) {
-  if (m_decided) return;
+void AC_commit_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
 
   /* trx_t *trx; */
   proposal_mark_t pmmt;
@@ -229,7 +265,7 @@ void AC_commit_policy::decide(THD *thd) {
     2. Decide master address.
   */
 
-  if ((txn_undo = trx_undo_get_txn(trx))) {
+  if ((txn_undo = lizard::trx_get_txn_undo(trx))) {
     pmmt = txn_undo->pmmt;
   }
 
@@ -263,13 +299,13 @@ void AC_commit_policy::decide(THD *thd) {
   m_master_addr.decide_if_ac_commit(trx);
   m_decided = true;
 
-  gcs_set_gcn_if_bigger(m_hlc_gcn);
+  lizard::gcs_set_gcn_if_bigger(m_hlc_gcn);
 }
 
 void AC_commit_policy::copy_to_trx(trx_t *trx) const {
   ut_ad(trx);
 
-  trx->txn_desc.copy_xa_when_commit(m_commit_gcn, m_master_addr);
+  trx->txn_desc.xa_copy_when_commit(m_commit_gcn, m_master_addr);
 }
 
 void AC_commit_policy::build_gcn_event(Gcn_event *event) const {
@@ -303,18 +339,18 @@ void Binlog_ac_prepare_policy::init(const gcn_tuple_t &tuple,
   m_proposal_gcn = tuple;
   m_branch = branch;
   /** Might will not run interface ::decide. */
-  gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
+  lizard::gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
 }
 
-void Binlog_ac_prepare_policy::decide(THD *thd) {
-  if (m_decided) return;
-  /** Already decided. Rplica from binlog. Do nothing. */
+void Binlog_ac_prepare_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
+
   m_decided = true;
-  gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
+  lizard::gcs_set_gcn_if_bigger(m_proposal_gcn.gcn);
 }
 
 void Binlog_ac_prepare_policy::copy_to_trx(trx_t *trx) const {
-  trx->txn_desc.copy_xa_when_prepare(m_proposal_gcn, m_branch);
+  trx->txn_desc.xa_copy_when_prepare(m_proposal_gcn, m_branch);
 }
 
 void Binlog_ac_prepare_policy::build_gcn_event(Gcn_event *event) const {
@@ -344,18 +380,19 @@ Binlog_commit_policy::Binlog_commit_policy() : m_commit_gcn() {}
 
 void Binlog_commit_policy::init(const gcn_tuple_t &tuple) {
   m_commit_gcn = tuple;
-  gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
+  lizard::gcs_set_gcn_if_bigger(m_commit_gcn.gcn);
 }
 
-void Binlog_commit_policy::decide(THD *thd) {
-  if (m_decided) return;
+void Binlog_commit_policy::decide(THD *thd, bool) {
+  ut_ad(!m_decided);
+
   /** Already decided. Rplica from binlog. Do nothing. */
   m_decided = true;
 }
 
 void Binlog_commit_policy::copy_to_trx(trx_t *trx) const {
   ut_ad(trx);
-  trx->txn_desc.copy_xa_when_commit(m_commit_gcn, XA_ADDR_NULL);
+  trx->txn_desc.xa_copy_when_commit(m_commit_gcn, XA_ADDR_NULL);
 }
 
 void Binlog_commit_policy::build_gcn_event(Gcn_event *event) const {
@@ -389,8 +426,8 @@ void Binlog_commit_policy::reset() {
 AC_prepare_policy *Commit_policy_ctx::activate_ac_prepare(
     const gcn_t &pre_commit_gcn, const xa_branch_t &branch) {
   ut_ad(is_implicit_policy());
+  ut_ad(!m_ac_prepare.has_decided());
 
-  m_ac_prepare.reset();
   m_ac_prepare.init(pre_commit_gcn, branch);
 
   m_current = &m_ac_prepare;
@@ -408,12 +445,24 @@ AC_prepare_policy *Commit_policy_ctx::activate_ac_prepare(
 void Commit_policy_ctx::activate_ac_commit(const gcn_t &commit_gcn,
                                                const xa_addr_t &master_addr) {
   ut_ad(is_implicit_policy());
+  ut_ad(!m_ac_commit.has_decided());
 
-  m_ac_commit.reset();
   m_ac_commit.init(commit_gcn, master_addr);
 
   m_current = &m_ac_commit;
   m_type = AC_COMMIT;
+}
+
+void Commit_policy_ctx::activate_xa_prepare() {
+  if (is_explicit_policy()) {
+    ut_ad(m_type == BINLOG_AC_PREPARE || m_type == BINLOG_COMMIT);
+    return;
+  }
+  ut_ad(is_implicit_policy());
+  ut_ad(!m_xa_prepare.has_decided());
+
+  m_current = &m_xa_prepare;
+  m_type = XA_PREPARE;
 }
 
 /**
@@ -437,12 +486,12 @@ void Commit_policy_ctx::activate_xa_commit(const gcn_t &commit_gcn) {
      * not needed. Notice that this does not violate the rules of state
      * transition
      */
-    ut_ad(m_type == AC_COMMIT || m_type == BINLOG_COMMIT);
+    ut_ad(m_type == BINLOG_COMMIT);
     return;
   }
   ut_ad(is_implicit_policy());
+  ut_ad(!m_xa_commit.has_decided());
 
-  m_xa_commit.reset();
   m_xa_commit.init(commit_gcn);
 
   m_current = &m_xa_commit;
@@ -465,14 +514,14 @@ void Commit_policy_ctx::activate_binlog(const Gcn_log_event *gcn_event) {
   ut_ad(is_implicit_policy());
 
   if (gcn_event->is_pmmt_gcn()) {
-    m_binlog_ac_prepare.reset();
+    ut_ad(!m_binlog_ac_prepare.has_decided());
     m_binlog_ac_prepare.init(gcn_event->clone_pmmt(),
                              gcn_event->clone_branch());
 
     m_type = BINLOG_AC_PREPARE;
     m_current = &m_binlog_ac_prepare;
   } else {
-    m_binlog_commit.reset();
+    ut_ad(!m_binlog_commit.has_decided());
     m_binlog_commit.init(gcn_event->clone_cmmt());
 
     m_type = BINLOG_COMMIT;
@@ -481,7 +530,7 @@ void Commit_policy_ctx::activate_binlog(const Gcn_log_event *gcn_event) {
 }
 
 void Commit_policy_ctx::activate_single_shard() {
-  m_single_shard.reset();
+  ut_ad(!m_single_shard.has_decided());
   m_current = &m_single_shard;
   m_type = SINGLE_SHARD;
 }
@@ -493,10 +542,20 @@ void Commit_policy_ctx::activate_single_shard() {
 /**
  * Decide the real GCN based on current commit policy.
  *
- * @param thd
+ * @param[in] thd
+ * @param[in] order_commit
  */
-void commit_policy_decide(THD *thd) {
-  thd->cpolicy_ctx.current_policy()->decide(thd);
+void commit_policy_decide(THD *thd, bool order_commit) {
+  thd->cpolicy_ctx.current_policy()->decide(thd, order_commit);
+}
+
+/**
+ *  Decide the real GCN based on current commit policy if not decided yet.
+ *  @param[in] thd
+ */
+void commit_policy_decide_if_not(THD *thd) {
+  if (!thd->cpolicy_ctx.current_policy()->has_decided())
+    commit_policy_decide(thd, false);
 }
 
 /**
@@ -506,11 +565,10 @@ void commit_policy_decide(THD *thd) {
  * @param[in/out] trx
  */
 void commit_policy_copy(THD *thd, trx_t *trx) {
-  if (!thd->cpolicy_ctx.current_policy()->has_decided()) {
-    commit_policy_decide(thd);
-  }
+  commit_policy_decide_if_not(thd);
+
   ut_ad(thd->cpolicy_ctx.current_policy()->has_decided());
 
   thd->cpolicy_ctx.current_policy()->copy_to_trx(trx);
 }
-}  // namespace lizard
+}  // namespace komodo

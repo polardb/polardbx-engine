@@ -1,0 +1,189 @@
+####################################################################
+# Cliff fallback of the budgeted window handover: when even the    #
+# resident node/adjacency structures cannot fit the budget, the    #
+# handover gives up keep-structures and rebuilds the context from  #
+# scratch every window (full topology reload).                     #
+#                                                                  #
+# 3000 x VECTOR(1024) puts the skeleton at ~1.2 MiB, so:           #
+#  - 2 MiB budget: multi-window build, keep-structures holds from  #
+#    the second handover on (the first one rebuilds into the       #
+#    evictable layout by design).  Fingerprint: topology reloads   #
+#    (node-cache misses) stay far below payload decodes.           #
+#  - 1 MiB budget (sysvar minimum): the skeleton alone outgrows    #
+#    the budget mid-build and the keep judge fails -> full window  #
+#    rebuilds.  Fingerprint: Vidx_load_node_misses climbs past one #
+#    topology reload per base row.                                 #
+#  - 2 MiB budget + vidx_ddl_force_full_handover: the injection    #
+#    forces the cliff branch although keep could hold, isolating   #
+#    the branch itself from the budget arithmetic.                 #
+# Sensitivity: reverting the keep judge to "always keep" turns the #
+# cliff-arm fingerprint red; clearing the node cache on the keep   #
+# path turns the keep-arm fingerprint red (mutation-verified).     #
+####################################################################
+--source include/have_debug.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/count_sessions.inc
+
+--disable_query_log
+CREATE DATABASE vidx_ddl_cliff_rebuild;
+USE vidx_ddl_cliff_rebuild;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+SET SESSION vidx_hnsw_ef_search = 600;
+let $save_cache = query_get_value(SHOW GLOBAL VARIABLES LIKE 'vidx_hnsw_cache_size', Value, 1);
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(1024)
+) ENGINE = InnoDB;
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 3000;
+INSERT INTO t1(id, v)
+  WITH RECURSIVE seq(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 3000
+  )
+  SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',7', 1023), ']'))
+  FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+--enable_query_log
+
+--echo ############################################
+--echo # Arm K: 2 MiB budget, keep-structures     #
+--echo # holds -- topology never reloads          #
+--echo ############################################
+SET GLOBAL vidx_hnsw_cache_size = 2097152;
+let $windows0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $miss0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+let $decoded0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $windows1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $miss1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+let $decoded1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+
+# Premise: the budget really forced window continuation.
+if (`SELECT $windows1 - $windows0 < 2`) {
+  --echo FATAL: only $windows0 -> $windows1 build windows under 2 MiB
+  --die the 2 MiB budget no longer forces a multi-window build, arm K is vacuous
+}
+--echo VERDICT K1 multi-window build exercised: PASS
+# Keep fingerprint: continuation windows decoded payloads...
+if (`SELECT $decoded1 <= $decoded0`) {
+  --echo FATAL: no payload decode across windows ($decoded0 -> $decoded1)
+  --die keep arm never reloaded a payload although the build spanned windows
+}
+--echo VERDICT K2 payloads reloaded across windows: PASS
+# Keep fingerprint: from the second handover on the adjacency walks
+# resolve resident pointers, so topology reloads (every one of which also
+# decodes) stay strictly below the payload decode volume.  If every
+# handover degraded into a full rebuild, each decode would pair with a
+# node-cache miss and the two deltas would meet.
+if (`SELECT $miss1 - $miss0 >= $decoded1 - $decoded0`) {
+  --echo FATAL: node misses $miss0 -> $miss1 caught up with decodes $decoded0 -> $decoded1
+  --die keep-structures arm reloaded topology on every window
+}
+--echo VERDICT K3 topology reloads stay below payload decodes: PASS
+let $keep_miss_delta = `SELECT $miss1 - $miss0`;
+
+--echo
+--echo ############################################
+--echo # Arm C: 1 MiB budget, skeleton outgrows   #
+--echo # the budget -> full window rebuilds       #
+--echo ############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+let $windows0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $miss0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $windows1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $miss1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+if (`SELECT $windows1 - $windows0 < 2`) {
+  --echo FATAL: only $windows0 -> $windows1 build windows under 1 MiB
+  --die the 1 MiB budget no longer forces a multi-window build, arm C is vacuous
+}
+--echo VERDICT C1 multi-window build exercised: PASS
+# Cliff fingerprint: rebuilding windows reload topology through the node
+# cache -- at least one miss per base row over the whole build separates
+# this cleanly from the keep arm's zero.
+if (`SELECT $miss1 - $miss0 <= 3000`) {
+  --echo FATAL: node-cache misses only moved $miss0 -> $miss1 under 1 MiB
+  --die skeleton exceeded the budget but windows did not fall back to full rebuilds
+}
+--echo VERDICT C2 full-rebuild topology reloads: PASS
+# Cross-arm separation: the cliff reloads topology massively more than
+# the keep arm on the identical table.
+if (`SELECT $miss1 - $miss0 <= 10 * ($keep_miss_delta + 1)`) {
+  --echo FATAL: cliff misses ($miss0 -> $miss1) not separated from keep delta $keep_miss_delta
+  --die cliff and keep arms are no longer distinguishable by topology reloads
+}
+--echo VERDICT C2b cliff separated from keep by topology reloads: PASS
+
+--echo # Disk truth: the cliff build lost no graph rows.
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_cliff_rebuild/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM `vidx_', $tid, '_0` WHERE TREF IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live IS NULL OR @live != 3000`) {
+  --echo FATAL: live graph row count is @live, expected 3000
+  --die cliff build lost graph rows
+}
+--echo VERDICT C3 live==3000: PASS
+
+--echo # ANN self-probes from the beginning, middle, and end of the scan.
+SET @nn1 = NULL;
+SET @nn1500 = NULL;
+SET @nn3000 = NULL;
+--disable_query_log
+SELECT id INTO @nn1 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[1', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn1500 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[1500', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn3000 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[3000', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+--enable_query_log
+if (`SELECT @nn1 IS NULL OR @nn1 != 1 OR @nn1500 IS NULL OR @nn1500 != 1500 OR @nn3000 IS NULL OR @nn3000 != 3000`) {
+  --echo FATAL: ANN self-probes returned @nn1, @nn1500, @nn3000
+  --die cliff-built graph is not fully reachable
+}
+--echo VERDICT C4 ANN self-probes on the cliff-built graph: PASS
+
+--echo
+--echo ############################################
+--echo # Arm F: keep-capable budget, injected     #
+--echo # cliff -- the branch itself stays live    #
+--echo ############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET GLOBAL vidx_hnsw_cache_size = 2097152;
+let $miss0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+SET SESSION debug = '+d,vidx_ddl_force_full_handover';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SET SESSION debug = '-d,vidx_ddl_force_full_handover';
+let $miss1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_load_node_misses', Value, 1);
+# Same budget as arm K; the injection alone must flip the handover into
+# full rebuilds and drag topology reloads well past the keep arm's delta.
+if (`SELECT $miss1 - $miss0 <= 1000`) {
+  --echo FATAL: forced full handover moved node misses only $miss0 -> $miss1
+  --die vidx_ddl_force_full_handover no longer reaches the cliff branch
+}
+--echo VERDICT F1 injected cliff reloads topology under a keep-capable budget: PASS
+
+--disable_query_log
+DROP TABLE t1;
+eval SET GLOBAL vidx_hnsw_cache_size = $save_cache;
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+SET SESSION vidx_ddl_threads = DEFAULT;
+SET GLOBAL show_vidx_hlindex_tables = DEFAULT;
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_ddl_cliff_rebuild;
+--enable_query_log
+
+--source include/wait_until_count_sessions.inc

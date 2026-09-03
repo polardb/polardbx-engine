@@ -64,6 +64,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0bool_scope_guard.h"
 
 #include "lizard0mysql.h"
+#include "sql/komodo0sql0guess0clust.h"
 
 // Forward declarations
 class THD;
@@ -326,7 +327,7 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 [[nodiscard]] dberr_t row_create_table_for_mysql(
     dict_table_t *&table, const char *compression,
     const HA_CREATE_INFO *create_info, trx_t *trx, mem_heap_t *heap,
-    const lizard::Ha_table_hint *table_hint,
+    const komodo::Dict_table_hint *table_hint,
     const dd::Table *old_dd_tab = nullptr);
 
 /** Does an index creation operation for MySQL. TODO: currently failure
@@ -343,8 +344,8 @@ kept in non-LRU list while on failure the 'table' object will be freed.
                                              index columns, which are
                                              then checked for not being too
                                              large. */
-    const lizard::Ha_index_hint *index_hint, /*!< in: ddl index hints */
-    const lizard::Ha_table_hint *table_hint, /*!< in: ddl table hints */
+    const komodo::Dict_index_hint *index_hint, /*!< in: ddl index hints */
+    const komodo::Dict_table_hint *table_hint, /*!< in: ddl table hints */
     dict_table_t *handler /*!< in/out: table handler. */);
 
 /** Loads foreign key constraints for the table being created. This
@@ -824,7 +825,7 @@ struct row_prebuilt_t {
   /*----------------------*/
   unsigned innodb_api : 1;     /*!< whether this is a InnoDB API
                                query */
-  const rec_t *innodb_api_rec; /*!< InnoDB API search result */
+  creg_t innodb_api_reg;       /*!< InnoDB API search result */
   void *innodb_api_buf;        /*!< Buffer holding copy of the physical
                                Innodb API search record */
   ulint innodb_api_rec_size;   /*!< Size of the Innodb API record */
@@ -884,6 +885,13 @@ struct row_prebuilt_t {
 
   /** query only by scn/gcn context */
   lizard::asof_query_context_t m_asof_query;
+
+  /** return gpp no from innodb to sql, following the buf parameter returned in
+   * row_search_mvcc.  */
+  gpp_no_t gpp_no;
+
+  /** guess clust context */
+  komodo::guess_ctx_t guess_ctx;
 
   lob::undo_vers_t *get_lob_undo() { return (&m_lob_undo); }
 

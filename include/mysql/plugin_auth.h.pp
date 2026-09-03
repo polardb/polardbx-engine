@@ -93,6 +93,7 @@ int thd_in_lock_tables(const void * thd);
 int thd_tablespace_op(const void * thd);
 long long thd_test_options(const void * thd, long long test_options);
 int thd_sql_command(const void * thd);
+bool thd_sql_recycle_command(const void * thd);
 const char *set_thd_proc_info(void * thd, const char *info,
                               const char *calling_func,
                               const char *calling_file,

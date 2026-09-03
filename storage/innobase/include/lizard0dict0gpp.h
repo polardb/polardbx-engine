@@ -44,11 +44,6 @@ namespace lizard {
  * */
 extern void dict_index_add_virtual_gcol(dict_index_t *index,
                                         const dict_table_t *table);
-/**
- * Return prefined dict_table_t GPP_NO column.
- *
- * @return	always valid column. */
-extern dict_col_t *dict_table_get_v_gcol(const dict_table_t *table);
 
 /**
  * Copy column definition

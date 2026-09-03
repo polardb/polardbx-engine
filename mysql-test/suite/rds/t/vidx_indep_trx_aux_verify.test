@@ -1,0 +1,296 @@
+##########################################
+# Auxiliary table direct verification    #
+# for vidx independent transaction.      #
+#                                        #
+# Scope vs vidx_indep_trx.test:          #
+#   - vidx_indep_trx.test verifies user- #
+#     visible behavior (COUNT, ANN       #
+#     search, replication delivery).     #
+#   - this file verifies internals: the  #
+#     aux table `vidx_<tid>_0` row count #
+#     directly, proving aux DML really   #
+#     committed independently of the     #
+#     surrounding user trx.              #
+#                                        #
+# Both files cover overlapping scenarios #
+# but assert at different layers; do not #
+# delete either without merging both     #
+# layers of assertions into the survivor.#
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+
+--echo ########################################
+--echo # Setup: create table with vector index
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # Insert seed data
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,2,3,4,10]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[1,2,3,4,9]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[1,2,3,4,8]'));
+INSERT INTO t1(a, v) VALUES (4, VEC_FROMTEXT('[1,2,3,4,7]'));
+INSERT INTO t1(a, v) VALUES (5, VEC_FROMTEXT('[1,2,3,4,6]'));
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo # Baseline: 5 rows in main table
+SELECT COUNT(*) AS main_rows FROM t1;
+
+--echo # Baseline: aux table rows after seed (HNSW graph nodes)
+SET @s = CONCAT('SELECT COUNT(*) AS seed_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Test 1: BEGIN + INSERT + COMMIT
+--echo # Aux table grows after INSERT (independent commit)
+--echo ########################################
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[10,10,10,10,10]'));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT('[11,11,11,11,11]'));
+
+--echo # During transaction: aux already committed
+SET @s = CONCAT('SELECT COUNT(*) AS during_trx_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+COMMIT;
+
+--echo # After commit: main table = 7 rows
+SELECT COUNT(*) AS after_commit_main FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_commit_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_sync.inc
+
+--echo # Slave: same aux row count
+--source include/rpl_connection_slave.inc
+SELECT TABLE_ID INTO @t1_tid_s FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux FROM `vidx_', @t1_tid_s, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Test 2: BEGIN + INSERT + ROLLBACK
+--echo # Main table: rows gone. Aux table: orphan nodes remain
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS before_rb_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT('[20,20,20,20,20]'));
+INSERT INTO t1(a, v) VALUES (21, VEC_FROMTEXT('[21,21,21,21,21]'));
+
+--echo # Aux committed independently during INSERT
+SET @s = CONCAT('SELECT COUNT(*) AS during_rb_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+ROLLBACK;
+
+--echo # Main table: no new rows (rolled back)
+SELECT COUNT(*) FROM t1 WHERE a IN (20, 21);
+
+--echo # Aux table: orphan nodes persist (independent commit)
+SET @s = CONCAT('SELECT COUNT(*) AS after_rb_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN still works (orphan tolerance)
+--sorted_result
+SELECT id, a FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 3;
+
+--echo ########################################
+--echo # Test 3: UPDATE (vector column)
+--echo # UPDATE = invalidate + insert = 2 independent trx
+--echo # Aux rows increase
+--echo ########################################
+
+SET @s = CONCAT('SELECT COUNT(*) AS before_upd_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+BEGIN;
+UPDATE t1 SET v = VEC_FROMTEXT('[50,50,50,50,50]') WHERE id = 1;
+--echo # After UPDATE: aux has new node (insert) + old node invalidated
+SET @s = CONCAT('SELECT COUNT(*) AS during_upd_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+COMMIT;
+
+SET @s = CONCAT('SELECT COUNT(*) AS after_upd_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SET @s = CONCAT('SELECT COUNT(*) AS slave_after_upd_aux FROM `vidx_', @t1_tid_s, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Test 4: DELETE
+--echo # Aux table: soft-delete marks the node
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS before_del_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+BEGIN;
+DELETE FROM t1 WHERE id = 2;
+--echo # After DELETE: aux node soft-deleted independently
+SET @s = CONCAT('SELECT COUNT(*) AS during_del_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+COMMIT;
+
+SELECT COUNT(*) AS after_del_main FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS after_del_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SET @s = CONCAT('SELECT COUNT(*) AS slave_after_del_aux FROM `vidx_', @t1_tid_s, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Test 5: SAVEPOINT + ROLLBACK TO SAVEPOINT
+--echo # Main: rolled back to savepoint; Aux: all independently committed
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS before_sp_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT('[30,30,30,30,30]'));
+SAVEPOINT sp1;
+INSERT INTO t1(a, v) VALUES (31, VEC_FROMTEXT('[31,31,31,31,31]'));
+INSERT INTO t1(a, v) VALUES (32, VEC_FROMTEXT('[32,32,32,32,32]'));
+SAVEPOINT sp2;
+INSERT INTO t1(a, v) VALUES (33, VEC_FROMTEXT('[33,33,33,33,33]'));
+
+--echo # All 4 aux entries committed independently
+SET @s = CONCAT('SELECT COUNT(*) AS during_sp_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+ROLLBACK TO SAVEPOINT sp1;
+--echo # Main: rolled back rows 31,32,33; only row 30 remains in scope
+COMMIT;
+
+--echo # Main table: only row 30 added (others rolled back)
+SELECT COUNT(*) FROM t1 WHERE a IN (30, 31, 32, 33);
+
+--echo # Aux table: still has orphan nodes from 31, 32, 33
+SET @s = CONCAT('SELECT COUNT(*) AS after_sp_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN still works
+--sorted_result
+SELECT a FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[31,31,31,31,31]')) LIMIT 3;
+
+--source include/rpl_sync.inc
+
+--echo ########################################
+--echo # Test 6: XA transaction — aux committed before XA PREPARE
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+SET @s = CONCAT('SELECT COUNT(*) AS before_xa_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+XA START 'xa_aux_verify';
+INSERT INTO t1(a, v) VALUES (40, VEC_FROMTEXT('[40,40,40,40,40]'));
+INSERT INTO t1(a, v) VALUES (41, VEC_FROMTEXT('[41,41,41,41,41]'));
+XA END 'xa_aux_verify';
+
+--echo # Aux already committed (before XA PREPARE)
+--connect (con_observer, 127.0.0.1, root,,test,$MASTER_MYPORT,)
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET @s = CONCAT('SELECT COUNT(*) AS during_xa_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+--disconnect con_observer
+
+--source include/rpl_connection_master.inc
+XA PREPARE 'xa_aux_verify';
+XA COMMIT 'xa_aux_verify';
+
+SELECT COUNT(*) FROM t1 WHERE a IN (40, 41);
+SET @s = CONCAT('SELECT COUNT(*) AS after_xa_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) FROM t1 WHERE a IN (40, 41);
+SET @s = CONCAT('SELECT COUNT(*) AS slave_xa_aux FROM `vidx_', @t1_tid_s, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Test 7: INSERT ... SELECT (multi-row, per-row independent commit)
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+
+CREATE TABLE t_src (id INT PRIMARY KEY, v VECTOR(5));
+INSERT INTO t_src VALUES (1, VEC_FROMTEXT('[60,0,0,0,0]'));
+INSERT INTO t_src VALUES (2, VEC_FROMTEXT('[0,60,0,0,0]'));
+INSERT INTO t_src VALUES (3, VEC_FROMTEXT('[0,0,60,0,0]'));
+
+SET @s = CONCAT('SELECT COUNT(*) AS before_inssel_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+INSERT INTO t1(a, v) SELECT id + 600, v FROM t_src;
+
+SET @s = CONCAT('SELECT COUNT(*) AS after_inssel_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+SELECT COUNT(*) FROM t1 WHERE a > 600;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SET @s = CONCAT('SELECT COUNT(*) AS slave_inssel_aux FROM `vidx_', @t1_tid_s, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+--source include/rpl_connection_master.inc
+DROP TABLE t_src;
+DROP TABLE t1;
+--source include/rpl_sync.inc
+
+--enable_warnings
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

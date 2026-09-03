@@ -159,8 +159,11 @@ void Connection_event_coordinator::notify_event(
 
   while (it != m_subscribers.end()) {
     Connection_event_subscriber event_subscriber = *it;
-    (void)event_subscriber.m_subscriber->notify_event(
-        thd, this, connection_event, error_handler);
+
+    if (event_subscriber.m_subscriber->enabled()) {
+      (void)event_subscriber.m_subscriber->notify_event(
+          thd, this, connection_event, error_handler);
+    }
 
     ++it;
   }
@@ -194,6 +197,29 @@ void Connection_event_coordinator::notify_sys_var(
     }
     ++it;
   }
+}
+
+/**
+ * Process reset request
+ *
+ * @param[in] error_handler Error handler
+ * @param[in] reset_request Reset request
+ */
+bool Connection_event_coordinator::notify_event(
+    Error_handler *error_handler,
+    const mysql_event_polarx_connection_control *event) {
+  DBUG_TRACE;
+  std::vector<Connection_event_subscriber>::iterator it = m_subscribers.begin();
+  bool res = false;
+  while (it != m_subscribers.end()) {
+    Connection_event_subscriber event_subscriber = *it;
+    if (event_subscriber.m_subscriber->enabled()) {
+      res |= event_subscriber.m_subscriber->notify_event(this, event,
+                                                         error_handler);
+    }
+    ++it;
+  }
+  return res;
 }
 
 /**

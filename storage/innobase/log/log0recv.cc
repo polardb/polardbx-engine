@@ -81,12 +81,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "../meb/mutex.h"
 #endif /* !UNIV_HOTBACKUP */
 
-#include "lizard0cleanout.h"
-#include "lizard0gcs.h"
+#include "lizard0btr0btr.h"
 #include "lizard0btr0cur.h"
 #include "lizard0btr0cur0bamboo.h"
 #include "lizard0btr0cur0clover.h"
 #include "lizard0btr0cur0gpp.h"
+#include "lizard0cleanout.h"
+#include "lizard0gcs.h"
+#include "lizard0page.h"
 
 std::list<space_id_t> recv_encr_ts_list;
 
@@ -1674,8 +1676,9 @@ specified.
 static byte *recv_parse_or_apply_log_rec_body(
     mlog_id_t type, byte *ptr, byte *end_ptr, space_id_t space_id,
     page_no_t page_no, buf_block_t *block, mtr_t *mtr, ulint parsed_bytes,
-    lsn_t start_lsn) {
+    lsn_t start_lsn, bool *is_spc) {
   bool applying_redo = (block != nullptr);
+  *is_spc = false;
 
   switch (type) {
 #ifndef UNIV_HOTBACKUP
@@ -2061,8 +2064,18 @@ static byte *recv_parse_or_apply_log_rec_body(
       if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
         ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
 
-        ptr = lizard::btr_cur_parse_del_mark_set_panda_sec_rec(ptr, end_ptr, page,
-                                                           page_zip, index);
+        ptr = lizard::btr_cur_parse_del_mark_set_panda_sec_rec(
+            ptr, end_ptr, page, page_zip, index);
+      }
+      break;
+
+    case MLOG_REC_SEC_HIPPO_DELETE_MARK:
+      ut_ad(!page || fil_page_type_is_index(page_type));
+
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
+        ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+        ptr = lizard::btr_cur_parse_del_mark_set_hippo_sec_rec(
+            ptr, end_ptr, page, page_zip, index);
       }
       break;
 
@@ -2280,6 +2293,17 @@ static byte *recv_parse_or_apply_log_rec_body(
 
       break;
 
+    case MLOG_COMP_PAGE_ENCODE:
+      ut_ad(!page || fil_page_type_is_spc(page_type));
+
+      if (nullptr != (ptr = mlog_parse_index(ptr, end_ptr, &index, &layout))) {
+        ut_a(!page || page_is_comp(page) == dict_table_is_comp(index->table));
+
+        ptr = lizard::btr_parse_page_encode(ptr, end_ptr, index, block, mtr);
+      }
+
+      break;
+
     case MLOG_PAGE_CREATE:
     case MLOG_COMP_PAGE_CREATE:
 
@@ -2304,13 +2328,26 @@ static byte *recv_parse_or_apply_log_rec_body(
       page_parse_create(block, type == MLOG_COMP_PAGE_CREATE_SDI, FIL_PAGE_SDI);
 
       break;
-
     case MLOG_PAGE_CREATE_PANDA:
     case MLOG_COMP_PAGE_CREATE_PANDA:
 
       page_parse_create(block, type == MLOG_COMP_PAGE_CREATE_PANDA,
                         FIL_PAGE_INDEX_PANDA);
 
+      break;
+    case MLOG_PAGE_CREATE_HIPPO:
+    case MLOG_COMP_PAGE_CREATE_HIPPO:
+
+      page_parse_create(block, type == MLOG_COMP_PAGE_CREATE_HIPPO,
+                        FIL_PAGE_INDEX_HIPPO);
+
+      break;
+    case MLOG_PAGE_CREATE_SPC:
+      page_parse_create(block, true, FIL_PAGE_INDEX_SPC);
+      break;
+
+    case MLOG_SPC_PAGE_CREATE_DICT:
+      ptr = lizard::page_parse_create_dict(ptr, end_ptr, block, mtr);
       break;
 
     case MLOG_UNDO_INSERT:
@@ -2520,6 +2557,7 @@ static byte *recv_parse_or_apply_log_rec_body(
   }
 
   if (index != nullptr) {
+    *is_spc = index->is_spc();
     dict_table_t *table = index->table;
 
     dict_mem_index_free(index);
@@ -2807,6 +2845,7 @@ void recv_recover_page_func(
 #endif /* !UNIV_HOTBACKUP */
   lsn_t start_lsn = 0;
   bool modification_to_page = false;
+  bool is_spc = false;
 
   for (auto recv : recv_addr->rec_list) {
 #ifndef UNIV_HOTBACKUP
@@ -2883,9 +2922,9 @@ void recv_recover_page_func(
       if (buf != nullptr) {
         buf_end = buf + recv->len;
       }
-      recv_parse_or_apply_log_rec_body(recv->type, buf, buf_end,
-                                       recv_addr->space, recv_addr->page_no,
-                                       block, &mtr, ULINT_UNDEFINED, LSN_MAX);
+      recv_parse_or_apply_log_rec_body(
+          recv->type, buf, buf_end, recv_addr->space, recv_addr->page_no, block,
+          &mtr, ULINT_UNDEFINED, LSN_MAX, &is_spc);
 
       end_lsn = recv->start_lsn + recv->len;
 
@@ -2960,8 +2999,10 @@ void recv_recover_page_func(
 @return length of the record, or 0 if the record was not complete */
 static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
                                 space_id_t *space_id, page_no_t *page_no,
-                                byte **body) {
+                                byte **body, bool *is_spc) {
   byte *new_ptr;
+  scn_meta_t scn_meta;
+  gcn_meta_t gcn_meta;
 
   *body = nullptr;
 
@@ -3026,13 +3067,23 @@ static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
     case MLOG_GCN_METADATA:
     case MLOG_GCN_METADATA | MLOG_SINGLE_REC_FLAG:
 
-      gcn_t gcn = GCN_NULL;
-
-      new_ptr =
-          lizard::mlog_parse_initial_gcn_log_record(ptr, end_ptr, type, &gcn);
+      new_ptr = lizard::GCN::GcnPersister::mlog_parse_initial_gcn_log_record(
+          ptr, end_ptr, type, &gcn_meta);
 
       if (new_ptr != nullptr) {
-        recv_sys->cn_recover->recover_gcn(gcn);
+        recv_sys->cn_recover->recover_gcn(gcn_meta);
+      }
+
+      return new_ptr == nullptr ? 0 : new_ptr - ptr;
+
+    case MLOG_SCN_METADATA:
+    case MLOG_SCN_METADATA | MLOG_SINGLE_REC_FLAG:
+
+      new_ptr = lizard::SCN::ScnPersister::mlog_parse_initial_scn_log_record(
+          ptr, end_ptr, type, &scn_meta);
+
+      if (new_ptr != nullptr) {
+        recv_sys->cn_recover->recover_scn(scn_meta);
       }
 
       return new_ptr == nullptr ? 0 : new_ptr - ptr;
@@ -3049,7 +3100,7 @@ static ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
 
   new_ptr = recv_parse_or_apply_log_rec_body(
       *type, new_ptr, end_ptr, *space_id, *page_no, nullptr, nullptr,
-      new_ptr - ptr, recv_sys->recovered_lsn);
+      new_ptr - ptr, recv_sys->recovered_lsn, is_spc);
 
   if (new_ptr == nullptr) {
     return 0;
@@ -3129,9 +3180,10 @@ static bool recv_single_rec(byte *ptr, byte *end_ptr) {
   mlog_id_t type;
   page_no_t page_no;
   space_id_t space_id;
+  bool is_spc = false;
 
-  ulint len =
-      recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, &body);
+  ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                 &body, &is_spc);
 
   if (recv_sys->found_corrupt_log) {
     recv_report_corrupt_log(ptr, type, space_id, page_no);
@@ -3166,6 +3218,10 @@ static bool recv_single_rec(byte *ptr, byte *end_ptr) {
   recv_track_changes_of_recovered_lsn();
 
   if (recv_update_bytes_to_ignore_before_checkpoint(len)) {
+    return false;
+  }
+
+  if (lizard::srv_mark_corrupt_spc_by_space_id == space_id && is_spc) {
     return false;
   }
 
@@ -3209,6 +3265,7 @@ static bool recv_single_rec(byte *ptr, byte *end_ptr) {
     case MLOG_FILE_EXTEND:
     case MLOG_TABLE_DYNAMIC_META:
     case MLOG_GCN_METADATA:
+    case MLOG_SCN_METADATA:
 
       /* These were already handled by
       recv_parse_log_rec() and
@@ -3240,9 +3297,10 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     byte *body;
     page_no_t page_no = 0;
     space_id_t space_id = 0;
+    bool is_spc = false;
 
-    ulint len =
-        recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, &body);
+    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                   &body, &is_spc);
 
     if (recv_sys->found_corrupt_log) {
       recv_report_corrupt_log(ptr, type, space_id, page_no);
@@ -3263,7 +3321,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
       return true;
     }
 
-    recv_sys->save_rec(n_recs, space_id, page_no, type, body, len);
+    recv_sys->save_rec(n_recs, space_id, page_no, type, body, len, is_spc);
 
     recv_previous_parsed_rec_type = type;
 
@@ -3310,6 +3368,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     /* This will apply MLOG_FILE_ records. */
     space_id_t space_id = 0;
     page_no_t page_no = 0;
+    bool is_spc = false;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
 
@@ -3317,8 +3376,10 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     size_t len = 0;
 
     /* Avoid parsing if we have the record saved already. */
-    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len)) {
-      len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, &body);
+    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len,
+                                 is_spc)) {
+      len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, &body,
+                               &is_spc);
     }
 
     if (recv_sys->found_corrupt_log &&
@@ -3336,7 +3397,9 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
 
     recv_sys->recovered_lsn = recv_calc_lsn_on_data_add(old_lsn, len);
 
-    const bool apply = !recv_update_bytes_to_ignore_before_checkpoint(len);
+    const bool apply =
+        !recv_update_bytes_to_ignore_before_checkpoint(len) &&
+        (lizard::srv_mark_corrupt_spc_by_space_id != space_id || !is_spc);
 
     switch (type) {
       case MLOG_MULTI_REC_END:
@@ -3358,6 +3421,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
       case MLOG_FILE_EXTEND:
       case MLOG_TABLE_DYNAMIC_META:
       case MLOG_GCN_METADATA:
+      case MLOG_SCN_METADATA:
         /* case MLOG_TRUNCATE: Disabled for WL6378 */
         /* These were already handled by
         recv_parse_or_apply_log_rec_body(). */
@@ -4257,7 +4321,7 @@ MetadataRecover *recv_recovery_from_checkpoint_finish(bool aborting) {
     metadata = nullptr;
   }
 
-  recv_sys->cn_recover->apply_gcn();
+  recv_sys->cn_recover->apply_cmmt();
 
   recv_sys_free();
 
@@ -4408,6 +4472,9 @@ const char *get_mlog_string(mlog_id_t type) {
     case MLOG_COMP_PAGE_REORGANIZE_8027:
       return "MLOG_COMP_PAGE_REORGANIZE_8027";
 
+    case MLOG_COMP_PAGE_ENCODE:
+      return "MLOG_COMP_PAGE_ENCODE";
+
     case MLOG_FILE_CREATE:
       return "MLOG_FILE_CREATE";
 
@@ -4509,8 +4576,24 @@ const char *get_mlog_string(mlog_id_t type) {
     case MLOG_COMP_PAGE_CREATE_PANDA:
       return "MLOG_COMP_PAGE_CREATE_PANDA";
 
+    case MLOG_SCN_METADATA:
+      return ("MLOG_SCN_METADATA");
+
+    case MLOG_PAGE_CREATE_HIPPO:
+      return "MLOG_PAGE_CREATE_HIPPO";
+
+    case MLOG_COMP_PAGE_CREATE_HIPPO:
+      return "MLOG_COMP_PAGE_CREATE_HIPPO";
+    case MLOG_REC_SEC_HIPPO_DELETE_MARK:
+      return "MLOG_REC_SEC_HIPPO_DELETE_MARK";
     case MLOG_TEST:
       return "MLOG_TEST";
+
+    case MLOG_PAGE_CREATE_SPC:
+      return "MLOG_PAGE_CREATE_SPC";
+
+    case MLOG_SPC_PAGE_CREATE_DICT:
+      return "MLOG_SPC_PAGE_CREATE_DICT";
   }
 
   assert(0);

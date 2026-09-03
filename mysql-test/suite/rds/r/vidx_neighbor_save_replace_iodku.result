@@ -1,0 +1,43 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE PROCEDURE p_replace(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 600 DO
+REPLACE INTO t1(id, v) VALUES ((j % 40) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, "]")));
+SET j = j + 1;
+END WHILE;
+END$$
+CREATE PROCEDURE p_iodku(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 600 DO
+INSERT INTO t1(id, v) VALUES ((j % 40) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, "]"))) ON DUPLICATE KEY UPDATE v = VEC_FROMTEXT(CONCAT("[", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, "]"));
+SET j = j + 1;
+END WHILE;
+END$$
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_replace(11);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_iodku(23);
+== save_neighbors_only REPLACE/IODKU deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+insert_count_gt_0=1
+delete_count_gt_0=1
+row_count_le_40=1
+DROP PROCEDURE p_replace;
+DROP PROCEDURE p_iodku;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

@@ -1,0 +1,278 @@
+################################################################################
+# HIPPO Index Change Buffer Test - additional scenarios
+#
+# Complements feature_hippo_change_buffer.test with paths it does not cover:
+#
+#  Test 1: DELETE-mark buffering followed by re-INSERT of the same key
+#          (delete-unmark / revive) buffering. On merge this drives
+#          btr_cur_set_deleted_flag_for_ibuf() which must re-stamp the hippo
+#          tid; verify the record is alive and consistent afterwards.
+#  Test 2: MVCC visibility across a change-buffer merge. An old REPEATABLE READ
+#          snapshot must NOT see rows whose inserts were buffered and committed
+#          after the snapshot, even though reading forces the merge that writes
+#          their tid.
+#  Test 3: Buffered INSERT + DELETE + PURGE across MULTIPLE hippo indexes.
+#  Test 4: Buffer operations, CRASH before merge, recover, then merge on read
+#          (bridges change-buffer and crash recovery).
+################################################################################
+
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+--source include/count_sessions.inc
+
+SET opt_index_format_hippo_enabled=on;
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--echo ########################################################################
+--echo # Test 1: DELETE-mark buffering then re-INSERT (delete-unmark) buffering
+--echo ########################################################################
+
+CREATE TABLE t_cb1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--let $TABLE_NAME = t_cb1
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_cb1 VALUES(0, 'a', 1);
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+
+--echo # 1024 rows
+SELECT COUNT(*) FROM t_cb1;
+
+--echo # Delete-mark buffering: remove even ids.
+DELETE FROM t_cb1 WHERE id % 2 = 0;
+
+--echo # Revive: re-insert the same key values (change 'a' -> 'b' rows kept).
+--echo # These inserts land on pages with delete-marked entries and are merged
+--echo # via the delete-unmark path.
+INSERT INTO t_cb1 SELECT 0, 'b', padding FROM t_cb1 WHERE id % 2 = 1 LIMIT 300;
+
+--echo # Force merge on both index values.
+SELECT COUNT(*) FROM t_cb1 USE INDEX(idx_val) WHERE val = 'a';
+SELECT COUNT(*) FROM t_cb1 USE INDEX(idx_val) WHERE val = 'b';
+
+--let $sec_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb1 USE INDEX(idx_val), cnt, 1)
+--let $pri_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb1 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index total ($sec_total) should match primary index total ($pri_total)
+--let $assert_cond = $sec_total = $pri_total
+--source include/assert.inc
+
+--echo # All surviving original rows have odd id.
+SELECT COUNT(*) FROM t_cb1 WHERE val='a' AND id % 2 = 0;
+
+DROP TABLE t_cb1;
+
+--echo ########################################################################
+--echo # Test 2: MVCC visibility across a change-buffer merge
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_cb2 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--let $TABLE_NAME = t_cb2
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_cb2 VALUES(0, 'a', 1);
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+
+--echo # 512 rows of val='a'
+SELECT COUNT(*) FROM t_cb2;
+
+--connect(cb2_read, localhost, root,,)
+--connection cb2_read
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+--echo # Establish snapshot (merges + reads base rows).
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='a';
+
+--connection default
+--echo # Insert new rows with val='k' (buffered) and commit AFTER the snapshot.
+INSERT INTO t_cb2 SELECT 0, 'k', padding FROM t_cb2 WHERE val='a' LIMIT 200;
+
+--connection cb2_read
+--echo # Old snapshot forces the merge but must NOT see the new val='k' rows.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='k';
+--echo # And the base rows are unchanged in the snapshot.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='a';
+COMMIT;
+
+--echo # A fresh snapshot sees the new rows.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='k';
+
+--connection default
+--disconnect cb2_read
+--connection default
+
+--let $sec_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb2 USE INDEX(idx_val), cnt, 1)
+--let $pri_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb2 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index total ($sec_total) should match primary index total ($pri_total)
+--let $assert_cond = $sec_total = $pri_total
+--source include/assert.inc
+
+DROP TABLE t_cb2;
+
+--echo ########################################################################
+--echo # Test 3: Buffered INSERT + DELETE + PURGE across MULTIPLE hippo indexes
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+
+CREATE TABLE t_cb3 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  a CHAR(1),
+  b INT,
+  INDEX idx_a(a),
+  INDEX idx_b(b)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--let $TABLE_NAME = t_cb3
+--let $INDEX_NAME = idx_a
+--source suite/panda/include/verify_hippo_index_page_type.inc
+--let $TABLE_NAME = t_cb3
+--let $INDEX_NAME = idx_b
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_cb3 VALUES(0, 'a', 1);
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+
+SELECT COUNT(*) FROM t_cb3;
+
+--echo # Buffered delete of half the rows.
+BEGIN;
+DELETE FROM t_cb3 WHERE id % 2 = 0;
+COMMIT;
+
+--echo # Buffered inserts touching both secondary indexes.
+INSERT INTO t_cb3 SELECT 0, 'c', 2 FROM t_cb3 WHERE id % 2 = 1 LIMIT 100;
+
+--echo # Purge (buffered) then merge on read.
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+SELECT a, COUNT(*) FROM t_cb3 USE INDEX(idx_a) GROUP BY a ORDER BY a;
+
+--let $sec_a = query_get_value(SELECT COUNT(*) as cnt FROM t_cb3 USE INDEX(idx_a), cnt, 1)
+--let $sec_b = query_get_value(SELECT COUNT(*) as cnt FROM t_cb3 USE INDEX(idx_b), cnt, 1)
+--let $pri = query_get_value(SELECT COUNT(*) as cnt FROM t_cb3 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = idx_a ($sec_a), idx_b ($sec_b) and PK ($pri) counts must all match
+--let $assert_cond = $sec_a = $pri AND $sec_b = $pri
+--source include/assert.inc
+
+DROP TABLE t_cb3;
+
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+
+--echo ########################################################################
+--echo # Test 4: Buffer operations, CRASH before merge, recover, then merge
+--echo ########################################################################
+
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_cb4 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--let $TABLE_NAME = t_cb4
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_cb4 VALUES(0, 'a', 1);
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+
+--echo # 1024 rows
+SELECT COUNT(*) FROM t_cb4;
+
+--echo # Buffer a delete and an insert, commit (durable via redo), do NOT merge.
+BEGIN;
+DELETE FROM t_cb4 WHERE id % 2 = 0;
+INSERT INTO t_cb4 SELECT 0, 'b', padding FROM t_cb4 WHERE id % 2 = 1 LIMIT 100;
+COMMIT;
+
+--echo # Crash and restart: buffered entries must be recovered from redo.
+--source include/kill_and_restart_mysqld.inc
+
+--echo # After recovery, reading forces the merge of recovered ibuf entries.
+SELECT COUNT(*) FROM t_cb4 USE INDEX(idx_val) WHERE val='a';
+SELECT COUNT(*) FROM t_cb4 USE INDEX(idx_val) WHERE val='b';
+
+--let $sec_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb4 USE INDEX(idx_val), cnt, 1)
+--let $pri_total = query_get_value(SELECT COUNT(*) as cnt FROM t_cb4 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = After recovery, secondary total ($sec_total) should match primary total ($pri_total)
+--let $assert_cond = $sec_total = $pri_total
+--source include/assert.inc
+
+--echo # No even id survived the delete.
+SELECT COUNT(*) FROM t_cb4 WHERE val='a' AND id % 2 = 0;
+
+DROP TABLE t_cb4;
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+SET GLOBAL innodb_change_buffering_debug = 0;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################

@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/18/1995 Heikki Tuuri
  *******************************************************/
 
+#ifndef fsp0fsp_h
+#define INNODB_FSP0FSP_IC_STANDALONE
+#include "fsp0fsp.h"
+#undef INNODB_FSP0FSP_IC_STANDALONE
+#endif /* !fsp0fsp_h */
 /** Checks if a page address is an extent descriptor page address.
 @param[in]      page_id         page id
 @param[in]      page_size       page size

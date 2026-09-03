@@ -45,6 +45,8 @@ ulonglong get_item_hash_value(Item *m_item) {
     char buff[1024];
     String str(buff, sizeof(buff), system_charset_info);
     String *res = m_item->val_str(&str);
+    /* Item may be evaluated as NULL */
+    if (res == nullptr) return 0;
     return murmur3_32(reinterpret_cast<const uchar *>(res->ptr()),
                       res->length(), 0);
   }

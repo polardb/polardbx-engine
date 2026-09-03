@@ -1,0 +1,3 @@
+--innodb_buffer_pool_chunk_size=1M
+--innodb_buffer_pool_size=5MB
+--innodb_data_file_purge=1

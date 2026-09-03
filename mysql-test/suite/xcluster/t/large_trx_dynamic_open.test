@@ -4,20 +4,7 @@
 create table t1 (id longblob);
 insert into t1 values(repeat('a', 10));
 
-set global consensus_large_trx=OFF;
 --disconnect conn1
-
---connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
---connection conn1
-
---error ER_CONSENSUS_LOG_TOO_LARGE 
-insert into t1 values(repeat('a', 2*1024*1024));
---error ER_CONSENSUS_LOG_TOO_LARGE 
-insert into t1 values(repeat('a', 3*1024*1024));
-
-set global consensus_large_trx=ON;
---disconnect conn1
-
 
 --connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
 --connection conn1

@@ -1,0 +1,200 @@
+##############################################################
+# DDL vector index build progress observability (A1).        #
+#                                                             #
+# The direct build runs under the PROGRESS-flagged stage      #
+# "vector index build" (set in finish_ddl_direct_build()      #
+# before the build) and accounts rows into the PSI            #
+# stage progress:                                             #
+#   work_estimated = copied rows x vector index slots         #
+#   work_completed += 1 serial row / +batch rows per          #
+#                     parallel batch.                         #
+#                                                             #
+# No debug binary required: assertions aggregate the archived #
+# stage events in events_stages_history_long after each       #
+# ALTER, so they are independent of where batches/windows     #
+# split.                                                      #
+#                                                             #
+# Phase 1  direct path, 100 rows, 1 slot: 100/100.            #
+# Phase 2  two vector indexes in one ALTER: the estimate      #
+#          carries the slot multiplier, and both slots'       #
+#          builds accrue: 50 rows x 2 slots -> 100/100.       #
+# Phase 3  vidx_hnsw_cache_size at its 1M floor + 1024-dim    #
+#          vectors: the direct build exhausts the cache       #
+#          memory budget mid-scan and continues in windows -  #
+#          every copied row graph-live when the ALTER returns #
+#          (600/600 in one stage event:                        #
+#          event: the direct build never commits mid-ALTER,   #
+#          so the stage is never flipped away), plus a        #
+#          one-shot soft-threshold warning.                   #
+# Phase 4  three NULL vectors: valid no-entry rows are still  #
+#          inspected work, so progress reaches 3/3.           #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_build_progress;
+USE vidx_ddl_build_progress;
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+
+# Enable the stage instrumentation (save current setup for exact restore).
+let $save_inst_en = query_get_value(SELECT ENABLED FROM performance_schema.setup_instruments WHERE NAME='stage/sql/vector index build', ENABLED, 1);
+let $save_inst_tm = query_get_value(SELECT TIMED FROM performance_schema.setup_instruments WHERE NAME='stage/sql/vector index build', TIMED, 1);
+let $save_cons_cur = query_get_value(SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME='events_stages_current', ENABLED, 1);
+let $save_cons_his = query_get_value(SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME='events_stages_history_long', ENABLED, 1);
+UPDATE performance_schema.setup_instruments SET ENABLED='YES', TIMED='YES'
+  WHERE NAME='stage/sql/vector index build';
+UPDATE performance_schema.setup_consumers SET ENABLED='YES'
+  WHERE NAME IN ('events_stages_current','events_stages_history_long');
+
+let $tid = `SELECT THREAD_ID FROM performance_schema.threads WHERE PROCESSLIST_ID = CONNECTION_ID()`;
+
+--echo
+--echo ############################################
+--echo # Phase 1: direct path, one slot          #
+--echo ############################################
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 100) {
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+# One archived build-stage event: all 100 copied rows accounted, estimate
+# published as copied(100) x 1 slot.
+--disable_query_log
+eval SELECT MAX(WORK_COMPLETED) AS completed, MAX(WORK_ESTIMATED) AS estimated
+  FROM performance_schema.events_stages_history_long
+  WHERE THREAD_ID = $tid AND EVENT_NAME = 'stage/sql/vector index build';
+--enable_query_log
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[42,43,44,45,46]')) LIMIT 1;
+DROP TABLE t1;
+
+--echo
+--echo ############################################
+--echo # Phase 2: slot multiplier (two indexes)  #
+--echo ############################################
+CREATE TABLE t2 (
+  id INT NOT NULL PRIMARY KEY,
+  a VECTOR(5),
+  b VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval INSERT INTO t2(id, a, b) VALUES ($i,
+    VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')),
+    VEC_FROMTEXT(CONCAT('[', $i+7, ',', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+--enable_query_log
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+
+ALTER TABLE t2 ADD VECTOR INDEX via(a), ADD VECTOR INDEX vib(b);
+
+# copied(50) x 2 slots = 100 estimated; both slots' builds accounted.
+--disable_query_log
+eval SELECT MAX(WORK_COMPLETED) AS completed, MAX(WORK_ESTIMATED) AS estimated
+  FROM performance_schema.events_stages_history_long
+  WHERE THREAD_ID = $tid AND EVENT_NAME = 'stage/sql/vector index build';
+--enable_query_log
+
+# Both slots' graphs are independently searchable: self-probe each index
+# with row 25's exact vector (a=[25..29], b=[32,25,25,25,25]; rows are
+# pairwise distinct on both columns, so top-1 is the row itself).
+SELECT id FROM t2 FORCE INDEX(via) ORDER BY VEC_DISTANCE(a, VEC_FROMTEXT('[25,26,27,28,29]')) LIMIT 1;
+SELECT id FROM t2 FORCE INDEX(vib) ORDER BY VEC_DISTANCE(b, VEC_FROMTEXT('[32,25,25,25,25]')) LIMIT 1;
+DROP TABLE t2;
+
+--echo
+--echo ############################################
+--echo # Phase 3: memory-budget windowed build  #
+--echo ############################################
+let $save_cache = query_get_value(SHOW GLOBAL VARIABLES LIKE 'vidx_hnsw_cache_size', Value, 1);
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+
+CREATE TABLE t3 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(1024)
+) ENGINE = InnoDB;
+# 600 x 1024-dim rows (~2.3KB node footprint each) overrun the 1MB build
+# memory budget mid-scan by construction; the first component keeps each vector
+# self-distinguishable.
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 1000;
+INSERT INTO t3(id, v)
+  WITH RECURSIVE seq(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n < 600)
+  SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',7', 1023), ']')) FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+
+# The one-shot soft-window warning is recorded on the ALTER above (mysqltest
+# echoes statement warnings into the result automatically).
+# All 600 copied rows are accounted in ONE stage event (600/600): the
+# direct build never commits mid-ALTER, so the PROGRESS stage survives
+# every window handover.
+--disable_query_log
+eval SELECT
+    MAX(IF(WORK_ESTIMATED = 600, WORK_COMPLETED, NULL)) AS windowed_completed
+  FROM performance_schema.events_stages_history_long
+  WHERE THREAD_ID = $tid AND EVENT_NAME = 'stage/sql/vector index build';
+--enable_query_log
+SELECT id FROM t3 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', 300, REPEAT(',7', 1023), ']'))) LIMIT 1;
+# Graph-table truth from disk: every copied row is live when ALTER returns.
+SET GLOBAL show_vidx_hlindex_tables = ON;
+let $tbl3 = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t3', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tbl3, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 600`) {
+  --die Phase 3: live nodes != 600 (windowed continuation lost rows)
+}
+--echo VERDICT 3 live==600 across windows: PASS
+SET GLOBAL show_vidx_hlindex_tables = default;
+DROP TABLE t3;
+--disable_query_log
+eval SET GLOBAL vidx_hnsw_cache_size = $save_cache;
+--enable_query_log
+
+--echo
+--echo ############################################
+--echo # Phase 4: NULL rows still complete work  #
+--echo ############################################
+CREATE TABLE t4 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t4 VALUES (1, NULL), (2, NULL), (3, NULL);
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+ALTER TABLE t4 ADD VECTOR INDEX vi(v);
+--disable_query_log
+eval SELECT MAX(WORK_COMPLETED) AS completed, MAX(WORK_ESTIMATED) AS estimated
+  FROM performance_schema.events_stages_history_long
+  WHERE THREAD_ID = $tid AND EVENT_NAME = 'stage/sql/vector index build';
+--enable_query_log
+DROP TABLE t4;
+
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+--disable_query_log
+eval UPDATE performance_schema.setup_instruments SET ENABLED='$save_inst_en', TIMED='$save_inst_tm'
+  WHERE NAME='stage/sql/vector index build';
+eval UPDATE performance_schema.setup_consumers SET ENABLED='$save_cons_cur'
+  WHERE NAME='events_stages_current';
+eval UPDATE performance_schema.setup_consumers SET ENABLED='$save_cons_his'
+  WHERE NAME='events_stages_history_long';
+--enable_query_log
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_build_progress;

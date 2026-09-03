@@ -31,6 +31,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 11/28/1995 Heikki Tuuri
  ***********************************************************************/
 
+#ifndef mach0data_h
+#define INNODB_MACH0DATA_IC_STANDALONE
+#include "mach0data.h"
+#undef INNODB_MACH0DATA_IC_STANDALONE
+#endif /* !mach0data_h */
 #include "mtr0types.h"
 #include "ut0byte.h"
 

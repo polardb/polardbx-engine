@@ -1,0 +1,182 @@
+select @@innodb_page_size;
+@@innodb_page_size
+16384
+select @@opt_index_format_spc_enabled;
+@@opt_index_format_spc_enabled
+1
+#
+# PART 1: Non-unique index on DYNAMIC table -> SPC_PAGE
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+a   INT,
+b   VARCHAR(100),
+KEY idx_a  (a),
+KEY idx_ab (a, b)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_ab	SPC_PAGE
+PRIMARY	INDEX
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_ab should match IS_SPC=1 (got SPC_PAGE)]
+DROP TABLE t1;
+#
+# PART 2: Unique index -> NOT SPC; Non-unique sibling -> SPC
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+a   INT,
+UNIQUE KEY uk_a  (a),
+KEY        idx_a (a)
+) ENGINE=InnoDB;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+PRIMARY	INDEX
+uk_a	PANDA_INDEX
+# uk_a is unique -> NOT SPC
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.uk_a should match IS_SPC=0 (got PANDA_INDEX)]
+# idx_a is non-unique -> SPC
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+DROP TABLE t1;
+#
+# PART 3: ROW_FORMAT=COMPRESSED -> NOT SPC
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  INT,
+KEY idx_a (a)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	INDEX
+PRIMARY	INDEX
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=0 (got INDEX)]
+DROP TABLE t1;
+#
+# PART 4: Virtual column index -> NOT SPC; Normal sibling -> SPC
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+a   INT,
+v   INT GENERATED ALWAYS AS (a + 1) VIRTUAL,
+KEY idx_v (v),
+KEY idx_a (a)
+) ENGINE=InnoDB;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_v	INDEX
+PRIMARY	INDEX
+# idx_v has virtual column -> NOT SPC
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_v should match IS_SPC=0 (got INDEX)]
+# idx_a is normal -> SPC
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+DROP TABLE t1;
+#
+# PART 5: opt_index_format_spc_enabled=OFF -> NOT SPC
+#
+SET opt_index_format_spc_enabled = OFF;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  INT,
+KEY idx_a (a)
+) ENGINE=InnoDB;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	HIPPO_INDEX
+PRIMARY	INDEX
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=0 (got HIPPO_INDEX)]
+DROP TABLE t1;
+SET opt_index_format_spc_enabled = ON;
+#
+# PART 6: ADD INDEX after table creation -> SPC; survives restart
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  VARCHAR(200),
+b  VARCHAR(200)
+) ENGINE=InnoDB;
+ALTER TABLE t1 ADD INDEX idx_a  (a);
+ALTER TABLE t1 ADD INDEX idx_ab (a, b);
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_ab	SPC_PAGE
+PRIMARY	INDEX
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_ab should match IS_SPC=1 (got SPC_PAGE)]
+# Restart: DD page type must survive
+# restart
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_ab	SPC_PAGE
+PRIMARY	INDEX
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_ab should match IS_SPC=1 (got SPC_PAGE)]
+DROP TABLE t1;
+#
+# PART 7: SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}' overrides OFF variable
+#
+SET opt_index_format_spc_enabled = OFF;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a  VARCHAR(200)
+) ENGINE=InnoDB;
+ALTER TABLE t1 ADD INDEX idx_a (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+PRIMARY	INDEX
+# Explicit spc attribute overrides the session variable
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_a should match IS_SPC=1 (got SPC_PAGE)]
+DROP TABLE t1;
+SET opt_index_format_spc_enabled = ON;

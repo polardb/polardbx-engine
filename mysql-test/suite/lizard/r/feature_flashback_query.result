@@ -314,32 +314,32 @@ c1	c2
 set @past_timestamps = (select now());
 alter table t2 add c3 int default 100;
 select * from t2 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t3 add c3 int default 100, ALGORITHM = copy;
 select * from t3 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 drop table t4;
 create table t4 as select * from t1;
 select * from t3 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t5 add c3 int after c1;
 select * from t3 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t6 add index sec(c2);
 select * from t6 as of timestamp @past_timestamps force index(primary);
 c1	c2
 1	100
 2	200
 select * from t6 as of timestamp @past_timestamps force index(sec);
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 select c2 from t6 as of timestamp @past_timestamps force index(sec);
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t7 row_format = compressed;
 select * from t7 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t8 change c2 c2_a bigint not null;
 select * from t8 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 alter table t9 rename column c2 to c3;
 select * from t9 as of timestamp @past_timestamps;
 c1	c3
@@ -347,7 +347,7 @@ c1	c3
 2	200
 alter table t10 drop primary key, add primary key(c2);
 select * from t10 as of timestamp @past_timestamps;
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 commit;
 drop table foo;
 drop table foo_history;

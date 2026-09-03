@@ -1,0 +1,74 @@
+#
+# Test case for encdb KMS mode support
+# Created 2026-06-11 by kaiwu.zfy
+#
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+# 1. Verify initial state: not in KMS mode
+SELECT from_base64(encdb_process_message('{"request_type":0, "version":"1.2.15"}')) NOT LIKE '%kms_mode%' AS no_kms_mode;
+no_kms_mode
+1
+# 2. Register KMS MEK (version=0)
+SELECT encdb_process_message('{"request_type":50, "kms_enc_mek":"dGVzdF9jaXBoZXJ0ZXh0X2Jsb2Jfdg==", "plaintext":"MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=", "kms_region":"cn-hangzhou", "kms_key_id":"key-test-001", "version":0}') IS NOT NULL AS register_ok;
+register_ok
+1
+# 3. Verify persistence
+SELECT version, region, key_id FROM mysql.encdb_kms_meta ORDER BY version;
+version	region	key_id
+1	cn-hangzhou	key-test-001
+# 4. Verify SERVER_INFO returns KMS fields
+SELECT from_base64(encdb_process_message('{"request_type":0, "version":"1.2.15"}')) LIKE '%kms_mode%' AS has_kms_mode;
+has_kms_mode
+1
+SELECT from_base64(encdb_process_message('{"request_type":0, "version":"1.2.15"}')) LIKE '%cn-hangzhou%' AS has_region;
+has_region
+1
+# 5. Key rotation (version=1)
+SELECT encdb_process_message('{"request_type":50, "kms_enc_mek":"cm90YXRlZF9jaXBoZXJ0ZXh0X2Jsb2I=", "plaintext":"ZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWU=", "kms_region":"cn-hangzhou", "kms_key_id":"key-test-001", "version":1}') IS NOT NULL AS rotate_ok;
+rotate_ok
+1
+# 6. Both versions preserved
+SELECT version, region, key_id FROM mysql.encdb_kms_meta ORDER BY version;
+version	region	key_id
+1	cn-hangzhou	key-test-001
+2	cn-hangzhou	key-test-001
+# 7. Latest enc_mek in SERVER_INFO
+SELECT from_base64(encdb_process_message('{"request_type":0, "version":"1.2.15"}')) LIKE '%cm90YXRlZF9jaXBoZXJ0ZXh0X2Jsb2I%' AS has_rotated_enc_mek;
+has_rotated_enc_mek
+1
+# 8. Exit KMS mode (request_type=51)
+SELECT encdb_process_message('{"request_type":51}') IS NOT NULL AS clean_ok;
+clean_ok
+1
+# 9. Verify exit
+SELECT COUNT(*) AS rows_remaining FROM mysql.encdb_kms_meta;
+rows_remaining
+0
+SELECT from_base64(encdb_process_message('{"request_type":0, "version":"1.2.15"}')) NOT LIKE '%kms_mode%' AS no_kms_mode_after_clean;
+no_kms_mode_after_clean
+1
+#
+# Field validation: each required field missing or empty should fail
+#
+# 10. Missing kms_enc_mek
+SELECT from_base64(encdb_process_message('{"request_type":50, "plaintext":"MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=", "kms_region":"cn-hangzhou", "kms_key_id":"key-test-001", "version":0}')) LIKE '%does not have kms_enc_mek%' AS missing_kms_enc_mek;
+missing_kms_enc_mek
+1
+# 11. Missing plaintext
+SELECT from_base64(encdb_process_message('{"request_type":50, "kms_enc_mek":"dGVzdF9jaXBoZXJ0ZXh0X2Jsb2Jfdg==", "kms_region":"cn-hangzhou", "kms_key_id":"key-test-001", "version":0}')) LIKE '%does not have plaintext%' AS missing_plaintext;
+missing_plaintext
+1
+# 12. Missing kms_region
+SELECT from_base64(encdb_process_message('{"request_type":50, "kms_enc_mek":"dGVzdF9jaXBoZXJ0ZXh0X2Jsb2Jfdg==", "plaintext":"MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=", "kms_key_id":"key-test-001", "version":0}')) LIKE '%does not have kms_region%' AS missing_kms_region;
+missing_kms_region
+1
+# 13. Missing kms_key_id
+SELECT from_base64(encdb_process_message('{"request_type":50, "kms_enc_mek":"dGVzdF9jaXBoZXJ0ZXh0X2Jsb2Jfdg==", "plaintext":"MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=", "kms_region":"cn-hangzhou", "version":0}')) LIKE '%does not have kms_key_id%' AS missing_kms_key_id;
+missing_kms_key_id
+1
+# 14. All required fields present but empty
+SELECT from_base64(encdb_process_message('{"request_type":50, "kms_enc_mek":"", "plaintext":"", "kms_region":"", "kms_key_id":"", "version":0}')) LIKE '%missing required fields%' AS empty_fields_rejected;
+empty_fields_rejected
+1
+# Clean up
+DELETE FROM mysql.encdb_kms_meta;

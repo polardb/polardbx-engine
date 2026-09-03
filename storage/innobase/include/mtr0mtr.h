@@ -511,6 +511,10 @@ struct mtr_t {
     return (m_impl.m_state == MTR_STATE_ACTIVE);
   }
 
+  [[nodiscard]] bool is_marked_nolog() const {
+    return (m_impl.m_marked_nolog);
+  }
+
   /** Get flush observer
   @return flush observer */
   [[nodiscard]] Flush_observer *get_flush_observer() const {
@@ -638,6 +642,13 @@ struct mtr_t {
       it->check_is_not_latching();
     }
   }
+  /** This method is useful to detect if the thread is already inside an mtr.
+  We should not do the log_free_check() in the child mtrs if a thread is
+  already inside an mtr.
+  @return true if thread is not inside an mtr, false otherwise */
+  static bool is_this_thread_inside_mtr() {
+    return !s_my_thread_active_mtrs.empty();
+  }
 #endif
 
   /** Check if this mini-transaction is dirtying a clean page.
@@ -705,6 +716,8 @@ void mtr_commit_mlog_test_filling_block(log_t &log, size_t space_left = 0);
 #endif /* UNIV_DEBUG */
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_MTR0MTR_IC_STANDALONE
 #include "mtr0mtr.ic"
+#endif /* !INNODB_MTR0MTR_IC_STANDALONE */
 
 #endif /* mtr0mtr_h */

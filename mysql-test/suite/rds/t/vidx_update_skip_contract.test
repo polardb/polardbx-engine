@@ -1,0 +1,177 @@
+--source include/have_debug.inc
+
+# DML update contract: hlindexes_on_update must skip the auxiliary
+# table invalidate+insert cycle when the vector and the primary key
+# (TREF) didn't change.  Without this skip, "UPDATE t SET <non-vector
+# column> WHERE k=..." pays a full attachable_rw + graph rebuild that
+# lengthens the base-table PRIMARY / k_<n> X-lock window and amplifies
+# ABBA deadlocks under sysbench OLTP_RW.
+#
+# Coverage matrix (all 5 rows of the contract table):
+#   1. NULL -> NULL              -> no-op   (early continue, baseline)
+#   2. NULL -> non-NULL          -> INSERT only
+#   3. non-NULL -> NULL          -> INVALIDATE only
+#   4. non-NULL -> non-NULL, no-change   -> SKIP  (the optimization)
+#   5. non-NULL -> non-NULL, vec changed -> INVALIDATE + INSERT
+#   6. non-NULL -> non-NULL, pk  changed -> INVALIDATE + INSERT
+
+SET GLOBAL vidx_disabled = OFF;
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  k INT,
+  c VARCHAR(50),
+  v VECTOR(3),
+  VECTOR INDEX vi(v),
+  KEY k_idx(k)
+) ENGINE = InnoDB;
+
+# Row 3 has NULL vector — used by tests 2/4 (NULL→NULL early continue,
+# NULL→non-NULL INSERT-only path).
+INSERT INTO t1(id, k, c, v) VALUES
+  (1, 100, 'one',   VEC_FROMTEXT('[1,1,1]')),
+  (2, 200, 'two',   VEC_FROMTEXT('[2,2,2]')),
+  (3, 300, 'three', NULL);
+
+# Helper: snapshot the four counters that distinguish skip / insert /
+# invalidate / both paths.
+let $b_ins  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $b_del  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_count'`;
+let $b_skip = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $b_cmt  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+
+--echo
+--echo ##############################################
+--echo # 1. UPDATE on non-vector column, vector and  #
+--echo #    PK unchanged — must SKIP vidx entirely.  #
+--echo ##############################################
+
+UPDATE t1 SET c = 'one_v2' WHERE id = 1;
+UPDATE t1 SET c = 'two_v2' WHERE id = 2;
+
+let $a_skip = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $a_cmt  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+let $d_skip = `SELECT $a_skip - $b_skip`;
+let $d_cmt  = `SELECT $a_cmt - $b_cmt`;
+
+# Two UPDATEs on rows with non-NULL vector but unchanged v/pk MUST
+# bump update_skipped by exactly 2, and MUST NOT bump indep_dml_commit
+# at all (no attachable was opened).
+let $ok_skip = `SELECT $d_skip = 2`;
+let $ok_no_attachable = `SELECT $d_cmt = 0`;
+--echo update_skipped_delta_eq_2=$ok_skip
+--echo no_attachable_for_skipped_update=$ok_no_attachable
+
+if (`SELECT $d_skip != 2`) {
+  --die DML update contract violated: Vidx_update_skipped delta must be 2
+}
+if (`SELECT $d_cmt != 0`) {
+  --die DML update contract violated: Vidx_indep_dml_commit must stay 0 on skipped UPDATEs
+}
+
+--echo
+--echo ##############################################
+--echo # 2. UPDATE NULL -> NULL — early continue,    #
+--echo #    must NOT bump update_skipped (it's a     #
+--echo #    different code path).                   #
+--echo ##############################################
+
+let $b_skip2 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+# id=3 has v IS NULL — UPDATE non-vector column keeps v NULL.
+UPDATE t1 SET c = 'three_v2' WHERE id = 3;
+let $a_skip2 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $ok_null_no_skip = `SELECT $a_skip2 = $b_skip2`;
+--echo null_to_null_no_skip_bump=$ok_null_no_skip
+
+--echo
+--echo ##############################################
+--echo # 3. UPDATE non-NULL -> NULL — INVALIDATE    #
+--echo #    only (no INSERT, no skip).              #
+--echo ##############################################
+
+let $b_del3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_count'`;
+let $b_ins3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $b_skip3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+UPDATE t1 SET v = NULL WHERE id = 1;
+let $a_del3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_count'`;
+let $a_ins3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $a_skip3 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $ok_inv = `SELECT ($a_del3 - $b_del3) = 1`;
+let $ok_no_ins = `SELECT ($a_ins3 - $b_ins3) = 0`;
+let $ok_no_skip3 = `SELECT ($a_skip3 - $b_skip3) = 0`;
+--echo invalidate_only_delta=$ok_inv
+--echo no_insert_for_to_null=$ok_no_ins
+--echo no_skip_for_to_null=$ok_no_skip3
+
+--echo
+--echo ##############################################
+--echo # 4. UPDATE NULL -> non-NULL — INSERT only.  #
+--echo ##############################################
+
+let $b_ins4 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $b_skip4 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+UPDATE t1 SET v = VEC_FROMTEXT('[3,3,3]') WHERE id = 3;
+let $a_ins4 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $a_skip4 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $ok_ins4 = `SELECT ($a_ins4 - $b_ins4) = 1`;
+let $ok_no_skip4 = `SELECT ($a_skip4 - $b_skip4) = 0`;
+--echo insert_only_delta=$ok_ins4
+--echo no_skip_for_from_null=$ok_no_skip4
+
+--echo
+--echo ##############################################
+--echo # 5. UPDATE non-NULL, vector changed —        #
+--echo #    INVALIDATE + INSERT (no skip).          #
+--echo ##############################################
+
+let $b_skip5 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $b_cmt5  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+UPDATE t1 SET v = VEC_FROMTEXT('[22,22,22]') WHERE id = 2;
+let $a_skip5 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $a_cmt5  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+let $ok_no_skip5 = `SELECT ($a_skip5 - $b_skip5) = 0`;
+let $ok_two_attachables = `SELECT ($a_cmt5 - $b_cmt5) = 2`;
+--echo no_skip_for_v_changed=$ok_no_skip5
+--echo two_attachables_for_v_changed=$ok_two_attachables
+
+if (`SELECT ($a_skip5 - $b_skip5) != 0`) {
+  --die Contract violated: vector-changed UPDATE must NOT bump update_skipped
+}
+
+--echo
+--echo ##############################################
+--echo # 6. UPDATE non-NULL, PK changed (vector     #
+--echo #    unchanged) — INVALIDATE + INSERT (the   #
+--echo #    sixth contract row).  Skip would break  #
+--echo #    aux-table TREF identity.                #
+--echo ##############################################
+
+let $b_skip6 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $b_cmt6  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+UPDATE t1 SET id = 99 WHERE id = 2;
+let $a_skip6 = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_skipped'`;
+let $a_cmt6  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit'`;
+let $ok_no_skip6 = `SELECT ($a_skip6 - $b_skip6) = 0`;
+let $ok_two_attachables6 = `SELECT ($a_cmt6 - $b_cmt6) = 2`;
+--echo no_skip_for_pk_changed=$ok_no_skip6
+--echo two_attachables_for_pk_changed=$ok_two_attachables6
+
+if (`SELECT ($a_skip6 - $b_skip6) != 0`) {
+  --die Contract violated: PK-changed UPDATE must NOT bump update_skipped
+}
+
+--echo
+--echo ##############################################
+--echo # 7. ANN sanity — exact-hit lookup for the   #
+--echo #    query vector itself (id=3 has v =       #
+--echo #    [3,3,3]).  LIMIT 1 avoids the top-K     #
+--echo #    tail flakiness that depends on cache /  #
+--echo #    graph cache state across the mixed      #
+--echo #    UPDATE sequence above.                  #
+--echo ##############################################
+
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3]')) LIMIT 1;
+
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

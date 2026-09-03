@@ -20,10 +20,11 @@
 
 #include <memory>
 
-#include "consensus.h"
 #include "easy_io_struct.h"
 #include "msg_compress.h"
+#include "protocol.h"
 #include "service.h"
+#include "sql/raii/sentry.h"  // raii::Sentry<>
 
 namespace alisql {
 
@@ -74,7 +75,7 @@ void *easy_baseth_on_start_wrapper(void *args) {
   return easy_baseth_on_start(args);
 }
 
-Service::Service(Consensus *cons) : cs(nullptr), cons_(cons) {}
+Service::Service(Protocol *cons) : cs(nullptr), cons_(cons) {}
 
 std::atomic<uint64_t> Service::running(0);
 uint64_t Service::workThreadCnt = 0;
@@ -224,25 +225,23 @@ int Service::pushAsyncEvent(CallbackType cb) {
 }
 
 int Service::process(easy_request_t *r, void *args) {
-  PaxosMsg *msg, omsg;
+  PaxosMsg *msg;
   NetPacket *np = nullptr;
   Service *srv = nullptr;
-  Consensus *cons = nullptr;
+  Protocol *cons = nullptr;
 
   np = (NetPacket *)r->ipacket;
 
-  // updateRunning is false only when msg is heartbeat and it is in heartbeat
-  // pool
-  bool updateRunning = true;
-  if (np && r->ms->c->type != EASY_TYPE_CLIENT && r->args) {
-    PaxosMsg *m = (PaxosMsg *)r->args;
-    if (m->msgtype() == Consensus::OptimisticHeartbeat) {
-      updateRunning = false;
-      m->set_msgtype(Consensus::AppendLog);
+  raii::Sentry<> release_guard([&r] {
+    if (r->ipacket)
+      EasyNet::tryFreeMsg(static_cast<NetPacket *>(r->ipacket));
+    if (r->args) {
+      delete (PaxosMsg *)r->args;
+      r->args = 0;
     }
-  }
+  });
 
-  if (updateRunning && ++Service::running >= Service::workThreadCnt)
+  if (++Service::running >= Service::workThreadCnt)
     easy_info_log("Almost out of workers total:%ld, running:%ld\n",
                   Service::workThreadCnt, Service::running.load());
 
@@ -259,6 +258,7 @@ int Service::process(easy_request_t *r, void *args) {
       /* Send fail case. */
       srv = (Service *)(r->user_data);
       cons = srv->getConsensus();
+      if (!srv->workPoolIsRunning()) return EASY_ABORT;
       if (cons->isShutdown()) return EASY_ABORT;
 
       if (cons == nullptr)  // for unittest consensus.RemoteServerSendMsg
@@ -306,6 +306,7 @@ int Service::process(easy_request_t *r, void *args) {
 
   srv = (Service *)(r->user_data);
   cons = srv->getConsensus();
+  if (!srv->workPoolIsRunning()) return EASY_ABORT;
   if (cons->isShutdown()) return EASY_ABORT;
 
   /* For ClientService Callback */
@@ -316,15 +317,7 @@ int Service::process(easy_request_t *r, void *args) {
     }
   }
 
-  /*
-   */
-  if (r->ms->c->type == EASY_TYPE_CLIENT) {
-    msg = static_cast<PaxosMsg *>(np->msg);
-  } else if (r->args) {
-    msg = (PaxosMsg *)r->args;
-  } else {
-    msg = &omsg;
-  }
+  msg = static_cast<PaxosMsg *>(np->msg);
 
   PaxosMsg rsp;
   rsp.set_clusterid(cons->getClusterId());
@@ -332,8 +325,8 @@ int Service::process(easy_request_t *r, void *args) {
   if (cons->onMsgPreCheck(msg, &rsp)) {
     uint64_t len = rsp.ByteSize();
     uint64_t extraLen = sizeof(NetPacket);
-    if ((np = (NetPacket *)easy_pool_alloc(r->ms->pool, extraLen + len)) ==
-        NULL) {
+    if (cons->isShutdown() || ((np = (NetPacket *)easy_pool_alloc(
+                                    r->ms->pool, extraLen + len)) == NULL)) {
       r->opacket = nullptr;
       --Service::running;
       return EASY_OK;
@@ -350,7 +343,7 @@ int Service::process(easy_request_t *r, void *args) {
   }
 
   switch (msg->msgtype()) {
-    case Consensus::RequestVote: {
+    case Protocol::RequestVote: {
       cons->onRequestVote(msg, &rsp);
 
       uint64_t len = rsp.ByteSize();
@@ -368,19 +361,21 @@ int Service::process(easy_request_t *r, void *args) {
       rsp.SerializeToArray(np->data, np->len);
     } break;
 
-    case Consensus::RequestVoteResponce: {
+    case Protocol::RequestVoteResponce: {
       cons->onRequestVoteResponce(msg);
       np = nullptr;
     } break;
 
-    case Consensus::AppendLog: {
+    case Protocol::OptimisticHeartbeat:
+      msg->set_msgtype(Protocol::AppendLog);
+    case Protocol::AppendLog: {
       if (msgDecompress(*msg) == false) {
         easy_error_log(
             "msg(%llu) from leader(%ld) decompression failed, potential data "
             "corruption!",
             msg->msgid(), msg->leaderid());
         r->opacket = nullptr;
-        if (updateRunning) --Service::running;
+        --Service::running;
         return EASY_OK;
       }
       cons->onAppendLog(msg, &rsp);
@@ -390,7 +385,7 @@ int Service::process(easy_request_t *r, void *args) {
       if (cons->isShutdown() || ((np = (NetPacket *)easy_pool_alloc(
                                       r->ms->pool, extraLen + len)) == NULL)) {
         r->opacket = nullptr;
-        if (updateRunning) --Service::running;
+        --Service::running;
         return EASY_OK;
       }
 
@@ -400,12 +395,12 @@ int Service::process(easy_request_t *r, void *args) {
       rsp.SerializeToArray(np->data, np->len);
     } break;
 
-    case Consensus::AppendLogResponce: {
+    case Protocol::AppendLogResponce: {
       cons->onAppendLogResponce(msg);
       np = nullptr;
     } break;
 
-    case Consensus::LeaderCommand: {
+    case Protocol::LeaderCommand: {
       cons->onLeaderCommand(msg, &rsp);
 
       uint64_t len = rsp.ByteSize();
@@ -423,13 +418,13 @@ int Service::process(easy_request_t *r, void *args) {
       rsp.SerializeToArray(np->data, np->len);
     } break;
 
-    case Consensus::LeaderCommandResponce: {
+    case Protocol::LeaderCommandResponce: {
       cons->onLeaderCommandResponce(msg);
       np = nullptr;
     } break;
 
-    case Consensus::ClusterIdNotMatch:
-    case Consensus::PreCheckFailedResponce: {
+    case Protocol::ClusterIdNotMatch:
+    case Protocol::PreCheckFailedResponce: {
       cons->onMsgPreCheckFailed(msg);
       np = nullptr;
     } break;
@@ -438,13 +433,8 @@ int Service::process(easy_request_t *r, void *args) {
       break;
   }  // endswitch
 
-  if (r->ipacket) EasyNet::tryFreeMsg(static_cast<NetPacket *>(r->ipacket));
-  if (r->args) {
-    delete (PaxosMsg *)r->args;
-    r->args = 0;
-  }
   r->opacket = (void *)np;
-  if (updateRunning) --Service::running;
+  --Service::running;
   return EASY_OK;
 }
 

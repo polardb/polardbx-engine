@@ -48,6 +48,14 @@ END WHILE;
 END$
 CALL test_system_table_alter_engine();
 @table_name
+mysql.ai_function_config
+ERROR
+Storage engine 'MyISAM' does not support system tables. [mysql.ai_function_config]
+@table_name
+mysql.ai_model_config
+ERROR
+Storage engine 'MyISAM' does not support system tables. [mysql.ai_model_config]
+@table_name
 mysql.columns_priv
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.columns_priv]
@@ -71,6 +79,12 @@ Storage engine 'MyISAM' does not support system tables. [mysql.db]
 mysql.default_roles
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.default_roles]
+@table_name
+mysql.encdb_auth_users
+@table_name
+mysql.encdb_kms_meta
+@table_name
+mysql.encdb_sensitive_rules
 @table_name
 mysql.engine_cost
 ERROR
@@ -255,6 +269,10 @@ SET i = i + 1;
 END WHILE;
 END$
 CALL test_create_system_table();
+SEVERITY	ERRNO	MESSAGE
+Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.ai_function_config]
+SEVERITY	ERRNO	MESSAGE
+Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.ai_model_config]
 SEVERITY	ERRNO	MESSAGE
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.columns_priv]
 SEVERITY	ERRNO	MESSAGE
@@ -603,6 +621,9 @@ WHERE table_schema='mysql'
 TABLE_SCHEMA	TABLE_NAME	ENGINE
 mysql	columns_priv	MyISAM
 mysql	db	MyISAM
+mysql	encdb_auth_users	MyISAM
+mysql	encdb_kms_meta	MyISAM
+mysql	encdb_sensitive_rules	MyISAM
 mysql	event	MyISAM
 mysql	func	MyISAM
 mysql	ndb_binlog_index	MyISAM
@@ -618,5 +639,8 @@ SELECT table_schema, table_name, engine FROM information_schema.tables
 WHERE table_schema='mysql'
                                               AND engine='MyISAM';
 TABLE_SCHEMA	TABLE_NAME	ENGINE
+mysql	encdb_auth_users	MyISAM
+mysql	encdb_kms_meta	MyISAM
+mysql	encdb_sensitive_rules	MyISAM
 mysql	event	MyISAM
 mysql	proc	MyISAM

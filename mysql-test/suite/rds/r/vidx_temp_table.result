@@ -1,0 +1,109 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2;
+DROP TEMPORARY TABLE IF EXISTS tmp1, tmp2, tmp3;
+#
+# Scenario 5.1: CREATE TEMPORARY TABLE with VECTOR INDEX -> error expected
+#
+CREATE TEMPORARY TABLE tmp1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+# Also test with different vector configurations
+CREATE TEMPORARY TABLE tmp1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(128),
+VECTOR INDEX vi(v) m=16 distance=cosine
+) ENGINE = InnoDB;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+#
+# Scenario 5.2: Create temporary table first -> ALTER TABLE ADD VECTOR INDEX -> error expected
+#
+CREATE TEMPORARY TABLE tmp2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE tmp2;
+Table	Create Table
+tmp2	CREATE TEMPORARY TABLE `tmp2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Attempt to add vector index to temporary table
+ALTER TABLE tmp2 ADD VECTOR INDEX vi(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+CREATE VECTOR INDEX vi ON tmp2(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TEMPORARY TABLE tmp2;
+#
+# Scenario 5.3: CREATE TEMPORARY TABLE t2 LIKE t1 (t1 has vector index) -> check behavior
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Creating temporary table LIKE a table with vector index
+# Should fail because LIKE copies the vector index definition
+CREATE TEMPORARY TABLE tmp3 LIKE t1;
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+# Verify: tmp3 was not created
+DROP TEMPORARY TABLE tmp3;
+ERROR 42S02: Unknown table 'test.tmp3'
+#
+# Scenario 5.4: CREATE TEMPORARY TABLE AS SELECT * FROM t1 (t1 has vector index) -> check behavior
+#
+# Note: AS SELECT does not copy indexes, so no vector index involved
+CREATE TEMPORARY TABLE tmp3 AS SELECT * FROM t1 WHERE 1=0;
+SHOW CREATE TABLE tmp3;
+Table	Create Table
+tmp3	CREATE TEMPORARY TABLE `tmp3` (
+  `id` int NOT NULL DEFAULT '0',
+  `v` vector(5) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify tmp3 does not have vector index (AS SELECT does not copy indexes)
+DROP TEMPORARY TABLE tmp3;
+DROP TABLE t1;
+#
+# Additional test: Verify temporary table can have VECTOR column without index
+#
+CREATE TEMPORARY TABLE tmp_with_vector_col (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(100),
+v VECTOR(5)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE tmp_with_vector_col;
+Table	Create Table
+tmp_with_vector_col	CREATE TEMPORARY TABLE `tmp_with_vector_col` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Can use vector column in temporary table, just cannot create vector index
+DROP TEMPORARY TABLE tmp_with_vector_col;
+#
+# Additional test: Global temporary table behavior (if supported)
+#
+CREATE GLOBAL TEMPORARY TABLE gtmp1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GLOBAL TEMPORARY TABLE gtmp1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VEC' at line 1
+# Cleanup
+SET GLOBAL vidx_disabled = ON;

@@ -80,9 +80,9 @@ void RTree_inserter::add_to_batch(const dtuple_t *row,
 
 dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
                                      Latch_release &&latch_release) noexcept {
-  rec_t *rec{};
   btr_cur_t cursor;
-  ulint *offsets{};
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   rtr_info_t rtr_info;
   big_rec_t *big_rec{};
   bool latches_released{};
@@ -105,6 +105,9 @@ dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
 
     ut_ad(dtuple != nullptr);
 
+    /* If there is no sufficient space in the redo logs then deep copy the
+    cached records and release the page(s) latches as that would be required to
+    commit the mini-transaction. */
     if (log_free_check_is_required() IF_DEBUG(|| force_log_free_check)) {
       if (!latches_released) {
         deep_copy_tuples(it);
@@ -149,8 +152,8 @@ dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
     }
 
     err =
-        btr_cur_optimistic_insert(flag, TL_NONE, &cursor, &offsets, &m_dml_heap,
-                                  dtuple, &rec, &big_rec, nullptr, &mtr);
+        btr_cur_optimistic_insert(flag, TL_NONE, &cursor, &slc, &sctx,
+                                  &m_dml_heap, dtuple, &big_rec, nullptr, &mtr);
 
     if (err == DB_FAIL) {
       ut_ad(big_rec == nullptr);
@@ -169,9 +172,9 @@ dberr_t RTree_inserter::batch_insert(trx_id_t trx_id,
                                   BTR_MODIFY_TREE, &cursor, 0, __FILE__,
                                   __LINE__, &mtr);
 
-      err = btr_cur_pessimistic_insert(flag, TL_NONE, &cursor, &offsets,
-                                       &m_dml_heap, dtuple, &rec, &big_rec,
-                                       nullptr, &mtr);
+      err = btr_cur_pessimistic_insert(flag, TL_NONE, &cursor, &slc, &sctx,
+                                       &m_dml_heap, dtuple, &big_rec, nullptr,
+                                       &mtr);
     }
 
     IF_ENABLED("ddl_ins_spatial_fail", err = DB_FAIL;)

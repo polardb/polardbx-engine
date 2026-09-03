@@ -1,3 +1,4 @@
+reset master;
 set global transaction_isolation='READ-COMMITTED';
 set session transaction_isolation='READ-COMMITTED';
 ###test for normal function
@@ -62,11 +63,11 @@ Group_update_reuse_count	0
 Group_update_total_count	1
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	init	show processlist
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	debug sync point: leader_done_after_clean_status	update t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL

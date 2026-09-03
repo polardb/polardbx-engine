@@ -283,6 +283,7 @@ our @DEFAULT_SUITES = qw(
   query_rewrite_plugins
   rpl_gtid
   rpl_gtid_no_xpaxos
+  rpl_gtid_without_polarx_event
   secondary_engine
   service_status_var_registration
   service_sys_var_registration
@@ -302,6 +303,10 @@ our @DEFAULT_SUITES = qw(
   polarx_rpc
   proxy
   panda
+  panda_redundant_4k
+  polardbx_router
+  spc
+  column_encryption
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
@@ -327,7 +332,7 @@ our $opt_report_times              = 0;
 our $opt_resfile                   = $ENV{'MTR_RESULT_FILE'} || 0;
 our $opt_test_progress             = 1;
 our $opt_sanitize                  = 0;
-our $opt_shutdown_timeout          = $ENV{MTR_SHUTDOWN_TIMEOUT} || 20; # seconds
+our $opt_shutdown_timeout          = $ENV{MTR_SHUTDOWN_TIMEOUT} || 240; # seconds
 our $opt_start_timeout             = $ENV{MTR_START_TIMEOUT} || 600;   # seconds
 our $opt_user                      = "root";
 our $opt_valgrind                  = 0;
@@ -336,6 +341,7 @@ our $opt_verbose                   = 0;
 our $opt_xcluster                  = 1;
 our $xcluster_info_prefix;
 our $opt_flashback_area            = 0;
+our $opt_spc                       = 0;
 # Visual Studio produces executables in different sub-directories
 # based on the configuration used to build them. To make life easier,
 # an environment variable or command-line option may be specified to
@@ -594,6 +600,10 @@ sub main {
 
   if ($opt_flashback_area) {
     $opt_suites .= ",flashback_area";
+  }
+
+  if ($opt_spc) {
+    $opt_suites .= ",spc";
   }
 
   my $mtr_suites = $opt_suites;
@@ -1671,6 +1681,7 @@ sub command_line_setup {
     'view-protocol'         => \$opt_view_protocol,
     'vs-config=s'           => \$opt_vs_config,
     'flashback-area'        => \$opt_flashback_area,
+    'opt-spc'               => \$opt_spc,
 
     # Max number of parallel threads to use
     'parallel=s' => \$opt_parallel,
@@ -2254,6 +2265,8 @@ sub command_line_setup {
   if ($opt_flashback_area) {
     push(@opt_extra_mysqld_opt, "--opt_flashback_area=1");
   }
+
+  push(@opt_extra_mysqld_opt, "--innodb_polarx_btree_search_mode=ON");
 
   # Check valgrind arguments
   if ($opt_valgrind or $opt_valgrind_path or @valgrind_args) {
@@ -3369,6 +3382,9 @@ sub environment_setup {
   my $extra_bootstrap_opts = join(" ", @opt_extra_bootstrap_opt);
   $ENV{'MYSQLD_CMD'} =
     "$exe_mysqld --defaults-group-suffix=.1 " .
+    "--defaults-file=$path_config_file $extra_bootstrap_opts $extra_opts";
+  $ENV{'MYSQLD2_CMD'} =
+    "$exe_mysqld --defaults-group-suffix=.2 " .
     "--defaults-file=$path_config_file $extra_bootstrap_opts $extra_opts";
 
   # bug25714 executable may _not_ exist in some versions, test using
@@ -5161,8 +5177,8 @@ sub run_testcase ($) {
       $ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
       last if ($ret == 0);
       $err_cnt++;
-      if ($err_cnt >= 20) {
-        mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
+      if ($err_cnt >= 40) {
+        mtr_error("Fail to change consensus_leader after $err_cnt times trying!!!");
         report_failure_and_restart($tinfo);
         return 1;
       }
@@ -5170,6 +5186,10 @@ sub run_testcase ($) {
       run_query($mysqld_oldleader, $query);
     }
     mtr_verbose("Finish change leader query.");
+    if ($mysqld_servers > 2) {
+      # wait follower start
+      sleep(3);
+    }
   }
 
   # If '--start' or '--start-dirty' given, stop here to let user manually
@@ -6211,8 +6231,8 @@ sub check_expected_crash_and_restart($$) {
               $ret = run_query($mysqld_leader, $query, "run_query.log", "run_query.error");
               last if ($ret == 0);
               $err_cnt++;
-              if ($err_cnt >= 20) {
-                mtr_warning("Fail to change consensus_leader after $err_cnt times trying!!!");
+              if ($err_cnt >= 40) {
+                mtr_error("Fail to change consensus_leader after $err_cnt times trying!!!");
                 report_failure_and_restart($tinfo);
                 return 1;
               }
@@ -7208,7 +7228,7 @@ sub start_servers($) {
     if ($basedir eq $mysqld_basedir) {
       # If dirty, keep possibly grown system db
       if (!$opt_start_dirty && $opt_xcluster) {
-        mysql_install_db($mysqld);    # For versional testing
+        mysql_install_db($mysqld, undef, $bootstrap_opts);    # For versional testing
         mtr_error("Failed to install system db to '$datadir'")
           unless -d $datadir;
       } elsif (!$opt_start_dirty) {
@@ -7497,6 +7517,7 @@ sub start_mysqltest ($) {
   }
 
   $ENV{'FLASHBACK_AREA'} = 1 if ($opt_flashback_area);
+  $ENV{'OPT_SPC'}        = 1 if ($opt_spc);
 
   foreach my $arg (@opt_extra_mysqltest_opt) {
     mtr_add_arg($args, $arg);

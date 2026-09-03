@@ -2839,11 +2839,18 @@ void acl_update_user(const char *user, const char *host, enum SSL_type ssl_type,
           acl_user->account_locked = password_life.account_locked;
 
           /* reset the runtime locked state if there is account locking */
-          if (!acl_user->account_locked &&
-              acl_user->password_locked_state.is_active())
-            acl_user->password_locked_state.set_parameters(
-                acl_user->password_locked_state.get_password_lock_time_days(),
-                acl_user->password_locked_state.get_failed_login_attempts());
+          if (!acl_user->account_locked) {
+            mysql_audit_notify(
+                current_thd,
+                AUDIT_EVENT(MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK),
+                acl_user->user, acl_user->host.get_host(), "", true);
+
+            if (acl_user->password_locked_state.is_active()) {
+              acl_user->password_locked_state.set_parameters(
+                  acl_user->password_locked_state.get_password_lock_time_days(),
+                  acl_user->password_locked_state.get_failed_login_attempts());
+            }
+          }
         }
 
         /* Update role graph  */

@@ -136,6 +136,8 @@ bool is_aligned_as(void const *const ptr) {
 }
 }  // namespace ut
 
+#ifndef INNODB_UT0MEM_IC_STANDALONE
 #include "ut0mem.ic"
+#endif /* !INNODB_UT0MEM_IC_STANDALONE */
 
 #endif

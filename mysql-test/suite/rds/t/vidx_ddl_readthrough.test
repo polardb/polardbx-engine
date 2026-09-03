@@ -1,0 +1,143 @@
+####################################################################
+# Worker read-through loading across memory-budget windows.        #
+#                                                                  #
+# A 1 MiB vidx_hnsw_cache_size cannot hold this 600 x VECTOR(1024) #
+# graph, so window 2+ searches touch nodes whose payload was       #
+# discarded by the handover.  Every executor owns a load channel   #
+# (worker: private graph TABLE bound to an internal READ-          #
+# UNCOMMITTED THD; leader: the ALTER's own graph handler) and      #
+# resolves such misses inline -- there is no leader-mediated       #
+# load protocol.                                                   #
+#                                                                  #
+# Sensitivity of the verdicts below:                               #
+#  - RU visibility broken (worker cannot see the ALTER's own       #
+#    uncommitted graph rows): the load fails and the ALTER itself  #
+#    errors out.                                                   #
+#  - Historical nodes never loaded at all (windows not exercised): #
+#    verdicts 1/2 turn red.                                        #
+#  - A stop-the-world leader load loop reintroduced ahead of       #
+#    SEARCH: Vidx_ddl_parallel_load_rounds or loaded_nodes moves,  #
+#    and verdict 3 turns red.                                     #
+# Keep-structures fingerprints live in vidx_ddl_cliff_rebuild:     #
+# this scenario spans just one handover, which rebuilds into the   #
+# evictable layout by design, so no keep steady state exists here. #
+# No DEBUG_SYNC: this test must also run on release builds, where  #
+# vidx_ddl_parallel_windows (debug-only) is skipped.               #
+####################################################################
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/count_sessions.inc
+
+--disable_query_log
+CREATE DATABASE vidx_ddl_readthrough;
+USE vidx_ddl_readthrough;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+SET SESSION vidx_hnsw_ef_search = 600;
+
+let $save_cache = query_get_value(SHOW GLOBAL VARIABLES LIKE 'vidx_hnsw_cache_size', Value, 1);
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(1024)
+) ENGINE = InnoDB;
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 1000;
+INSERT INTO t1(id, v)
+  WITH RECURSIVE seq(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 600
+  )
+  SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',7', 1023), ']'))
+  FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+
+let $windows0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $decoded0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+let $rounds0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_load_rounds', Value, 1);
+let $loaded0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_loaded_nodes', Value, 1);
+let $batches0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $windows1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_build_windows', Value, 1);
+let $decoded1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+let $rounds1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_load_rounds', Value, 1);
+let $loaded1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_loaded_nodes', Value, 1);
+let $batches1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+
+# 1. The scenario premise: the budget actually forced window continuation.
+if (`SELECT $windows1 - $windows0 < 2`) {
+  --echo FATAL: only $windows0 -> $windows1 build windows
+  --die the 1MiB budget no longer forces a multi-window build, test is vacuous
+}
+--echo VERDICT 1 multi-window build exercised: PASS
+
+# 2. Continuation windows really did load historical nodes:
+#    Vidx_decode_vec_node_count counts every load_from_record, whichever
+#    thread performs it.
+if (`SELECT $decoded1 <= $decoded0`) {
+  --echo FATAL: continuation windows loaded no historical nodes ($decoded0 -> $decoded1)
+  --die read-through resolved no miss although the build spanned windows
+}
+--echo VERDICT 2 historical nodes loaded: PASS
+
+# 3. All continuation-window loads stayed on executor-owned channels.
+#    The worker path raises the shared decode counter; the leader preflight
+#    counters remain unchanged because SEARCH has already made its reverse
+#    dependencies resident.  Checking both counters avoids accepting a
+#    leader-mediated reload loop merely because it ran fewer times than the
+#    coarse micro-batch count.
+if (`SELECT $rounds1 != $rounds0 OR $loaded1 != $loaded0`) {
+  --echo FATAL: leader load counters moved rounds $rounds0 -> $rounds1, nodes $loaded0 -> $loaded1
+  --die continuation-window loads escaped the executor read-through path
+}
+if (`SELECT $batches1 <= $batches0`) {
+  --echo FATAL: parallel batches did not move ($batches0 -> $batches1)
+  --die read-through scenario did not exercise the parallel batch path
+}
+--echo VERDICT 3 only executor read-through loaded historical nodes: PASS
+
+# Disk truth: every row made it into the graph across all windows.
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_readthrough/t1', TABLE_ID, 1);
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM `vidx_', $tid, '_0` WHERE TREF IS NOT NULL');
+PREPARE stmt FROM @s;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+if (`SELECT @live IS NULL OR @live != 600`) {
+  --echo FATAL: live graph row count is @live, expected 600
+  --die multi-window direct build lost graph rows
+}
+--echo VERDICT 4 live==600 across windows: PASS
+
+# ANN self-probes from the beginning, middle, and end of the scan catch a
+# lost or unreachable continuation window even when the ALTER succeeds.
+SET @nn1 = NULL;
+SET @nn300 = NULL;
+SET @nn600 = NULL;
+SELECT id INTO @nn1 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[1', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn300 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[300', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn600 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[600', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+if (`SELECT @nn1 IS NULL OR @nn1 != 1 OR @nn300 IS NULL OR @nn300 != 300 OR @nn600 IS NULL OR @nn600 != 600`) {
+  --echo FATAL: ANN self-probes returned @nn1, @nn300, @nn600
+  --die multi-window graph is not fully reachable
+}
+--echo VERDICT 5 ANN self-probes across windows: PASS
+
+DROP TABLE t1;
+eval SET GLOBAL vidx_hnsw_cache_size = $save_cache;
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+SET SESSION vidx_ddl_threads = DEFAULT;
+SET GLOBAL show_vidx_hlindex_tables = DEFAULT;
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_ddl_readthrough;
+--enable_query_log
+
+--source include/wait_until_count_sessions.inc

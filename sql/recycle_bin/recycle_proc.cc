@@ -57,6 +57,36 @@ Proc *Recycle_proc_purge::instance() {
   return proc;
 }
 
+/** Evaluate and copy a string parameter for the current proc execution. */
+static bool resolve_string_parameter(THD *thd, Item *item, size_t index,
+                                     const Proc *proc, bool allow_empty,
+                                     const char **value) {
+  char buff[128];
+  String str(buff, sizeof(buff), system_charset_info);
+  String *result = item->val_str(&str);
+
+  /* A VARCHAR expression can still produce NULL at execution time. */
+  if (result == nullptr) {
+    if (!thd->is_error())
+      my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), index + 1,
+               proc->qname().c_str());
+    return true;
+  }
+
+  if (!allow_empty && result->length() == 0) {
+    my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), index + 1,
+             proc->qname().c_str());
+    return true;
+  }
+
+  *value = strmake_root(thd->mem_root, result->ptr(), result->length());
+  if (*value == nullptr) {
+    if (!thd->is_error()) my_error(ER_OUT_OF_RESOURCES, MYF(0));
+    return true;
+  }
+  return false;
+}
+
 /**
   Invoke the sql_cmd object for show_tables() proc.
 */
@@ -172,25 +202,26 @@ void Sql_cmd_recycle_proc_purge::send_result(THD *thd, bool error) {
 
 /* Override the default check_access. */
 bool Sql_cmd_recycle_proc_purge::check_access(THD *thd) {
-  char buff[128];
-  String str(buff, sizeof(buff), system_charset_info);
-  String *res;
   DBUG_ENTER("Sql_cmd_recycle_proc_purge::check_access");
   Recycle_process_context recycle_context(thd);
   /* Special privilege flag for ddl on recycle schema */
   thd->recycle_state->set_priv_relax();
 
-  res = (*m_list)[0]->val_str(&str);
-  const char *table = strmake_root(thd->mem_root, res->ptr(), res->length());
-  if (table == NULL || strlen(table) == 0) {
-    my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), 1,
-             m_proc->qname().c_str());
+  /* Reuse the same evaluated name for access checking and execution. */
+  m_table_name = nullptr;
+  if (resolve_string_parameter(thd, (*m_list)[0], 0, m_proc, false,
+                               &m_table_name)) {
     DBUG_RETURN(true);
+  }
+
+  /* Convert to lowercase when lower_case_table_names is not 0 */
+  if (lower_case_table_names) {
+    my_casedn_str(files_charset_info, const_cast<char *>(m_table_name));
   }
 
   Table_ref *table_list =
       build_table_list(thd, RECYCLE_BIN_SCHEMA.str, RECYCLE_BIN_SCHEMA.length,
-                       table, strlen(table));
+                       m_table_name, strlen(m_table_name));
   if (check_table_access(thd, DROP_ACL, table_list, false, 1, false))
     DBUG_RETURN(true);
 
@@ -206,14 +237,9 @@ bool Sql_cmd_recycle_proc_purge::check_access(THD *thd) {
   @retval       false         Success
 */
 bool Sql_cmd_recycle_proc_purge::pc_execute(THD *thd) {
-  char buff[128];
-  String str(buff, sizeof(buff), system_charset_info);
-  String *res;
   DBUG_ENTER("Sql_cmd_recycle_proc_purge::pc_execute");
-  res = (*m_list)[0]->val_str(&str);
-  const char *table = strmake_root(thd->mem_root, res->ptr(), res->length());
-
-  DBUG_RETURN(recycle_purge_table(thd, table));
+  assert(m_table_name != nullptr);
+  DBUG_RETURN(recycle_purge_table(thd, m_table_name));
 }
 
 /* Singleton instance for restore_table */
@@ -248,9 +274,6 @@ bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
   DBUG_ENTER("Sql_cmd_recycle_proc_restore::check_access");
   if (Sql_cmd_proc::check_access(thd)) DBUG_RETURN(true);
 
-  char buff[128];
-  String str(buff, sizeof(buff), system_charset_info);
-  String *res;
   Recycle_process_context recycle_context(thd);
   /* Special privilege flag for ddl on recycle schema */
   thd->recycle_state->set_priv_relax();
@@ -259,17 +282,23 @@ bool Sql_cmd_recycle_proc_restore::check_access(THD *thd) {
   const char *old_table = nullptr;
   const char *new_db = nullptr;
   const char *new_table = nullptr;
-  res = (*m_list)[0]->val_str(&str);
-  old_table = strmake_root(thd->mem_root, res->ptr(), res->length());
-  if (old_table == NULL || strlen(old_table) == 0) {
-    my_error(ER_NATIVE_PROC_PARAMETER_MISMATCH, MYF(0), 1,
-             m_proc->qname().c_str());
+  if (resolve_string_parameter(thd, (*m_list)[0], 0, m_proc, false,
+                               &old_table)) {
     DBUG_RETURN(true);
   } else if (m_list->size() == 3) {
-    res = (*m_list)[1]->val_str(&str);
-    new_db = strmake_root(thd->mem_root, res->ptr(), res->length());
-    res = (*m_list)[2]->val_str(&str);
-    new_table = strmake_root(thd->mem_root, res->ptr(), res->length());
+    if (resolve_string_parameter(thd, (*m_list)[1], 1, m_proc, true,
+                                 &new_db) ||
+        resolve_string_parameter(thd, (*m_list)[2], 2, m_proc, true,
+                                 &new_table))
+      DBUG_RETURN(true);
+  }
+
+  /* Convert to lowercase when lower_case_table_names is not 0 */
+  if (lower_case_table_names) {
+    my_casedn_str(files_charset_info, const_cast<char *>(old_table));
+    if (new_db) my_casedn_str(files_charset_info, const_cast<char *>(new_db));
+    if (new_table)
+      my_casedn_str(files_charset_info, const_cast<char *>(new_table));
   }
 
   /* 2. The old table must exist in recycle_bin */

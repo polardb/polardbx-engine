@@ -303,7 +303,7 @@ void easy_connection_destroy(easy_connection_t *c)
         if (t > 30) t = 30;
         c->reconn_fail++;
         t = ((c->client && c->client->timeout) ? c->client->timeout : EASY_CLIENT_DEFAULT_TIMEOUT) / 1000.0;
-        if (c->reconn_fail % 10 == 0)
+        if (c->reconn_fail % 60 == 0)
             easy_warn_log("%s reconn_time: %f, reconn_fail: %d\n", easy_connection_str(c), t, c->reconn_fail);
         else
             easy_info_log("%s reconn_time: %f, reconn_fail: %d\n", easy_connection_str(c), t, c->reconn_fail);
@@ -2233,8 +2233,10 @@ static int easy_connection_checkself(easy_connection_t *c)
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
 
-    // self connect self
-    if (c->addr.family == AF_INET && getsockname(c->fd, (struct sockaddr *)&addr, &len) == 0) {
+    // bugfix::getsockname() return unexpected addr after connect failed!!
+    if (c->status == EASY_CONN_OK
+        && c->addr.family == AF_INET
+        && getsockname(c->fd, (struct sockaddr *)&addr, &len) == 0) {
         if (addr.sin_port == c->addr.port && addr.sin_addr.s_addr == c->addr.u.addr) {
             easy_error_log("connect to %s failure, self connect self, %d-%d\n", 
                             easy_connection_str(c),

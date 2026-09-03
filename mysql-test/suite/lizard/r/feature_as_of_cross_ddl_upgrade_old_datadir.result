@@ -1,0 +1,84 @@
+# Verify AS OF cross-DDL after upgrading old datadir without visible-from DD keys.
+# Stop the default MTR server.
+# Copy and unzip the old-version datadir fixture.
+# Restart the current server against the old datadir.
+# restart: --datadir=DATADIR --innodb_undo_retention=4294967295 --innodb_txn_retention=4294967295 --innodb_scn_history_interval=1
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_before_ddl
+FROM asof_upgrade_snapshots WHERE name = 'before_ddl';
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+# Category 1: no-rebuild DDL traverses after loading old DD metadata.
+SELECT * FROM u_c1_add_col AS OF SCN @scn_before_ddl ORDER BY id;
+id	name	email
+1	Alice	n/a
+2	Bob	n/a
+SELECT * FROM u_c1_drop_idx AS OF SCN @scn_before_ddl ORDER BY id;
+id	name
+1	Alice
+2	Bob
+# ADD INDEX: primary path works, new index path is rejected.
+SELECT * FROM u_add_idx AS OF SCN @scn_before_ddl
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+2	Bob
+SELECT * FROM u_add_idx AS OF SCN @scn_before_ddl
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Category 2: rebuild-created secondary is rejected with unified DDL-change error.
+SELECT * FROM u_rebuild_sec AS OF SCN @scn_before_ddl
+FORCE INDEX(idx_name) WHERE id = 2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Category 3: COPY rebuild returns empty history.
+SELECT * FROM u_c3_copy AS OF SCN @scn_before_ddl ORDER BY id;
+id	name
+# Bad case: old DD metadata lost rebuild lineage and must not return empty success.
+# The target snapshot is after ADD INDEX, but before UPDATE + rebuild.
+SELECT * FROM u_bad_rebuild_overwrite ORDER BY id;
+id	name
+1	Bob
+2	Carol
+SELECT * FROM u_bad_rebuild_overwrite AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Post-upgrade bad case 1: current INSTANT must not lose old-DD fallback creator.
+# Sanity: idx_name is visible for this snapshot before the current-version INSTANT.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+id	name
+1	Alice
+ALTER TABLE u_add_idx ADD COLUMN post_upgrade_marker INT DEFAULT 7,
+ALGORITHM=INSTANT;
+# INSTANT discards dict cache; the next open must still use the old creator.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+id	name
+1	Alice
+# Restart only verifies the materialized creator is durable.
+# restart
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+# The old secondary must remain visible after restart as a durability check.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+id	name
+1	Alice
+# Post-upgrade bad case 2: later dd_write_index() must not persist wrong creator.
+ALTER TABLE u_add_idx ADD INDEX idx_post_upgrade_marker(post_upgrade_marker);
+# Restart again to verify the dd_write_index() write-back is durable and correct.
+# restart
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+# The old secondary must remain visible after dd_write_index() write-back + reload.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+id	name
+1	Alice
+# Cleanup upgraded datadir server and restart the default MTR server.
+# restart

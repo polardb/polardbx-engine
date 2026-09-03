@@ -540,6 +540,8 @@ static_assert(DATA_ROLL_PTR_LEN == 7, "DATA_PTR_LEN != 7!");
 
 static_assert(DATA_TRX_ID + 1 == DATA_ROLL_PTR, "DATA_TRX_ID value invalid!");
 
+#ifndef INNODB_DATA0TYPE_IC_STANDALONE
 #include "data0type.ic"
+#endif /* !INNODB_DATA0TYPE_IC_STANDALONE */
 
 #endif

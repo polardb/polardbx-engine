@@ -241,7 +241,9 @@ class TableStatsRecord {
   mem_heap_t *m_heap;
 };
 
+#ifndef INNODB_DICT0STATS_IC_STANDALONE
 #include "dict0stats.ic"
+#endif /* !INNODB_DICT0STATS_IC_STANDALONE */
 
 #ifdef UNIV_ENABLE_UNIT_TEST_DICT_STATS
 void test_dict_stats_all();

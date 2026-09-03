@@ -49,6 +49,21 @@ Sql_cmd *Ccl_proc_add::invoke_cmd(THD *thd,
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
+/* Singleton instance for add_ccl_rule_returning */
+Proc *Ccl_proc_add_returning::instance() {
+  static Proc *proc = new Ccl_proc_add_returning(key_memory_ccl);
+
+  return proc;
+}
+
+/**
+  Evoke the sql_cmd object for add_ccl_rule_returning() proc.
+*/
+Sql_cmd *Ccl_proc_add_returning::invoke_cmd(THD *thd,
+                                           mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
 /* Singleton instance for flush_ccl_rule */
 Proc *Ccl_proc_flush::instance() {
   static Proc *proc = new Ccl_proc_flush(key_memory_ccl);
@@ -295,6 +310,8 @@ void Sql_cmd_ccl_proc_show::send_result(THD *thd, bool error) {
     protocol->store(result->matched);
     protocol->store(result->running);
     protocol->store(result->waiting);
+    protocol->store(result->concurrency_peek);
+    protocol->store(result->killed_num);
     protocol->store_string(result->keywords.str, result->keywords.length,
                            system_charset_info);
     if (protocol->end_row()) DBUG_VOID_RETURN;
@@ -345,5 +362,151 @@ void Sql_cmd_ccl_proc_show_queue::send_result(THD *thd, bool error) {
 
   my_eof(thd);
   DBUG_VOID_RETURN;
+}
+
+/**
+  Delete all the rule from cache and table mysql.concurrency_control.
+
+  report my_error if failed.
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
+*/
+bool Sql_cmd_ccl_proc_del_all::pc_execute(THD *thd) {
+  Conf_error error;
+  DBUG_ENTER("Sql_cmd_ccl_delete_all_ccl::pc_execute");
+
+  if ((error = del_all_ccl_rules(thd)) != Conf_error::CONF_OK)
+    DBUG_RETURN(true);
+
+  DBUG_RETURN(false);
+}
+
+/* Singleton instance for del_all_ccl_rule */
+Proc *Ccl_proc_del_all::instance() {
+  static Proc *proc = new Ccl_proc_del_all(key_memory_ccl);
+  return proc;
+}
+
+/**
+  Evoke the sql_cmd object for del_ccl_rule() proc.
+*/
+Sql_cmd *Ccl_proc_del_all::invoke_cmd(THD *thd,
+                                     mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+/**
+  Add the rule into the concurrency_control table,
+  copy into ccl cache, and return the rule id.
+
+  First write into table, then update the ccl cache,
+  report my_error if failed.
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
+*/
+bool Sql_cmd_ccl_proc_add_returning::pc_execute(THD *thd) {
+  bool error = false;
+  Conf_record *record;
+  DBUG_ENTER("Sql_cmd_ccl_proc_add_returning::pc_execute");
+  Skip_readonly_check_helper helper(thd);
+  record = get_record(thd, m_list);
+  const char *msg = "";
+  if (!record->check_valid(&msg)) {
+    my_error(ER_CCL_INVALID_RULE, MYF(0), 0, "add rule returning");
+    DBUG_RETURN(true);
+  }
+  error = add_ccl_rule(thd, record, &m_rule_id);
+  DBUG_RETURN(error);
+}
+
+void Sql_cmd_ccl_proc_add_returning::send_result(THD *thd, bool error) {
+  Protocol *protocol = thd->get_protocol();
+  DBUG_ENTER("Sql_cmd_ccl_proc_add_returning::send_result");
+  if (error) {
+    assert(thd->is_error());
+    DBUG_VOID_RETURN;
+  }
+  if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
+  protocol->start_row();
+  protocol->store(m_rule_id);
+  if (protocol->end_row()) DBUG_VOID_RETURN;
+  my_eof(thd);
+  DBUG_VOID_RETURN;
+}
+
+
+/* Singleton instance for del_ccl_rule_batch */
+Proc *Ccl_proc_del_batch::instance() {
+  static Proc *proc = new Ccl_proc_del_batch(key_memory_ccl);
+
+  return proc;
+}
+
+/**
+  Invoke the sql_cmd object for del_ccl_rule_batch() proc.
+*/
+Sql_cmd *Ccl_proc_del_batch::invoke_cmd(THD *thd,
+                                  mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+int get_records_id(THD *thd, const char *id_str,
+                    std::vector<Conf_record *> &result, char delimiter = ',') {
+  std::stringstream ss(id_str);
+  std::string item;
+
+  while (std::getline(ss, item, delimiter)) {
+    if (!item.empty()) {
+      std::stringstream converter(item);
+      ulonglong value;
+      if (converter >> value && converter.eof()) {
+        Conf_record *record = new (thd->mem_root) Ccl_record();
+        record->set_id(value);
+        result.push_back(record);
+      } else {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+/**
+  Delete the rule from cache and table mysql.concurrency_control.
+
+  report my_error if failed.
+
+  @param[in]    THD           Thread context
+
+  @retval       true          Failure
+  @retval       false         Success
+*/
+bool Sql_cmd_ccl_proc_del_batch::pc_execute(THD *thd) {
+  bool error;
+  DBUG_ENTER("Sql_cmd_ccl_proc_del_batch::pc_execute");
+  Skip_readonly_check_helper helper(thd);
+
+  char buff[1024];
+  String str(buff, sizeof(buff), system_charset_info);
+  String *res;
+  /** ccl rule ids string */
+  res = (*m_list)[0]->val_str(&str);
+  const char *id_str = strmake_root(thd->mem_root, res->ptr(), res->length());
+  std::vector<Conf_record *> records;
+  if (get_records_id(thd, id_str, records) != 0) {
+    my_error(ER_CCL_INVALID_RULE, MYF(0), 0, "del rule batch");
+    DBUG_RETURN(true);
+  }
+
+  if ((error = del_ccl_rule_batch(thd, records))) DBUG_RETURN(true);
+
+  DBUG_RETURN(false);
 }
 } /* namespace im */

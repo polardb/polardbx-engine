@@ -31,18 +31,18 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "storage/innobase/handler/p_s.h"
 
-#include <stdlib.h>
-#include <sys/types.h>
 #include <type_traits>
 
+#include "dict0dd.h"
 #include "lock0iter.h"
 #include "lock0lock.h"
 #include "sql_table.h"
-#include "table.h"
 #include "trx0i_s.h"
-#include "trx0sys.h"
 
-#include "my_io.h"
+/** The following variables are used to limit the output of the
+ * performance_schema.data_locks*/
+/** Maximum number of data locks that can be displayed for a single batch. */
+ulong pfs_data_locks_max_locks_per_batch = 1048576;
 
 /**
   @page PAGE_INNODB_PFS Innodb data lock instrumentation
@@ -119,333 +119,157 @@ this program; if not, write to the Free Software Foundation, Inc.,
   @subsection restartable_batch_scan Restartable batch scan
 
   What is implemented is:
-  - Take all necessary locks
-  - Resume the scan on innodb internal locks,
-  for a given record range
-  - Report all the records in the range to the performance schema
-  - Release all the locks taken
+  - As lock sys data structures are sharded with each shard having own latch, we
+    inspect the shards one by one to avoid latching whole lock system
+  - We first process table locks, then record locks
+  - Table locks are processed one table at a time
+  - Record locks are processed one internal hash table bucket at a time
 
   This is a compromise, with the following properties:
   - Memory consumption is bounded,
-    by the number of records returned in each range.
+    by the number of locks in each bucket and on each table.
   - The duration of mutex locks on innodb structures is bounded
-    by the number of records in each range
+    by the number of locks in each bucket and on each table.
   - The data returned is not consistent,
     but at least it is "consistent by chunks"
-  - The overall scan complexity is (N/RANGE)^2, where RANGE is the range size.
-  This is still technically O(N^2), but in practice should be reasonable.
 
-  For example with N = 10,000 transactions and RANGE = 256,
-  there are 40 batches at the trx list,
-  where each batch reports (up to) 256 trx, with the trx locks.
-  The total number of operations on the list is 400 thousands.
 */
 
 static const char *g_engine = "INNODB";
 static const size_t g_engine_length = 6;
-
-/** Pass of a given scan. */
-enum scan_pass {
-  INIT_SCANNING,
-  /** Scan the RW trx list.
-  @sa trx_sys_t::rw_trx_list
-  */
-  SCANNING_RW_TRX_LIST,
-  /** Scan the MySQL trx list.
-  @sa trx_t::mysql_trx_list
-  */
-  SCANNING_MYSQL_TRX_LIST,
-  DONE_SCANNING
+namespace {
+struct parsed_table_path {
+  std::string_view schema;
+  std::string_view table;
+  std::string_view partition;
+  std::string_view subpartition;
 };
-
-/** The following variables are used to limit the output of the
- * performance_schema.data_locks*/
-/** Maximum number of data locks that can be displayed for a single batch. */
-ulong pfs_data_locks_max_locks_per_batch = 1048576;
-
-/** State of a given scan.
-Scans are restartable, and done in multiple calls.
-Overall, the code scans separately:
-- the RW trx list
-- the MySQL trx list
-For each list, the scan is done by ranges of trx_id values.
-Saving the current scan state allows to resume where the previous
-scan ended.
-*/
-class Innodb_trx_scan_state {
- public:
-  const trx_id_t SCAN_RANGE = 256;
-
-  Innodb_trx_scan_state()
-      : m_scan_pass(INIT_SCANNING),
-        m_start_trx_id_range(0),
-        m_end_trx_id_range(SCAN_RANGE),
-        m_next_trx_id_range(TRX_ID_MAX),
-        m_snapshot_trx_id(TRX_ID_MAX) {
-    trx_sys_mutex_enter();
-    auto trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list);
-    auto len = UT_LIST_GET_LEN(trx_sys->mysql_trx_list);
-    trx_sys_mutex_exit();
-    if (trx != nullptr) {
-      /** Take the largest trx id (if exists) in the current trx sys as the
-       * snapshot of the scan. */
-      m_snapshot_trx_id = trx->id;
-    } else if (len == 0) {
-      /** If both rw_trx_list and mysql_trx_list are empty, the scan should be
-       * skipped. */
-      m_scan_pass = DONE_SCANNING;
-    }
+}  // namespace
+/** Searches for the lock_t object which has the specified engine_lock_id (@see
+print_lock_id), and if it exists, executes provided f on it, under protection
+of shard-specific latch. The type of the lock (LOCK_REC or LOCK_TABLE) is also
+provided to f. For LOCK_REC multiple lock requests can share the same lock_t
+object, thus f will be fed the specific heap_no. For LOCK_TABLE this third
+argument will be always ULINT_UNDEFINED.
+@param[in]     engine_lock_id
+                   The string used in ENGINE_LOCK_ID column to uniquely
+                   identify the lock request.
+@param[in]     f
+                   A callable, for which f(lock, type, heap_no) will be
+                   executed, if lock with specified engine_lock_id exists. */
+template <typename F>
+static void find_lock_and_execute(const char *engine_lock_id, F &&f) {
+  i_s_locks_row_t row;
+  const int lock_type = trx_i_s_parse_lock_id(engine_lock_id, &row);
+  if (0 == lock_type) {
+    return;
   }
 
-  ~Innodb_trx_scan_state() = default;
+  if (lock_type == LOCK_REC) {
+    const page_id_t page_id{row.lock_space, row.lock_page};
+    locksys::Shard_latch_guard guard{UT_LOCATION_HERE, page_id};
 
-  scan_pass get_pass() { return m_scan_pass; }
+    const lock_t *lock = lock_find_record_lock_by_guid(page_id, row.lock_guid);
 
-  /** Prepare the next scan.
-  When there are TRX after the current range,
-  compute the next range.
-  When there are no more TRX for this pass,
-  advance to the next pass.
-  */
-  void prepare_next_scan() {
-    if (m_next_trx_id_range != TRX_ID_MAX) {
-      m_start_trx_id_range = m_next_trx_id_range;
-      m_end_trx_id_range = m_start_trx_id_range + SCAN_RANGE;
-      m_next_trx_id_range = TRX_ID_MAX;
-    } else {
-      switch (m_scan_pass) {
-        case INIT_SCANNING:
-          m_scan_pass = SCANNING_RW_TRX_LIST;
-          m_start_trx_id_range = 0;
-          m_end_trx_id_range = SCAN_RANGE;
-          m_next_trx_id_range = TRX_ID_MAX;
-          break;
-        case SCANNING_RW_TRX_LIST:
-          m_scan_pass = SCANNING_MYSQL_TRX_LIST;
-          m_start_trx_id_range = 0;
-          m_end_trx_id_range = SCAN_RANGE;
-          m_next_trx_id_range = TRX_ID_MAX;
-          /** Reset snapshot for RO trx. */
-          m_snapshot_trx_id = TRX_ID_MAX;
-          break;
-        case SCANNING_MYSQL_TRX_LIST:
-          m_scan_pass = DONE_SCANNING;
-          break;
-        case DONE_SCANNING:
-        default:
-          ut_error;
-          break;
+    if (lock != nullptr) {
+      std::forward<F>(f)(*lock, lock_type, row.lock_rec);
+    }
+
+  } else {
+    ut_ad(lock_type == LOCK_TABLE);
+    locksys::find_on_table(row.lock_table_id, [&](const lock_t &lock) {
+      if (lock_guid_t(lock) == row.lock_guid) {
+        std::forward<F>(f)(lock, lock_type, ULINT_UNDEFINED);
+        return true;
       }
-    }
+      return false;
+    });
   }
-
-  /** Check if a transaction belongs to the current range.
-  As a side effect, compute the next range.
-  @param[in] trx_id     Transaction id to evaluate
-  @param[in] found      Number of data locks found in the current range.
-  @return True if transaction is within range.
-  */
-  bool trx_id_in_range(trx_id_t trx_id, size_t found) {
-    ut_ad(trx_id < TRX_ID_MAX);
-
-    if ((m_start_trx_id_range <= trx_id) && (trx_id < m_end_trx_id_range)) {
-      if (found >= pfs_data_locks_max_locks_per_batch) {
-        /** Transition to the next range in advance to prevent excessive memory
-         * consumption. */
-        if (trx_id < m_next_trx_id_range) {
-          m_next_trx_id_range = trx_id;
-        }
-
-        return false;
-      }
-      return true;
-    }
-
-    if (trx_id > m_snapshot_trx_id) {
-      /** Check if a transaction belongs to the current inspection. The
-       * transaction with a larger trx id than m_snapshot_trx_id will be
-       * ignored. As a side effect, transition to the next state.*/
-      m_next_trx_id_range = TRX_ID_MAX;
-    } else if ((m_end_trx_id_range <= trx_id) &&
-               (trx_id < m_next_trx_id_range)) {
-      /** Transition to the next range.*/
-      m_next_trx_id_range = trx_id;
-    }
-
-    return false;
-  }
-
- private:
-  /** Current scan pass. */
-  scan_pass m_scan_pass;
-  /** Start of the current range. */
-  trx_id_t m_start_trx_id_range;
-  /** End of the current range. */
-  trx_id_t m_end_trx_id_range;
-  /** Next range. */
-  trx_id_t m_next_trx_id_range;
-  /** The snapshot taken when the state is initiated. Any transaction with a
-   * larger trx id will be ignored during inspection. */
-  trx_id_t m_snapshot_trx_id;
-};
+}
 
 /** Inspect data locks for the innodb storage engine. */
 class Innodb_data_lock_iterator : public PSI_engine_data_lock_iterator {
  public:
-  Innodb_data_lock_iterator();
-  ~Innodb_data_lock_iterator() override;
-
   bool scan(PSI_server_data_lock_container *container,
             bool with_lock_data) override;
 
-  bool fetch(PSI_server_data_lock_container *container,
+  void fetch(PSI_server_data_lock_container *container,
              const char *engine_lock_id, size_t engine_lock_id_length,
              bool with_lock_data) override;
 
  private:
-  /** Scan a trx list.
-  @param[in] container          The container to fill
-  @param[in] with_lock_data     True if column LOCK_DATA
-  needs to be populated.
-  @param[in] trx_list           The trx list to scan
-  @returns The number of records found
-  */
-  template <typename Trx_list>
-  size_t scan_trx_list(PSI_server_data_lock_container *container,
-                       bool with_lock_data, Trx_list *trx_list);
+  All_locks_iterator m_all_locks_iterator;
 
-  /** Scan a given trx.
-  Either scan all the locks for a transaction,
-  or scan only records matching a given lock.
-  @param[in] container          The container to fill
-  @param[in] with_lock_data     True if column LOCK_DATA
-  needs to be populated.
-  @param[in] trx                        The trx to scan
-  @param[in] with_filter                True if looking for a specific record
-  only.
-  @param[in] filter_lock_immutable_id     Immutable id of lock_t we are looking
-  for
-  @param[in] filter_heap_id     Heap id to look for, when filtering
-  @returns The number of records found
-  */
-  size_t scan_trx(PSI_server_data_lock_container *container,
-                  bool with_lock_data, const trx_t *trx, bool with_filter,
-                  uint64_t filter_lock_immutable_id = 0,
-                  ulint filter_heap_id = 0);
-
-  /** Current scan state. */
-  Innodb_trx_scan_state m_scan_state;
+  /** For a given lock it will inform container about each lock request it
+  represents (which can be more than one in case of LOCK_RECORD as there can be
+  multiple lock requests differing only by heap_no compressed into single lock
+  object), subject to filtering defined for the container, and
+  optionally by filter_heap_no if with_filter is true.
+  The with_filter is used to fetch just a lock request, the one specified by its
+  heap_no. Please note, that there is no guarantee that the lock with this heap
+  no is still in the lock sys.
+  @param[in,out]  parsed_paths    The cache of table path parsing results
+  @param[in,out]  container       The container to fill. Serves as both visitor
+                                  and filter
+  @param[in]      lock            The lock to inspect and report upon
+  @param[in]      with_lock_data  True if column LOCK_DATA is required.
+  @param[in]      with_filter     If true then filter_heap_no has
+                                  to be passed, and means that only the lock
+                                  request for that heap number (if still present
+                                  and matches the container's filters) should be
+                                  reported to the container. If false then all
+                                  lock requests represented for this lock are
+                                  considered for reporting.
+  @param[in]      filter_heap_no  if with_filter is true it further narrows the
+                                  set of reported lock requests to just the one
+                                  with given immutable id.
+  @return number of locks reported to the container */
+  static size_t report(
+      std::unordered_map<const char *, parsed_table_path> &parsed_paths,
+      PSI_server_data_lock_container &container, const lock_t &lock,
+      bool with_lock_data, bool with_filter,
+      ulint filter_heap_no = ULINT_UNDEFINED);
 };
 
 /** Inspect data lock waits for the innodb storage engine. */
 class Innodb_data_lock_wait_iterator
     : public PSI_engine_data_lock_wait_iterator {
  public:
-  Innodb_data_lock_wait_iterator() = default;
-  ~Innodb_data_lock_wait_iterator() override = default;
-
   bool scan(PSI_server_data_lock_wait_container *container) override;
 
-  bool fetch(PSI_server_data_lock_wait_container *container,
+  void fetch(PSI_server_data_lock_wait_container *container,
              const char *requesting_engine_lock_id,
              size_t requesting_engine_lock_id_length,
              const char *blocking_engine_lock_id,
              size_t blocking_engine_lock_id_length) override;
 
  private:
-  /** Scan a given transaction list.
-  @param[in] container          The container to fill
-  @param[in] trx_list           The trx list to scan
-  @returns the number of records found.
-  */
-  template <typename Trx_list>
-  size_t scan_trx_list(PSI_server_data_lock_wait_container *container,
-                       Trx_list *trx_list);
+  All_locks_iterator m_all_locks_iterator;
 
-  /** Scan a given transaction.
-  Either scan all the waits for a transaction,
-  or scan only records matching a given wait.
-  @param[in] container          The container to fill
-  @param[in] trx                        The trx to scan
-  @param[in] with_filter                True if looking for a given wait only.
-  @param[in] filter_requesting_lock_immutable_id                Immutable id of
-  lock_t for the requesting lock, when filtering
-  @param[in] filter_blocking_lock_immutable_id          Immutable idof
-  lock_t for the blocking lock, when filtering
-  @returns the number of records found.
-  */
-  size_t scan_trx(PSI_server_data_lock_wait_container *container,
-                  const trx_t *trx, bool with_filter,
-                  uint64_t filter_requesting_lock_immutable_id = 0,
-                  uint64_t filter_blocking_lock_immutable_id = 0);
-
-  /** Current scan state. */
-  Innodb_trx_scan_state m_scan_state;
+  /** For a given wait_lock it will inform container about each lock which is
+  blocking this wait_lock, subject to filtering defined for the container, and
+  optionally by filter_blocking_lock_immutable_id if with_filter is true.
+  The with_filter is used to fetch just a single blocking lock, the one
+  specified by its immutable id. Please note, that there is no guarantee that
+  this blocking lock is still in the lock sys.
+  @param[in,out]  container   The container to fill. Serves as both visitor and
+                              filter
+  @param[in]      wait_lock   The requesting lock which has to wait
+  @param[in]      with_filter If true then filter_blocking_lock_immutable_id has
+                              to be passed, and means that only the lock with
+                              that immutable id (if still present and matches
+                              the container's filters) should be reported to the
+                              container. If false then all locks blocking the
+                              wait_lock are considered for reporting.
+  @param[in]      filter_blocking_lock_guid if with_filter is true it
+                              further narrows the set of reported locks to just
+                              the one with given guid.
+  @return number of locks reported to the container */
+  static size_t report(
+      PSI_server_data_lock_wait_container &container, const lock_t &wait_lock,
+      bool with_filter,
+      const lock_guid_t &filter_blocking_lock_guid = lock_guid_t());
 };
-
-/** Check if a transaction should be discarded.
-Transactions present in any TRX LIST that have not started yet
-are discarded, when inspecting data locks.
-Transactions present in the MySQL TRX LIST,
-that are writing data and have an id, are also discarded.
-@param[in] trx Transaction to evaluate
-@param[in] read_write True if trx is in the RW TRX list
-@returns True if the trx should be discarded
-*/
-bool discard_trx(const trx_t *trx, bool read_write) {
-  if (!trx_was_started(trx)) {
-    return true;
-  }
-
-  if ((!read_write && trx->id != 0 && !trx->read_only)) {
-    return true;
-  }
-
-  return false;
-}
-template <typename Trx_list>
-static constexpr bool is_read_write() {
-  constexpr bool is_read_write =
-      std::is_same<Trx_list, decltype(trx_sys->rw_trx_list)>::value;
-  constexpr bool is_mysql_trx_list =
-      std::is_same<Trx_list, decltype(trx_sys->mysql_trx_list)>::value;
-  static_assert(is_read_write || is_mysql_trx_list,
-                "only rw_trx_list and mysql_trx_list are supported");
-  static_assert(!is_read_write || !is_mysql_trx_list,
-                "can not distinguish rw_trx_list from mysql_trx_list by type");
-  return is_read_write;
-}
-
-/** Find a transaction in a TRX LIST.
-@param[in] filter_trx_immutable_id  The transaction immutable id
-@param[in] trx_list                 The transaction list
-@returns The transaction when found, or NULL
-*/
-template <typename Trx_list>
-static const trx_t *fetch_trx_in_trx_list(uint64_t filter_trx_immutable_id,
-                                          Trx_list *trx_list) {
-  constexpr bool read_write = is_read_write<Trx_list>();
-
-  /* It is not obvious if and why we need lock_sys exclusive access, but we do
-  own exclusive latch here, so treat this assert more as a documentation */
-  ut_ad(locksys::owns_exclusive_global_latch());
-  ut_ad(trx_sys_mutex_own());
-
-  for (auto trx : *trx_list) {
-    if (discard_trx(trx, read_write)) {
-      continue;
-    }
-    /* Note: for read-only transactions the check above might be based on stale
-    values and does not bring any guarantee after it is finished, because state
-    of read-only transaction might be modified outside the trx_sys->mutex. */
-
-    if (filter_trx_immutable_id == trx_immutable_id(trx)) {
-      return trx;
-    }
-  }
-
-  return nullptr;
-}
 
 PSI_engine_data_lock_iterator *
 Innodb_data_lock_inspector::create_data_lock_iterator() {
@@ -467,22 +291,31 @@ void Innodb_data_lock_inspector::destroy_data_lock_wait_iterator(
   delete it;
 }
 
-/** Allocate identifier in performance schema container.
-@param[in]      container       The container to fill
-@param[in]      id_str          The identifier string
-@param[out]     id_length       The identifier string length
-@returns string allocated in the performance schema container.
-*/
-const char *alloc_identifier(PSI_server_data_lock_container *container,
-                             std::string &id_str, size_t *id_length) {
-  *id_length = id_str.length();
-  const char *id_name = nullptr;
-
-  if (*id_length > 0) {
-    id_name = container->cache_data(id_str.c_str(), *id_length);
+namespace {
+/** Allocate identifier in performance schema container. The string is allocated
+in the cache of the container and is owned by that cache. Therefore the
+returned std::string_view is only valid for as long as the cache is not cleared
+by a call to PFS_data_cache::clear() which occurs in:
+  - PFS_data_lock_wait_container::clear()
+  - PFS_data_lock_wait_container::shrink()
+  - PFS_data_lock_container::clear()
+  - PFS_data_lock_wait_container::shrink()
+@param[in]  container        The container to fill
+@param[in]  kind             The identifier kind
+@param[in]  id_str           The identifier string
+@return view of the cached string */
+std::string_view alloc_identifier(PSI_server_data_lock_container *container,
+                                  PSI_identifier kind,
+                                  const std::string &id_str) {
+  if (id_str.length() > 0) {
+    const char *cached_id;
+    size_t cached_id_length;
+    container->cache_identifier(kind, id_str.c_str(), id_str.length(),
+                                &cached_id, &cached_id_length);
+    return {cached_id, cached_id_length};
+  } else {
+    return {};
   }
-
-  return (id_name);
 }
 
 /** Parse a table path string.
@@ -492,22 +325,10 @@ Convert these strings and store them in the performance schema container.
 @note String returned are not zero terminated.
 @param[in] container                    The container to fill
 @param[in] table_path                   The table path string
-@param[out] table_schema                The table schema
-@param[out] table_schema_length         The table schema length
-@param[out] table_name                  The table name
-@param[out] table_name_length           The table name length
-@param[out] partition_name              Partition name
-@param[out] partition_name_length       Partition name length
-@param[out] subpartition_name           Sub partition name
-@param[out] subpartition_name_length    Sub partition name length
+@return parsed fragments of the table name pointing to cached strings
 */
-void parse_table_path(PSI_server_data_lock_container *container,
-                      const char *table_path, const char **table_schema,
-                      size_t *table_schema_length, const char **table_name,
-                      size_t *table_name_length, const char **partition_name,
-                      size_t *partition_name_length,
-                      const char **subpartition_name,
-                      size_t *subpartition_name_length) {
+parsed_table_path parse_table_path(PSI_server_data_lock_container *container,
+                                   const char *table_path) {
   std::string dict_table(table_path);
 
   /* Get schema and table name in system cs. */
@@ -524,26 +345,29 @@ void parse_table_path(PSI_server_data_lock_container *container,
     /* Get schema partition and sub-partition name in system cs. */
     dict_name::get_partition(partition, true, part, sub_part);
   }
-
-  *table_schema = alloc_identifier(container, schema, table_schema_length);
-  *table_name = alloc_identifier(container, table, table_name_length);
-  *partition_name = alloc_identifier(container, part, partition_name_length);
-  *subpartition_name =
-      alloc_identifier(container, sub_part, subpartition_name_length);
+  parsed_table_path parsed;
+  parsed.schema = alloc_identifier(container, PSI_IDENTIFIER_SCHEMA, schema);
+  parsed.table = alloc_identifier(container, PSI_IDENTIFIER_TABLE, table);
+  parsed.partition =
+      alloc_identifier(container, PSI_IDENTIFIER_PARTITION, part);
+  parsed.subpartition =
+      alloc_identifier(container, PSI_IDENTIFIER_SUBPARTITION, sub_part);
+  return parsed;
 }
+}  // namespace
 
 /** Print a table lock id.
 @param[in]      lock            The lock to print
 @param[in,out]  lock_id         Printing buffer
 @param[in]      lock_id_size    Printing buffer length
 */
-void print_table_lock_id(const lock_t *lock, char *lock_id,
-                         size_t lock_id_size) {
+static void print_table_lock_id(const lock_t &lock, char *lock_id,
+                                size_t lock_id_size) {
   /* We try to be backward compatible with INFORMATION_SCHEMA so that one can
   join with INFORMATION_SCHEMA.innodb_trx.trx_requested_lock_id column */
   i_s_locks_row_t row;
-  fill_locks_row(&row, lock, ULINT_UNDEFINED);
-  trx_i_s_create_lock_id(&row, lock_id, lock_id_size);
+  fill_locks_row(&row, &lock, ULINT_UNDEFINED);
+  trx_i_s_create_lock_id(row, lock_id, lock_id_size);
 }
 
 /** Print a record lock id.
@@ -552,24 +376,25 @@ void print_table_lock_id(const lock_t *lock, char *lock_id,
 @param[in,out]  lock_id         Printing buffer
 @param[in]      lock_id_size    Printing buffer length
 */
-void print_record_lock_id(const lock_t *lock, ulint heap_no, char *lock_id,
-                          size_t lock_id_size) {
+static void print_record_lock_id(const lock_t &lock, ulint heap_no,
+                                 char *lock_id, size_t lock_id_size) {
   /* We try to be backward compatible with INFORMATION_SCHEMA so that one can
   join with INFORMATION_SCHEMA.innodb_trx.trx_requested_lock_id column */
   i_s_locks_row_t row;
-  fill_locks_row(&row, lock, heap_no);
-  trx_i_s_create_lock_id(&row, lock_id, lock_id_size);
+  fill_locks_row(&row, &lock, heap_no);
+  trx_i_s_create_lock_id(row, lock_id, lock_id_size);
 }
 
 /** Print a lock id.
 @param[in]      lock            The lock to print
-@param[in]      heap_no         Lock heap number
+@param[in]      heap_no         Lock heap number if lock's type is LOCK_REC,
+                                ignored otherwise.
 @param[in,out]  lock_id         Printing buffer
 @param[in]      lock_id_size    Printing buffer length
 */
-void print_lock_id(const lock_t *lock, ulint heap_no, char *lock_id,
-                   size_t lock_id_size) {
-  switch (lock_get_type(lock)) {
+static void print_lock_id(const lock_t &lock, ulint heap_no, char *lock_id,
+                          size_t lock_id_size) {
+  switch (lock_get_type(&lock)) {
     case LOCK_TABLE:
       print_table_lock_id(lock, lock_id, lock_id_size);
       break;
@@ -581,465 +406,220 @@ void print_lock_id(const lock_t *lock, ulint heap_no, char *lock_id,
   }
 }
 
-/** Scan a lock id string and extract information necessary to find a row
-by primary key.
-@param[in]      lock_id                 The lock id string to parse
-@param[out]     trx_immutable_id        The immutable id of lock->trx
-@param[out]     lock_immutable_id       The immutable id of lock
-@param[out]     heap_id                 The heap number found, for record locks
-@returns The type of lock found.
-@retval LOCK_TABLE      Table lock
-@retval LOCK_REC        Record lock
-@retval 0               Format error
-*/
-int scan_lock_id(const char *lock_id, uint64_t *trx_immutable_id,
-                 uint64_t *lock_immutable_id, ulint *heap_id) {
-  i_s_locks_row_t row;
-  int lock_type = trx_i_s_parse_lock_id(lock_id, &row);
-  if (!lock_type) {
-    return 0;
-  }
-  *trx_immutable_id = row.lock_trx_immutable_id;
-  *lock_immutable_id = row.lock_immutable_id;
-  if (lock_type == LOCK_REC) {
-    *heap_id = row.lock_rec;
-  }
-  return lock_type;
-}
-
-Innodb_data_lock_iterator::Innodb_data_lock_iterator() = default;
-
-Innodb_data_lock_iterator::~Innodb_data_lock_iterator() = default;
-
 bool Innodb_data_lock_iterator::scan(PSI_server_data_lock_container *container,
                                      bool with_lock_data) {
-  if (m_scan_state.get_pass() == INIT_SCANNING) {
-    if (!container->accept_engine(g_engine, g_engine_length)) {
-      return true;
-    }
-
-    m_scan_state.prepare_next_scan();
-  }
-
-  if (m_scan_state.get_pass() == DONE_SCANNING) {
-    return true;
-  }
-
-  /* We want locks reported in a single scan to be a consistent snapshot. */
-  locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
-
-  trx_sys_mutex_enter();
-
-  size_t found = 0;
-
-  while ((m_scan_state.get_pass() == SCANNING_RW_TRX_LIST) && (found == 0)) {
-    found = scan_trx_list(container, with_lock_data, &trx_sys->rw_trx_list);
-    m_scan_state.prepare_next_scan();
-  }
-
-  while ((m_scan_state.get_pass() == SCANNING_MYSQL_TRX_LIST) && (found == 0)) {
-    found = scan_trx_list(container, with_lock_data, &trx_sys->mysql_trx_list);
-    m_scan_state.prepare_next_scan();
-  }
-
-  trx_sys_mutex_exit();
-
-  return false;
-}
-
-bool Innodb_data_lock_iterator::fetch(PSI_server_data_lock_container *container,
-                                      const char *engine_lock_id, size_t,
-                                      bool with_lock_data) {
-  int record_type;
-  uint64_t trx_immutable_id;
-  ulint heap_id{0};
-  uint64_t lock_immutable_id;
-  const trx_t *trx;
-
   if (!container->accept_engine(g_engine, g_engine_length)) {
     return true;
   }
-
-  record_type = scan_lock_id(engine_lock_id, &trx_immutable_id,
-                             &lock_immutable_id, &heap_id);
-
-  if (record_type == 0) {
-    return true;
-  }
-
-  /* scan_trx() requires exclusive global latch to iterate over locks of trx */
-  locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
-
-  trx_sys_mutex_enter();
-
-  trx = fetch_trx_in_trx_list(trx_immutable_id, &trx_sys->rw_trx_list);
-
-  if (trx == nullptr) {
-    trx = fetch_trx_in_trx_list(trx_immutable_id, &trx_sys->mysql_trx_list);
-  }
-
-  if (trx != nullptr) {
-    scan_trx(container, with_lock_data, trx, true, lock_immutable_id, heap_id);
-  }
-
-  trx_sys_mutex_exit();
-
-  return true;
-}
-/** Scan a trx list.
-@param[in] container            The container to fill
-@param[in] with_lock_data       True if column LOCK_DATA
-needs to be populated.
-@param[in] trx_list             The trx list to scan
-@returns The number of records found
-*/
-template <typename Trx_list>
-size_t Innodb_data_lock_iterator::scan_trx_list(
-    PSI_server_data_lock_container *container, bool with_lock_data,
-    Trx_list *trx_list) {
-  trx_id_t trx_id;
-  size_t found = 0;
-  constexpr bool read_write = is_read_write<Trx_list>();
-  /* We are about to scan over various locks of multiple transactions not
-  limited to any particular shard thus we need an exclusive latch on lock_sys */
-  ut_ad(locksys::owns_exclusive_global_latch());
-  ut_ad(trx_sys_mutex_own());
-
-  for (auto trx : *trx_list) {
-    if (discard_trx(trx, read_write)) {
-      continue;
+  std::unordered_map<const char *, parsed_table_path> parsed_paths;
+  for (size_t found = 0; 0 == found;) {
+    if (m_all_locks_iterator.iterate_over_next_batch([&](const lock_t &lock) {
+          found +=
+              report(parsed_paths, *container, lock, with_lock_data, false);
+          bool exceed_max_locks = found >= pfs_data_locks_max_locks_per_batch;
+          if (exceed_max_locks) {
+            ib::warn()
+                << "One cell holds too many locks which exceeds the configured "
+                   "pfs_data_locks_max_locks_per_batch.";
+          }
+          return exceed_max_locks;
+        })) {
+      return true;
     }
-    /* Note: for read-only transactions the check above might be based on stale
-    values and does not bring any guarantee after it is finished, because state
-    of read-only transaction might be modified outside the trx_sys->mutex. */
-
-    trx_id = trx_get_id_for_print(trx);
-
-    if (!m_scan_state.trx_id_in_range(trx_id, found)) {
-      continue;
-    }
-
-    found += scan_trx(container, with_lock_data, trx, false);
   }
-
-  return found;
+  return false;
 }
 
-/** Scan a given trx.
-Either scan all the locks for a transaction,
-or scan only records matching a given lock.
-@param[in] container                  The container to fill
-@param[in] with_lock_data             True if column LOCK_DATA
-needs to be populated.
-@param[in] trx                        The trx to scan
-@param[in] with_filter                True if looking for a specific
-record only.
-@param[in] filter_lock_immutable_id   Immutable id of lock_t we are looking for
-@param[in] filter_heap_id             Heap id to look for, when filtering
-@returns The number of records found
-*/
-size_t Innodb_data_lock_iterator::scan_trx(
-    PSI_server_data_lock_container *container, bool with_lock_data,
-    const trx_t *trx, bool with_filter, uint64_t filter_lock_immutable_id,
-    ulint filter_heap_id) {
-  assert_trx_nonlocking_or_in_list(trx);
+void Innodb_data_lock_iterator::fetch(PSI_server_data_lock_container *container,
+                                      const char *engine_lock_id,
+                                      size_t engine_lock_id_length,
+                                      bool with_lock_data) {
+  ut_ad(strnlen(engine_lock_id, engine_lock_id_length + 1) ==
+        engine_lock_id_length);
 
+  if (!container->accept_engine(g_engine, g_engine_length)) {
+    return;
+  }
+  std::unordered_map<const char *, parsed_table_path> parsed_paths;
+  find_lock_and_execute(engine_lock_id,
+                        [&](const lock_t &lock, int lock_type, ulint heap_no) {
+                          report(parsed_paths, *container, lock, with_lock_data,
+                                 lock_type == LOCK_REC, heap_no);
+                        });
+}
+
+size_t Innodb_data_lock_iterator::report(
+    std::unordered_map<const char *, parsed_table_path> &parsed_paths,
+    PSI_server_data_lock_container &container, const lock_t &lock,
+    bool with_lock_data, bool with_filter, ulint filter_heap_no) {
   size_t found = 0;
-  const lock_t *lock;
-  ulonglong trx_id;
   ulonglong thread_id;
   ulonglong event_id;
-  const char *table_path;
-  const char *table_schema;
-  size_t table_schema_length;
-  const char *table_name;
-  size_t table_name_length;
-  const char *partition_name;
-  size_t partition_name_length;
-  const char *subpartition_name;
-  size_t subpartition_name_length;
   const char *index_name;
   size_t index_name_length;
   const void *identity;
   const char *lock_mode_str;
   const char *lock_type_str;
-  const char *lock_status_str = "GRANTED";
+  const char *lock_status_str;
   const char *lock_data_str;
   char engine_lock_id[TRX_I_S_LOCK_ID_MAX_LEN + 1];
   size_t engine_lock_id_length;
   ulint heap_no;
-  int record_type;
-  lock_t *wait_lock;
-  size_t container_size;
-  ut_ad(locksys::owns_exclusive_global_latch());
-  wait_lock = trx->lock.wait_lock;
+  ut_ad(locksys::owns_lock_shard(&lock));
+  const auto trx_id = lock_get_trx_id(&lock);
 
-  trx_id = trx_get_id_for_print(trx);
-
-  if (!container->accept_transaction_id(trx_id)) {
-    return 0;
+  if (!container.accept_transaction_id(trx_id)) {
+    return found;
   }
 
-  for (lock = lock_get_first_trx_locks(&trx->lock); lock != nullptr;
-       lock = lock_get_next_trx_locks(lock)) {
-    record_type = lock_get_type(lock);
+  lock_get_psi_event(&lock, &thread_id, &event_id);
 
-    if (with_filter &&
-        filter_lock_immutable_id != lock_get_immutable_id(lock)) {
-      continue;
-    }
+  if (!container.accept_thread_id_event_id(thread_id, event_id)) {
+    return found;
+  }
+  const char *table_path = lock_get_table_name(&lock).m_name;
+  auto parsed_it = parsed_paths.find(table_path);
+  if (parsed_it == parsed_paths.end()) {
+    parsed_it =
+        parsed_paths
+            .emplace(table_path, parse_table_path(&container, table_path))
+            .first;
+  }
+  const auto parsed = parsed_it->second;
 
-    lock_get_psi_event(lock, &thread_id, &event_id);
+  if (!container.accept_object(
+          parsed.schema.data(), parsed.schema.size(), parsed.table.data(),
+          parsed.table.size(), parsed.partition.data(), parsed.partition.size(),
+          parsed.subpartition.data(), parsed.subpartition.size())) {
+    return found;
+  }
 
-    if (!container->accept_thread_id_event_id(thread_id, event_id)) {
-      continue;
-    }
+  identity = &lock;
+  lock_mode_str = lock_get_mode_str(&lock);
+  lock_type_str = lock_get_type_str(&lock);
+  lock_status_str = lock_is_waiting(lock) ? "WAITING" : "GRANTED";
 
-    table_path = lock_get_table_name(lock).m_name;
-    parse_table_path(container, table_path, &table_schema, &table_schema_length,
-                     &table_name, &table_name_length, &partition_name,
-                     &partition_name_length, &subpartition_name,
-                     &subpartition_name_length);
+  switch (lock_get_type(&lock)) {
+    case LOCK_TABLE:
+      print_table_lock_id(lock, engine_lock_id, sizeof(engine_lock_id));
+      engine_lock_id_length = strlen(engine_lock_id);
 
-    if (!container->accept_object(table_schema, table_schema_length, table_name,
-                                  table_name_length, partition_name,
-                                  partition_name_length, subpartition_name,
-                                  subpartition_name_length)) {
-      continue;
-    }
+      if (container.accept_lock_id(engine_lock_id, engine_lock_id_length)) {
+        container.add_lock_row(
+            g_engine, g_engine_length, engine_lock_id, engine_lock_id_length,
+            trx_id, thread_id, event_id, parsed.schema.data(),
+            parsed.schema.size(), parsed.table.data(), parsed.table.size(),
+            parsed.partition.data(), parsed.partition.size(),
+            parsed.subpartition.data(), parsed.subpartition.size(), nullptr, 0,
+            identity, lock_mode_str, lock_type_str, lock_status_str, nullptr);
+        found++;
+      }
+      break;
+    case LOCK_REC:
+      index_name = lock_rec_get_index_name(&lock);
+      index_name_length = strlen(index_name);
 
-    identity = lock;
-    lock_mode_str = lock_get_mode_str(lock);
-    lock_type_str = lock_get_type_str(lock);
+      heap_no = lock_rec_find_set_bit(&lock);
 
-    if (lock == wait_lock) {
-      lock_status_str = "WAITING";
-    }
+      while (heap_no != ULINT_UNDEFINED) {
+        if (!with_filter || (heap_no == filter_heap_no)) {
+          print_record_lock_id(lock, heap_no, engine_lock_id,
+                               sizeof(engine_lock_id));
+          engine_lock_id_length = strlen(engine_lock_id);
 
-    switch (record_type) {
-      case LOCK_TABLE:
-        print_table_lock_id(lock, engine_lock_id, sizeof(engine_lock_id));
-        engine_lock_id_length = strlen(engine_lock_id);
-
-        if (container->accept_lock_id(engine_lock_id, engine_lock_id_length)) {
-          container_size = container->add_lock_row(
-              g_engine, g_engine_length, engine_lock_id, engine_lock_id_length,
-              trx_id, thread_id, event_id, table_schema, table_schema_length,
-              table_name, table_name_length, partition_name,
-              partition_name_length, subpartition_name,
-              subpartition_name_length, nullptr, 0, identity, lock_mode_str,
-              lock_type_str, lock_status_str, nullptr);
-          found++;
-          if (container_size >= pfs_data_locks_max_locks_per_batch) {
-            goto func_exit;
-          }
-        }
-        break;
-      case LOCK_REC:
-        index_name = lock_rec_get_index_name(lock);
-        index_name_length = strlen(index_name);
-
-        heap_no = lock_rec_find_set_bit(lock);
-
-        while (heap_no != ULINT_UNDEFINED) {
-          if (!with_filter || (heap_no == filter_heap_id)) {
-            print_record_lock_id(lock, heap_no, engine_lock_id,
-                                 sizeof(engine_lock_id));
-            engine_lock_id_length = strlen(engine_lock_id);
-
-            if (container->accept_lock_id(engine_lock_id,
-                                          engine_lock_id_length)) {
-              if (with_lock_data) {
-                p_s_fill_lock_data(&lock_data_str, lock, heap_no, container);
-              } else {
-                lock_data_str = nullptr;
-              }
-
-              container_size = container->add_lock_row(
-                  g_engine, g_engine_length, engine_lock_id,
-                  engine_lock_id_length, trx_id, thread_id, event_id,
-                  table_schema, table_schema_length, table_name,
-                  table_name_length, partition_name, partition_name_length,
-                  subpartition_name, subpartition_name_length, index_name,
-                  index_name_length, identity, lock_mode_str, lock_type_str,
-                  lock_status_str, lock_data_str);
-              found++;
-              if (container_size >= pfs_data_locks_max_locks_per_batch) {
-                goto func_exit;
-              }
+          if (container.accept_lock_id(engine_lock_id, engine_lock_id_length)) {
+            if (with_lock_data) {
+              p_s_fill_lock_data(&lock_data_str, &lock, heap_no, &container);
+            } else {
+              lock_data_str = nullptr;
             }
+
+            container.add_lock_row(
+                g_engine, g_engine_length, engine_lock_id,
+                engine_lock_id_length, trx_id, thread_id, event_id,
+                parsed.schema.data(), parsed.schema.size(), parsed.table.data(),
+                parsed.table.size(), parsed.partition.data(),
+                parsed.partition.size(), parsed.subpartition.data(),
+                parsed.subpartition.size(), index_name, index_name_length,
+                identity, lock_mode_str, lock_type_str, lock_status_str,
+                lock_data_str);
+            found++;
           }
-
-          heap_no = lock_rec_find_next_set_bit(lock, heap_no);
         }
-        break;
-      default:
-        ut_error;
-    }
+
+        heap_no = lock_rec_find_next_set_bit(&lock, heap_no);
+      }
+      break;
+    default:
+      ut_error;
   }
 
-func_exit:
-  if (found >= pfs_data_locks_max_locks_per_batch) {
-    ib::warn() << "The transaction " << trx->id
-               << " holds too many locks which exceeds the configured "
-                  "pfs_data_locks_max_locks_per_batch.";
-  }
   return found;
 }
 
 bool Innodb_data_lock_wait_iterator::scan(
     PSI_server_data_lock_wait_container *container) {
-  if (m_scan_state.get_pass() == INIT_SCANNING) {
-    if (!container->accept_engine(g_engine, g_engine_length)) {
-      return true;
-    }
-
-    m_scan_state.prepare_next_scan();
-  }
-
-  if (m_scan_state.get_pass() == DONE_SCANNING) {
-    return true;
-  }
-
-  /* We want locks reported in a single scan to be a consistent snapshot. */
-  locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
-
-  trx_sys_mutex_enter();
-
-  size_t found = 0;
-
-  while ((m_scan_state.get_pass() == SCANNING_RW_TRX_LIST) && (found == 0)) {
-    found = scan_trx_list(container, &trx_sys->rw_trx_list);
-    m_scan_state.prepare_next_scan();
-  }
-
-  while ((m_scan_state.get_pass() == SCANNING_MYSQL_TRX_LIST) && (found == 0)) {
-    found = scan_trx_list(container, &trx_sys->mysql_trx_list);
-    m_scan_state.prepare_next_scan();
-  }
-
-  trx_sys_mutex_exit();
-
-  return false;
-}
-
-bool Innodb_data_lock_wait_iterator::fetch(
-    PSI_server_data_lock_wait_container *container,
-    const char *requesting_engine_lock_id, size_t,
-    const char *blocking_engine_lock_id, size_t) {
-  int requesting_record_type;
-  uint64_t requesting_trx_immutable_id;
-  ulint requesting_heap_id;
-  uint64_t requesting_lock_immutable_id;
-  int blocking_record_type;
-  uint64_t blocking_trx_immutable_id;
-  ulint blocking_heap_id;
-  uint64_t blocking_lock_immutable_id;
-  const trx_t *trx;
-
   if (!container->accept_engine(g_engine, g_engine_length)) {
     return true;
   }
 
-  requesting_record_type =
-      scan_lock_id(requesting_engine_lock_id, &requesting_trx_immutable_id,
-                   &requesting_lock_immutable_id, &requesting_heap_id);
-
-  if (requesting_record_type == 0) {
-    return true;
+  for (size_t found = 0; 0 == found;) {
+    if (m_all_locks_iterator.iterate_over_next_batch([&](const lock_t &lock) {
+          found += report(*container, lock, false);
+          bool exceed_max_locks = found >= pfs_data_locks_max_locks_per_batch;
+          if (exceed_max_locks) {
+            ib::warn()
+                << "One cell holds too many locks which exceeds the configured "
+                   "pfs_data_locks_max_locks_per_batch.";
+          }
+          return exceed_max_locks;
+        })) {
+      return true;
+    }
   }
-
-  blocking_record_type =
-      scan_lock_id(blocking_engine_lock_id, &blocking_trx_immutable_id,
-                   &blocking_lock_immutable_id, &blocking_heap_id);
-
-  if (blocking_record_type == 0) {
-    return true;
-  }
-
-  /* scan_trx() requires exclusive global latch to iterate over locks of trx */
-  locksys::Global_exclusive_latch_guard guard{UT_LOCATION_HERE};
-
-  trx_sys_mutex_enter();
-
-  trx =
-      fetch_trx_in_trx_list(requesting_trx_immutable_id, &trx_sys->rw_trx_list);
-
-  if (trx == nullptr) {
-    trx = fetch_trx_in_trx_list(requesting_trx_immutable_id,
-                                &trx_sys->mysql_trx_list);
-  }
-
-  if (trx != nullptr) {
-    scan_trx(container, trx, true, requesting_lock_immutable_id,
-             blocking_lock_immutable_id);
-  }
-
-  trx_sys_mutex_exit();
-
-  return true;
+  return false;
 }
 
-/** Scan a given transaction list.
-@param[in] container            The container to fill
-@param[in] trx_list             The trx list to scan
-@returns the number of records found.
-*/
-template <typename Trx_list>
-size_t Innodb_data_lock_wait_iterator::scan_trx_list(
-    PSI_server_data_lock_wait_container *container, Trx_list *trx_list) {
-  trx_id_t trx_id;
-  size_t found = 0;
-  constexpr bool read_write = is_read_write<Trx_list>();
+void Innodb_data_lock_wait_iterator::fetch(
+    PSI_server_data_lock_wait_container *container,
+    const char *requesting_engine_lock_id,
+    size_t requesting_engine_lock_id_length,
+    const char *blocking_engine_lock_id,
+    size_t blocking_engine_lock_id_length) {
+  ut_ad(strnlen(requesting_engine_lock_id,
+                requesting_engine_lock_id_length + 1) ==
+        requesting_engine_lock_id_length);
+  ut_ad(strnlen(blocking_engine_lock_id, blocking_engine_lock_id_length + 1) ==
+        blocking_engine_lock_id_length);
 
-  /* We are about to scan over various locks of multiple transactions not
-  limited to any particular shard thus we need an exclusive latch on lock_sys */
-  ut_ad(locksys::owns_exclusive_global_latch());
-  ut_ad(trx_sys_mutex_own());
-
-  for (auto trx : *trx_list) {
-    if (discard_trx(trx, read_write)) {
-      continue;
-    }
-    /* Note: for read-only transactions the check above might be based on stale
-    values and does not bring any guarantee after it is finished, because state
-    of read-only transaction might be modified outside the trx_sys->mutex. */
-
-    trx_id = trx_get_id_for_print(trx);
-
-    if (!m_scan_state.trx_id_in_range(trx_id, found)) {
-      continue;
-    }
-
-    found += scan_trx(container, trx, false);
+  if (!container->accept_engine(g_engine, g_engine_length)) {
+    return;
   }
 
-  return found;
+  i_s_locks_row_t blocking_lock_row;
+  const int blocking_lock_type =
+      trx_i_s_parse_lock_id(blocking_engine_lock_id, &blocking_lock_row);
+  if (0 == blocking_lock_type) {
+    return;
+  }
+
+  find_lock_and_execute(
+      requesting_engine_lock_id,
+      [&](const lock_t &lock, int lock_type, ulint heap_no) {
+        ut_ad(lock_type != LOCK_REC || heap_no == lock_rec_find_set_bit(&lock));
+        report(*container, lock, true, blocking_lock_row.lock_guid);
+      });
+  return;
 }
 
-/** Scan a given transaction.
-Either scan all the waits for a transaction,
-or scan only records matching a given wait.
-@param[in] container            The container to fill
-@param[in] trx                  The trx to scan
-@param[in] with_filter          True if looking for a given wait only.
-@param[in] filter_requesting_lock_immutable_id          Immutable id of
-lock_t for the requesting lock, when filtering
-@param[in] filter_blocking_lock_immutable_id            Immutable idof
-lock_t for the blocking lock, when filtering
-@returns the number of records found.
-*/
-size_t Innodb_data_lock_wait_iterator::scan_trx(
-    PSI_server_data_lock_wait_container *container, const trx_t *trx,
-    bool with_filter, uint64_t filter_requesting_lock_immutable_id,
-    uint64_t filter_blocking_lock_immutable_id) {
-  assert_trx_nonlocking_or_in_list(trx);
-
-  if (trx->lock.que_state != TRX_QUE_LOCK_WAIT) {
+size_t Innodb_data_lock_wait_iterator::report(
+    PSI_server_data_lock_wait_container &container, const lock_t &wait_lock,
+    bool with_filter, const lock_guid_t &filter_blocking_lock_guid) {
+  ut_ad(locksys::owns_lock_shard(&wait_lock));
+  if (!lock_is_waiting(wait_lock)) {
     return 0;
   }
 
-  ulonglong requesting_trx_id;
   ulonglong requesting_thread_id;
   ulonglong requesting_event_id;
   const void *requesting_identity;
@@ -1051,87 +631,70 @@ size_t Innodb_data_lock_wait_iterator::scan_trx(
   const void *blocking_identity;
   char blocking_engine_lock_id[TRX_I_S_LOCK_ID_MAX_LEN + 1];
   size_t blocking_engine_lock_id_length;
-  ut_ad(locksys::owns_exclusive_global_latch());
-  const lock_t *wait_lock = trx->lock.wait_lock;
-  const lock_t *curr_lock;
-  int requesting_record_type;
+
   size_t found = 0;
-  lock_queue_iterator_t iter;
 
-  ut_a(wait_lock != nullptr);
-
-  requesting_record_type = lock_get_type(wait_lock);
-
-  if (with_filter &&
-      lock_get_immutable_id(wait_lock) != filter_requesting_lock_immutable_id) {
-    return 0;
+  const auto requesting_record_type = lock_get_type(&wait_lock);
+  const auto requesting_trx_id = lock_get_trx_id(&wait_lock);
+  if (!container.accept_requesting_transaction_id(requesting_trx_id)) {
+    return found;
   }
 
-  requesting_trx_id = trx_get_id_for_print(trx);
-  if (!container->accept_requesting_transaction_id(requesting_trx_id)) {
-    return 0;
+  lock_get_psi_event(&wait_lock, &requesting_thread_id, &requesting_event_id);
+  if (!container.accept_requesting_thread_id_event_id(requesting_thread_id,
+                                                      requesting_event_id)) {
+    return found;
   }
 
-  lock_get_psi_event(wait_lock, &requesting_thread_id, &requesting_event_id);
-  if (!container->accept_requesting_thread_id_event_id(requesting_thread_id,
-                                                       requesting_event_id)) {
-    return 0;
-  }
-
-  ulint heap_no = 0;
-  if (requesting_record_type == LOCK_REC) {
-    heap_no = lock_rec_find_set_bit(wait_lock);
-  }
+  const ulint heap_no = requesting_record_type == LOCK_REC
+                            ? lock_rec_find_set_bit(&wait_lock)
+                            : ULINT_UNDEFINED;
 
   print_lock_id(wait_lock, heap_no, requesting_engine_lock_id,
                 sizeof(requesting_engine_lock_id));
   requesting_engine_lock_id_length = strlen(requesting_engine_lock_id);
-  if (!container->accept_requesting_lock_id(requesting_engine_lock_id,
-                                            requesting_engine_lock_id_length)) {
-    return 0;
+  if (!container.accept_requesting_lock_id(requesting_engine_lock_id,
+                                           requesting_engine_lock_id_length)) {
+    return found;
   }
 
-  requesting_identity = wait_lock;
-  lock_queue_iterator_reset(&iter, wait_lock, ULINT_UNDEFINED);
-  locksys::Trx_locks_cache wait_lock_cache{};
-  for (curr_lock = lock_queue_iterator_get_prev(&iter); curr_lock != nullptr;
-       curr_lock = lock_queue_iterator_get_prev(&iter)) {
-    if (with_filter &&
-        lock_get_immutable_id(curr_lock) != filter_blocking_lock_immutable_id) {
-      continue;
+  requesting_identity = &wait_lock;
+  locksys::find_blockers(wait_lock, [&](const lock_t &curr_lock) {
+    ut_ad(locksys::owns_lock_shard(&curr_lock));
+    if (with_filter && lock_guid_t(curr_lock) != filter_blocking_lock_guid) {
+      return false;
     }
 
-    if (locksys::has_to_wait(wait_lock, curr_lock, wait_lock_cache)) {
-      blocking_trx_id = lock_get_trx_id(curr_lock);
-      if (!container->accept_blocking_transaction_id(blocking_trx_id)) {
-        continue;
-      }
-
-      lock_get_psi_event(curr_lock, &blocking_thread_id, &blocking_event_id);
-      if (!container->accept_blocking_thread_id_event_id(blocking_thread_id,
-                                                         blocking_event_id)) {
-        continue;
-      }
-
-      blocking_identity = curr_lock;
-      print_lock_id(curr_lock, heap_no, blocking_engine_lock_id,
-                    sizeof(blocking_engine_lock_id));
-      blocking_engine_lock_id_length = strlen(blocking_engine_lock_id);
-      if (!container->accept_blocking_lock_id(blocking_engine_lock_id,
-                                              blocking_engine_lock_id_length)) {
-        continue;
-      }
-
-      container->add_lock_wait_row(
-          g_engine, g_engine_length, requesting_engine_lock_id,
-          requesting_engine_lock_id_length, requesting_trx_id,
-          requesting_thread_id, requesting_event_id, requesting_identity,
-          blocking_engine_lock_id, blocking_engine_lock_id_length,
-          blocking_trx_id, blocking_thread_id, blocking_event_id,
-          blocking_identity);
-      found++;
+    blocking_trx_id = lock_get_trx_id(&curr_lock);
+    if (!container.accept_blocking_transaction_id(blocking_trx_id)) {
+      return false;
     }
-  }
+
+    lock_get_psi_event(&curr_lock, &blocking_thread_id, &blocking_event_id);
+    if (!container.accept_blocking_thread_id_event_id(blocking_thread_id,
+                                                      blocking_event_id)) {
+      return false;
+    }
+
+    blocking_identity = &curr_lock;
+    print_lock_id(curr_lock, heap_no, blocking_engine_lock_id,
+                  sizeof(blocking_engine_lock_id));
+    blocking_engine_lock_id_length = strlen(blocking_engine_lock_id);
+    if (!container.accept_blocking_lock_id(blocking_engine_lock_id,
+                                           blocking_engine_lock_id_length)) {
+      return false;
+    }
+
+    container.add_lock_wait_row(
+        g_engine, g_engine_length, requesting_engine_lock_id,
+        requesting_engine_lock_id_length, requesting_trx_id,
+        requesting_thread_id, requesting_event_id, requesting_identity,
+        blocking_engine_lock_id, blocking_engine_lock_id_length,
+        blocking_trx_id, blocking_thread_id, blocking_event_id,
+        blocking_identity);
+    found++;
+    return false;
+  });
 
   return found;
 }

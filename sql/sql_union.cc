@@ -46,7 +46,7 @@
 #include <utility>
 #include <vector>
 
-#include "column_encrypted_type.h"
+#include "column_encryption/column_encryption.h"
 #include "item_strfunc.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
@@ -814,6 +814,8 @@ bool Query_expression::prepare(THD *thd, Query_result *sel_result,
              ++it, ++tp) {
           if ((down_cast<Item_type_holder *>(*tp))->join_types(thd, *it))
             return true;
+          /** Aggregate the encryption type across different query blocks */
+          (*tp)->add_encryption_type((*it)->encryption_type());
         }
       }
     }
@@ -1667,51 +1669,6 @@ bool Query_expression::ClearForExecution() {
   return false;
 }
 
-/**
- * @brief Here, we check all visible columns in the result set to clients to
- * determine if we need to encrypt. If the result set is not for clients, e.g.
- * insert ... select, we just return.
- * Otherwise, for each visible column, if it is specified with Mask
- * Algorithm(i.e mask_internal_user or mask_users_password), we will encrypt it
- * by creating a new Item_func_xxx and replace the original Item.
- *
- * @param thd
- * @param[in] query_result
- * @param[in/out] fields
- */
-static void encrypt_result_set_if_need(THD *thd, Query_result *query_result,
-                                       mem_root_deque<Item *> *fields) {
-  /** Only for result to users. */
-  if (dynamic_cast<Query_result_send *>(query_result) == nullptr ||
-      !thd->enable_mask_internal_user) {
-    return;
-  }
-  for (auto it = fields->begin(); it != fields->end(); ++it) {
-    Item *item = *it;
-    Item **item_pos = &*it;
-    if (!item->hidden && item->has_encrypted_column()) {
-      Item *encrypted_func = nullptr;
-      uint16 encrypted_type = item->encrypted_type();
-      if (has_mask_users_password_type(encrypted_type)) {
-        encrypted_func =
-            new (thd->mem_root) Item_func_mask_users_password(POS(), item);
-      } else if (has_mask_internal_users_type(encrypted_type)) {
-        encrypted_func =
-            new (thd->mem_root) Item_func_mask_internal_user(POS(), item);
-      }
-      if (encrypted_func) {
-        /** Keep name and original name same */
-        encrypted_func->item_name.set(item->item_name.ptr());
-        encrypted_func->orig_name.set(item->orig_name.ptr());
-        encrypted_func->fix_fields(thd, item_pos);
-        *item_pos = encrypted_func;
-        /** To avoid memory leak, we need to add it to the query arena */
-        thd->add_item(encrypted_func);
-      }
-    }
-  }
-}
-
 bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   THD_STAGE_INFO(thd, stage_executing);
   DEBUG_SYNC(thd, "before_join_exec");
@@ -1732,7 +1689,7 @@ bool Query_expression::ExecuteIteratorQuery(THD *thd) {
   Query_result *query_result = this->query_result();
   assert(query_result != nullptr);
 
-  encrypt_result_set_if_need(thd, query_result, fields);
+  komodo::encrypt_result_set_if_need(thd, query_result, fields);
 
   if (query_result->start_execution(thd)) return true;
 
@@ -2069,7 +2026,7 @@ static void cleanup_tmp_tables(Table_ref *list) {
         tl->table = nullptr;
       } else {
         // Clear indexes added during optimization, keep possible unique index
-        tl->table->s->keys = tl->table->s->is_distinct ? 1 : 0;
+        tl->table->s->total_keys = tl->table->s->keys = tl->table->s->is_distinct ? 1 : 0;
         tl->table->s->first_unused_tmp_key = 0;
       }
     }

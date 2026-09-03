@@ -2,21 +2,18 @@
 #include "ha_innodb.h"
 #include "row0mysql.h"
 #include "sql/table.h"
-#include "trx0purge.h"
 
-#include "lizard0gcs.h"
-#include "lizard0gcs0hist.h"
+#include "lizard0gcs0history.h"
 #include "lizard0mysql.h"
-#include "sql/lizard/lizard_snapshot.h"
+
 #include "sql/sql_class.h"
+#include "sql/transaction/komodo0snapshot.h"
+
 
 /* To get current session thread default THD */
 THD *thd_get_current_thd();
 
 namespace lizard {
-
-/** Whether to enable use as of query (true by default) */
-bool srv_flashback_query_enable = true;
 
 static utc_t utc_distance(utc_t x, utc_t y) { return x > y ? x - y : y - x; }
 
@@ -72,11 +69,6 @@ static scn_t convert_timestamp_to_scn_low(utc_t user_utc, dberr_t *err) {
 int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn) {
   dberr_t err;
 
-  if (!srv_flashback_query_enable) {
-    *scn = SCN_MAX;
-    return 0;
-  }
-
   *scn = convert_timestamp_to_scn_low(utc, &err);
 
   return convert_error_code_to_mysql(err, 0, thd);
@@ -90,8 +82,8 @@ int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn) {
   @return           snapshot_vision if has,
                     nullptr if hasn't
 */
-const lizard::Snapshot_vision *row_prebuilt_get_snapshot_vision(
-    const row_prebuilt_t *prebuilt) {
+komodo::Snapshot_vision *row_prebuilt_get_snapshot_vision(
+    row_prebuilt_t *prebuilt) {
   TABLE *mysql_table;
   mysql_table = prebuilt->m_mysql_table;
   /* If it's not a flash back query, just return */
@@ -111,11 +103,8 @@ const lizard::Snapshot_vision *row_prebuilt_get_snapshot_vision(
   DB_SNAPSHOT_OUT_OF_RANGE, DB_AS_OF_TABLE_DEF_CHANGED, DB_SNAPSHOT_TOO_OLD
 */
 dberr_t row_prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
-  const Snapshot_vision *snapshot_vision = nullptr;
+  komodo::Snapshot_vision *snapshot_vision = nullptr;
   ut_ad(prebuilt);
-
-  /* forbid as-of query */
-  if (!srv_flashback_query_enable) return DB_SUCCESS;
 
   /* scn query context should never set twice */
   if (prebuilt->m_asof_query.is_assigned()) return DB_SUCCESS;
@@ -125,10 +114,12 @@ dberr_t row_prebuilt_bind_flashback_query(row_prebuilt_t *prebuilt) {
     return DB_SUCCESS;
   }
 
-  if (snapshot_vision->get_flashback_area()) {
+  if (snapshot_vision->is_flashback_area()) {
     ut_ad(prebuilt->table->is_2pp);
     generic_stats.flashback_area_query_cnt.inc();
   }
+
+  snapshot_vision->delay_activate(prebuilt->trx);
 
   if (snapshot_vision->too_old()) {
     return DB_SNAPSHOT_TOO_OLD;
@@ -160,5 +151,31 @@ dberr_t row_prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt) {
                   err = DB_SNAPSHOT_TOO_OLD;);
   return err;
 }
+
+void AsofVisonWrapper::trx_store_snapshot_vision(row_prebuilt_t *prebuilt) {
+  komodo::Snapshot_vision *snapshot_vision;
+
+  if (!prebuilt || !prebuilt->m_asof_query.is_asof_query()) return;
+
+  ut_ad(prebuilt->trx);
+
+  ut_ad(prebuilt->trx->vision.is_active());
+
+  if (!prebuilt->trx->vision.is_active()) return;
+
+  snapshot_vision = prebuilt->m_asof_query.snapshot_vision();
+  snapshot_vision->inherit(&prebuilt->trx->shadow_view);
+
+  m_vision = &prebuilt->trx->vision;
+  m_vision->store_snapshot_vision(snapshot_vision);
+}
+
+void AsofVisonWrapper::release_snapshot_vision() {
+  if (m_vision) {
+    m_vision->release_snapshot_vision();
+    m_vision = nullptr;
+  }
+}
+
 
 }  // namespace lizard

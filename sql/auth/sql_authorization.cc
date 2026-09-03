@@ -90,6 +90,7 @@
 #include "sql/auth/role_tables.h"
 #include "sql/auth/roles.h"
 #include "sql/auth/sql_auth_cache.h"
+#include "sql/auth/sql_guard.h"
 #include "sql/auth/sql_security_ctx.h"
 #include "sql/auth/sql_user_table.h"
 #include "sql/current_thd.h"
@@ -315,6 +316,38 @@ bool Grant_validator::validate_and_process_grant_as() {
   DBUG_TRACE;
 
   if (m_grant_as == nullptr || !m_grant_as->grant_as_used) return false;
+
+  /*
+    GRANT ... AS runs the grant with the authorization context of another
+    account (see change_security_context() below).  Under the RDS privilege
+    strategy this is a privilege-escalation vector (#85329745): a non-SUPER
+    user could specify AS a built-in high-privilege account (e.g.
+    aliyun_root@127.0.0.1) as the grantor and thereby bypass the entity guards
+    that gate mysql.global_grants / mysql.user on the *current* security
+    context (im::guard_record() -> guard_insert()/guard_update() exempt only
+    SUPER).  With the grantor swapped to a SUPER account the guard is fooled
+    into writing dynamic privileges (e.g. SYSTEM_VARIABLES_ADMIN) for the
+    attacker, who then disables opt_enable_rds_priv_strategy and rewrites his
+    own static Super_priv/File_priv.
+
+    Restrict GRANT ... AS to SUPER users while the strategy is enabled,
+    aligning with the SUPER-only exemption model used by the guards.  The check
+    runs before the context swap, so it inspects the real (current) user.  When
+    the strategy is off (default) behaviour is unchanged.
+
+    The replication applier is exempted (thd->slave_thread): it only replays
+    GRANT ... AS statements that already passed this very check on the source
+    (a malicious one is blocked there and never reaches the binlog), and the
+    binlog legitimately carries an AS clause both for explicit GRANT ... AS and
+    for the --partial_revokes rewrite of ordinary grants.  A normal applier runs
+    as a skip-grants (SUPER) user and would pass anyway; the slave_thread guard
+    additionally keeps a non-SUPER PRIVILEGE_CHECKS_USER applier working.
+  */
+  if (im::opt_enable_rds_priv_strategy && m_thd && !m_thd->slave_thread &&
+      !m_thd->security_context()->check_access(SUPER_ACL)) {
+    my_error(ER_RESERVED_USER_OR_PRIVS, MYF(0));
+    return true;
+  }
 
   LEX_USER *user = get_current_user(m_thd, m_grant_as->user);
   if (user == nullptr) return mask_and_return_error();
@@ -2297,6 +2330,35 @@ bool check_access(THD *thd, ulong want_access, const char *db, ulong *save_priv,
              sctx->priv_host().str,
              (db ? db : (thd->db().str ? thd->db().str : "unknown")));
   return true;
+}
+
+
+/**
+  Check DROP DATABASE privilege.
+
+  This function checks both static ACL_SUPER privilege and dynamic
+  DROP_DATABASE_ADMIN. It should be called before attempting to
+  drop a database.
+
+  @param thd      Thread handle
+
+  @retval false  OK (User has required privileges)
+  @retval true   Error (User lacks required privileges)
+*/
+bool check_drop_db_priv(THD *thd) {
+  if (!opt_polarx_security_enhancement_mode) {
+    return false;
+  }
+
+  Security_context *sctx = thd->security_context();
+  bool has_super_priv = sctx->check_access(SUPER_ACL);
+  bool has_drop_db_priv = sctx->has_global_grant(STRING_WITH_LEN("DROP_DATABASE_ADMIN")).first;
+  
+  if (has_super_priv || has_drop_db_priv) {
+    return false; // Access granted
+  }
+  my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "DROP_DATABASE_ADMIN");
+  return true; // Access denied
 }
 
 /**

@@ -1,0 +1,51 @@
+--echo #
+--echo # Test vector function HELP entries
+--echo #
+
+--echo # HELP category should list all vector functions
+HELP 'Vector Functions';
+
+--echo # HELP category should list vector data type, index, variables, and status topics
+HELP 'Vector';
+
+--echo # Individual function topics
+HELP 'VEC_DISTANCE';
+HELP 'VEC_FROMTEXT';
+HELP 'VEC_TOTEXT';
+HELP 'VECTOR_DIM';
+
+--echo # Vector column and index topics
+HELP 'VECTOR COLUMNS';
+HELP 'VECTOR INDEXES';
+
+--echo # Vector variables and status topics
+HELP 'VECTOR VARIABLES';
+HELP 'VECTOR STATUS';
+
+--echo # Alias keywords should resolve to the correct topic
+HELP 'VEC_DISTANCE_EUCLIDEAN';
+HELP 'VEC_DISTANCE_COSINE';
+HELP 'VEC_DISTANCE_INNER_PRODUCT';
+HELP 'TO_VECTOR';
+HELP 'STRING_TO_VECTOR';
+HELP 'FROM_VECTOR';
+HELP 'VECTOR_TO_STRING';
+
+--echo # Variable name keywords should resolve to VECTOR VARIABLES topic
+HELP 'VIDX_HNSW_EF_SEARCH';
+HELP 'VIDX_DEFAULT_DISTANCE';
+HELP 'VIDX_DISABLED';
+
+--echo # VECTOR INDEX keyword should resolve to VECTOR INDEXES topic
+HELP 'VECTOR INDEX';
+
+--echo # EF_CONSTRUCTION keyword should resolve to VECTOR INDEXES topic
+HELP 'EF_CONSTRUCTION';
+
+--echo # vidx_hnsw_default_ef_construction keyword should resolve to VECTOR VARIABLES topic
+HELP 'VIDX_HNSW_DEFAULT_EF_CONSTRUCTION';
+
+--echo # Wildcard search
+HELP 'VEC%';
+HELP 'VECTOR%';
+HELP 'VIDX%';

@@ -74,7 +74,7 @@ typedef struct node_visit {
 typedef std::vector<node_visit_t, ut::allocator<node_visit_t>> rtr_node_path_t;
 
 typedef struct rtr_rec {
-  rec_t *r_rec; /*!< matched record */
+  reg_t r_reg;  /*!< matched record */
   bool locked;  /*!< whether the record locked */
 } rtr_rec_t;
 

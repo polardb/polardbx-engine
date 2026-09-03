@@ -5,11 +5,12 @@ t-polardbx-engine:
     DO_TAG: 1
     NO_BUILDNUMBER: 1
     BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
   machine:
     docker:
       el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
 
 t-polardbx-engine-80:
   pkgpara:
@@ -18,14 +19,15 @@ t-polardbx-engine-80:
     DO_TAG: 1
     NO_BUILDNUMBER: 1
     BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
   machine:
     docker:
       alios7:
         x86_64: 1
         aarch64: 1
-      el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
+      alios8:
+        x86_64: 1
+        aarch64: 1
 
 t-polardbx-engine-lc-80:
   pkgpara:
@@ -34,14 +36,15 @@ t-polardbx-engine-lc-80:
     DO_TAG: 1
     NO_BUILDNUMBER: 1
     BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
   machine:
     docker:
       alios7:
         x86_64: 1
         aarch64: 1
       el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
   
 t-polardbx-engine-804:
   pkgpara:
@@ -50,14 +53,15 @@ t-polardbx-engine-804:
     DO_TAG: 1
     NO_BUILDNUMBER: 1
     BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
   machine:
     docker:
       alios7:
         x86_64: 1
         aarch64: 1
       el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20250313134418
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20250313134418
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
   
 t-polardbx-engine-pt-80:
   pkgpara:
@@ -65,11 +69,30 @@ t-polardbx-engine-pt-80:
     DOCKER: 1
     DO_TAG: 1
     NO_BUILDNUMBER: 1
+    BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
   machine:
     docker:
       alios7:
         x86_64: 1
         aarch64: 1
       el8:
-        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
-        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20241112100401
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+
+t-polardbx-engine-asan-80:
+  pkgpara:
+    ALLOW_SAME: 1
+    DOCKER: 1
+    DO_TAG: 1
+    NO_BUILDNUMBER: 1
+    BUILD_RESOURCE: 32-128Gi
+    NO_UPDATE_YML: 1
+  machine:
+    docker:
+      alios7:
+        x86_64: 1
+        aarch64: 1
+      el8:
+        x86_64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606
+        aarch64: hub.docker.alibaba-inc.com/aone-base-global/rpmbuid-centos7:20251211152606

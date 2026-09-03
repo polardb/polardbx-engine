@@ -34,7 +34,7 @@
 */
 namespace im {
 
-template class Ring_buffer<Ccl_slot, CCL_SLOT_SIZE>;
+template class Ring_buffer<Ccl_slot, STATIC_CCL_SLOT_SIZE>;
 
 /* Singleton static Ccl_ring_slots object init */
 template <>
@@ -115,11 +115,11 @@ static void ccl_ring_slots_init() {
   Ccl_ring_slots *ccl_ring_slots;
   DBUG_ENTER("ccl_ring_slots_init");
   ccl_ring_slots = allocate_ccl_object<Ccl_ring_slots>(key_memory_ccl);
-  for (size_t i = 0; i < CCL_SLOT_SIZE; i++) {
-    Ccl_slot *slot = allocate_ccl_object<Ccl_slot>();
+  for (size_t i = 0; i < STATIC_CCL_SLOT_SIZE; i++) {
+    Ccl_slot *slot = allocate_ccl_object<Ccl_slot>(false);
     ccl_ring_slots->get_slots().push_back(slot);
   }
-  assert(ccl_ring_slots->get_slots().size() == CCL_SLOT_SIZE);
+  assert(ccl_ring_slots->get_slots().size() == STATIC_CCL_SLOT_SIZE);
   Ccl_ring_slots::m_ring_buffer = ccl_ring_slots;
   DBUG_VOID_RETURN;
 }

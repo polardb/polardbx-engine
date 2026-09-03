@@ -414,6 +414,7 @@ struct ST_CONN_ATTR {
 /* Global variables */
 extern Internal_account_config ia_config;
 extern bool opt_mask_internal_user;
+extern char *polarx_specific_user_list;
 extern PSI_mutex_key key_LOCK_internal_account_string;
 extern mysql_mutex_t LOCK_internal_account_string;
 
@@ -431,6 +432,8 @@ extern bool internal_account_adjust_connection(THD *thd,
 /* For COM_CHANGE_USER */
 extern bool internal_account_change_connection(THD *thd,
                                                enum_server_command command);
+
+extern void apply_polarx_specific_user_default(THD *thd);
 
 /* We should promise the connections for internal account */
 extern bool internal_account_exceed_max_connection(THD *thd);

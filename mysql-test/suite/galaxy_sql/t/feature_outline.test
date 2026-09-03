@@ -1,5 +1,7 @@
 --disable_ps_protocol
 
+set global opt_outline_enabled = on;
+
 call mtr.add_suppression("mysql.outline");
 call mtr.add_suppression("Statement outline");
 
@@ -465,5 +467,7 @@ drop user 'u1'@'%';
 disconnect con_u0;
 disconnect con_u1;
 disconnect con_root;
+
+set global opt_outline_enabled = default;
 
 --enable_ps_protocol

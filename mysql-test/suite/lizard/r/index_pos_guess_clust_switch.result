@@ -1,0 +1,409 @@
+#
+# Test index_pos_guess_clust_enabled switch
+# This test verifies the switch works correctly for:
+# - Index Intersection
+# - Index Union
+# - Index Merge (Sort-Union)
+# - Multi-Range Read (MRR)
+#
+# Save original values
+# enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+# ============================================================
+# Setup: Create test table and data
+# ============================================================
+CREATE TABLE t (
+id INT AUTO_INCREMENT PRIMARY KEY,
+a VARCHAR(20) NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+d CHAR(1) NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+# Insert test data
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE val_a VARCHAR(20);
+DECLARE val_b INT;
+DECLARE val_c INT;
+DECLARE val_d CHAR(1);
+START TRANSACTION;
+WHILE i <= num_rows DO
+SET val_a = CONCAT('VAL', LPAD(i, 5, '0'));
+SET val_b = i * 10;
+SET val_c = val_b * 5;
+SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+CALL insert_t_data(1000);
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+# Warm up GPP info by accessing records
+SELECT * FROM t WHERE a = 'VAL00001' LIMIT 1;
+id	a	b	c	d
+1	VAL00001	10	50	A
+SELECT * FROM t WHERE b = 10 LIMIT 1;
+id	a	b	c	d
+1	VAL00001	10	50	A
+SELECT * FROM t WHERE c = 50 AND d = 'A' LIMIT 1;
+id	a	b	c	d
+1	VAL00001	10	50	A
+# ============================================================
+# Test 1: Index Intersection with switch ON/OFF
+# ============================================================
+# --- Switch ON: intersection GPP path should be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' AND b = 500;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_a, PRIMARY) */ * FROM t 
+WHERE a = 'VAL00020' AND id < 10;
+id	a	b	c	d
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' AND c = 2500 AND d = 'A';
+id	a	b	c	d
+include/assert.inc [[Test 1 switch ON] rowid intersection gpp hit+miss should be > 0]
+# --- Switch OFF: intersection GPP path should NOT be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' AND b = 500;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_a, PRIMARY) */ * FROM t 
+WHERE a = 'VAL00050' AND id < 10;
+id	a	b	c	d
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' AND c = 2500 AND d = 'A';
+id	a	b	c	d
+include/assert.inc [[Test 1 switch OFF] rowid intersection gpp hit+miss should be 0]
+# Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+# ============================================================
+# Test 2: Index Union with switch ON/OFF
+# ============================================================
+# --- Switch ON: union GPP path should be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' OR b = 500 LIMIT 10;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+explain SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	PRIMARY,idx_b	idx_b,PRIMARY	4,4	NULL	10	100.00	Using union(idx_b,PRIMARY); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_b`, `PRIMARY`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`b` = 500) or (`test`.`t`.`id` < 10)) limit 10
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR (c = 2500 AND d = 'A') LIMIT 10;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b, idx_cd) */ * FROM t 
+WHERE (a = 'VAL00050' AND b = 500) OR (c = 2500 AND d = 'A') LIMIT 10;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+include/assert.inc [[Test 2 switch ON] rowid union gpp hit+miss should be > 0]
+# --- Switch OFF: union GPP path should NOT be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00050' OR b = 500 LIMIT 10;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE b = 500 OR id < 10 LIMIT 10;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+50	VAL00050	500	2500	B
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR (c = 2500 AND d = 'A') LIMIT 10;
+id	a	b	c	d
+50	VAL00050	500	2500	B
+include/assert.inc [[Test 2 switch OFF] rowid union gpp hit+miss should be 0]
+# Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+# ============================================================
+# Test 3: Index Merge Sort-Union with switch ON/OFF
+# ============================================================
+# --- Switch ON: sort-union GPP path should be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+call dbms_stat.flush_gpp();
+explain SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	82,4	NULL	53	100.00	Using sort_union(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` < 'VAL00050') or (`test`.`t`.`b` < 50)) limit 20
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+11	VAL00011	110	550	B
+12	VAL00012	120	600	C
+13	VAL00013	130	650	A
+14	VAL00014	140	700	B
+15	VAL00015	150	750	C
+16	VAL00016	160	800	A
+17	VAL00017	170	850	B
+18	VAL00018	180	900	C
+19	VAL00019	190	950	A
+20	VAL00020	200	1000	B
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE id < 10 OR b < 50 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR c < 2500 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+11	VAL00011	110	550	B
+12	VAL00012	120	600	C
+13	VAL00013	130	650	A
+14	VAL00014	140	700	B
+15	VAL00015	150	750	C
+16	VAL00016	160	800	A
+17	VAL00017	170	850	B
+18	VAL00018	180	900	C
+19	VAL00019	190	950	A
+20	VAL00020	200	1000	B
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR b < 50 OR (c = 2500 AND d = 'A') LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+50	VAL00050	500	2500	B
+include/assert.inc [[Test 3 switch ON] index merge gpp hit+miss should be > 0]
+# --- Switch OFF: sort-union GPP path should NOT be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00050' OR b < 50 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+11	VAL00011	110	550	B
+12	VAL00012	120	600	C
+13	VAL00013	130	650	A
+14	VAL00014	140	700	B
+15	VAL00015	150	750	C
+16	VAL00016	160	800	A
+17	VAL00017	170	850	B
+18	VAL00018	180	900	C
+19	VAL00019	190	950	A
+20	VAL00020	200	1000	B
+SELECT /*+ INDEX_MERGE(t idx_b, PRIMARY) */ * FROM t 
+WHERE id < 10 OR b < 50 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+SELECT /*+ INDEX_MERGE(t idx_a, idx_cd) */ * FROM t 
+WHERE a = 'VAL00050' OR c < 2500 LIMIT 20;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+11	VAL00011	110	550	B
+12	VAL00012	120	600	C
+13	VAL00013	130	650	A
+14	VAL00014	140	700	B
+15	VAL00015	150	750	C
+16	VAL00016	160	800	A
+17	VAL00017	170	850	B
+18	VAL00018	180	900	C
+19	VAL00019	190	950	A
+20	VAL00020	200	1000	B
+include/assert.inc [[Test 3 switch OFF] index merge gpp hit+miss should be 0]
+# Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+# ============================================================
+# Test 4: Multi-Range Read (MRR) with switch ON/OFF
+# ============================================================
+# --- Switch ON
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+call dbms_stat.flush_gpp();
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a IN ('VAL00010', 'VAL00020', 'VAL00030', 'VAL00040', 'VAL00050') 
+ORDER BY a;
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 100 ORDER BY a;
+include/assert.inc [[Test 4 switch ON] multi range read gpp hit+miss should be >= 0]
+# --- Switch OFF: MRR GPP path should NOT be exercised
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a IN ('VAL00010', 'VAL00020', 'VAL00030', 'VAL00040', 'VAL00050') 
+ORDER BY a;
+SELECT /*+ MRR(t) */ * FROM t 
+WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 100 ORDER BY a;
+include/assert.inc [[Test 4 switch OFF] multi range read gpp hit+miss should be 0]
+# Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+# ============================================================
+# Test 5: Combined scenarios with switch toggle
+# ============================================================
+# --- Switch ON: combined intersection / union / sort-union / MRR
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' AND b = 1000 LIMIT 1;
+id	a	b	c	d
+100	VAL00100	1000	5000	A
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' OR b = 1000 LIMIT 5;
+id	a	b	c	d
+100	VAL00100	1000	5000	A
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00100' OR b < 1000 LIMIT 10;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00090' AND 'VAL00110' ORDER BY a LIMIT 10;
+include/assert.inc [[Test 5 switch ON] rowid intersection gpp hit+miss should be > 0]
+include/assert.inc [[Test 5 switch ON] rowid union gpp hit+miss should be > 0]
+# --- Switch OFF: no GPP counters should advance
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' AND b = 1000 LIMIT 1;
+id	a	b	c	d
+100	VAL00100	1000	5000	A
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a = 'VAL00100' OR b = 1000 LIMIT 5;
+id	a	b	c	d
+100	VAL00100	1000	5000	A
+SELECT /*+ INDEX_MERGE(t idx_a, idx_b) */ * FROM t 
+WHERE a < 'VAL00100' OR b < 1000 LIMIT 10;
+id	a	b	c	d
+1	VAL00001	10	50	A
+2	VAL00002	20	100	B
+3	VAL00003	30	150	C
+4	VAL00004	40	200	A
+5	VAL00005	50	250	B
+6	VAL00006	60	300	C
+7	VAL00007	70	350	A
+8	VAL00008	80	400	B
+9	VAL00009	90	450	C
+10	VAL00010	100	500	A
+SELECT /*+ MRR(t) */ * FROM t WHERE a BETWEEN 'VAL00090' AND 'VAL00110' ORDER BY a LIMIT 10;
+include/assert.inc [[Test 5 switch OFF] all gpp counters should be 0]
+# Restore switch
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+# ============================================================
+# Test 6: Verify switch value can be set and read
+# ============================================================
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+Variable_name	Value
+innodb_index_pos_guess_clust_enabled	ON
+SET GLOBAL innodb_index_pos_guess_clust_enabled=off;
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+Variable_name	Value
+innodb_index_pos_guess_clust_enabled	OFF
+SET GLOBAL innodb_index_pos_guess_clust_enabled=on;
+SHOW VARIABLES LIKE 'innodb_index_pos_guess_clust_enabled';
+Variable_name	Value
+innodb_index_pos_guess_clust_enabled	ON
+# ============================================================
+# Cleanup
+# ============================================================
+DROP TABLE t;
+DROP PROCEDURE insert_t_data;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+# Restore original values
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_index_purge_guess_clust_enabled = 1;
+SET GLOBAL innodb_index_scan_guess_clust_enabled = 1;
+SET GLOBAL innodb_adaptive_hash_index = 0;
+SET GLOBAL innodb_polarx_btree_search_mode = 1;

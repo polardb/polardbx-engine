@@ -1,0 +1,271 @@
+SET GLOBAL innodb_purge_stop_now = ON;
+##################################################################
+# Scenario 1: Purge across TABLE REBUILD (table_id changes)
+##################################################################
+# Steps:
+#  1. Delete record (generates undo with old table_id)
+#  2. Stop purge
+#  3. Rebuild table (DROP PK + ADD PK) -> table_id changes
+#  4. Resume purge -> should SKIP (dd_table_open_on_id fails)
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+a INT PRIMARY KEY,
+b INT,
+c VARCHAR(50),
+KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3');
+# Step 1: Delete a record to generate undo log
+BEGIN;
+DELETE FROM t1 WHERE a=2;
+COMMIT;
+# Verify record is delete-marked
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2
+# Step 2: Purge is already stopped (SET GLOBAL innodb_purge_stop_now = ON)
+# Get current table_id before rebuild
+SELECT table_id INTO @old_table_id 
+FROM INFORMATION_SCHEMA.INNODB_TABLES 
+WHERE name = 'test/t1';
+# Step 3: Rebuild table (table_id will change)
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (b), ALGORITHM=INPLACE, LOCK=NONE;
+# Verify table_id changed
+SELECT table_id INTO @new_table_id 
+FROM INFORMATION_SCHEMA.INNODB_TABLES 
+WHERE name = 'test/t1';
+SELECT @old_table_id != @new_table_id AS table_id_changed;
+table_id_changed
+1
+# Step 4: Resume purge
+# Expected: Purge should SKIP because dd_table_open_on_id(old_table_id) fails
+SET GLOBAL innodb_purge_run_now = ON;
+# Wait for purge to process
+# Verify: Data is still consistent (no incorrect purge)
+SELECT * FROM t1 ORDER BY b;
+a	b	c
+1	10	row1
+3	30	row3
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2
+DROP TABLE t1;
+##################################################################
+# Scenario 2: Purge across INDEX REBUILD - Case 1 (uncommitted)
+##################################################################
+# Steps:
+#  1. Delete record (generates undo with old index)
+#  2. Stop purge
+#  3. Start index rebuild, pause at row_log_apply (index uncommitted)
+#  4. Try purge -> should SKIP (!index->is_committed())
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t2 (
+a INT PRIMARY KEY,
+b INT,
+c VARCHAR(50),
+KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3'), (4, 40, 'row4');
+# Step 1: Delete record to generate undo
+BEGIN;
+DELETE FROM t2 WHERE a=2;
+COMMIT;
+# Verify delete-marked
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+3
+# Step 2: Drop old index and prepare to rebuild
+ALTER TABLE t2 DROP INDEX idx_b;
+# Step 3: Start rebuilding index, pause before row_log_apply
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_rebuild';
+ALTER TABLE t2 ADD KEY idx_b_new (b) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# At this point: idx_b_new is uncommitted (still in online DDL)
+# Verify index is uncommitted
+SELECT name 
+FROM INFORMATION_SCHEMA.INNODB_INDEXES 
+WHERE table_id = (SELECT table_id FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE name = 'test/t2')
+AND name = 'idx_b_new';
+name
+# Step 4: Try to run purge
+# Expected: Purge should SKIP uncommitted index
+# (see row_purge_remove_sec_if_poss_leaf: !index->is_committed())
+SET GLOBAL innodb_purge_run_now = ON;
+# Let DDL continue
+SET DEBUG_SYNC = 'now SIGNAL continue_rebuild';
+# Verify: Data is consistent after DDL completes
+SELECT * FROM t2 ORDER BY a;
+a	b	c
+1	10	row1
+3	30	row3
+4	40	row4
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+3
+# Verify index is now committed and usable
+SELECT * FROM t2 WHERE b=10;
+a	b	c
+1	10	row1
+EXPLAIN SELECT * FROM t2 WHERE b=10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ref	idx_b_new	idx_b_new	5	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b`,`test`.`t2`.`c` AS `c` from `test`.`t2` where (`test`.`t2`.`b` = 10)
+DROP TABLE t2;
+##################################################################
+# Scenario 3: Purge across INDEX REBUILD - Case 2 (completed)
+##################################################################
+# Steps:
+#  1. Delete record (generates undo with old index)
+#  2. Stop purge
+#  3. Complete index rebuild (new index does NOT have delete-mark)
+#  4. Resume purge -> entry not found in new index (ROW_NOT_FOUND)
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t3 (
+a INT PRIMARY KEY,
+b INT,
+c VARCHAR(50),
+KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t3 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3'), (4, 40, 'row4');
+# Step 1: Delete record to generate undo
+BEGIN;
+DELETE FROM t3 WHERE a=3;
+COMMIT;
+SELECT COUNT(*) FROM t3;
+COUNT(*)
+3
+# Step 2: Purge is stopped
+# Step 3: Rebuild index (delete-marked records are NOT copied)
+ALTER TABLE t3 DROP INDEX idx_b;
+ALTER TABLE t3 ADD KEY idx_b_new (b) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+# At this point:
+#  - Old undo log references old idx_b (which is dropped)
+#  - New idx_b_new does NOT contain the delete-marked record (a=3, b=30)
+#  - Purge will try to find entry in idx_b_new but won't find it
+# Verify new index exists and is committed
+SELECT name FROM INFORMATION_SCHEMA.INNODB_INDEXES 
+WHERE table_id = (SELECT table_id FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE name = 'test/t3')
+AND name = 'idx_b_new';
+name
+idx_b_new
+# Step 4: Resume purge
+# Expected: row_search_index_entry returns ROW_NOT_FOUND
+# (delete-marked record was not copied to new index)
+SET GLOBAL innodb_purge_run_now = ON;
+# Verify: Data is consistent
+SELECT * FROM t3 ORDER BY a;
+a	b	c
+1	10	row1
+2	20	row2
+4	40	row4
+SELECT COUNT(*) FROM t3;
+COUNT(*)
+3
+# Verify new index works correctly
+SELECT * FROM t3 WHERE b=10;
+a	b	c
+1	10	row1
+SELECT * FROM t3 WHERE b=40;
+a	b	c
+4	40	row4
+DROP TABLE t3;
+##################################################################
+# Scenario 4: Complex case - Multiple deletes across table rebuild
+##################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t4 (
+a INT PRIMARY KEY,
+b INT,
+c INT,
+d VARCHAR(100),
+KEY idx_b (b) COMMENT 'hippo_index',
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t4 VALUES 
+(1, 10, 100, 'row1'),
+(2, 20, 200, 'row2'),
+(3, 30, 300, 'row3'),
+(4, 40, 400, 'row4'),
+(5, 50, 500, 'row5');
+# Delete multiple records
+BEGIN;
+DELETE FROM t4 WHERE a IN (2, 4);
+COMMIT;
+SELECT COUNT(*) FROM t4;
+COUNT(*)
+3
+# Rebuild table with purge stopped
+ALTER TABLE t4 DROP PRIMARY KEY, ADD PRIMARY KEY (c), ALGORITHM=INPLACE, LOCK=NONE;
+# Resume purge - should safely skip old undos
+SET GLOBAL innodb_purge_run_now = ON;
+# Verify all indexes are consistent
+SELECT * FROM t4 ORDER BY c;
+a	b	c	d
+1	10	100	row1
+3	30	300	row3
+5	50	500	row5
+SELECT * FROM t4 WHERE b=10;
+a	b	c	d
+1	10	100	row1
+SELECT * FROM t4 WHERE c=300;
+a	b	c	d
+3	30	300	row3
+SHOW CREATE TABLE t4;
+Table	Create Table
+t4	CREATE TABLE `t4` (
+  `a` int NOT NULL,
+  `b` int DEFAULT NULL,
+  `c` int NOT NULL,
+  `d` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`c`),
+  KEY `idx_b` (`b`) COMMENT 'hippo_index',
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t4;
+##################################################################
+# Scenario 5: Purge during DDL (concurrent)
+##################################################################
+CREATE TABLE t5 (
+a INT PRIMARY KEY,
+b INT,
+KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t5 VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);
+# Generate delete-marked records
+SET GLOBAL innodb_purge_stop_now = ON;
+DELETE FROM t5 WHERE a IN (2, 4);
+# Start DDL with pause
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL ddl_bulk_done WAIT_FOR continue_ddl';
+ALTER TABLE t5 DROP PRIMARY KEY, ADD PRIMARY KEY (b), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR ddl_bulk_done';
+# Try purge while DDL is in progress
+SET GLOBAL innodb_purge_run_now = ON;
+# Let DDL continue
+SET DEBUG_SYNC = 'now SIGNAL continue_ddl';
+# Verify final state
+SELECT * FROM t5 ORDER BY b;
+a	b
+1	10
+3	30
+5	50
+SELECT COUNT(*) FROM t5;
+COUNT(*)
+3
+# Run purge again after DDL completes
+SET GLOBAL innodb_purge_run_now = ON;
+SELECT * FROM t5 ORDER BY b;
+a	b
+1	10
+3	30
+5	50
+DROP TABLE t5;
+##################################################################
+# Cleanup
+##################################################################
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL innodb_purge_run_now = ON;

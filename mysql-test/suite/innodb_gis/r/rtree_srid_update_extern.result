@@ -1,0 +1,64 @@
+#
+# PK UPDATE of rows whose SRID-restricted geometry is stored
+# off-page must not fail the SRID pre-check in
+# row_upd_sec_index_entry_low().
+#
+CREATE TABLE t_dyn (
+pk INT NOT NULL PRIMARY KEY,
+c INT NOT NULL,
+g GEOMETRY NOT NULL SRID 0,
+SPATIAL INDEX g_idx(g)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+CREATE TABLE t_com (
+pk INT NOT NULL PRIMARY KEY,
+c INT NOT NULL,
+g GEOMETRY NOT NULL SRID 0,
+SPATIAL INDEX g_idx(g)
+) ENGINE=InnoDB ROW_FORMAT=COMPACT;
+SET @big_wkt = CONCAT('LINESTRING(0 0', REPEAT(',7 7', 2999), ')');
+INSERT INTO t_dyn VALUES (1, 1, ST_GeomFromText('LINESTRING(0 0,1 1)', 0));
+INSERT INTO t_dyn VALUES (2, 2, ST_GeomFromText(@big_wkt, 0));
+INSERT INTO t_com VALUES (2, 2, ST_GeomFromText(@big_wkt, 0));
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_dyn ORDER BY pk;
+pk	c	ST_SRID(g)	ST_NumPoints(g)	LENGTH(g)
+1	1	0	2	45
+2	2	0	3000	48013
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_com ORDER BY pk;
+pk	c	ST_SRID(g)	ST_NumPoints(g)	LENGTH(g)
+2	2	0	3000	48013
+# Control 1: updating a non-indexed column does not rebuild the
+# spatial index entry, so it works even with the bug present.
+UPDATE t_dyn SET c = c + 100 WHERE pk = 2;
+# Control 2: PK update of a row whose geometry is stored in-page
+# works: the pre-check reads the real SRID from the inline value.
+UPDATE t_dyn SET pk = pk + 10 WHERE pk = 1;
+# Control 3: PK update of an off-page row in COMPACT format works:
+# the record keeps a 768-byte prefix starting with the real SRID.
+UPDATE t_com SET pk = pk + 10 WHERE pk = 2;
+# Bug scenario: PK update of an off-page row in DYNAMIC format.
+# The dfield holds only the 20-byte extern field reference whose
+# first 4 bytes are the LOB space_id; with the bug present this
+# statement spuriously fails with ER_CANT_CREATE_GEOMETRY_OBJECT.
+UPDATE t_dyn SET pk = pk + 10 WHERE pk = 2;
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_dyn ORDER BY pk;
+pk	c	ST_SRID(g)	ST_NumPoints(g)	LENGTH(g)
+11	1	0	2	45
+12	102	0	3000	48013
+SELECT pk, c, ST_SRID(g), ST_NumPoints(g), LENGTH(g) FROM t_com ORDER BY pk;
+pk	c	ST_SRID(g)	ST_NumPoints(g)	LENGTH(g)
+12	2	0	3000	48013
+# The R-tree entries must carry the new PK values.
+SELECT pk FROM t_dyn FORCE INDEX(g_idx) WHERE MBRContains(ST_GeomFromText('POLYGON((-1 -1,-1 8,8 8,8 -1,-1 -1))', 0), g) ORDER BY pk;
+pk
+11
+12
+SELECT pk FROM t_com FORCE INDEX(g_idx) WHERE MBRContains(ST_GeomFromText('POLYGON((-1 -1,-1 8,8 8,8 -1,-1 -1))', 0), g) ORDER BY pk;
+pk
+12
+CHECK TABLE t_dyn;
+Table	Op	Msg_type	Msg_text
+test.t_dyn	check	status	OK
+CHECK TABLE t_com;
+Table	Op	Msg_type	Msg_text
+test.t_com	check	status	OK
+DROP TABLE t_dyn, t_com;

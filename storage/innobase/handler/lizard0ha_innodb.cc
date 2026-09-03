@@ -21,27 +21,25 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <cstdio>
-#include "mach0data.h"
-#include "mtr0mtr.h"
 #include "trx0sys.h"
 #include "trx0types.h"
 
 #include "ha_innodb.h"
+#include "lizard0dict0dict.h"
 #include "lizard0gcs.h"
 #include "lizard0ha_innodb.h"
-#include "lizard0undo.h"
-#include "lizard0xa.h"
-#include "lizard0dict.h"
+#include "lizard0mon.h"
+#include "lizard0trx0erase.h"
+#include "lizard0trx0history.h"
+#include "lizard0txn0slot0undo.h"
 #include "lizard0undo0retent.h"
+#include "lizard0xa.h"
 
 #include <sql_class.h>
-#include "sql/xa/lizard_xa_trx.h"
-#include "lizard0erase.h"
-#include "sql/package/proc_gpp.h"
-
+#include "komodo0service.h"
 #include "libbinlogevents/include/gcn_event.h"
-#include "sql/lizard/lizard_service.h"
 #include "sql/sql_class.h"
+#include "sql/xa/komodo0xa0trx.h"
 
 extern trx_t *thd_to_trx_if_have(THD *thd);
 
@@ -94,6 +92,26 @@ static bool innobase_start_trx_for_xa(handlerton *hton, THD *thd, bool rw) {
   return false;
 }
 
+static bool innobase_start_trx_for_blackhole(handlerton *hton, THD *thd, bool rw) {
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  trx_start_if_not_started(trx, rw, UT_LOCATION_HERE);
+
+  innobase_register_trx(hton, thd, trx);
+
+  if (rw) {
+    thd->get_ha_data(hton->slot)->ha_info[0].set_trx_read_write();
+    if (thd->get_ha_data(hton->slot)->ha_info[1].is_started()) {
+      thd->get_ha_data(hton->slot)->ha_info[1].set_trx_read_write();
+    }
+  }
+
+  return false;
+}
+
 static bool innobase_start_trx_for_gu(handlerton *hton, THD *thd) {
   trx_t *trx = check_trx_exists(thd);
 
@@ -126,11 +144,44 @@ bool innobase_assign_trans_slot(THD *thd, slot_ptr_t *slot_ptr_arg,
   ut_ad(!trx->internal);
 
   /** Force to assign a TXN. */
-  if (lizard::trx_assign_txn_undo(trx, slot_ptr, trx_id) != DB_SUCCESS) {
+  if (lizard::trx_assign_txn_slot(trx, slot_ptr, trx_id) != DB_SUCCESS) {
     return true;
   }
 
   return false;
+}
+
+bool innobase_assign_update_undo(THD *thd, slot_ptr_t *slot_ptr_arg,
+                                trx_id_t *trx_id_arg) {
+  trx_t *trx = check_trx_exists(thd);
+
+  /** check_trx_exists will create trx if no trx. */
+  ut_ad(trx);
+
+  /** The trx must have been started as rw mode. */
+  if (!trx_is_registered_for_2pc(trx) || !trx_is_started(trx) || trx->id == 0 ||
+      trx->read_only) {
+    ut_ad(thd->gu_ctx.is_not_gu());
+    return true;
+  }
+
+  ut_ad(!trx->internal);
+
+  dberr_t err = DB_SUCCESS;
+  mutex_enter(&trx->undo_mutex);
+
+  auto undo_ptr = &trx->rsegs.m_redo;
+  if (undo_ptr->update_undo == nullptr) {
+    err = trx_undo_assign_undo(trx, undo_ptr, TRX_UNDO_UPDATE);
+  }
+
+  mutex_exit(&trx->undo_mutex);
+
+  if (err == DB_SUCCESS) {
+    return false;
+  }
+
+  return true;
 }
 
 static bool innobase_search_detach_prepare_trx_by_xid(const XID *xid,
@@ -153,10 +204,10 @@ static trx_id_t innobase_search_up_limit_tid(const T *lhs) {
   return static_cast<trx_id_t>(lizard::gcs_search_up_limit_tid<T>(lhs));
 }
 
-template trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>(
-    const lizard::Snapshot_scn_vision *lhs);
-template trx_id_t innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>(
-    const lizard::Snapshot_gcn_vision *lhs);
+template trx_id_t innobase_search_up_limit_tid<komodo::Snapshot_scn_vision>(
+    const komodo::Snapshot_scn_vision *lhs);
+template trx_id_t innobase_search_up_limit_tid<komodo::Snapshot_gcn_vision>(
+    const komodo::Snapshot_gcn_vision *lhs);
 
 /**
  * Copy server XA attributes into innobase.
@@ -229,37 +280,41 @@ static bool innobase_register_xa_group(THD *thd) {
   return !closed;
 }
 
-uint64 innobase_load_gcn() { return lizard::gcs_load_gcn(); }
+gcn_t innobase_load_gcn() { return lizard::gcs_load_gcn(); }
 
-uint64 innobase_load_scn() { return lizard::gcs_load_scn(); }
+scn_t innobase_load_scn() { return lizard::gcs_load_scn(); }
 
 bool innobase_snapshot_scn_too_old(scn_t scn, bool flashback_area) {
   if (flashback_area) {
-    return scn < lizard::erase_sys->erased_scn.load();
+    return scn < lizard::gcs_clean_erased_scn();
   } else {
-    return scn < purge_sys->purged_scn.load();
+    return scn < lizard::gcs_clean_purged_scn();
   }
 }
 
 bool innobase_snapshot_automatic_gcn_too_old(gcn_t gcn,
                                              bool flashback_area) {
   if (flashback_area) {
-    return gcn < lizard::erase_sys->erased_gcn.get();
+    return gcn < lizard::gcs_clean_erased_gcn();
   } else {
-    return gcn < purge_sys->purged_gcn.get();
+    return gcn < lizard::gcs_clean_purged_gcn();
   }
 }
 
 bool innobase_snapshot_assigned_gcn_too_old(gcn_t gcn, bool flashback_area) {
   if (flashback_area) {
-    return gcn <= lizard::erase_sys->erased_gcn.get();
+    return gcn <= lizard::gcs_clean_erased_gcn();
   } else {
-    return gcn <= purge_sys->purged_gcn.get();
+    return gcn <= lizard::gcs_clean_purged_gcn();
   }
 }
 
 void innobase_set_gcn_if_bigger(gcn_t gcn_arg) {
   lizard::gcs_set_gcn_if_bigger(gcn_arg);
+}
+
+void innobase_undo_retention_update_gcn(gcn_t gcn_arg) {
+  lizard::Undo_manager::instance().refresh_retention_gcn(gcn_arg);
 }
 
 int innobase_conver_timestamp_to_scn(THD *thd, utc_t utc_arg,
@@ -269,12 +324,12 @@ int innobase_conver_timestamp_to_scn(THD *thd, utc_t utc_arg,
   return lizard::convert_timestamp_to_scn(thd, utc, scn);
 }
 
-void innobase_trunc_status(std::vector<lizard::trunc_status_t> &array) {
-  lizard::trx_trunc_status(array);
+void innobase_trunc_status(std::vector<komodo::trunc_status_t> &array) {
+  lizard::trx_history_trunc_status(array);
 }
 
-void innobase_purge_status(lizard::purge_status_t &status) {
-  lizard::trx_purge_status(status);
+void innobase_purge_status(komodo::purge_status_t &status) {
+  lizard::trx_history_purge_status(status);
 }
 
 void innobase_flush_gpp_stat() {
@@ -284,6 +339,22 @@ void innobase_flush_gpp_stat() {
   lizard::generic_stats.index_purge_guess_clust_miss.reset();
   lizard::generic_stats.index_lock_guess_clust_hit.reset();
   lizard::generic_stats.index_lock_guess_clust_miss.reset();
+  lizard::generic_stats.index_pcur_guess_restore_hit.reset();
+  lizard::generic_stats.index_pcur_guess_restore_miss.reset();
+  lizard::generic_stats.rowid_intersection_gpp_hit.reset();
+  lizard::generic_stats.rowid_intersection_gpp_miss.reset();
+  lizard::generic_stats.rowid_union_gpp_hit.reset();
+  lizard::generic_stats.rowid_union_gpp_miss.reset();
+  lizard::generic_stats.index_merge_gpp_hit.reset();
+  lizard::generic_stats.index_merge_gpp_miss.reset();
+  lizard::generic_stats.multi_range_read_gpp_hit.reset();
+  lizard::generic_stats.multi_range_read_gpp_miss.reset();
+  lizard::generic_stats.filesort_gpp_hit.reset();
+  lizard::generic_stats.filesort_gpp_miss.reset();
+  lizard::generic_stats.multi_update_gpp_hit.reset();
+  lizard::generic_stats.multi_update_gpp_miss.reset();
+  lizard::generic_stats.multi_delete_gpp_hit.reset();
+  lizard::generic_stats.multi_delete_gpp_miss.reset();
   lizard::Gpp_index_stat_flusher flusher;
   dict_sys->for_each_table(flusher);
 }
@@ -293,7 +364,7 @@ void innobase_flush_cleanout_stat() {
 
   lizard::generic_stats.scan_cleanout_txn_clean.reset();
   lizard::generic_stats.scan_cleanout_gpp_clean.reset();
-  lizard::generic_stats.ddl_cleanout_clean.reset();
+  lizard::generic_stats.pread_cleanout_clean.reset();
   lizard::generic_stats.commit_cleanout_clean.reset();
 }
 
@@ -303,7 +374,8 @@ void innobase_flush_cleanout_stat() {
 bool innobase_trx_slot_check_retention() {
   DBUG_EXECUTE_IF("ac_not_care_txn_retention", return true;);
 
-  return lizard::Undo_retention::retention_time || lizard::txn_retention_time;
+  return lizard::srv_undo_retention_time_in_seconds ||
+         lizard::txn_retention_time;
 }
 
 trx_t *innobase_get_trx_by_thd(THD *thd) {
@@ -334,6 +406,10 @@ bool innobase_has_started_mysql_trx() {
   return has_started_mysql_trx();
 }
 
+bool innobase_has_enabled_force_recovery() {
+  return srv_force_recovery >= SRV_FORCE_IGNORE_CORRUPT;
+}
+
 /**
   Initialize innobase extension.
 
@@ -352,9 +428,12 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.snapshot_automatic_gcn_too_old =
       innobase_snapshot_automatic_gcn_too_old;
   hton->ext.set_gcn_if_bigger = innobase_set_gcn_if_bigger;
+  hton->ext.undo_retention_update_gcn = innobase_undo_retention_update_gcn;
   hton->ext.start_trx_for_xa = innobase_start_trx_for_xa;
+  hton->ext.start_trx_for_blackhole = innobase_start_trx_for_blackhole;
   hton->ext.start_trx_for_gu = innobase_start_trx_for_gu;
   hton->ext.assign_trans_slot = innobase_assign_trans_slot;
+  hton->ext.assign_update_undo = innobase_assign_update_undo;
   hton->ext.search_detach_prepare_trx_by_xid =
       innobase_search_detach_prepare_trx_by_xid;
   hton->ext.search_rollback_background_trx_by_xid =
@@ -362,22 +441,22 @@ void innobase_init_ext(handlerton *hton) {
   hton->ext.search_history_trx_by_xid = innobase_search_history_trx_by_xid;
   hton->ext.convert_timestamp_to_scn = innobase_conver_timestamp_to_scn;
   hton->ext.search_up_limit_tid_for_scn =
-      innobase_search_up_limit_tid<lizard::Snapshot_scn_vision>;
+      innobase_search_up_limit_tid<komodo::Snapshot_scn_vision>;
   hton->ext.search_up_limit_tid_for_gcn =
-      innobase_search_up_limit_tid<lizard::Snapshot_gcn_vision>;
+      innobase_search_up_limit_tid<komodo::Snapshot_gcn_vision>;
   hton->ext.trunc_status = innobase_trunc_status;
   hton->ext.purge_status = innobase_purge_status;
   hton->ext.flush_gpp_stat = innobase_flush_gpp_stat;
   hton->ext.flush_cleanout_stat = innobase_flush_cleanout_stat;
   hton->ext.trx_slot_check_retention = innobase_trx_slot_check_retention;
   hton->ext.has_started_mysql_trx = innobase_has_started_mysql_trx;
+  hton->ext.has_enabled_force_recovery = innobase_has_enabled_force_recovery;
 }
 
 enum_tx_isolation thd_get_trx_isolation(const THD *thd);
 
 #include "ha_innodb.h"
 #include "i_s.h"
-#include "sync0sync.h"
 
 /* for ha_innopart, Native InnoDB Partitioning. */
 #include "ha_innopart.h"
@@ -422,8 +501,8 @@ int ha_innobase::lizard_sample_init(double sampling_percentage,
 
 int ha_innobase::lizard_sample_init_low(double sampling_percentage,
                                         int sampling_seed) {
-  ut_a(sampling_percentage > 0.0);
-  ut_a(sampling_percentage <= 100.0);
+  ut_ad(sampling_percentage >= 0.0);
+  ut_ad(sampling_percentage <= 100.0);
 
 #ifndef POLARX_SAMPLE_TEST
   /* If in POLARX_SAMPLE_TEST, allow it. */

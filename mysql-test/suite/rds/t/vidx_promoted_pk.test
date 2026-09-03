@@ -1,0 +1,127 @@
+#
+# Bug#B3: the vidx auxiliary table's tref column must be sized from the
+# semantic primary key (TABLE_SHARE::primary_key), not from a key-name
+# check.  MySQL promotes a qualifying UNIQUE NOT NULL key to be the
+# primary key while keeping its original name, so a name-based check
+# sized tref as a 6-byte hidden row id for an 8-byte row reference:
+# the first INSERT was silently truncated and every later INSERT or
+# vector-index read failed with ER_CRASHED_ON_USAGE.
+#
+# Auxiliary table names embed se_private_id, so this test never prints
+# them: it always looks up the most recently created aux table and
+# reports only the property under test.
+#
+--source include/have_binlog_format_mixed_or_row.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--disable_warnings
+DROP TABLE IF EXISTS t_promoted, t_explicit_pk, t_nokey, t_charkey, t_multicol;
+--enable_warnings
+
+# tref type of the aux table created last (stable across environments).
+--let $newest_tref= SELECT c.COLUMN_TYPE FROM information_schema.COLUMNS c WHERE c.TABLE_SCHEMA='test' AND c.COLUMN_NAME='tref' AND c.TABLE_NAME = (SELECT SUBSTRING_INDEX(NAME,'/',-1) FROM information_schema.INNODB_TABLES WHERE NAME LIKE 'test/vidx\_%' ORDER BY TABLE_ID DESC LIMIT 1)
+
+--echo #
+--echo # 1. Promoted primary key (UNIQUE NOT NULL, no explicit PRIMARY KEY).
+--echo #    tref must be varbinary(8), matching the BIGINT row reference.
+--echo #
+CREATE TABLE t_promoted (u BIGINT NOT NULL, v VECTOR(4),
+                         UNIQUE KEY uk_u(u), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+--let $tref= `$newest_tref`
+--echo # t_promoted tref: $tref
+
+--echo # Every DML must succeed: before the fix the 2nd INSERT already failed.
+INSERT INTO t_promoted VALUES (1, VEC_FROMTEXT('[1,1,1,1]'));
+INSERT INTO t_promoted VALUES (2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_promoted VALUES (72623859790382856, VEC_FROMTEXT('[8,8,8,8]'));
+UPDATE t_promoted SET v = VEC_FROMTEXT('[3,3,3,3]') WHERE u = 2;
+DELETE FROM t_promoted WHERE u = 1;
+SELECT COUNT(*) AS rows_after_dml FROM t_promoted;
+
+--echo # FORCE INDEX(vi) is required: without it the optimizer picks a
+--echo # filesort plan that never touches the HNSW graph.
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3]')) LIMIT 2;
+
+--echo # Cold cache: forces load_from_record() to compare the stored tref
+--echo # length against ctx->tref_len, which is where the defect surfaced.
+FLUSH TABLES;
+INSERT INTO t_promoted VALUES (4, VEC_FROMTEXT('[4,4,4,4]'));
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4]')) LIMIT 2;
+
+--echo # Stored references must be the full 8 bytes, not truncated to 6.
+--let $aux= `SELECT SUBSTRING_INDEX(NAME,'/',-1) FROM information_schema.INNODB_TABLES WHERE NAME LIKE 'test/vidx\_%' ORDER BY TABLE_ID DESC LIMIT 1`
+--let $stored_len= `SELECT GROUP_CONCAT(DISTINCT LENGTH(tref)) FROM test.$aux WHERE tref IS NOT NULL`
+--echo # distinct stored tref lengths: $stored_len
+
+--echo # Base OPTIMIZE rebuilds the auxiliary table and keeps tref width.
+OPTIMIZE TABLE t_promoted;
+--let $tref= `$newest_tref`
+--echo # t_promoted tref after OPTIMIZE: $tref
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4]')) LIMIT 1;
+
+DROP TABLE t_promoted;
+
+--echo #
+--echo # 2. Reference lengths for the other key shapes.
+--echo #
+CREATE TABLE t_explicit_pk (u BIGINT NOT NULL PRIMARY KEY, v VECTOR(4),
+                            VECTOR INDEX vi(v)) ENGINE=InnoDB;
+--let $tref= `$newest_tref`
+--echo # explicit BIGINT PRIMARY KEY tref: $tref
+
+CREATE TABLE t_nokey (u BIGINT NOT NULL, v VECTOR(4),
+                      VECTOR INDEX vi(v)) ENGINE=InnoDB;
+--let $tref= `$newest_tref`
+--echo # no key at all (hidden row id) tref: $tref
+
+CREATE TABLE t_charkey (u CHAR(20) CHARACTER SET utf8mb4 NOT NULL,
+                        v VECTOR(4), UNIQUE KEY uk(u),
+                        VECTOR INDEX vi(v)) ENGINE=InnoDB;
+--let $tref= `$newest_tref`
+--echo # promoted CHAR(20) utf8mb4 key tref: $tref
+
+CREATE TABLE t_multicol (a INT NOT NULL, b BIGINT NOT NULL, v VECTOR(4),
+                         UNIQUE KEY uk(a,b), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+--let $tref= `$newest_tref`
+--echo # promoted INT+BIGINT key tref: $tref
+
+INSERT INTO t_explicit_pk VALUES (1, VEC_FROMTEXT('[1,1,1,1]')),
+                                 (2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_nokey VALUES (1, VEC_FROMTEXT('[1,1,1,1]')),
+                           (2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_charkey VALUES ('aaa', VEC_FROMTEXT('[1,1,1,1]')),
+                             ('bbb', VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_multicol VALUES (1, 10, VEC_FROMTEXT('[1,1,1,1]')),
+                              (2, 20, VEC_FROMTEXT('[2,2,2,2]'));
+
+SELECT u FROM t_explicit_pk FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+SELECT u FROM t_nokey FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+SELECT u FROM t_charkey FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+SELECT a, b FROM t_multicol FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+
+--echo #
+--echo # 3. Adding a UNIQUE NOT NULL key to a key-less vector table promotes
+--echo #    it to the clustered index, so the row reference grows from 6 to 8
+--echo #    bytes.  InnoDB rebuilds the table, the auxiliary table is
+--echo #    recreated with the new length, and DML keeps working (before the
+--echo #    fix this ALTER died with ER_DATA_TOO_LONG on the tref column).
+--echo #
+ALTER TABLE t_nokey ADD UNIQUE KEY uk_u(u);
+--echo # _rowid is only resolvable once a semantic primary key exists:
+SELECT _rowid FROM t_nokey ORDER BY _rowid;
+INSERT INTO t_nokey VALUES (3, VEC_FROMTEXT('[3,3,3,3]'));
+SELECT u FROM t_nokey FORCE INDEX(vi)
+ ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3]')) LIMIT 2;
+
+DROP TABLE t_explicit_pk, t_nokey, t_charkey, t_multicol;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;

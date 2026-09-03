@@ -1,0 +1,94 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+[connection master]
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# 1. Create an INNER_PRODUCT vector index on the master
+#
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+# Normalized (unit) vectors so ANN recall is exact; dot = first comp.
+INSERT INTO t1(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0,0]')),
+(2, VEC_FROMTEXT('[0.8,0.6,0,0]')),
+(3, VEC_FROMTEXT('[0.6,0.8,0,0]')),
+(4, VEC_FROMTEXT('[0,1,0,0]')),
+(5, VEC_FROMTEXT('[-1,0,0,0]'));
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+#
+# 2. Replica must carry DISTANCE=INNER_PRODUCT in the table definition
+#
+[connection slave]
+SET SESSION vidx_hnsw_ef_search = 100;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Replica ANN ordering matches the expected (id1 > id2 > id3 > id4 > id5)
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]'));
+id
+1
+2
+3
+4
+5
+#
+# 3. Master ANN ordering (must equal the replica's)
+#
+[connection master]
+SET SESSION vidx_hnsw_ef_search = 100;
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]'));
+id
+1
+2
+3
+4
+5
+#
+# 4. DML on master replicates and keeps INNER_PRODUCT semantics
+#
+UPDATE t1 SET v = VEC_FROMTEXT('[0.95,0.31225,0,0]') WHERE id = 5;
+DELETE FROM t1 WHERE id = 1;
+INSERT INTO t1(id, v) VALUES (6, VEC_FROMTEXT('[0.99,0.14107,0,0]'));
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+# Master result after DML (nearest first: id6 0.99 > id5 0.95 > id2 0.8)
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+6
+5
+2
+# Replica must produce the identical ordering
+[connection slave]
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+6
+5
+2
+#
+# 5. Cleanup
+#
+SET GLOBAL vidx_disabled = ON;
+[connection master]
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+include/rpl_sync.inc
+include/rpl_end.inc

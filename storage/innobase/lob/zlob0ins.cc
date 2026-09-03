@@ -51,8 +51,9 @@ int zInserter::write_first_page(big_rec_field_t &field) {
   ut_ad(!dict_index_is_spatial(m_ctx->index()));
 
   const ulint field_no = field.field_no;
-  byte *field_ref = btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(),
-                                          m_ctx->get_offsets(), field_no);
+  DSlice *dslc = dynamic_cast<DSlice *>(m_ctx->slc());
+  ut_a(dslc);
+  byte *field_ref = dslc->get_lob_field_ref(field_no);
   ref_t blobref(field_ref);
 
   if (err == Z_OK) {
@@ -89,8 +90,9 @@ void zInserter::update_length_in_blobref(big_rec_field_t &field) {
 
   const ulint field_no = field.field_no;
   /* DO HERE */
-  byte *field_ref = btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(),
-                                          m_ctx->get_offsets(), field_no);
+  DSlice *dslc = dynamic_cast<DSlice *>(m_ctx->slc());
+  ut_a(dslc);
+  byte *field_ref = dslc->get_lob_field_ref(field_no);
 
   ref_t blobref(field_ref);
   blobref.set_length(m_stream.total_in, nullptr);

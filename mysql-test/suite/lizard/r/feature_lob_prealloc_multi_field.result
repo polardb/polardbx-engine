@@ -1,0 +1,100 @@
+####################################################################################
+# 1. prepare
+####################################################################################
+set @old_innodb_lob_prealloc = @@innodb_lob_prealloc;
+set @size_0 = 15680;
+set @size_1 = 162623;
+set @size_2 = 4603567;
+SET global innodb_lob_prealloc = on;
+CREATE TABLE `t1` (
+`id` bigint unsigned NOT NULL AUTO_INCREMENT,
+`b1` mediumblob NOT NULL,
+`b2` mediumblob NOT NULL,
+`b3` mediumblob NOT NULL,
+PRIMARY KEY (`id`)
+) ;
+####################################################################################
+# 2. INSERT with multiple BLOB fields: pages_claimed = sum(per-field pages)
+####################################################################################
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+INSERT INTO t1 VALUES (1, REPEAT('a', @size_0),
+REPEAT('b', @size_0 + 1),
+REPEAT('c', @size_1));
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 3. INSERT with one beyond-size_2 field: prealloc continues (multi-node-page path)
+####################################################################################
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+INSERT INTO t1 VALUES (2, REPEAT('a', @size_0),
+REPEAT('b', @size_0),
+REPEAT('c', @size_2 + 1));
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 4. UPDATE multi-field BLOB row: pre-alloc count matches new sizes
+####################################################################################
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+UPDATE t1 SET b1 = REPEAT('A', @size_1 + 1),
+b2 = REPEAT('B', 10000),
+b3 = REPEAT('C', @size_0 + 1)
+WHERE id = 1;
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+SELECT id, LENGTH(b1), LENGTH(b2), LENGTH(b3) FROM t1 WHERE id = 1;
+id	LENGTH(b1)	LENGTH(b2)	LENGTH(b3)
+1	162624	10000	15681
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 5. Pre-alloc disabled at session level: counter stays flat for multi-field
+####################################################################################
+SET global innodb_lob_prealloc = off;
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+INSERT INTO t1 VALUES (4, REPEAT('a', @size_0 + 1),
+REPEAT('b', @size_0 + 1),
+REPEAT('c', @size_0 + 1));
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SET global innodb_lob_prealloc = on;
+####################################################################################
+# 6. Rollback must not leak pre-allocated pages: counters stay balanced
+####################################################################################
+SET @alloc_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+SET @unexpected_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+START TRANSACTION;
+INSERT INTO t1 VALUES (5, REPEAT('a', @size_0 + 1),
+REPEAT('b', @size_0 + 1),
+REPEAT('c', @size_0 + 1));
+ROLLBACK;
+SET @alloc_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_pages');
+SET @unexpected_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+SELECT COUNT(*) FROM t1 WHERE id = 5;
+COUNT(*)
+0
+check table t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+####################################################################################
+# 7. cleanup
+####################################################################################
+set global innodb_lob_prealloc = @old_innodb_lob_prealloc;
+drop table t1;

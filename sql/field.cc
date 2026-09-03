@@ -88,6 +88,7 @@
 #include "sql/tztime.h"      // Time_zone
 #include "template_utils.h"  // pointer_cast
 #include "typelib.h"
+#include "vidx/vidx_field.h"
 
 namespace dd {
 class Spatial_reference_system;
@@ -1696,7 +1697,7 @@ Field::Field(uchar *ptr_arg, uint32 length_arg, uchar *null_ptr_arg,
       stored_in_db(true),
       m_default_val_expr(nullptr),
       m_is_implicit(false),
-      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {
+      m_encryption_type(komodo::COLUMN_ENCRYPTION_TYPE_NONE) {
   if (!is_nullable()) set_flag(NOT_NULL_FLAG);
   comment.str = "";
   comment.length = 0;
@@ -1779,6 +1780,76 @@ void Field::set_notnull(ptrdiff_t row_offset) {
   }
 }
 
+static void my_hash_sort_bin_align_with_cn(const uchar *key, size_t len,
+                                           uint64 *nr1, uint64 *nr2) {
+  //based on com.alibaba.polardbx.optimizer.config.table.collation.BinaryCollationHandler#hashcode
+  const uchar *pos = key;
+  uint64 tmp1 = *nr1;
+  uint64 tmp2 = *nr2;
+
+  for (; pos < key + len; pos++) {
+    int byte_value = static_cast<signed char>(*pos);
+
+    // Java equivalent expression:
+    // tmp1 ^= ((((tmp1 & 63) + tmp2) * byte_value) & 0xFF) + (tmp1 << 8);
+    // In Java, (int)b preserves the sign for negative numbers, and multiplication
+    // will overflow, but only the lower 8 bits (& 0xff) are taken, so we need
+    // to explicitly truncate the product to the lower 8 bits
+
+    uint64 product = (((tmp1 & 63) + tmp2) * byte_value) & 0xFF;
+    tmp1 ^= product + (tmp1 << 8);
+    tmp2 += 3;
+  }
+
+  *nr1 = tmp1;
+  *nr2 = tmp2;
+}
+extern CHARSET_INFO my_charset_utf8mb4_0900_ai_ci_for_cn;
+extern CHARSET_INFO my_charset_utf8mb4_zh_0900_as_cs_for_cn;
+void Field::polarx_cn_hash(ulong *nr, ulong *nr2) const {
+  if (is_null()) {
+    *nr ^= (*nr << 1) | 1;
+  } else {
+    const CHARSET_INFO *cs = sort_charset();
+    if (strcmp(cs->m_coll_name, "utf8mb4_0900_ai_ci") == 0) {
+      uint len = data_length();
+      CHARSET_INFO *cs_for_cn = &my_charset_utf8mb4_0900_ai_ci_for_cn;
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      cs_for_cn->coll->hash_sort(cs_for_cn, ptr, len, &tmp1, &tmp2);
+
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+
+    } else if (strcmp(cs->m_coll_name, "utf8mb4_zh_0900_as_cs") == 0) {
+      uint len = data_length();
+      // Create a local copy to avoid modifying the global charset structure
+      CHARSET_INFO cs_for_cn_local = my_charset_utf8mb4_zh_0900_as_cs_for_cn;
+      // Share the same UCA weights with cs to ensure consistent collation
+      // behavior Only the hash_sort function differs between them
+      cs_for_cn_local.uca = cs->uca;
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      cs_for_cn_local.coll->hash_sort(&cs_for_cn_local, ptr, len, &tmp1, &tmp2);
+
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+
+    } else if (strcmp(cs->m_coll_name, "binary") != 0) {
+      hash(nr, nr2);
+    } else {
+      uint len = pack_length();
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      my_hash_sort_bin_align_with_cn(ptr, len, &tmp1, &tmp2);
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+    }
+  }
+}
 void Field::hash(ulong *nr, ulong *nr2) const {
   if (is_null()) {
     *nr ^= (*nr << 1) | 1;
@@ -5785,6 +5856,20 @@ void Field_newdate::sql_type(String &res) const {
   res.set_ascii(STRING_WITH_LEN("date"));
 }
 
+void Field_newdate::polarx_cn_hash(ulong *nr, ulong *nr2) const {
+  if (is_null()) {
+    *nr ^= (*nr << 1) | 1;
+  } else {
+    uint len = pack_length();
+    uint64 tmp1 = *nr;
+    uint64 tmp2 = *nr2;
+    my_hash_sort_bin_align_with_cn(ptr, len, &tmp1, &tmp2);
+    // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+    *nr = static_cast<ulong>(tmp1);
+    *nr2 = static_cast<ulong>(tmp2);
+  }
+}
+
 /****************************************************************************
 ** datetime type
 ** In string context: YYYY-MM-DD HH:MM:DD
@@ -6914,7 +6999,51 @@ uint Field_varstring::is_equal(const Create_field *new_field) const {
 
   return IS_EQUAL_PACK_LENGTH;
 }
+void Field_varstring::polarx_cn_hash(ulong *nr, ulong *nr2) const {
+  if (is_null()) {
+    *nr ^= (*nr << 1) | 1;
+  } else {
+    const CHARSET_INFO *cs = sort_charset();
+    if (strcmp(cs->m_coll_name, "utf8mb4_0900_ai_ci") == 0) {
+      uint len = data_length();
+      CHARSET_INFO *cs_for_cn = &my_charset_utf8mb4_0900_ai_ci_for_cn;
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      cs_for_cn->coll->hash_sort(cs_for_cn, ptr + length_bytes, len, &tmp1,
+                                 &tmp2);
 
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+    } else if (strcmp(cs->m_coll_name, "utf8mb4_zh_0900_as_cs") == 0) {
+      uint len = data_length();
+      // Create a local copy to avoid modifying the global charset structure
+      CHARSET_INFO cs_for_cn_local = my_charset_utf8mb4_zh_0900_as_cs_for_cn;
+      // Share the same UCA weights with cs to ensure consistent collation
+      // behavior Only the hash_sort function differs between them
+      cs_for_cn_local.uca = cs->uca;
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      cs_for_cn_local.coll->hash_sort(&cs_for_cn_local, ptr + length_bytes, len,
+                                      &tmp1, &tmp2);
+
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+
+    } else if (strcmp(cs->m_coll_name, "binary") != 0) {
+      hash(nr, nr2);
+    } else {
+      uint len = data_length();
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      my_hash_sort_bin_align_with_cn(ptr + length_bytes, len, &tmp1, &tmp2);
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+    }
+  }
+}
 void Field_varstring::hash(ulong *nr, ulong *nr2) const {
   if (is_null()) {
     *nr ^= (*nr << 1) | 1;
@@ -8671,6 +8800,27 @@ Field_bit::Field_bit(uchar *ptr_arg, uint32 len_arg, uchar *null_ptr_arg,
   if (!null_ptr_arg) null_bit = bit_ofs_arg;
 }
 
+void Field_bit::polarx_cn_hash(ulong *nr, ulong *nr2) const {
+  if (is_null()) {
+    *nr ^= (*nr << 1) | 1;
+  } else {
+    const CHARSET_INFO *cs = sort_charset();
+    if (cs->coll != ((&my_charset_bin)->coll)) {
+      hash(nr, nr2);
+    } else {
+      longlong value = Field_bit::val_int();
+      uchar tmp[8];
+      mi_int8store(tmp, value);
+
+      uint64 tmp1 = *nr;
+      uint64 tmp2 = *nr2;
+      my_hash_sort_bin_align_with_cn(tmp, 8, &tmp1, &tmp2);
+      // NOTE: This truncates to 32-bit on Windows, to keep on-disk stability.
+      *nr = static_cast<ulong>(tmp1);
+      *nr2 = static_cast<ulong>(tmp2);
+    }
+  }
+}
 void Field_bit::hash(ulong *nr, ulong *nr2) const {
   if (is_null()) {
     *nr ^= (*nr << 1) | 1;
@@ -9321,7 +9471,8 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
                   TYPELIB *interval, const char *field_name, bool is_nullable,
                   bool is_zerofill, bool is_unsigned, uint decimals,
                   bool treat_bit_as_char, uint pack_length_override,
-                  std::optional<gis::srid_t> srid, bool is_array) {
+                  std::optional<gis::srid_t> srid, bool is_array,
+                  bool is_vector) {
   uchar *bit_ptr = nullptr;
   uchar bit_offset = 0;
   assert(mem_root);
@@ -9396,9 +9547,15 @@ Field *make_field(MEM_ROOT *mem_root, TABLE_SHARE *share, uchar *ptr,
       return new (mem_root) Field_string(ptr, field_length, null_pos, null_bit,
                                          auto_flags, field_name, field_charset);
     case MYSQL_TYPE_VARCHAR:
-      return new (mem_root) Field_varstring(
-          ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
-          null_bit, auto_flags, field_name, share, field_charset);
+      if (is_vector) {
+        return new (mem_root) vidx::Field_vector(
+            ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
+            null_bit, auto_flags, field_name, share);
+      } else {
+        return new (mem_root) Field_varstring(
+            ptr, field_length, HA_VARCHAR_PACKLENGTH(field_length), null_pos,
+            null_bit, auto_flags, field_name, share, field_charset);
+      }
     case MYSQL_TYPE_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_TINY_BLOB:
@@ -9551,7 +9708,7 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
                     create_field.is_zerofill, create_field.is_unsigned,
                     create_field.decimals, create_field.treat_bit_as_char,
                     create_field.pack_length_override, create_field.m_srid,
-                    create_field.is_array);
+                    create_field.is_array, create_field.is_vector);
 }
 
 Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
@@ -10030,10 +10187,11 @@ void Field_typed_array::init(TABLE *table_arg) {
       field_name, is_nullable(),
       false,  // zerofill is meaningless with JSON
       is_unsigned(), m_elt_decimals,
-      false,  // treat_bit_as_char
-      0,      // pack_length_override
-      {},     // srid
-      false   // is_array
+      false,       // treat_bit_as_char
+      0,           // pack_length_override
+      {},          // srid
+      false,       // is_array
+      is_vector()  // is_vector
   );
   if (conv_field == nullptr) return;
   uchar *buf =

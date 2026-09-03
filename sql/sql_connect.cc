@@ -655,13 +655,7 @@ static int check_connection(THD *thd) {
   polarx::check_sqb_user_pattern(thd);
 
   if (mysql_audit_notify(thd, AUDIT_EVENT(MYSQL_AUDIT_CONNECTION_CONNECT))) {
-    if (thd->get_stmt_da()->mysql_errno() ==
-        ER_CONN_CONTROL_CONN_REFUSE_CONNECTION) {
-      /** not return here, the audit log plugin might need to log the error.*/
-      auth_rc = 1;
-    } else {
-      return 1;
-    }
+    return 1;
   }
 
   if (mysql_audit_notify(thd,

@@ -42,6 +42,15 @@ void deinit_keyring_services(SERVICE_TYPE(registry) * reg_srv);
 }  // namespace encryption
 }  // namespace innobase
 
+/** Log a TDE page checksum failure using the unified enc_checksum wording.
+@param[in]      space_id        Tablespace identifier
+@param[in]      page_no         Page number */
+void innodb_log_tde_enc_checksum_mismatch(space_id_t space_id,
+                                          page_no_t page_no) noexcept;
+
+/** Check whether encrypted checksum verification is enabled and active. */
+bool enc_checksum_verify_enabled() noexcept;
+
 // Forward declaration.
 class IORequest;
 struct Encryption_key;

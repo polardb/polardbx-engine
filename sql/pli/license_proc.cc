@@ -50,7 +50,8 @@ const LEX_CSTRING LICENSE_STATUS_STR[] = {
     {C_STRING_WITH_LEN(" UNSUPPOTED FORMAT ")},
     {C_STRING_WITH_LEN(" UNKOWN TYPE ")},
     {C_STRING_WITH_LEN(" EXPIRED ")},
-    {C_STRING_WITH_LEN(" UNAUTHORIZED ")}};
+    {C_STRING_WITH_LEN(" UNAUTHORIZED MAC ")},
+    {C_STRING_WITH_LEN(" UNAUTHORIZED PORT ")}};
 
 /** Must be the same as the License_type_t with
  * @file: include/pli/pli_common.h */
@@ -58,47 +59,49 @@ const LEX_CSTRING LICENSE_TYPE[] = {{C_STRING_WITH_LEN(" STANDARD ")},
                                     {C_STRING_WITH_LEN(" UNSUPPORT ")}};
 
 static inline const LEX_CSTRING get_license_status(
-    xlicense::License_error_t &error) {
+    komodo::License_error_t &error) {
   size_t index = 0;
 
   switch (error) {
-    case xlicense::License_error_t::LICENSE_OK:
+    case komodo::License_error_t::LICENSE_OK:
       index = 0;
       break;
-    case xlicense::License_error_t::LICENSE_FILE_NOT_EXIST:
+    case komodo::License_error_t::LICENSE_FILE_NOT_EXIST:
       index = 1;
       break;
-    case xlicense::License_error_t::LICENSE_FILE_CORRUPTED:
+    case komodo::License_error_t::LICENSE_FILE_CORRUPTED:
       index = 2;
       break;
-    case xlicense::License_error_t::LICENSE_FORMAT_UNRECOGNIZED:
+    case komodo::License_error_t::LICENSE_FORMAT_UNRECOGNIZED:
       index = 3;
       break;
-    case xlicense::License_error_t::LICENSE_TYPE_UNSUPPORT:
+    case komodo::License_error_t::LICENSE_TYPE_UNSUPPORT:
       index = 4;
       break;
-    case xlicense::License_error_t::LICENSE_EXPIRED:
+    case komodo::License_error_t::LICENSE_EXPIRED:
       index = 5;
       break;
-    case xlicense::License_error_t::LICENSE_UNAUTHORIZED_MACHINE:
+    case komodo::License_error_t::LICENSE_UNAUTHORIZED_MAC:
       index = 6;
       break;
-    case xlicense::License_error_t::LICENSE_TOO_MUCH_CONNS:
-    case xlicense::License_error_t::LICNESE_UNPERMITTED_BP_SIZE:
+    case komodo::License_error_t::LICENSE_UNAUTHORIZED_PORT:
+      index = 7;
+      break;
+    case komodo::License_error_t::LICENSE_TOO_MUCH_CONNS:
+    case komodo::License_error_t::LICNESE_UNPERMITTED_BP_SIZE:
     default:
       assert(false);
   }
   return LICENSE_STATUS_STR[index];
 }
 
-static inline const LEX_CSTRING get_license_type(
-    xlicense::License_type_t &type) {
+static inline const LEX_CSTRING get_license_type(komodo::License_type_t &type) {
   size_t index = 0;
   switch (type) {
-    case xlicense::License_type_t::LICENSE_TYPE_STANDARD:
+    case komodo::License_type_t::LICENSE_TYPE_STANDARD:
       index = 0;
       break;
-    case xlicense::License_type_t::LICENSE_TYPE_UNSUPPORT:
+    case komodo::License_type_t::LICENSE_TYPE_UNSUPPORT:
       index = 1;
       break;
     default:
@@ -125,7 +128,7 @@ Sql_cmd *License_proc_show_info::invoke_cmd(
 bool Sql_cmd_license_show_info::pc_execute(THD *) {
   DBUG_ENTER("Sql_cmd_license_show_info::pc_execute");
 
-  if (!(xlicense::POLARX_LICENSE_CALL(search_license_show_info(m_show_info)))) {
+  if (!(komodo::POLARX_LICENSE_CALL(search_license_show_info(m_show_info)))) {
     my_error(ER_LICENSE_PROC_DISABLE, MYF(0));
     DBUG_RETURN(true);
   }
@@ -166,6 +169,9 @@ void Sql_cmd_license_show_info::send_result(THD *thd, bool error) {
 
   protocol->store_longlong(m_show_info.conns_constrains, true);
   protocol->store_longlong(m_show_info.BP_constrains, true);
+  protocol->store_string(m_show_info.port_range_str.c_str(),
+                         m_show_info.port_range_str.length(),
+                         system_charset_info);
 
   if (protocol->end_row()) DBUG_VOID_RETURN;
 
@@ -222,6 +228,9 @@ void Sql_cmd_license_check_license::send_result(THD *thd, bool error) {
 
   protocol->store_longlong(m_show_info.conns_constrains, true);
   protocol->store_longlong(m_show_info.BP_constrains, true);
+  protocol->store_string(m_show_info.port_range_str.c_str(),
+                         m_show_info.port_range_str.length(),
+                         system_charset_info);
 
   if (protocol->end_row()) DBUG_VOID_RETURN;
 
@@ -237,7 +246,7 @@ bool Sql_cmd_license_check_license::pc_execute(THD *) {
   String *res = (*m_list)[0]->val_str(&str);
   std::string file_path(res->ptr(), res->length());
 
-  if (!(xlicense::POLARX_LICENSE_CALL(
+  if (!(komodo::POLARX_LICENSE_CALL(
           check_specified_license(file_path, m_show_info, true)))) {
     my_error(ER_LICENSE_PROC_DISABLE, MYF(0));
     DBUG_RETURN(true);

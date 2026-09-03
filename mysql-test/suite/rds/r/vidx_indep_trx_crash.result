@@ -1,0 +1,141 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+##############################################
+# Setup                                      #
+##############################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+INSERT INTO t1(a, v) VALUES (4, VEC_FROMTEXT('[1,1,0]'));
+INSERT INTO t1(a, v) VALUES (5, VEC_FROMTEXT('[0,1,1]'));
+SELECT COUNT(*) AS main_rows FROM t1;
+main_rows
+5
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+aux_rows
+5
+DEALLOCATE PREPARE s;
+
+##############################################
+# 1. Crash BEFORE commit of independent trx #
+#    Expected: aux DML rolled back (undo)   #
+#    Main table also rolled back            #
+##############################################
+# Record state before crash
+SELECT COUNT(*) INTO @main_before FROM t1;
+SET SESSION debug = '+d,vidx_indep_dml_crash_before_commit';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[10,10,10]'));
+ERROR HY000: Lost connection to MySQL server during query
+# Server crashed. Restart and verify recovery.
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# After recovery: main table should not have the crashed row
+SELECT COUNT(*) AS main_rows FROM t1;
+main_rows
+5
+SELECT COUNT(*) AS crashed_row FROM t1 WHERE a = 10;
+crashed_row
+0
+# Aux table: the uncommitted independent trx should be rolled back
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+aux_rows
+6
+DEALLOCATE PREPARE s;
+# ANN search works normally after recovery (LIMIT 2: ids 4,5 are
+# strictly closest; ids 1,2,3 are equidistant so LIMIT 3 is flaky)
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,10,10]')) LIMIT 2;
+id
+4
+5
+
+##############################################
+# 2. Crash AFTER commit of independent trx  #
+#    Expected: aux DML persisted (redo)     #
+#    Main table user trx rolled back        #
+#    Result: orphan node in aux table       #
+##############################################
+# Use explicit transaction so main-table commit is separate
+BEGIN;
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT('[20,20,20]'));
+SET SESSION debug = '+d,vidx_indep_dml_crash_after_commit';
+INSERT INTO t1(a, v) VALUES (21, VEC_FROMTEXT('[21,21,21]'));
+ERROR HY000: Lost connection to MySQL server during query
+# Server crashed after aux committed but before main committed
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# After recovery: main table rows from the open trx should be gone
+SELECT COUNT(*) AS row_20 FROM t1 WHERE a = 20;
+row_20
+0
+SELECT COUNT(*) AS row_21 FROM t1 WHERE a = 21;
+row_21
+0
+# Aux table: the crash_after_commit row's aux entry IS persisted (orphan)
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+aux_rows
+8
+DEALLOCATE PREPARE s;
+# ANN search works (orphan node tolerated by mhnsw_read_next)
+SELECT COUNT(*) >= 3 AS ann_returns_rows FROM (
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20]')) LIMIT 3
+) t;
+ann_returns_rows
+1
+
+##############################################
+# 3. Normal operation after crash recovery  #
+#    Verify server is fully functional      #
+##############################################
+# INSERT should work normally
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT('[30,30,30]'));
+SELECT COUNT(*) AS row_30 FROM t1 WHERE a = 30;
+row_30
+1
+# UPDATE should work normally
+UPDATE t1 SET v = VEC_FROMTEXT('[99,99,99]') WHERE id = 1;
+SELECT VEC_TOTEXT(v) AS updated_vec FROM t1 WHERE id = 1;
+updated_vec
+[99,99,99]
+# DELETE should work normally
+DELETE FROM t1 WHERE id = 5;
+SELECT COUNT(*) AS row_5 FROM t1 WHERE id = 5;
+row_5
+0
+# ANN search works
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[30,30,30]')) LIMIT 5;
+id
+1
+2
+3
+4
+9
+# Aux table consistent
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+aux_rows
+10
+DEALLOCATE PREPARE s;
+
+##############################################
+# Cleanup                                    #
+##############################################
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

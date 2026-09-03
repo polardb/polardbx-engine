@@ -36,7 +36,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0chkp.h"
 #include "que0que.h"
 #include "row0undo.h"
-#include "row0upd.h"
 #include "row0vers.h"
 #include "trx0rec.h"
 
@@ -46,7 +45,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row0umod.h"
 #include "lizard0row0undo.h"
 #include "lizard0row0vers.h"
-#include "lizard0undo.h"
 #include "lizard0btr0cur.h"
 
 namespace lizard {
@@ -60,11 +58,9 @@ namespace lizard {
   btr_cur_t *btr_cur;
   dberr_t err = DB_SUCCESS;
   bool modify_leaf = (mode == BTR_MODIFY_LEAF);
-  rec_t *rec;
   big_rec_t *dummy_big_rec;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   const txn_layout_t layout = node->layout;
 
   ut_ad(thr_get_trx(thr) == node->trx);
@@ -127,20 +123,18 @@ namespace lizard {
       dict_set_corrupted(index);
       err = DB_SUCCESS;
     } else {
-      rec = node->pcur.get_rec();
-      offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, offsets_heap);
+      slc = sctx.get_offsets(node->pcur.get_reg(), index, ULINT_UNDEFINED);
       err =
           btr_cur_optimistic_insert(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
                                         BTR_KEEP_SYS_FLAG | BTR_KEEP_POS_FLAG,
-                                    layout, btr_cur, &offsets, offsets_heap,
-                                    node->ref, &rec, &dummy_big_rec, thr, &mtr);
+                                    layout, btr_cur, &slc, &sctx, offsets_heap,
+                                    node->ref, &dummy_big_rec, thr, &mtr);
       ut_a(!dummy_big_rec);
       if (err == DB_FAIL && !modify_leaf) {
         err = btr_cur_pessimistic_insert(
             BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG |
                 BTR_KEEP_POS_FLAG,
-            layout, btr_cur, &offsets, offsets_heap, node->ref, &rec,
+            layout, btr_cur, &slc, &sctx, offsets_heap, node->ref,
             &dummy_big_rec, thr, &mtr);
         ut_a(!dummy_big_rec);
       }
@@ -163,13 +157,9 @@ namespace lizard {
 
   btr_cur = node->pcur.get_btr_cur();
 
-  rec = node->pcur.get_rec();
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, offsets_heap);
-  ut_ad(row_get_rec_trx_id(btr_cur_get_rec(btr_cur), index, offsets) ==
-        node->trx->id);
-  ut_ad(row_get_rec_roll_ptr(btr_cur_get_rec(btr_cur), index, offsets) ==
-        node->roll_ptr);
+  slc = sctx.get_offsets(node->pcur.get_reg(), index, ULINT_UNDEFINED);
+  ut_ad(row_get_rec_trx_id(slc, index) == node->trx->id);
+  ut_ad(row_get_rec_roll_ptr(slc, index) == node->roll_ptr);
 
   if (modify_leaf) {
     ut_ad((mode & ~BTR_ALREADY_S_LATCHED) == BTR_MODIFY_LEAF);
@@ -179,7 +169,7 @@ namespace lizard {
 
     err = btr_cur_optimistic_update(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
                                         BTR_KEEP_SYS_FLAG | BTR_KEEP_POS_FLAG,
-                                    layout, btr_cur, &offsets, offsets_heap,
+                                    layout, btr_cur, &slc, &sctx, offsets_heap,
                                     node->update, node->cmpl_info, thr,
                                     thr_get_trx(thr)->id, &mtr);
   } else {
@@ -187,7 +177,7 @@ namespace lizard {
     err = btr_cur_pessimistic_update(
         BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG |
             BTR_KEEP_POS_FLAG,
-        layout, btr_cur, &offsets, offsets_heap, heap, &dummy_big_rec,
+        layout, btr_cur, &slc, &sctx, offsets_heap, heap, &dummy_big_rec,
         node->update, node->cmpl_info, thr, thr_get_trx(thr)->id, node->undo_no,
         &mtr, pcur);
     ut_a(!dummy_big_rec);
@@ -225,29 +215,28 @@ namespace lizard {
   trx_id_offset = btr_cur->index->trx_id_offset;
 
   if (!trx_id_offset) {
-    mem_heap_t *heap = nullptr;
     ulint trx_id_col;
-    const ulint *offsets;
+    Slice_ctx sctx;
     ulint len;
 
     trx_id_col = btr_cur->index->get_sys_col_pos(DATA_TRX_ID);
     ut_ad(trx_id_col > 0);
     ut_ad(trx_id_col != ULINT_UNDEFINED);
 
-    offsets = rec_get_offsets(btr_cur_get_rec(btr_cur), btr_cur->index, nullptr,
-                              trx_id_col + 1, UT_LOCATION_HERE, &heap);
+    const Slice *slc = sctx.get_offsets(btr_cur_get_reg(btr_cur),
+                                        btr_cur->index, trx_id_col + 1);
 
     /* nullptr for index as trx_id_col is physical here */
-    trx_id_offset = rec_get_nth_field_offs(nullptr, offsets, trx_id_col, &len);
+    trx_id_offset = slc->get_nth_sys_field_offs(DATA_TRX_ID, trx_id_col, &len);
     ut_ad(len == DATA_TRX_ID_LEN);
-    mem_heap_free(heap);
   }
 
   if (trx_read_trx_id(btr_cur_get_rec(btr_cur) + trx_id_offset) !=
       node->new_trx_id) {
     /* The record must have been purged and then replaced
     with a different one. */
-    return (DB_SUCCESS);
+    err = DB_SUCCESS;
+    goto func_exit;
   }
 
   /* We are about to remove an old, delete-marked version of the
@@ -298,6 +287,7 @@ func_exit:
     ut_ad(err == DB_SUCCESS || err == DB_OUT_OF_FILE_SPACE);
   }
   if (err == DB_SUCCESS && node->rec_type == TRX_UNDO_UPD_DEL_REC) {
+    DEBUG_SYNC(current_thd, "before_row_undo_mod_remove_panda_rec");
     err = row_undo_mod_remove_panda_rec_low(BTR_MODIFY_LEAF, index, node);
     if (err != DB_SUCCESS) {
       err = row_undo_mod_remove_panda_rec_low(

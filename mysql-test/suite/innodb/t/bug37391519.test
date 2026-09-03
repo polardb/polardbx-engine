@@ -1,0 +1,63 @@
+# Bug#37391519: a plain error returned by
+# Builder::bulk_add_row() leaves the Btree_load leaf page buffer-fixed, because
+# Builder::add_row() does not route that error to online_build_handle_error().
+#
+# The trigger needs no DBUG injection:
+#   - dropping the trailing PK column keeps the clustered order, so
+#     innobase_pk_order_preserved() -> skip_pk_sort, Builder::is_skip_file_sort()
+#     is true and the rebuild uses m_btr_load;
+#   - a minimal innodb_ddl_buffer_size makes the key sort buffer overflow early,
+#     so Builder::insert_direct() runs several times and every non-eof round ends
+#     with Btree_load::release(), i.e. the leaf page stays buffer-fixed;
+#   - the new PRIMARY KEY(a) is not unique, and the duplicate rows are the last
+#     ones scanned, so Builder::add_to_key_buffer() returns DB_DUPLICATE_KEY
+#     which bulk_add_row() hands straight back to add_row().
+
+SET SESSION innodb_ddl_threads = 1;
+SET SESSION innodb_ddl_buffer_size = 65536;
+
+CREATE TABLE t1 (
+  a INT NOT NULL,
+  b INT NOT NULL,
+  c CHAR(200) NOT NULL,
+  PRIMARY KEY (a, b)
+) ENGINE=InnoDB;
+
+--disable_query_log
+DELIMITER |;
+CREATE PROCEDURE populate_t1(IN n INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  WHILE i <= n DO
+    INSERT INTO t1 VALUES (i, 1, REPEAT('x', 200));
+    SET i = i + 1;
+  END WHILE;
+END|
+DELIMITER ;|
+
+CALL populate_t1(2000);
+DROP PROCEDURE populate_t1;
+--enable_query_log
+
+--echo # The duplicate value of the new PRIMARY KEY(a) is scanned last
+INSERT INTO t1 VALUES (2000, 2, REPEAT('y', 200));
+
+SELECT COUNT(*) FROM t1;
+
+--echo # ALTER is expected to fail inside Builder::bulk_add_row()
+--error ER_DUP_ENTRY
+ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY (a), ALGORITHM=INPLACE;
+
+--echo # Restart to run the final buffer pool validation
+--source include/shutdown_mysqld.inc
+--source include/start_mysqld.inc
+
+--echo # A leftover buffer-fixed page makes buf_must_be_all_freed() fatal during
+--echo # shutdown, so the pattern below must not be present once the follow-up
+--echo # fix (Bug#37391519) is applied.
+--let SEARCH_FILE = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let SEARCH_PATTERN = still fixed or dirty
+--source include/search_pattern.inc
+
+SELECT COUNT(*) FROM t1;
+DROP TABLE t1;

@@ -32,11 +32,39 @@ Created 2020-04-24 by Mayank Prasad */
 #include "dict0dd.h"
 #include "dict0dict.h"
 #include "ha_innodb.h"
+
+#include "lizard0txn.h"
 #include "lizard0undo.h"
 
 static void populate_to_be_instant_columns_low(
     const Alter_inplace_info *ha_alter_info, const TABLE *old_table,
     const TABLE *new_table, Columns &cols_to_add, Columns &cols_to_drop);
+
+/** Materialize missing AS OF creator metadata from copied runtime metadata.
+@param[in,out]  dd_index        DD index whose se_private_data was copied */
+template <typename Index>
+static void dd_index_materialize_creator_if_absent(Index *dd_index) {
+  dd::Properties &p = dd_index->se_private_data();
+
+  if (p.exists(dd_index_key_strings[DD_INDEX_CREATOR_TRX_ID])) {
+    return;
+  }
+
+  trx_id_t trx_id = 0;
+  undo_ptr_t uba = UNDO_PTR_NULL;
+  scn_t scn = SCN_NULL;
+  gcn_t gcn = GCN_NULL;
+
+  if (p.get(dd_index_key_strings[DD_INDEX_TRX_ID], &trx_id) ||
+      p.get(dd_index_key_strings[DD_INDEX_UBA], &uba) ||
+      p.get(dd_index_key_strings[DD_INDEX_SCN], &scn) ||
+      p.get(dd_index_key_strings[DD_INDEX_GCN], &gcn)) {
+    return;
+  }
+
+  dd_index_set_se_private_for_creator_cols(dd_index, trx_id,
+                                           txn_info_t(scn, uba, gcn));
+}
 
 template <typename Table>
 bool Instant_ddl_impl<Table>::is_instant_add_drop_possible(
@@ -234,7 +262,7 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
     case Instant_Type::INSTANT_ADD_DROP_COLUMN:
       trx_start_if_not_started(m_trx, true, UT_LOCATION_HERE);
       mutex_enter(&m_trx->undo_mutex);
-      if (lizard::trx_always_assign_txn_undo(m_trx) != DB_SUCCESS) {
+      if (lizard::trx_always_assign_txn_slot(m_trx) != DB_SUCCESS) {
         mutex_exit(&m_trx->undo_mutex);
         return true;
       }
@@ -263,10 +291,9 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
       ut_ad(dd_table_has_instant_cols(m_new_dd_tab->table()));
 
       for (auto dd_index : *m_new_dd_tab->indexes()) {
-        dd_index_set_se_private_for_system_cols(
-            dd_index, m_trx->id,
-            txn_info_t{m_trx->txn_desc.cmmt.scn, m_trx->txn_desc.undo_ptr,
-                       m_trx->txn_desc.cmmt.gcn});
+        dd_index_materialize_creator_if_absent(dd_index);
+        dd_index_set_se_private_for_system_cols(dd_index, m_trx->id,
+                                                txn_info_t(m_trx->txn_desc));
       }
 
       row_mysql_lock_data_dictionary(m_trx, UT_LOCATION_HERE);
@@ -301,8 +328,8 @@ bool Instant_ddl_impl<Table>::commit_instant_ddl() {
       ;
     const dd::Properties &old_options = (*old_dd_index)->options();
     const dd::Properties &new_options = dd_index->options();
-    ut_ad(!lizard::validate_dd_index_format_match(old_options, index));
-    ut_ad(!lizard::validate_dd_index_format_match(new_options, index));
+    ut_ad(!lizard::dd_index_format_match_check(old_options, index));
+    ut_ad(!lizard::dd_index_format_match_check(new_options, index));
   }
 #endif
   return false;

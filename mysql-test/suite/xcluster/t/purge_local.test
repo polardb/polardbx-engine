@@ -8,37 +8,142 @@
 #
 --connection f1
 flush local logs;
+--let $f1_uuid= `SELECT @@GLOBAL.SERVER_UUID`
 --connection f2
 flush local logs;
 --connection leader
 create table t1(id int);
+--let $leader_uuid= `SELECT @@GLOBAL.SERVER_UUID`
+
+flush local logs;
+insert into t1 values (1);
+flush local logs;
+insert into t1 values (1);
 flush local logs;
 insert into t1 values (1);
 #purge consensus_log before 100000000;
 call dbms_consensus.purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
-# show consensus logs;
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+# Save leader's gtid_purged as baseline; follower checks will use GTID_SUBTRACT
+# against this baseline so the result is independent of pre-test GTIDs.
+--let $leader_purged_base= `SELECT @@gtid_purged`
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_purged;
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
 
 --source include/wait_follower_catchup.inc
 
 insert into t1 values (1);
 --connection f1
+flush local logs;
 --error ER_CONSENSUS_COMMAND_ERROR
 #purge consensus_log before 100000000;
 call dbms_consensus.purge_log(100000000);
 #purge force consensus_log before 100000000;
 call dbms_consensus.force_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
-# show consensus logs;
---connection f2
---error ER_CONSENSUS_COMMAND_ERROR
-#purge consensus_log before 100000000;
-call dbms_consensus.purge_log(100000000);
-#purge force consensus_log before 100000000;
-call dbms_consensus.force_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
-# show consensus logs;
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+# extra_purged: GTIDs f1 purged beyond what leader already purged; should be empty
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--disable_query_log
+eval SELECT GTID_SUBTRACT(@@gtid_purged, '$leader_purged_base') AS extra_purged_vs_leader;
+--enable_query_log
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
 
+--connection f2
+flush local logs;
+--error ER_CONSENSUS_COMMAND_ERROR
+#purge consensus_log before 100000000;
+call dbms_consensus.purge_log(100000000);
+#purge force consensus_log before 100000000;
+call dbms_consensus.force_purge_log(100000000);
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+# extra_purged: same check on f2
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--disable_query_log
+eval SELECT GTID_SUBTRACT(@@gtid_purged, '$leader_purged_base') AS extra_purged_vs_leader;
+--enable_query_log
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
+
+
+--disconnect f1
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+
+--echo "restart follower"
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
+--shutdown_server 0
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--disconnect f1
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connection f1
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+# after follower restart, its gtid_purged should not exceed what leader purged
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--disable_query_log
+eval SELECT GTID_SUBTRACT(@@gtid_purged, '$leader_purged_base') AS extra_purged_vs_leader;
+--enable_query_log
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
+set global consensus_force_promote=1;
+--source include/wait_leader_apply_catchup.inc
+insert into t1 values (1);
+--source include/wait_follower_catchup.inc
+
+--echo "restart leader"
+--disconnect leader
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 0
+--source include/wait_until_disconnected.inc
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--disconnect leader
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connection leader
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_purged;
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
+# Update baseline after leader restart + more operations
+--let $leader_purged_base= `SELECT @@gtid_purged`
+set global consensus_force_promote=1;
+--source include/wait_leader_apply_catchup.inc
+insert into t1 values (1);
+--source include/wait_follower_catchup.inc
+
+--disconnect f1
+--disconnect f2
+--connect (f1,127.0.0.1,root,,test,$MYPORT_2)
+--connect (f2,127.0.0.1,root,,test,$MYPORT_3)
+#
 #
 # purge local
 #
@@ -62,11 +167,13 @@ insert into t1 values (1);
 
 #purge local consensus_log before 100000000;
 call dbms_consensus.local_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
+# --replace_column 2 # 3 #
 # show consensus logs;
 #purge force consensus_log before 100000000;
 call dbms_consensus.force_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
+# Update baseline after leader's force_purge_log in purge-local section
+--let $leader_purged_base= `SELECT @@gtid_purged`
+# --replace_column 2 # 3 #
 # show consensus logs;
 
 --connection f1
@@ -74,19 +181,40 @@ call dbms_consensus.force_purge_log(100000000);
 --echo # for f1: purge local should fail
 #purge local consensus_log before 100000000;
 call dbms_consensus.local_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
+# --replace_column 2 # 3 #
 # show consensus logs;
 #purge force consensus_log before 100000000;
 call dbms_consensus.force_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
-# show consensus logs;
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+
+# f1's extra purge beyond leader should be empty
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--disable_query_log
+eval SELECT GTID_SUBTRACT(@@gtid_purged, '$leader_purged_base') AS extra_purged_vs_leader;
+--enable_query_log
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
+
 
 --connection f2
 --echo # for f2: purge local should success
 #purge local consensus_log before 100000000;
 call dbms_consensus.local_purge_log(100000000);
-# --replace_column 1 # 2 # 3 #
-# show consensus logs;
+--sleep 2
+--replace_column 2 # 3 #
+show consensus logs;
+
+# f2's extra purge beyond leader should be empty
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--disable_query_log
+eval SELECT GTID_SUBTRACT(@@gtid_purged, '$leader_purged_base') AS extra_purged_vs_leader;
+--enable_query_log
+--replace_result $f1_uuid  f1_uuid  $leader_uuid leader_uuid
+--replace_regex /:[0-9][0-9-]*/:X/
+select @@gtid_executed;
 
 --connection leader
 #drop consensus_learner "127.0.0.1:24000";

@@ -61,6 +61,9 @@ Internal_account_config ia_config;
 /** Whether mask the internal user */
 bool opt_mask_internal_user = false;
 
+/** Users whose sessions default forbid_execute_dml_all to off. */
+char *polarx_specific_user_list = nullptr;
+
 /* The static struct for looping and checking account type */
 /**
   Revision history:
@@ -113,6 +116,27 @@ const char *Internal_account_config::str(User_type type) {
   return internal_accounts_info[type].name;
 }
 /* End: Class Internal_account_config member function definition */
+
+static bool account_in_csv_list(const char *account_list, const char *account) {
+  if (account_list == nullptr || account_list[0] == '\0' ||
+      account == nullptr || account[0] == '\0')
+    return false;
+
+  const size_t account_len = strlen(account);
+  const char *begin = account_list;
+
+  while (*begin != '\0') {
+    const char *end = strstr(begin, Internal_account_ctx::SEPARATOR);
+    const size_t len =
+        end == nullptr ? strlen(begin) : static_cast<size_t>(end - begin);
+
+    if (len == account_len && strncmp(begin, account, len) == 0) return true;
+    if (end == nullptr) break;
+    begin = end + strlen(Internal_account_ctx::SEPARATOR);
+  }
+
+  return false;
+}
 
 /* begin: Class Internal_account_ctx member function definition */
 
@@ -460,6 +484,13 @@ ulonglong internal_account_active_connection_count(IA_type type) {
 /* It's used when COM_CHANGE_USER */
 bool internal_account_change_connection(THD *thd, enum_server_command command) {
   return Internal_account_ctx::instance()->change_connection(thd, command);
+}
+
+void apply_polarx_specific_user_default(THD *thd) {
+  const char *account = thd->security_context()->priv_user().str;
+
+  if (account_in_csv_list(polarx_specific_user_list, account))
+    thd->variables.forbid_execute_dml_all = false;
 }
 
 bool internal_account_exceed_max_connection(THD *thd) {

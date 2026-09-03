@@ -1,0 +1,232 @@
+SET GLOBAL innodb_purge_stop_now = ON;
+SET opt_index_format_hippo_enabled=on;
+##################################################################
+# Path 1: INSERT during online DDL
+##################################################################
+CREATE TABLE t_insert (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_insert VALUES (1, 100), (2, 200);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_insert ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# INSERT during DDL - logged to row_log with trx_id
+INSERT INTO t_insert VALUES (3, 300);
+INSERT INTO t_insert VALUES (4, 400);
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify INSERT applied correctly
+SELECT * FROM t_insert ORDER BY id;
+id	val
+1	100
+2	200
+3	300
+4	400
+SELECT * FROM t_insert FORCE INDEX(idx_val) WHERE val IN (300, 400) ORDER BY val;
+id	val
+3	300
+4	400
+DROP TABLE t_insert;
+##################################################################
+# Path 2: UPDATE indexed column (DELETE old + INSERT new)
+##################################################################
+CREATE TABLE t_update_idx (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_update_idx VALUES (1, 100), (2, 200), (3, 300);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_update_idx ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# UPDATE indexed column: triggers DELETE(100) + INSERT(150)
+UPDATE t_update_idx SET val=150 WHERE id=1;
+UPDATE t_update_idx SET val=250 WHERE id=2;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify UPDATE applied correctly
+SELECT * FROM t_update_idx ORDER BY id;
+id	val
+1	150
+2	250
+3	300
+SELECT * FROM t_update_idx FORCE INDEX(idx_val) WHERE val=150;
+id	val
+1	150
+SELECT * FROM t_update_idx FORCE INDEX(idx_val) WHERE val=100;
+id	val
+DROP TABLE t_update_idx;
+##################################################################
+# Path 3: UPDATE non-indexed column
+##################################################################
+CREATE TABLE t_update_nonidx (
+id INT PRIMARY KEY,
+val INT NOT NULL,
+data VARCHAR(100)
+) ENGINE=InnoDB;
+INSERT INTO t_update_nonidx VALUES (1, 100, 'old');
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_update_nonidx ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# UPDATE non-indexed column: only clustered index changes
+UPDATE t_update_nonidx SET data='new' WHERE id=1;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify data updated, index still works
+SELECT * FROM t_update_nonidx;
+id	val	data
+1	100	new
+SELECT * FROM t_update_nonidx FORCE INDEX(idx_val) WHERE val=100;
+id	val	data
+1	100	new
+DROP TABLE t_update_nonidx;
+##################################################################
+# Path 4: DELETE during online DDL
+##################################################################
+CREATE TABLE t_delete (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_delete VALUES (1, 100), (2, 200), (3, 300);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_delete ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# DELETE during DDL
+DELETE FROM t_delete WHERE id=2;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify DELETE applied correctly
+SELECT * FROM t_delete ORDER BY id;
+id	val
+1	100
+3	300
+SELECT * FROM t_delete FORCE INDEX(idx_val) WHERE val=200;
+id	val
+DROP TABLE t_delete;
+##################################################################
+# Path 5: ROLLBACK INSERT during online DDL
+##################################################################
+CREATE TABLE t_rollback_ins (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_rollback_ins VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rollback_ins ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# INSERT then ROLLBACK
+BEGIN;
+INSERT INTO t_rollback_ins VALUES (10, 1000);
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rolled back INSERT does not exist
+SELECT * FROM t_rollback_ins;
+id	val
+1	100
+SELECT * FROM t_rollback_ins FORCE INDEX(idx_val) WHERE val=1000;
+id	val
+DROP TABLE t_rollback_ins;
+##################################################################
+# Path 6: ROLLBACK DELETE during online DDL
+##################################################################
+CREATE TABLE t_rollback_del (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_rollback_del VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rollback_del ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# DELETE then ROLLBACK
+BEGIN;
+DELETE FROM t_rollback_del WHERE id=1;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rolled back DELETE is restored
+SELECT * FROM t_rollback_del;
+id	val
+1	100
+SELECT * FROM t_rollback_del FORCE INDEX(idx_val) WHERE val=100;
+id	val
+1	100
+DROP TABLE t_rollback_del;
+##################################################################
+# Path 7: ROLLBACK UPDATE during online DDL
+##################################################################
+CREATE TABLE t_rollback_upd (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_rollback_upd VALUES (1, 100);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_rollback_upd ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# UPDATE indexed column then ROLLBACK
+BEGIN;
+UPDATE t_rollback_upd SET val=999 WHERE id=1;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify rolled back UPDATE shows original value
+SELECT * FROM t_rollback_upd;
+id	val
+1	100
+SELECT * FROM t_rollback_upd FORCE INDEX(idx_val) WHERE val=100;
+id	val
+1	100
+SELECT * FROM t_rollback_upd FORCE INDEX(idx_val) WHERE val=999;
+id	val
+DROP TABLE t_rollback_upd;
+##################################################################
+# Mixed: Committed and rolled back transactions
+##################################################################
+CREATE TABLE t_mixed (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_mixed VALUES (1, 10), (2, 20), (3, 30);
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t_mixed ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# Committed transaction
+BEGIN;
+INSERT INTO t_mixed VALUES (100, 100);
+UPDATE t_mixed SET val=11 WHERE id=1;
+DELETE FROM t_mixed WHERE id=2;
+COMMIT;
+# Rolled back transaction
+BEGIN;
+INSERT INTO t_mixed VALUES (200, 200);
+UPDATE t_mixed SET val=999 WHERE id=3;
+ROLLBACK;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify final state
+SELECT * FROM t_mixed ORDER BY id;
+id	val
+1	11
+3	30
+100	100
+# Via hippo index
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=11;
+id	val
+1	11
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=20;
+id	val
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=30;
+id	val
+3	30
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=100;
+id	val
+100	100
+SELECT * FROM t_mixed FORCE INDEX(idx_val) WHERE val=200;
+id	val
+DROP TABLE t_mixed;
+##################################################################
+# Cleanup
+##################################################################
+SET DEBUG_SYNC = 'RESET';
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;

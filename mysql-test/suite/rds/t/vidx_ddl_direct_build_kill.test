@@ -1,0 +1,221 @@
+##############################################################
+# DDL direct build KILL semantics:                           #
+# the graph is built straight from the copied rows BEFORE    #
+# the ALTER commits (TABLE::vidx_ddl_direct_build_target),   #
+# so a KILL during the build fails the WHOLE ALTER — the     #
+# #sql intermediate table and its half-built graph are       #
+# discarded together (atomic DDL), no background resume.     #
+#                                                            #
+# Phase A: KILL QUERY parked on vidx_ddl_direct_build_start  #
+#          -> ALTER fails with ER_QUERY_INTERRUPTED,         #
+#             t1 keeps no vector index, no orphan aux table. #
+# Phase B: plain retry succeeds; live nodes == base rows and  #
+#          ANN self-probes work immediately.                  #
+# Phase C: KILL parked after a window fixup; rollback stays   #
+#          complete and the active-build gauge drains.        #
+# Phase D: KILL parked between micro-batches (graph half-     #
+#          built in memory, nothing persisted); rollback      #
+#          leaves no residue and a retry builds fully.        #
+##############################################################
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_mixed_or_row.inc
+CREATE DATABASE vidx_ddl_direct_build_kill;
+USE vidx_ddl_direct_build_kill;
+--source include/count_sessions.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+
+--echo
+--echo ############################################
+--echo # Phase A: KILL during direct build fails  #
+--echo # the whole ALTER (no index, no leftovers) #
+--echo ############################################
+
+connect (killer, localhost, root,,);
+USE vidx_ddl_direct_build_kill;
+connection default;
+let $conn_id = `SELECT CONNECTION_ID()`;
+let $aux_before = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+
+SET DEBUG_SYNC = 'vidx_ddl_direct_build_start SIGNAL build_reached WAIT_FOR build_go';
+--send ALTER TABLE t1 ADD VECTOR INDEX vi(v)
+
+connection killer;
+SET DEBUG_SYNC = 'now WAIT_FOR build_reached';
+--disable_query_log
+eval KILL QUERY $conn_id;
+--enable_query_log
+SET DEBUG_SYNC = 'now SIGNAL build_go';
+
+connection default;
+--error ER_QUERY_INTERRUPTED
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+--echo # Assert: t1 keeps no vector index after the failed ALTER
+SHOW CREATE TABLE t1;
+--echo # Assert: no orphan vidx aux table survived the rollback
+let $aux_after = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+if ($aux_after != $aux_before) {
+  --die KILL during direct build left an orphan auxiliary table
+}
+--echo VERDICT A no orphan auxiliary table: PASS
+
+--echo
+--echo ############################################
+--echo # Phase B: retry succeeds; direct build    #
+--echo # publishes all live rows before returning     #
+--echo ############################################
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --echo FATAL: live node count != 40 base rows after direct-build ALTER
+  --die graph incomplete after direct build
+}
+--echo VERDICT B live==base: PASS
+
+--echo # ANN self-probes right after the DDL, no flush needed
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[40,41,42,43,44]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase C: KILL after graph fixup still   #
+--echo # rolls back the complete intermediate    #
+--echo # and releases the active-build gauge     #
+--echo ############################################
+CREATE TABLE t_tail (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_tail VALUES
+  (1, VEC_FROMTEXT('[1,2,3,4,5]')),
+  (2, VEC_FROMTEXT('[2,3,4,5,6]')),
+  (3, VEC_FROMTEXT('[3,4,5,6,7]'));
+let $aux_before = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+let $ddl_active_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_direct_builds_active', Value, 1);
+let $conn_id = `SELECT CONNECTION_ID()`;
+SET DEBUG_SYNC =
+  'vidx_ddl_direct_build_after_fixup SIGNAL fixup_done WAIT_FOR fixup_go';
+--send ALTER TABLE t_tail ADD VECTOR INDEX vi(v)
+
+connection killer;
+SET DEBUG_SYNC = 'now WAIT_FOR fixup_done';
+let $ddl_active_during = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_direct_builds_active', Value, 1);
+let $ddl_active_expected = `SELECT $ddl_active_before + 1`;
+if ($ddl_active_during != $ddl_active_expected) {
+  --die direct-build active gauge did not include the blocked ALTER
+}
+--echo VERDICT C active-during-build: PASS
+--disable_query_log
+eval KILL QUERY $conn_id;
+--enable_query_log
+SET DEBUG_SYNC = 'now SIGNAL fixup_go';
+
+connection default;
+--error ER_QUERY_INTERRUPTED
+--reap
+SET DEBUG_SYNC = 'RESET';
+let $ddl_active_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_direct_builds_active', Value, 1);
+if ($ddl_active_after != $ddl_active_before) {
+  --die direct-build active gauge did not return to its baseline after KILL
+}
+--echo VERDICT C active-after-kill: PASS
+SHOW CREATE TABLE t_tail;
+let $aux_after = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+if ($aux_after != $aux_before) {
+  --die KILL after graph fixup left an orphan direct-build aux table
+}
+
+--echo
+--echo ############################################
+--echo # Phase D: KILL between micro-batches --   #
+--echo # the in-memory graph is half-built and    #
+--echo # nothing is persisted yet                 #
+--echo ############################################
+ALTER TABLE t1 DROP INDEX vi;
+let $aux_before = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+let $ddl_active_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_direct_builds_active', Value, 1);
+let $conn_id = `SELECT CONNECTION_ID()`;
+let $batches0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+SET DEBUG_SYNC =
+  'vidx_direct_build_after_batch SIGNAL batch_done WAIT_FOR batch_go';
+--send ALTER TABLE t1 ADD VECTOR INDEX vi(v)
+
+connection killer;
+SET DEBUG_SYNC = 'now WAIT_FOR batch_done';
+--disable_query_log
+eval KILL QUERY $conn_id;
+--enable_query_log
+SET DEBUG_SYNC = 'now SIGNAL batch_go';
+
+connection default;
+--error ER_QUERY_INTERRUPTED
+--reap
+SET DEBUG_SYNC = 'RESET';
+--echo # Assert: no index, no orphan aux table, gauge back to baseline
+SHOW CREATE TABLE t1;
+let $aux_after = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_direct_build_kill/vidx_%', c, 1);
+if ($aux_after != $aux_before) {
+  --die KILL between micro-batches left an orphan auxiliary table
+}
+let $ddl_active_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_direct_builds_active', Value, 1);
+if ($ddl_active_after != $ddl_active_before) {
+  --die direct-build active gauge did not return to baseline after a mid-batch KILL
+}
+--echo VERDICT D mid-batch KILL leaves no residue: PASS
+# The KILL must stop the build at the parked batch: exactly one micro-batch
+# (40 rows, W=4 -> 32-row batches) was published before the sync point, and
+# a build that ran to completion would have published two.
+let $batches1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+if (`SELECT $batches1 - $batches0 != 1`) {
+  --echo FATAL: batches moved $batches0 -> $batches1 across the killed ALTER
+  --die the mid-batch KILL did not stop the build at the parked batch
+}
+--echo VERDICT D build stopped at the parked batch: PASS
+
+--echo # Retry after the mid-batch KILL still builds the full graph.
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+# The COPY ALTER rebuilt the table: refresh the table id before probing
+# its auxiliary graph table.
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --echo FATAL: live node count != 40 base rows after the retry
+  --die graph incomplete after mid-batch-KILL retry
+}
+--echo VERDICT D retry live==base: PASS
+
+DROP TABLE t_tail, t1;
+disconnect killer;
+--source include/wait_until_count_sessions.inc
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_direct_build_kill;

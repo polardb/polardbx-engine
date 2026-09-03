@@ -1,0 +1,40 @@
+CREATE DATABASE vidx_ddl_build_disk_full;
+USE vidx_ddl_build_disk_full;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+
+############################################
+# The build fails on a disk-full write     #
+############################################
+SET DEBUG = "+d,vidx_ddl_inject_disk_full";
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+ERROR HY000: The table 'vidx_AUX_SLOT' is full
+SET DEBUG = "-d,vidx_ddl_inject_disk_full";
+# Assert: nothing half-built survives a failed build
+SELECT COUNT(*) AS vector_indexes
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+vector_indexes
+0
+VERDICT no orphan graph table after disk-full: PASS
+# Assert: the failure is accounted exactly once
+VERDICT error count +1: PASS
+
+############################################
+# A retry with the disk healed builds full #
+############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT retry live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+id
+20
+DROP TABLE t1;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_build_disk_full;

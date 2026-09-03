@@ -110,7 +110,14 @@ err_t Account_verification_handler::get_account_record_for_sha2_start(
   m_attached = std::this_thread::get_id();
   auto error = m_session.switch_to_user(user.c_str(), m_tcp.host().c_str(),
                                         m_tcp.ip().c_str(), "");
-  if (error) return err_t::SQLError_access_denied();
+  if (error) {
+    /// detach
+    m_session.detach();  /// ignore result
+    m_attached = std::thread::id();
+    if (UNLIKELY(!m_session.is_detach_and_tls_cleared()))
+      sql_print_error("FATAL: polarx_rpc session not detach and cleared!");
+    return err_t::SQLError_access_denied();
+  }
   auto authenticated_user_name = m_session.get_authenticated_user_name();
   auto authenticated_user_host = m_session.get_authenticated_user_host();
 
@@ -179,11 +186,27 @@ Account_verification_handler::get_account_verificator_id(
   return Account_verification_interface::Account_unsupported;
 }
 
+// 定义需要去除的空白字符集合
+const std::string WHITESPACE = " \n\r\t\f\v";
+
+std::string& rtrim(std::string& s) {
+  size_t end = s.find_last_not_of(WHITESPACE);
+  if (end != std::string::npos) {
+    s.erase(end + 1);
+  } else {
+    // 如果字符串全是空格，则清空它
+    s.clear();
+  }
+  return s;
+}
+
 err_t Account_verification_handler::verify_account(
     const std::string &user, const std::string &host, const std::string &passwd,
     Authentication_info *authenication_info) {
   Account_record record;
   if (auto error = get_account_record(user, host, record)) return error;
+
+  record.auth_plugin_name = rtrim(record.auth_plugin_name);
 
   auto account_verificator_id =
       get_account_verificator_id(record.auth_plugin_name);

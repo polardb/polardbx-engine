@@ -52,15 +52,31 @@ extern ulonglong opt_changeset_threads;
 static constexpr ulonglong DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL = 0;
 extern ulonglong opt_import_tablespace_iterator_interval_ms;
 extern bool opt_enable_binlog_wait_if_full;
+extern bool opt_sql_log_bin_super_modified;
+
+extern bool opt_enable_disk_sentinel;
+extern ulonglong opt_disk_sentinel_check_interval;
+extern ulonglong opt_disk_sentinel_max_retries;
+extern ulonglong opt_disk_sentinel_delay_threshold;
+
+
+/**
+  LOAD DATA might use Item_user_var_as_out_param, if there is already an
+  existing var_entry:
+  true: will respect the charset from syntax.
+  false: will not respect the charset from syntax.
+*/
+extern bool opt_load_data_var_inherit_charset;
 
 extern void customize_server_version();
 
 extern void print_build_info();
 
-namespace lizard {
+namespace komodo {
 extern SHOW_COMP_OPTION have_xa_prepare_with_trx_slot;
 extern SHOW_COMP_OPTION have_xa_async_commit;
 extern SHOW_COMP_OPTION have_xa_find_by_xid_with_hint;
-}  // namespace lizard
+extern SHOW_COMP_OPTION have_xa_advance_retention_gcn;
+}  // namespace komodo
 
 #endif /* SYS_VARS_EXT_INCLUDED */

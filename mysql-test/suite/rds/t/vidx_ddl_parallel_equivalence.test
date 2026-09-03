@@ -1,0 +1,244 @@
+##############################################################
+# Parallel-vs-serial DDL build equivalence (W determinism).  #
+#                                                            #
+# Two properties of the parallel DDL build carried no test:               #
+#  1. CLAIMED: prepare_build_batch() draws every node's layer on the      #
+#     leader in row order from thd->rand, capped by the running top       #
+#     INCLUDING earlier in-batch rows, so the layer sequence is           #
+#     "byte-identical to the serial build's" (stage 1b comment).          #
+#  2. NOT claimed, and verified here to be false: identical adjacency.    #
+#     generate_reverse_ops() states outright "No cross-W graph-identity   #
+#     claim is made" -- inside a batch rows reach each other only via     #
+#     the direct candidate append (the in-batch blind window), never via  #
+#     graph search, so candidate sets differ from strict sequential       #
+#     insertion. Measured: all 500 blobs differ in content, every one     #
+#     matches in length. Hence adjacency is asserted by DEGREE, which is  #
+#     what a dropped or duplicated shard of reverse-edge ops would break. #
+# Every existing parallel case asserts a recall floor or a self-probe;    #
+# both stay green when the parallel graph merely DIFFERS from the serial  #
+# one, so neither property was covered.                                   #
+#                                                                        #
+# rand_seed1/rand_seed2 pin thd->rand (sys_vars.cc update_rand_seed1()   #
+# assigns thd->rand.seed1 directly), which is what makes the layer       #
+# sequence comparable across two builds of the same rows.                #
+#                                                                        #
+# Deliberately NOT asserted through ANN queries: searches train          #
+# ctx->diameter / ctx->ef_power monotonically (vidx_hnsw.cc              #
+# set_if_bigger) and those persist into the share across a rebuild, so a #
+# narrow-LIMIT probe can return a different row for an IDENTICAL graph.  #
+# Comparing the persisted graph avoids that feedback entirely.           #
+#                                                                        #
+# Phase 1  W=1 serial reference build, adjacency snapshot.               #
+# Phase 2  W=8 rebuild from the same seed: same node set, same layer per #
+#          node, same per-node degree and same total edge volume.        #
+# Phase 3  W=16 over 5 rows: W far above the row count must still admit  #
+#          every row and keep it reachable (degenerate partial batch).   #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_parallel_equivalence;
+USE vidx_ddl_parallel_equivalence;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+# Dimension 0 is the row id, so every vector is unique and is its own exact
+# match; the other four are coprime moduli of the id, which scatters the rows
+# through 5-space. A collinear generator such as [i,i+1,i+2,i+3,i+4] would put
+# every row on one line, making each row's nearest neighbours simply its id
+# neighbours -- that forces neighbour selection and would hide divergence.
+--disable_query_log
+let $i = 1;
+while ($i <= 500) {
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', ($i*61)%97, ',', ($i*17)%89, ',', ($i*89)%83, ',', ($i*7)%79, ']')));
+  inc $i;
+}
+--enable_query_log
+
+--echo
+--echo ############################################
+--echo # Phase 1: W=1 serial reference build      #
+--echo ############################################
+SET SESSION rand_seed1 = 776433, rand_seed2 = 199081;
+SET SESSION vidx_ddl_threads = 1;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('CREATE TABLE g1 AS SELECT layer, tref, neighbors FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+SELECT COUNT(*) INTO @live1 FROM g1;
+if (`SELECT @live1 <> 500`) {
+  --echo FATAL: serial build snapshot holds @live1 nodes, expected 500
+  --die Phase 1: serial reference build did not admit every row
+}
+--echo VERDICT 1 serial build live==500: PASS
+
+# A graph of 500 nodes must be multi-layer, otherwise the layer-sequence half
+# of the comparison would be trivially satisfied by an all-zero column.
+SELECT COUNT(DISTINCT layer) INTO @layers1 FROM g1;
+if (`SELECT @layers1 < 2`) {
+  --echo FATAL: reference graph has @layers1 distinct layer, expected >= 2
+  --die Phase 1: single-layer graph makes the layer comparison vacuous
+}
+--echo VERDICT 1 reference graph is multi-layer: PASS
+
+# Likewise the adjacency must be populated, or comparing neighbors blobs
+# would pass on two equally empty graphs.
+SELECT COUNT(*) INTO @nonempty1 FROM g1 WHERE neighbors IS NOT NULL AND LENGTH(neighbors) > 0;
+if (`SELECT @nonempty1 <> 500`) {
+  --echo FATAL: only @nonempty1 of 500 reference nodes carry neighbors
+  --die Phase 1: reference adjacency incomplete, comparison would be vacuous
+}
+--echo VERDICT 1 all 500 reference nodes carry neighbors: PASS
+
+--echo
+--echo ############################################
+--echo # Phase 2: W=8 rebuild, same RNG seed      #
+--echo ############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET SESSION rand_seed1 = 776433, rand_seed2 = 199081;
+SET SESSION vidx_ddl_threads = 8;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('CREATE TABLE g2 AS SELECT layer, tref, neighbors FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+SELECT COUNT(*) INTO @live2 FROM g2;
+if (`SELECT @live2 <> @live1`) {
+  --echo FATAL: parallel build holds @live2 nodes, serial held @live1
+  --die Phase 2: parallel build admitted a different node count
+}
+--echo VERDICT 2 parallel live==serial live: PASS
+
+# Same node identities: no tref may appear on only one side.
+SELECT COUNT(*) INTO @only1 FROM g1 LEFT JOIN g2 ON g1.tref = g2.tref WHERE g2.tref IS NULL;
+SELECT COUNT(*) INTO @only2 FROM g2 LEFT JOIN g1 ON g2.tref = g1.tref WHERE g1.tref IS NULL;
+if (`SELECT @only1 <> 0 OR @only2 <> 0`) {
+  --echo FATAL: @only1 trefs only in serial build, @only2 only in parallel build
+  --die Phase 2: parallel build produced a different node set
+}
+--echo VERDICT 2 node sets identical: PASS
+
+# Claim 1: identical layer for every node (leader-side row-order layer draws).
+SELECT COUNT(*) INTO @layer_diff
+  FROM g1 JOIN g2 ON g1.tref = g2.tref WHERE g1.layer <> g2.layer;
+if (`SELECT @layer_diff <> 0`) {
+  --echo FATAL: @layer_diff nodes were assigned a different layer
+  --die Phase 2: parallel layer sequence diverged from the serial one
+}
+--echo VERDICT 2 layer identical for all 500 nodes: PASS
+
+# Adjacency: the neighbors BLOB is deliberately NOT compared byte-wise.
+# generate_reverse_ops() states "No cross-W graph-identity claim is made":
+# within a batch, rows reach each other only through the direct candidate
+# append (the in-batch blind window), not through graph search, so candidate
+# sets legitimately differ from strict sequential insertion -- and stage 3a
+# gref-sorts each layer before emitting ops. Measured on this data: all 500
+# blobs differ in content while every one matches in length.
+# What must still hold is the DEGREE: a shard that dropped or duplicated its
+# reverse-edge ops would leave destination lists under- or over-saturated.
+SELECT COUNT(*) INTO @len_diff
+  FROM g1 JOIN g2 ON g1.tref = g2.tref
+  WHERE LENGTH(g1.neighbors) <> LENGTH(g2.neighbors);
+if (`SELECT @len_diff <> 0`) {
+  --echo FATAL: nodes whose adjacency length differs between W=1 and W=8
+  --die Phase 2: parallel build changed some node's neighbor count
+}
+--echo VERDICT 2 per-node adjacency length identical for all 500 nodes: PASS
+
+SELECT SUM(LENGTH(neighbors)) INTO @bytes1 FROM g1;
+SELECT SUM(LENGTH(neighbors)) INTO @bytes2 FROM g2;
+if (`SELECT @bytes1 <> @bytes2 OR @bytes1 IS NULL OR @bytes1 = 0`) {
+  --echo FATAL: total adjacency bytes differ (serial vs parallel)
+  --die Phase 2: parallel build changed total edge volume
+}
+--echo VERDICT 2 total adjacency bytes identical: PASS
+
+# The rebuilt graph must also still answer: identical to a broken graph is
+# not the property under test.
+SET SESSION vidx_hnsw_ef_search = 64;
+--disable_query_log
+let $i = 1;
+let $bad = 0;
+while ($i <= 500) {
+  SET @nn = NULL;
+  eval SELECT id INTO @nn FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', $i, ',', ($i*61)%97, ',', ($i*17)%89, ',', ($i*89)%83, ',', ($i*7)%79, ']'))) LIMIT 1;
+  if (`SELECT @nn IS NULL OR @nn <> $i`) {
+    --echo self-probe MISS: row $i got another id
+    inc $bad;
+  }
+  inc $i;
+}
+--enable_query_log
+if ($bad) {
+  --die Phase 2: $bad/500 self-probes missed on the parallel graph
+}
+--echo VERDICT 2 parallel graph full self-probe 500/500: PASS
+
+--echo
+--echo ############################################
+--echo # Phase 3: W=16 over 5 rows (W >> rows)    #
+--echo ############################################
+CREATE TABLE t2 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 5) {
+  eval INSERT INTO t2(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i*7, ',', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+--enable_query_log
+# 4 parallel rows against a 128-row batch: the orchestrator must publish a
+# partial batch instead of waiting for a full one.
+SET SESSION vidx_ddl_threads = 16;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t2', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live3 FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live3 <> 5`) {
+  --echo FATAL: W=16 over 5 rows produced @live3 live nodes, expected 5
+  --die Phase 3: degenerate partial batch lost rows
+}
+--echo VERDICT 3 W=16 over 5 rows live==5: PASS
+
+--disable_query_log
+let $i = 1;
+let $bad = 0;
+while ($i <= 5) {
+  SET @nn = NULL;
+  eval SELECT id INTO @nn FROM t2 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', $i*7, ',', $i, ',', $i, ',', $i, ',', $i, ']'))) LIMIT 1;
+  if (`SELECT @nn IS NULL OR @nn <> $i`) {
+    --echo self-probe MISS: row $i got another id
+    inc $bad;
+  }
+  inc $i;
+}
+--enable_query_log
+if ($bad) {
+  --die Phase 3: $bad/5 self-probes missed under W >> rows
+}
+--echo VERDICT 3 W=16 full self-probe 5/5: PASS
+
+DROP TABLE g1;
+DROP TABLE g2;
+DROP TABLE t1;
+DROP TABLE t2;
+SET SESSION vidx_ddl_threads = default;
+SET SESSION vidx_hnsw_ef_search = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_parallel_equivalence;

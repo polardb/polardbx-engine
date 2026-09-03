@@ -5,12 +5,17 @@ SELECT * FROM information_schema.table_constraints
 WHERE table_schema = 'mysql' AND table_name != 'ndb_binlog_index'
 ORDER BY table_schema,table_name,constraint_name COLLATE utf8_general_ci;
 CONSTRAINT_CATALOG	CONSTRAINT_SCHEMA	CONSTRAINT_NAME	TABLE_SCHEMA	TABLE_NAME	CONSTRAINT_TYPE	ENFORCED
+def	mysql	PRIMARY	mysql	ai_function_config	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	ai_model_config	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	columns_priv	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	component	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	concurrency_control	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	consensus_info	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	db	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	default_roles	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	encdb_auth_users	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	encdb_kms_meta	PRIMARY KEY	YES
+def	mysql	PRIMARY	mysql	encdb_sensitive_rules	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	engine_cost	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	func	PRIMARY KEY	YES
 def	mysql	PRIMARY	mysql	global_grants	PRIMARY KEY	YES
@@ -47,6 +52,7 @@ def	mysql	PRIMARY	mysql	user	PRIMARY KEY	YES
 def	mysql	name	mysql	help_category	UNIQUE	YES
 def	mysql	name	mysql	help_keyword	UNIQUE	YES
 def	mysql	name	mysql	help_topic	UNIQUE	YES
+def	mysql	uk_model_name	mysql	ai_model_config	UNIQUE	YES
 # Test 03
 SET optimizer_switch = 'derived_merge=off';
 SELECT DISTINCT

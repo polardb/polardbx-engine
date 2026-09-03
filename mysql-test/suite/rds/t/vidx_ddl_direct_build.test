@@ -1,0 +1,135 @@
+##############################################################
+# Synchronous DDL direct build:                              #
+# ALTER/OPTIMIZE COPY builds the HNSW graph straight from    #
+# the copied rows before the rename (see                     #
+# TABLE::vidx_ddl_direct_build_target). The row copy skips   #
+# foreground per-row graph maintenance; the complete graph   #
+# is available when the DDL returns.                          #
+#                                                            #
+# Phase A: ADD VECTOR INDEX -> direct path discriminator,     #
+#          live nodes == base rows, ANN self-probes.          #
+# Phase B: OPTIMIZE TABLE rebuild -> same invariants.        #
+# Phase C: NULL vectors are skipped (live == non-NULL rows). #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_direct_build;
+USE vidx_ddl_direct_build;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+INSERT INTO t1(v) VALUES (NULL), (NULL);
+
+--echo
+--echo ############################################
+--echo # Phase A: ADD VECTOR INDEX — direct build #
+--echo ############################################
+
+# The direct-path discriminator: baseline row-by-row graph maintenance bumps
+# Vidx_insert_count once per copied non-NULL row. Direct construction bypasses
+# that path, so the ALTER must not move this counter.
+let $insert_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_insert_count', Value, 1);
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $insert_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_insert_count', Value, 1);
+if ($insert_after != $insert_before) {
+  --echo FATAL: ALTER used row-by-row graph maintenance ($insert_before -> $insert_after)
+  --die direct build must bypass foreground per-row construction
+}
+--echo VERDICT A direct path bypassed per-row construction: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 50`) {
+  --echo FATAL: live node count != 50 non-NULL base rows
+  --die graph incomplete after direct build
+}
+--echo VERDICT A live==non-null-base (NULLs skipped): PASS
+
+--echo # ANN self-probes right after the DDL, no flush needed
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[25,26,27,28,29]')) LIMIT 1;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[50,51,52,53,54]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase B: OPTIMIZE TABLE — direct rebuild #
+--echo ############################################
+
+let $insert_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_insert_count', Value, 1);
+
+OPTIMIZE TABLE t1;
+
+let $insert_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_insert_count', Value, 1);
+if ($insert_after != $insert_before) {
+  --echo FATAL: OPTIMIZE used row-by-row graph maintenance ($insert_before -> $insert_after)
+  --die direct rebuild must bypass foreground per-row construction
+}
+--echo VERDICT B direct rebuild bypassed per-row construction: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 50`) {
+  --echo FATAL: live node count != 50 after OPTIMIZE rebuild
+  --die graph incomplete after direct rebuild
+}
+--echo VERDICT B live==non-null-base: PASS
+
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[10,11,12,13,14]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase C: post-DDL synchronous DML still works #
+--echo ############################################
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[99,99,99,99,99]'));
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[99,99,99,99,99]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Phase D: empty and all-NULL boundaries   #
+--echo ############################################
+CREATE TABLE t2 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+ALTER TABLE t2 ADD VECTOR INDEX vi2(v);
+SELECT COUNT(*) AS empty_rows FROM t2 FORCE INDEX(vi2);
+
+CREATE TABLE t3 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t3 VALUES (1, NULL), (2, NULL), (3, NULL);
+ALTER TABLE t3 ADD VECTOR INDEX vi3(v);
+SELECT COUNT(v) AS indexed_vectors FROM t3 FORCE INDEX(vi3);
+
+--echo # A non-vector COPY ALTER on an indexed table rebuilds synchronously.
+ALTER TABLE t1 ADD COLUMN c INT DEFAULT 0, ALGORITHM=COPY;
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+
+DROP TABLE t1, t2, t3;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_direct_build;

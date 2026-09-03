@@ -1,0 +1,788 @@
+# ================================================================
+# Test: AS OF queries across different types of DDL operations
+#
+# Verifies three categories of cross-DDL AS OF behavior:
+#   Category 1: No table rebuild   -> normal traversal
+#   Category 2: INPLACE rebuild    -> ER_AS_OF_TABLE_DEF_CHANGED
+#   Category 3: COPY rebuild       -> empty result
+# ================================================================
+
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+# Helper: Get table_id for a given table
+DELIMITER //;
+CREATE FUNCTION get_table_id(tbl_name VARCHAR(64))
+RETURNS BIGINT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE tid BIGINT;
+    SELECT table_id INTO tid FROM information_schema.innodb_tables
+    WHERE name = CONCAT('test/', tbl_name);
+    RETURN tid;
+END//
+DELIMITER ;//
+
+# ################################################################
+#   Category 1: No Rebuild -- Normal Traversal
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category 1: No Rebuild -- Normal Traversal
+--echo ================================================================
+
+# --- Create all Category 1 tables and insert data ---
+
+CREATE TABLE c1_add_col (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_add_col VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c1_drop_col (id INT PRIMARY KEY, name VARCHAR(64), age INT);
+INSERT INTO c1_drop_col VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+
+CREATE TABLE c1_rename_col (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_rename_col VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c1_alter_default (id INT PRIMARY KEY, name VARCHAR(64) DEFAULT 'unknown');
+INSERT INTO c1_alter_default VALUES (1, 'Alice');
+
+CREATE TABLE c1_vcol (id INT PRIMARY KEY, price INT, qty INT);
+INSERT INTO c1_vcol VALUES (1, 100, 5), (2, 200, 3);
+
+CREATE TABLE c1_add_idx (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_add_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c1_drop_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO c1_drop_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c1_rename_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_old(name));
+INSERT INTO c1_rename_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c1_fk_parent (id INT PRIMARY KEY);
+INSERT INTO c1_fk_parent VALUES (1), (2);
+CREATE TABLE c1_fk_child (id INT PRIMARY KEY, pid INT, INDEX(pid));
+INSERT INTO c1_fk_child VALUES (1, 1), (2, 2);
+
+# --- Record timestamp before DDLs ---
+
+sleep 3;
+SET @ts_cat1 = NOW(6);
+sleep 3;
+
+# --- Execute Category 1 DDLs and verify AS OF queries ---
+
+--echo
+--echo --- 1.1 ADD COLUMN (INSTANT) ---
+--disable_result_log
+SELECT get_table_id('c1_add_col') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_add_col ADD COLUMN email VARCHAR(128) DEFAULT 'n/a';
+--disable_result_log
+SELECT get_table_id('c1_add_col') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD COLUMN (INSTANT) should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Historical rows show DEFAULT value for new column
+SELECT * FROM c1_add_col AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.2 DROP COLUMN ---
+--disable_result_log
+SELECT get_table_id('c1_drop_col') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_drop_col DROP COLUMN age;
+--disable_result_log
+SELECT get_table_id('c1_drop_col') INTO @tid_after;
+--enable_result_log
+--let $assert_text= DROP COLUMN should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Dropped column no longer appears in result
+SELECT * FROM c1_drop_col AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.3 RENAME COLUMN ---
+--disable_result_log
+SELECT get_table_id('c1_rename_col') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_rename_col RENAME COLUMN name TO full_name;
+--disable_result_log
+SELECT get_table_id('c1_rename_col') INTO @tid_after;
+--enable_result_log
+--let $assert_text= RENAME COLUMN should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Result uses current (renamed) column name
+SELECT * FROM c1_rename_col AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.4 ALTER COLUMN DEFAULT ---
+--disable_result_log
+SELECT get_table_id('c1_alter_default') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_alter_default ALTER COLUMN name SET DEFAULT 'nobody';
+--disable_result_log
+SELECT get_table_id('c1_alter_default') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ALTER DEFAULT should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Existing data unchanged
+SELECT * FROM c1_alter_default AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.5 ADD VIRTUAL COLUMN ---
+--disable_result_log
+SELECT get_table_id('c1_vcol') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_vcol ADD COLUMN total INT AS (price * qty) VIRTUAL;
+--disable_result_log
+SELECT get_table_id('c1_vcol') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD VIRTUAL COLUMN should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Virtual column shows computed value from historical base data
+SELECT * FROM c1_vcol AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.6 ADD INDEX (special case) ---
+--disable_result_log
+SELECT get_table_id('c1_add_idx') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_add_idx ADD INDEX idx_name(name);
+--disable_result_log
+SELECT get_table_id('c1_add_idx') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD INDEX should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Via primary key -> success
+SELECT * FROM c1_add_idx AS OF TIMESTAMP @ts_cat1 FORCE INDEX(PRIMARY);
+--echo # Via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c1_add_idx AS OF TIMESTAMP @ts_cat1 FORCE INDEX(idx_name);
+
+--echo
+--echo --- 1.7 DROP INDEX ---
+--disable_result_log
+SELECT get_table_id('c1_drop_idx') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_drop_idx DROP INDEX idx_name;
+--disable_result_log
+SELECT get_table_id('c1_drop_idx') INTO @tid_after;
+--enable_result_log
+--let $assert_text= DROP INDEX should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Normal traversal after DROP INDEX
+SELECT * FROM c1_drop_idx AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.8 RENAME INDEX ---
+--disable_result_log
+SELECT get_table_id('c1_rename_idx') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_rename_idx RENAME INDEX idx_old TO idx_new;
+--disable_result_log
+SELECT get_table_id('c1_rename_idx') INTO @tid_after;
+--enable_result_log
+--let $assert_text= RENAME INDEX should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # Normal traversal after RENAME INDEX
+SELECT * FROM c1_rename_idx AS OF TIMESTAMP @ts_cat1;
+
+--echo
+--echo --- 1.9 ADD FOREIGN KEY (with foreign_key_checks=OFF, INPLACE NO-REBUILD) ---
+--echo # When foreign_key_checks is disabled, ADD FOREIGN KEY uses INPLACE algorithm
+--echo # ADD FK is INPLACE NO-REBUILD (part of INNOBASE_FOREIGN_OPERATIONS)
+--echo # This does NOT change table_id, so AS OF query works normally
+--disable_result_log
+SELECT get_table_id('c1_fk_child') INTO @tid_before;
+--enable_result_log
+sleep 3;
+SET @ts_cat1_fk_inplace = NOW(6);
+sleep 3;
+SET foreign_key_checks = OFF;
+ALTER TABLE c1_fk_child ADD CONSTRAINT fk_pid_inplace FOREIGN KEY (pid) REFERENCES c1_fk_parent(id);
+SET foreign_key_checks = ON;
+--disable_result_log
+SELECT get_table_id('c1_fk_child') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD FK (INPLACE) should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # ADD FK is NO-REBUILD, table_id unchanged, normal traversal
+SELECT * FROM c1_fk_child AS OF TIMESTAMP @ts_cat1_fk_inplace;
+
+--echo
+--echo --- 1.11 DROP FOREIGN KEY ---
+sleep 3;
+SET @ts_cat1_fk_drop = NOW(6);
+sleep 3;
+--disable_result_log
+SELECT get_table_id('c1_fk_child') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c1_fk_child DROP FOREIGN KEY fk_pid_inplace;
+--disable_result_log
+SELECT get_table_id('c1_fk_child') INTO @tid_after;
+--enable_result_log
+--let $assert_text= DROP FK should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+--echo # DROP FOREIGN KEY does not change table_id
+--echo # Normal traversal after DROP FOREIGN KEY
+SELECT * FROM c1_fk_child AS OF TIMESTAMP @ts_cat1_fk_drop;
+
+
+# ################################################################
+#   Category 2: INPLACE Rebuild -- Error (ER_AS_OF_TABLE_DEF_CHANGED)
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category 2: INPLACE Rebuild -- Error (ER_AS_OF_TABLE_DEF_CHANGED)
+--echo ================================================================
+
+# --- Create all Category 2 tables and insert data ---
+
+CREATE TABLE c2_force (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_force VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c2_optimize (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_optimize VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c2_change_pk (id INT NOT NULL, val INT NOT NULL, PRIMARY KEY(id));
+INSERT INTO c2_change_pk VALUES (1, 100), (2, 200);
+
+CREATE TABLE c2_not_null (id INT PRIMARY KEY, name VARCHAR(64) NULL);
+INSERT INTO c2_not_null VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c2_row_fmt (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_row_fmt VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c2_implicit (id INT PRIMARY KEY, name VARCHAR(64), age INT, INDEX idx_age(age));
+INSERT INTO c2_implicit VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+
+# --- Record timestamp BEFORE updates ---
+
+sleep 3;
+SET @ts_cat2 = NOW(6);
+sleep 3;
+
+# --- Record table_ids before DDLs ---
+--disable_result_log
+SELECT get_table_id('c2_force') INTO @tid_c2_force_before;
+SELECT get_table_id('c2_optimize') INTO @tid_c2_optimize_before;
+SELECT get_table_id('c2_change_pk') INTO @tid_c2_change_pk_before;
+SELECT get_table_id('c2_not_null') INTO @tid_c2_not_null_before;
+SELECT get_table_id('c2_row_fmt') INTO @tid_c2_row_fmt_before;
+SELECT get_table_id('c2_implicit') INTO @tid_c2_implicit_before;
+--enable_result_log
+
+# --- UPDATE rows BEFORE DDLs ---
+# These updates happen AFTER @ts_cat2 but BEFORE the DDL rebuild.
+# They create UPDATE-type undo records containing the ORIGINAL table_id.
+# After the DDL rebuild changes the table_id, the engine will detect
+# the mismatch when traversing the version chain:
+#
+#   row updated at t2 (after @ts) -> undo record has old table_id
+#   -> DDL at t3 changes table_id -> query AS OF @ts needs traversal
+#   -> engine reads undo: old table_id != new table_id -> error
+#
+# Key: INSERT-type roll_ptr (unmodified rows) causes early return in
+# trx_undo_prev_version_build() at trx0rec.cc:2709 without reading
+# the undo record, so no table_id comparison occurs -> no error.
+# Only UPDATE-type roll_ptr triggers the undo read and table_id check.
+
+UPDATE c2_force SET name = 'Bob_v2' WHERE id = 2;
+# c2_force id=1 is intentionally NOT updated (to test unmodified row behavior)
+UPDATE c2_optimize SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_optimize SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_change_pk SET val = 101 WHERE id = 1;
+UPDATE c2_change_pk SET val = 201 WHERE id = 2;
+UPDATE c2_not_null SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_not_null SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_row_fmt SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_row_fmt SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_implicit SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_implicit SET name = 'Bob_v2' WHERE id = 2;
+
+# --- Execute Category 2 DDLs (INPLACE rebuild changes table_id) ---
+
+ALTER TABLE c2_force FORCE;
+OPTIMIZE TABLE c2_optimize;
+ALTER TABLE c2_change_pk DROP PRIMARY KEY, ADD PRIMARY KEY(val);
+ALTER TABLE c2_not_null MODIFY COLUMN name VARCHAR(64) NOT NULL;
+ALTER TABLE c2_row_fmt ROW_FORMAT = COMPRESSED;
+ALTER TABLE c2_implicit DROP COLUMN age;
+
+# --- Verify table_ids changed after DDLs ---
+--disable_result_log
+SELECT get_table_id('c2_force') INTO @tid_c2_force_after;
+SELECT get_table_id('c2_optimize') INTO @tid_c2_optimize_after;
+SELECT get_table_id('c2_change_pk') INTO @tid_c2_change_pk_after;
+SELECT get_table_id('c2_not_null') INTO @tid_c2_not_null_after;
+SELECT get_table_id('c2_row_fmt') INTO @tid_c2_row_fmt_after;
+SELECT get_table_id('c2_implicit') INTO @tid_c2_implicit_after;
+--enable_result_log
+--let $assert_text= ALTER FORCE should change table_id (INPLACE rebuild)
+--let $assert_cond= @tid_c2_force_before != @tid_c2_force_after
+--source include/assert.inc
+--let $assert_text= OPTIMIZE should change table_id (INPLACE rebuild)
+--let $assert_cond= @tid_c2_optimize_before != @tid_c2_optimize_after
+--source include/assert.inc
+--let $assert_text= DROP+ADD PK should change table_id (INPLACE rebuild)
+--let $assert_cond= @tid_c2_change_pk_before != @tid_c2_change_pk_after
+--source include/assert.inc
+--let $assert_text= NOT NULL should change table_id (INPLACE rebuild)
+--let $assert_cond= @tid_c2_not_null_before != @tid_c2_not_null_after
+--source include/assert.inc
+--let $assert_text= ROW_FORMAT should change table_id (INPLACE rebuild)
+--let $assert_cond= @tid_c2_row_fmt_before != @tid_c2_row_fmt_after
+--source include/assert.inc
+--let $assert_text= Implicit rebuild should change table_id
+--let $assert_cond= @tid_c2_implicit_before != @tid_c2_implicit_after
+--source include/assert.inc
+
+# --- Test AS OF queries ---
+
+--echo
+--echo --- 2.1 ALTER TABLE FORCE (detailed version chain behavior) ---
+--echo # Unmodified row (id=1): only INSERTed before @ts, INSERT-type
+--echo # roll_ptr -> trx_undo_prev_version_build returns early without
+--echo # reading undo -> no table_id check -> row visible -> success
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2 WHERE id = 1;
+
+--echo # Modified row (id=2): UPDATEd after @ts but before rebuild,
+--echo # undo record contains old table_id -> mismatch after rebuild -> error
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2 WHERE id = 2;
+
+--echo # Full table scan: encounters modified row -> entire query fails
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2;
+
+--echo
+--echo --- 2.1b ALTER TABLE FORCE -- rebuild secondary boundary ---
+--echo # Purpose:
+--echo #   After INPLACE rebuild, both clustered and secondary index
+--echo #   generations are regenerated and only contain the CURRENT
+--echo #   row/key values. An AS OF snapshot that predates an UPDATE on
+--echo #   the indexed column must not silently return an empty result.
+--echo #
+--echo # Why this is a separate sub-case from 2.1:
+--echo #   2.1 covers clustered rebuild behavior via WHERE id = <pk>.
+--echo #   This sub-case targets two path-specific risks that 2.1 does
+--echo #   not exercise:
+--echo #     (a) FORCE INDEX(PRIMARY) with a non-key historical predicate
+--echo #         (WHERE name='Alice') must not filter the historical row
+--echo #         out using the current clustered value before AS OF
+--echo #         version construction.
+--echo #     (b) FORCE INDEX(idx_name) looking up a historical secondary
+--echo #         key that only existed before the rebuild must not
+--echo #         short-circuit to empty success -- the current rebuilt
+--echo #         secondary has no entry for the old key, so the engine
+--echo #         must reject the access path rather than silently miss
+--echo #         the row.
+--echo #
+--echo # Timeline:
+--echo #   S0: INSERT (1,'Alice'),(2,'Carol'); idx_name has 'Alice'
+--echo #   T1: UPDATE id=1 name='Alice' -> 'Bob'  (idx_name now has 'Bob')
+--echo #   T2: ALTER TABLE ... FORCE        (rebuild clustered + secondary)
+--echo #
+--echo # Expected after rebuild: both FORCE INDEX(PRIMARY) WHERE name='Alice'
+--echo # and FORCE INDEX(idx_name) WHERE name='Alice' report
+--echo # ER_AS_OF_TABLE_DEF_CHANGED instead of returning 0 rows.
+CREATE TABLE c2_force_sec (
+  id INT PRIMARY KEY,
+  name VARCHAR(64),
+  KEY idx_name(name)
+) ENGINE=InnoDB;
+INSERT INTO c2_force_sec VALUES (1, 'Alice'), (2, 'Carol');
+
+sleep 3;
+SET @ts_cat2b = NOW(6);
+sleep 3;
+
+--echo # Change the secondary key value BEFORE the table rebuild, so the
+--echo # AS OF @ts_cat2b snapshot requires the historical key 'Alice'.
+UPDATE c2_force_sec SET name = 'Bob' WHERE id = 1;
+
+--echo # Rebuild both clustered and secondary index generations together.
+ALTER TABLE c2_force_sec FORCE;
+
+--echo # Current state after rebuild (sanity check).
+SELECT id, name FROM c2_force_sec ORDER BY id;
+
+--echo # (a) PRIMARY path with an old non-key predicate must not return
+--echo # empty success; it must signal the table-def-changed boundary.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM c2_force_sec AS OF TIMESTAMP @ts_cat2b
+FORCE INDEX(PRIMARY) WHERE name = 'Alice';
+
+--echo # (b) Secondary old-key lookup after rebuild must be rejected
+--echo # rather than scanning the rebuilt index (which only contains 'Bob'
+--echo # and 'Carol') and silently returning an empty set.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM c2_force_sec AS OF TIMESTAMP @ts_cat2b
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+DROP TABLE c2_force_sec;
+
+--echo
+--echo --- 2.2 OPTIMIZE TABLE ---
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_optimize AS OF TIMESTAMP @ts_cat2;
+
+--echo
+--echo --- 2.3 DROP PRIMARY KEY + ADD PRIMARY KEY ---
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_change_pk AS OF TIMESTAMP @ts_cat2;
+
+--echo
+--echo --- 2.4 MODIFY COLUMN NULL to NOT NULL ---
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_not_null AS OF TIMESTAMP @ts_cat2;
+
+--echo
+--echo --- 2.5 CHANGE ROW_FORMAT ---
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_row_fmt AS OF TIMESTAMP @ts_cat2;
+
+--echo
+--echo --- 2.6 Implicit rebuild: DROP COLUMN with associated index ---
+--echo # DROP COLUMN on a column that has an index triggers implicit
+--echo # INPLACE rebuild (engine auto-drops the index first)
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c2_implicit AS OF TIMESTAMP @ts_cat2;
+
+
+# ################################################################
+#   Category 3: COPY Rebuild -- Empty Result
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category 3: COPY Rebuild -- Empty Result
+--echo ================================================================
+
+# --- Create all Category 3 tables and insert data ---
+
+CREATE TABLE c3_shrink (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c3_shrink VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c3_type (id INT PRIMARY KEY, val INT);
+INSERT INTO c3_type VALUES (1, 100), (2, 200);
+
+CREATE TABLE c3_drop_pk (id INT NOT NULL, name VARCHAR(64));
+ALTER TABLE c3_drop_pk ADD PRIMARY KEY(id);
+INSERT INTO c3_drop_pk VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE c3_fk_parent (id INT PRIMARY KEY);
+INSERT INTO c3_fk_parent VALUES (1), (2);
+CREATE TABLE c3_fk_child (id INT PRIMARY KEY, pid INT, INDEX(pid));
+INSERT INTO c3_fk_child VALUES (1, 1), (2, 2);
+
+# --- Record timestamp before DDLs ---
+
+sleep 3;
+SET @ts_cat3 = NOW(6);
+sleep 3;
+
+# --- Record table_ids before DDLs ---
+--disable_result_log
+SELECT get_table_id('c3_shrink') INTO @tid_c3_shrink_before;
+SELECT get_table_id('c3_type') INTO @tid_c3_type_before;
+SELECT get_table_id('c3_drop_pk') INTO @tid_c3_drop_pk_before;
+SELECT get_table_id('c3_fk_child') INTO @tid_c3_fk_child_before;
+--enable_result_log
+
+# --- Execute Category 3 DDLs ---
+# COPY rebuild creates entirely new rows (INSERT-based migration).
+# All rows are "newly inserted" with the DDL transaction's timestamp,
+# making them invisible at any point before the DDL.
+
+ALTER TABLE c3_shrink MODIFY COLUMN name VARCHAR(32);
+ALTER TABLE c3_type MODIFY COLUMN val BIGINT;
+ALTER TABLE c3_drop_pk DROP PRIMARY KEY;
+# foreign_key_checks=ON (default) -> ADD FK uses COPY algorithm
+ALTER TABLE c3_fk_child ADD CONSTRAINT fk_pid FOREIGN KEY (pid) REFERENCES c3_fk_parent(id);
+
+# --- Verify table_ids changed after DDLs ---
+--disable_result_log
+SELECT get_table_id('c3_shrink') INTO @tid_c3_shrink_after;
+SELECT get_table_id('c3_type') INTO @tid_c3_type_after;
+SELECT get_table_id('c3_drop_pk') INTO @tid_c3_drop_pk_after;
+SELECT get_table_id('c3_fk_child') INTO @tid_c3_fk_child_after;
+--enable_result_log
+--let $assert_text= MODIFY shrink should change table_id (COPY rebuild)
+--let $assert_cond= @tid_c3_shrink_before != @tid_c3_shrink_after
+--source include/assert.inc
+--let $assert_text= MODIFY type should change table_id (COPY rebuild)
+--let $assert_cond= @tid_c3_type_before != @tid_c3_type_after
+--source include/assert.inc
+--let $assert_text= DROP PK should change table_id (COPY rebuild)
+--let $assert_cond= @tid_c3_drop_pk_before != @tid_c3_drop_pk_after
+--source include/assert.inc
+--let $assert_text= ADD FK (COPY) should change table_id
+--let $assert_cond= @tid_c3_fk_child_before != @tid_c3_fk_child_after
+--source include/assert.inc
+
+# --- Test AS OF queries ---
+
+--echo
+--echo --- 3.1 MODIFY COLUMN (shrink column width) ---
+--echo # COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_shrink AS OF TIMESTAMP @ts_cat3;
+
+--echo
+--echo --- 3.2 MODIFY COLUMN (change data type INT -> BIGINT) ---
+--echo # COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_type AS OF TIMESTAMP @ts_cat3;
+
+--echo
+--echo --- 3.3 DROP PRIMARY KEY (only, no new PK added) ---
+--echo # COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_drop_pk AS OF TIMESTAMP @ts_cat3;
+
+--echo
+--echo --- 3.4 ADD FOREIGN KEY (foreign_key_checks=ON, COPY rebuild) ---
+--echo # foreign_key_checks=ON -> ADD FK uses COPY algorithm -> table rebuilt
+--echo # table_id change above confirms COPY rebuild occurred
+--echo # The FK helper index is rebuilt and may not contain all AS OF-visible keys.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c3_fk_child AS OF TIMESTAMP @ts_cat3;
+
+--echo
+--echo --- 3.5 COPY rebuild + secondary index interaction ---
+--echo # COPY creates an entirely new table. ALL indexes (including secondary)
+--echo # are re-created with the DDL transaction's timestamp.
+--echo # The optimizer may choose a covering index scan on the secondary index,
+--echo # which is not safe for the AS OF snapshot -> ER_AS_OF_TABLE_DEF_CHANGED.
+--echo # Forcing PRIMARY avoids the secondary index -> empty result.
+
+CREATE TABLE c3_sec_idx (id INT PRIMARY KEY, pid INT, INDEX idx_pid(pid));
+INSERT INTO c3_sec_idx VALUES (1, 10), (2, 20);
+
+sleep 3;
+SET @ts_cat3_sec = NOW(6);
+sleep 3;
+
+--echo # COPY rebuild (change column type)
+ALTER TABLE c3_sec_idx MODIFY COLUMN pid BIGINT;
+
+--echo # 3.5a: FORCE INDEX on secondary index -> conservatively rejected
+--echo # The rebuilt current secondary may miss keys visible at the AS OF snapshot.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec FORCE INDEX(idx_pid);
+
+--echo # 3.5b: FORCE INDEX(PRIMARY) -> empty result (COPY INSERT undo)
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec FORCE INDEX(PRIMARY);
+
+--echo # 3.5c: Default SELECT * may pick the rebuilt secondary and is rejected
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec;
+
+--echo
+--echo --- 3.6 TRUNCATE TABLE ---
+--echo # TRUNCATE drops and recreates the physical table generation.
+--echo # The current table is empty; PRIMARY AS OF before TRUNCATE therefore
+--echo # returns empty. The secondary index generation is newer than the
+--echo # snapshot and must be rejected explicitly.
+
+CREATE TABLE c3_truncate (
+  id INT PRIMARY KEY,
+  name VARCHAR(64),
+  KEY idx_name(name)
+) ENGINE=InnoDB;
+INSERT INTO c3_truncate VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 3;
+SET @ts_cat3_truncate = NOW(6);
+sleep 3;
+
+--disable_result_log
+SELECT get_table_id('c3_truncate') INTO @tid_c3_truncate_before;
+--enable_result_log
+
+TRUNCATE TABLE c3_truncate;
+
+--disable_result_log
+SELECT get_table_id('c3_truncate') INTO @tid_c3_truncate_after;
+--enable_result_log
+--let $assert_text= TRUNCATE TABLE should change table_id
+--let $assert_cond= @tid_c3_truncate_before != @tid_c3_truncate_after
+--source include/assert.inc
+
+--echo # Current table is empty after TRUNCATE.
+SELECT * FROM c3_truncate ORDER BY id;
+
+--echo # PRIMARY path: new empty physical generation -> empty result.
+SELECT * FROM c3_truncate AS OF TIMESTAMP @ts_cat3_truncate FORCE INDEX(PRIMARY);
+
+--echo # Secondary path: rebuilt index generation is not visible at @ts.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM c3_truncate AS OF TIMESTAMP @ts_cat3_truncate
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+# ################################################################
+#   Category 4: Complex Scenario - Multiple DDLs + AS OF queries
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Category 4: Complex Scenario - Multiple DDLs with AS OF queries
+--echo ================================================================
+
+CREATE TABLE c4_complex (
+    id INT PRIMARY KEY,
+    name VARCHAR(64),
+    age INT,
+    salary INT,
+    INDEX idx_name(name)
+);
+INSERT INTO c4_complex VALUES (1, 'Alice', 30, 5000), (2, 'Bob', 25, 4000), (3, 'Charlie', 35, 6000);
+
+--echo
+--echo # Record timestamp T1 (initial state)
+sleep 3;
+SET @ts_t1 = NOW(6);
+sleep 3;
+
+--echo # Insert more data after T1
+INSERT INTO c4_complex VALUES (4, 'David', 28, 4500);
+
+--echo
+--echo # Record timestamp T2 (after first insert)
+sleep 3;
+SET @ts_t2 = NOW(6);
+sleep 3;
+
+--echo # ADD INDEX (Category 1: no rebuild, but new index cannot be used for AS OF before this point)
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c4_complex ADD INDEX idx_age(age);
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD INDEX should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+
+--echo # Insert more data after ADD INDEX
+INSERT INTO c4_complex VALUES (5, 'Eve', 32, 5500);
+
+--echo
+--echo # Record timestamp T3 (after ADD INDEX)
+sleep 3;
+SET @ts_t3 = NOW(6);
+sleep 3;
+
+--echo # ADD COLUMN (Category 1: instant, no rebuild)
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c4_complex ADD COLUMN email VARCHAR(128) DEFAULT 'unknown';
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_after;
+--enable_result_log
+--let $assert_text= ADD COLUMN should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+
+--echo # Update some data after ADD COLUMN
+UPDATE c4_complex SET email = 'alice@example.com' WHERE id = 1;
+
+--echo
+--echo # Record timestamp T4 (after ADD COLUMN)
+sleep 3;
+SET @ts_t4 = NOW(6);
+sleep 3;
+
+--echo # DROP COLUMN (Category 1: instant, no rebuild)
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_before;
+--enable_result_log
+ALTER TABLE c4_complex DROP COLUMN salary;
+--disable_result_log
+SELECT get_table_id('c4_complex') INTO @tid_after;
+--enable_result_log
+--let $assert_text= DROP COLUMN should not change table_id
+--let $assert_cond= @tid_before = @tid_after
+--source include/assert.inc
+
+--echo # Update data after DROP COLUMN
+UPDATE c4_complex SET age = 31 WHERE id = 1;
+
+--echo
+--echo # Record timestamp T5 (after DROP COLUMN)
+sleep 3;
+SET @ts_t5 = NOW(6);
+sleep 3;
+
+--echo
+--echo --- 4.1 AS OF T1 (initial state): should show 3 rows, no email column, has salary column ---
+--echo # Query via PRIMARY KEY (should work)
+SELECT id, name, age FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(PRIMARY);
+--echo # Query via old index idx_name (should work - existed at T1)
+SELECT id, name FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(idx_name);
+--echo # Query via new index idx_age (should ERROR)
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, age FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(idx_age);
+
+--echo
+--echo --- 4.2 AS OF T2 (after first insert): should show 4 rows ---
+SELECT id, name, age FROM c4_complex AS OF TIMESTAMP @ts_t2 FORCE INDEX(PRIMARY);
+
+--echo
+--echo --- 4.3 AS OF T3 (after ADD INDEX): should show 5 rows, can use idx_age ---
+--echo # Query via new index idx_age (should work now - existed at T3)
+SELECT id, age FROM c4_complex AS OF TIMESTAMP @ts_t3 FORCE INDEX(idx_age) WHERE age = 30;
+
+--echo
+--echo --- 4.4 AS OF T4 (after ADD COLUMN): should show email column with DEFAULT values ---
+--echo # At T4, email column exists but only id=1 has been updated
+SELECT id, name, age, email FROM c4_complex AS OF TIMESTAMP @ts_t4 FORCE INDEX(PRIMARY);
+
+--echo
+--echo --- 4.5 AS OF T5 (after DROP COLUMN): salary column should not appear ---
+--echo # salary column was dropped, so it should not appear in results
+SELECT id, name, age, email FROM c4_complex AS OF TIMESTAMP @ts_t5 FORCE INDEX(PRIMARY);
+
+--echo
+--echo --- 4.6 Current state: all changes applied ---
+SELECT * FROM c4_complex FORCE INDEX(PRIMARY);
+
+--echo
+--echo --- 4.7 Verify table_id remained unchanged throughout (Category 1 DDLs) ---
+--echo # All Category 1 DDLs should not change table_id
+--echo # (already verified above: before/after values should be equal)
+
+
+# ################################################################
+#   Cleanup
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Cleanup
+--echo ================================================================
+
+DROP TABLE IF EXISTS c1_fk_child, c1_fk_parent;
+DROP TABLE IF EXISTS c1_add_col, c1_drop_col, c1_rename_col, c1_alter_default;
+DROP TABLE IF EXISTS c1_vcol, c1_add_idx, c1_drop_idx, c1_rename_idx;
+DROP TABLE IF EXISTS c2_force, c2_force_sec, c2_optimize, c2_change_pk;
+DROP TABLE IF EXISTS c2_not_null, c2_row_fmt, c2_implicit;
+DROP TABLE IF EXISTS c3_fk_child, c3_fk_parent;
+DROP TABLE IF EXISTS c3_shrink, c3_type, c3_drop_pk, c3_sec_idx, c3_truncate;
+DROP TABLE IF EXISTS c4_complex;
+
+DROP FUNCTION IF EXISTS get_table_id;
+
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

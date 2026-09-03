@@ -256,6 +256,12 @@ call dbms_proxy.ping();
 
 stop xpaxos_replication;
 
+# Wait for the apply thread to actually stop before checking IS_PAXOS_APPLING.
+# stop xpaxos_replication is asynchronous; under high load the apply thread
+# may still be running when the next ping is issued, causing a spurious pass.
+let $wait_condition= SELECT APPLY_RUNNING='No' FROM information_schema.alisql_cluster_local LIMIT 1;
+--source include/wait_condition.inc
+
 select @@ping_mode;
 --error ER_PING_CHECK_FAILED
 call dbms_proxy.ping();

@@ -34,11 +34,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define GCN_EVENT_H
 
 #include "control_events.h"
-#include "sql/lizard/lizard_service.h"  // MyVisionGCN...
+#include "komodo0service.h"  // MyVisionGCN...
 
 class THD;
 
-namespace lizard {
+namespace komodo {
 class Commit_policy;
 }
 
@@ -131,7 +131,7 @@ class Gcn_event : public Binary_log_event {
   /**
     Constructor.
   */
-  explicit Gcn_event(const lizard::Commit_policy *policy,
+  explicit Gcn_event(const komodo::Commit_policy *policy,
                      const uint64_t innodb_commit_gcn,
                      const uint64_t innodb_snapshot_gcn);
 

@@ -1,0 +1,182 @@
+### Purpose ###
+#
+# Verify that redo log recovery works correctly for SPC indexes.
+#
+# For each of 5 DML categories x 3 row formats (DYNAMIC/COMPACT/REDUNDANT):
+#   1. Prepare the table (CREATE + optional pre-INSERT)
+#   2. Force a clean checkpoint
+#   3. Disable checkpoints, execute the DML (produce redo)
+#   4. Kill mysqld without flushing -- redo remains uncommitted
+#   5. Restart: InnoDB recovery replays the redo
+#   6. Verify: SPC index checksum == PRIMARY KEY checksum
+#
+# DML categories:
+#   simple_insert          -- INSERT only
+#   simple_delete          -- DELETE only (after pre-INSERT)
+#   update_del_ins         -- UPDATE that causes delete+insert in index
+#   update_inplace         -- UPDATE that is in-place (no index change)
+#   insert_on_del_marked   -- INSERT after DELETE in same txn (reuses slot)
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+--let $CHECKSUM_TABLE = t1
+--let $CHECKSUM_INDEX = idx_c
+--let $CHECKSUM_COLS  = id, c
+
+--let $number_of_formats = 3
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 1: simple insert
+--echo #
+# ---------------------------------------------------------------------------
+
+let $i = 1;
+while ($i <= $number_of_formats) {
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'COMPACT' WHEN 3 THEN 'REDUNDANT' END`
+  --echo # $row_format
+
+  --let $PREPARE_STATEMENTS  = CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=$row_format;
+  --let $PRODUCE_REDO_STATEMENTS = INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('b', 100), 2)); UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id = 1;
+  --let $CLEANUP_STATEMENTS  = SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;
+
+  --source suite/spc/include/feature_spc_redo_func.inc
+  inc $i;
+}
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 2: simple delete
+--echo #
+# ---------------------------------------------------------------------------
+
+let $i = 1;
+while ($i <= $number_of_formats) {
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'COMPACT' WHEN 3 THEN 'REDUNDANT' END`
+  --echo # $row_format
+
+  --let $PREPARE_STATEMENTS  = CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=$row_format; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 2));
+  --let $PRODUCE_REDO_STATEMENTS = DELETE FROM t1 WHERE id = 1;
+  --let $CLEANUP_STATEMENTS  = SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;
+
+  --source suite/spc/include/feature_spc_redo_func.inc
+  inc $i;
+}
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 3: update (delete-and-insert in secondary index)
+--echo #
+# ---------------------------------------------------------------------------
+
+let $i = 1;
+while ($i <= $number_of_formats) {
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'COMPACT' WHEN 3 THEN 'REDUNDANT' END`
+  --echo # $row_format
+
+  --let $PREPARE_STATEMENTS  = CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=$row_format; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1));
+  --let $PRODUCE_REDO_STATEMENTS = UPDATE t1 SET c = CONCAT(REPEAT('z', 100), 99) WHERE id = 1;
+  --let $CLEANUP_STATEMENTS  = SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;
+
+  --source suite/spc/include/feature_spc_redo_func.inc
+  inc $i;
+}
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 4: update in-place (PK changes; secondary index not touched)
+--echo # Verifies that redo on clustered index does not corrupt SPC index.
+--echo #
+# ---------------------------------------------------------------------------
+
+let $i = 1;
+while ($i <= $number_of_formats) {
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'COMPACT' WHEN 3 THEN 'REDUNDANT' END`
+  --echo # $row_format
+
+  # pad column is not indexed; updating it is an in-place update on clustered
+  # but does NOT touch the secondary SPC index.
+  --let $PREPARE_STATEMENTS  = CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', pad VARCHAR(60) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=$row_format; INSERT INTO t1 (c, pad) VALUES (CONCAT(REPEAT('a', 100), 1), REPEAT('x', 60));
+  --let $PRODUCE_REDO_STATEMENTS = UPDATE t1 SET pad = REPEAT('y', 60) WHERE id = 1;
+  --let $CLEANUP_STATEMENTS  = SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp, LEFT(pad,1) AS pp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;
+
+  --source suite/spc/include/feature_spc_redo_func.inc
+  inc $i;
+}
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 5: insert reusing del-marked slot (DELETE + INSERT in one txn)
+--echo #
+# ---------------------------------------------------------------------------
+
+let $i = 1;
+while ($i <= $number_of_formats) {
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'COMPACT' WHEN 3 THEN 'REDUNDANT' END`
+  --echo # $row_format
+
+  --let $PREPARE_STATEMENTS  = CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=$row_format; INSERT INTO t1 (id, c) VALUES (1, CONCAT(REPEAT('a', 100), 1));
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; DELETE FROM t1 WHERE id = 1; INSERT INTO t1 (id, c) VALUES (2, CONCAT(REPEAT('b', 100), 2)); COMMIT;
+  --let $CLEANUP_STATEMENTS  = SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;
+
+  --source suite/spc/include/feature_spc_redo_func.inc
+  inc $i;
+}
+
+# ---------------------------------------------------------------------------
+--echo #
+--echo # CASE 6: B-tree split on SPC index (page_copy_rec_list_end_to_created_page)
+--echo #
+--echo # page_copy_rec_list_end_to_created_page() copies right-half records to a
+--echo # newly allocated page during split.  The redo log records individual
+--echo # MLOG_COMP_REC_INSERT entries for those records but does NOT log the
+--echo # page-dict area that SPC needs for decompression.  On recovery the new
+--echo # page's page-dict is uninitialized, which used to crash.
+--echo #
+# ---------------------------------------------------------------------------
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c  VARCHAR(100) NOT NULL DEFAULT '',
+  PRIMARY KEY (id),
+  KEY idx_c (c) secondary_engine_attribute '{"gpp":"0","spc":"1"}'
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t1 (c) VALUES (CONCAT(LPAD(100, 3, '0'), REPEAT('x', 97)));
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+--enable_query_log
+
+--echo # Force checkpoint: pre-fill pages are now durable
+SET GLOBAL innodb_log_checkpoint_now = 1;
+
+--echo # Freeze pages: disable page cleaner and checkpoint
+SET GLOBAL innodb_page_cleaner_disabled_debug = 1;
+SET GLOBAL innodb_checkpoint_disabled         = 1;
+
+--echo # Trigger B-tree split (redo written; new split page NOT flushed)
+--disable_query_log
+INSERT INTO t1 (c) SELECT c FROM t1;
+INSERT INTO t1 (c) SELECT c FROM t1;
+--enable_query_log
+
+--echo # Kill without flushing; restart to replay redo
+--source include/kill_and_restart_mysqld.inc
+
+--echo # After recovery: verify SPC secondary index == PRIMARY KEY
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+             FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+             FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;

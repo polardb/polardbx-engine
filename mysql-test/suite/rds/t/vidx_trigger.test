@@ -1,0 +1,180 @@
+##########################################
+# Test triggers with VECTOR INDEX tables #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo # 1. Create tables with vector index and log table
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t_log (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  action_type VARCHAR(50),
+  action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  details VARCHAR(255)
+) ENGINE = InnoDB;
+
+--echo
+--echo # 2. Create BEFORE INSERT trigger - log the action
+DELIMITER |;
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('BEFORE_INSERT', 'Inserting into t1');
+END|
+DELIMITER ;|
+
+--echo
+--echo # 3. Create AFTER INSERT trigger - insert into another vector table
+DELIMITER |;
+CREATE TRIGGER tr_after_insert AFTER INSERT ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('AFTER_INSERT', 'Inserted into t1');
+  INSERT INTO t2(v) VALUES (NEW.v);
+END|
+DELIMITER ;|
+
+--echo
+--echo # 4. Create BEFORE UPDATE trigger - log the update
+DELIMITER |;
+CREATE TRIGGER tr_before_update BEFORE UPDATE ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('BEFORE_UPDATE', 'Updating t1');
+END|
+DELIMITER ;|
+
+--echo
+--echo # 5. Create AFTER UPDATE trigger
+DELIMITER |;
+CREATE TRIGGER tr_after_update AFTER UPDATE ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('AFTER_UPDATE', 'Updated t1');
+END|
+DELIMITER ;|
+
+--echo
+--echo # 6. Create BEFORE DELETE trigger
+DELIMITER |;
+CREATE TRIGGER tr_before_delete BEFORE DELETE ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('BEFORE_DELETE', 'Deleting from t1');
+END|
+DELIMITER ;|
+
+--echo
+--echo # 7. Create AFTER DELETE trigger
+DELIMITER |;
+CREATE TRIGGER tr_after_delete AFTER DELETE ON t1
+FOR EACH ROW
+BEGIN
+  INSERT INTO t_log(action_type, details) VALUES ('AFTER_DELETE', 'Deleted from t1');
+END|
+DELIMITER ;|
+
+--echo
+--echo # 8. Test INSERT with triggers
+--disable_warnings
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,4,3,2,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+--enable_warnings
+
+--echo # Check log table
+SELECT action_type, details FROM t_log ORDER BY id;
+
+--echo # Check t1 data
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Check t2 data (populated by trigger)
+SELECT id, VEC_TOTEXT(v) FROM t2 ORDER BY id;
+
+--echo
+--echo # 9. Verify vector index integrity after trigger operations
+--echo # ANN query on t1
+--disable_warnings
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+--enable_warnings
+
+--echo # ANN query on t2
+--disable_warnings
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t2 FORCE INDEX(`vi2`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+SELECT id, VEC_TOTEXT(v) FROM t2 FORCE INDEX(`vi2`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+--enable_warnings
+
+--echo
+--echo # 10. Test UPDATE with triggers
+--disable_warnings
+UPDATE t1 SET v = VEC_FROMTEXT("[9,9,9,9,9]") WHERE id = 1;
+--enable_warnings
+
+--echo # Check log after update
+SELECT action_type, details FROM t_log WHERE action_type LIKE '%UPDATE%' ORDER BY id;
+
+--echo # Verify updated data
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify ANN query after update
+--disable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[9,9,9,9,9]")) LIMIT 1;
+--enable_warnings
+
+--echo
+--echo # 11. Test DELETE with triggers
+DELETE FROM t1 WHERE id = 2;
+
+--echo # Check log after delete
+SELECT action_type, details FROM t_log WHERE action_type LIKE '%DELETE%' ORDER BY id;
+
+--echo # Verify remaining data
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 12. Test trigger with NULL vector
+--disable_warnings
+INSERT INTO t1(v) VALUES (NULL);
+--enable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 13. Test multiple inserts in transaction with triggers
+BEGIN;
+--disable_warnings
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[3,3,3,3,3]"));
+--enable_warnings
+COMMIT;
+
+SELECT COUNT(*) FROM t_log WHERE action_type = 'AFTER_INSERT';
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 14. Clean up
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_after_insert;
+DROP TRIGGER tr_before_update;
+DROP TRIGGER tr_after_update;
+DROP TRIGGER tr_before_delete;
+DROP TRIGGER tr_after_delete;
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t_log;
+
+SET GLOBAL vidx_disabled = ON;

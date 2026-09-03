@@ -1,4 +1,5 @@
-/* Copyright (c) 2006, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/* Copyright (c) 2006, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,7 +28,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include "dd/lizard_policy_types.h"
+#include "dd/komodo0dd0policy0types.h"
 #include "lex_string.h"
 #include "my_base.h" /* ha_rows, ha_key_alg */
 
@@ -159,6 +160,20 @@ class KEY {
   */
   ulong *rec_per_key{nullptr};
 
+  /** Options of vector index */
+  uint vector_distance{0};
+  uint vector_m{0};
+  uint vector_ef_construction{0};
+  /**
+    Stable per-vector-index id used to name the hlindex table
+    as vidx_<se_private_id>_<vector_index_id>.  Monotonically allocated and
+    never reused across the table's lifetime, so DROP/ADD of one vector
+    index does not affect the physical table names of the others.  For
+    tables upgraded from a single-vector-index layout the legacy hlindex
+    table is vidx_<id>_0, hence the default value 0.
+  */
+  uint vector_index_id{0};
+
   /**
     @retval true if this is a functional index (at least one of the key parts
                  is a functional key part).
@@ -170,7 +185,7 @@ class KEY {
   // the struct
   LEX_CSTRING engine_attribute{nullptr, 0};
   LEX_CSTRING secondary_engine_attribute{nullptr, 0};
-  lizard::Ha_se_attr_hint se_attr_hint;
+  komodo::dd_se_attrs_t se_attrs{};  // Be aware of the uninitialized problem.
 
  private:
   /**

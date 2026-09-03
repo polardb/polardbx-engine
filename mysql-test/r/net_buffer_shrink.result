@@ -1,0 +1,272 @@
+# Set net_buffer_length to initial value 16384
+SET @@global.net_buffer_length = 16384;
+#
+# Test 1: Buffer expansion and shrink
+#
+# Enable buffer shrink feature
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+CREATE DATABASE IF NOT EXISTS buf_test;
+USE buf_test;
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'buf_test.t1'
+CREATE TABLE t1 (id INT PRIMARY KEY, data1 LONGBLOB, data2 LONGBLOB);
+# Check initial buffer size and statistics for current connection
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	0
+# Generate large data string (32KB) and send it to server via INSERT
+# Note: net_buffer only expands when server RECEIVES data from client
+# Verify buffer expanded - check buffer size increased and expand count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	0
+# Send multiple small packets to trigger buffer shrink
+# Send 10 small queries (threshold is 5, so should shrink after 5th consecutive small packet)
+SELECT 'small query 1' AS test_query;
+test_query
+small query 1
+SELECT 'small query 2' AS test_query;
+test_query
+small query 2
+SELECT 'small query 3' AS test_query;
+test_query
+small query 3
+SELECT 'small query 4' AS test_query;
+test_query
+small query 4
+SELECT 'small query 5' AS test_query;
+test_query
+small query 5
+# Verify buffer shrunk after consecutive small packets - check buffer size decreased and shrink count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	1
+#
+# Test 2: Verify buffer shrink is disabled when feature is off
+#
+SET @@global.net_buff_shrink_enabled = 0;
+# Generate and send large data (32KB) to expand buffer
+# Check buffer state before sending small packets
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	1
+# Send small packets (should NOT trigger shrink when feature is disabled)
+SELECT 'small query disabled 1' AS test_query;
+test_query
+small query disabled 1
+SELECT 'small query disabled 2' AS test_query;
+test_query
+small query disabled 2
+SELECT 'small query disabled 3' AS test_query;
+test_query
+small query disabled 3
+SELECT 'small query disabled 4' AS test_query;
+test_query
+small query disabled 4
+SELECT 'small query disabled 5' AS test_query;
+test_query
+small query disabled 5
+# Verify no shrink happened when feature is disabled - shrink count should not increase
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	1
+#
+# Test 3: Buffer expansion and shrink with compression enabled
+#
+# Enable compression and buffer shrink feature
+SET @@global.protocol_compression_algorithms = 'zlib';
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+# Reconnect with compression enabled
+USE buf_test;
+# Check initial buffer size and statistics for compressed connection
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	0
+# Generate large data string (32KB) and send it to server via INSERT
+# Note: net_buffer only expands when server RECEIVES data from client
+# Verify buffer expanded - check buffer size increased and expand count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	0
+# Send multiple small packets to trigger buffer shrink
+# Send 10 small queries (threshold is 5, so should shrink after 5th consecutive small packet)
+SELECT 'small query compressed 1' AS test_query;
+test_query
+small query compressed 1
+SELECT 'small query compressed 2' AS test_query;
+test_query
+small query compressed 2
+SELECT 'small query compressed 3' AS test_query;
+test_query
+small query compressed 3
+SELECT 'small query compressed 4' AS test_query;
+test_query
+small query compressed 4
+SELECT 'small query compressed 5' AS test_query;
+test_query
+small query compressed 5
+# Verify buffer shrunk after consecutive small packets - check buffer size decreased and shrink count incremented
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	1
+#
+# Test 4: Verify buffer shrink is disabled when feature is off (compressed connection)
+#
+SET @@global.net_buff_shrink_enabled = 0;
+# Reconnect with compression enabled
+USE buf_test;
+# Generate and send large data (32KB) to expand buffer
+# Check buffer state before sending small packets
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	0
+# Send small packets (should NOT trigger shrink when feature is disabled)
+SELECT 'small query disabled compressed 1' AS test_query;
+test_query
+small query disabled compressed 1
+SELECT 'small query disabled compressed 2' AS test_query;
+test_query
+small query disabled compressed 2
+SELECT 'small query disabled compressed 3' AS test_query;
+test_query
+small query disabled compressed 3
+SELECT 'small query disabled compressed 4' AS test_query;
+test_query
+small query disabled compressed 4
+SELECT 'small query disabled compressed 5' AS test_query;
+test_query
+small query disabled compressed 5
+# Verify no shrink happened when feature is disabled - shrink count should not increase
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	0
+SHOW GLOBAL STATUS LIKE 'net_buff_stat_shrink_count';
+Variable_name	Value
+net_buff_stat_shrink_count	2
+#
+# Test 5: Verify no repeated shrink when net_buffer_length is not 4KB aligned
+#
+# Reset compression algorithms to allow uncompressed connection
+SET @@global.protocol_compression_algorithms = 'zlib,zstd,uncompressed';
+# Set net_buffer_length to 3KB (3072), which is not 4KB aligned
+SET @@global.net_buffer_length = 3072;
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 5;
+# Reconnect to apply new net_buffer_length setting
+USE buf_test;
+# Check initial buffer size
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+3072	0
+# Send large packet to expand buffer
+# Verify buffer expanded
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+69632	0
+# Send multiple small packets to trigger shrink
+SELECT 'small query unaligned 1' AS test_query;
+test_query
+small query unaligned 1
+SELECT 'small query unaligned 2' AS test_query;
+test_query
+small query unaligned 2
+SELECT 'small query unaligned 3' AS test_query;
+test_query
+small query unaligned 3
+SELECT 'small query unaligned 4' AS test_query;
+test_query
+small query unaligned 4
+SELECT 'small query unaligned 5' AS test_query;
+test_query
+small query unaligned 5
+# Verify buffer shrunk once
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+4096	1
+# Send more small packets - should NOT trigger repeated shrink
+SELECT 'small query unaligned 6' AS test_query;
+test_query
+small query unaligned 6
+SELECT 'small query unaligned 7' AS test_query;
+test_query
+small query unaligned 7
+SELECT 'small query unaligned 8' AS test_query;
+test_query
+small query unaligned 8
+SELECT 'small query unaligned 9' AS test_query;
+test_query
+small query unaligned 9
+SELECT 'small query unaligned 10' AS test_query;
+test_query
+small query unaligned 10
+# Verify shrink count and buffer size did not change (no repeated shrink)
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT 
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST 
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+4096	1
+USE buf_test;
+#
+# Test 6: Verify shrink_thresh=0 - shrink immediately without waiting for consecutive small packets
+#
+# Reset compression algorithms to allow uncompressed connection
+SET @@global.protocol_compression_algorithms = 'zlib,zstd,uncompressed';
+# Set net_buffer_length to initial value 16384
+SET @@global.net_buffer_length = 16384;
+# Enable buffer shrink with immediate mode (thresh=0)
+SET @@global.net_buff_shrink_enabled = 1;
+SET @@global.net_buff_shrink_thresh = 0;
+# Reconnect to apply new settings
+USE buf_test;
+# Check initial buffer size and statistics
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	0
+# Send large packet to expand buffer
+# Verify buffer shrunk immediately
+SELECT NET_BUFF_SIZE, BUFF_SHRINK_COUNT
+FROM INFORMATION_SCHEMA.MILLI_PROCESSLIST
+WHERE ID = CONNECTION_ID();
+NET_BUFF_SIZE	BUFF_SHRINK_COUNT
+16384	1
+#
+# Cleanup
+#
+DROP TABLE t1;
+DROP DATABASE buf_test;
+# Restore original settings
+SET @@global.net_buff_shrink_enabled = 0;
+SET @@global.net_buff_shrink_thresh = 5;
+SET @@global.protocol_compression_algorithms = 'zlib,zstd,uncompressed';
+SET @@global.net_buffer_length = 16384;

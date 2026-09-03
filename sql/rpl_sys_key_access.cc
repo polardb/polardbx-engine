@@ -89,7 +89,8 @@ int Rpl_sys_key_access::init(TABLE *table, std::string pos) {
 
   if ((m_key_init = !table->file->ha_rnd_init(false))) {
     char *cpos = const_cast<char *>(pos.c_str());
-    m_error = m_table->file->ha_rnd_pos(m_table->record[0], (uchar *)cpos);
+    m_error = m_table->file->ha_rnd_pos(m_table->record[0], (uchar *)cpos,
+                                        komodo::GM_NONE);
   }
 
   return m_error;

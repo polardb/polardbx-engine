@@ -1,0 +1,94 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+connection master;
+CREATE DATABASE recycle_event_state;
+CREATE TABLE recycle_event_state.ta(id INT);
+CREATE TABLE recycle_event_state.tb(id INT);
+--sync_slave_with_master
+
+# A Query_event without a recycle name must clear stale applier state.
+connection slave;
+--source include/stop_slave_sql.inc
+SET GLOBAL replica_parallel_workers = 0;
+SET GLOBAL init_replica =
+    "SET SESSION recycle_bin_table_name = 'stale_applier'";
+--source include/start_slave_sql.inc
+SET GLOBAL init_replica = '';
+--let $assert_text= init_replica should seed the applier recycle name
+--let $assert_cond= [SELECT COUNT(*) FROM performance_schema.variables_by_thread v JOIN performance_schema.threads t USING (THREAD_ID) WHERE t.NAME = "thread/sql/replica_sql" AND v.VARIABLE_NAME = "recycle_bin_table_name" AND v.VARIABLE_VALUE = "stale_applier"] = 1
+--source include/assert.inc
+
+connection master;
+ALTER TABLE recycle_event_state.ta ADD COLUMN applier_reset INT;
+--sync_slave_with_master
+--let $wait_condition= SELECT COUNT(*) = 1 FROM information_schema.columns WHERE table_schema = "recycle_event_state" AND table_name = "ta" AND column_name = "applier_reset"
+--source include/wait_condition.inc
+--let $assert_text= Query_event should clear the applier recycle name
+--let $assert_cond= [SELECT COUNT(*) FROM performance_schema.variables_by_thread v JOIN performance_schema.threads t USING (THREAD_ID) WHERE t.NAME = "thread/sql/replica_sql" AND v.VARIABLE_NAME = "recycle_bin_table_name" AND v.VARIABLE_VALUE = "stale_applier"] = 0
+--source include/assert.inc
+
+connect(source_a, 127.0.0.1, root,, recycle_event_state, $MASTER_MYPORT);
+connection source_a;
+SET SESSION recycle_bin_table_name = 'custom_a';
+# Keep custom_a in the source session until a DROP or TRUNCATE consumes it.
+ALTER TABLE ta ADD COLUMN value_a INT;
+
+connection master;
+DROP TABLE recycle_event_state.tb;
+--sync_slave_with_master
+
+--echo # A DROP from another source session must use an automatic name.
+connection master;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection slave;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection source_a;
+DROP TABLE ta;
+connection master;
+--sync_slave_with_master
+
+--echo # The source session that owns custom_a can still consume it later.
+connection master;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection slave;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection source_a;
+CREATE TABLE tc(id INT);
+SET SESSION recycle_bin_table_name = 'custom_duplicate';
+DROP TABLE tc;
+CREATE TABLE td(id INT);
+SET SESSION recycle_bin_table_name = 'custom_duplicate';
+DROP TABLE td;
+
+connection master;
+--sync_slave_with_master
+
+--echo # A name that decides a duplicate-name fallback follows that DROP only.
+connection master;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection slave;
+--replace_regex /__innodb_[0-9]+/<automatic_name>/
+--replace_column 5 # 6 #
+CALL dbms_recycle.show_tables();
+
+connection master;
+SET SESSION recycle_bin = OFF;
+DROP DATABASE recycle_event_state;
+--sync_slave_with_master
+--source include/rpl_end.inc

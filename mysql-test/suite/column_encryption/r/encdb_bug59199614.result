@@ -1,0 +1,47 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+set global column_encryption = on;
+select encdb_rule_op('add','{"name":"all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+encdb_rule_op('add','{"name":"all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}')
+OK
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"10000-01-01 00:00:00"}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "Invalid timestamp 10000-01-01 00:00:00"
+select * from mysql.encdb_auth_users;
+user	salt_mac	accs_type	expire_time
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"0000-00-00 00:00:00"}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "Invalid timestamp 0000-00-00 00:00:00"
+select * from mysql.encdb_auth_users;
+user	salt_mac	accs_type	expire_time
+create table test(a int);
+insert into test values (1);
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+select * from test;
+select * from test;
+select encdb_rule_op('grant','{"fullAccess":["root"]}');
+encdb_rule_op('grant','{"fullAccess":["root"]}')
+OK
+select * from test;
+a
+1
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+select * from test;
+a
+1
+select * from test;
+a
+1
+select encdb_rule_op('grant','{"fullAccess":["root"],"expired":"2050-01-01 00:00:00"}');
+encdb_rule_op('grant','{"fullAccess":["root"],"expired":"2050-01-01 00:00:00"}')
+OK
+select * from test;
+a
+1
+drop table test;
+set global column_encryption = off;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+include/rpl_end.inc

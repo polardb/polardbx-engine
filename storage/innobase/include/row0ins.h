@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0txn0rec0types.h"
 
+extern bool srv_acquire_next_key_on_next_rec;
+
 /** Checks if foreign key constraint fails for an index entry. Sets shared locks
  which lock either the success or the failure of the constraint. NOTE that
  the caller must have a shared latch on dict_foreign_key_check_lock.

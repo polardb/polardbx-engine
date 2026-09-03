@@ -13,6 +13,10 @@ call mtr.add_suppression("Failed to delete the datafile of tablespace");
 
 create table test.t1(id int);
 
+# flush dirty pages for this table before removing ibd file
+flush tables test.t1 for export;
+unlock tables;
+
 --remove_file $MYSQLD_DATADIR/test/t1.ibd
 flush tables;
 
@@ -28,6 +32,10 @@ drop table test.t1;
 
 
 create table test.t1(id int);
+
+# flush dirty pages for this table before removing ibd file
+flush tables test.t1 for export;
+unlock tables;
 
 --remove_file $MYSQLD_DATADIR/test/t1.ibd
 flush tables;

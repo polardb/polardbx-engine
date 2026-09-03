@@ -9,6 +9,13 @@
 # connect 3 server. must have test database
 --connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
 
+# Record binlog position *before* any test operations so that
+# show_binlog_events.inc only shows events belonging to this test.
+# Without this, a previous test on the same worker may have left events
+# in the current binlog file, causing spurious mismatches.
+--let $binlog_file= query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_start= query_get_value(SHOW MASTER STATUS, Position, 1)
+
 # test savepoint
 #--echo "source_verify_checksum=ON, replica_sql_verify_checksum=ON"
 --connection conn1
@@ -103,9 +110,17 @@ INSERT INTO employees (name) VALUES ('Doe John');
 
 
 
+# Increase max_allowed_packet to avoid 'Event too big' under ASAN/debug builds
+# where binlog events with savepoint rollback can exceed the default limit.
+--disable_query_log
+set global max_allowed_packet= 67108864;
+--enable_query_log
 --let $binlog_file1 = query_get_value(SHOW MASTER STATUS, File, 1)
 #let $MYSQLD_DATADIR= `select @@datadir`;
 #--eval SHOW BINLOG EVENTS IN '$binlog_file1';
+# Normalize binlog file name so result is stable regardless of rotation count
+--let $normalize_binlog_filename= 1
+--replace_regex /master-bin\.[0-9]+/master-bin.000001/
 --source include/show_binlog_events.inc
 select * from t1;
 select * from employees;
@@ -115,9 +130,13 @@ select * from employees;
 --connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
 --connection conn2
 --source include/wait_apply_catchup.inc
+--disable_query_log
+set global max_allowed_packet= 67108864;
+--enable_query_log
 --let $binlog_file2 = query_get_value(SHOW MASTER STATUS, File, 1)
 # let $MYSQLD_DATADIR= `select @@datadir`;
 #--eval SHOW BINLOG EVENTS IN '$binlog_file2'; 
+--replace_regex /master-bin\.[0-9]+/master-bin.000001/
 --source include/show_binlog_events.inc
 select * from t1;
 select * from employees;

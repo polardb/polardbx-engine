@@ -52,6 +52,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0purge.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0gcs.h"
+
 static_assert(static_cast<int>(MTR_MEMO_PAGE_S_FIX) ==
                   static_cast<int>(RW_S_LATCH),
               "");
@@ -933,9 +935,11 @@ int mtr_t::Logging::enable(THD *thd) {
   to progress the system LSN and take a checkpoint. An easy way is to flush
   the max transaction ID which is generally done at TRX_SYS_TRX_ID_WRITE_MARGIN
   interval but safe to do any time. */
-  trx_sys_mutex_enter();
-  trx_sys_write_max_trx_id();
-  trx_sys_mutex_exit();
+  // trx_sys_mutex_enter();
+  // trx_sys_write_max_trx_id();
+  // trx_sys_mutex_exit();
+
+  lizard::gcs_persist_cmmt();
 
   /* It would ensure that the modified page in previous mtr and all other
   pages modified before are flushed to disk. Since there could be large

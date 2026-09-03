@@ -57,7 +57,7 @@ TEST(LeaderDegrade, OptimisticHeartbeat) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 5000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<TestFilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 10000);
   paxos1->init(strConfig, 1, 1, NULL, 4, 4, NULL, false, 1);

@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 5/30/1994 Heikki Tuuri
  ************************************************************************/
 
+#ifndef ut0mem_h
+#define INNODB_UT0MEM_IC_STANDALONE
+#include "ut0mem.h"
+#undef INNODB_UT0MEM_IC_STANDALONE
+#endif /* !ut0mem_h */
 #include "mach0data.h"
 #include "ut0byte.h"
 

@@ -75,7 +75,7 @@ xa start 'fwg_b6';
 insert into tt values (6);
 xa end 'fwg_b6';
 xa prepare 'fwg_b6';
-SET @@SESSION.DEBUG= '+d, simulate_crash_after_consensus_append_log';
+SET @@SESSION.DEBUG= '+d, crash_after_append_log_in_sync';
 xa commit 'fwg_b6';
 ERROR HY000: Lost connection to MySQL server during query
 # Restart the master server

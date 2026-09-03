@@ -1,0 +1,123 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+# 1. Create table with vector index
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# 2. Test ROW format - should work normally
+SET SESSION binlog_format = 'ROW';
+SELECT @@SESSION.binlog_format;
+@@SESSION.binlog_format
+ROW
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,4,3,2,1]"));
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+# ANN query should work
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 2;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+
+# 3. Test STATEMENT format behavior
+# Note: STATEMENT format requires REPEATABLE-READ or SERIALIZABLE isolation
+SET transaction_isolation = 'REPEATABLE-READ';
+SET SESSION binlog_format = 'STATEMENT';
+SELECT @@SESSION.binlog_format;
+@@SESSION.binlog_format
+STATEMENT
+# INSERT with STATEMENT format - may generate warning
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+# UPDATE with STATEMENT format
+UPDATE t1 SET v = VEC_FROMTEXT("[2,2,2,2,2]") WHERE id = 1;
+# DELETE with STATEMENT format
+DELETE FROM t1 WHERE id = 2;
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[2,2,2,2,2]
+3	[1,1,1,1,1]
+
+# 4. Switch to MIXED format
+# MIXED format works with READ-COMMITTED
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION binlog_format = 'MIXED';
+SELECT @@SESSION.binlog_format;
+@@SESSION.binlog_format
+MIXED
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[3,3,3,3,3]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[4,4,4,4,4]"));
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[2,2,2,2,2]
+3	[1,1,1,1,1]
+4	[3,3,3,3,3]
+5	[4,4,4,4,4]
+# ANN query should work
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[3,3,3,3,3]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+4	[3,3,3,3,3]
+1	[2,2,2,2,2]
+5	[4,4,4,4,4]
+
+# 5. Switch back to ROW format and verify
+SET SESSION binlog_format = 'ROW';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,5,5,5,5]"));
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+
+# 6. Test format switching within transaction
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[6,6,6,6,6]"));
+COMMIT;
+# Switching binlog_format within active transaction not allowed
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[7,7,7,7,7]"));
+SET SESSION binlog_format = 'STATEMENT';
+ERROR HY000: Cannot modify @@session.binlog_format inside a transaction
+COMMIT;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+7
+
+# 7. Test with different data operations in ROW format
+SET SESSION binlog_format = 'ROW';
+# Batch insert
+INSERT INTO t1(v) VALUES 
+(VEC_FROMTEXT("[8,8,8,8,8]")),
+(VEC_FROMTEXT("[9,9,9,9,9]")),
+(VEC_FROMTEXT("[10,10,10,10,10]"));
+# Batch update
+UPDATE t1 SET v = VEC_FROMTEXT("[0,0,0,0,0]") WHERE id > 5 AND id <= 7;
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[2,2,2,2,2]
+3	[1,1,1,1,1]
+4	[3,3,3,3,3]
+5	[4,4,4,4,4]
+6	[0,0,0,0,0]
+7	[0,0,0,0,0]
+8	[7,7,7,7,7]
+9	[8,8,8,8,8]
+10	[9,9,9,9,9]
+11	[10,10,10,10,10]
+
+# 8. Final ANN query verification
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5,5,5]")), id LIMIT 5;
+id	VEC_TOTEXT(v)
+5	[4,4,4,4,4]
+4	[3,3,3,3,3]
+8	[7,7,7,7,7]
+1	[2,2,2,2,2]
+9	[8,8,8,8,8]
+
+# 9. Clean up
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

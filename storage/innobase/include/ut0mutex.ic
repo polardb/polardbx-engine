@@ -36,6 +36,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2012/08/21 Sunny Bains
  *******************************************************/
 
+#if !defined(UNIV_LIBRARY) && !defined(UNIV_HOTBACKUP)
+#ifndef ut0mutex_h
+#define INNODB_UT0MUTEX_IC_STANDALONE
+#include "ut0mutex.h"
+#undef INNODB_UT0MUTEX_IC_STANDALONE
+#endif /* !ut0mutex_h */
 #include "sync0arr.h"
 #include "sync0debug.h"
 
@@ -224,3 +230,4 @@ void TTASEventMutex<Policy>::signal() UNIV_NOTHROW {
 
   sync_array_object_signalled();
 }
+#endif /* !defined(UNIV_LIBRARY) && !defined(UNIV_HOTBACKUP) */

@@ -1,0 +1,149 @@
+# Test for innodb_redo_log_file_cache_pct system variable
+# This variable controls the maximum number of redo log files that can be
+# marked as consumed in one iteration of the redo log governor.
+
+--source include/have_debug.inc
+--source include/big_test.inc
+
+--echo #
+--echo # Test 1: Verify variable affects redo log file consumption rate
+--echo #
+
+--echo # Reset to default value
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;
+
+--echo # Prepare test environment with small redo log capacity
+let $tmp_dir = $MYSQLTEST_VARDIR/tmp;
+let MYSQLD_DATADIR = $tmp_dir/redo_consume_test;
+let MYSQLD_ERROR_LOG = $tmp_dir/my_restart.err;
+let $INNODB_PAGE_SIZE = `select @@innodb_page_size`;
+let MYSQLD_EXTRA_ARGS = --innodb-redo-log-capacity=8388608 --innodb_page_size=$INNODB_PAGE_SIZE;
+
+--echo # Save bootstrap.sql state before test
+perl;
+my $bootstrap_file = "$ENV{'MYSQLTEST_VARDIR'}/tmp/bootstrap.sql";
+my $bootstrap_backup = "$ENV{'MYSQLTEST_VARDIR'}/tmp/bootstrap.sql.backup";
+if (-f $bootstrap_file) {
+    # File exists, save it
+    system("cp", $bootstrap_file, $bootstrap_backup) == 0 or die "Failed to backup bootstrap.sql: $!\n";
+    print "# Saved bootstrap.sql state\n";
+} else {
+    # File doesn't exist, create empty marker
+    open my $fh, '>', $bootstrap_backup or die "Failed to create backup marker: $!\n";
+    print $fh "NOT_EXISTS\n";
+    close $fh;
+    print "# Marked bootstrap.sql as not existing\n";
+}
+EOF
+
+--echo # Initialize new data directory...
+--source include/initialize_datadir.inc
+
+let $restart_parameters = restart: --datadir=$MYSQLD_DATADIR --log-error=$MYSQLD_ERROR_LOG $MYSQLD_EXTRA_ARGS;
+--replace_result $MYSQLD_ERROR_LOG ERROR_LOG $MYSQLD_DATADIR DATADIR $INNODB_PAGE_SIZE INNODB_PAGE_SIZE
+--source include/restart_mysqld.inc
+
+--echo # Prepare schema for generating redo log
+--source include/ib_log_spammer_init.inc
+CREATE TABLE t (a INT) ENGINE=InnoDB;
+
+--echo # Ensure checkpoint is enabled and force consumption
+SET GLOBAL innodb_log_checkpoint_now = ON;
+SET GLOBAL DEBUG = '+d,log_force_consumption';
+
+--echo # Wait until we have exactly 1 redo log file
+let MYSQLD_IB_REDO_LOG_NON_TMP_FILES_COUNT_MAX = 1;
+--source include/ib_redo_log_files_count_wait.inc
+
+--echo # Test with max_unused_redo_prepare_count = 1 (default, slow consumption)
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;
+
+--echo # Disable checkpoint to generate multiple redo files
+SET GLOBAL innodb_checkpoint_disabled = ON;
+
+--echo # Generate redo log to create multiple files
+--connect(C1,localhost,root,,test)
+--send CALL log_spammer()
+--connection default
+
+--echo # Wait until we have at least 3 redo log files
+let MYSQLD_IB_REDO_LOG_NON_TMP_FILES_COUNT_MIN = 3;
+--source include/ib_redo_log_files_count_wait.inc
+
+--echo # Count current redo log files
+perl;
+require 'include/ib_redo_log_files.inc';
+my @files = log_get_non_tmp_files();
+my $file_count = scalar(@files);
+print "# Current redo log files: $file_count\n";
+EOF
+
+--echo # Re-enable checkpoint and force consumption
+SET GLOBAL innodb_checkpoint_disabled = OFF;
+SET GLOBAL innodb_log_checkpoint_now = ON;
+
+--echo # Stop log spammer
+UPDATE test.log_spam_controller SET status = 'Stopping' WHERE id = 1;
+--connection C1
+--reap
+--connection default
+--disconnect C1
+
+--echo # Wait a bit for consumption to start
+--sleep 2
+
+--echo # Count current redo log files before consumption
+perl;
+require 'include/ib_redo_log_files.inc';
+my @files_before = log_get_non_tmp_files();
+my $count_before = scalar(@files_before);
+print "# Redo log files before consumption: $count_before\n";
+EOF
+
+--echo # Test with max_unused_redo_prepare_count = 5 (faster consumption)
+SET GLOBAL innodb_redo_log_file_cache_pct = 5;
+
+--echo # Generate more redo log
+--connect(C2,localhost,root,,test)
+--send CALL log_spammer()
+--connection default
+
+--echo # Wait until we have at least 3 redo log files again
+let MYSQLD_IB_REDO_LOG_NON_TMP_FILES_COUNT_MIN = 3;
+--source include/ib_redo_log_files_count_wait.inc
+
+--echo # Re-enable checkpoint
+SET GLOBAL innodb_checkpoint_disabled = OFF;
+SET GLOBAL innodb_log_checkpoint_now = ON;
+
+--echo # Stop log spammer
+UPDATE test.log_spam_controller SET status = 'Stopping' WHERE id = 1;
+--connection C2
+--reap
+--connection default
+--disconnect C2
+
+--echo # Wait for consumption with higher limit (should be faster)
+--sleep 3
+
+--echo # Count redo log files after consumption
+perl;
+require 'include/ib_redo_log_files.inc';
+my @files_after = log_get_non_tmp_files();
+my $count_after = scalar(@files_after);
+print "# Redo log files after consumption: $count_after\n";
+EOF
+
+--echo # Verify variable is still set correctly
+SELECT @@global.innodb_redo_log_file_cache_pct AS 'Current Value';
+
+
+let MYSQLD_DATADIR =;
+let MYSQLD_ERROR_LOG =;
+let MYSQLD_EXTRA_ARGS =;
+
+--source include/start_mysqld.inc
+
+--echo # Reset to default
+SET GLOBAL innodb_redo_log_file_cache_pct = 1;
+

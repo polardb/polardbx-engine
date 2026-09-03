@@ -31,14 +31,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "lizard0row0gpp.h"
-#include "lizard0dict0mem.h"
 #include "lizard0btr0cur.h"
-#include "lizard0dict.h"
+#include "lizard0data0types.h"
+#include "lizard0dict0dict.h"
 
 #include "btr0pcur.h"
+#include "page0types.h"
 #include "row0ins.h"
+#include "row0mysql.h"
 #include "row0purge.h"
-#include "row0row.h"
 #include "row0undo.h"
 #include "row0upd.h"
 
@@ -53,34 +54,52 @@ bool index_purge_guess_clust_enabled = true;
 /** Whether to enable clustered index record inference during the locking. */
 bool index_lock_guess_clust_enabled = true;
 
+/** Whether to enable clustered index record inference during the index merge.
+ */
+bool index_pos_guess_clust_enabled = true;
+
 #ifdef UNIV_DEBUG
 gpp_no_t dbug_gpp_no = PAGE_NO_MAX;
 #endif /* UNIV_DEBUG */
+
+/**
+   Allocate the GPP_NO field buffer from heap and link it with the row.
+
+   @param[in/out]  row      row tuple
+   @param[in]      heap     memory heap
+   @param[in]      gpp_no   initial gpp no value
+
+   @return   allocated buffer of GPP_NO field
+*/
+static byte *row_alloc_gpp_field(dtuple_t *row, mem_heap_t *heap,
+                                 gpp_no_t gpp_no) {
+  byte *ptr = nullptr;
+  dfield_t *dfield = nullptr;
+
+  ut_ad(row && heap);
+
+  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
+  mach_write_to_4(ptr, gpp_no);
+
+  dfield = dtuple_get_v_gfield(row);
+  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
+
+  ut_ad(row->read_v_gpp_no() == gpp_no);
+  return ptr;
+}
+
 /**
    Allocate row buffers for GPP_NO field of insert node.
 
    @param[in]      node      Insert node
 */
 void ins_alloc_gpp_field(ins_node_t *node) {
-  ut_d(dict_table_t *table = nullptr);
-  byte *ptr = nullptr;
-  dtuple_t *row = nullptr;
-  mem_heap_t *heap = nullptr;
-  dfield_t *dfield = nullptr;
   ut_ad(node);
+  ut_ad(node->row && node->table && node->entry_sys_heap);
+  ut_ad(dtuple_get_n_fields(node->row) == node->table->get_n_cols());
 
-  row = node->row;
-  ut_d(table = node->table);
-  heap = node->entry_sys_heap;
-
-  ut_ad(row && table && heap);
-  ut_ad(dtuple_get_n_fields(row) == table->get_n_cols());
-
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
-  node->gpp_no_buf = ptr;
+  /* Init as 0, wait to be filled after the clustered index insert. */
+  node->gpp_no_buf = row_alloc_gpp_field(node->row, node->entry_sys_heap, 0);
 }
 
 /**
@@ -108,6 +127,7 @@ void row_ins_clust_write_gpp_no(ins_node_t *node, const dict_index_t *index,
   ut_ad(entry->read_v_gpp_no() == node->gpp_no);
 }
 
+#ifdef UNIV_DEBUG
 /**
  * Debug assert GPP_NO is valid when inserting second index.
  * Attention: Use macro instead of using it directly.
@@ -117,8 +137,9 @@ void row_ins_clust_write_gpp_no(ins_node_t *node, const dict_index_t *index,
  * @param[in]		index entry
  * @param[in]		row
  */
-void row_ins_sec_assert_gpp_no(ins_node_t *node, const dict_index_t *index,
-                               dtuple_t *entry, const dtuple_t *row) {
+static bool row_ins_sec_assert_gpp_no(ins_node_t *node,
+                                      const dict_index_t *index,
+                                      dtuple_t *entry, const dtuple_t *row) {
   ut_ad(!index->is_clustered());
   ut_ad(node);
   ut_ad(node->index == index);
@@ -133,8 +154,9 @@ void row_ins_sec_assert_gpp_no(ins_node_t *node, const dict_index_t *index,
   if (index->n_s_gfields > 0) {
     ut_ad(entry->read_s_gpp_no() == entry->read_v_gpp_no());
   }
-  return;
+  return true;
 }
+#endif
 
 /**
  * Write GPP_NO after primary key insert or just assert it for sec index.
@@ -149,7 +171,7 @@ void row_ins_index_write_gpp_no(ins_node_t *node, const dict_index_t *index,
   if (index->is_clustered()) {
     row_ins_clust_write_gpp_no(node, index, entry, row);
   } else {
-    lizard_row_ins_sec_assert_gpp_no(node, index, entry, row);
+    ut_ad(row_ins_sec_assert_gpp_no(node, index, entry, row));
   }
 }
 
@@ -159,25 +181,12 @@ void row_ins_index_write_gpp_no(ins_node_t *node, const dict_index_t *index,
    @param[in]      node      Insert node
 */
 void row_upd_alloc_gpp_field_for_old_row(upd_node_t *node) {
-  ut_d(dict_table_t *table = nullptr);
-  byte *ptr = nullptr;
-  dtuple_t *row = nullptr;
-  mem_heap_t *heap = nullptr;
-  dfield_t *dfield = nullptr;
   ut_ad(node);
-  ut_d(table = node->table);
-  heap = node->heap;
+  ut_ad(node->row && node->table && node->heap);
+  ut_ad(dtuple_get_n_fields(node->row) == node->table->get_n_cols());
 
-  /* For old row, Set gpp_no to FIL_NULL. */
-  row = node->row;
-  ut_ad(row);
-  ut_ad(dtuple_get_n_fields(row) == table->get_n_cols());
-
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
-  mach_write_to_4(ptr, FIL_NULL);
-  ut_ad(node->row->read_v_gpp_no() == FIL_NULL);
+  /* For old row, set gpp_no to FIL_NULL. */
+  row_alloc_gpp_field(node->row, node->heap, FIL_NULL);
 }
 
 /**
@@ -186,25 +195,13 @@ void row_upd_alloc_gpp_field_for_old_row(upd_node_t *node) {
    @param[in]      node      Insert node
 */
 void row_upd_alloc_gpp_field_for_new_row(upd_node_t *node) {
-  ut_d(dict_table_t *table = nullptr);
-  byte *ptr = nullptr;
-  dtuple_t *row = nullptr;
-  mem_heap_t *heap = nullptr;
-  dfield_t *dfield = nullptr;
   ut_ad(node);
-  ut_d(table = node->table);
-  heap = node->heap;
+  ut_ad(node->upd_row && node->table && node->heap);
+  ut_ad(dtuple_get_n_fields(node->upd_row) == node->table->get_n_cols());
 
-  /* For update row, link it with node->gpp_no_buf. */
-  row = node->upd_row;
-  ut_ad(row && table && heap);
-  ut_ad(dtuple_get_n_fields(row) == table->get_n_cols());
-
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
-  node->gpp_no_buf = ptr;
+  /* Init as 0 and link it with node->gpp_no_buf, wait to be filled after
+  the clustered index update. */
+  node->gpp_no_buf = row_alloc_gpp_field(node->upd_row, node->heap, 0);
 }
 
 /**
@@ -240,7 +237,7 @@ void row_upd_clust_write_gpp_no(upd_node_t *node, const dict_index_t *index,
  * @param[in]   index entry
  * @param[in]		upd_row
  */
-void row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
+bool row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
                                dtuple_t *entry, const dtuple_t *upd_row) {
   ut_ad(!index->is_clustered());
   ut_ad(node);
@@ -254,6 +251,8 @@ void row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
   if (index->n_s_gfields > 0) {
     ut_ad(entry->read_s_gpp_no() == entry->read_v_gpp_no());
   }
+
+  return true;
 }
 
 /*=============================================================================*/
@@ -266,13 +265,8 @@ void row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
    @param[in]       heap
 */
 void row_log_table_alloc_gpp_field(dtuple_t *row, mem_heap_t *heap) {
-  byte *ptr = nullptr;
-  dfield_t *dfield = nullptr;
-
-  ut_ad(row && heap);
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
+  /* Init as 0, wait to be filled after the clustered index apply. */
+  row_alloc_gpp_field(row, heap, 0);
 }
 
 /**
@@ -304,7 +298,7 @@ void row_log_table_clust_write_gpp_no(const gpp_no_t &gpp_no,
  * @param[in]		row
  * @param[in]		gpp_no
  */
-void row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
+bool row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
                                      const dtuple_t *row,
                                      const gpp_no_t &gpp_no) {
   ut_ad(!index->is_clustered());
@@ -315,6 +309,8 @@ void row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
   if (index->n_s_gfields > 0) {
     ut_ad(entry->read_s_gpp_no() == gpp_no);
   }
+
+  return true;
 }
 
 /*=============================================================================*/
@@ -326,23 +322,11 @@ void row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
    @param[in]       node      Undo node
 */
 void row_undo_alloc_gpp_field(undo_node_t *node) {
-  ut_d(dict_table_t *table = nullptr);
-  byte *ptr = nullptr;
-  dtuple_t *row = nullptr;
-  mem_heap_t *heap = nullptr;
-  dfield_t *dfield = nullptr;
   ut_ad(node);
+  ut_ad(node->row && node->table && node->heap);
 
-  row = node->row;
-  ut_d(table = node->table);
-  heap = node->heap;
-
-  ut_ad(row && table && heap);
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
-  mach_write_to_4(ptr, FIL_NULL);
-  ut_ad(node->row->read_v_gpp_no() == FIL_NULL);
+  /* For undo row, set gpp_no to FIL_NULL. */
+  row_alloc_gpp_field(node->row, node->heap, FIL_NULL);
 }
 
 /*=============================================================================*/
@@ -354,26 +338,12 @@ void row_undo_alloc_gpp_field(undo_node_t *node) {
    @param[in]       node      Purge node
 */
 void row_purge_alloc_gpp_field(purge_node_t *node) {
-  ut_d(dict_table_t *table = nullptr);
-  byte *ptr = nullptr;
-  dtuple_t *row = nullptr;
-  mem_heap_t *heap = nullptr;
-  dfield_t *dfield = nullptr;
   ut_ad(node);
+  ut_ad(node->row && node->table && node->heap);
 
-  row = node->row;
-  ut_d(table = node->table);
-  heap = node->heap;
-
-  ut_ad(row && table && heap);
-  ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
-  dfield = dtuple_get_v_gfield(row);
-  dfield_set_data(dfield, ptr, DATA_GPP_NO_LEN);
-  mach_write_to_4(ptr, FIL_NULL);
-  ut_ad(node->row->read_v_gpp_no() == FIL_NULL);
+  /* For purge row, set gpp_no to FIL_NULL. */
+  row_alloc_gpp_field(node->row, node->heap, FIL_NULL);
 }
-
-
 
 /**
   Updates the gpp_no of secondary index record when cleanout.
@@ -412,20 +382,16 @@ void row_upd_rec_gpp_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
  * @param[in] offsets Array of field offsets
  * @return            Returns the offset of the GPP number within the record
  */
-ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets) {
-  ulint pos;
+ulint row_get_gpp_no_offset(const dict_index_t *index, const Slice *slc) {
   ulint offset;
   ulint len;
   ut_ad(!index->is_clustered());
-  ut_ad(index->n_fields == offsets[1]);
+  ut_ad(index->n_fields == slc->offsets()[1]);
   ut_ad(index->n_s_gfields > 0);
 
   /** The GPP NO resides on the last field of the index. */
   /** Revision : GPP NO will be not last field after index page version.*/
-  pos = index->get_gpp_col_pos();
-  ut_ad(pos != ULINT_UNDEFINED);
-
-  offset = rec_get_nth_field_offs(index, offsets, pos, &len);
+  offset = slc->get_nth_sys_field_offs(DATA_GPP_NO, ULINT_UNDEFINED, &len);
   ut_ad(len == DATA_GPP_NO_LEN);
 
   return offset;
@@ -440,15 +406,14 @@ ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets) {
  *
  * @return            Returns the GPP Number and offset from the record
  */
-std::pair<gpp_no_t, ulint> row_get_gpp_no(const rec_t *rec,
-                                          const dict_index_t *index,
-                                          const ulint *offsets) {
+std::pair<gpp_no_t, ulint> row_get_gpp_no(const dict_index_t *index,
+                                          const Slice *slc) {
   ut_ad(!index->is_clustered());
   ut_ad(index->n_s_gfields > 0);
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
-  ulint gpp_no_offset = row_get_gpp_no_offset(index, offsets);
-  gpp_no_t gpp_no = mach_read_from_4(rec + gpp_no_offset);
+  ulint gpp_no_offset = row_get_gpp_no_offset(index, slc);
+  gpp_no_t gpp_no = mach_read_from_4(slc->rec() + gpp_no_offset);
 
   return {gpp_no, gpp_no_offset};
 }
@@ -457,7 +422,8 @@ void row_write_gpp_no(rec_t *rec, const dict_index_t *index,
                       const ulint gpp_no_offset, const gpp_no_t gpp_no) {
   ut_ad(!index->is_clustered());
   ut_ad(index->n_s_gfields > 0);
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
+
   mach_write_to_4(rec + gpp_no_offset, gpp_no);
 }
 
@@ -467,16 +433,18 @@ void row_write_gpp_no(rec_t *rec, const dict_index_t *index,
  * @param[in]		index
  * @param[in]		multi-value entry
  */
-void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
+bool row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
                                        const dtuple_t *mv_entry) {
   ut_ad(!index->is_clustered());
   ut_d(gpp_no_t gpp_no = mv_entry->read_v_gpp_no());
   ut_ad(gpp_no != 0 && gpp_no != FIL_NULL);
+
   if (index->n_s_gfields > 0) {
     ut_ad(mv_entry->read_s_gpp_no() == gpp_no);
   }
-}
 
+  return true;
+}
 
 /*=============================================================================*/
 /* lizard row guess on gpp */
@@ -493,7 +461,7 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     cleanout        cleanout context
  * @param[in]     mtr             Mini-transaction handle
  *
@@ -501,25 +469,25 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  */
 bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
                                     dict_index_t *sec_idx, dtuple_t *clust_ref,
-                                    const rec_t *sec_rec,
-                                    btr_pcur_t *clust_pcur, ulint *sec_offsets,
-                                    ulint mode, Cleanout_ctx_t &cctx,
-                                    mtr_t *mtr) {
+                                    const Slice *sec_slc,
+                                    btr_pcur_t *clust_pcur, ulint latch_mode,
+                                    Cleanout_ctx_t &cctx, mtr_t *mtr) {
   bool hit = false;
   ulint gpp_no_offset = ULINT_UNDEFINED;
 
   ut_ad(!sec_idx->is_clustered());
-  ut_ad(mode == BTR_SEARCH_LEAF);
+  ut_ad(latch_mode == BTR_SEARCH_LEAF);
+  ut_ad(sec_slc->is_positioned(sec_idx));
 
   if (!index_scan_guess_clust_enabled || sec_idx->n_s_gfields == 0) {
     return false;
   }
 
-  ut_ad(sec_offsets);
+  ut_ad(sec_slc);
 
   std::tie(hit, gpp_no_offset) =
-      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
-                                 clust_pcur, sec_offsets, mode, mtr);
+      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_slc,
+                                 clust_pcur, PAGE_CUR_LE, latch_mode, mtr);
 
   /* Try to add the cursor into scan_cleanout. */
   if (!hit && cctx.is_usable()) {
@@ -540,39 +508,33 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     clust_ref       Reference tuple for the clustered index
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
  */
 bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
                                       dict_index_t *sec_idx,
-                                      dtuple_t *clust_ref, const rec_t *sec_rec,
-                                      btr_pcur_t *clust_pcur, ulint mode,
+                                      dtuple_t *clust_ref, creg_t sec_reg,
+                                      btr_pcur_t *clust_pcur, ulint latch_mode,
                                       mtr_t *mtr) {
-  mem_heap_t *heap = nullptr;
   bool hit = false;
+
   ut_ad(!sec_idx->is_clustered());
-  ut_ad(mode == BTR_SEARCH_LEAF);
+  ut_ad(latch_mode == BTR_SEARCH_LEAF);
 
   if (!index_purge_guess_clust_enabled || sec_idx->n_s_gfields == 0) {
     return false;
   }
 
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-
-  rec_offs_init(offsets_);
-  offsets = rec_get_offsets(sec_rec, sec_idx, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  Slice_ctx sctx;
+  Slice *slc = sctx.get_offsets(sec_reg, sec_idx, ULINT_UNDEFINED);
 
   std::tie(hit, std::ignore) = btr_cur_guess_clust_by_gpp(
-      clust_idx, sec_idx, clust_ref, sec_rec, clust_pcur, offsets, mode, mtr);
+      clust_idx, sec_idx, clust_ref, slc, clust_pcur, PAGE_CUR_LE,
+      latch_mode, mtr);
 
   index_purge_guess_clust_stat(hit);
 
-  if (heap) {
-    mem_heap_free(heap);
-  }
   return hit;
 }
 
@@ -587,32 +549,95 @@ bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
  */
 bool row_lock_optimistic_guess_clust(dict_index_t *clust_idx,
                                      const dict_index_t *sec_idx,
-                                     dtuple_t *clust_ref, const rec_t *sec_rec,
-                                     btr_pcur_t *clust_pcur,
-                                     const ulint *sec_offsets, ulint mode,
+                                     dtuple_t *clust_ref, const Slice *sec_slc,
+                                     btr_pcur_t *clust_pcur, ulint latch_mode,
                                      mtr_t *mtr) {
   bool hit = false;
+
   ut_ad(!sec_idx->is_clustered());
-  ut_ad(mode == BTR_SEARCH_LEAF);
+  ut_ad(latch_mode == BTR_SEARCH_LEAF);
 
   if (!index_lock_guess_clust_enabled || sec_idx->n_s_gfields == 0) {
     return false;
   }
-  ut_ad(sec_offsets);
+  ut_ad(sec_slc);
 
   std::tie(hit, std::ignore) =
-      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_rec,
-                                 clust_pcur, sec_offsets, mode, mtr);
+      btr_cur_guess_clust_by_gpp(clust_idx, sec_idx, clust_ref, sec_slc,
+                                 clust_pcur, PAGE_CUR_LE, latch_mode, mtr);
 
   index_lock_guess_clust_stat(hit);
 
   return hit;
 }
 
+/** Optimistic guess clust index record with guess context.
+ * @param[in]      guess_ctx       Guess context
+ * @param[in]      base_idx        Base index
+ * @param[in]      clust_ref       Clustered index reference
+ * @param[in]      mode            Search mode
+ * @param[in]      latch_mode      Latching mode
+ * @param[in,out]  clust_pcur      Clustered index cursor
+ * @param[in]      mtr             Mini-transaction
+ * @return true if guess succeeded
+ */
+bool row_pos_optimistic_guess_clust(const komodo::guess_ctx_t guess_ctx,
+                                    dict_index_t *base_idx,
+                                    const dtuple_t *clust_ref,
+                                    page_cur_mode_t mode, ulint latch_mode,
+                                    btr_pcur_t *clust_pcur, mtr_t *mtr) {
+  komodo::guess_mode_t gmode = guess_ctx.gmode();
+  gpp_no_t gpp_no = guess_ctx.gpp_no();
+
+  if (!lizard::index_pos_guess_clust_enabled || gmode == komodo::GM_NONE ||
+      gpp_no == FIL_NULL) {
+    return false;
+  }
+
+  ut_ad(mode == PAGE_CUR_GE);
+  ut_ad(latch_mode == BTR_SEARCH_LEAF);
+
+  clust_pcur->m_search_mode = mode;
+  clust_pcur->m_latch_mode = latch_mode;
+  clust_pcur->m_old_stored = false;
+
+  bool hit = lizard::btr_cur_guess_by_gpp_low(gpp_no, base_idx, clust_ref,
+                                              clust_pcur->get_btr_cur(), mode,
+                                              latch_mode, mtr);
+  if (hit) {
+    clust_pcur->m_pos_state = BTR_PCUR_IS_POSITIONED;
+    clust_pcur->m_btr_cur.index = base_idx;
+    clust_pcur->m_btr_cur.flag = BTR_CUR_BINARY;
+  }
+
+  lizard::index_pos_guess_clust_stat(gmode, hit);
+
+  return hit;
+}
+
+/** Get the gpp number from a secondary index record.
+ *
+ * @param[in] prebuilt        Prebuilt struct for the table handler
+ * @param[in] index           Index object
+ * @param[in] rec             Record
+ * @param[in] offsets         Offsets array
+ */
+gpp_no_t row_sec_get_gpp_no(const dict_index_t *index, const Slice *slc) {
+  ut_ad(!index->is_clustered());
+  ut_ad(index->n_fields == slc->offsets()[1]);
+
+  /** If there is no stored gpp no column, return FIL_NULL. */
+  if (index->n_s_gfields == 0) {
+    return FIL_NULL;
+  }
+  gpp_no_t gpp_no = FIL_NULL;
+  std::tie(gpp_no, std::ignore) = row_get_gpp_no(index, slc);
+  return gpp_no;
+}
 }  // namespace lizard

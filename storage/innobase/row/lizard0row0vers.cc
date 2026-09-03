@@ -33,8 +33,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0mem.h"
 
 #include "lizard0row0vers.h"
+#include "lizard0txn0slot.h"
 
 namespace lizard {
+
+bool srv_quick_purge_build_prev_version = true;
 
 /** Simulate a invalid vision which took as a faked asof query,
  * then trx_undo_prev_version_build will try to get prev image
@@ -45,11 +48,15 @@ namespace lizard {
  * flashback area.
  * */
 const Vision *row_vers_old_simulate_vision() {
-  static Snapshot_scn_vision simulate_snapshot;
+  static komodo::Snapshot_scn_vision simulate_snapshot;
   static const Vision simulate_vision(&simulate_snapshot);
-  /** It's a faked as of scn vision to get prev version instead of purge vision.
-   */
-  return &simulate_vision;
+  if (srv_quick_purge_build_prev_version) {
+    return nullptr;
+  } else {
+    /** It's a faked as of scn vision to get prev version instead of purge
+     * vision. */
+    return &simulate_vision;
+  }
 }
 
 /** Jedge whether the cluster delete marked record still was needed.
@@ -73,7 +80,7 @@ bool row_clust_vers_must_preserve_del_marked(txn_rec_t *txn_rec,
 
   /** delete marked record will be not inherited after ddl, so table->is_2pp is
    * safe here. */
-  bool missing = txn_rec_is_missing_history(txn_rec, table->is_2pp, &mtr);
+  bool missing = txn_slot_is_missing_history(txn_rec, table->is_2pp, &mtr);
 
   mtr_commit(&mtr);
   return !missing;
@@ -96,7 +103,7 @@ bool row_panda_vers_must_preserve_del_marked(txn_rec_t *txn_rec) {
 
   mtr_start(&mtr);
 
-  bool missing = txn_rec_is_missing_history(txn_rec, false, &mtr);
+  bool missing = txn_slot_is_missing_history(txn_rec, false, &mtr);
 
   mtr_commit(&mtr);
   return !missing;

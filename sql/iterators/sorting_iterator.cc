@@ -61,6 +61,9 @@
 #include "sql/table.h"
 #include "thr_lock.h"
 #include "varlen_sort.h"
+#include "sql/range_optimizer/index_merge.h"
+#include "sql/komodo0sql0guess0clust.h"
+#include "sql/komodo0handler0types.h"
 
 using std::string;
 using std::vector;
@@ -91,7 +94,20 @@ SortFileIndirectIterator::SortFileIndirectIterator(
       m_examined_rows(examined_rows),
       m_tables(std::move(tables)),
       m_ignore_not_found_rows(ignore_not_found_rows),
-      m_has_null_flags(has_null_flags) {}
+      m_has_null_flags(has_null_flags),
+      m_gmode(komodo::GM_NONE) {}
+
+SortFileIndirectIterator::SortFileIndirectIterator(
+    THD *thd, Mem_root_array<TABLE *> tables, IO_CACHE *tempfile,
+    bool ignore_not_found_rows, bool has_null_flags, ha_rows *examined_rows,
+    komodo::guess_mode_t gmode)
+    : RowIterator(thd),
+      m_io_cache(tempfile),
+      m_examined_rows(examined_rows),
+      m_tables(std::move(tables)),
+      m_ignore_not_found_rows(ignore_not_found_rows),
+      m_has_null_flags(has_null_flags),
+      m_gmode(gmode) {}
 
 SortFileIndirectIterator::~SortFileIndirectIterator() {
   for (TABLE *table : m_tables) {
@@ -129,7 +145,9 @@ bool SortFileIndirectIterator::Init() {
     if (m_has_null_flags && table->is_nullable()) {
       ++m_sum_ref_length;
     }
-    m_sum_ref_length += table->file->ref_length;
+    m_sum_ref_length +=
+        table->file->ref_length +
+        (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length);
   }
   if (m_ref_pos == nullptr) {
     m_ref_pos = thd()->mem_root->ArrayAlloc<uchar>(m_sum_ref_length);
@@ -160,18 +178,26 @@ int SortFileIndirectIterator::Read() {
     uchar *ref_pos = m_ref_pos;
     bool skip = false;
     for (TABLE *table : m_tables) {
+      uint rg_length =
+          table->file->ref_length +
+          (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length);
+
       if (m_has_null_flags && table->is_nullable()) {
         if (*ref_pos++) {
           table->set_null_row();
-          ref_pos += table->file->ref_length;
+          ref_pos += rg_length;
           continue;
         } else {
           table->reset_null_row();
         }
       }
+      int tmp = table->file->ha_rnd_pos(table->record[0], ref_pos, m_gmode);
+      ref_pos += rg_length;
 
-      int tmp = table->file->ha_rnd_pos(table->record[0], ref_pos);
-      ref_pos += table->file->ref_length;
+      ut_ad(rg_length ==
+            table->file->ref_length +
+                (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length));
+
       /* The following is extremely unlikely to happen */
       if (tmp == HA_ERR_RECORD_DELETED ||
           (tmp == HA_ERR_KEY_NOT_FOUND && m_ignore_not_found_rows)) {
@@ -314,7 +340,20 @@ SortBufferIndirectIterator::SortBufferIndirectIterator(
       m_tables(std::move(tables)),
       m_examined_rows(examined_rows),
       m_ignore_not_found_rows(ignore_not_found_rows),
-      m_has_null_flags(has_null_flags) {}
+      m_has_null_flags(has_null_flags),
+      m_gmode(komodo::GM_NONE) {}
+
+SortBufferIndirectIterator::SortBufferIndirectIterator(
+    THD *thd, Mem_root_array<TABLE *> tables, Sort_result *sort_result,
+    bool ignore_not_found_rows, bool has_null_flags, ha_rows *examined_rows,
+    komodo::guess_mode_t gmode)
+    : RowIterator(thd),
+      m_sort_result(sort_result),
+      m_tables(std::move(tables)),
+      m_examined_rows(examined_rows),
+      m_ignore_not_found_rows(ignore_not_found_rows),
+      m_has_null_flags(has_null_flags),
+      m_gmode(gmode) {}
 
 SortBufferIndirectIterator::~SortBufferIndirectIterator() {
   m_sort_result->sorted_result.reset();
@@ -352,7 +391,9 @@ bool SortBufferIndirectIterator::Init() {
     if (m_has_null_flags && table->is_nullable()) {
       ++m_sum_ref_length;
     }
-    m_sum_ref_length += table->file->ref_length;
+    m_sum_ref_length +=
+        table->file->ref_length +
+        (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length);
   }
   m_cache_pos = m_sort_result->sorted_result.get();
   m_cache_end = m_cache_pos + m_sort_result->found_records * m_sum_ref_length;
@@ -367,17 +408,27 @@ int SortBufferIndirectIterator::Read() {
 
     bool skip = false;
     for (TABLE *table : m_tables) {
+      uint rg_length =
+          table->file->ref_length +
+          (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length);
+
       if (m_has_null_flags && table->is_nullable()) {
         if (*cache_pos++) {
           table->set_null_row();
-          cache_pos += table->file->ref_length;
+          cache_pos += rg_length;
           continue;
         } else {
           table->reset_null_row();
         }
       }
-      int tmp = table->file->ha_rnd_pos(table->record[0], cache_pos);
-      cache_pos += table->file->ref_length;
+      int tmp = table->file->ha_rnd_pos(table->record[0], cache_pos, m_gmode);
+
+      cache_pos += rg_length;
+
+      ut_ad(rg_length ==
+            table->file->ref_length +
+                (m_gmode == komodo::GM_NONE ? 0 : table->file->gpp_length));
+
       /* The following is extremely unlikely to happen */
       if (tmp == HA_ERR_RECORD_DELETED ||
           (tmp == HA_ERR_KEY_NOT_FOUND && m_ignore_not_found_rows)) {
@@ -467,7 +518,8 @@ bool SortingIterator::Init() {
               SortFileIndirectIterator(
                   thd(), std::move(tables), m_sort_result.io_cache,
                   /*ignore_not_found_rows=*/false,
-                  /*has_null_flags=*/true, m_examined_rows));
+                  /*has_null_flags=*/true, m_examined_rows,
+                  komodo::GM_FILESORT));
     }
     m_sort_result.io_cache =
         nullptr;  // The result iterator has taken ownership.
@@ -493,7 +545,8 @@ bool SortingIterator::Init() {
               SortBufferIndirectIterator(
                   thd(), std::move(tables), &m_sort_result,
                   /*ignore_not_found_rows=*/false,
-                  /*has_null_flags=*/true, m_examined_rows));
+                  /*has_null_flags=*/true, m_examined_rows,
+                  komodo::GM_FILESORT));
     }
   }
 

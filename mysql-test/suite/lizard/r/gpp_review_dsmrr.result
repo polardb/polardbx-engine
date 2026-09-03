@@ -1,0 +1,31 @@
+#
+# DS-MRR must size its rowid buffer as ref_length + gpp_length.
+# An INT primary key has a four-byte row reference.  Four bytes are
+# enough according to the current cost calculation, but not enough
+# for the actual row reference plus the four-byte GPP suffix.
+#
+CREATE TABLE t (
+id INT NOT NULL PRIMARY KEY,
+a INT NOT NULL,
+payload CHAR(8) NOT NULL,
+KEY idx_a (a)
+) ENGINE = InnoDB;
+INSERT INTO t VALUES
+(1, 10, 'one'),
+(2, 20, 'two'),
+(3, 30, 'three');
+SET SESSION optimizer_switch = 'mrr=on,mrr_cost_based=off';
+SET SESSION read_rnd_buffer_size = 4;
+EXPLAIN SELECT /*+ MRR(t) */ payload
+FROM t FORCE INDEX (idx_a)
+WHERE a BETWEEN 10 AND 30;
+# The query must return all rows.  Before the DS-MRR size fix, Debug
+# builds assert in DsMrr_impl::dsmrr_fill_buffer() because the actual
+# eight-byte row reference cannot fit in the four-byte buffer.
+SELECT /*+ MRR(t) */ GROUP_CONCAT(CONCAT(id, ':', payload) ORDER BY id)
+AS rows_seen
+FROM t FORCE INDEX (idx_a)
+WHERE a BETWEEN 10 AND 30;
+rows_seen
+1:one,2:two,3:three
+DROP TABLE t;

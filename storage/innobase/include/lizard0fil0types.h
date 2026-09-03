@@ -33,7 +33,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0fil0types_h
 #define lizard0fil0types_h
 
-#include "fil0types.h"
 #include "fil0fil.h"
 
 /** Fil Page Mark in space */
@@ -73,11 +72,20 @@ enum ipage_ver_t : uint16_t {
   /** Normal btree page */
   IPV0 = FIL_PAGE_INDEX,
   /** Lizard UK page */
-  IPV1 = FIL_PAGE_INDEX_PANDA
+  IPV1 = FIL_PAGE_INDEX_PANDA,
+  /** Secondary index page with tid on the rec. */
+  IPV2 = FIL_PAGE_INDEX_HIPPO,
+  /** Lizard SPC page */
+  IPV3 = FIL_PAGE_INDEX_SPC
 };
 
 inline bool fil_page_type_is_btree_index(page_type_t page_type) {
-  return page_type == ipage_ver_t::IPV0 || page_type == ipage_ver_t::IPV1;
+  return page_type == ipage_ver_t::IPV0 || page_type == ipage_ver_t::IPV1 ||
+         page_type == ipage_ver_t::IPV2 || page_type == ipage_ver_t::IPV3;
+}
+
+inline bool fil_page_type_is_spc(page_type_t page_type) {
+  return page_type == ipage_ver_t::IPV3;
 }
 
 /** Check whether the page type is index (Btree or Rtree or SDI) type */
@@ -91,9 +99,17 @@ inline bool fil_page_index_page_check(const byte *page) {
   return fil_page_type_is_index(fil_page_get_type(page));
 }
 
+inline bool fil_page_is_spc(const byte *page) {
+  return fil_page_get_type(page) == ipage_ver_t::IPV3;
+}
+
 static_assert(ipage_ver_t::IPV0 == 17855, "btree v0 type is FIL_PAGE_INDEX");
 
 static_assert(ipage_ver_t::IPV1 == 40, "btree v1 type is FIL_PAGE_INDEX_PANDA");
+
+static_assert(ipage_ver_t::IPV2 == 41, "btree v2 type is FIL_PAGE_INDEX_HIPPO");
+
+static_assert(ipage_ver_t::IPV3 == 42, "btree v3 type is FIL_PAGE_INDEX_SPC");
 
 #if defined UNIV_DEBUG
 /*

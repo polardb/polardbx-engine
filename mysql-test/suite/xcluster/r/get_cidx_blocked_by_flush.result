@@ -1,0 +1,41 @@
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");
+use test;
+create table t1 (id int);
+insert into t1 values (1);
+# Get initial index before the blocking insert
+# Thread 1: Start insert, block at flush stage (holds LOCK_log)
+SET debug_sync = "flush_stage_holds_lock SIGNAL flush_started WAIT_FOR flush_continue";
+insert into t1 values (2);
+# Thread 2: Wait for flush to start, then call get_cidx (will block on LOCK_log)
+SET debug_sync = "now WAIT_FOR flush_started";
+SET debug_sync = "get_cidx_acquiring_lock SIGNAL get_cidx_reached_lock_point";
+call dbms_consensus.get_cidx();
+# Thread 3: Wait for get_cidx to reach lock (proves it is blocked), then release flush
+SET debug_sync = "now WAIT_FOR get_cidx_reached_lock_point";
+SET debug_sync = "now SIGNAL flush_continue";
+# Reap both: conn1 (insert) and conn2 (get_cidx)
+# Verify: get_cidx returned index after the insert (index should have incremented)
+include/assert.inc [CIDX should have incremented after the blocked insert flushed]
+drop table t1;
+#
+# Call get_cidx on leader, follower, learner, logger (no crash)
+#
+call dbms_consensus.get_cidx();
+CIDX
+#
+call dbms_consensus.get_cidx();
+CIDX
+#
+# start a new learner
+call dbms_consensus.add_learner(learner_cluster_info);
+call dbms_consensus.get_cidx();
+CIDX
+#
+call dbms_consensus.drop_learner(learner_cluster_info);
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_3");
+stop xpaxos_replication;
+call dbms_consensus.get_cidx();
+CIDX
+#
+start xpaxos_replication;
+call dbms_consensus.change_leader("127.0.0.1:PAXOS_PORT_1");

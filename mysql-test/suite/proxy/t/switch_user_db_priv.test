@@ -1,0 +1,138 @@
+--echo #
+--echo # Test: switch_user should properly refresh db-level privilege cache
+--echo # for the current database. This verifies the fix for intermittent
+--echo # permission errors after user switching when the connection already
+--echo # has an active database.
+--echo #
+
+--echo #
+--echo # Setup: create test database, table, and users with db-level privileges
+--echo #
+CREATE DATABASE proxy_test_db;
+CREATE TABLE proxy_test_db.t1 (id INT PRIMARY KEY, val VARCHAR(64));
+INSERT INTO proxy_test_db.t1 VALUES (1, 'row1'), (2, 'row2');
+
+# User with only db-level SELECT privilege (no global privilege)
+CREATE USER 'proxy_db_user'@'%' IDENTIFIED WITH mysql_native_password BY 'pass1';
+GRANT SELECT ON proxy_test_db.* TO 'proxy_db_user'@'%';
+
+# User with db-level SELECT + INSERT privilege
+CREATE USER 'proxy_rw_user'@'%' IDENTIFIED WITH mysql_native_password BY 'pass2';
+GRANT SELECT, INSERT ON proxy_test_db.* TO 'proxy_rw_user'@'%';
+
+# User with no privilege on proxy_test_db
+CREATE USER 'proxy_no_priv'@'%' IDENTIFIED WITH mysql_native_password BY 'pass3';
+
+FLUSH PRIVILEGES;
+
+let $token=query_get_value(call dbms_proxy.get_token(), token, 1);
+
+--echo #
+--echo # Test 1: switch_user with active database - db-level SELECT privilege
+--echo # The connection uses proxy_test_db before switching, so
+--echo # cache_current_db_access must be refreshed for the new user.
+--echo #
+USE proxy_test_db;
+SELECT DATABASE();
+
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_db_user', '%');
+--enable_query_log
+
+SELECT user();
+
+--echo # Should succeed: proxy_db_user has SELECT on proxy_test_db
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Should fail: proxy_db_user does NOT have INSERT on proxy_test_db
+--error ER_TABLEACCESS_DENIED_ERROR
+INSERT INTO t1 VALUES (3, 'row3');
+
+--echo #
+--echo # Test 2: switch to a user with more privileges (SELECT + INSERT)
+--echo #
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_rw_user', '%');
+--enable_query_log
+
+SELECT user();
+
+--echo # Should succeed: proxy_rw_user has SELECT on proxy_test_db
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Should succeed: proxy_rw_user has INSERT on proxy_test_db
+INSERT INTO t1 VALUES (3, 'row3');
+
+--echo # Verify the insert worked
+SELECT * FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 3: switch to a user with NO privilege on the current db
+--echo #
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_no_priv', '%');
+--enable_query_log
+
+SELECT user();
+
+--echo # Should fail: proxy_no_priv has no privileges on proxy_test_db
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT * FROM t1;
+
+--echo #
+--echo # Test 4: switch back and forth - ensures no stale privilege cache
+--echo #
+
+--echo # Switch to read-only user
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_db_user', '%');
+--enable_query_log
+--echo # Should succeed
+SELECT COUNT(*) FROM t1;
+--echo # Should fail
+--error ER_TABLEACCESS_DENIED_ERROR
+INSERT INTO t1 VALUES (4, 'row4');
+
+--echo # Switch to read-write user
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_rw_user', '%');
+--enable_query_log
+--echo # Should succeed
+SELECT COUNT(*) FROM t1;
+--echo # Should succeed now
+INSERT INTO t1 VALUES (4, 'row4');
+
+--echo # Switch back to read-only user again
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_db_user', '%');
+--enable_query_log
+--echo # Should succeed
+SELECT COUNT(*) FROM t1;
+--echo # Should fail again
+--error ER_TABLEACCESS_DENIED_ERROR
+INSERT INTO t1 VALUES (5, 'row5');
+
+--echo #
+--echo # Test 5: switch_user with cross-database query
+--echo # Even though current db is proxy_test_db, query a different db explicitly
+--echo #
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'proxy_db_user', '%');
+--enable_query_log
+
+--echo # Should fail: proxy_db_user has no privilege on mysql schema
+--error ER_TABLEACCESS_DENIED_ERROR
+SELECT COUNT(*) FROM mysql.user;
+
+--echo #
+--echo # Cleanup
+--echo #
+--disable_query_log
+eval call dbms_proxy.switch_user('$token', 'root', 'localhost');
+--enable_query_log
+
+DROP TABLE proxy_test_db.t1;
+DROP DATABASE proxy_test_db;
+DROP USER 'proxy_db_user'@'%';
+DROP USER 'proxy_rw_user'@'%';
+DROP USER 'proxy_no_priv'@'%';

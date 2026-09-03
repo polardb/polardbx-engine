@@ -34,9 +34,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0row0vers_h
 
 #include "lizard0txn0rec.h"
-#include "lizard0read0types.h"
+#include "lizard0gcs0read0types.h"
 
 namespace lizard {
+
+extern bool srv_quick_purge_build_prev_version;
 
 /** Simulate a invalid vision which took as a faked asof query,
  * then trx_undo_prev_version_build will try to get prev image

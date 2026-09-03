@@ -76,6 +76,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/dd/dd_minor_upgrade.h"
 
 #include "lizard0fil0types.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 extern mysql_mutex_t LOCK_global_system_variables;
 
@@ -166,9 +168,11 @@ static buf_page_desc_t i_s_page_type[] = {
     {"", 0},                                            /*i_s_page_type[38] */
     {"", 0},                                            /*i_s_page_type[39] */
     {"PANDA_INDEX", FIL_PAGE_INDEX_PANDA},              /*i_s_page_type[40] */
-    {"RTREE_INDEX", I_S_PAGE_TYPE_RTREE},               /*i_s_page_type[41] */
-    {"IBUF_INDEX", I_S_PAGE_TYPE_IBUF},                 /*i_s_page_type[42] */
-    {"SDI_INDEX", I_S_PAGE_TYPE_SDI}};                  /*i_s_page_type[43] */
+    {"HIPPO_INDEX", FIL_PAGE_INDEX_HIPPO},              /*i_s_page_type[41] */
+    {"SPC_PAGE", FIL_PAGE_INDEX_SPC},                   /*i_s_page_type[42] */
+    {"RTREE_INDEX", I_S_PAGE_TYPE_RTREE},               /*i_s_page_type[43] */
+    {"IBUF_INDEX", I_S_PAGE_TYPE_IBUF},                 /*i_s_page_type[44] */
+    {"SDI_INDEX", I_S_PAGE_TYPE_SDI}};                  /*i_s_page_type[45] */
 
 const char *i_s_index_page_type_to_str(page_type_t page_type) {
   if (fil_page_type_is_index(page_type)) {
@@ -178,6 +182,10 @@ const char *i_s_index_page_type_to_str(page_type_t page_type) {
       return i_s_page_type[I_S_PAGE_TYPE_SDI].type_str;
     } else if (page_type == FIL_PAGE_INDEX_PANDA) {
       return i_s_page_type[FIL_PAGE_INDEX_PANDA].type_str;
+    } else if (page_type == FIL_PAGE_INDEX_HIPPO) {
+      return i_s_page_type[FIL_PAGE_INDEX_HIPPO].type_str;
+    } else if (page_type == FIL_PAGE_INDEX_SPC) {
+      return i_s_page_type[FIL_PAGE_INDEX_SPC].type_str;
     } else {
       return i_s_page_type[I_S_PAGE_TYPE_INDEX].type_str;
     }
@@ -600,7 +608,7 @@ static int fill_innodb_trx_from_cache(
     /* trx_wait_started */
     if (row->trx_wait_started != std::chrono::system_clock::time_point{}) {
       OK(field_store_string(fields[IDX_TRX_REQUESTED_LOCK_ID],
-                            trx_i_s_create_lock_id(row->requested_lock_row,
+                            trx_i_s_create_lock_id(*row->requested_lock_row,
                                                    lock_id, sizeof(lock_id))));
       /* field_store_string() sets it no notnull */
 
@@ -5433,8 +5441,7 @@ information_schema.innodb_tables table with related table information
 @return 0 on success */
 static int i_s_innodb_tables_fill_table(THD *thd, Table_ref *tables, Item *) {
   btr_pcur_t pcur;
-  const rec_t *rec;
-  mem_heap_t *heap;
+  const Slice *slc;
   mtr_t mtr;
   MDL_ticket *mdl = nullptr;
   dict_table_t *dd_tables;
@@ -5446,20 +5453,20 @@ static int i_s_innodb_tables_fill_table(THD *thd, Table_ref *tables, Item *) {
     return 0;
   }
 
-  heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(100);
   dict_sys_mutex_enter();
   mtr_start(&mtr);
 
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_tables_name.c_str(),
-                            &dd_tables);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_tables_name.c_str(), &dd_tables);
 
-  while (rec) {
+  while (slc) {
     dict_table_t *table_rec;
     MDL_ticket *mdl_on_tab = nullptr;
 
     /* Fetch the dict_table_t structure corresponding to
     this INNODB_TABLES record */
-    dd_process_dd_tables_rec_and_mtr_commit(heap, rec, &table_rec, dd_tables,
+    dd_process_dd_tables_rec_and_mtr_commit(slc, &table_rec, dd_tables,
                                             &mdl_on_tab, &mtr);
 
     dict_sys_mutex_exit();
@@ -5467,7 +5474,7 @@ static int i_s_innodb_tables_fill_table(THD *thd, Table_ref *tables, Item *) {
       i_s_dict_fill_innodb_tables(thd, table_rec, tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -5477,34 +5484,34 @@ static int i_s_innodb_tables_fill_table(THD *thd, Table_ref *tables, Item *) {
     }
 
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
   dd_table_close(dd_tables, thd, &mdl, true);
 
   /* Scan mysql.partitions */
-  mem_heap_empty(heap);
+  slc_ctx.reset_slice();
   mtr_start(&mtr);
 
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_partitions_name.c_str(),
-                            &dd_tables);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_partitions_name.c_str(), &dd_tables);
 
-  while (rec) {
+  while (slc) {
     dict_table_t *table_rec;
     MDL_ticket *mdl_on_tab = nullptr;
 
     /* Fetch the dict_table_t structure corresponding to
     this INNODB_TABLES record */
-    dd_process_dd_partitions_rec_and_mtr_commit(heap, rec, &table_rec,
-                                                dd_tables, &mdl_on_tab, &mtr);
+    dd_process_dd_partitions_rec_and_mtr_commit(slc, &table_rec, dd_tables,
+                                                &mdl_on_tab, &mtr);
 
     dict_sys_mutex_exit();
     if (table_rec != nullptr) {
       i_s_dict_fill_innodb_tables(thd, table_rec, tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -5514,14 +5521,12 @@ static int i_s_innodb_tables_fill_table(THD *thd, Table_ref *tables, Item *) {
     }
 
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
   dd_table_close(dd_tables, thd, &mdl, true);
   dict_sys_mutex_exit();
-
-  mem_heap_free(heap);
 
   return 0;
 }
@@ -5735,8 +5740,7 @@ related information
 static int i_s_innodb_tables_fill_table_stats(THD *thd, Table_ref *tables,
                                               Item *) {
   btr_pcur_t pcur;
-  const rec_t *rec;
-  mem_heap_t *heap;
+  const Slice *slc;
   mtr_t mtr;
   MDL_ticket *mdl = nullptr;
   dict_table_t *dd_tables;
@@ -5748,22 +5752,22 @@ static int i_s_innodb_tables_fill_table_stats(THD *thd, Table_ref *tables,
     return 0;
   }
 
-  heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(100);
 
   /* Prevent DDL to drop tables. */
   dict_sys_mutex_enter();
   mtr_start(&mtr);
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_tables_name.c_str(),
-                            &dd_tables);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_tables_name.c_str(), &dd_tables);
 
-  while (rec) {
+  while (slc) {
     dict_table_t *table_rec;
     MDL_ticket *mdl_on_tab = nullptr;
     ulint ref_count = 0;
 
     /* Fetch the dict_table_t structure corresponding to
     this INNODB_TABLES record */
-    dd_process_dd_tables_rec_and_mtr_commit(heap, rec, &table_rec, dd_tables,
+    dd_process_dd_tables_rec_and_mtr_commit(slc, &table_rec, dd_tables,
                                             &mdl_on_tab, &mtr);
     if (table_rec != nullptr) {
       ref_count = table_rec->get_ref_count();
@@ -5775,7 +5779,7 @@ static int i_s_innodb_tables_fill_table_stats(THD *thd, Table_ref *tables,
       i_s_dict_fill_innodb_tablestats(thd, table_rec, ref_count, tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -5785,13 +5789,12 @@ static int i_s_innodb_tables_fill_table_stats(THD *thd, Table_ref *tables,
     }
 
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
   dd_table_close(dd_tables, thd, &mdl, true);
   dict_sys_mutex_exit();
-  mem_heap_free(heap);
 
   return 0;
 }
@@ -5981,8 +5984,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
                                 bool exclude_partition_index,
                                 bool exclude_dd_table) {
   btr_pcur_t pcur;
-  const rec_t *rec;
-  mem_heap_t *heap;
+  const Slice *slc;
   mtr_t mtr;
   MDL_ticket *mdl = nullptr;
   dict_table_t *dd_indexes;
@@ -5995,16 +5997,16 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
     return 0;
   }
 
-  heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(100);
   dict_sys_mutex_enter();
   mtr_start(&mtr);
 
   /* Start scan the mysql.indexes */
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_indexes_name.c_str(),
-                            &dd_indexes);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_indexes_name.c_str(), &dd_indexes);
 
   /* Process each record in the table */
-  while (rec) {
+  while (slc) {
     const dict_index_t *index_rec;
     MDL_ticket *mdl_on_tab = nullptr;
     dict_table_t *parent = nullptr;
@@ -6012,7 +6014,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
 
     /* Populate a dict_index_t structure with information from
     a INNODB_INDEXES row */
-    ret = dd_process_dd_indexes_rec(heap, rec, &index_rec, &mdl_on_tab, &parent,
+    ret = dd_process_dd_indexes_rec(slc, &index_rec, &mdl_on_tab, &parent,
                                     &mdl_on_parent, dd_indexes, &mtr,
                                     exclude_dd_table);
 
@@ -6022,7 +6024,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
       fill_func(thd, index_rec, tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -6037,7 +6039,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
     }
 
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
@@ -6048,14 +6050,14 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
   }
 
   /* Scan mysql.index_partitions */
-  mem_heap_empty(heap);
+  slc_ctx.reset_slice();
   mtr_start(&mtr);
 
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr,
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
                             dd_partition_indexes_name.c_str(), &dd_indexes);
 
   /* Process each record in the table */
-  while (rec) {
+  while (slc) {
     const dict_index_t *index_rec;
     MDL_ticket *mdl_on_tab = nullptr;
     dict_table_t *parent = nullptr;
@@ -6063,9 +6065,9 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
 
     /* Populate a dict_index_t structure with information from a
      * mysql.index_partitions row */
-    ret = dd_process_dd_partition_indexes_rec(heap, rec, &index_rec,
-                                              &mdl_on_tab, &parent,
-                                              &mdl_on_parent, dd_indexes, &mtr);
+    ret = dd_process_dd_partition_indexes_rec(slc, &index_rec, &mdl_on_tab,
+                                              &parent, &mdl_on_parent,
+                                              dd_indexes, &mtr);
 
     dict_sys_mutex_exit();
 
@@ -6073,7 +6075,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
       fill_func(thd, index_rec, tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -6088,7 +6090,7 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
     }
 
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
@@ -6096,7 +6098,6 @@ int fill_i_s_innodb_indexes_low(THD *thd, Table_ref *tables, Item *,
 
 exit:
   dict_sys_mutex_exit();
-  mem_heap_free(heap);
 
   return 0;
 }
@@ -6358,31 +6359,31 @@ static int i_s_dict_fill_innodb_columns(THD *thd, table_id_t table_id,
   return 0;
 }
 
-static void process_rows(THD *thd, Table_ref *tables, const rec_t *rec,
+static void process_rows(THD *thd, Table_ref *tables, const Slice *slc,
                          dict_table_t *dd_table, btr_pcur_t &pcur, mtr_t &mtr,
-                         mem_heap_t *heap, bool is_partition) {
+                         Slice_ctx *slc_ctx, bool is_partition) {
   ut_ad(dict_sys_mutex_own());
 
-  while (rec) {
+  while (slc) {
     dict_table_t *table_rec = nullptr;
     MDL_ticket *mdl_on_tab = nullptr;
 
     /* Fetch the dict_table_t structure corresponding to this table or
     partition record */
     if (!is_partition) {
-      dd_process_dd_tables_rec_and_mtr_commit(heap, rec, &table_rec, dd_table,
+      dd_process_dd_tables_rec_and_mtr_commit(slc, &table_rec, dd_table,
                                               &mdl_on_tab, &mtr);
     } else {
-      dd_process_dd_partitions_rec_and_mtr_commit(heap, rec, &table_rec,
-                                                  dd_table, &mdl_on_tab, &mtr);
+      dd_process_dd_partitions_rec_and_mtr_commit(slc, &table_rec, dd_table,
+                                                  &mdl_on_tab, &mtr);
     }
 
     if (table_rec == nullptr) {
-      mem_heap_empty(heap);
+      slc_ctx->reset_slice();
 
       /* Get the next record */
       mtr_start(&mtr);
-      rec = dd_getnext_system_rec(&pcur, &mtr);
+      slc = dd_getnext_system_rec(slc_ctx, &pcur, &mtr);
       continue;
     }
 
@@ -6448,11 +6449,11 @@ static void process_rows(THD *thd, Table_ref *tables, const rec_t *rec,
     }
 
     /* Get the next record */
-    mem_heap_empty(heap);
+    slc_ctx->reset_slice();
     dict_sys_mutex_enter();
     dd_table_close(table_rec, thd, &mdl_on_tab, true);
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(slc_ctx, &pcur, &mtr);
   }
 }
 
@@ -6463,8 +6464,7 @@ collected by scanning INNODB_COLUMNS table.
 @return 0 on success */
 static int i_s_innodb_columns_fill_table(THD *thd, Table_ref *tables, Item *) {
   btr_pcur_t pcur;
-  const rec_t *rec;
-  mem_heap_t *heap;
+  const Slice *slc;
   mtr_t mtr;
   MDL_ticket *mdl = nullptr;
   dict_table_t *dd_tables;
@@ -6476,32 +6476,31 @@ static int i_s_innodb_columns_fill_table(THD *thd, Table_ref *tables, Item *) {
     return 0;
   }
 
-  heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(100);
   dict_sys_mutex_enter();
 
   /* Scan mysql.tables table */
   mtr_start(&mtr);
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_tables_name.c_str(),
-                            &dd_tables);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_tables_name.c_str(), &dd_tables);
 
-  process_rows(thd, tables, rec, dd_tables, pcur, mtr, heap, false);
+  process_rows(thd, tables, slc, dd_tables, pcur, mtr, &slc_ctx, false);
 
   mtr_commit(&mtr);
   dd_table_close(dd_tables, thd, &mdl, true);
 
   /* Scan mysql.partitions table */
-  mem_heap_empty(heap);
+  slc_ctx.reset_slice();
   mtr_start(&mtr);
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_partitions_name.c_str(),
-                            &dd_tables);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_partitions_name.c_str(), &dd_tables);
 
-  process_rows(thd, tables, rec, dd_tables, pcur, mtr, heap, true);
+  process_rows(thd, tables, slc, dd_tables, pcur, mtr, &slc_ctx, true);
 
   mtr_commit(&mtr);
   dd_table_close(dd_tables, thd, &mdl, true);
 
   dict_sys_mutex_exit();
-  mem_heap_free(heap);
 
   return 0;
 }
@@ -6643,7 +6642,7 @@ param[in]       item            condition (not used)
 @return 0 on success */
 static int i_s_innodb_virtual_fill_table(THD *thd, Table_ref *tables, Item *) {
   btr_pcur_t pcur;
-  const rec_t *rec;
+  const Slice *slc;
   mem_heap_t *heap;
   mtr_t mtr;
   MDL_ticket *mdl = nullptr;
@@ -6658,14 +6657,15 @@ static int i_s_innodb_virtual_fill_table(THD *thd, Table_ref *tables, Item *) {
   }
 
   heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(&heap);
   dict_sys_mutex_enter();
   mtr_start(&mtr);
 
   /* Start scan the mysql.columns */
-  rec = dd_startscan_system(thd, &mdl, &pcur, &mtr, dd_columns_name.c_str(),
-                            &dd_columns);
+  slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
+                            dd_columns_name.c_str(), &dd_columns);
 
-  while (rec) {
+  while (slc) {
     table_id_t table_id;
     ulint *pos;
     ulint *base_pos;
@@ -6674,7 +6674,7 @@ static int i_s_innodb_virtual_fill_table(THD *thd, Table_ref *tables, Item *) {
     /* populate a dict_col_t structure with information from
     a row */
     ret = dd_process_dd_virtual_columns_rec(
-        heap, rec, &table_id, &pos, &base_pos, &n_row, dd_columns, &mtr);
+        heap, slc, &table_id, &pos, &base_pos, &n_row, dd_columns, &mtr);
 
     dict_sys_mutex_exit();
 
@@ -6685,12 +6685,12 @@ static int i_s_innodb_virtual_fill_table(THD *thd, Table_ref *tables, Item *) {
       }
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
     mtr_start(&mtr);
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
@@ -7037,7 +7037,7 @@ information and fill the INFORMATION_SCHEMA.INNODB_TABLESPACES table.
 static int i_s_innodb_tablespaces_fill_table(THD *thd, Table_ref *tables,
                                              Item *) {
   btr_pcur_t pcur;
-  const rec_t *rec;
+  const Slice *slc;
   mem_heap_t *heap;
   mtr_t mtr;
   dict_table_t *dd_spaces;
@@ -7052,12 +7052,13 @@ static int i_s_innodb_tablespaces_fill_table(THD *thd, Table_ref *tables,
   }
 
   heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(&heap);
   dict_sys_mutex_enter();
   mtr_start(&mtr);
 
-  for (rec = dd_startscan_system(thd, &mdl, &pcur, &mtr,
+  for (slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
                                  dd_tablespaces_name.c_str(), &dd_spaces);
-       rec != nullptr; rec = dd_getnext_system_rec(&pcur, &mtr)) {
+       slc != nullptr; slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr)) {
     space_id_t space;
     char *name{nullptr};
     uint32_t flags;
@@ -7070,7 +7071,7 @@ static int i_s_innodb_tablespaces_fill_table(THD *thd, Table_ref *tables,
     /* Extract necessary information from a INNODB_TABLESPACES
     row */
     ret = dd_process_dd_tablespaces_rec(
-        heap, rec, &space, &name, &flags, &server_version, &space_version,
+        heap, slc, &space, &name, &flags, &server_version, &space_version,
         &is_encrypted, &autoextend_size, &state, dd_spaces);
 
     mtr_commit(&mtr);
@@ -7082,7 +7083,7 @@ static int i_s_innodb_tablespaces_fill_table(THD *thd, Table_ref *tables,
           autoextend_size, state.c_str(), tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record */
     dict_sys_mutex_enter();
@@ -7248,7 +7249,7 @@ static int i_s_innodb_cached_indexes_fill_table(THD *thd, Table_ref *tables,
     return 0;
   }
 
-  mem_heap_t *heap = mem_heap_create(100, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx(100);
 
   dict_sys_mutex_enter();
 
@@ -7258,15 +7259,15 @@ static int i_s_innodb_cached_indexes_fill_table(THD *thd, Table_ref *tables,
 
   /* Start the scan of INNODB_INDEXES. */
   btr_pcur_t pcur;
-  const rec_t *rec = dd_startscan_system(thd, &mdl, &pcur, &mtr,
+  const Slice *slc = dd_startscan_system(thd, &slc_ctx, &mdl, &pcur, &mtr,
                                          dd_indexes_name.c_str(), &dd_indexes);
 
   /* Process each record in the table. */
-  while (rec != nullptr) {
+  while (slc != nullptr) {
     /* Populate a dict_index_t structure with an information
     from a INNODB_INDEXES row. */
-    bool ret = dd_process_dd_indexes_rec_simple(heap, rec, &index_id, &space_id,
-                                                dd_indexes);
+    bool ret =
+        dd_process_dd_indexes_rec_simple(slc, &index_id, &space_id, dd_indexes);
 
     mtr_commit(&mtr);
 
@@ -7277,14 +7278,14 @@ static int i_s_innodb_cached_indexes_fill_table(THD *thd, Table_ref *tables,
                                          tables->table);
     }
 
-    mem_heap_empty(heap);
+    slc_ctx.reset_slice();
 
     /* Get the next record. */
     dict_sys_mutex_enter();
 
     mtr_start(&mtr);
 
-    rec = dd_getnext_system_rec(&pcur, &mtr);
+    slc = dd_getnext_system_rec(&slc_ctx, &pcur, &mtr);
   }
 
   mtr_commit(&mtr);
@@ -7292,8 +7293,6 @@ static int i_s_innodb_cached_indexes_fill_table(THD *thd, Table_ref *tables,
   dd_table_close(dd_indexes, thd, &mdl, true);
 
   dict_sys_mutex_exit();
-
-  mem_heap_free(heap);
 
   return 0;
 }

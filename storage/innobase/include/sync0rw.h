@@ -795,7 +795,9 @@ static inline void rw_lock_x_unlock(rw_lock_t *L) {
   rw_lock_x_unlock_gen(L, 0);
 }
 
+#ifndef INNODB_SYNC0RW_IC_STANDALONE
 #include "sync0rw.ic"
+#endif /* !INNODB_SYNC0RW_IC_STANDALONE */
 
 #endif /* !UNIV_HOTBACKUP */
 

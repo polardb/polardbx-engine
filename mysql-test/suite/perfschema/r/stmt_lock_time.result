@@ -12,6 +12,7 @@ id	val
 SELECT SQL_TEXT, (LOCK_TIME >= 4900000000000) as locked_5_sec
 FROM performance_schema.events_statements_current;
 SQL_TEXT	locked_5_sec
+CREATE FUNCTION IF NOT EXISTS encdb_userauth_export RETURNS STRING SONAME 'encdb_udf.so'	0
 SELECT SQL_TEXT, (LOCK_TIME >= 4900000000000) as locked_5_sec
 FROM performance_schema.events_statements_current	0
 SELECT * FROM t1 FOR UPDATE	1

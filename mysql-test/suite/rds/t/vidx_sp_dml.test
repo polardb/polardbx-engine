@@ -1,0 +1,203 @@
+##########################################
+# Stored Procedure DML for VECTOR INDEX  #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare - Create table with vector index
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo
+--echo # 2. SP with INSERT operations
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_insert(IN n INT)
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  WHILE i < n DO
+    INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT('[', i, ',', i+1, ',', i+2, ',', i+3, ',', i+4, ']')));
+    SET i = i + 1;
+  END WHILE;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_insert(5);
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo
+--echo # 3. SP with UPDATE operations
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_update(IN target_id INT)
+BEGIN
+  UPDATE t1 SET v = VEC_FROMTEXT('[10,20,30,40,50]') WHERE id = target_id;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_update(1);
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--echo
+--echo # 4. SP with DELETE operations
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_delete(IN target_id INT)
+BEGIN
+  DELETE FROM t1 WHERE id = target_id;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_delete(2);
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo
+--echo # 5. SP with cursor to traverse vector data
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_cursor()
+BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE v_id INT;
+  DECLARE v_text VARCHAR(255);
+  DECLARE cur CURSOR FOR SELECT id, VEC_TOTEXT(v) FROM t1;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+  
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO v_id, v_text;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    SELECT CONCAT('ID: ', v_id, ', Vector: ', v_text) AS cursor_output;
+  END LOOP;
+  CLOSE cur;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_cursor();
+
+--echo
+--echo # 6. SP with transaction control (BEGIN/COMMIT/ROLLBACK)
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_transaction(IN do_commit BOOL)
+BEGIN
+  START TRANSACTION;
+  INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[100,100,100,100,100]'));
+  IF do_commit THEN
+    COMMIT;
+  ELSE
+    ROLLBACK;
+  END IF;
+END|
+DELIMITER ;|
+
+SELECT COUNT(*) AS count_before FROM t1;
+CALL sp_vidx_transaction(TRUE);
+SELECT COUNT(*) AS count_after_commit FROM t1;
+CALL sp_vidx_transaction(FALSE);
+SELECT COUNT(*) AS count_after_rollback FROM t1;
+
+--echo
+--echo # 7. SP with error handling (DECLARE HANDLER FOR SQLEXCEPTION)
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_error_handler()
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    SELECT 'Error caught: Invalid vector dimension' AS error_message;
+  END;
+  
+  -- This should fail due to dimension mismatch
+  INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3]'));
+END|
+DELIMITER ;|
+
+CALL sp_vidx_error_handler();
+
+--echo
+--echo # 8. SP using vector functions (VEC_FROMTEXT/VEC_TOTEXT/VEC_DISTANCE_EUCLIDEAN)
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_functions(IN vec_text VARCHAR(255))
+BEGIN
+  DECLARE vec_binary VECTOR(5);
+  SET vec_binary = VEC_FROMTEXT(vec_text);
+  
+  SELECT VEC_TOTEXT(vec_binary) AS converted_vector;
+  SELECT VECTOR_DIM(vec_binary) AS dimension;
+  
+  SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, vec_binary) AS distance 
+  FROM t1 
+  ORDER BY distance 
+  LIMIT 3;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_functions('[5,6,7,8,9]');
+
+--echo
+--echo # 9. Verify vector index consistency after SP operations using ANN query
+--disable_warnings
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,6,7,8,9]')) LIMIT 3;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,6,7,8,9]')) LIMIT 3;
+--enable_warnings
+
+--echo
+--echo # 10. SP with nested procedure calls
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_inner()
+BEGIN
+  INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[200,200,200,200,200]'));
+END|
+
+CREATE PROCEDURE sp_vidx_outer()
+BEGIN
+  CALL sp_vidx_inner();
+  SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id DESC LIMIT 1;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_outer();
+
+--echo
+--echo # 11. SP with local vector variables
+DELIMITER |;
+CREATE PROCEDURE sp_vidx_local_vars()
+BEGIN
+  DECLARE v1 VECTOR(5);
+  DECLARE v2 VECTOR(5);
+  DECLARE dist DOUBLE;
+  
+  SET v1 = VEC_FROMTEXT('[1,2,3,4,5]');
+  SET v2 = VEC_FROMTEXT('[2,3,4,5,6]');
+  SET dist = VEC_DISTANCE_EUCLIDEAN(v1, v2);
+  
+  SELECT VEC_TOTEXT(v1) AS vec1, VEC_TOTEXT(v2) AS vec2, dist AS distance;
+END|
+DELIMITER ;|
+
+CALL sp_vidx_local_vars();
+
+--echo
+--echo # 12. Cleanup stored procedures
+DROP PROCEDURE sp_vidx_insert;
+DROP PROCEDURE sp_vidx_update;
+DROP PROCEDURE sp_vidx_delete;
+DROP PROCEDURE sp_vidx_cursor;
+DROP PROCEDURE sp_vidx_transaction;
+DROP PROCEDURE sp_vidx_error_handler;
+DROP PROCEDURE sp_vidx_functions;
+DROP PROCEDURE sp_vidx_inner;
+DROP PROCEDURE sp_vidx_outer;
+DROP PROCEDURE sp_vidx_local_vars;
+
+--echo
+--echo # 13. Final verification of vector index
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 5;
+
+--echo
+--echo # 14. Clear
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

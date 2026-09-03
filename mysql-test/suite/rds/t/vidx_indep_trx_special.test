@@ -1,0 +1,295 @@
+##########################################
+# Special SQL path testing for           #
+# independent transaction (vidx)         #
+##########################################
+#
+# TEST: vidx_indep_trx_special
+#
+# Tests special SQL statements that trigger unique code paths
+# in the independent transaction implementation:
+#   - INSERT ... ON DUPLICATE KEY UPDATE (delete+insert path)
+#   - REPLACE INTO (delete+insert path)
+#   - INSERT ... SELECT (multi-row in single statement)
+#   - Multi-table UPDATE
+#   - NULL vector handling (skip/no-skip transitions)
+#   - Stored Procedure with loop INSERT
+#   - LOAD DATA equivalent (multi-row batch)
+
+--source include/count_sessions.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--echo
+--echo ##############################################
+--echo # Setup                                      #
+--echo ##############################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  UNIQUE KEY uk_a(a),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+# Seed data
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+SELECT COUNT(*) AS main_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo
+--echo ##############################################
+--echo # 1. INSERT ... ON DUPLICATE KEY UPDATE      #
+--echo #    Triggers delete+insert on aux table     #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Insert with duplicate key - triggers UPDATE path for vector
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[11,12,13]'))
+  ON DUPLICATE KEY UPDATE v = VEC_FROMTEXT('[11,12,13]');
+
+--echo # Verify main table: a=1 has new vector
+SELECT a, VEC_TOTEXT(v) AS vec FROM t1 WHERE a = 1;
+
+--echo # Aux table: should have new entries (invalidate old + insert new)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after >= @aux_before AS aux_updated;
+
+--echo # ANN search finds updated vector
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[11,12,13]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 2. REPLACE INTO (delete+insert path)       #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # REPLACE triggers DELETE of existing row + INSERT of new row
+REPLACE INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[22,22,22]'));
+
+--echo # Verify main table
+SELECT a, VEC_TOTEXT(v) AS vec FROM t1 WHERE a = 2;
+
+--echo # Aux table updated
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after >= @aux_before AS aux_updated;
+
+--echo # ANN search
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[22,22,22]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 3. INSERT ... SELECT (multi-row)           #
+--echo #    Each row gets independent aux commit    #
+--echo ##############################################
+
+CREATE TABLE t_src (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL,
+  v VECTOR(3)
+) ENGINE = InnoDB;
+
+INSERT INTO t_src(a, v) VALUES (10, VEC_FROMTEXT('[10,10,10]'));
+INSERT INTO t_src(a, v) VALUES (11, VEC_FROMTEXT('[11,11,11]'));
+INSERT INTO t_src(a, v) VALUES (12, VEC_FROMTEXT('[13,13,13]'));
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # INSERT ... SELECT: 3 rows, each independently committed to aux
+BEGIN;
+INSERT INTO t1(a, v) SELECT a, v FROM t_src;
+COMMIT;
+
+--echo # Main table: 3 new rows
+SELECT COUNT(*) AS new_rows FROM t1 WHERE a BETWEEN 10 AND 12;
+
+--echo # Aux table: 3 new entries
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after - @aux_before AS aux_new_nodes;
+
+--echo # ANN search
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[11,11,11]')) LIMIT 3;
+
+DROP TABLE t_src;
+
+--echo
+--echo ##############################################
+--echo # 4. NULL vector → INSERT (skip path)        #
+--echo #    Then UPDATE to non-NULL (write path)    #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # INSERT with NULL vector - should skip aux table write
+INSERT INTO t1(a, v) VALUES (20, NULL);
+
+--echo # Aux table: unchanged (NULL vector skipped)
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_null FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after_null = @aux_before AS aux_unchanged_for_null;
+
+--echo # UPDATE NULL → non-NULL: now aux table gets the insert
+UPDATE t1 SET v = VEC_FROMTEXT('[20,20,20]') WHERE a = 20;
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after_update > @aux_before AS aux_has_new_node;
+
+--echo # ANN finds the new vector
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 5. Non-NULL → UPDATE to NULL               #
+--echo #    Triggers invalidate, no insert          #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # UPDATE to NULL: invalidate the node
+UPDATE t1 SET v = NULL WHERE a = 20;
+
+--echo # Verify main table
+SELECT a, v FROM t1 WHERE a = 20;
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_null2 FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+--echo # Aux count may decrease (invalidate) or stay same (soft-delete mark)
+SELECT @aux_after_null2 AS aux_after_set_null;
+
+--echo # ANN search doesn't crash
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 6. Stored Procedure: loop INSERT 10 rows   #
+--echo #    Each row independent aux commit          #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+DELIMITER |;
+CREATE PROCEDURE sp_insert_vectors()
+BEGIN
+  DECLARE i INT DEFAULT 100;
+  WHILE i < 110 DO
+    INSERT INTO t1(a, v) VALUES (i, VEC_FROMTEXT(CONCAT('[', i, ',', i, ',', i, ']')));
+    SET i = i + 1;
+  END WHILE;
+END|
+DELIMITER ;|
+
+CALL sp_insert_vectors();
+
+--echo # Main table: 10 new rows
+SELECT COUNT(*) AS sp_rows FROM t1 WHERE a BETWEEN 100 AND 109;
+
+--echo # Aux table: 10 new nodes
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_sp FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after_sp - @aux_before AS aux_new_from_sp;
+
+--echo # ANN search
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[105,105,105]')) LIMIT 5;
+
+DROP PROCEDURE sp_insert_vectors;
+
+--echo
+--echo ##############################################
+--echo # 7. Multi-row VALUES INSERT                  #
+--echo #    All in one statement, each per-row       #
+--echo ##############################################
+
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+INSERT INTO t1(a, v) VALUES
+  (200, VEC_FROMTEXT('[200,200,200]')),
+  (201, VEC_FROMTEXT('[201,201,201]')),
+  (202, VEC_FROMTEXT('[202,202,202]')),
+  (203, VEC_FROMTEXT('[203,203,203]')),
+  (204, VEC_FROMTEXT('[204,204,204]'));
+
+--echo # Main table: 5 new rows
+SELECT COUNT(*) AS multi_rows FROM t1 WHERE a BETWEEN 200 AND 204;
+
+--echo # Aux table: 5 new nodes
+SET @s = CONCAT('SELECT COUNT(*) INTO @aux_after_multi FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+SELECT @aux_after_multi - @aux_before AS aux_new_multi;
+
+--echo
+--echo ##############################################
+--echo # 8. LOCK TABLES + INSERT                     #
+--echo #    Aux table works in attachable context    #
+--echo ##############################################
+
+LOCK TABLES t1 WRITE;
+INSERT INTO t1(a, v) VALUES (300, VEC_FROMTEXT('[300,300,300]'));
+SELECT COUNT(*) AS locked_insert FROM t1 WHERE a = 300;
+UNLOCK TABLES;
+
+--echo # Verify after unlock
+SELECT COUNT(*) AS row_300 FROM t1 WHERE a = 300;
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[300,300,300]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 9. SET autocommit=1 explicit sanity         #
+--echo #    Other sections are autocommit by default;#
+--echo #    this section just guards the "explicit   #
+--echo #    SET autocommit=1" branch in              #
+--echo #    need_independent_trx().                  #
+--echo ##############################################
+SET autocommit = 1;
+INSERT INTO t1(a, v) VALUES (400, VEC_FROMTEXT('[400,400,400]'));
+SELECT a FROM t1 WHERE a = 400;
+
+--echo
+--echo ##############################################
+--echo # 10. READ ONLY transaction: no aux write    #
+--echo ##############################################
+
+SET autocommit = 0;
+START TRANSACTION READ ONLY;
+--echo # ANN query in read-only transaction should work
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 3;
+COMMIT;
+SET autocommit = 1;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;
+
+--source include/wait_until_count_sessions.inc

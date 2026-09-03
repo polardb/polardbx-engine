@@ -46,9 +46,16 @@ CREATE TABLE mtr.test_suppressions (pattern VARCHAR(255)) ENGINE=MyISAM;
 EOF
 
 
---let extra_args=--defaults-file='$MYSQLTEST_VARDIR/my.cnf' --console --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR --socket=$learner_socket_path --mysqlx-port=$learner_x_port --port=$learner_port --rpc-port=$learner_rpc_port --pid-file=$learner_pid_file --mysqlx=0 --server-id=$learner_consensus_port --core-file
+--let extra_args=--defaults-file='$MYSQLTEST_VARDIR/my.cnf' --console --skip-ssl --basedir=$BASEDIR --lc-messages-dir=$MYSQL_SHAREDIR --socket=$learner_socket_path --mysqlx-port=$learner_x_port --port=$learner_port --rpc-port=$learner_rpc_port --pid-file=$learner_pid_file --mysqlx=0 --server-id=$learner_consensus_port --core-file --tmpdir=$MYSQL_TMP_DIR
 
 --let init_args=--server_id=$learner_server_id --cluster-id=$learner_cluster_id --cluster-learner-node=ON --cluster-info=$learner_cluster_info --init-file=$mysql_bootsql_file
+
+if ($learner_log_type)
+{
+	--let init_args=$init_args --cluster-log-type-node=ON
+	--let extra_args=$extra_args --cluster-log-type-node=ON
+	--let $learner_log_type=
+}
 
 --exec if [ -d $DDIR ]; then rm -rf $DDIR; fi
 
@@ -58,4 +65,10 @@ EOF
 
 --exec $MYSQLD $extra_args --datadir=$DDIR >> $MYSQLD_LOG 2>&1 &
 
---sleep 20
+# Wait for learner mysqld paxos layer to be ready (consensus port, not MySQL
+# port). The MySQL port only becomes available AFTER the caller invokes
+# add_learner() to register this node with the cluster, so we must NOT wait
+# on the MySQL port here -- doing so would deadlock.
+# --tmpdir above ensures learner uses the large MTR tmpdir rather than /tmp,
+# which may fill under high parallel load.
+--exec bash -c "c=0; while ! bash -c 'echo >/dev/tcp/127.0.0.1/$learner_consensus_port' 2>/dev/null; do sleep 1; c=\$((c+1)); if [ \$c -ge 120 ]; then echo 'Learner paxos port failed to open within 120 seconds. Last log:'; tail -30 $MYSQLD_LOG; exit 1; fi; done"

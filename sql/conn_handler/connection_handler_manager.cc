@@ -105,15 +105,17 @@ static void scheduler_wait_sync_end() {
                  (current_thd));
 }
 
-bool Connection_handler_manager::valid_connection_count() {
+std::pair<bool, uint> Connection_handler_manager::valid_connection_count() {
   bool connection_accepted = true;
+  uint curr_conns = 0;
   mysql_mutex_lock(&LOCK_connection_count);
   if (connection_count > max_connections) {
     connection_accepted = false;
     m_connection_errors_max_connection++;
   }
+  curr_conns = connection_count;
   mysql_mutex_unlock(&LOCK_connection_count);
-  return connection_accepted;
+  return {connection_accepted, curr_conns};
 }
 
 uint Connection_handler_manager::get_connection_count() {

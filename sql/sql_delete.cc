@@ -1055,9 +1055,10 @@ bool DeleteRowsIterator::Init() {
 
     // Set up a Unique object for each table whose delete operation is deferred.
     if (!IsBitSet(tableno, m_immediate_tables)) {
+      uint rg_length = table->file->ref_length + table->file->gpp_length;
       auto tempfile = make_unique_destroy_only<Unique>(
-          thd()->mem_root, refpos_order_cmp, table->file,
-          table->file->ref_length, thd()->variables.sortbuff_size);
+          thd()->mem_root, refpos_order_cmp_with_gpp, table->file,
+          rg_length, thd()->variables.sortbuff_size);
       if (tempfile == nullptr || m_tempfiles.push_back(std::move(tempfile)) ||
           m_delayed_tables.push_back(table)) {
         return true; /* purecov: inspected */
@@ -1162,7 +1163,8 @@ bool DeleteRowsIterator::DoDelayedDeletesFromTable(TABLE *table) {
   */
   unique_ptr_destroy_only<RowIterator> iterator =
       init_table_iterator(thd(), table, /*ignore_not_found_rows=*/true,
-                          /*count_examined_rows=*/false);
+                          /*count_examined_rows=*/false,
+                          komodo::GM_MULTI_DELETE);
   if (iterator == nullptr) return true;
 
   const uint tableno = table->pos_in_table_list->tableno();

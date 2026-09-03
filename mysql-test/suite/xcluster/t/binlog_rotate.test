@@ -39,9 +39,11 @@ SELECT * FROM t1;
 --replace_column 2 # 3 #
 SHOW CONSENSUS LOGS;
 
+--disable_result_log
 # Binlog rotation will fail due to the simulated error
 --error ER_CANT_OPEN_FILE
 FLUSH LOGS;
+--enable_result_log
 
 --error ER_NO_BINARY_LOGGING
 SHOW CONSENSUS LOGS;

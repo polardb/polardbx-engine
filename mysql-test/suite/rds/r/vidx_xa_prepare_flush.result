@@ -1,0 +1,140 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+##############################################
+# 0. Setup                                   #
+##############################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[3,3,3]"));
+
+##############################################
+# 1. Non-detach XA - PREPARE state isolation #
+#    set_prepared_in_tc returns 0;           #
+#    share cache invalidate deferred to      #
+#    XA COMMIT (same thd do_commit).         #
+##############################################
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_off_commit';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[10,10,10]"));
+XA END 'xa_off_commit';
+XA PREPARE 'xa_off_commit';
+# Reader during PREPARE state: must not see uncommitted row
+SELECT COUNT(*) AS pre_commit_count FROM t1;
+pre_commit_count
+3
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+id
+1
+2
+3
+XA COMMIT 'xa_off_commit';
+# After COMMIT: row visible, ANN finds the new node
+SELECT COUNT(*) AS post_commit_count FROM t1;
+post_commit_count
+4
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+id
+1
+2
+3
+4
+
+##############################################
+# 2. Non-detach XA - PREPARE then ROLLBACK   #
+#    set_prepared_in_tc returned 0 earlier;  #
+#    do_rollback handles the trx-list now.   #
+#    Pre-fix would have invalidated cache    #
+#    at PREPARE time even though XA          #
+#    ROLLBACK followed.                      #
+##############################################
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_off_rb';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[20,20,20]"));
+XA END 'xa_off_rb';
+XA PREPARE 'xa_off_rb';
+XA ROLLBACK 'xa_off_rb';
+# Rolled-back row must not appear in ANN result set
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[20,20,20]")) LIMIT 5;
+id
+1
+2
+3
+4
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+
+##############################################
+# 3. Detach XA - PREPARE detaches the        #
+#    session; set_prepared_in_tc flushes     #
+#    eagerly because the same thd is about   #
+#    to lose its Transaction_ctx.            #
+##############################################
+SET SESSION xa_detach_on_prepare = ON;
+XA START 'xa_on_commit';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[30,30,30]"));
+XA END 'xa_on_commit';
+XA PREPARE 'xa_on_commit';
+# After PREPARE the session is detached; con_w may immediately
+# issue plain SQL without an active XA branch.
+SELECT COUNT(*) AS detached_self_count FROM t1;
+detached_self_count
+4
+# XA RECOVER must list the detached transaction
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+#	#	#	#
+XA COMMIT 'xa_on_commit';
+SELECT COUNT(*) AS post_detach_commit_count FROM t1;
+post_detach_commit_count
+5
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[30,30,30]")) LIMIT 5;
+id
+1
+2
+3
+4
+6
+
+##############################################
+# 4. Disconnect-degrades-to-detach           #
+#    Non-detach XA + connection drop:        #
+#    THD::cleanup runs                        #
+#    xa::Transaction_cache::detach() then    #
+#    flush_share_cache_on_xa_disconnect()    #
+#    so MHNSW_Trx invalidate is not lost.    #
+##############################################
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_drop_conn';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[40,40,40]"));
+XA END 'xa_drop_conn';
+XA PREPARE 'xa_drop_conn';
+# XA RECOVER on a different connection must list the prepared XA
+XA RECOVER;
+formatID	gtrid_length	bqual_length	data
+#	#	#	#
+XA COMMIT 'xa_drop_conn';
+SELECT COUNT(*) AS post_disconnect_commit_count FROM t1;
+post_disconnect_commit_count
+6
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[40,40,40]")) LIMIT 5;
+id
+2
+3
+4
+6
+7
+
+##############################################
+# Cleanup                                    #
+##############################################
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

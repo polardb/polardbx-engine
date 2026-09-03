@@ -135,6 +135,9 @@ class RowIDIntersectionIterator : public RowIDCapableRowIterator {
   bool inited = false;
 
   bool init_ror_merged_scan();
+
+  /** Guess mode for rowid ordered retrieval. */
+  komodo::guess_mode_t m_gmode;
 };
 
 /*
@@ -189,9 +192,13 @@ class RowIDUnionIterator : public TableRowIterator {
   uchar *prev_rowid;  /* rowid of last row returned by Read() */
   bool have_prev_rowid; /* true if prev_rowid has valid data */
   uint rowid_length;    /* table rowid length */
+  uint gpp_length;	    /* table gpp no length */
 
   bool scans_inited;
   bool inited = false;
+
+  /** Guess mode for rowid ordered retrieval. */
+  komodo::guess_mode_t m_gmode;
 };
 
 #endif  // SQL_RANGE_OPTIMIZER_ROWID_ORDERED_RETRIEVAL_H_

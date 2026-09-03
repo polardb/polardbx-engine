@@ -1,0 +1,38 @@
+SHOW VARIABLES LIKE "load_data_var_inherit_charset";
+Variable_name	Value
+load_data_var_inherit_charset	OFF
+CREATE TABLE `assp_sis_payres_imp` (
+`AUTO_INC` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '自增列',
+`D_NAME` varchar(210) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+PRIMARY KEY (`AUTO_INC`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+SET GLOBAL load_data_var_inherit_charset = 0;
+SET @row = _utf8mb4'';
+LOAD DATA INFILE 'bug115824_gb18030.txt' IGNORE INTO TABLE assp_sis_payres_imp CHARACTER SET GB18030 IGNORE 0 LINES  (@row) SET `D_NAME` = CONVERT(UNHEX(HEX(@row)) USING GB18030);
+SELECT * FROM assp_sis_payres_imp;
+AUTO_INC	D_NAME
+1	鍙板窞甯傝矾妗ュ尯绀句細淇濋櫓浜嬩笟绠＄悊涓績                                                                                        
+2	鍙板窞甯傝矾妗ュ尯绀句細淇濋櫓浜嬩笟绠＄悊涓績                                                                                        
+TRUNCATE TABLE assp_sis_payres_imp;
+SET GLOBAL load_data_var_inherit_charset = 1;
+SET @row = _utf8mb4'';
+LOAD DATA INFILE 'bug115824_gb18030.txt' IGNORE INTO TABLE assp_sis_payres_imp CHARACTER SET GB18030 IGNORE 0 LINES  (@row) SET `D_NAME` = CONVERT(UNHEX(HEX(@row)) USING GB18030);
+SELECT * FROM assp_sis_payres_imp;
+AUTO_INC	D_NAME
+1	台州市路桥区社会保险事业管理中心                                                                                        
+2	台州市路桥区社会保险事业管理中心                                                                                        
+TRUNCATE TABLE assp_sis_payres_imp;
+SET GLOBAL load_data_var_inherit_charset = 0;
+SELECT * FROM assp_sis_payres_imp;
+AUTO_INC	D_NAME
+1	鍙板窞甯傝矾妗ュ尯绀句細淇濋櫓浜嬩笟绠＄悊涓績                                                                                        
+2	鍙板窞甯傝矾妗ュ尯绀句細淇濋櫓浜嬩笟绠＄悊涓績                                                                                        
+TRUNCATE TABLE assp_sis_payres_imp;
+SET GLOBAL load_data_var_inherit_charset = 1;
+SELECT * FROM assp_sis_payres_imp;
+AUTO_INC	D_NAME
+1	台州市路桥区社会保险事业管理中心                                                                                        
+2	台州市路桥区社会保险事业管理中心                                                                                        
+TRUNCATE TABLE assp_sis_payres_imp;
+DROP TABLE assp_sis_payres_imp;
+SET GLOBAL load_data_var_inherit_charset = default;

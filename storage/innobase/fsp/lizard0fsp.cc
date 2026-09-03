@@ -30,13 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-03-19 by Jianwei.zhao
  *******************************************************/
 #include "mtr0mtr.h"
-#include "trx0purge.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0fil.h"
 #include "lizard0fsp.h"
 #include "lizard0fspspace.h"
-#include "lizard0txn0space.h"
 
 namespace lizard {
 

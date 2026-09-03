@@ -51,8 +51,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0page.h"
 #include "srv0mon.h"
 #include "sync0sync.h"
+#include "univ.i"
 
 #include <scope_guard.h>
+
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 /** Flag storing if the search system is in enabled state. While it is false,
 the AHI data structures can't have new entries added, they can only be
@@ -64,6 +68,10 @@ std::atomic_bool btr_search_enabled = true;
 /** A value that basically stores the same as btr_search_enabled, but is not
 atomic and thus can be used as SYSVAR. */
 bool srv_btr_search_enabled = true;
+
+/** A value that basically stores the same as btr_search_enabled, but is not
+atomic and thus can be used as SYSVAR. */
+bool srv_polarx_btree_search_mode = false;
 
 /** Protects changes of btr_search_enabled flag. */
 static ib_mutex_t btr_search_enabled_mutex;
@@ -185,7 +193,7 @@ static inline void btr_search_check_free_space_in_heap(dict_index_t *index) {
 void btr_search_sys_create(ulint hash_size) {
   /* Copy the initial SYSVAR value. While the Server is starting, the updater
   for SYSVARs is not called to set their initial value. */
-  btr_search_enabled = srv_btr_search_enabled;
+  btr_search_enabled = srv_btr_search_enabled || srv_polarx_btree_search_mode;
   btr_search_sys = ut::new_withkey<btr_search_sys_t>(
       ut::make_psi_memory_key(mem_key_ahi), hash_size);
   mutex_create(LATCH_ID_AHI_ENABLED, &btr_search_enabled_mutex);
@@ -310,9 +318,17 @@ static void btr_search_await_no_reference(dict_table_t *table) {
   }
 }
 
-bool btr_search_disable() {
+bool btr_search_disable_by_sysvar(bool *srv_sys_var) {
+  ut_ad(srv_sys_var == &srv_btr_search_enabled ||
+        srv_sys_var == &srv_polarx_btree_search_mode);
   mutex_enter(&btr_search_enabled_mutex);
   if (!btr_search_enabled) {
+    mutex_exit(&btr_search_enabled_mutex);
+    return false;
+  }
+
+  *srv_sys_var = false;
+  if (srv_polarx_btree_search_mode || srv_btr_search_enabled) {
     mutex_exit(&btr_search_enabled_mutex);
     return false;
   }
@@ -322,7 +338,7 @@ bool btr_search_disable() {
   ut_a(btr_search_enabled);
 
   btr_search_enabled = false;
-  srv_btr_search_enabled = false;
+
   btr_search_x_unlock_all();
 
   /* Clear AHI info for all non-private blocks from Buffer Pool. */
@@ -355,7 +371,71 @@ bool btr_search_disable() {
   return true;
 }
 
-void btr_search_enable() {
+void btr_search_enable_by_sysvar(bool *srv_sys_var) {
+  os_rmb;
+  ut_ad(srv_sys_var == &srv_btr_search_enabled ||
+        srv_sys_var == &srv_polarx_btree_search_mode);
+  /* Don't allow enabling AHI if buffer pool resize is happening.
+  Ignore it silently. */
+  if (srv_buf_pool_old_size != srv_buf_pool_size) return;
+
+  /* We need to synchronize with any threads that are in the middle of
+  btr_search_disable_by_sysvar() - they must first clear all structures before
+  we can re-enable AHI again. */
+  mutex_enter(&btr_search_enabled_mutex);
+  btr_search_enabled = true;
+  if (srv_sys_var) *srv_sys_var = true;
+  mutex_exit(&btr_search_enabled_mutex);
+}
+
+bool btr_search_disable_by_internal() {
+  mutex_enter(&btr_search_enabled_mutex);
+  if (!btr_search_enabled) {
+    mutex_exit(&btr_search_enabled_mutex);
+    return false;
+  }
+
+  btr_search_x_lock_all(UT_LOCATION_HERE);
+
+  ut_a(btr_search_enabled);
+
+  btr_search_enabled = false;
+  /* Tolerate the inconsistency of srv_btr_search_enabled and
+   srv_polarx_btree_search_mode */
+  // srv_btr_search_enabled = false;
+  btr_search_x_unlock_all();
+
+  /* Clear AHI info for all non-private blocks from Buffer Pool. */
+  buf_pool_clear_hash_index();
+
+  dict_sys_mutex_enter();
+  /* Wait for every index in the data dictionary cache to have no references to
+  AHI. After the buf_pool_clear_hash_index() is called, there might be some
+  blocks that are being evicted by buf_LRU_free_page() and they are in
+  BUF_BLOCK_REMOVE_HASH state. We will wait for them to be removed from AHI. */
+  for (auto table : dict_sys->table_LRU) {
+    btr_search_await_no_reference(table);
+  }
+
+  for (auto table : dict_sys->table_non_LRU) {
+    btr_search_await_no_reference(table);
+  }
+
+  dict_sys_mutex_exit();
+
+  /* Clear the adaptive hash index. */
+  for (ulint i = 0; i < btr_ahi_parts; ++i) {
+    const auto hash_table = btr_search_sys->parts[i].hash_table;
+    hash_table_clear(hash_table);
+    mem_heap_empty(hash_table->heap);
+  }
+
+  mutex_exit(&btr_search_enabled_mutex);
+
+  return true;
+}
+
+void btr_search_enable_by_internal() {
   os_rmb;
   /* Don't allow enabling AHI if buffer pool resize is happening.
   Ignore it silently. */
@@ -366,7 +446,9 @@ void btr_search_enable() {
   re-enable AHI again. */
   mutex_enter(&btr_search_enabled_mutex);
   btr_search_enabled = true;
-  srv_btr_search_enabled = true;
+  /* Tolerate the inconsistency of srv_btr_search_enabled and
+   srv_polarx_btree_search_mode */
+  // srv_btr_search_enabled = true;
   mutex_exit(&btr_search_enabled_mutex);
 }
 
@@ -612,15 +694,16 @@ static void btr_search_update_hash_ref(buf_block_t *block,
   current prefix info can be in AHI. */
   if (info->n_hash_potential > 0 &&
       block_prefix_info == info->prefix_info.load()) {
-    const auto rec = btr_cur_get_rec(cursor);
+    creg_t reg = btr_cur_get_reg(cursor);
 
-    if (!page_rec_is_user_rec(rec)) {
+    if (!page_rec_is_user_rec(reg.rec)) {
       return;
     }
 
-    const auto hash_value = rec_hash(
-        rec, Rec_offsets{}.compute(rec, index), block_prefix_info.n_fields,
-        block_prefix_info.n_bytes, btr_hash_seed_for_record(index), index);
+    const auto hash_value =
+        rec_hash(Slice_ctx().get_offsets(reg, index, ULINT_UNDEFINED),
+                 block_prefix_info.n_fields, block_prefix_info.n_bytes,
+                 btr_hash_seed_for_record(index), index);
 
     btr_search_check_free_space_in_heap(cursor->index);
 
@@ -639,7 +722,7 @@ static void btr_search_update_hash_ref(buf_block_t *block,
       if (info->n_hash_potential > 0 &&
           block_prefix_info == block->ahi.prefix_info.load()) {
         const auto hash_table = btr_get_search_table(index);
-        ha_insert_for_hash(hash_table, hash_value, block, rec);
+        ha_insert_for_hash(hash_table, hash_value, block, reg);
       }
     }
     btr_search_x_unlock(cursor->index);
@@ -696,22 +779,22 @@ static bool btr_search_check_guess(btr_cur_t *cursor,
                                    bool can_only_compare_to_cursor_rec,
                                    const dtuple_t *tuple, ulint mode,
                                    mtr_t *mtr) {
-  rec_t *rec;
+  reg_t reg;
   ulint match;
 
   const auto n_unique = dict_index_get_n_unique_in_tree(cursor->index);
 
-  rec = btr_cur_get_rec(cursor);
+  reg = btr_cur_get_reg(cursor);
 
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(reg.rec));
 
   match = 0;
 
-  Rec_offsets offsets;
+  Slice_ctx slc_ctx;
   {
-    const auto cmp =
-        tuple->compare(rec, cursor->index,
-                       offsets.compute(rec, cursor->index, n_unique), &match);
+    const auto cmp = tuple->compare(
+        cursor->index, slc_ctx.get_offsets(reg, cursor->index, n_unique),
+        &match);
 
     if (mode == PAGE_CUR_GE) {
       if (cmp > 0) {
@@ -750,19 +833,19 @@ static bool btr_search_check_guess(btr_cur_t *cursor,
   match = 0;
 
   if ((mode == PAGE_CUR_G) || (mode == PAGE_CUR_GE)) {
-    rec_t *prev_rec;
+    reg_t prev_reg;
 
-    ut_ad(!page_rec_is_infimum(rec));
+    ut_ad(!page_rec_is_infimum(reg.rec));
 
-    prev_rec = page_rec_get_prev(rec);
+    prev_reg = page_rec_get_prev_reg(reg.rec);
 
-    if (page_rec_is_infimum(prev_rec)) {
-      return btr_page_get_prev(page_align(prev_rec), mtr) == FIL_NULL;
+    if (page_rec_is_infimum(prev_reg.rec)) {
+      return btr_page_get_prev(page_align(prev_reg), mtr) == FIL_NULL;
     }
 
     const auto cmp = tuple->compare(
-        prev_rec, cursor->index,
-        offsets.compute(prev_rec, cursor->index, n_unique), &match);
+        cursor->index, slc_ctx.get_offsets(prev_reg, cursor->index, n_unique),
+        &match);
     bool success;
     if (mode == PAGE_CUR_GE) {
       success = cmp > 0;
@@ -772,14 +855,14 @@ static bool btr_search_check_guess(btr_cur_t *cursor,
 
     return success;
   } else {
-    rec_t *next_rec;
+    reg_t next_reg;
 
-    ut_ad(!page_rec_is_supremum(rec));
+    ut_ad(!page_rec_is_supremum(reg.rec));
 
-    next_rec = page_rec_get_next(rec);
+    next_reg = page_rec_get_next_reg(reg.rec);
 
-    if (page_rec_is_supremum(next_rec)) {
-      if (btr_page_get_next(page_align(next_rec), mtr) == FIL_NULL) {
+    if (page_rec_is_supremum(next_reg.rec)) {
+      if (btr_page_get_next(page_align(next_reg), mtr) == FIL_NULL) {
         cursor->up_match = 0;
         return true;
       }
@@ -788,8 +871,8 @@ static bool btr_search_check_guess(btr_cur_t *cursor,
     }
 
     const auto cmp = tuple->compare(
-        next_rec, cursor->index,
-        offsets.compute(next_rec, cursor->index, n_unique), &match);
+        cursor->index, slc_ctx.get_offsets(next_reg, cursor->index, n_unique),
+        &match);
     bool success;
     if (mode == PAGE_CUR_LE) {
       success = cmp < 0;
@@ -804,7 +887,7 @@ static bool btr_search_check_guess(btr_cur_t *cursor,
 bool btr_search_guess_on_hash(const dtuple_t *tuple, ulint mode,
                               ulint latch_mode, btr_cur_t *cursor,
                               ulint has_search_latch, mtr_t *mtr) {
-  const rec_t *rec;
+  creg_t reg;
 #ifdef notdefined
   btr_cur_t cursor2;
   btr_pcur_t pcur;
@@ -870,8 +953,7 @@ bool btr_search_guess_on_hash(const dtuple_t *tuple, ulint mode,
   ut_ad(rw_lock_get_writer(btr_get_search_latch(index)) != RW_LOCK_X);
   ut_ad(rw_lock_get_reader_count(btr_get_search_latch(index)) > 0);
 
-  rec =
-      (rec_t *)ha_search_and_get_data(btr_get_search_table(index), hash_value);
+  reg = ha_search_and_get_data(btr_get_search_table(index), hash_value);
 
   /* We did the hash search. If we decide to return before successfully
   verifying the search is correct, we will return with the following state of
@@ -884,11 +966,11 @@ bool btr_search_guess_on_hash(const dtuple_t *tuple, ulint mode,
 
   info->last_hash_succ = false;
 
-  if (rec == nullptr) {
+  if (reg.is_null()) {
     return false;
   }
 
-  buf_block_t *block = buf_block_from_ahi(rec);
+  buf_block_t *block = buf_block_from_ahi(reg.rec);
 
   if (!has_search_latch) {
     if (!buf_page_get_known_nowait(latch_mode, block, Cache_hint::MAKE_YOUNG,
@@ -916,9 +998,9 @@ bool btr_search_guess_on_hash(const dtuple_t *tuple, ulint mode,
     return false;
   }
 
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(reg.rec));
 
-  btr_cur_position(index, (rec_t *)rec, block, cursor);
+  btr_cur_position(index, (rec_t *)reg.rec, block, cursor);
 
   /* Check the validity of the guess within the page */
 
@@ -1118,19 +1200,18 @@ void btr_search_drop_page_hash_index(buf_block_t *block, bool force) {
 
     size_t n_cached = 0;
 
-    const rec_t *rec = page_get_infimum_rec(page);
-    rec = page_rec_get_next_low(rec, page_is_comp(page));
+    creg_t reg = page_rec_get_next_creg(page_get_infimum_rec(page));
 
     const auto index_hash = btr_hash_seed_for_record(index);
 
     uint64_t prev_hash_value = 0;
     {
-      Rec_offsets offsets;
+      Slice_ctx slc_ctx;
 
-      while (!page_rec_is_supremum(rec)) {
+      while (!page_rec_is_supremum(reg.rec)) {
         const auto hash_value = rec_hash(
-            rec,
-            offsets.compute(rec, index, btr_search_get_n_fields(prefix_info)),
+            slc_ctx.get_offsets(reg, index,
+                                btr_search_get_n_fields(prefix_info)),
             prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
 
         if (hash_value != prev_hash_value || prev_hash_value == 0) {
@@ -1140,7 +1221,7 @@ void btr_search_drop_page_hash_index(buf_block_t *block, bool force) {
           hashes[n_cached] = hash_value;
           n_cached++;
         }
-        rec = page_rec_get_next_low(rec, page_rec_is_comp(rec));
+        reg = page_rec_get_next_creg(reg.rec);
         prev_hash_value = hash_value;
       }
     }
@@ -1450,63 +1531,64 @@ static void btr_search_build_page_hash_index(dict_index_t *index,
   an array for fast insertion to the hash index */
 
   auto hashes = ut::make_unique<uint64_t[]>(UT_NEW_THIS_FILE_PSI_KEY, n_recs);
-  auto recs = ut::make_unique<rec_t *[]>(UT_NEW_THIS_FILE_PSI_KEY, n_recs);
+  auto recs = ut::make_unique<reg_t[]>(UT_NEW_THIS_FILE_PSI_KEY, n_recs);
 
   ut_a(index->id == btr_page_get_index_id(page));
 
-  auto rec = page_rec_get_next(page_get_infimum_rec(page));
+  reg_t reg = page_rec_get_next_reg(page_get_infimum_rec(page));
 
-  Rec_offsets offsets;
-  ut_ad(
-      page_rec_is_supremum(rec) ||
-      btr_search_get_n_fields(prefix_info) ==
-          rec_offs_n_fields(offsets.compute(rec, index, n_fields_for_offsets)));
+  Slice_ctx slc_ctx;
+  ut_ad(page_rec_is_supremum(reg.rec) ||
+        btr_search_get_n_fields(prefix_info) ==
+            rec_offs_n_fields(
+                slc_ctx.get_offsets(reg, index, n_fields_for_offsets)
+                    ->offsets()));
 
   const auto index_hash = btr_hash_seed_for_record(index);
 
   auto hash_value =
-      rec_hash(rec, offsets.compute(rec, index, n_fields_for_offsets),
+      rec_hash(slc_ctx.get_offsets(reg, index, n_fields_for_offsets),
                prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
 
   size_t n_cached = 0;
   if (prefix_info.left_side) {
     hashes[n_cached] = hash_value;
-    recs[n_cached] = rec;
+    recs[n_cached] = reg;
     n_cached++;
   }
 
   for (;;) {
-    const auto next_rec = page_rec_get_next(rec);
+    reg_t next_reg = page_rec_get_next_reg(reg.rec);
 
-    if (page_rec_is_supremum(next_rec)) {
+    if (page_rec_is_supremum(next_reg.rec)) {
       if (!prefix_info.left_side) {
         hashes[n_cached] = hash_value;
-        recs[n_cached] = rec;
+        recs[n_cached] = reg;
         n_cached++;
       }
 
       break;
     }
 
-    const auto next_hash_value = rec_hash(
-        next_rec, offsets.compute(next_rec, index, n_fields_for_offsets),
-        prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
+    const auto next_hash_value =
+        rec_hash(slc_ctx.get_offsets(next_reg, index, n_fields_for_offsets),
+                 prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
 
     if (hash_value != next_hash_value) {
       /* Insert an entry into the hash index */
 
       if (prefix_info.left_side) {
         hashes[n_cached] = next_hash_value;
-        recs[n_cached] = next_rec;
+        recs[n_cached] = next_reg;
         n_cached++;
       } else {
         hashes[n_cached] = hash_value;
-        recs[n_cached] = rec;
+        recs[n_cached] = reg;
         n_cached++;
       }
     }
 
-    rec = next_rec;
+    reg = next_reg;
     hash_value = next_hash_value;
   }
 
@@ -1648,7 +1730,7 @@ void btr_search_update_hash_on_delete(btr_cur_t *cursor) {
   ut_a(index == cursor->index);
   ut_a(!dict_index_is_ibuf(index));
 
-  const auto rec = btr_cur_get_rec(cursor);
+  reg_t reg = btr_cur_get_reg(cursor);
 
   /* Since we hold the X-latch on block's lock, the AHI prefix parameters
   can't be changed (such change require at least S-latch on block's lock)
@@ -1657,8 +1739,9 @@ void btr_search_update_hash_on_delete(btr_cur_t *cursor) {
   ut_a(btr_search_get_n_fields(prefix_info) > 0);
 
   const auto hash_value =
-      rec_hash(rec, Rec_offsets{}.compute(rec, index), prefix_info.n_fields,
-               prefix_info.n_bytes, btr_hash_seed_for_record(index), index);
+      rec_hash(Slice_ctx().get_offsets(reg, index, ULINT_UNDEFINED),
+               prefix_info.n_fields, prefix_info.n_bytes,
+               btr_hash_seed_for_record(index), index);
 
   btr_search_x_lock(index, UT_LOCATION_HERE);
   const auto table = btr_get_search_table(index);
@@ -1671,7 +1754,7 @@ void btr_search_update_hash_on_delete(btr_cur_t *cursor) {
     ut_a(block->ahi.index == index);
     ut_a(block->ahi.prefix_info.load() == prefix_info);
 
-    if (ha_search_and_delete_if_found(table, hash_value, rec)) {
+    if (ha_search_and_delete_if_found(table, hash_value, reg)) {
       MONITOR_INC(MONITOR_ADAPTIVE_HASH_ROW_REMOVED);
     } else {
       MONITOR_INC(MONITOR_ADAPTIVE_HASH_ROW_REMOVE_NOT_FOUND);
@@ -1688,7 +1771,7 @@ void btr_search_update_hash_node_on_insert(btr_cur_t *cursor) {
     return;
   }
 
-  const auto rec = btr_cur_get_rec(cursor);
+  reg_t reg = btr_cur_get_reg(cursor);
 
   const auto block = btr_cur_get_block(cursor);
 
@@ -1720,8 +1803,9 @@ void btr_search_update_hash_node_on_insert(btr_cur_t *cursor) {
       /* Since we hold the X-latch on block's lock, the AHI prefix parameters
       can't be changed (such change require at least S-latch on block's lock)
       even if the AHI latches are not held in meantime. */
-      if (ha_search_and_update_if_found(table, cursor->ahi.ahi_hash_value, rec,
-                                        block, page_rec_get_next(rec))) {
+      if (ha_search_and_update_if_found(table, cursor->ahi.ahi_hash_value, reg,
+                                        block,
+                                        page_rec_get_next_reg(reg.rec))) {
         MONITOR_INC(MONITOR_ADAPTIVE_HASH_ROW_UPDATED);
       }
     }
@@ -1734,8 +1818,8 @@ void btr_search_update_hash_node_on_insert(btr_cur_t *cursor) {
 }
 
 void btr_search_update_hash_on_insert(btr_cur_t *cursor) {
-  const rec_t *ins_rec;
-  const rec_t *next_rec;
+  creg_t ins_reg;
+  creg_t next_reg;
   uint64_t hash_value;
   uint64_t next_hash = 0;
   bool locked = false;
@@ -1766,7 +1850,7 @@ void btr_search_update_hash_on_insert(btr_cur_t *cursor) {
 
   hash_table_t *table = nullptr;
 
-  const auto rec = btr_cur_get_rec(cursor);
+  creg_t reg = btr_cur_get_reg(cursor);
 
   ut_a(!index->disable_ahi);
   ut_a(index == cursor->index);
@@ -1777,26 +1861,26 @@ void btr_search_update_hash_on_insert(btr_cur_t *cursor) {
   even if the AHI latches are not held. */
   const auto prefix_info = block->ahi.prefix_info.load();
 
-  ins_rec = page_rec_get_next_const(rec);
-  next_rec = page_rec_get_next_const(ins_rec);
+  ins_reg = page_rec_get_next_creg(reg.rec);
+  next_reg = page_rec_get_next_creg(ins_reg.rec);
 
   const auto index_hash = btr_hash_seed_for_record(index);
   const ulint n_offs = btr_search_get_n_fields(prefix_info);
 
-  Rec_offsets offsets;
+  Slice_ctx slc_ctx;
   const auto ins_hash =
-      rec_hash(ins_rec, offsets.compute(ins_rec, index, n_offs),
+      rec_hash(slc_ctx.get_offsets(ins_reg, index, n_offs),
                prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
 
-  if (!page_rec_is_supremum(next_rec)) {
+  if (!page_rec_is_supremum(next_reg.rec)) {
     next_hash =
-        rec_hash(next_rec, offsets.compute(next_rec, index, n_offs),
+        rec_hash(slc_ctx.get_offsets(next_reg, index, n_offs),
                  prefix_info.n_fields, prefix_info.n_bytes, index_hash, index);
   }
 
-  if (!page_rec_is_infimum(rec)) {
+  if (!page_rec_is_infimum(reg.rec)) {
     hash_value =
-        rec_hash(rec, offsets.compute(rec, index, n_offs), prefix_info.n_fields,
+        rec_hash(slc_ctx.get_offsets(reg, index, n_offs), prefix_info.n_fields,
                  prefix_info.n_bytes, index_hash, index);
   } else {
     if (prefix_info.left_side) {
@@ -1810,7 +1894,7 @@ void btr_search_update_hash_on_insert(btr_cur_t *cursor) {
       }
       table = btr_get_search_table(index);
 
-      ha_insert_for_hash(table, ins_hash, block, ins_rec);
+      ha_insert_for_hash(table, ins_hash, block, ins_reg);
     }
 
     goto check_next_rec;
@@ -1830,14 +1914,14 @@ void btr_search_update_hash_on_insert(btr_cur_t *cursor) {
     }
 
     if (!prefix_info.left_side) {
-      ha_insert_for_hash(table, hash_value, block, rec);
+      ha_insert_for_hash(table, hash_value, block, reg);
     } else {
-      ha_insert_for_hash(table, ins_hash, block, ins_rec);
+      ha_insert_for_hash(table, ins_hash, block, ins_reg);
     }
   }
 
 check_next_rec:
-  if (page_rec_is_supremum(next_rec)) {
+  if (page_rec_is_supremum(next_reg.rec)) {
     if (!prefix_info.left_side) {
       if (!locked) {
         locked = btr_search_x_lock_nowait(index, UT_LOCATION_HERE);
@@ -1851,7 +1935,7 @@ check_next_rec:
         table = btr_get_search_table(index);
       }
 
-      ha_insert_for_hash(table, ins_hash, block, ins_rec);
+      ha_insert_for_hash(table, ins_hash, block, ins_reg);
     }
 
     return;
@@ -1871,9 +1955,9 @@ check_next_rec:
     }
 
     if (!prefix_info.left_side) {
-      ha_insert_for_hash(table, ins_hash, block, ins_rec);
+      ha_insert_for_hash(table, ins_hash, block, ins_reg);
     } else {
-      ha_insert_for_hash(table, next_hash, block, next_rec);
+      ha_insert_for_hash(table, next_hash, block, next_reg);
     }
   }
 }
@@ -1889,7 +1973,7 @@ static bool btr_search_hash_table_validate(ulint part_id) {
   bool ok = true;
   ulint i;
   ulint cell_count;
-  Rec_offsets offsets;
+  Slice_ctx slc_ctx;
 
   if (!btr_search_enabled) {
     return true;
@@ -1929,7 +2013,7 @@ static bool btr_search_hash_table_validate(ulint part_id) {
     node = (ha_node_t *)hash_get_nth_cell(part.hash_table, i)->node;
 
     for (; node != nullptr; node = node->next) {
-      buf_block_t *const block = buf_block_from_ahi((byte *)node->data);
+      buf_block_t *const block = buf_block_from_ahi((byte *)node->data.rec);
       const buf_block_t *hash_block;
 
       const auto buf_pool = buf_pool_from_bpage((buf_page_t *)block);
@@ -1973,11 +2057,11 @@ static bool btr_search_hash_table_validate(ulint part_id) {
       ut_a(!dict_index_is_ibuf(index));
       ut_ad(block->page.id.space() == index->space);
 
-      const auto offsets_array = offsets.compute(
+      const auto slc = slc_ctx.get_offsets(
           node->data, index, btr_search_get_n_fields(prefix_info));
       const auto hash_value =
-          rec_hash(node->data, offsets_array, prefix_info.n_fields,
-                   prefix_info.n_bytes, btr_hash_seed_for_record(index), index);
+          rec_hash(slc, prefix_info.n_fields, prefix_info.n_bytes,
+                   btr_hash_seed_for_record(index), index);
 
       if (node->hash_value != hash_value) {
         const page_t *page = block->frame;
@@ -1989,12 +2073,13 @@ static bool btr_search_hash_table_validate(ulint part_id) {
             << " index pointer to page "
             << page_id_t(page_get_space_id(page), page_get_page_no(page))
             << ", ptr mem address "
-            << reinterpret_cast<const void *>(node->data) << ", index id "
+            << reinterpret_cast<const void *>(node->data.rec) << ", index id "
             << index_id_t{index->space, index->id} << ", node hash "
             << node->hash_value << ", rec hash " << hash_value;
 
         fputs("InnoDB: Record ", stderr);
-        rec_print_new(stderr, node->data, offsets_array);
+        ut_ad(slc->is_positioned(node->data, index));
+        rec_print_new(stderr, slc);
         fprintf(stderr,
                 "\nInnoDB: on that page."
                 " Page mem address %p, is hashed %p,"

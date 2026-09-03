@@ -4,6 +4,7 @@
 --echo ############ init and add learner
 let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --source include/start_new_learner.inc
+
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 #add consensus_learner $learner_cluster_info;
@@ -22,10 +23,8 @@ select server_id, role, learner_source from information_schema.alisql_cluster_gl
 --connection follower
 --source include/wait_apply_catchup.inc
 
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 stop xpaxos_replication;
@@ -33,15 +32,26 @@ SET @@global.binlog_expire_logs_seconds=1;
 
 --disconnect follower
 
+--echo ############ check logger before
+--connect (logger,127.0.0.1,root,,test,$MYPORT_3)
+--connection logger
+--source include/wait_apply_catchup.inc
+
+--replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
+show consensus logs;
+
+SET @@global.binlog_expire_logs_seconds=1;
+
+--disconnect logger
+
 --echo ############ check learner before
---connect (learner,127.0.0.1,root,,mysql,$learner_port)
+--connect (learner,127.0.0.1,root,,test,$learner_port)
 --connection learner
 --source include/wait_apply_catchup.inc
 
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 stop xpaxos_replication;
@@ -54,13 +64,14 @@ SET @@global.binlog_expire_logs_seconds=1;
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 
-create table t1(id int);
-insert into t1 values (1);
-insert into t1 values (2);
-flush logs;
+create table t1(c1 int auto_increment primary key, c2 blob);
+insert into t1 (c2) values(repeat('#', 5000));
+--sleep 1
+insert into t1 (c2) values(repeat('#', 5000));
 
 --sleep 1
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 SET @@global.binlog_expire_logs_seconds=1;
@@ -72,20 +83,24 @@ SET @@global.binlog_expire_logs_seconds=1;
 --echo ############ check follower before2
 --connect (follower,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 --disconnect follower
 
---echo ############ check learner before2
---connect (learner,127.0.0.1,root,,mysql,$learner_port)
---connection learner
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
+--echo ############ check logger before2
+--connect (logger,127.0.0.1,root,,test,$MYPORT_3)
+--connection logger
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
+show consensus logs;
+--disconnect logger
+
+--echo ############ check learner before2
+--connect (learner,127.0.0.1,root,,test,$learner_port)
+--connection learner
+--replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 --disconnect learner
 
@@ -94,25 +109,28 @@ show consensus logs;
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 SET SESSION debug="+d,force_rotate";
 
 --sleep 1
-insert into t1 values(6);
+insert into t1 (c2) values(repeat('#', 5000));
 --sleep 1
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 --sleep 1
-insert into t1 values(7);
+insert into t1 (c2) values(repeat('#', 5000));
 --sleep 1
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 --sleep 1
-flush logs;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 SET @@global.binlog_expire_logs_seconds=default;
@@ -121,40 +139,54 @@ SET @@global.binlog_expire_logs_seconds=default;
 
 
 --echo ############ check follower after
---connect (follower,127.0.0.1,root,,mysql,$MYPORT_2)
+--connect (follower,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower
 
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 start xpaxos_replication;
 --source include/wait_apply_catchup.inc
 sleep 1;
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
 
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 --disconnect follower
 
 
+--echo ############ check logger after
+--connect (logger,127.0.0.1,root,,test,$MYPORT_3)
+--connection logger
+set global consensus_disable_election=ON;
+
+--replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
+show consensus logs;
+
+# Turn off disable_election so node3 can vote in the upcoming leader election
+# (after node1 shutdown). Without this, node3 rejects RequestVote messages
+# and node2 can never form a majority to become the new leader.
+set global consensus_disable_election=OFF;
+--disconnect logger
+
+
 --echo ############ check learner after
---connect (learner,127.0.0.1,root,,mysql,$learner_port)
+--connect (learner,127.0.0.1,root,,test,$learner_port)
 --connection learner
 
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 start xpaxos_replication;
 --source include/wait_apply_catchup.inc
 sleep 1;
-set force_revise=1;
-set sql_log_bin=0; 
-flush relay logs;
 
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 --disconnect learner
@@ -164,34 +196,74 @@ show consensus logs;
 --echo ############ check leader after2
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
-insert into t1 values(8);
-insert into t1 values(9);
-sleep 1;
---disconnect leader
-
+--enable_reconnect
+--exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--shutdown_server 0
+--sleep 20
+--source include/wait_until_disconnected.inc
 
 
 --echo ############ check follower after2
---connect (follower,127.0.0.1,root,,mysql,$MYPORT_2)
+--connect (follower,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower
---source include/wait_apply_catchup.inc
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+SET SESSION debug="+d,force_rotate";
+
+insert into t1 (c2) values(repeat('#', 5000));
+--sleep 1
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
+show consensus logs;
+
+--sleep 1
+insert into t1 (c2) values(repeat('#', 5000));
+--sleep 1
+
+--replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 SET @@global.binlog_expire_logs_seconds=default;
 --disconnect follower
 
 
+--echo ############ check logger after2
+--connect (logger,127.0.0.1,root,,test,$MYPORT_3)
+--connection logger
+--source include/wait_apply_catchup.inc
+--replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
+show consensus logs;
+
+SET @@global.binlog_expire_logs_seconds=default;
+set global consensus_disable_election=OFF;
+--disconnect logger
+
 --echo ############ check learner after2
---connect (learner,127.0.0.1,root,,mysql,$learner_port)
+--connect (learner,127.0.0.1,root,,test,$learner_port)
 --connection learner
 --source include/wait_apply_catchup.inc
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 show consensus logs;
 
 SET @@global.binlog_expire_logs_seconds=default;
 --disconnect learner
 
+--echo ############ check leader after3
+--connection leader
+--exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--connection leader
+set global consensus_force_promote=1;
+--source include/wait_until_connected_again.inc
+--source include/wait_follower_catchup.inc
+--disconnect leader
 
 --echo ############ cleanup
 --source include/stop_new_learner.inc

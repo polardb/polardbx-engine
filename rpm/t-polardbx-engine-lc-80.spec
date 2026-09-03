@@ -22,12 +22,12 @@
 
 
 %define polardb_version 'PolarDB V2.0'
-%define product_version 2.5.0
+%define product_version 2.6.0
 %define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
 
 Name: t-polardbx-engine-lc-80
-Version: 8.4.20
+Version: 8.4.21
 Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
@@ -36,13 +36,20 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 
 %if "%{?dist}" == ".alios7"
-BuildRequires: cmake >= 3.8.2, make, autoconf, libstdc++-static, alios7u-2_32-gcc-10-repo
+BuildRequires: alios7u-2_32-gcc-10-repo, python-sphinx
+%endif
+
+%if "%{?dist}" == ".alios8"  || "%{?dist}" == ".al8"
+BuildRequires: python3-sphinx, rpcgen
+%endif
+
+%if "%{?dist}" == ".alios7" || "%{?dist}" == ".alios8"  || "%{?dist}" == ".al8"
+BuildRequires: cmake >= 3.8.2, make, autoconf, libstdc++-static
 BuildRequires: gcc >= 10.2.1, gcc-c++ >= 10.2.1, libstdc++-devel >= 10.2.1, binutils >= 2.35
 BuildRequires: zlib-devel, snappy-devel, lz4-devel, bzip2-devel
 BuildRequires: libev-devel, libcurl-devel, libaio-devel, libarchive, ncurses-devel
-BuildRequires: bison, libudev-devel, python-sphinx, procps-ng-devel, rsync
+BuildRequires: bison, libudev-devel, procps-ng, rsync, perl-IPC-Cmd, libtirpc-devel
 %endif
-
 
 Packager: jianwei.zhao@alibaba-inc.com
 Autoreq: no
@@ -84,10 +91,13 @@ fi
 %build
 cd $OLDPWD/../
 
-%if "%{?dist}" == ".alios7"
+COMMON_FLAGS="-O3 -g -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing"
+
+%if "%{?dist}" == ".alios7" || "%{?dist}" == ".alios8"  || "%{?dist}" == ".al8"
     CC=gcc
     CXX=g++
     CMAKE_BIN=cmake
+    COMMON_FLAGS="$COMMON_FLAGS -static-libgcc -static-libstdc++"
 %else
     CC=/opt/rh/devtoolset-10/root/usr/bin/gcc
     CXX=/opt/rh/devtoolset-10/root/usr/bin/g++
@@ -95,27 +105,27 @@ cd $OLDPWD/../
 %endif
 
 %if "%{?_arch}" == "aarch64"
-    CFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
-    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing -Wl,-Bsymbolic"
+    COMMON_FLAGS="$COMMON_FLAGS -Wl,-Bsymbolic"
+    CFLAGS="$COMMON_FLAGS"
+    CXXFLAGS="$COMMON_FLAGS"
 %else
-    CFLAGS="-O3 -g -fexceptions  -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
-    CXXFLAGS="-O3 -g -fexceptions -static-libgcc -static-libstdc++ -fno-omit-frame-pointer -fno-strict-aliasing"
+    CFLAGS="$COMMON_FLAGS"
+    CXXFLAGS="$COMMON_FLAGS"
 %endif
+
 export CC CXX CFLAGS CXXFLAGS CMAKE_BIN
 
 cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
 
 $CMAKE_BIN .                            \
-%ifarch aarch64
-  -DWITH_JEMALLOC="no" \
-%endif
   -DFORCE_INSOURCE_BUILD=ON          \
   -DSYSCONFDIR:PATH=%{prefix}           \
   -DCMAKE_INSTALL_PREFIX:PATH=%{prefix} \
   -DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo  \
+  -DWITH_TEST_ONLY_PLUGINS=OFF       \
   -DWITH_PROTOBUF:STRING=bundled     \
   -DINSTALL_LAYOUT=STANDALONE        \
-  -DMYSQL_MAINTAINER_MODE=0          \
+  -DMYSQL_MAINTAINER_MODE=1          \
   -DWITH_SSL=openssl                 \
   -DWITH_ZLIB=bundled                \
   -DWITH_MYISAM_STORAGE_ENGINE=1     \
@@ -141,14 +151,21 @@ $CMAKE_BIN .                            \
   -DPOLARDB_VERSION=%{polardb_version} \
   -DPOLARDBX_PRODUCT_VERSION=%{product_version} \
   -DPOLARDBX_VERSION_EXTRA=%{version_extra} \
-  -DWITH_UNIT_TESTS=0                 \
   -DWITH_TESTS=0                     \
+  -DWITH_UNIT_TESTS=0                \
   -DWITH_POLARDBX_LICENSE=1
+
+MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
+make -j $MIN_PARALLEL
 
 %install
 cd $OLDPWD/../
-MIN_PARALLEL=$(($(cat /proc/cpuinfo | grep processor | wc -l) < 40 ? $(cat /proc/cpuinfo | grep processor | wc -l) : 40))
-make DESTDIR=$RPM_BUILD_ROOT -j $MIN_PARALLEL install
+rm -rf $RPM_BUILD_ROOT
+make DESTDIR=${RPM_BUILD_ROOT} install
+
+# Refuse to package test-only plugins and components (Bug #85439771).
+sh rpm/check_release_artifacts.sh ${RPM_BUILD_ROOT}
+
 find $RPM_BUILD_ROOT -name '.git' -type d -print0|xargs -0 rm -rf
 
 %clean

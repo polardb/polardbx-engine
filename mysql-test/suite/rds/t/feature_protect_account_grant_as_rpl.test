@@ -1,0 +1,63 @@
+################################################################################
+# SQL Guard #85329745 — replication non-regression for the GRANT ... AS gate.
+#
+# The fix in Grant_validator::validate_and_process_grant_as() rejects GRANT ... AS
+# for non-SUPER users while opt_enable_rds_priv_strategy is ON.  A legitimate
+# GRANT ... AS is binlogged with the AS clause in two cases:
+#   1. a SUPER user explicitly runs GRANT ... AS ...
+#   2. --partial_revokes is ON and the server synthesizes an AS clause for an
+#      ordinary global GRANT (to reproduce the grantor context on replicas)
+# The replica applier must keep applying such events even with the strategy
+# enabled.  The fix exempts the applier (thd->slave_thread), and a normal applier
+# is a skip-grants (SUPER) user anyway.  This test proves replication is NOT
+# broken: both an explicit GRANT AS and a partial_revokes-rewritten plain GRANT
+# replicate to a strategy-ON slave.
+################################################################################
+--source include/have_log_bin.inc
+--source include/master-slave.inc
+
+--echo # Enable the RDS privilege strategy on BOTH primary and replica
+connection master;
+set global opt_enable_rds_priv_strategy=on;
+connection slave;
+set global opt_enable_rds_priv_strategy=on;
+
+connection master;
+create user 'repl_u'@'%';
+
+--echo #
+--echo # 1. Explicit GRANT ... AS by a SUPER user (root): binlogged WITH the AS
+--echo #    clause; the strategy-ON replica applier must apply it (not blocked).
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'repl_u'@'%' as 'root'@'localhost' with role DEFAULT;
+
+--echo #
+--echo # 2. Plain global GRANT with --partial_revokes ON: the server injects a
+--echo #    synthesized AS clause into the binlog; must also replicate.
+grant BACKUP_ADMIN on *.* to 'repl_u'@'%';
+
+--echo # primary state
+select user, host, priv from mysql.global_grants where user='repl_u' order by priv;
+
+--echo # Wait for the replica to catch up.  If the fix had wrongly blocked the
+--echo # applier, the SQL thread would have errored and this sync would fail.
+sync_slave_with_master;
+
+--echo #
+--echo # On the REPLICA: both privileges were applied -> replication is healthy.
+connection slave;
+select user, host, priv from mysql.global_grants where user='repl_u' order by priv;
+
+--echo #
+--echo ###########################################################################
+--echo # Cleanup
+--echo ###########################################################################
+--echo #
+connection master;
+drop user 'repl_u'@'%';
+set global opt_enable_rds_priv_strategy=off;
+connection slave;
+set global opt_enable_rds_priv_strategy=off;
+
+connection master;
+sync_slave_with_master;
+--source include/rpl_end.inc

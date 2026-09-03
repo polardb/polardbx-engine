@@ -216,6 +216,8 @@ enum dberr_t {
   DB_GP_WAIT_TIMEOUT,
   /**Ignore create lock if allowed */
   DB_LOCK_IGNORE_CREATE,
+  /** Failed to compress the page using prefix compression. */
+  DB_SPC_ENCODE_FAILED,
 
   /* The following are partial failure codes */
 

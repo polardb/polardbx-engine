@@ -19,7 +19,6 @@
 
 #include "consensus_recovery_manager.h"
 
-#include "consensus_log_manager.h"
 #include "handler.h"
 #include "mysql/components/services/mysql_mutex_service.h"
 #include "mysql/plugin.h"
@@ -29,6 +28,8 @@
 #include "psi_memory_key.h"
 #include "sql/consensus/consensus_err.h"
 #include "sql_plugin.h"
+
+namespace komodo {
 
 #ifdef HAVE_PSI_INTERFACE
 PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
@@ -76,7 +77,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
     Pending_recovering_trx::xid_type::INTERNAL>(
     handlerton &ht, enum_ha_recover_xa_state current_state,
     enum_ha_recover_xa_state next_state, const XA_recover_txn *xa_trx,
-    const XA_specification &xa_spec) {
+    const komodo::XA_specification &xa_spec) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   auto iter = internal_xids_in_binlog.find(xa_trx->id.get_my_xid());
   if (iter != internal_xids_in_binlog.end()) {
@@ -99,7 +100,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
     Pending_recovering_trx::xid_type::EXTERNAL>(
     handlerton &ht, enum_ha_recover_xa_state current_state,
     enum_ha_recover_xa_state next_state, const XA_recover_txn *xa_trx,
-    const XA_specification &xa_spec) {
+    const komodo::XA_specification &xa_spec) {
   mysql_mutex_lock(&LOCK_consensuslog_recover_hash);
   auto iter = external_xids_in_binlog.find(xa_trx->id);
   if (iter != external_xids_in_binlog.end()) {
@@ -125,7 +126,7 @@ void Consensus_recovery_manager::add_pending_recovering_trx<
 void Consensus_recovery_manager::add_pending_recovering_trx(
     handlerton &ht, Pending_recovering_trx::xid_type type,
     enum_ha_recover_xa_state current_state, enum_ha_recover_xa_state next_state,
-    const XA_recover_txn *xa_trx, const XA_specification &xa_spec,
+    const XA_recover_txn *xa_trx, const komodo::XA_specification &xa_spec,
     uint64 consensus_index) {
   if (std::count(Pending_recovering_trxs.begin(), Pending_recovering_trxs.end(),
                  consensus_index)) {
@@ -199,12 +200,11 @@ bool Consensus_recovery_manager::is_pending_recovering_trx_empty() {
   return empty;
 }
 
-int Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
+void Consensus_recovery_manager::recover_remaining_pending_recovering_trxs() {
   for (auto &trx : Pending_recovering_trxs) {
     trx->recover();
   }
   Pending_recovering_trxs.clear();
-  return 0;
 }
 
 int Pending_recovering_trx::withdraw() {
@@ -272,7 +272,7 @@ int Pending_recovering_trx::recover() {
 Pending_recovering_trx::Pending_recovering_trx(
     handlerton &ht, xid_type type, enum_ha_recover_xa_state current_state,
     enum_ha_recover_xa_state next_state, const XA_recover_txn *tmp_xa_trx,
-    const XA_specification &xa_spec, uint64 consensus_index)
+    const komodo::XA_specification &xa_spec, uint64 consensus_index)
     : processed(false),
       ht(ht),
       type(type),
@@ -345,4 +345,6 @@ bool Pending_recovering_trx::is_state_legal() {
     }
   }
   return ret;
+}
+
 }

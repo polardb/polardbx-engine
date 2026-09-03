@@ -1,0 +1,95 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+==============================================================
+1. Baseline: function metadata rows only, reload counter = 0
+==============================================================
+show global status like 'Reload_slave_ai_model';
+Variable_name	Value
+Reload_slave_ai_model	0
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT			AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+==============================================================
+2. Register model on master -> slave cache refreshed
+==============================================================
+CALL dbms_ai.register_model(
+'test_slave_llm', 'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+'{"description":"slave reload test"}'
+);
+show global status like 'Reload_slave_ai_model';
+Variable_name	Value
+Reload_slave_ai_model	1
+CALL dbms_ai.describe_model('test_slave_llm');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+test_slave_llm	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus			ACTIVE	slave reload test
+==============================================================
+3. Update model on master -> slave cache refreshed again
+==============================================================
+CALL dbms_ai.update_model('test_slave_llm',
+'{"description":"slave reload updated"}');
+show global status like 'Reload_slave_ai_model';
+Variable_name	Value
+Reload_slave_ai_model	2
+CALL dbms_ai.describe_model('test_slave_llm');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+test_slave_llm	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus			ACTIVE	slave reload updated
+==============================================================
+4. Update function on master -> slave cache refreshed again
+==============================================================
+CALL dbms_ai.update_function('AI_PROMPT', 'test_slave_llm');
+show global status like 'Reload_slave_ai_model';
+Variable_name	Value
+Reload_slave_ai_model	3
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	test_slave_llm	qwen-plus	AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+==============================================================
+5. Drop model on master -> slave cache refreshed again
+==============================================================
+CALL dbms_ai.drop_model('test_slave_llm');
+show global status like 'Reload_slave_ai_model';
+Variable_name	Value
+Reload_slave_ai_model	4
+CALL dbms_ai.describe_model('test_slave_llm');
+ERROR HY000: dbms_ai.describe_model: model 'test_slave_llm' not found
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	test_slave_llm		AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+==============================================================
+Cleanup
+==============================================================
+include/rpl_end.inc

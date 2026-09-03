@@ -1,0 +1,124 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test mrr with gpp infos.
+--echo #
+
+--echo # Save original values
+--let $innodb_lizard_stat_enabled_original = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $innodb_index_purge_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_purge_guess_clust_enabled`
+--let $innodb_index_scan_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_scan_guess_clust_enabled`
+--let $innodb_adaptive_hash_index_original = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $innodb_polarx_btree_search_mode_original = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+
+--echo # enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+
+
+--echo # Create table t
+CREATE TABLE IF NOT EXISTS t (
+    id  INT AUTO_INCREMENT PRIMARY KEY,
+    a   VARCHAR(10) NOT NULL,  
+    b   INT         NOT NULL,  
+    c   INT         NOT NULL,  
+    d   CHAR(1)     NOT NULL DEFAULT 'A'
+    #,  
+    #KEY idx_a (a),
+    #KEY idx_b (b),
+    #KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (250),
+    PARTITION p1 VALUES LESS THAN (500),
+    PARTITION p2 VALUES LESS THAN (750),
+    PARTITION p3 VALUES LESS THAN (1000),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+ 
+--echo # Insert data into table t
+--echo # Procedure to produce data
+delimiter |;
+ 
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(10);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('NO', LPAD(i, 4, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+    SELECT CONCAT('Successfully inserted ', num_rows, ' rows into table t.') AS Result;
+END|
+delimiter ;|
+ 
+--echo # Insert 1000 rows into table t.
+CALL insert_t_data(1000);
+ 
+--echo # Create indexes on table t.
+--echo # Create indexes on table t.
+--echo # Also make sure that selection using the gpp infos of these secondary indexes will hit.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+
+
+explain select * from t where a < 'NO0101';
+select * from t where a < 'NO0101';
+
+EXPLAIN SELECT /*+ MRR(t) */ * FROM t WHERE a < 'NO0101';
+SELECT /*+ MRR(t) */ * FROM t WHERE a < 'NO0101';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_multi_range_read_gpp_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_multi_range_read_gpp_miss", Value, 1)
+--let $assert_text= [MRR a<NO0101] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+explain select * from t where a < "NO0101" and b > 20;
+SELECT * FROM t WHERE a < "NO0101" and b > 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_multi_range_read_gpp_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_multi_range_read_gpp_miss", Value, 1)
+--let $assert_text= [range scan a<NO0101 and b>20] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+explain SELECT /*+ MRR(t) */ * FROM t WHERE a < "NO0101" and b > 20;
+SELECT /*+ MRR(t) */ * FROM t WHERE a < "NO0101" and b > 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_multi_range_read_gpp_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_multi_range_read_gpp_miss", Value, 1)
+--let $assert_text= [MRR a<NO0101 and b>20] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+
+--echo --echo # END ALL TEST ---------------------------------------------------------------
+DROP TABLE t;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+--echo # Restore original values
+--eval SET GLOBAL innodb_lizard_stat_enabled = $innodb_lizard_stat_enabled_original
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $innodb_index_purge_guess_clust_enabled_original
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $innodb_index_scan_guess_clust_enabled_original
+--eval SET GLOBAL innodb_adaptive_hash_index = $innodb_adaptive_hash_index_original
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $innodb_polarx_btree_search_mode_original
+
+DROP PROCEDURE insert_t_data;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';
+
+
+

@@ -126,6 +126,10 @@ while ($isolation_levels)
             # Sporadically, P_S can not access record's page in buffer pool and reconstruct LOCK_DATA values
             --eval DROP TABLE locks_in_$context
             --let $need_locks_data=1
+            --disable_result_log
+            # Load all pages into buffer pool
+            analyze table t1;
+            --enable_result_log
             # wait a little to not cause furious spinning and allow for release of latches on page, if any
             --sleep 1
             # Try to bring back the pages into buffer pool using a non-locking SELECT, if they were missing

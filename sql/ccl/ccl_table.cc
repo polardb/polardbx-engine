@@ -24,6 +24,7 @@
 #include "m_string.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
+#include "sql/dd/cache/dictionary_client.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
@@ -51,7 +52,7 @@ const char *CCL_TABLE_ALIAS = "concurrency_control";
 /* Whether the table is concurrency_control */
 bool is_ccl_table(const char *table_name, size_t len) {
   if (len == CCL_TABLE_NAME.length &&
-      my_strcasecmp(system_charset_info, CCL_TABLE_NAME.str, table_name))
+      my_strcasecmp(system_charset_info, CCL_TABLE_NAME.str, table_name) == 0)
     return true;
   return false;
 }
@@ -301,8 +302,7 @@ void ccl_rules_init(bool bootstrap) {
   thd->store_globals();
   lex_start(thd);
 
-  ccl_queue_buckets_init(ccl_queue_bucket_count, ccl_queue_bucket_size);
-
+  /* Queue buckets are initialized separately within mysqld boot. */
   error = reload_ccl_rules(thd);
 
   lex_end(thd->lex);
@@ -360,6 +360,77 @@ err_and_close:
 }
 
 /**
+  Load and delete all rules from table for del_all_ccl_rule.
+
+  Report client error if failed, whether log error
+  message decided by caller.
+
+  Log warning message if the number of successful loading into cache
+  is not equal to records in table.
+
+  @param[in]      thd           Thread context
+
+  @retval         Ccl_error
+*/
+Conf_error del_all_ccl_rules(THD *thd) {
+  Conf_error error = Conf_error::CONF_ER_RECORD;
+  TABLE_LIST_PTR table_list;
+  DBUG_ENTER("del_all_ccl_rules");
+  Conf_records *records = nullptr;
+  size_t num = 0;
+  bool cache_modified = false;
+
+  /** Step 1: open table and read all rules. */
+  if ((error = open_ccl_table(thd, table_list, true)) != Conf_error::CONF_OK)
+    DBUG_RETURN(error);
+
+  assert(table_list->table);
+
+  Ccl_reader reader(thd, table_list->table, thd->mem_root);
+
+  Ccl_writer writer(thd, table_list->table, thd->mem_root,
+    Conf_table_op::OP_DELETE);
+
+  records = reader.read_all_rows(&error);
+
+  if (error != Conf_error::CONF_OK) goto err_and_close;
+
+  assert(records);
+
+  /** Step 2: delete all rules in table and cache. */
+  for (Conf_records::const_iterator it = records->cbegin();
+       it != records->cend(); it++) {
+
+    if (writer.delete_row_by_id(*it)) {
+      error = Conf_error::CONF_ER_RECORD;
+      goto err_and_close;
+    }
+    num = System_ccl::instance()->delete_rule((*it)->get_id());
+
+    if (num < 1) {
+      push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CCL_RULE_NOT_FOUND,
+                          ER_THD(thd, ER_CCL_RULE_NOT_FOUND), (*it)->get_id(),
+                          "cache");
+    } else
+      cache_modified = true;
+  }
+
+  destroy(records);
+  ccl_end_trans(thd, false);
+  DBUG_RETURN(error);
+
+err_and_close:
+  destroy(records);
+  ccl_end_trans(thd, true);
+  /**
+    Table changes have been rolled back, but some rules may already be
+    removed from cache, reload rules to keep cache consistent with table.
+  */
+  if (cache_modified) reload_ccl_rules(thd);
+  DBUG_RETURN(error);
+}
+
+/**
   Add new rule into concurrency_table and insert ccl cache.
   Report client error if failed.
 
@@ -369,7 +440,7 @@ err_and_close:
   @retval         false       Success
   @retval         true        Failure
 */
-bool add_ccl_rule(THD *thd, Conf_record *r) {
+bool add_ccl_rule(THD *thd, Conf_record *r, ulonglong *rule_id) {
   Conf_error error;
   size_t num;
   TABLE_LIST_PTR table_list;
@@ -392,6 +463,7 @@ bool add_ccl_rule(THD *thd, Conf_record *r) {
 
   /* Personalized process ccl rule cache  */
   record = dynamic_cast<Ccl_record *>(r);
+  if (rule_id) *rule_id = record->id;
   records.push_back(record);
   num = group.classify_rule(record->type, &records);
 
@@ -447,4 +519,44 @@ err:
   ccl_end_trans(thd, true);
   DBUG_RETURN(true);
 }
+
+/**
+  Delete the rule batch.
+  Delete the row or clear the rule cache or both.
+
+  Only report warning message if row or cache not found
+*/
+bool del_ccl_rule_batch(THD *thd, std::vector<Conf_record *> &records) {
+  Conf_error error;
+  TABLE_LIST_PTR table_list;
+  size_t num;
+  DBUG_ENTER("del_ccl_rule");
+
+  if ((error = open_ccl_table(thd, table_list, true)) != Conf_error::CONF_OK)
+    DBUG_RETURN(true);
+
+  Ccl_writer writer(thd, table_list->table, thd->mem_root,
+                    Conf_table_op::OP_DELETE);
+
+  /** Delete the row and clear the rule cache. */
+  for (auto record : records) {
+
+    if (writer.delete_row_by_id(record)) goto err;
+
+    num = System_ccl::instance()->delete_rule(record->get_id());
+    if (num < 1) {
+      push_warning_printf(thd, Sql_condition::SL_WARNING, ER_CCL_RULE_NOT_FOUND,
+                          ER_THD(thd, ER_CCL_RULE_NOT_FOUND), record->get_id(),
+                          "cache");
+    }
+  }
+
+  ccl_end_trans(thd, false);
+  DBUG_RETURN(false);
+
+err:
+  ccl_end_trans(thd, true);
+  DBUG_RETURN(true);
+}
+
 } /* namespace im */

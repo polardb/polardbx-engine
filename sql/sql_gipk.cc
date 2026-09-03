@@ -30,6 +30,7 @@
 #include "sql/sql_class.h"                // THD
 #include "sql/sql_lex.h"                  // LEX
 #include "sql/sql_table.h"                // primary_key_name
+#include "sql/sequence_common.h" 
 
 /* Generated invisible primary key column name. */
 const char *gipk_column_name = "my_row_id";
@@ -72,6 +73,11 @@ bool is_candidate_table_for_invisible_primary_key_generation(
         return (ks->type == KEYTYPE_PRIMARY);
       }))
     return false;
+
+  // Disable sequence
+  if (sequence_create_info(create_info)) {
+    return false;
+  }
 
   return true;
 }

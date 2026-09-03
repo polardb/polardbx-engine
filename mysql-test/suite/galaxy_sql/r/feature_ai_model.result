@@ -1,0 +1,686 @@
+# 1. Check ai_model_config table
+show create table mysql.ai_model_config;
+Table	Create Table
+ai_model_config	CREATE TABLE `ai_model_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `model_name` varchar(128) COLLATE utf8mb4_bin NOT NULL,
+  `provider` varchar(64) COLLATE utf8mb4_bin NOT NULL,
+  `endpoint` varchar(512) COLLATE utf8mb4_bin NOT NULL,
+  `model` varchar(128) COLLATE utf8mb4_bin DEFAULT NULL,
+  `api_key` varchar(512) COLLATE utf8mb4_bin DEFAULT NULL,
+  `model_params` text COLLATE utf8mb4_bin,
+  `status` varchar(16) COLLATE utf8mb4_bin DEFAULT 'ACTIVE',
+  `description` varchar(1024) COLLATE utf8mb4_bin DEFAULT NULL,
+  `gmt_created` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `gmt_modified` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_model_name` (`model_name`)
+) /*!50100 TABLESPACE `mysql` */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin STATS_PERSISTENT=0 COMMENT='AI model configuration'
+# 2. register_model
+# 2.1 register qwen_plus (LLM, valid key)
+# 2.1a register_model masks api_key in mysql.ai_model_config for direct SELECT
+api_key
+******
+# 2.2 register qwen_turbo (LLM)
+# 2.3 register EMBEDDING model
+# 2.3b register RERANK model
+# 2.3c register DOCUMENT_PARSE model
+# 2.3d register VL_EMBEDDING model
+# 2.3e register OpenAI-compatible LLM model
+# 2.3f register OpenAI-compatible EMBEDDING model
+# 2.3g register control-plane default-name LLM model without api_key
+CALL dbms_ai.register_model(
+'__POLARDBX_QWEN35_PLUS',
+'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+'{"description":"Control-plane default-name LLM no key"}'
+);
+# 2.4 register model WITHOUT api_key (no options)
+CALL dbms_ai.register_model(
+'no_key_model',
+'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+''
+);
+# 2.5 register model with INVALID api_key
+CALL dbms_ai.register_model(
+'bad_key_model',
+'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+'{"api_key":"sk-invalid-key-000000000000000000"}'
+);
+# 2.6 register model with BAD endpoint URL
+# 2.7 register model without 'model' field (should fallback to model_name)
+# 2.8 duplicate model_name should fail
+ERROR HY000: dbms_ai: model 'qwen_plus' already exists
+# 2.9 missing required fields (empty strings) should fail
+CALL dbms_ai.register_model('bad_model', '', '', '', '');
+ERROR HY000: dbms_ai.register_model: model_name, provider, and endpoint are required
+# 2.10 wrong number of args should fail
+CALL dbms_ai.register_model('only_name');
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ai.register_model; expected 5, got 1
+# 2.11 configure AI function defaults through dbms_ai.update_function
+CALL dbms_ai.update_function('AI_PROMPT', 'qwen_plus');
+CALL dbms_ai.update_function('AI_EMBEDDING', 'embed_v3');
+CALL dbms_ai.update_function('AI_CLASSIFY', 'qwen_plus');
+CALL dbms_ai.update_function('AI_RANK', 'rerank_v2');
+CALL dbms_ai.update_function('AI_SIMILARITY', 'embed_v3');
+CALL dbms_ai.update_function('AI_EXTRACT', 'qwen_plus');
+CALL dbms_ai.update_function('AI_SUMMARIZE', 'qwen_plus');
+CALL dbms_ai.update_function('AI_PARSE_DOCUMENT', 'doc_parse');
+CALL dbms_ai.update_function('AI_VL_EMBEDDING', 'vl_embed');
+CALL dbms_ai.update_function('AI_TEXT2SQL', 'qwen_plus');
+# 3. list_models
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+qwen_plus	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+qwen_turbo	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-turbo	ACTIVE
+embed_v3	dashscope	https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v3	ACTIVE
+rerank_v2	dashscope	https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank	gte-rerank-v2	ACTIVE
+doc_parse	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-doc-turbo	ACTIVE
+vl_embed	dashscope	https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding	qwen3-vl-embedding	ACTIVE
+openai_llm	openai	https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions	qwen-plus	ACTIVE
+openai_embed	openai	https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings	text-embedding-v3	ACTIVE
+__POLARDBX_QWEN35_PLUS	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+no_key_model	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+bad_key_model	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+bad_url_model	dashscope	https://this-host-does-not-exist.example.com/v1/chat/completions	qwen-plus	ACTIVE
+no_model_field	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation		ACTIVE
+# 4. describe_model
+# 4.1 describe existing model (api_key masked)
+CALL dbms_ai.describe_model('qwen_plus');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+qwen_plus	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	sk-7****0798		ACTIVE	Qwen Plus model
+# 4.2 describe model with no api_key (should show empty)
+CALL dbms_ai.describe_model('no_key_model');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+no_key_model	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus			ACTIVE	
+# 4.3 describe model without 'model' field
+CALL dbms_ai.describe_model('no_model_field');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+no_model_field	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation		sk-7****0798		ACTIVE	
+# 4.4 describe non-existent model should fail
+CALL dbms_ai.describe_model('no_such_model');
+ERROR HY000: dbms_ai.describe_model: model 'no_such_model' not found
+# 4.5 describe with empty name should fail
+CALL dbms_ai.describe_model('');
+ERROR HY000: dbms_ai.describe_model: model_name is required
+# 5. update_model
+# 5.1 update description and model_params
+CALL dbms_ai.update_model('qwen_turbo', '{"description":"Updated Qwen Turbo", "model_params":"temperature=0.5"}');
+# 5.2 verify update took effect
+CALL dbms_ai.describe_model('qwen_turbo');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+qwen_turbo	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-turbo	sk-7****0798	temperature=0.5	ACTIVE	Updated Qwen Turbo
+# 5.3 update with empty options should fail
+CALL dbms_ai.update_model('qwen_turbo', '');
+ERROR HY000: dbms_ai.update_model: options_json is required
+# 5.4 update with invalid JSON should fail
+CALL dbms_ai.update_model('qwen_turbo', 'not json');
+ERROR HY000: dbms_ai.update_model: invalid JSON in options
+# 5.5 update non-existent model should fail
+CALL dbms_ai.update_model('no_such_model', '{"description":"x"}');
+ERROR HY000: dbms_ai: model 'no_such_model' not found
+# 5.6 update provider to openai
+CALL dbms_ai.update_model('qwen_turbo', '{"provider":"openai"}');
+CALL dbms_ai.describe_model('qwen_turbo');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+qwen_turbo	openai	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-turbo	sk-7****0798	temperature=0.5	ACTIVE	Updated Qwen Turbo
+# 5.7 update provider back to dashscope
+CALL dbms_ai.update_model('qwen_turbo', '{"provider":"dashscope"}');
+# 5.8 update with invalid provider should fail
+CALL dbms_ai.update_model('qwen_turbo', '{"provider":"invalid_provider"}');
+ERROR HY000: dbms_ai.update_model: provider must be 'dashscope' or 'openai', got 'invalid_provider'
+# 5.9 update with unrecognized JSON key should fail
+CALL dbms_ai.update_model('qwen_turbo', '{"unknown_key":"value"}');
+ERROR HY000: dbms_ai.update_model: no updatable field found in options. Supported fields: endpoint, provider, model, api_key, model_params, status, description
+# 5.10 update endpoint accepts HTTP (no scheme restriction in kernel)
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"http://example.com/api"}');
+# restore endpoint for subsequent tests
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"}');
+# 5.11 update with empty JSON object should fail
+CALL dbms_ai.update_model('qwen_turbo', '{}');
+ERROR HY000: dbms_ai.update_model: no updatable field found in options. Supported fields: endpoint, provider, model, api_key, model_params, status, description
+# 5.12 update_model masks api_key in direct SELECT and calls use the restored key
+api_key
+******
+SELECT AI_PROMPT('Say exactly one word: cyan', 'qwen_turbo') IS NOT NULL;
+AI_PROMPT('Say exactly one word: cyan', 'qwen_turbo') IS NOT NULL
+1
+# 7. AI_PROMPT happy path
+# 7.1 AI_PROMPT with configured default model
+SELECT AI_PROMPT('Say exactly one word: hello') IS NOT NULL;
+AI_PROMPT('Say exactly one word: hello') IS NOT NULL
+1
+# 7.2 AI_PROMPT with explicit model name
+SELECT AI_PROMPT('Say exactly one word: blue', 'qwen_turbo') IS NOT NULL;
+AI_PROMPT('Say exactly one word: blue', 'qwen_turbo') IS NOT NULL
+1
+# 7.3 AI_PROMPT with options JSON (3rd arg)
+SELECT AI_PROMPT('Say exactly one word: yes', 'qwen_plus', '{"temperature":0.1, "max_tokens":10}') IS NOT NULL;
+AI_PROMPT('Say exactly one word: yes', 'qwen_plus', '{"temperature":0.1, "max_tokens":10}') IS NOT NULL
+1
+# 8. AI_PROMPT edge cases
+# 8.1 NULL prompt -> NULL (SQL scalar function convention)
+SELECT AI_PROMPT(NULL);
+AI_PROMPT(NULL)
+NULL
+# 8.2 non-existent model name -> error
+SELECT AI_PROMPT('hello', 'nonexistent_model');
+ERROR HY000: ai_prompt: model 'nonexistent_model' not found in ai_model_config. Register it first with CALL dbms_ai.register_model(...).
+# 8.3 model with no api_key -> falls back to env var (should succeed)
+SELECT AI_PROMPT('hello', 'no_key_model') IS NOT NULL;
+AI_PROMPT('hello', 'no_key_model') IS NOT NULL
+1
+# 8.4 model with invalid api_key -> HTTP 401 from API
+SELECT AI_PROMPT('hello', 'bad_key_model');
+ERROR HY000: AI: HTTP 401 error from remote server
+# 8.5 model with bad/unreachable endpoint -> connection error
+SELECT AI_PROMPT('hello', 'bad_url_model');
+ERROR HY000: AI: connection to this-host-does-not-exist.example.com:443 failed
+# 8.6 model without 'model' field -> fallback to model_name for API call
+SELECT AI_PROMPT('hello', 'no_model_field');
+ERROR HY000: AI: HTTP 400 error from remote server
+# 8b. AI_EMBEDDING tests
+# 8b.1 AI_EMBEDDING with configured default EMBEDDING model
+SELECT AI_EMBEDDING('What is PolarDB-X?') IS NOT NULL;
+AI_EMBEDDING('What is PolarDB-X?') IS NOT NULL
+1
+# 8b.2 AI_EMBEDDING with explicit model name
+SELECT AI_EMBEDDING('hello world', 'embed_v3') IS NOT NULL;
+AI_EMBEDDING('hello world', 'embed_v3') IS NOT NULL
+1
+# 8b.3 NULL text -> NULL (SQL scalar function convention)
+SELECT AI_EMBEDDING(NULL);
+AI_EMBEDDING(NULL)
+NULL
+# 8b.4 non-existent model -> error
+SELECT AI_EMBEDDING('hello', 'nonexistent_embed_model');
+ERROR HY000: AI_EMBEDDING: model 'nonexistent_embed_model' not found in ai_model_config. Register it first with CALL dbms_ai.register_model(...).
+# 8b.5 model with no api_key -> falls back to env var (should succeed)
+SELECT AI_EMBEDDING('hello', 'no_key_model');
+ERROR HY000: AI: HTTP 400 error from remote server
+# 8d. AI_CLASSIFY tests
+# 8d.1 basic classification
+SELECT AI_CLASSIFY('This product is excellent, very satisfied!', JSON_ARRAY('positive', 'negative', 'neutral')) IS NOT NULL;
+AI_CLASSIFY('This product is excellent, very satisfied!', JSON_ARRAY('positive', 'negative', 'neutral')) IS NOT NULL
+1
+# 8d.2 classification with explicit model
+SELECT AI_CLASSIFY('This is a technical article about databases', JSON_ARRAY('technology', 'finance', 'entertainment', 'sports'), 'qwen_plus') IS NOT NULL;
+AI_CLASSIFY('This is a technical article about databases', JSON_ARRAY('technology', 'finance', 'entertainment', 'sports'), 'qwen_plus') IS NOT NULL
+1
+# 8d.3 NULL text -> NULL (SQL scalar function convention)
+SELECT AI_CLASSIFY(NULL, JSON_ARRAY('a', 'b'));
+AI_CLASSIFY(NULL, JSON_ARRAY('a', 'b'))
+NULL
+# 8d.4 NULL categories -> NULL (SQL scalar function convention)
+SELECT AI_CLASSIFY('hello', NULL);
+AI_CLASSIFY('hello', NULL)
+NULL
+# 8d.5 non-existent model -> error
+SELECT AI_CLASSIFY('hello', JSON_ARRAY('a', 'b'), 'nonexistent_model');
+ERROR HY000: AI_CLASSIFY: model 'nonexistent_model' not found in ai_model_config.
+# 8d.6 classification with multi_label option
+SELECT AI_CLASSIFY('This article discusses AI technology applications in the finance industry', JSON_ARRAY('technology', 'finance', 'entertainment', 'sports'), '', '{"multi_label":true}') IS NOT NULL;
+AI_CLASSIFY('This article discusses AI technology applications in the finance industry', JSON_ARRAY('technology', 'finance', 'entertainment', 'sports'), '', '{"multi_label":true}') IS NOT NULL
+1
+# 8e. AI_EXTRACT tests
+# 8e.1 basic extraction
+SELECT AI_EXTRACT('Contact John, phone: 13800138000, email: john@example.com', JSON_OBJECT('name', 'Name', 'phone', 'Phone number', 'email', 'Email address')) IS NOT NULL;
+AI_EXTRACT('Contact John, phone: 13800138000, email: john@example.com', JSON_OBJECT('name', 'Name', 'phone', 'Phone number', 'email', 'Email address')) IS NOT NULL
+1
+# 8e.2 AI_EXTRACT with explicit model
+SELECT AI_EXTRACT('Contact Jane, mobile: 13900139000', JSON_OBJECT('name', 'Name', 'phone', 'Phone number'), 'qwen_plus') IS NOT NULL;
+AI_EXTRACT('Contact Jane, mobile: 13900139000', JSON_OBJECT('name', 'Name', 'phone', 'Phone number'), 'qwen_plus') IS NOT NULL
+1
+# 8e.3 NULL text -> NULL (SQL scalar function convention)
+SELECT AI_EXTRACT(NULL, JSON_OBJECT('name', 'Name'));
+AI_EXTRACT(NULL, JSON_OBJECT('name', 'Name'))
+NULL
+# 8e.4 NULL schema -> NULL (SQL scalar function convention)
+SELECT AI_EXTRACT('some text', NULL);
+AI_EXTRACT('some text', NULL)
+NULL
+# 8f. AI_SUMMARIZE tests
+# 8f.1 basic summarize (default max_length)
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba, featuring high availability, high performance, and horizontal scalability, widely used in e-commerce and finance scenarios.') IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba, featuring high availability, high performance, and horizontal scalability, widely used in e-commerce and finance scenarios.') IS NOT NULL
+1
+# 8f.2 summarize with max_length
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba, featuring high availability, high performance, and horizontal scalability.', 50) IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba, featuring high availability, high performance, and horizontal scalability.', 50) IS NOT NULL
+1
+# 8f.3 NULL text -> NULL (SQL scalar function convention)
+SELECT AI_SUMMARIZE(NULL);
+AI_SUMMARIZE(NULL)
+NULL
+# 8f.4 summarize with language option
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba.', 100, '', '{"language":"Chinese"}') IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system independently developed by Alibaba.', 100, '', '{"language":"Chinese"}') IS NOT NULL
+1
+# 8f.5 summarize with bullet_points style
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system. It features high availability and horizontal scalability. It is widely used in e-commerce and finance.', 200, '', '{"style":"bullet_points"}') IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system. It features high availability and horizontal scalability. It is widely used in e-commerce and finance.', 200, '', '{"style":"bullet_points"}') IS NOT NULL
+1
+# 9. drop_model
+# 9.1 drop qwen_turbo
+CALL dbms_ai.drop_model('qwen_turbo');
+# 9.2 verify it's gone
+CALL dbms_ai.describe_model('qwen_turbo');
+ERROR HY000: dbms_ai.describe_model: model 'qwen_turbo' not found
+# 9.3 list should show remaining models
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+qwen_plus	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+embed_v3	dashscope	https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v3	ACTIVE
+rerank_v2	dashscope	https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank	gte-rerank-v2	ACTIVE
+doc_parse	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-doc-turbo	ACTIVE
+vl_embed	dashscope	https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding	qwen3-vl-embedding	ACTIVE
+openai_llm	openai	https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions	qwen-plus	ACTIVE
+openai_embed	openai	https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings	text-embedding-v3	ACTIVE
+__POLARDBX_QWEN35_PLUS	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+no_key_model	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+bad_key_model	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+bad_url_model	dashscope	https://this-host-does-not-exist.example.com/v1/chat/completions	qwen-plus	ACTIVE
+no_model_field	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation		ACTIVE
+# 9.4 drop non-existent model should fail
+CALL dbms_ai.drop_model('no_such_model');
+ERROR HY000: dbms_ai: model 'no_such_model' not found
+# 9.5 drop with empty name should fail
+CALL dbms_ai.drop_model('');
+ERROR HY000: dbms_ai.drop_model: model_name is required
+# 8i. AI_SIMILARITY
+# 8i.1 cosine similarity of identical vectors = 1.0
+SELECT AI_SIMILARITY('[1.0, 0.0, 0.0]', '[1.0, 0.0, 0.0]');
+AI_SIMILARITY('[1.0, 0.0, 0.0]', '[1.0, 0.0, 0.0]')
+1
+# 8i.2 cosine similarity of orthogonal vectors = 0.0
+SELECT AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]');
+AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]')
+0
+# 8i.3 cosine similarity of opposite vectors = -1.0
+SELECT AI_SIMILARITY('[1.0, 0.0]', '[-1.0, 0.0]');
+AI_SIMILARITY('[1.0, 0.0]', '[-1.0, 0.0]')
+-1
+# 8i.4 cosine of non-trivial vectors
+SELECT AI_SIMILARITY('[0.6, 0.8]', '[0.8, 0.6]');
+AI_SIMILARITY('[0.6, 0.8]', '[0.8, 0.6]')
+0.96
+# 8i.5 euclidean distance
+SELECT AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]', 'euclidean');
+AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]', 'euclidean')
+1.4142135623730951
+# 8i.6 dot product
+SELECT AI_SIMILARITY('[3.0, 4.0]', '[1.0, 2.0]', 'dot');
+AI_SIMILARITY('[3.0, 4.0]', '[1.0, 2.0]', 'dot')
+11
+# 8i.7 explicit cosine
+SELECT AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]', 'cosine');
+AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]', 'cosine')
+0
+# 8i.8 invalid sim_type should fail
+SELECT AI_SIMILARITY('[1.0, 0.0]', '[0.0, 1.0]', 'manhattan');
+ERROR HY000: AI_SIMILARITY: unsupported similarity type 'manhattan'. Supported types: cosine, euclidean, dot
+# 8i.9 dimension mismatch should fail
+SELECT AI_SIMILARITY('[1.0, 2.0]', '[1.0, 2.0, 3.0]');
+ERROR HY000: AI_SIMILARITY: vectors have different dimensions (2 vs 3).
+# 8i.10 empty vectors should fail
+SELECT AI_SIMILARITY('[]', '[]');
+ERROR HY000: AI_SIMILARITY: vectors are empty.
+# 8i.11 model name with vector args (4-arg) should fail
+SELECT AI_SIMILARITY('[1,0]', '[0,1]', 'cosine', 'some_model');
+ERROR HY000: AI_SIMILARITY: both arguments are vectors; model name 'some_model' is not applicable.
+# 8i.12 empty text input should fail
+SELECT AI_SIMILARITY('', '[1.0, 2.0, 3.0]');
+ERROR HY000: Incorrect arguments to ai_similarity
+# 8i.13 text vs pre-stored vector (auto-embeds arg1)
+SELECT AI_SIMILARITY('database technology', AI_EMBEDDING('Cloud native distributed database system', 'embed_v3')) IS NOT NULL;
+AI_SIMILARITY('database technology', AI_EMBEDDING('Cloud native distributed database system', 'embed_v3')) IS NOT NULL
+1
+# 8i.14 non-existent model for text mode should fail (4-arg)
+SELECT AI_SIMILARITY('hello', 'world', 'cosine', 'nonexistent_model');
+ERROR HY000: ai_similarity: model 'nonexistent_model' not found in ai_model_config.
+# 8i.15 text vs text with default embedding (happy path, needs API)
+SELECT AI_SIMILARITY('PolarDB-X is a distributed database', 'Cloud native distributed database system') IS NOT NULL;
+AI_SIMILARITY('PolarDB-X is a distributed database', 'Cloud native distributed database system') IS NOT NULL
+1
+# 8i.16 semantic similarity: related > unrelated (may fail on API error)
+SELECT AI_SIMILARITY('PolarDB-X is a distributed database', 'Cloud native distributed database system') IS NOT NULL;
+AI_SIMILARITY('PolarDB-X is a distributed database', 'Cloud native distributed database system') IS NOT NULL
+1
+# 8i.17 VECTOR column args are recognized without an embedding call
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE ai_sim_vec (id INT PRIMARY KEY, embedding VECTOR(4));
+INSERT INTO ai_sim_vec VALUES (1, VEC_FROMTEXT('[0.1,0.2,0.3,0.4]'));
+INSERT INTO ai_sim_vec VALUES (2, VEC_FROMTEXT('[0.4,0.3,0.2,0.1]'));
+# 8i.17a VEC_TOTEXT of a VECTOR column vs identical JSON text vector
+SELECT AI_SIMILARITY(VEC_TOTEXT(embedding), '[0.1,0.2,0.3,0.4]') FROM ai_sim_vec WHERE id = 1;
+AI_SIMILARITY(VEC_TOTEXT(embedding), '[0.1,0.2,0.3,0.4]')
+0.9999999999999998
+# 8i.17b two VECTOR columns computed directly
+SELECT AI_SIMILARITY(
+(SELECT embedding FROM ai_sim_vec WHERE id = 1),
+(SELECT embedding FROM ai_sim_vec WHERE id = 2)) AS sim;
+sim
+0.6666666666666665
+# 8i.17c VECTOR column vs JSON text vector
+SELECT AI_SIMILARITY(embedding, '[0.1,0.2,0.3,0.4]') FROM ai_sim_vec WHERE id = 1;
+AI_SIMILARITY(embedding, '[0.1,0.2,0.3,0.4]')
+0.9999999999999998
+DROP TABLE ai_sim_vec;
+SET GLOBAL vidx_disabled = ON;
+# 8j. AI_RANK
+# 8j.1 missing query argument (NULL) -> NULL
+SELECT AI_RANK(NULL, 'some text');
+AI_RANK(NULL, 'some text')
+NULL
+# 8j.2 missing candidate argument (NULL) -> NULL
+SELECT AI_RANK('query', NULL);
+AI_RANK('query', NULL)
+NULL
+# 8j.3 non-existent model should fail
+SELECT AI_RANK('query', 'candidate', 'nonexistent_rerank_model');
+ERROR HY000: AI_RANK: model 'nonexistent_rerank_model' not found in ai_model_config.
+# 8j.4 AI_RANK happy path with configured default RERANK model
+SELECT AI_RANK('database optimization', 'Top 10 best practices for database index design and query optimization') IS NOT NULL;
+AI_RANK('database optimization', 'Top 10 best practices for database index design and query optimization') IS NOT NULL
+1
+# 8j.5 AI_RANK with explicit model
+SELECT AI_RANK('database optimization', 'Index design best practices', 'rerank_v2') IS NOT NULL;
+AI_RANK('database optimization', 'Index design best practices', 'rerank_v2') IS NOT NULL
+1
+# 8j.6 empty query should fail
+SELECT AI_RANK('', 'some text');
+ERROR HY000: Incorrect arguments to ai_rank
+# 8j.7 empty candidate should fail
+SELECT AI_RANK('query', '');
+ERROR HY000: Incorrect arguments to ai_rank
+# 8k. AI_PARSE_DOCUMENT
+# 8k.1 missing URL argument (NULL) -> NULL
+SELECT AI_PARSE_DOCUMENT(NULL);
+AI_PARSE_DOCUMENT(NULL)
+NULL
+# 8k.2 empty URL should fail
+SELECT AI_PARSE_DOCUMENT('');
+ERROR HY000: Incorrect arguments to ai_parse_document
+# 8k.3 AI_PARSE_DOCUMENT happy path with configured default model
+SELECT AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx') IS NOT NULL;
+AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx') IS NOT NULL
+1
+# 8k.4 AI_PARSE_DOCUMENT with explicit input_format (2-arg)
+SELECT AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx', 'auto') IS NOT NULL;
+AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx', 'auto') IS NOT NULL
+1
+# 8k.5 AI_PARSE_DOCUMENT with explicit model (3-arg)
+SELECT AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx', 'auto', 'doc_parse') IS NOT NULL;
+AI_PARSE_DOCUMENT('https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20251107/jockge/%E7%A4%BA%E4%BE%8B%E4%BA%A7%E5%93%81%E6%89%8B%E5%86%8CA.docx', 'auto', 'doc_parse') IS NOT NULL
+1
+# 8k.6 AI_PARSE_DOCUMENT with non-existent model should fail (3-arg)
+SELECT AI_PARSE_DOCUMENT('https://example.com/doc.pdf', 'auto', 'nonexistent_doc_model');
+ERROR HY000: AI_PARSE_DOCUMENT: model 'nonexistent_doc_model' not found in ai_model_config.
+# 8k.7 AI_PARSE_DOCUMENT with invalid input_format should fail
+SELECT AI_PARSE_DOCUMENT('https://example.com/doc.pdf', 'invalid_format');
+ERROR HY000: AI_PARSE_DOCUMENT: invalid input_format 'invalid_format'. Supported: auto, text_only, text_and_images, or file-type aliases (pdf, word, image, etc.)
+# 8l. AI_VL_EMBEDDING
+# 8l.1 missing URL argument (NULL) -> NULL
+SELECT AI_VL_EMBEDDING(NULL);
+AI_VL_EMBEDDING(NULL)
+NULL
+# 8l.1b empty URL should fail
+SELECT AI_VL_EMBEDDING('');
+ERROR HY000: Incorrect arguments to ai_vl_embedding
+# 8l.2 non-existent model should fail
+SELECT AI_VL_EMBEDDING('https://example.com/image.jpg', 'nonexistent_vl');
+ERROR HY000: AI_VL_EMBEDDING: model 'nonexistent_vl' not found in ai_model_config.
+# 8l.3 AI_VL_EMBEDDING happy path with configured default model
+SELECT AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg') IS NOT NULL;
+AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg') IS NOT NULL
+1
+# 8l.4 AI_VL_EMBEDDING with dimension option (3-arg)
+SELECT AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg', 'vl_embed', '{"dimension":512}') IS NOT NULL;
+AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg', 'vl_embed', '{"dimension":512}') IS NOT NULL
+1
+# 8l.5 AI_VL_EMBEDDING with explicit content_type image
+SELECT AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg', '', '{"content_type":"image"}') IS NOT NULL;
+AI_VL_EMBEDDING('https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg', '', '{"content_type":"image"}') IS NOT NULL
+1
+# 8l.6 AI_VL_EMBEDDING invalid content_type should fail
+SELECT AI_VL_EMBEDDING('https://example.com/image.jpg', '', '{"content_type":"audio"}');
+ERROR HY000: AI_VL_EMBEDDING: invalid content_type 'audio'. Must be 'text', 'image' or 'video'.
+# 8l.7 AI_VL_EMBEDDING with plain text input (auto-detect as text)
+SELECT AI_VL_EMBEDDING('红色连衣裙') IS NOT NULL;
+AI_VL_EMBEDDING('红色连衣裙') IS NOT NULL
+1
+# 8l.8 AI_VL_EMBEDDING with explicit content_type text
+SELECT AI_VL_EMBEDDING('PolarDB-X 分布式数据库', '', '{"content_type":"text"}') IS NOT NULL;
+AI_VL_EMBEDDING('PolarDB-X 分布式数据库', '', '{"content_type":"text"}') IS NOT NULL
+1
+# 8m. AI_PROMPT supplemental
+# 8m.1 empty string prompt should fail
+SELECT AI_PROMPT('');
+ERROR HY000: ai_prompt: prompt cannot be empty
+# 8m.2 AI_PROMPT with system_prompt option
+SELECT AI_PROMPT('What role are you?', 'qwen_plus', '{"system_prompt":"You are a professional DBA"}') IS NOT NULL;
+AI_PROMPT('What role are you?', 'qwen_plus', '{"system_prompt":"You are a professional DBA"}') IS NOT NULL
+1
+# 8m.3 AI_PROMPT with invalid options JSON should fail
+SELECT AI_PROMPT('hello', 'qwen_plus', 'not json');
+ERROR HY000: ai_prompt: invalid options JSON
+# 8m.4 AI_PROMPT with stop parameter (string)
+SELECT AI_PROMPT('Count from 1 to 100', 'qwen_plus', '{"stop":"50", "max_tokens":200}') IS NOT NULL;
+AI_PROMPT('Count from 1 to 100', 'qwen_plus', '{"stop":"50", "max_tokens":200}') IS NOT NULL
+1
+# 8m.5 AI_PROMPT with stop parameter (array)
+SELECT AI_PROMPT('Count from 1 to 100', 'qwen_plus', '{"stop":["50","60"], "max_tokens":200}') IS NOT NULL;
+AI_PROMPT('Count from 1 to 100', 'qwen_plus', '{"stop":["50","60"], "max_tokens":200}') IS NOT NULL
+1
+# 8n. AI_EMBEDDING supplemental
+# 8n.1 empty string text -> NULL with warning (does not abort batch)
+SELECT AI_EMBEDDING('');
+AI_EMBEDDING('')
+NULL
+Warnings:
+Warning	1210	ai_embedding: empty input text returned NULL
+# 8n.2 AI_EMBEDDING with invalid options JSON should fail
+SELECT AI_EMBEDDING('hello', 'embed_v3', 'not valid json');
+ERROR HY000: AI_EMBEDDING: invalid options JSON
+# 8n.3 AI_EMBEDDING with dimension option (happy path)
+SELECT AI_EMBEDDING('hello world', 'embed_v3', '{"dimension":512}') IS NOT NULL;
+AI_EMBEDDING('hello world', 'embed_v3', '{"dimension":512}') IS NOT NULL
+1
+# 8n.4 NULL and empty rows return NULL without aborting the batch
+CREATE TABLE ai_embed_batch (id INT PRIMARY KEY, content TEXT);
+INSERT INTO ai_embed_batch VALUES (1, 'hello'), (2, NULL), (3, ''), (4, 'world');
+SELECT id, AI_EMBEDDING(content) IS NULL AS emb_is_null FROM ai_embed_batch ORDER BY id;
+id	emb_is_null
+1	0
+2	1
+3	1
+4	0
+Warnings:
+Warning	1210	ai_embedding: empty input text returned NULL
+DROP TABLE ai_embed_batch;
+# 8o. AI_EXTRACT supplemental
+# 8o.1 extract + JSON_EXTRACT to expand columns
+SELECT JSON_EXTRACT(result, '$.name') IS NOT NULL FROM (SELECT AI_EXTRACT('Contact John, phone: 13800138000, email: john@example.com', JSON_OBJECT('name', 'Name', 'phone', 'Phone number', 'email', 'Email address')) AS result) t;
+JSON_EXTRACT(result, '$.name') IS NOT NULL
+1
+# 8p. AI_SUMMARIZE supplemental
+# 8p.1 AI_SUMMARIZE with explicit model name
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system developed by Alibaba.', 50, 'qwen_plus') IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system developed by Alibaba.', 50, 'qwen_plus') IS NOT NULL
+1
+# 8q. Model management supplemental
+# 8q.1 register with __POLARDBX_ prefix should succeed
+CALL dbms_ai.register_model(
+'__POLARDBX_MY_MODEL',
+'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+'{"api_key":"sk-test", "description":"Prefixed model"}'
+);
+CALL dbms_ai.describe_model('__POLARDBX_MY_MODEL');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+__POLARDBX_MY_MODEL	dashscope	https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation	qwen-plus	****		ACTIVE	Prefixed model
+CALL dbms_ai.drop_model('__POLARDBX_MY_MODEL');
+# 8r. Table-based semantic search (skipped - network dependent)
+CREATE TABLE ai_test_docs (
+id INT AUTO_INCREMENT PRIMARY KEY,
+title VARCHAR(200),
+embedding TEXT
+);
+DROP TABLE ai_test_docs;
+# 8s. AI_RANK semantic correctness
+# 8s.1 relevant candidate scores higher than irrelevant (skipped - API dependent)
+SELECT AI_RANK('database performance optimization', 'SQL query tuning and indexing best practices') IS NOT NULL;
+AI_RANK('database performance optimization', 'SQL query tuning and indexing best practices') IS NOT NULL
+1
+# 8t. OpenAI-compatible protocol tests
+# 8t.1 AI_PROMPT with OpenAI-compatible model
+SELECT AI_PROMPT('Say exactly one word: green', 'openai_llm') IS NOT NULL;
+AI_PROMPT('Say exactly one word: green', 'openai_llm') IS NOT NULL
+1
+# 8t.2 AI_PROMPT with OpenAI model and options
+SELECT AI_PROMPT('Say exactly one word: red', 'openai_llm', '{"temperature":0.1, "max_tokens":10}') IS NOT NULL;
+AI_PROMPT('Say exactly one word: red', 'openai_llm', '{"temperature":0.1, "max_tokens":10}') IS NOT NULL
+1
+# 8t.2a AI_PROMPT with OpenAI model and stop parameter
+SELECT AI_PROMPT('Count from 1 to 100', 'openai_llm', '{"stop":["50"], "max_tokens":200}') IS NOT NULL;
+AI_PROMPT('Count from 1 to 100', 'openai_llm', '{"stop":["50"], "max_tokens":200}') IS NOT NULL
+1
+# 8t.3 AI_EMBEDDING with OpenAI-compatible model
+SELECT AI_EMBEDDING('What is PolarDB-X?', 'openai_embed') IS NOT NULL;
+AI_EMBEDDING('What is PolarDB-X?', 'openai_embed') IS NOT NULL
+1
+# 8t.4 AI_EMBEDDING with OpenAI model and dimension option
+SELECT AI_EMBEDDING('hello world', 'openai_embed', '{"dimension":512}') IS NOT NULL;
+AI_EMBEDDING('hello world', 'openai_embed', '{"dimension":512}') IS NOT NULL
+1
+# 8t.5 AI_CLASSIFY with OpenAI-compatible LLM model
+SELECT AI_CLASSIFY('This product is excellent!', JSON_ARRAY('positive', 'negative', 'neutral'), 'openai_llm') IS NOT NULL;
+AI_CLASSIFY('This product is excellent!', JSON_ARRAY('positive', 'negative', 'neutral'), 'openai_llm') IS NOT NULL
+1
+# 8t.6 AI_EXTRACT with OpenAI-compatible LLM model
+SELECT AI_EXTRACT('Contact John, phone: 13800138000', JSON_OBJECT('name', 'Name', 'phone', 'Phone'), 'openai_llm') IS NOT NULL;
+AI_EXTRACT('Contact John, phone: 13800138000', JSON_OBJECT('name', 'Name', 'phone', 'Phone'), 'openai_llm') IS NOT NULL
+1
+# 8t.7 AI_SUMMARIZE with OpenAI-compatible LLM model
+SELECT AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system developed by Alibaba.', 50, 'openai_llm') IS NOT NULL;
+AI_SUMMARIZE('PolarDB-X is a cloud-native distributed database system developed by Alibaba.', 50, 'openai_llm') IS NOT NULL
+1
+# 8t.8 AI_VL_EMBEDDING with OpenAI provider should fail
+SELECT AI_VL_EMBEDDING('https://example.com/image.jpg', 'openai_llm');
+ERROR HY000: AI_VL_EMBEDDING: OpenAI provider is not supported. Use a DashScope model instead.
+# 8t.9 AI_PARSE_DOCUMENT with OpenAI provider should fail
+SELECT AI_PARSE_DOCUMENT('https://example.com/doc.pdf', 'auto', 'openai_llm');
+ERROR HY000: AI_PARSE_DOCUMENT: OpenAI provider is not supported. Use a DashScope model instead.
+# 8u. AI_TEXT2SQL
+# 8u.0 prepare schema context tables in a dedicated database
+CREATE DATABASE ai_t2s_real;
+USE ai_t2s_real;
+CREATE TABLE employees (
+id BIGINT PRIMARY KEY AUTO_INCREMENT,
+name VARCHAR(100) NOT NULL,
+department VARCHAR(50),
+salary DECIMAL(10,2),
+hire_date DATE
+);
+CREATE TABLE departments (
+id BIGINT PRIMARY KEY AUTO_INCREMENT,
+dept_name VARCHAR(100) NOT NULL,
+manager_id BIGINT
+);
+CREATE TABLE orders (
+id BIGINT PRIMARY KEY AUTO_INCREMENT,
+customer_name VARCHAR(100) NOT NULL,
+product VARCHAR(100) NOT NULL,
+quantity INT NOT NULL,
+total_price DECIMAL(10,2) NOT NULL,
+order_date DATE NOT NULL
+);
+INSERT INTO employees (name, department, salary, hire_date) VALUES
+('Alice', 'Engineering', 95000.00, '2020-01-15'),
+('Bob', 'Marketing', 75000.00, '2019-06-01'),
+('Charlie', 'Engineering', 110000.00, '2018-03-10');
+INSERT INTO departments (dept_name, manager_id) VALUES
+('Engineering', 3), ('Marketing', 2);
+INSERT INTO orders (customer_name, product, quantity, total_price, order_date) VALUES
+('Alice', 'Laptop', 1, 1299.99, '2024-01-15'),
+('Bob', 'Phone', 2, 1599.98, '2024-01-20');
+# 8u.1 AI_TEXT2SQL happy path with configured default model
+SELECT AI_TEXT2SQL('Find all employees') IS NOT NULL;
+AI_TEXT2SQL('Find all employees') IS NOT NULL
+1
+# 8u.2 basic select references the schema table
+SELECT UPPER(s) LIKE '%SELECT%' AND UPPER(s) LIKE '%EMPLOYEES%' AS basic_ok
+FROM (SELECT AI_TEXT2SQL('Find all employees') AS s) t;
+basic_ok
+1
+# 8u.3 filter query generates a WHERE clause on the schema column
+SELECT UPPER(s) LIKE '%WHERE%' AND UPPER(s) LIKE '%SALARY%' AS filter_ok
+FROM (SELECT AI_TEXT2SQL('Find employees with salary greater than 80000') AS s) t;
+filter_ok
+1
+# 8u.4 aggregation query generates aggregate + GROUP BY
+SELECT (UPPER(s) LIKE '%AVG%' OR UPPER(s) LIKE '%AVERAGE%')
+AND UPPER(s) LIKE '%GROUP BY%' AS agg_ok
+FROM (SELECT AI_TEXT2SQL('Calculate the average salary of employees by department') AS s) t;
+agg_ok
+1
+# 8u.5 cross-table query references the orders table
+SELECT UPPER(s) LIKE '%ORDERS%' AS cross_ok
+FROM (SELECT AI_TEXT2SQL('Show the total order amount for each customer') AS s) t;
+cross_ok
+1
+# 8u.6 explicit model references the departments table
+SELECT UPPER(s) LIKE '%DEPARTMENTS%' AS model_ok
+FROM (SELECT AI_TEXT2SQL('List all departments', 'qwen_plus') AS s) t;
+model_ok
+1
+# 8u.7 AI_TEXT2SQL with options JSON
+SELECT AI_TEXT2SQL('Find all employees', '', '{"temperature":0.1, "max_tokens":200}') IS NOT NULL;
+AI_TEXT2SQL('Find all employees', '', '{"temperature":0.1, "max_tokens":200}') IS NOT NULL
+1
+# 8u.8 AI_TEXT2SQL with OpenAI-compatible model
+SELECT UPPER(s) LIKE '%SELECT%' AS openai_ok
+FROM (SELECT AI_TEXT2SQL('Find all employees', 'openai_llm') AS s) t;
+openai_ok
+1
+# 8u.9 Chinese prompt maps to English schema identifiers
+SELECT UPPER(s) LIKE '%EMPLOYEES%' AND UPPER(s) LIKE '%SALARY%' AS zh_ok
+FROM (SELECT AI_TEXT2SQL('查询工资高于80000的员工姓名') AS s) t;
+zh_ok
+1
+# 8u.10 generated SQL is executable against the schema
+# generated SQL executed successfully
+# 8u.11 NULL prompt -> NULL (SQL scalar function convention)
+SELECT AI_TEXT2SQL(NULL);
+AI_TEXT2SQL(NULL)
+NULL
+# 8u.12 cleanup text2sql database
+DROP DATABASE ai_t2s_real;
+USE test;
+# 9. Real-call validation of DASHSCOPE_API_KEY fallback path
+# 9.1 registered model has empty api_key, must fall back to DASHSCOPE_API_KEY
+SELECT AI_PROMPT('Say exactly one word: ok', '__POLARDBX_QWEN35_PLUS') IS NOT NULL;
+AI_PROMPT('Say exactly one word: ok', '__POLARDBX_QWEN35_PLUS') IS NOT NULL
+1
+# 10. Cleanup
+CALL dbms_ai.drop_model('qwen_plus');
+CALL dbms_ai.drop_model('embed_v3');
+CALL dbms_ai.drop_model('rerank_v2');
+CALL dbms_ai.drop_model('doc_parse');
+CALL dbms_ai.drop_model('vl_embed');
+CALL dbms_ai.drop_model('no_key_model');
+CALL dbms_ai.drop_model('bad_key_model');
+CALL dbms_ai.drop_model('bad_url_model');
+CALL dbms_ai.drop_model('no_model_field');
+CALL dbms_ai.drop_model('openai_llm');
+CALL dbms_ai.drop_model('openai_embed');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN35_PLUS');
+# 10.1 verify all cleaned up
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS

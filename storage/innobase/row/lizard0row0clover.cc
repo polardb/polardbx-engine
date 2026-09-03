@@ -32,9 +32,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "row0row.h"
 
-#include "lizard0row0clover.h"
-#include "lizard0undo.h"
+#include "lizard0dbg.h"
 #include "lizard0page.h"
+#include "lizard0rem0slc.h"
+#include "lizard0row0clover.h"
+#include "lizard0trx.h"
+#include "lizard0undo.h"
 
 namespace lizard {
 /**
@@ -58,7 +61,9 @@ void row_upd_index_entry_clover_field(que_thr_t *thr, dtuple_t *entry,
     txn_desc = &txn_sys_t::instance()->txn_desc_temp;
   } else {
     trx_t *trx = thr_get_trx(thr);
-    assert_txn_desc_allocated(trx);
+    ut_ad(trx->txn_desc.is_slot_alloced());
+    ut_ad(trx->txn_desc.is_cmmt_initial());
+
     txn_desc = &trx->txn_desc;
   }
 
@@ -66,7 +71,7 @@ void row_upd_index_entry_clover_field(que_thr_t *thr, dtuple_t *entry,
   pos = index->get_sys_col_pos(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_scn(ptr, txn_desc);
+  trx_write_scn(ptr, txn_desc->cmmt.scn);
   pos++;
 
   /** 2. Populate UBA */
@@ -74,7 +79,7 @@ void row_upd_index_entry_clover_field(que_thr_t *thr, dtuple_t *entry,
 
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_undo_ptr(ptr, txn_desc);
+  trx_write_undo_ptr(ptr, txn_desc->undo_ptr);
   pos++;
 
   /** 3. Populate GCN */
@@ -82,7 +87,7 @@ void row_upd_index_entry_clover_field(que_thr_t *thr, dtuple_t *entry,
 
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_gcn(ptr, txn_desc);
+  trx_write_gcn(ptr, txn_desc->cmmt.gcn);
 }
 
 /**
@@ -94,20 +99,20 @@ void row_upd_index_entry_clover_field(que_thr_t *thr, dtuple_t *entry,
   @param[in]      undo_ptr  UBA
   @param[in]      gcn       GCN
 */
-void row_upd_rec_write_clover(rec_t *rec, const dict_index_t *index,
-                              const ulint *offsets, const scn_t scn,
-                              const undo_ptr_t uba, const gcn_t gcn) {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+void row_upd_rec_write_clover(Slice *slc, const dict_index_t *index,
+                              const scn_t scn, const undo_ptr_t uba,
+                              const gcn_t gcn) {
+  ut_ad(slc->is_positioned(index));
   ut_ad(index->is_clustered());
 
   ulint len;
-  ulint offset = rec_get_nth_field_offs(
-      index, offsets, index->get_sys_col_pos(DATA_SCN_ID), &len);
+  ulint offset =
+      slc->get_nth_sys_field_offs(DATA_SCN_ID, ULINT_UNDEFINED, &len);
   ut_ad(len == DATA_SCN_ID_LEN);
 
-  trx_write_scn(rec + offset, scn);
-  trx_write_undo_ptr(rec + offset + DATA_SCN_ID_LEN, uba);
-  trx_write_gcn(rec + offset + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN, gcn);
+  trx_write_scn(slc->rec() + offset, scn);
+  trx_write_undo_ptr(slc->rec() + offset + DATA_SCN_ID_LEN, uba);
+  trx_write_gcn(slc->rec() + offset + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN, gcn);
 }
 /**
   Write clover layout fields of the physical record.
@@ -130,19 +135,18 @@ void row_upd_rec_write_clover(byte *ptr, const scn_t scn,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_desc  txn description
 */
-void row_upd_rec_clover_fields_low(rec_t *rec, page_zip_des_t *page_zip,
-                                   const dict_index_t *index,
-                                   const ulint *offsets, const scn_t scn,
+void row_upd_rec_clover_fields_low(Slice *slc, page_zip_des_t *page_zip,
+                                   const dict_index_t *index, const scn_t scn,
                                    const undo_ptr_t uba, const gcn_t gcn) {
   ut_ad(index->is_clustered());
-  assert_undo_ptr_allocated(uba);
+  ut_ad(undo_addr_t::decode_is_allocated(uba));
 
   if (page_zip) {
     ulint pos = index->get_sys_col_pos(DATA_SCN_ID);
-    page_zip_write_clover(page_zip, index, rec, offsets, pos, scn, uba, gcn);
+    page_zip_write_clover(page_zip, index, slc, pos, scn, uba, gcn);
 
   } else {
-    row_upd_rec_write_clover(rec, index, offsets, scn, uba, gcn);
+    row_upd_rec_write_clover(slc, index, scn, uba, gcn);
   }
 }
 
@@ -155,16 +159,15 @@ void row_upd_rec_clover_fields_low(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_rec   scn/uba/gcn info
 */
-void row_upd_rec_clover_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
+void row_upd_rec_clover_fields_in_cleanout(Slice *slc, page_zip_des_t *page_zip,
                                            const dict_index_t *index,
-                                           const ulint *offsets,
                                            const txn_rec_t *txn_rec) {
   ut_ad(index->is_clustered());
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_temporary());
 
   lizard_ut_ad(txn_rec->is_committed());
-  row_upd_rec_clover_fields_low(rec, page_zip, index, offsets, txn_rec->scn,
+  row_upd_rec_clover_fields_low(slc, page_zip, index, txn_rec->scn,
                                 txn_rec->undo_ptr, txn_rec->gcn);
 }
 
@@ -175,14 +178,19 @@ void row_upd_rec_clover_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      offsets
 */
 static ulint row_get_clover_offset(const dict_index_t *index, ulint type,
-                                   const ulint *offsets) {
+                                   const Slice *slc) {
   ulint offset = 0;
   ut_ad(index->is_clustered());
   ut_ad(!index->table->is_intrinsic());
 
   offset = index->trx_id_offset;
   if (!offset) {
-    offset = row_get_trx_id_offset(index, offsets);
+    offset = row_get_trx_id_offset(index, slc);
+  }
+
+  /** Performance */
+  if (type == DATA_TRX_ID) {
+    return offset;
   }
 
   switch (type) {
@@ -213,7 +221,7 @@ static ulint row_get_clover_offset(const dict_index_t *index, ulint type,
   ulint len;
   ulint d_pos = index->get_sys_col_pos(type);
   ut_a(d_pos == index->n_uniq + type - 1);
-  ulint d_offset = rec_get_nth_field_offs(index, offsets, d_pos, &len);
+  ulint d_offset = slc->get_nth_sys_field_offs(type, d_pos, &len);
 
   if (type == DATA_SCN_ID) {
     ut_ad(len == DATA_SCN_ID_LEN);
@@ -234,7 +242,6 @@ static ulint row_get_clover_offset(const dict_index_t *index, ulint type,
    return offset;
 }
 
-
 /**
   Read Clover layout txn fields from record
 
@@ -243,28 +250,28 @@ static ulint row_get_clover_offset(const dict_index_t *index, ulint type,
   @param[in]      offsets     rec_get_offsets(rec, index)
   @param[out]     txn_rec     lizard transaction attributes
 */
-void row_get_clover_txn_rec(const rec_t *rec, const dict_index_t *index,
-                            const ulint *offsets, txn_rec_t *txn_rec) {
-  ulint offset;
+void row_get_clover_txn_rec(const Slice *slc, const dict_index_t *index,
+                            txn_rec_t *txn_rec) {
+   ulint offset;
 
-  ut_ad(index->is_clustered());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+   ut_ad(index->is_clustered());
+   ut_ad(slc->is_positioned(index));
 
-  offset = row_get_clover_offset(index, DATA_TRX_ID, offsets);
+   offset = row_get_clover_offset(index, DATA_TRX_ID, slc);
 
-  txn_rec->trx_id = trx_read_trx_id(rec + offset);
-  offset += (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
+   txn_rec->trx_id = trx_read_trx_id(slc->rec() + offset);
+   offset += (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
 
-  txn_rec->scn = trx_read_scn(rec + offset);
-  offset += DATA_SCN_ID_LEN;
+   txn_rec->scn = trx_read_scn(slc->rec() + offset);
+   offset += DATA_SCN_ID_LEN;
 
-  txn_rec->undo_ptr = trx_read_undo_ptr(rec + offset);
-  offset += DATA_UNDO_PTR_LEN;
+   txn_rec->undo_ptr = trx_read_undo_ptr(slc->rec() + offset);
+   offset += DATA_UNDO_PTR_LEN;
 
-  txn_rec->gcn = trx_read_gcn(rec + offset);
+   txn_rec->gcn = trx_read_gcn(slc->rec() + offset);
 
-  /** Confirm validation of txn rec. */
-  ut_ad(lizard::txn_rec_validate(txn_rec, index));
+   /** Confirm validation of txn rec. */
+   ut_ad(txn_rec->is_validate(index));
 }
 
 /**
@@ -275,29 +282,27 @@ void row_get_clover_txn_rec(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      cleanout
 */
-bool row_clover_has_cleanout(const rec_t *rec, const dict_index_t *index,
-                                    const ulint *offsets) {
-  undo_addr_t undo_addr;
-  txn_rec_t txn_rec;
-  ut_ad(index->is_clustered());
-  ut_ad(!index->table->is_intrinsic());
 
-  /**
-    Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
-  */
-  if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
-    row_get_clover_txn_rec(rec, index, offsets, &txn_rec);
-    undo_addr.decode(txn_rec.undo_ptr);
+bool row_clover_has_cleanout(const Slice *slc, const dict_index_t *index) {
+   txn_rec_t txn_rec;
+   ut_ad(index->is_clustered());
+   ut_ad(!index->table->is_intrinsic());
+
+   /**
+     Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
+   */
+   if (rec_get_status(slc->rec()) == REC_STATUS_ORDINARY) {
+    row_get_clover_txn_rec(slc, index, &txn_rec);
+    undo_addr_t undo_addr(txn_rec.undo_ptr);
     /** UBA is valid */
-    undo_addr_validation(&undo_addr, index);
+    ut_ad(undo_addr.is_validate(index));
     /** commit */
     ut_a(txn_rec.is_committed());
     /** valid scn */
     ut_a(txn_rec.scn != SCN_NULL);
     ut_a(txn_rec.gcn != GCN_NULL);
-  }
-  return true;
-
+   }
+   return true;
 }
 
 /**
@@ -308,24 +313,21 @@ bool row_clover_has_cleanout(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      Success
 */
-bool row_clover_is_valid(const rec_t *rec, const dict_index_t *index,
-                         const ulint *offsets) {
-  undo_addr_t undo_addr;
-  txn_rec_t txn_rec;
-  ut_ad(index->is_clustered());
-  ut_ad(!index->table->is_intrinsic());
+bool row_clover_is_valid(const Slice *slc, const dict_index_t *index) {
+   txn_rec_t txn_rec;
+   ut_ad(index->is_clustered());
+   ut_ad(!index->table->is_intrinsic());
 
-  /**
-    Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
-    Skip the non-compact record
-  */
-  if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
-    row_get_clover_txn_rec(rec, index, offsets, &txn_rec);
-
-    undo_addr.decode(txn_rec.undo_ptr);
+   /**
+     Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
+     Skip the non-compact record
+   */
+   if (rec_get_status(slc->rec()) == REC_STATUS_ORDINARY) {
+    row_get_clover_txn_rec(slc, index, &txn_rec);
+    undo_addr_t undo_addr(txn_rec.undo_ptr);
 
     /** UBA is valid */
-    undo_addr_validation(&undo_addr, index);
+    ut_ad(undo_addr.is_validate(index));
 
     /** Scn and trx state are matched */
     ut_a(txn_rec.is_active() == (txn_rec.scn == SCN_NULL));
@@ -417,16 +419,15 @@ byte *row_upd_parse_clover_vals(const byte *ptr, const byte *end_ptr,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_clover_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
+void row_upd_rec_clover_fields_in_recovery(Slice *slc, page_zip_des_t *page_zip,
                                            const dict_index_t *index, ulint pos,
-                                           const ulint *offsets,
                                            const scn_t scn,
                                            const undo_ptr_t undo_ptr,
                                            const gcn_t gcn) {
   /** index->type (Log_Dummy) will not be set rightly if it's non-compact
   format, see function **mlog_parse_index** */
-  ut_ad(!rec_offs_comp(offsets) || index->is_clustered());
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(!rec_offs_comp(slc->offsets()) || index->is_clustered());
+  ut_ad(slc->validate());
 
   /** Lizard: This assertion is left, because we wonder if
   there will be a false case */
@@ -443,19 +444,16 @@ void row_upd_rec_clover_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
   //              index->get_sys_col_pos(DATA_SCN_ID) == pos);
 
   if (page_zip) {
-    page_zip_write_clover(page_zip, index, rec, offsets, pos, scn, undo_ptr,
-                          gcn);
+    page_zip_write_clover(page_zip, index, slc, pos, scn, undo_ptr, gcn);
   } else {
     byte *field;
     ulint len;
 
-    field =
-        const_cast<byte *>(rec_get_nth_field(index, rec, offsets, pos, &len));
+    field = slc->get_nth_field(index, pos, &len);
     ut_ad(len == DATA_SCN_ID_LEN);
 
     row_upd_rec_write_clover(field, scn, undo_ptr, gcn);
   }
 }
-
 
 }  // namespace lizard

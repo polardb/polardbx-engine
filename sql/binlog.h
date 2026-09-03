@@ -52,7 +52,10 @@
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "thr_mutex.h"
 
+namespace komodo {
 class Gcn_manager;
+struct ConsensusLogEntry;
+}
 
 class Format_description_log_event;
 class Gtid_monitoring_info;
@@ -69,7 +72,6 @@ class Transaction_boundary_parser;
 class binlog_cache_data;
 class user_var_entry;
 class Binlog_cache_storage;
-struct ConsensusLogEntry;
 
 struct Gtid;
 
@@ -554,7 +556,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
   std::pair<int, my_off_t> flush_thread_caches(THD *thd);
   int flush_cache_to_file(my_off_t *flush_end_pos);
   int finish_commit(THD *thd);
+ public:
   std::pair<bool, bool> sync_binlog_file(bool force);
+ private:
   void process_commit_stage_queue(THD *thd, THD *queue);
   void process_after_commit_stage_queue(THD *thd, THD *first);
 
@@ -846,8 +850,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
                          const char *new_name);
   int truncate_logs_from_index(std::vector<std::string> &files_list,
                                std::string last_file);
-  static void consensus_rollback_with_flush_nothing(THD *thd, bool is_my_thd);
-  static void consensus_wait_commit(THD *thd);
   int recover_intergrity_for_normandy(Binlog_file_reader *binlog_file_reader,
                                       Format_description_log_event *fdle,
                                       my_off_t *valid_pos);
@@ -916,7 +918,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   uint next_file_id();
 
   int build_consensus_log_index();
-  int init_last_index_of_term(uint64 term);
+  uint64 get_last_index_of_term(const uint64 term);
+  uint64 get_first_index_of_last_file_term(const uint64 term);
   int get_consensus_log_file_list(
       std::vector<std::string> &consensuslog_file_name_vector);
   int find_log_by_consensus_index(uint64 consensus_index,
@@ -931,11 +934,12 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int prefetch_logs_of_file(THD *thd, uint64 channel_id, const char *file_name,
                             uint64 start_index);
   int find_pos_by_consensus_index(const char *file_name, uint64 consensus_index,
-                                  uint64 *pos);
+                                  uint64 *pos, Gtid_set *truncated_gtids = nullptr);
   int truncate_files_after(std::string &file_name);
   int truncate_single_file_by_consensus_index(const char *file_name,
-                                              uint64 consensus_index,
-                                              uint64 *position_offset);
+                                              const uint64 consensus_index,
+                                              const uint64 position_offset);
+  int truncate_rli_gtid_set(const Gtid_set *truncated_gtids);
   int consensus_truncate_log(uint64 consensus_index);
   int consensus_get_log_position(uint64 consensus_index, char *file_name,
                                  uint64 *pos);
@@ -945,13 +949,12 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int consensus_prefetch_log_entries(THD *thd, uint64 channel_id,
                                      uint64 consensus_index);
 
-  int append_consensus_log(ConsensusLogEntry &log, uint64 *index,
+  int append_consensus_log(komodo::ConsensusLogEntry &log, uint64 *index,
                            bool *rotate_var, Relay_log_info *rli,
                            bool with_check = false);
-  int append_multi_consensus_logs(std::vector<ConsensusLogEntry> &logs,
+  int append_multi_consensus_logs(std::vector<komodo::ConsensusLogEntry> &logs,
                                   uint64 *max_index, bool *rotate_var,
                                   Relay_log_info *rli);
-  int rotate_consensus_log();
 
   /**
     Retrieves the contents of the index file associated with this log object
@@ -1062,9 +1065,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
                          bool need_lock_index, bool need_sid_lock,
                          Format_description_log_event *extra_description_event);
 
-  bool is_in_leader_transfer();
-
-  std::unique_ptr<Gcn_manager> gcn_mgr;
+  bool is_in_switchover();
 };
 
 struct LOAD_FILE_INFO {
@@ -1142,6 +1143,7 @@ int query_error_code(const THD *thd, bool not_killed);
 extern const char *log_bin_index;
 extern const char *log_bin_basename;
 extern bool opt_binlog_order_commits;
+extern bool binlog_rows_query_key_content_only;
 extern ulong rpl_read_size;
 /**
   Turns a relative log binary log path into a full path, based on the
@@ -1161,12 +1163,12 @@ extern ulong rpl_read_size;
 
 bool normalize_binlog_name(char *to, const char *from, bool is_relay_log);
 
-int flush_consensus_log(THD *thd, binlog_cache_data *binlog_cache,
-                        Binlog_event_writer *writer, bool &mark_as_rollback,
-                        my_off_t &bytes_in_cache);
-
 int fetch_binlog_by_offset(Binlog_file_reader &binlog_file_reader,
                            uint64 start_pos, uint64 end_pos,
                            Consensus_cluster_info_log_event *rci_ev,
                            std::string &log_content);
+
+void reset_binlog_cache_mngr(const THD *thd);
+void exec_binlog_error_action_exit(const char *err_string);
+
 #endif /* BINLOG_H_INCLUDED */

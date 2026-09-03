@@ -34,12 +34,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0row_h
 
 #include "lizard0cleanout.h"
-#include "lizard0data0types.h"
-#include "lizard0undo0types.h"
+#include "lizard0rem0types.h"
 
 #include "btr0cur.h"
 #include "mem0mem.h"
-#include "rem0types.h"
 
 struct ins_node_t;
 struct que_thr_t;
@@ -68,7 +66,6 @@ struct type_cmpl_t;
 
   Both durable and temporary table will add two new columns expect of
   intrinsic temproary table.
-
 
   Revision: Add gcn into record.
 */
@@ -100,14 +97,14 @@ void ins_alloc_txn_fields(ins_node_t *node);
 */
 bool validate_lizard_fields_in_record(const dict_index_t *index,
                                       const byte *scn_ptr_in_rec, ulint scn_pos,
-                                      const rec_t *rec, const ulint *offsets);
+                                      const Slice *slc);
 
 /**
-  Fill txn fields into index entry.
+  Fill txn fields into index entry and record if provided.
   @param[in]    thr       query
   @param[in]    entry     dtuple
-  @param[in]    index     panda index
-  @param[in]	layout
+  @param[in]    index     clustered index
+  @param[in]	layout      txn layout
 */
 void row_upd_index_entry_txn_field(que_thr_t *thr, dtuple_t *entry,
                                    dict_index_t *index,
@@ -122,8 +119,8 @@ void row_upd_index_entry_txn_field(que_thr_t *thr, dtuple_t *entry,
   @param[in]     layout    txn layout
   @param[in]     txn       txn description
 */
-void row_upd_rec_txn_fields(rec_t *rec, page_zip_des_t *page_zip,
-                            const dict_index_t *index, const ulint *offsets,
+void row_upd_rec_txn_fields(Slice *slc, page_zip_des_t *page_zip,
+                            const dict_index_t *index,
                             const txn_layout_t &layout, const txn_desc_t *txn);
 
 void row_log_entry_update_txn_field(dtuple_t *entry, const dict_index_t *index,
@@ -141,9 +138,8 @@ void row_log_entry_update_txn_field(dtuple_t *entry, const dict_index_t *index,
   @param[in]      layout      rec layout
   @param[out]     txn_rec     lizard transaction attributes
 */
-void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
-                     const ulint *offsets, const txn_layout_t &layout,
-                     txn_rec_t *txn_rec);
+void row_get_txn_rec(const Slice *slc, const dict_index_t *index,
+                     const txn_layout_t &layout, txn_rec_t *txn_rec);
 
 /*=============================================================================*/
 /* lizard record write/parse redo */
@@ -208,7 +204,7 @@ bool row_search_on_row_ref_for_panda(btr_pcur_t *pcur, ulint mode,
                                      dict_index_t *index, const dtuple_t *ref,
                                      mtr_t *mtr);
 
-extern bool row_panda_rec_neighbor_unique_check(const rec_t *rec,
+extern bool row_panda_rec_neighbor_unique_check(creg_t reg,
                                                 const dict_index_t *index);
 
 /**
@@ -221,52 +217,31 @@ extern bool row_panda_rec_neighbor_unique_check(const rec_t *rec,
 mem_heap_t *row_sel_decide_old_vers_heap(const dict_index_t *index,
                                          row_prebuilt_t *prebuilt);
 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
-/* lizard field debug */
+/* lizard field validation */
 /*=============================================================================*/
 /**
-  Debug the undo_ptr and scn in record is matched.
-  @param[in]      rec       record
+  Check the undo_ptr and scn in record is matched.
+  @param[in]      slc       record slice
   @param[in]      index     cluster index
-  @parma[in]      offsets   rec_get_offsets(rec, index)
+  @param[in]      layout    txn layout of the index
 
   @retval         true      Success
 */
-bool row_txn_is_valid(const rec_t *rec, const dict_index_t *index,
-                      const ulint *offsets, const txn_layout_t &layout);
+bool row_txn_is_valid(const Slice *slc, const dict_index_t *index,
+                      const txn_layout_t &layout);
 
 /**
-  Debug row has cleanout.
-  @param[in]      rec       record
+  Check row has cleanout.
+  @param[in]      slc       record slice
   @param[in]      index     cluster index
-  @parma[in]      offsets   rec_get_offsets(rec, index)
+  @param[in]      layout    txn layout of the index
 
   @retval         true      Success
 */
-bool row_txn_has_cleanout(const rec_t *rec, const dict_index_t *index,
-                          const ulint *offsets, const txn_layout_t &layout);
-
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
+bool row_txn_has_cleanout(const Slice *slc, const dict_index_t *index,
+                          const txn_layout_t &layout);
 
 } /* namespace lizard */
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-
-#define assert_row_txn_is_valid(rec, index, offsets, layout)     \
-  do {                                                           \
-    ut_a(lizard::row_txn_is_valid(rec, index, offsets, layout)); \
-  } while (0)
-
-#define assert_row_txn_has_cleanout(rec, index, offsets, layout)     \
-  do {                                                               \
-    ut_a(lizard::row_txn_has_cleanout(rec, index, offsets, layout)); \
-  } while (0)
-
-#else
-
-#define assert_row_txn_is_valid(rec, index, offsets, layout)
-#define assert_row_txn_has_cleanout(rec, index, offsets, layout)
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
 #endif /* lizard0row_h */

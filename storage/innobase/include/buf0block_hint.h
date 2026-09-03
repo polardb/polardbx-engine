@@ -37,6 +37,10 @@ class Block_hint {
   /** Clears currently stored pointer. */
   void clear();
 
+  /** Get the stored page id.
+  @return the page id stored at time of store() */
+  page_id_t page_id() const { return m_page_id; }
+
   /** Executes given function with the block pointer which was previously stored
   or with nullptr if the pointer is no longer valid, was cleared or not stored.
   @param[in]  f   The function to be executed. It will be passed the pointer.

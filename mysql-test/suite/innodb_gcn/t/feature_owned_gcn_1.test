@@ -153,7 +153,7 @@ xa prepare 'fwg_b6';
 --enable_query_log
 
 --exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
-SET @@SESSION.DEBUG= '+d, simulate_crash_after_consensus_append_log';
+SET @@SESSION.DEBUG= '+d, crash_after_append_log_in_sync';
 --error 2013
 xa commit 'fwg_b6';
 

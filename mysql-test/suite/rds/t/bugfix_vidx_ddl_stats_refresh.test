@@ -1,0 +1,93 @@
+##############################################################
+# Bugfix: the vidx DDL direct build must refresh persistent  #
+# InnoDB statistics before the #sql target is renamed.       #
+#                                                            #
+# A COPY ALTER creates its #sql target with an empty-table   #
+# statistics row (n_rows=0).  The background recalc thread   #
+# cannot process the #sql table while the ALTER holds its    #
+# MDL, and the graph build phase inserts no base rows, so on #
+# large tables the zero row survives the rename; ORDER BY    #
+# vec_distance queries then estimate records=0 and reject    #
+# the index just built (test_if_cheaper_vector_ordering:     #
+# limit > records/4).  The build epilogue now runs the       #
+# ha_analyze() refresh that INPLACE ADD INDEX gets from      #
+# alter_stats_rebuild().                                     #
+#                                                            #
+# STATS_AUTO_RECALC=0 pins the no-background-rescue state    #
+# deterministically on a small table (a large table reaches  #
+# it through timing alone).  Without the fix both            #
+# stats_refreshed probes below read 0 and the EXPLAIN key    #
+# column degrades to NULL (full scan + filesort).            #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE bugfix_vidx_ddl_stats_refresh;
+USE bugfix_vidx_ddl_stats_refresh;
+SET GLOBAL vidx_disabled = OFF;
+
+--echo # Case 1: serial build path (vidx_ddl_threads = 1)
+CREATE TABLE t_serial (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 120) {
+  eval INSERT INTO t_serial(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+
+# The CREATE wrote the empty-table statistics row and auto recalc is off:
+# nothing but the ALTER itself may repair it.
+SELECT n_rows FROM mysql.innodb_table_stats
+  WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_serial';
+
+SET SESSION vidx_ddl_threads = 1;
+ALTER TABLE t_serial ADD VECTOR INDEX vi(v) M=4 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10;
+
+SELECT n_rows > 0 AS stats_refreshed_serial FROM mysql.innodb_table_stats
+  WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_serial';
+
+# key column must be vi (vector index); without the fix the plan
+# degrades to key=NULL + Using filesort and the recorded result differs.
+--replace_column 10 #
+EXPLAIN SELECT id FROM t_serial ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3.5,4.5,5.5,6.5,7.5]')) LIMIT 10;
+
+--echo # Case 2: parallel build path (vidx_ddl_threads = 4)
+CREATE TABLE t_parallel (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 120) {
+  eval INSERT INTO t_parallel(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+
+SELECT n_rows FROM mysql.innodb_table_stats
+  WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_parallel';
+
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t_parallel ADD VECTOR INDEX vi(v) M=4 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10;
+
+SELECT n_rows > 0 AS stats_refreshed_parallel FROM mysql.innodb_table_stats
+  WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_parallel';
+
+--replace_column 10 #
+EXPLAIN SELECT id FROM t_parallel ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3.5,4.5,5.5,6.5,7.5]')) LIMIT 10;
+
+DROP TABLE t_serial;
+DROP TABLE t_parallel;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS bugfix_vidx_ddl_stats_refresh;

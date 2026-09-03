@@ -1,0 +1,83 @@
+--echo #
+--echo # 1. register a model with api_key
+--echo #
+--disable_query_log
+CALL dbms_ai.register_model(
+  'mask_secret_model',
+  'dashscope',
+  'http://example.com/api',
+  'qwen-mask',
+  '{"api_key":"sk-secret-for-mask", "description":"Mask secret model"}'
+);
+--enable_query_log
+
+--echo #
+--echo # 2. api_key is masked when mask_internal_user is disabled
+--echo #
+SET GLOBAL mask_internal_user=OFF;
+SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+SELECT CONCAT(api_key, ':suffix') AS api_key_expr FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+
+--echo #
+--echo # 3. updated api_key is masked too
+--echo #
+--disable_query_log
+CALL dbms_ai.update_model('mask_secret_model', '{"api_key":"sk-secret-updated"}');
+--enable_query_log
+SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+SELECT CONCAT(api_key, ':suffix') AS api_key_expr FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+
+--echo #
+--echo # 4. api_key remains masked when mask_internal_user is enabled
+--echo #
+SET GLOBAL mask_internal_user=ON;
+SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+SELECT CONCAT(api_key, ':suffix') AS api_key_expr FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+
+--echo #
+--echo # 5. api_key transfer is rejected while mask is enabled
+--echo #
+CREATE TABLE api_key_mask_sink(api_key TEXT);
+--error ER_COLUMNS_ENCRYPTION_TRANSFER
+INSERT INTO api_key_mask_sink SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+--error ER_COLUMNS_ENCRYPTION_TRANSFER
+SELECT api_key INTO @masked_api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+INSERT INTO api_key_mask_sink VALUES ('plain');
+--error ER_COLUMNS_ENCRYPTION_TRANSFER
+UPDATE api_key_mask_sink s JOIN mysql.ai_model_config c
+  ON c.model_name = 'mask_secret_model'
+  SET s.api_key = c.api_key;
+TRUNCATE TABLE api_key_mask_sink;
+
+--echo #
+--echo # 6. api_key mask can be disabled explicitly
+--echo #
+SET GLOBAL mask_ai_model_config_api_key=OFF;
+SELECT api_key <> '******' AS api_key_unmasked,
+       LEFT(api_key, 10) = CONCAT('$','AI_OBF','$','1:') AS api_key_has_prefix
+FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+INSERT INTO api_key_mask_sink SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+SELECT COUNT(*) AS inserted_rows FROM api_key_mask_sink;
+SELECT LEFT(api_key, 10) = CONCAT('$','AI_OBF','$','1:') AS inserted_has_prefix
+FROM api_key_mask_sink;
+SELECT api_key INTO @unmasked_api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+SELECT LEFT(@unmasked_api_key, 10) = CONCAT('$','AI_OBF','$','1:') AS variable_has_prefix;
+UPDATE api_key_mask_sink s JOIN mysql.ai_model_config c
+  ON c.model_name = 'mask_secret_model'
+  SET s.api_key = c.api_key;
+SELECT LEFT(api_key, 10) = CONCAT('$','AI_OBF','$','1:') AS updated_has_prefix
+FROM api_key_mask_sink;
+
+--echo #
+--echo # 7. api_key mask can be enabled again
+--echo #
+SET GLOBAL mask_ai_model_config_api_key=ON;
+SELECT api_key FROM mysql.ai_model_config WHERE model_name = 'mask_secret_model';
+
+--echo #
+--echo # 8. cleanup
+--echo #
+SET GLOBAL mask_internal_user=OFF;
+SET GLOBAL mask_ai_model_config_api_key=DEFAULT;
+DROP TABLE api_key_mask_sink;
+CALL dbms_ai.drop_model('mask_secret_model');

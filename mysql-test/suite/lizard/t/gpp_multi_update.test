@@ -1,0 +1,147 @@
+--echo #
+--echo # Test GPP (Guess Primary Page) support for multi-table UPDATE.
+--echo # When multi-table UPDATE uses the delayed update path (buffering rowids
+--echo # in a tmp table then calling ha_rnd_pos to read back), GPP should be
+--echo # used to speed up clustered index lookups.
+--echo #
+
+--source include/have_debug.inc
+
+# Save original values
+--let $orig_opt_index_format_gpp_enabled = `SELECT @@global.opt_index_format_gpp_enabled`
+--let $orig_innodb_lizard_stat_enabled = `SELECT @@global.innodb_lizard_stat_enabled`
+--let $orig_innodb_index_pos_guess_clust_enabled = `SELECT @@global.innodb_index_pos_guess_clust_enabled`
+
+# Enable GPP and statistics
+set global innodb_lizard_stat_enabled=on;
+set global innodb_index_pos_guess_clust_enabled=on;
+set opt_index_format_gpp_enabled=true;
+
+--echo # -----------------------------------------------------------------------
+--echo # Create two tables. t1 is the "driver" table, t2 is the table to be
+--echo # updated via the delayed path (non-immediate, buffered rowids).
+--echo # t2 has a LONGTEXT column to ensure InnoDB uses full row format and
+--echo # that the rowid + gpp_no are properly handled.
+--echo # -----------------------------------------------------------------------
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  val INT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  c INT NOT NULL,
+  data LONGTEXT,
+  PRIMARY KEY (id, name),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--echo # -----------------------------------------------------------------------
+--echo # Insert 100 rows into each table.
+--echo # -----------------------------------------------------------------------
+
+INSERT INTO t1 (id, val)
+WITH RECURSIVE seq AS (
+  SELECT 1 AS i
+  UNION ALL
+  SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT i, i * 10 FROM seq;
+
+INSERT INTO t2 (id, name, c, data)
+WITH RECURSIVE seq AS (
+  SELECT 1 AS i
+  UNION ALL
+  SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT
+  i,
+  CONCAT('user_', LPAD(i, 5, '0')),
+  100 - i,
+  REPEAT(CHAR(65 + (i MOD 26) USING ascii), 1500)
+FROM seq;
+
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 1: Multi-table UPDATE — update t2 via JOIN with t1.
+--echo # This triggers the delayed update path: rowids of t2 are buffered in a
+--echo # tmp table, then ha_rnd_pos is called with GM_MULTI_UPDATE to read back.
+--echo # -----------------------------------------------------------------------
+
+call dbms_stat.flush_gpp();
+
+UPDATE t1 JOIN t2 ON t1.id = t2.id
+SET t2.c = t2.c + 1;
+
+--let $mu_hit = query_get_value(show global status like "Lizard_multi_update_gpp_hit", Value, 1)
+--let $mu_miss = query_get_value(show global status like "Lizard_multi_update_gpp_miss", Value, 1)
+
+--let $assert_text = multi_update gpp total (hit+miss) should be 100
+--let $assert_cond = $mu_hit + $mu_miss = 100
+--source include/assert.inc
+
+--let $assert_text = multi_update gpp hit should be greater than 0
+--let $assert_cond = $mu_hit > 0
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Verify result correctness after the multi-table UPDATE.
+--echo # Original c = 100 - i, after +1 => c = 101 - i.
+--echo # -----------------------------------------------------------------------
+
+SELECT id, name, c FROM t2 ORDER BY id LIMIT 5;
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 2: Another multi-table UPDATE with a WHERE clause.
+--echo # Only 50 rows should be updated (t1.id <= 50).
+--echo # -----------------------------------------------------------------------
+
+call dbms_stat.flush_gpp();
+
+UPDATE t1 JOIN t2 ON t1.id = t2.id
+SET t2.c = t2.c + 1
+WHERE t1.val <= 500;
+
+--let $mu_hit = query_get_value(show global status like "Lizard_multi_update_gpp_hit", Value, 1)
+--let $mu_miss = query_get_value(show global status like "Lizard_multi_update_gpp_miss", Value, 1)
+
+--let $assert_text = multi_update gpp total (hit+miss) should be 50 with WHERE
+--let $assert_cond = $mu_hit + $mu_miss = 50
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 3: Verify no multi_update GPP stat when GPP is disabled.
+--echo # -----------------------------------------------------------------------
+
+set global innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+
+UPDATE t1 JOIN t2 ON t1.id = t2.id
+SET t2.c = t2.c + 1;
+
+--let $mu_hit = query_get_value(show global status like "Lizard_multi_update_gpp_hit", Value, 1)
+--let $mu_miss = query_get_value(show global status like "Lizard_multi_update_gpp_miss", Value, 1)
+
+--let $assert_text = multi_update gpp hit should be 0 when GPP disabled
+--let $assert_cond = $mu_hit = 0
+--source include/assert.inc
+
+--let $assert_text = multi_update gpp miss should be 0 when GPP disabled
+--let $assert_cond = $mu_miss = 0
+--source include/assert.inc
+
+set global innodb_index_pos_guess_clust_enabled=on;
+
+--echo # -----------------------------------------------------------------------
+--echo # Clean up
+--echo # -----------------------------------------------------------------------
+
+DROP TABLE t1, t2;
+
+--eval SET opt_index_format_gpp_enabled = $orig_opt_index_format_gpp_enabled
+--eval SET GLOBAL innodb_lizard_stat_enabled = $orig_innodb_lizard_stat_enabled
+--eval SET GLOBAL innodb_index_pos_guess_clust_enabled = $orig_innodb_index_pos_guess_clust_enabled

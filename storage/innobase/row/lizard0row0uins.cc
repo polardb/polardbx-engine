@@ -76,7 +76,7 @@ namespace lizard {
   ut_a(lizard::row_undo_reposition_panda_pcur(mode, index, node, &mtr));
 
   btr_cur = node->pcur.get_btr_cur();
-  ut_ad(rec_get_trx_id(btr_cur_get_rec(btr_cur), btr_cur->index) ==
+  ut_ad(rec_get_trx_id(btr_cur_get_reg(btr_cur), btr_cur->index) ==
         node->trx->id);
   ut_ad(!rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
                               dict_table_is_comp(btr_cur->index->table)));

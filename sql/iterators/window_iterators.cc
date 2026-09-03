@@ -306,8 +306,8 @@ bool read_frame_buffer_row(int64 rowno, Window *w,
 
   Window::Frame_buffer_position *cand = &w->m_frame_buffer_positions[use_idx];
 
-  int error =
-      t->file->ha_rnd_pos(w->frame_buffer()->record[0], cand->m_position);
+  int error = t->file->ha_rnd_pos(w->frame_buffer()->record[0],
+                                  cand->m_position, komodo::GM_NONE);
   if (error) {
     t->file->print_error(error, MYF(0));
     return true;

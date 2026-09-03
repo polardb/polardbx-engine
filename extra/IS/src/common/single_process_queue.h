@@ -35,13 +35,14 @@ class SingleProcessQueue {
  public:
   SingleProcessQueue() : stop_(false) { onProcess_.store(false); }
   virtual ~SingleProcessQueue() {}
-  bool push(TaskType *task) {
+  bool push(TaskType *&task) {
     std::lock_guard<std::mutex> lg(lock_);
     if (!stop_) {
       taskList_.push(task);
+      task = nullptr;
       return !onProcess_.load();
-    } else
-      return false;
+    }
+    return false;
   }
   void start() {
     std::lock_guard<std::mutex> lg(lock_);

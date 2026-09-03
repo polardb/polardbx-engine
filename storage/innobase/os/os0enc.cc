@@ -38,7 +38,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "mach0data.h"
 #include "os0file.h"
 #include "page0page.h"
+#include "srv0srv.h"
 #include "ut0crc32.h"
+#include "enc_checksum/enc_checksum.h"
 
 #include <errno.h>
 #include <mysql/components/services/keyring_generator.h>
@@ -207,6 +209,15 @@ char Encryption::s_uuid[Encryption::SERVER_UUID_LEN + 1] = {0};
 
 /** Tablespaces whose key needs to be reencrypted */
 std::vector<space_id_t> Encryption::s_tablespaces_to_reencrypt;
+
+void innodb_log_tde_enc_checksum_mismatch(space_id_t space_id,
+                                          page_no_t page_no) noexcept {
+  ib::error(ER_IB_MSG_ENC_CKSUM_FAIL) << space_id << ":" << page_no;
+}
+
+bool enc_checksum_verify_enabled() noexcept {
+  return srv_verify_enc_checksum && enc_checksum::Enc_checksum_is_active();
+}
 
 const char *Encryption::to_string(Type type) noexcept {
   switch (type) {
@@ -1086,6 +1097,8 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
                           byte *dst, ulint *dst_len) noexcept {
   /* For encrypting redo log, take another way. */
   ut_ad(!type.is_log());
+  ut_ad(m_type != NONE);
+  ut_a(m_key != nullptr);
 
 #ifdef UNIV_ENCRYPT_DEBUG
   {
@@ -1099,10 +1112,16 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
 
-  ut_ad(m_type != NONE);
-
   if (!encrypt_low(src, src_len, dst, dst_len)) {
     return (src);
+  }
+
+  {
+    auto *enc_checksum_service =
+        enc_checksum::Enc_checksum_service.load(std::memory_order_acquire);
+    enc_checksum_service->write_enc_checksum(dst, *dst_len, FIL_PAGE_DATA,
+                                             FIL_PAGE_END_LSN_OLD_CHKSUM,
+                                             m_key, m_klen);
   }
 
 #ifdef UNIV_ENCRYPT_DEBUG
@@ -1294,6 +1313,8 @@ dberr_t Encryption::decrypt(const IORequest &type, byte *src, ulint src_len,
     return DB_SUCCESS;
   }
 
+  ut_a(m_key != nullptr);
+
   /* For compressed page, we need to get the compressed size
   for decryption */
   const ulint page_type = mach_read_from_2(src + FIL_PAGE_TYPE);
@@ -1314,6 +1335,33 @@ dberr_t Encryption::decrypt(const IORequest &type, byte *src, ulint src_len,
       if (src_len < MIN_ENCRYPTION_LEN) {
         src_len = MIN_ENCRYPTION_LEN;
       }
+    }
+  }
+
+  /* DBUG: flip one ciphertext byte at most once per server lifetime so the
+     mismatch path runs and logs, while Buf_fetch::read_page() retries then
+     succeeds. Keep this outside srv_verify_enc_checksum so debug tests can
+     cover both enc_checksum-specific and legacy CRC reporting paths. */
+  DBUG_EXECUTE_IF("enc_checksum_corrupt_ciphertext_byte", {
+    static bool fired = false;
+    if (src_len > FIL_PAGE_DATA && !fired) {
+      fired = true;
+      src[FIL_PAGE_DATA] ^= 0x1;
+    }
+  });
+
+  if (enc_checksum_verify_enabled()) {
+    const space_id_t space_id =
+        mach_read_from_4(src + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
+    const page_no_t page_no = mach_read_from_4(src + FIL_PAGE_OFFSET);
+
+    auto *enc_checksum_service =
+        enc_checksum::Enc_checksum_service.load(std::memory_order_acquire);
+    if (!enc_checksum_service->verify_enc_checksum(src, src_len, FIL_PAGE_DATA,
+                                                   FIL_PAGE_END_LSN_OLD_CHKSUM,
+                                                   m_key, m_klen)) {
+      innodb_log_tde_enc_checksum_mismatch(space_id, page_no);
+      return (DB_IO_DECRYPT_FAIL);
     }
   }
 

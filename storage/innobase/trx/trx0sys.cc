@@ -53,8 +53,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 
-#include "lizard0erase.h"
-#include "lizard0read0types.h"
+#include "lizard0gcs.h"
+#include "lizard0gcs0read0types.h"
+#include "lizard0trx0erase.h"
+#include "lizard0trx0history.h"
 
 /** The transaction system */
 trx_sys_t *trx_sys = nullptr;
@@ -71,7 +73,7 @@ void lizard::Vision::check_trx_id_sanity(trx_id_t id,
     return;
   }
 
-  if (id >= trx_sys_get_next_trx_id_or_no()) {
+  if (id >= lizard::gcs_load_next_tid()) {
     ib::warn(ER_IB_MSG_1196)
         << "A transaction id"
         << " in a record of table " << name << " is newer than the"
@@ -100,46 +102,47 @@ void lizard::Vision::check_trx_id_sanity(trx_id_t id,
 uint trx_rseg_n_slots_debug = 0;
 #endif /* UNIV_DEBUG */
 
-/** Writes the value of max_trx_id to the file based trx system header. */
-void trx_sys_write_max_trx_id(void) {
-  mtr_t mtr;
-  trx_sysf_t *sys_header;
-
-  /* The final synchronization happens here between maximum 2 threads,
-  one holding the trx_sys_t::mutex and one holding the serialisation
-  mutex. They can concurrently enter here, and start their mtrs.
-  They will synchronize inside trx_sysf_get because only one of them
-  could succeed in acquiring the x-lock for the header page to modify.
-  That thread will then read the max_trx_id and write to the page.
-  After it finishes mtr_commit, the another thread will succeed in
-  acquiring the x-lock and it will again read the newest max_trx_id,
-  and possibly re-write it. */
-
-  ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
-
-  if (!srv_read_only_mode) {
-    DBUG_EXECUTE_IF(
-        "trx_sys_write_max_trx_id__all_blocked",
-        while (true) { std::this_thread::sleep_for(std::chrono::seconds(1)); });
-
-#ifdef UNIV_DEBUG
-    if ((trx_sys_gtids_mem_mutex_own())) {
-      DEBUG_SYNC_C("trx_sys_write_max_trx_id__ser");
-    }
-#endif /* UNIV_DEBUG */
-
-    mtr_start(&mtr);
-
-    sys_header = trx_sysf_get(&mtr);
-
-    const trx_id_t max_trx_id = trx_sys->next_trx_id_or_no.load();
-
-    mlog_write_ull(sys_header + TRX_SYS_TRX_ID_STORE, max_trx_id, &mtr);
-
-    mtr_commit(&mtr);
-  }
-}
-
+///** Writes the value of max_trx_id to the file based trx system header. */
+// void trx_sys_write_max_trx_id(void) {
+//   mtr_t mtr;
+//   trx_sysf_t *sys_header;
+//
+//   /* The final synchronization happens here between maximum 2 threads,
+//   one holding the trx_sys_t::mutex and one holding the serialisation
+//   mutex. They can concurrently enter here, and start their mtrs.
+//   They will synchronize inside trx_sysf_get because only one of them
+//   could succeed in acquiring the x-lock for the header page to modify.
+//   That thread will then read the max_trx_id and write to the page.
+//   After it finishes mtr_commit, the another thread will succeed in
+//   acquiring the x-lock and it will again read the newest max_trx_id,
+//   and possibly re-write it. */
+//
+//   ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
+//
+//   if (!srv_read_only_mode) {
+//     DBUG_EXECUTE_IF(
+//         "trx_sys_write_max_trx_id__all_blocked",
+//         while (true) { std::this_thread::sleep_for(std::chrono::seconds(1));
+//         });
+//
+// #ifdef UNIV_DEBUG
+//     if ((trx_sys_gtids_mem_mutex_own())) {
+//       DEBUG_SYNC_C("trx_sys_write_max_trx_id__ser");
+//     }
+// #endif /* UNIV_DEBUG */
+//
+//     mtr_start(&mtr);
+//
+//     sys_header = trx_sysf_get(&mtr);
+//
+//     const trx_id_t max_trx_id = trx_sys->next_trx_id_or_no.load();
+//
+//     mlog_write_ull(sys_header + TRX_SYS_TRX_ID_STORE, max_trx_id, &mtr);
+//
+//     mtr_commit(&mtr);
+//   }
+// }
+//
 void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn) {
   mtr_t mtr;
   mtr.start();
@@ -152,24 +155,41 @@ void trx_sys_persist_gtid_scn(scn_t gtid_trx_scn) {
 }
 
 void trx_sys_get_binlog_prepared(std::vector<txn_id_t> &txn_ids) {
+  //  /* Exit fast if no prepared transaction. */
+  //  if (trx_sys->n_prepared_trx == 0) {
+  //    trx_sys_mutex_exit();
+  //    return;
+  //  }
+  //  /* Check and find binary log prepared transaction. */
+  //  for (auto trx : trx_sys->rw_trx_list) {
+  //    assert_trx_in_rw_list(trx);
+  //    trx_mutex_enter(trx);
+  //    if (trx_state_eq(trx, TRX_STATE_PREPARED) && trx_is_mysql_xa(trx) &&
+  //        /** Temporary table modification maybe didn't allocate txn slot,
+  //         * we also didn't care of those data modification. */
+  //        trx->txn_desc.is_slot_alloced()) {
+  //      txn_ids.push_back({trx->id, trx->txn_desc.undo_ptr});
+  //    }
+  //    trx_mutex_exit(trx);
+  //  }
+  //  trx_sys_mutex_exit();
+
   trx_sys_mutex_enter();
-  /* Exit fast if no prepared transaction. */
-  if (trx_sys->n_prepared_trx == 0) {
-    trx_sys_mutex_exit();
-    return;
-  }
-  /* Check and find binary log prepared transaction. */
-  for (auto trx : trx_sys->rw_trx_list) {
+
+  /** Attention. xid will be reset when detach/attach, so hold trx sys mutex. */
+  lizard::gcs_iterate_rw_trx([&txn_ids](trx_t *trx) -> bool {
     assert_trx_in_rw_list(trx);
     trx_mutex_enter(trx);
     if (trx_state_eq(trx, TRX_STATE_PREPARED) && trx_is_mysql_xa(trx) &&
         /** Temporary table modification maybe didn't allocate txn slot,
          * we also didn't care of those data modification. */
-        trx->txn_desc.alloced()) {
+        trx->txn_desc.is_slot_alloced()) {
       txn_ids.push_back({trx->id, trx->txn_desc.undo_ptr});
     }
     trx_mutex_exit(trx);
-  }
+
+    return false;
+  });
   trx_sys_mutex_exit();
 }
 
@@ -432,23 +452,18 @@ const uint32_t max_rseg_init_threads = 4;
 /** Creates and initializes the central memory structures for the transaction
  system. This is called when the database is started.
  @return pair of min binary heaps of rsegs to purge / erase */
-std::pair<lizard::purge_heap_t *, lizard::erase_heap_t *>
-trx_sys_init_at_db_start(void) {
+lizard::pe_heap_t *trx_sys_init_at_db_start(void) {
   /** Lizard: comment out */
   // purge_pq_t *purge_queue;
-  lizard::purge_heap_t *purge_heap;
-  lizard::erase_heap_t *erase_heap;
-  trx_sysf_t *sys_header;
+  lizard::pe_heap_t *pe = nullptr;
+  // trx_sysf_t *sys_header;
   uint64_t rows_to_undo = 0;
   const char *unit = "";
 
   /* We create the min binary heap here and pass ownership to
   purge when we init the purge sub-system. Purge is responsible
   for freeing the binary heap. */
-  purge_heap = ut::new_withkey<lizard::purge_heap_t>(UT_NEW_THIS_FILE_PSI_KEY);
-  ut_a(purge_heap != nullptr);
-  erase_heap = ut::new_withkey<lizard::erase_heap_t>(UT_NEW_THIS_FILE_PSI_KEY);
-  ut_a(erase_heap != nullptr);
+  pe = lizard::history_sys->allocate_heap();
 
   if (srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN) {
     /* Create the memory objects for all the rollback segments
@@ -465,9 +480,9 @@ trx_sys_init_at_db_start(void) {
     using Clock_point = std::chrono::time_point<Clock>;
     Clock_point start = Clock::now();
     if (srv_rseg_init_threads > 1) {
-      trx_rsegs_parallel_init(purge_heap, erase_heap);
+      trx_rsegs_parallel_init(pe);
     } else {
-      trx_rsegs_init(purge_heap, erase_heap);
+      trx_rsegs_init(pe);
     }
     Clock_point end = Clock::now();
     const auto time_diff =
@@ -477,36 +492,36 @@ trx_sys_init_at_db_start(void) {
              (uint32_t)time_diff);
   }
 
-  mtr_t mtr;
-  mtr.start();
+  // mtr_t mtr;
+  // mtr.start();
 
-  sys_header = trx_sysf_get(&mtr);
+  //sys_header = trx_sysf_get(&mtr);
 
-  const trx_id_t max_trx_id =
-      mach_read_from_8(sys_header + TRX_SYS_TRX_ID_STORE);
+  //const trx_id_t max_trx_id =
+  //    mach_read_from_8(sys_header + TRX_SYS_TRX_ID_STORE);
 
-  /* VERY important: after the database is started, next_trx_id_or_no value
-  needs to be set to a higher value than the maximum of values that have ever
-  been used for either trx->id or trx->no. After that, it needs to be written
-  to the transaction system header page, before it is used the first time to
-  assign a new value for trx->id or trx->no. This way trx id values will not
-  overlap when the database is repeatedly crashed and restarted!
+  ///* VERY important: after the database is started, next_trx_id_or_no value
+  //needs to be set to a higher value than the maximum of values that have ever
+  //been used for either trx->id or trx->no. After that, it needs to be written
+  //to the transaction system header page, before it is used the first time to
+  //assign a new value for trx->id or trx->no. This way trx id values will not
+  //overlap when the database is repeatedly crashed and restarted!
 
-  Note, that the factor 2 in 2 * TRX_SYS_TRX_ID_WRITE_MARGIN is required,
-  because the next_trx_id_or_no might be increased concurrently in two
-  threads:
-    - one that has acquired trx_sys_mutex,
-    - and one that has acquired the trx_sys_serialisation_mutex.
-  If you decreased the factor 2, the test innodb.max_trx_id should fail. */
+  //Note, that the factor 2 in 2 * TRX_SYS_TRX_ID_WRITE_MARGIN is required,
+  //because the next_trx_id_or_no might be increased concurrently in two
+  //threads:
+  //  - one that has acquired trx_sys_mutex,
+  //  - and one that has acquired the trx_sys_serialisation_mutex.
+  //If you decreased the factor 2, the test innodb.max_trx_id should fail. */
 
-  trx_sys->next_trx_id_or_no.store(max_trx_id +
-                                   2 * trx_sys_get_trx_id_write_margin());
+  //trx_sys->next_trx_id_or_no.store(max_trx_id +
+  //                                 2 * trx_sys_get_trx_id_write_margin());
 
-  mtr.commit();
+  //mtr.commit();
 
-  trx_sys_mutex_enter();
-  trx_sys_write_max_trx_id();
-  trx_sys_mutex_exit();
+  //trx_sys_mutex_enter();
+  //trx_sys_write_max_trx_id();
+  //trx_sys_mutex_exit();
 
   trx_dummy_sess = sess_open();
 
@@ -517,37 +532,49 @@ trx_sys_init_at_db_start(void) {
   bootstrap mode. */
 
   trx_sys_mutex_enter();
+  uint64_t n_prepared_trx = 0;
+  uint64_t n_rw_trx = 0;
 
-  if (UT_LIST_GET_LEN(trx_sys->rw_trx_list) > 0) {
-    for (auto trx : trx_sys->rw_trx_list) {
-      ut_ad(trx->is_recovered);
-      assert_trx_in_rw_list(trx);
+  lizard::gcs_iterate_rw_trx([&](trx_t *trx) -> bool {
+    ut_ad(trx->is_recovered);
+    assert_trx_in_rw_list(trx);
 
-      if (trx_state_eq(trx, TRX_STATE_ACTIVE)) {
-        rows_to_undo += trx->undo_no;
-      }
+    /** Aggregate rw trx */
+    n_rw_trx += 1;
+
+    /** Aggregate undo rows to rollback. */
+    if (trx_state_eq(trx, TRX_STATE_ACTIVE)) {
+      rows_to_undo += trx->undo_no;
     }
 
+    /** Aggregate prepared trx */
+    if (trx_state_eq(trx, TRX_STATE_PREPARED)) {
+      n_prepared_trx += 1;
+    }
+    return false;
+  });
+
+  if (n_rw_trx > 0) {
     if (rows_to_undo > 1000000000) {
       unit = "M";
       rows_to_undo = rows_to_undo / 1000000;
     }
 
     ib::info(ER_IB_MSG_1198)
-        << UT_LIST_GET_LEN(trx_sys->rw_trx_list)
+        << n_rw_trx
         << " transaction(s) which must be rolled back or"
            " cleaned up in total "
         << rows_to_undo << unit << " row operations to undo";
 
     ib::info(ER_IB_MSG_1199)
-        << "Trx id counter is " << trx_sys_get_next_trx_id_or_no();
+        << "Trx id counter is " << lizard::gcs_load_next_tid();
   }
 
-  trx_sys->found_prepared_trx = trx_sys->n_prepared_trx > 0;
+  trx_sys->found_prepared_trx = n_prepared_trx > 0;
 
   trx_sys_mutex_exit();
 
-  return std::make_pair(purge_heap, erase_heap);
+  return pe;
 }
 
 /** Creates the trx_sys instance and initializes purge_queue and mutex. */
@@ -560,7 +587,7 @@ void trx_sys_create(void) {
   mutex_create(LATCH_ID_TRX_SYS, &trx_sys->mutex);
   mutex_create(LATCH_ID_TRX_SYS_GTIDS_MEM, &trx_sys->gtids_mem_mutex);
 
-  UT_LIST_INIT(trx_sys->rw_trx_list);
+  // UT_LIST_INIT(trx_sys->rw_trx_list);
   UT_LIST_INIT(trx_sys->mysql_trx_list);
 
   for (auto &shard : trx_sys->shards) {
@@ -598,7 +625,7 @@ void trx_sys_close(void) {
     return;
   }
 
-  ulint size = lizard::trx_vision_container_size();
+  ulint size = lizard::gcs_mvcc_size();
 
   if (size > 0) {
     ib::error(ER_IB_MSG_1201) << "All read views were not closed before"
@@ -609,9 +636,7 @@ void trx_sys_close(void) {
   sess_close(trx_dummy_sess);
   trx_dummy_sess = nullptr;
 
-  trx_purge_sys_close();
-
-  lizard::trx_erase_sys_close();
+  lizard::trx_history_sys_close();
 
   /* Only prepared or active-recovered transactions may be left in the system.
   The active-recovered transactions are allowed only if we did not force to
@@ -619,16 +644,21 @@ void trx_sys_close(void) {
   shutdown). Free all of them. */
   ut_d(trx_sys_after_background_threads_shutdown_validate());
 
-  while (auto trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list)) {
+  while (auto trx = lizard::gcs_get_rw_trx()) {
     trx_free_prepared_or_active_recovered(trx);
   }
+
+  //  while (auto trx = UT_LIST_GET_FIRST(trx_sys->rw_trx_list)) {
+  //    trx_free_prepared_or_active_recovered(trx);
+  //  }
 
   /* There can't be any active transactions. */
   trx_sys->rsegs.~Rsegs();
 
   trx_sys->tmp_rsegs.~Rsegs();
 
-  ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
+  // ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) == 0);
+  ut_a(lizard::gcs_n_rw_trx() == 0);
   ut_a(UT_LIST_GET_LEN(trx_sys->mysql_trx_list) == 0);
 
   for (auto &shard : trx_sys->shards) {
@@ -697,10 +727,13 @@ void trx_sys_after_pre_dd_shutdown_validate() {
     ut_a(active_recovered_trxs == 0);
   }
 
-  trx_sys_mutex_enter();
-  ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) ==
-       trx_sys->n_prepared_trx + active_recovered_trxs);
-  trx_sys_mutex_exit();
+ // trx_sys_mutex_enter();
+ // ut_a(UT_LIST_GET_LEN(trx_sys->rw_trx_list) ==
+ //      trx_sys->n_prepared_trx + active_recovered_trxs);
+ // trx_sys_mutex_exit();
+
+  ut_a(lizard::gcs_n_rw_trx() ==
+       lizard::gcs_n_prepared_trx() + active_recovered_trxs);
 }
 
 void trx_sys_after_background_threads_shutdown_validate() {
@@ -711,15 +744,26 @@ void trx_sys_after_background_threads_shutdown_validate() {
 
 size_t trx_sys_recovered_active_trxs_count() {
   size_t total_trx = 0;
-  trx_sys_mutex_enter();
-  /* Recovered transactions are never citizens of mysql_trx_list,
-  so it's enough to check rw_trx_list. */
-  for (auto trx : trx_sys->rw_trx_list) {
+
+  //  trx_sys_mutex_enter();
+  //  /* Recovered transactions are never citizens of mysql_trx_list,
+  //  so it's enough to check rw_trx_list. */
+  //  for (auto trx : trx_sys->rw_trx_list) {
+  //    if (trx_state_eq(trx, TRX_STATE_ACTIVE) && trx->is_recovered) {
+  //      total_trx++;
+  //    }
+  //  }
+  //  trx_sys_mutex_exit();
+  //
+  lizard::gcs_iterate_rw_trx([&total_trx](trx_t *trx) -> bool {
+    /* Recovered transactions are never citizens of mysql_trx_list,
+    so it's enough to check rw_trx_list. */
     if (trx_state_eq(trx, TRX_STATE_ACTIVE) && trx->is_recovered) {
       total_trx++;
     }
-  }
-  trx_sys_mutex_exit();
+    return false;
+  });
+
   return (total_trx);
 }
 
@@ -738,24 +782,24 @@ bool has_started_mysql_trx() {
   return ret;
 }
 
-#ifdef UNIV_DEBUG
-/** Validate the trx_sys_t::rw_trx_list.
- @return true if the list is valid. */
-bool trx_sys_validate_trx_list() {
-  ut_ad(trx_sys_mutex_own());
-
-  const trx_t *prev_trx = nullptr;
-
-  for (auto trx : trx_sys->rw_trx_list) {
-    check_trx_state(trx);
-    ut_a(prev_trx == nullptr || prev_trx->id > trx->id);
-    prev_trx = trx;
-  }
-
-  return (true);
-}
-#endif /* UNIV_DEBUG */
-
+// #ifdef UNIV_DEBUG
+///** Validate the trx_sys_t::rw_trx_list.
+// @return true if the list is valid. */
+// bool trx_sys_validate_trx_list() {
+//  ut_ad(trx_sys_mutex_own());
+//
+//  const trx_t *prev_trx = nullptr;
+//
+//  for (auto trx : trx_sys->rw_trx_list) {
+//    check_trx_state(trx);
+//    ut_a(prev_trx == nullptr || prev_trx->id > trx->id);
+//    prev_trx = trx;
+//  }
+//
+//  return (true);
+//}
+// #endif /* UNIV_DEBUG */
+//
 #endif /* !UNIV_HOTBACKUP */
 
 /** A list of undo tablespace IDs found in the TRX_SYS page. These are the

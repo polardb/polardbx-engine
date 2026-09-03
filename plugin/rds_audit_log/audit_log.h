@@ -115,7 +115,7 @@ class MYSQL_RDS_AUDIT_LOG {
   enum enum_log_format { PLAIN, JSON };
 
   /* PolorDB 8.0 supports MYSQL_V2, we don't */
-  enum enum_log_version { MYSQL_V1, MYSQL_V3, MYSQL_V4 };
+  enum enum_log_version { MYSQL_V1, MYSQL_V3, MYSQL_V4, MYSQL_V5 };
 
   /*
     The strategy used when write to audit log file.
@@ -772,7 +772,7 @@ class MYSQL_RDS_AUDIT_LOG {
 
   /* Return count of pwrite error */
   ulong get_pwrite_err() const { return pwrite_err_num; }
-#ifndef DBUG_OFF
+#ifndef NDEBUG
  public:
   static uint log_debug;
 #endif

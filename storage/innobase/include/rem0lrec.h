@@ -118,7 +118,7 @@ size.
 @param[in]  rec   record
 @param[in]  n     index of the field
 @return field size in bytes */
-static inline ulint rec_get_nth_field_size_low(const rec_t *rec, ulint n) {
+static inline ulint rec_get_nth_field_size_old_low(const rec_t *rec, ulint n) {
   ulint os;
   ulint next_os;
 
@@ -128,43 +128,6 @@ static inline ulint rec_get_nth_field_size_low(const rec_t *rec, ulint n) {
   ut_ad(next_os - os < UNIV_PAGE_SIZE);
 
   return (next_os - os);
-}
-
-/** Get an offset to the nth data field in a record.
-@param[in]   offsets  array returned by rec_get_offsets()
-@param[in]   n        index of the field
-@param[out]  len      length of the field; UNIV_SQL_NULL if SQL null;
-                      UNIV_SQL_ADD_COL_DEFAULT if it's default value and no
-                      value inlined
-@return offset from the origin of rec */
-static inline ulint rec_get_nth_field_offs_low(const ulint *offsets, ulint n,
-                                               ulint *len) {
-  ulint offs;
-  ulint length;
-  ut_ad(n < rec_offs_n_fields(offsets));
-  ut_ad(len);
-
-  if (n == 0) {
-    offs = 0;
-  } else {
-    offs = rec_offs_base(offsets)[n] & REC_OFFS_MASK;
-  }
-
-  length = rec_offs_base(offsets)[1 + n];
-
-  if (length & REC_OFFS_SQL_NULL) {
-    length = UNIV_SQL_NULL;
-  } else if (length & REC_OFFS_DEFAULT) {
-    length = UNIV_SQL_ADD_COL_DEFAULT;
-  } else if (length & REC_OFFS_DROP) {
-    length = UNIV_SQL_INSTANT_DROP_COL;
-  } else {
-    length &= REC_OFFS_MASK;
-    length -= offs;
-  }
-
-  *len = length;
-  return (offs);
 }
 
 /** The following function is used to get the offset to the nth
@@ -215,14 +178,6 @@ static inline ulint rec_get_nth_field_offs_old_low(const rec_t *rec, ulint n,
   return (os);
 }
 
-/** Returns nonzero if the extern bit is set in nth field of rec.
-@param[in]  offsets  array returned by rec_get_offsets()
-@param[in]  n        index of the field
-@return nonzero if externally stored */
-static inline ulint rec_offs_nth_extern_low(const ulint *offsets, ulint n) {
-  return (rec_offs_base(offsets)[1 + n] & REC_OFFS_EXTERNAL);
-}
-
 /** Mark the nth field as externally stored.
 @param[in]  offsets  array returned by rec_get_offsets()
 @param[in]  n       index of the field */
@@ -255,68 +210,66 @@ static inline ulint rec_offs_nth_size_low(const ulint *offsets, ulint n) {
           REC_OFFS_MASK);
 }
 
-/** This is used to modify the value of an already existing field in a record.
-The previous value must have exactly the same size as the new value. If len
-is UNIV_SQL_NULL then the field is treated as an SQL null.
-For records in ROW_FORMAT=COMPACT (new-style records), len must not be
-UNIV_SQL_NULL unless the field already is SQL null.
-@param[in]  rec      record
-@param[in]  offsets  array returned by rec_get_offsets()
-@param[in]  n        index of the field
-@param[in]  data     pointer to the data if not SQL null
-@param[in]  len      length of the data or UNIV_SQL_NULL */
-static inline void rec_set_nth_field_low(rec_t *rec, const ulint *offsets,
-                                         ulint n, const void *data, ulint len) {
-  byte *data2;
-  ulint len2;
+// rec_set_nth_field has been replaced by DSlice::set_nth_field
+// void DSlice::set_nth_field(const dict_index_t *index, ulint n, const void
+// *data,
+//                            ulint len) {
+//   byte *data2;
+//   ulint len2;
 
-  ut_ad(rec);
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
+//   ut_ad(validate());
+//   ut_ad(!index || index == m_index);
 
-  auto fn = [&](const ulint *offsets, ulint n) {
-    ulint n_drop = 0;
-    for (size_t i = 0; i < n; i++) {
-      ulint len = rec_offs_base(offsets)[1 + i];
-      if (len & REC_OFFS_DROP) {
-        n_drop++;
-      }
-    }
-    return n_drop;
-  };
+//   if (index && index->has_row_versions()) {
+//     n = index->get_field_off_pos(n);
+//   }
 
-  if (len == UNIV_SQL_NULL) {
-    if (!rec_offs_nth_sql_null_low(offsets, n)) {
-      ut_a(!rec_offs_comp(offsets));
-      ulint n_drop = rec_old_is_versioned(rec) ? fn(offsets, n) : 0;
-      rec_set_nth_field_sql_null_low(rec, n - n_drop);
-    }
+//   auto fn = [&](const ulint *offsets, ulint n) {
+//     ulint n_drop = 0;
+//     for (size_t i = 0; i < n; i++) {
+//       ulint len = rec_offs_base(offsets)[1 + i];
+//       if (len & REC_OFFS_DROP) {
+//         n_drop++;
+//       }
+//     }
+//     return n_drop;
+//   };
 
-    return;
-  }
+//   if (len == UNIV_SQL_NULL) {
+//     if (!rec_offs_nth_sql_null_low(m_offsets, n)) {
+//       ut_a(!rec_offs_comp(m_offsets));
+//       ulint n_drop = rec_old_is_versioned(m_reg.rec) ? fn(m_offsets, n) : 0;
+//       rec_set_nth_field_sql_null_low(m_reg.rec, n - n_drop);
+//     }
 
-  ut_ad(!rec_offs_nth_default_low(offsets, n));
+//     return;
+//   }
 
-  /* nullptr for index as n is physical here */
-  data2 = rec_get_nth_field(nullptr, rec, offsets, n, &len2);
+//   ut_ad(!rec_offs_nth_default_low(m_offsets, n));
 
-  if (len2 == UNIV_SQL_NULL) {
-    ut_ad(!rec_offs_comp(offsets));
-    ulint n_drop = rec_old_is_versioned(rec) ? fn(offsets, n) : 0;
-    rec_set_nth_field_null_bit_low(rec, n - n_drop, false);
-    ut_ad(len == rec_get_nth_field_size_low(rec, n - n_drop));
-  } else {
-    ut_ad(len2 == len);
-  }
+//   /* nullptr for index as n is physical here */
+//   data2 = get_nth_field(nullptr, n, &len2);
 
-  ut_memcpy(data2, data, len);
-}
+//   if (len2 == UNIV_SQL_NULL) {
+//     ut_ad(!rec_offs_comp(m_offsets));
+
+//     ulint n_drop = rec_old_is_versioned(m_reg.rec) ? fn(m_offsets, n) : 0;
+//     rec_set_nth_field_null_bit_low(m_reg.rec, n - n_drop, false);
+
+//     ut_ad(len == rec_get_nth_field_size_old_low(m_reg.rec, n - n_drop));
+//   } else {
+//     ut_ad(len2 == len);
+//   }
+
+//   ut_memcpy(data2, data, len);
+// }
 
 static inline void rec_set_nth_field_sql_null_low(rec_t *rec, ulint n) {
   ulint offset;
 
   offset = rec_get_field_start_offs_low(rec, n);
 
-  data_write_sql_null(rec + offset, rec_get_nth_field_size_low(rec, n));
+  data_write_sql_null(rec + offset, rec_get_nth_field_size_old_low(rec, n));
 
   rec_set_nth_field_null_bit_low(rec, n, true);
 }

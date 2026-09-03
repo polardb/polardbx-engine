@@ -51,7 +51,7 @@ TEST(consensus, follower_has_more_log) {
   le.set_value("ccc");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog3;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog3;
   rlog1 = rlog =
       std::make_shared<FilePaxosLog>("paxosLogTestDir1", FilePaxosLog::LTSync);
   EXPECT_EQ(rlog1->getLastLogIndex(), 0);
@@ -140,7 +140,7 @@ TEST(consensus, leader_has_more_log) {
   le.set_value("ccc");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog3;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog3;
   rlog1 = rlog =
       std::make_shared<FilePaxosLog>("paxosLogTestDir1", FilePaxosLog::LTSync);
   EXPECT_EQ(rlog1->getLastLogIndex(), 0);
@@ -205,7 +205,7 @@ TEST(consensus, follower_has_different_log) {
   le.set_value("ccc");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog3;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog3;
   rlog1 = rlog =
       std::make_shared<FilePaxosLog>("paxosLogTestDir1", FilePaxosLog::LTSync);
   EXPECT_EQ(rlog1->getLastLogIndex(), 0);
@@ -291,7 +291,7 @@ TEST(consensus, follower_lose_log) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog3;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog3;
   rlog1 = rlog =
       std::make_shared<FilePaxosLog>("paxosLogTestDir1", FilePaxosLog::LTMem);
   EXPECT_EQ(rlog1->getLastLogIndex(), 0);
@@ -358,7 +358,7 @@ TEST(consensus, leader_truncate_configure_change) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 5000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);

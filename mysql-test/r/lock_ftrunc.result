@@ -1,0 +1,74 @@
+#
+# Test for FTRUNC_LOCK MDL
+# Verify ftrunc lock functionality and observability
+#
+# Restart server with dedicated log file for this test
+# restart: --log-error=MYSQLD_LOG
+#
+# Test case 1: Lock blocking and observability
+#
+# Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+# Acquire exclusive lock
+CALL dbms_lock.acquire_x_ftrunc();
+connect  con2, localhost, root,,;
+# Set short lock wait timeout for testing
+SET lock_wait_timeout = 1;
+# Try to acquire shared lock (will be blocked and timeout)
+CALL dbms_lock.acquire_s_ftrunc();
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+connection default;
+# Verify locks visible in performance_schema
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK' AND lock_status = 'GRANTED';
+object_type	lock_type	lock_duration	lock_status
+FTRUNC LOCK	EXCLUSIVE	EXPLICIT	GRANTED
+# Release exclusive lock
+CALL dbms_lock.release_ftrunc();
+#
+# Test case 2: Lock released on disconnect
+#
+connect  con3, localhost, root,,;
+# Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+CALL dbms_lock.acquire_s_ftrunc();
+connection default;
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK';
+object_type	lock_type	lock_duration	lock_status
+FTRUNC LOCK	SHARED	EXPLICIT	GRANTED
+connection con3;
+disconnect con3;
+connection default;
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK';
+object_type	lock_type	lock_duration	lock_status
+#
+# Test case 3: Background purge thread lock failure
+#
+connection default;
+# Enable innodb_data_file_purge
+SET @old_innodb_data_file_purge = @@global.innodb_data_file_purge;
+SET @@global.innodb_data_file_purge = ON;
+FLUSH LOGS;
+# Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+# Acquire shared lock in foreground
+CALL dbms_lock.acquire_s_ftrunc();
+# Create and drop table to trigger file purge
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1);
+DROP TABLE t1;
+# Wait for background purge thread to attempt acquiring lock
+# Release lock
+CALL dbms_lock.release_ftrunc();
+# Verify error message in log file
+Pattern found.
+# Restore setting
+SET @@global.innodb_data_file_purge= @old_innodb_data_file_purge;
+connection con2;
+disconnect con2;
+connection default;

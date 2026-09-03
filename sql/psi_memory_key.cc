@@ -29,7 +29,8 @@
 #include "mysql/psi/psi_memory.h"
 #include "template_utils.h"
 
-#include "sql/consensus_fifo_cache_manager.h"
+#include "sql/consensus_cache_manager.h"
+#include "sql/consensus/komodo0fifo0cache.h"
 
 /*
   MAINTAINER: Please keep this list in order, to limit merge collisions.
@@ -146,6 +147,7 @@ PSI_memory_key key_memory_user_var_entry;
 PSI_memory_key key_memory_user_var_entry_value;
 PSI_memory_key key_memory_sp_cache;
 PSI_memory_key key_memory_write_set_extraction;
+PSI_memory_key key_memory_vidx_mem;
 PSI_memory_key key_memory_IA_mem;
 
 PSI_memory_key key_memory_CS_PRIMARY_KEY_CACHE;
@@ -369,6 +371,7 @@ static PSI_memory_info all_server_memory[] = {
      "show_replica_status_io_gtid_set", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_write_set_extraction, "write_set_extraction", 0, 0,
      PSI_DOCUMENT_ME},
+    {&key_memory_vidx_mem, "vector_index", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_JSON, "JSON", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_log_error_loaded_services, "log_error::loaded_services", 0, 0,
      "Memory allocated for duplicate log events."},
@@ -396,8 +399,6 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_persisted_variables_unordered_set,
      "Persisted_variables::unordered_set", PSI_FLAG_ONLY_GLOBAL_STAT, 0,
      "Memory allocated for in-memory sets for persisted variables"},
-    {&key_memory_ConsensusLogManager, "ConsensusLogManager", 0, 0,
-     PSI_DOCUMENT_ME},
     {&key_memory_CS_PRIMARY_KEY_CACHE, "changeset_primary_key_cache", 0, 0,
      "Memory allocated for primary keys of changeset cache"},
     {&key_memory_CS_PRIMARY_KEY, "changeset_primary_key", 0, 0,
@@ -405,7 +406,10 @@ static PSI_memory_info all_server_memory[] = {
     {&key_memory_CS_RESULT_BUFFER, "changeset_result_buffer", 0, 0,
      "Memory allocated for fetching result of changeset"},
     {&key_memory_CS_FILE_NAME, "changeset_file_name", 0, 0,
-     "Memory allocated for filename of changeset"}};
+     "Memory allocated for filename of changeset"},
+    {&komodo::key_memory_FIFO_CACHE, "consensus_engine_fifo_cache", 0, 0,
+     "Memory allocated for consensus engine fifo cache"}
+  };
 
 void register_server_memory_keys() {
   const char *category = "sql";

@@ -26,16 +26,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sql/consensus/consensus_rpl_rli.h"
 
-#include "sql/bl_consensus_log.h"
 #include "sql/consensus/consensus_err.h"
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0xlog.h"
 #include "sql/log.h"
 #include "sql/mysqld.h"
 #include "sql/rpl_replica.h"
 #include "sql/rpl_rli_pdb.h"
 
 XPaxos_relay_log_info::~XPaxos_relay_log_info() {
-  consensus_log_manager.set_relay_log_info(nullptr);
+  komodo::xlog_engine_get_log_manager().set_relay_log_info(nullptr);
 }
 
 /**
@@ -60,12 +59,11 @@ void Relay_log_info::overwrite_log_name(const char **, const char **) {
 void XPaxos_relay_log_info::overwrite_log_name(const char **ln,
                                                const char **log_index_name) {
   assert(relay_log.is_relay_log);
+  assert(relay_log.is_xpaxos_log);
 
   /** Use binlog file name although it's relay log object. */
   *ln = opt_bin_logname;
-  *log_index_name = opt_binlog_index_name;
-
-  relay_log.is_xpaxos_log = ConsensusLogManager::enable_consensus();
+  *log_index_name = log_bin_index;
   return;
 }
 
@@ -93,10 +91,10 @@ int XPaxos_relay_log_info::get_log_position(LOG_INFO *linfo,
                                             my_off_t &log_position) {
   uint64 log_pos = 0;
   char log_name[FN_REFLEN];
+  auto &mgr = komodo::xlog_engine_get_log_manager();
   uint64 next_index =
-      consensus_log_manager.get_next_trx_index(get_consensus_apply_index(), false);
-  if (consensus_log_manager.get_log_position(next_index, false, log_name,
-                                             &log_pos)) {
+      mgr.get_next_trx_index(get_consensus_apply_index(), false);
+  if (mgr.get_log_position(next_index, false, log_name, &log_pos)) {
     sql_print_error("Mts recover cannot find start index %llu.", next_index);
     return 1;
   }
@@ -109,7 +107,8 @@ int XPaxos_relay_log_info::get_log_position(LOG_INFO *linfo,
 }
 
 void XPaxos_relay_log_info::set_xpaxos_relay_log_info() {
-  consensus_log_manager.set_relay_log_info(this);
+  komodo::xlog_engine_get_log_manager().set_relay_log_info(this);
+  relay_log.is_xpaxos_log = true;
 }
 
 void XPaxos_relay_log_info::update_xpaxos_applied_index() {

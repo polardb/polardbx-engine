@@ -1,0 +1,267 @@
+### Purpose ###
+#
+# Verify that transaction rollback works correctly for SPC indexes:
+#   - INSERT + ROLLBACK: SPC index returns to pre-insert state
+#   - UPDATE + ROLLBACK: SPC index reverts to old values
+#   - DELETE + ROLLBACK: deleted records reappear in SPC index
+#   - Mixed operations + ROLLBACK: data consistency between SPC and PK
+#   - Crash during rollback: idempotent recovery (kill & restart)
+#
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/feature_spc_rollback.err
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_innodb_max_16k.inc
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo #
+--echo # PART 1: INSERT + ROLLBACK
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+BEGIN;
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+INSERT INTO t1 VALUES (5, REPEAT('c', 100));
+
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+
+ROLLBACK;
+
+--echo # After rollback: only id=1,2 should be visible
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: UPDATE + ROLLBACK
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 20) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+BEGIN;
+UPDATE t1 SET c = REPEAT('z', 100) WHERE id <= 10;
+SELECT id, LEFT(c, 3) AS c_prefix FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+ROLLBACK;
+
+--echo # After rollback: all rows should have original 'a' prefix
+SELECT id, LEFT(c, 3) AS c_prefix FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: DELETE + ROLLBACK
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+INSERT INTO t1 VALUES (5, REPEAT('c', 100));
+
+BEGIN;
+DELETE FROM t1 WHERE id IN (1, 3, 5);
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+ROLLBACK;
+
+--echo # After rollback: all 5 rows should reappear
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Mixed INSERT/UPDATE/DELETE + ROLLBACK
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY AUTO_INCREMENT,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 100) {
+  eval INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+--source suite/innodb/include/force_purge.inc
+SET GLOBAL innodb_purge_stop_now = ON;
+
+BEGIN;
+--disable_query_log
+let $i = 1;
+while ($i <= 30) {
+  eval UPDATE t1 SET c = CONCAT(REPEAT('b', 100), $i) WHERE id = $i;
+  inc $i;
+}
+let $i = 31;
+while ($i <= 60) {
+  eval DELETE FROM t1 WHERE id = $i;
+  inc $i;
+}
+let $i = 101;
+while ($i <= 130) {
+  eval INSERT INTO t1 (id, c) VALUES ($i, CONCAT(REPEAT('c', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+ROLLBACK;
+
+--echo # After rollback: must be back to original 100 rows, all 'a' prefix
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 5: Crash during rollback - idempotent recovery
+--echo # Mimics feature_panda_rollback ib_panda_after_undo_ins pattern.
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+
+--source suite/innodb/include/force_purge.inc
+SET GLOBAL innodb_purge_stop_now = ON;
+
+BEGIN;
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+
+--echo # Set up sync point: signal after first undo is applied, then kill
+set debug_sync = 'ib_clust_after_undo_ins signal s1 wait_for s2';
+--send ROLLBACK
+
+--connection con1
+set debug_sync = 'now wait_for s1';
+--echo # Force a checkpoint before kill
+INSERT INTO t1 VALUES (9999, REPEAT('x', 100));
+
+--let $restart_parameters = restart:--debug=d,pause_rollback_on_recovery
+--source include/kill_and_restart_mysqld.inc
+--let $restart_parameters =
+
+--connection default
+--error 2013
+--reap
+--disconnect default
+--disconnect con1
+--disconnect con2
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+--connect(default, localhost, root,,test)
+
+--echo # Recovery rollback is paused; insert a new row (id=5) that does not conflict
+INSERT INTO t1 VALUES (5, REPEAT('b', 100));
+
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+
+--echo # Resume recovery rollback
+SET GLOBAL debug = '-d,pause_rollback_on_recovery';
+--sleep 3
+
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--connection default
+DROP TABLE t1;
+
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--disconnect con1
+--disconnect con2

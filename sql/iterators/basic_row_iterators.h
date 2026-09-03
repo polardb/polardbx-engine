@@ -147,7 +147,8 @@ class IndexScanIterator final : public TableRowIterator {
   //
   // "examined_rows", if not nullptr, is incremented for each successful Read().
   IndexScanIterator(THD *thd, TABLE *table, int idx, bool use_order,
-                    double expected_rows, ha_rows *examined_rows);
+                    double expected_rows, ha_rows *examined_rows,
+                    void *vec_func);
   ~IndexScanIterator() override;
 
   bool Init() override;
@@ -159,6 +160,7 @@ class IndexScanIterator final : public TableRowIterator {
   const bool m_use_order;
   const double m_expected_rows;
   ha_rows *const m_examined_rows;
+  void *m_vec_func;
   bool m_first = true;
 };
 
@@ -231,6 +233,10 @@ class SortBufferIndirectIterator final : public RowIterator {
                              Sort_result *sort_result,
                              bool ignore_not_found_rows, bool has_null_flags,
                              ha_rows *examined_rows);
+  SortBufferIndirectIterator(THD *thd, Mem_root_array<TABLE *> tables,
+                             Sort_result *sort_result,
+                             bool ignore_not_found_rows, bool has_null_flags,
+                             ha_rows *examined_rows, komodo::guess_mode_t gmode);
   ~SortBufferIndirectIterator() override;
   bool Init() override;
   int Read() override;
@@ -248,6 +254,7 @@ class SortBufferIndirectIterator final : public RowIterator {
   uchar *m_cache_pos = nullptr, *m_cache_end = nullptr;
   bool m_ignore_not_found_rows;
   bool m_has_null_flags;
+  komodo::guess_mode_t m_gmode;
 };
 
 /**
@@ -303,6 +310,12 @@ class SortFileIndirectIterator final : public RowIterator {
   SortFileIndirectIterator(THD *thd, Mem_root_array<TABLE *> tables,
                            IO_CACHE *tempfile, bool ignore_not_found_rows,
                            bool has_null_flags, ha_rows *examined_rows);
+
+  SortFileIndirectIterator(THD *thd, Mem_root_array<TABLE *> tables,
+                           IO_CACHE *tempfile, bool ignore_not_found_rows,
+                           bool has_null_flags, ha_rows *examined_rows,
+                           komodo::guess_mode_t gmode);
+                           
   ~SortFileIndirectIterator() override;
 
   bool Init() override;
@@ -322,6 +335,7 @@ class SortFileIndirectIterator final : public RowIterator {
   bool m_has_null_flags;
 
   uint m_sum_ref_length;
+  komodo::guess_mode_t m_gmode;
 };
 
 // Used when the plan is const, ie. is known to contain a single row

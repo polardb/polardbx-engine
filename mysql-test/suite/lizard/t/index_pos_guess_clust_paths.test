@@ -1,0 +1,457 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test row_search_mvcc and row_search_no_mvcc with GPP paths
+--echo # This test covers prefetch cache, ICP, and various code paths
+--echo #
+
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+
+--echo # Create table for testing
+CREATE TABLE t1 (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    a VARCHAR(20) NOT NULL,
+    b INT NOT NULL,
+    c INT NOT NULL,
+    d CHAR(1) NOT NULL DEFAULT 'X',
+    e TEXT
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+--echo # Insert test data
+delimiter |;
+CREATE PROCEDURE insert_t1_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(20);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('VAL', LPAD(i, 5, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t1 (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END|
+delimiter ;|
+
+CALL insert_t1_data(500);
+
+CREATE INDEX idx_a on t1(a);
+CREATE INDEX idx_b on t1(b);
+CREATE INDEX idx_cd on t1(c, d);
+
+--echo # Warm up GPP info by accessing records
+SELECT * FROM t1 WHERE a = 'VAL00001' LIMIT 1;
+SELECT * FROM t1 WHERE b = 10 LIMIT 1;
+SELECT * FROM t1 WHERE c = 50 AND d = 'A' LIMIT 1;
+
+--echo # ============================================================
+--echo # Test 1: Prefetch cache path without ICP (clustered index)
+--echo # ============================================================
+--echo # This should trigger prefetch cache and test GPP storage/retrieval
+explain SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan cluster] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 2: Prefetch cache path without ICP (secondary index)
+--echo # ============================================================
+explain SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan secondary] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 3: Prefetch cache path with ICP (secondary index)
+--echo # ============================================================
+--echo # Test ICP path where records are enqueued to cache
+--echo # Use index condition that can be pushed down
+explain SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 5 AND b < 500 ORDER BY a;
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' AND b > 5 AND b < 500 ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [scan ICP] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 4: Single row fetch (no prefetch)
+--echo # ============================================================
+SELECT * FROM t1 WHERE id = 100;
+SELECT * FROM t1 WHERE a = 'VAL00100';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [single row fetch] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 5: Range scan with end_range condition
+--echo # ============================================================
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100 AND id < 50 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [range scan] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 6: Secondary index with clustered access
+--echo # ============================================================
+SELECT * FROM t1 WHERE a = 'VAL00050';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary to cluster] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 7: Composite index access
+--echo # ============================================================
+SELECT * FROM t1 WHERE c = 250 AND d = 'A';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [composite index] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 8: Multiple rows with prefetch (trigger cache fill)
+--echo # ============================================================
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 200 ORDER BY id LIMIT 100;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [prefetch multiple rows] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 9: Direction change (should clear cache)
+--echo # ============================================================
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50 ORDER BY id DESC;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [direction change] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 10: Empty result set
+--echo # ============================================================
+SELECT * FROM t1 WHERE id = 99999;
+SELECT * FROM t1 WHERE a = 'NONEXISTENT';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [empty result] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 11: Large result set (multiple cache fills)
+--echo # ============================================================
+SELECT COUNT(*) FROM t1 WHERE id BETWEEN 1 AND 300;
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 300 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [large result set] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 12: Temporary table (row_search_no_mvcc path)
+--echo # ============================================================
+CREATE TEMPORARY TABLE t2 LIKE t1;
+INSERT INTO t2 SELECT * FROM t1 WHERE id <= 100;
+SELECT * FROM t2 WHERE id BETWEEN 1 AND 50 ORDER BY id;
+SELECT * FROM t2 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [temporary table] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+DROP TEMPORARY TABLE t2;
+
+--echo # ============================================================
+--echo # Test 13: GPP invalidation scenario
+--echo # ============================================================
+--echo # Invalidate GPP info and test fallback
+SET DEBUG='+d,set_gpp_null';
+SELECT * FROM t1 WHERE a = 'VAL00050';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [GPP invalidation] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+SET DEBUG='-d,set_gpp_null';
+
+--echo # ============================================================
+--echo # Test 14: Index condition pushdown with prefetch
+--echo # ============================================================
+--echo # Test ICP with range condition that triggers prefetch
+explain SELECT * FROM t1 WHERE a LIKE 'VAL00%' AND b > 100 AND b < 400 ORDER BY a LIMIT 50;
+SELECT * FROM t1 WHERE a LIKE 'VAL00%' AND b > 100 AND b < 400 ORDER BY a LIMIT 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [ICP prefetch] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 15: Clustered index range scan
+--echo # ============================================================
+SELECT * FROM t1 WHERE id BETWEEN 50 AND 150 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [clustered range scan] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 16: Secondary index with range and filter
+--echo # ============================================================
+SELECT * FROM t1 WHERE a BETWEEN 'VAL00010' AND 'VAL00090' AND b BETWEEN 100 AND 900 ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary range filter] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 17: Multiple index access patterns
+--echo # ============================================================
+SELECT * FROM t1 WHERE a = 'VAL00025' OR b = 250 ORDER BY id LIMIT 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [multiple index access] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 18: Deleted record handling
+--echo # ============================================================
+DELETE FROM t1 WHERE id = 50;
+SELECT * FROM t1 WHERE a = (SELECT a FROM t1 WHERE id = 50);
+SELECT * FROM t1 WHERE id = 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [deleted record] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 19: Record buffer path (server-provided buffer)
+--echo # ============================================================
+--echo # This tests the record_buffer != nullptr path
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [record buffer path] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 20: Check table path (ROW_MYSQL_DUMMY_TEMPLATE)
+--echo # ============================================================
+CHECK TABLE t1;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [check table] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 21: Optimistic guess clust path
+--echo # ============================================================
+--echo # Test row_pos_optimistic_guess_clust function
+SELECT * FROM t1 WHERE id = 25;
+SELECT * FROM t1 WHERE a = 'VAL00025';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [optimistic guess clust] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 22: Large prefix length path
+--echo # ============================================================
+--echo # Test path where mysql_prefix_len > 63
+SELECT a, b, c, d, CONCAT(a, b, c, d, a, b, c, d) as long_field 
+FROM t1 WHERE id BETWEEN 1 AND 20 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [large prefix length] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 23: Blob field handling (should not cache)
+--echo # ============================================================
+UPDATE t1 SET e = REPEAT('X', 1000) WHERE id <= 10;
+SELECT id, a, LEFT(e, 10) as e_preview FROM t1 WHERE id <= 10 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [blob field handling] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 24: Unique search path
+--echo # ============================================================
+SELECT * FROM t1 WHERE id = 100;
+SELECT * FROM t1 WHERE a = 'VAL00100';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [unique search] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+
+--echo # ============================================================
+--echo # Test 25: Composite index with prefix
+--echo # ============================================================
+SELECT * FROM t1 WHERE c = 250 ORDER BY c, d;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [composite index prefix] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 26: Secondary index with clustered template
+--echo # ============================================================
+SELECT id, a, b FROM t1 WHERE a BETWEEN 'VAL00001' AND 'VAL00050' ORDER BY a;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [secondary with cluster template] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 27: End range check with prefetch
+--echo # ============================================================
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 200 AND id < 150 ORDER BY id;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [end range check] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 28: Rowid ordered retrieval with GPP
+--echo # ============================================================
+SELECT /*+ INDEX_MERGE(t1 idx_a, idx_b) */ * FROM t1 
+WHERE a = 'VAL00025' AND b = 250;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $rowid_intersection_hit= query_get_value(show global status like "Lizard_rowid_intersection_gpp_hit", Value, 1)
+--let $rowid_intersection_miss= query_get_value(show global status like "Lizard_rowid_intersection_gpp_miss", Value, 1)
+--let $rowid_union_hit= query_get_value(show global status like "Lizard_rowid_union_gpp_hit", Value, 1)
+--let $rowid_union_miss= query_get_value(show global status like "Lizard_rowid_union_gpp_miss", Value, 1)
+
+--let $assert_text= [rowid ordered] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--let $assert_text= [rowid intersection] gpp total (hit+miss) should be > 0
+--let $assert_cond= $rowid_intersection_hit + $rowid_intersection_miss > 0
+--source include/assert.inc
+
+--let $assert_text= [rowid union] gpp total (hit+miss) should be > 0
+--let $assert_cond= $rowid_union_hit + $rowid_union_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 29: Final statistics check
+--echo # ============================================================
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+
+--let $assert_text= [final stats] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Cleanup
+--echo # ============================================================
+DROP TABLE t1;
+DROP PROCEDURE insert_t1_data;
+SET GLOBAL innodb_lizard_stat_enabled = default;
+SET GLOBAL innodb_index_scan_guess_clust_enabled = default;
+SET GLOBAL innodb_index_purge_guess_clust_enabled = default;
+SET GLOBAL innodb_adaptive_hash_index = default;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';
+

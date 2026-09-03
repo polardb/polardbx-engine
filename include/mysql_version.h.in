@@ -30,11 +30,8 @@
 #define POLARDBX_ENGINE_VERSION       "@POLARDBX_ENGINE_VERSION@"
 #define POLARDBX_VERSION_EXTRA        "@POLARDBX_VERSION_EXTRA@"
 
-#define BUILD_BRANCH                "@BUILD_BRANCH@"
-#define BUILD_COMMIT                "@BUILD_COMMIT@"
-#define BUILD_TYPE                  "@BUILD_TYPE@"
-#define BUILD_DATE                  __DATE__
-#define BUILD_TIME                  __TIME__
+/* BUILD_BRANCH, BUILD_COMMIT, BUILD_TYPE, BUILD_DATE and BUILD_TIME live in
+   mysql_build_info.h, so that a new commit does not invalidate this header. */
 
 #ifndef LICENSE
 #define LICENSE                     GPL

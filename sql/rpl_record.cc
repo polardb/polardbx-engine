@@ -266,13 +266,14 @@ static bool unpack_field(const uchar **pack_ptr, Field *field, uint metadata,
 
   @return The number of bytes written at @c row_data.
 */
-size_t pack_row(TABLE *table, MY_BITMAP const *columns_in_image,
+size_t pack_row_low(TABLE *table, MY_BITMAP const *columns_in_image,
                 uchar *row_data, const uchar *record,
-                enum_row_image_type row_image_type, ulonglong value_options) {
+                enum_row_image_type row_image_type, ulonglong value_options,
+                cs::util::ReplicatedColumnsView &fields) {
   DBUG_TRACE;
-  cs::util::ReplicatedColumnsView fields{table};
-  fields.add_filter(
-      cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index);
+  // cs::util::ReplicatedColumnsView fields{table};
+  // fields.add_filter(
+  //     cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index);
 
   // Since we don't want any hidden generated columns to be included in the
   // binlog, we must clear any bits for these columns in the bitmap. We will
@@ -398,6 +399,22 @@ size_t pack_row(TABLE *table, MY_BITMAP const *columns_in_image,
   // Reset the pack_row_tmp_set so it can be used elsewhere.
   bitmap_clear_all(&table->pack_row_tmp_set);
   return static_cast<size_t>(pack_ptr - row_data);
+}
+
+size_t pack_row(TABLE *table, MY_BITMAP const *columns_in_image,
+                uchar *row_data, const uchar *record,
+                enum_row_image_type row_image_type, ulonglong value_options) {
+  if (table->cached_rcv) {
+    return pack_row_low(table, columns_in_image, row_data, record,
+                        row_image_type, value_options,
+                        *table->cached_rcv);
+  } else {
+    cs::util::ReplicatedColumnsView fields{
+        table,
+        cs::util::ColumnFilterFactory::ColumnFilterType::outbound_func_index};
+    return pack_row_low(table, columns_in_image, row_data, record,
+                        row_image_type, value_options, fields);
+  }
 }
 
 /**

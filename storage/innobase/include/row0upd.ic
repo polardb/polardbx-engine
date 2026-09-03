@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/27/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef row0upd_h
+#define INNODB_ROW0UPD_IC_STANDALONE
+#include "row0upd.h"
+#undef INNODB_ROW0UPD_IC_STANDALONE
+#endif /* !row0upd_h */
 #include "mtr0log.h"
 #ifndef UNIV_HOTBACKUP
 #include "lock0lock.h"
@@ -154,28 +159,27 @@ static inline const upd_field_t *upd_get_field_by_field_no(const upd_t *update,
 /** Updates the trx id and roll ptr field in a clustered index record when
  a row is updated or marked deleted. */
 static inline void row_upd_rec_sys_fields(
-    rec_t *rec,                /*!< in/out: record */
+    Slice *slc,                /*!< in/out: record */
     page_zip_des_t *page_zip,  /*!< in/out: compressed page whose
                               uncompressed part will be updated, or NULL */
     const dict_index_t *index, /*!< in: clustered index or panda index */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     const trx_t *trx,          /*!< in: transaction */
     roll_ptr_t roll_ptr)       /*!< in: roll ptr of the undo log record,
                        can be 0 during IMPORT */
 {
   ut_ad(!index->table->is_intrinsic());
   ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
 
   if (page_zip) {
+    ut_ad(slc->contiguous());
     ulint pos = index->get_sys_col_pos(DATA_TRX_ID);
-    page_zip_write_trx_id_and_roll_ptr(page_zip, rec, offsets, pos, trx->id,
-                                       roll_ptr);
+    page_zip_write_trx_id_and_roll_ptr(page_zip, slc, pos, trx->id, roll_ptr);
   } else {
     ulint offset = index->trx_id_offset;
 
     if (!offset) {
-      offset = row_get_trx_id_offset(index, offsets);
+      offset = row_get_trx_id_offset(index, slc);
     }
 
     /* During IMPORT the trx id in the record can be in the
@@ -184,13 +188,12 @@ static inline void row_upd_rec_sys_fields(
 
     /** Revision: During IMPORT roll_ptr will be lizard::ROLL_PTR_IMPORT
     for now to keep MVCC working fine. */
-    ut_ad(roll_ptr == 0 ||
-          roll_ptr == lizard::ROLL_PTR_IMPORT ||
-          lock_check_trx_id_sanity(trx_read_trx_id(rec + offset), rec, index,
-                                   offsets));
+    ut_ad(roll_ptr == 0 || roll_ptr == lizard::ROLL_PTR_IMPORT ||
+          lock_check_trx_id_sanity(trx_read_trx_id(slc->rec() + offset), slc,
+                                   index));
 
-    trx_write_trx_id(rec + offset, trx->id);
-    trx_write_roll_ptr(rec + offset + DATA_TRX_ID_LEN, roll_ptr);
+    trx_write_trx_id(slc->rec() + offset, trx->id);
+    trx_write_roll_ptr(slc->rec() + offset + DATA_TRX_ID_LEN, roll_ptr);
   }
 }
 #endif /* !UNIV_HOTBACKUP */

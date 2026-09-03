@@ -493,6 +493,13 @@ TABLE *Table_cache::get_table(THD *thd, const char *key, size_t key_length,
 */
 
 void Table_cache::release_table(THD *thd, TABLE *table) {
+  /* Do NOT destroy TABLE::hlindex here.  The hlindex TABLE instance
+     persists across statements in Table_cache (avoids per-statement
+     LOCK_open).  reset_hlindexes() in ha_reset + cascade F_UNLCK in
+     ha_external_lock ensure it's in a clean state for the next user.
+     The hlindex is only destroyed when the base TABLE is truly closed
+     (intern_close_table). */
+
   Table_cache_element *el =
       table->s->cache_element[table_cache_manager.cache_index(this)];
 

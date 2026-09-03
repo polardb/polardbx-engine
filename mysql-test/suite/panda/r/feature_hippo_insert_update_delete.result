@@ -1,0 +1,1997 @@
+SET GLOBAL innodb_purge_stop_now = ON;
+SET opt_index_format_hippo_enabled=on;
+########################################################################
+# Test 1: INSERT - Trigger row_sec_assert_tid_in_entry()
+########################################################################
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val INT,
+data VARCHAR(100),
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+# Verify HIPPO index created
+SELECT index_name, index_page_type FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE table_name='t1' AND index_name='idx_val';
+index_name	index_page_type
+idx_val	HIPPO_INDEX
+# Test 1.1: Simple INSERT - triggers assert at row0ins.cc:3108
+BEGIN;
+INSERT INTO t1 VALUES (1, 100, 'data1');
+INSERT INTO t1 VALUES (2, 200, 'data2');
+INSERT INTO t1 VALUES (3, 100, 'data3');
+COMMIT;
+# Test 1.2: Batch INSERT
+INSERT INTO t1 VALUES 
+(4, 300, 'data4'),
+(5, 100, 'data5'),
+(6, 200, 'data6');
+# Test 1.3: INSERT with duplicates (non-unique index)
+INSERT INTO t1 VALUES (7, 100, 'data7'), (8, 100, 'data8');
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+8
+########################################################################
+# Test 2: MVCC Visibility - FORCE INDEX to use HIPPO index
+########################################################################
+# Test 2.1: Concurrent transactions with FORCE INDEX
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+# con1: Query using HIPPO index (not PK)
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+id	val	data
+1	100	data1
+3	100	data3
+5	100	data5
+7	100	data7
+8	100	data8
+BEGIN;
+# con2: INSERT new row with val=100
+INSERT INTO t1 VALUES (9, 100, 'data9_con2');
+# con2: UPDATE existing row
+UPDATE t1 SET data='data1_updated' WHERE id=1;
+# con1: Should NOT see con2's uncommitted changes
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+id	val	data
+1	100	data1
+3	100	data3
+5	100	data5
+7	100	data7
+8	100	data8
+# con2: Commit
+COMMIT;
+# con1: Now should see con2's committed changes (READ COMMITTED)
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+id	val	data
+1	100	data1_updated
+3	100	data3
+5	100	data5
+7	100	data7
+8	100	data8
+9	100	data9_con2
+COMMIT;
+########################################################################
+# Test 3: UPDATE = DELETE old entry + INSERT new entry
+# INSERT phase has three different paths (see file header)
+########################################################################
+########################################################################
+# Test 3 INSERT Path 1: Normal INSERT (most common)
+# Condition: row_ins_must_modify_rec() returns false
+#            (no record with same ordering keys in index)
+# Assertions triggered:
+#   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+#   - INSERT: row_sec_assert_tid_in_entry() at row0ins.cc:3108
+########################################################################
+# Test 3.1.1: Update indexed column to new value (no existing record)
+BEGIN;
+UPDATE t1 SET val=150 WHERE id=2;
+# Verify: old value (200) gone, new value (150) exists
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=150;
+id	val	data
+2	150	data2
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=200;
+id	val	data
+6	200	data6
+COMMIT;
+# Test 3.1.2: Batch update indexed column
+BEGIN;
+UPDATE t1 SET val=val+1000 WHERE val < 200;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val >= 1000 ORDER BY id;
+id	val	data
+1	1100	data1_updated
+2	1150	data2
+3	1100	data3
+5	1100	data5
+7	1100	data7
+8	1100	data8
+9	1100	data9_con2
+COMMIT;
+# Test 3.1.3: Update that changes index key ordering
+BEGIN;
+UPDATE t1 SET val=50 WHERE id=4;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=50;
+id	val	data
+4	50	data4
+COMMIT;
+########################################################################
+# Test 3 INSERT Path 2: INSERT by unmark delete-marked record
+# Condition: row_ins_must_modify_rec() returns true
+#            (found delete-marked record with same ordering keys)
+#            AND row_upd_build_sec_rec_difference_binary() -> n_fields=0
+# This happens when we delete a row and insert same index key value
+# Assertions triggered:
+#   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+#   - INSERT(unmark): row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+########################################################################
+# Test 3.2a.1: Delete then insert same key value (triggers unmark path)
+# Step 1: Insert and delete to create delete-marked record
+BEGIN;
+INSERT INTO t1 VALUES (100, 9999, 'temp_row');
+DELETE FROM t1 WHERE id=100;
+# Now index has delete-marked record with val=9999
+# Step 2: Insert same key value - triggers row_ins_must_modify_rec()
+INSERT INTO t1 VALUES (100, 9999, 'reuse_key');
+# This should find the delete-marked record and unmark it
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=9999;
+id	val	data
+100	9999	reuse_key
+COMMIT;
+# Test 3.2a.2: Same pattern in separate transactions
+BEGIN;
+INSERT INTO t1 VALUES (102, 8888, 'will_delete');
+COMMIT;
+BEGIN;
+DELETE FROM t1 WHERE id=102;
+COMMIT;
+BEGIN;
+# Insert with same key - finds delete-marked record, unmarks it
+INSERT INTO t1 VALUES (102, 8888, 'reuse_again');
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=8888;
+id	val	data
+102	8888	reuse_again
+COMMIT;
+########################################################################
+# Test 3 INSERT Path 3: INSERT by in-place update (rare, charset/case)
+# Condition: row_ins_must_modify_rec() returns true
+#            (found delete-marked record with same ordering keys)
+#            BUT row_upd_build_sec_rec_difference_binary() -> n_fields>0
+# This happens due to case-insensitive collation in search
+# but case-sensitive memcmp in row_upd_build_sec_rec_difference_binary()
+# Example: 'ABC' and 'abc' match in search but differ in memcmp
+# Assertions triggered:
+#   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+#   - INSERT(in-place): row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+########################################################################
+# Create table with case-insensitive collation for this test
+DROP TABLE IF EXISTS t_case;
+Warnings:
+Note	1051	Unknown table 'test.t_case'
+CREATE TABLE t_case (
+id INT PRIMARY KEY,
+name VARCHAR(100) COLLATE utf8mb4_general_ci,
+KEY idx_name (name) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+# Test 3.2b.1: Case change triggers in-place update
+# Step 1: Insert and delete uppercase
+BEGIN;
+INSERT INTO t_case VALUES (1, 'HELLO');
+DELETE FROM t_case WHERE id=1;
+# Now index has delete-marked record with name='HELLO'
+# Step 2: Insert lowercase - search finds 'HELLO' (case-insensitive match)
+# but memcmp sees difference -> triggers in-place update
+INSERT INTO t_case VALUES (1, 'hello');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='hello';
+id	name
+1	hello
+COMMIT;
+# Test 3.2b.2: Another case change scenario
+BEGIN;
+INSERT INTO t_case VALUES (3, 'World');
+DELETE FROM t_case WHERE id=3;
+# Insert with different case
+INSERT INTO t_case VALUES (3, 'WORLD');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='WORLD';
+id	name
+3	WORLD
+COMMIT;
+# Test 3.2b.3: Mixed case changes
+BEGIN;
+INSERT INTO t_case VALUES (5, 'MixedCase');
+DELETE FROM t_case WHERE id=5;
+INSERT INTO t_case VALUES (5, 'MIXEDCASE');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='MIXEDCASE';
+id	name
+5	MIXEDCASE
+COMMIT;
+# Cleanup case test table
+DROP TABLE t_case;
+########################################################################
+# Test 3 INSERT Path 4: INSERT by non-in-place update (field size change)
+# Condition: row_ins_must_modify_rec() returns true
+#            (found delete-marked record with same ordering keys)
+#            AND row_upd_build_sec_rec_difference_binary() -> n_fields>0
+#            AND row_upd_changes_field_size_or_external() -> true
+# This happens when collation treats strings as equal but binary
+# comparison shows different lengths (e.g., '' vs '  ' in utf8mb4_general_ci)
+# Two sub-paths:
+#   4A: Optimistic non-in-place update (btr_cur_optimistic_update succeeds)
+#       - Field size changes but page has enough space
+#       - Delete old record and insert new record within same page
+#       - Assertion: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#   4B: Pessimistic update (btr_cur_optimistic_update fails)
+#       - btr_cur_optimistic_update() fails (DB_OVERFLOW/DB_UNDERFLOW) because
+#         record size change requires delete+insert, which may cause page
+#         to become too empty or not have enough space
+#       - Falls back to btr_cur_pessimistic_update() with BTR_MODIFY_TREE
+#       - Assertion: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+# Assertions triggered:
+#   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+########################################################################
+# Create table with case-insensitive collation for this test
+DROP TABLE IF EXISTS t_space;
+Warnings:
+Note	1051	Unknown table 'test.t_space'
+CREATE TABLE t_space (
+id BIGINT PRIMARY KEY,
+unit_id BIGINT NOT NULL,
+nick_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+KEY auto_shard_key_nick_name (nick_name) COMMENT 'hippo_index'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
+# Test 3.2c.1: Empty string to spaces - Path 4B (pessimistic update)
+# Strategy: Fill page to near merge threshold, then delete+insert with size change
+# Step 0: Pre-fill page with many records using empty string
+# This ensures page data size is close to merge threshold (50% of page size)
+# When we delete small record (empty string) and insert larger one (spaces),
+# page data size may drop below threshold, triggering DB_UNDERFLOW -> pessimistic update
+BEGIN;
+# Insert ~200 records with empty string to fill the page
+# Each record: id (8 bytes) + unit_id (8 bytes) + nick_name (empty, ~1 byte) = ~17 bytes
+# Plus index entry overhead, ~200 records should fill ~4-5KB, close to 8KB threshold
+INSERT INTO t_space VALUES 
+(1001, 100, ''), (1002, 100, ''), (1003, 100, ''), (1004, 100, ''), (1005, 100, ''),
+(1006, 100, ''), (1007, 100, ''), (1008, 100, ''), (1009, 100, ''), (1010, 100, ''),
+(1011, 100, ''), (1012, 100, ''), (1013, 100, ''), (1014, 100, ''), (1015, 100, ''),
+(1016, 100, ''), (1017, 100, ''), (1018, 100, ''), (1019, 100, ''), (1020, 100, ''),
+(1021, 100, ''), (1022, 100, ''), (1023, 100, ''), (1024, 100, ''), (1025, 100, ''),
+(1026, 100, ''), (1027, 100, ''), (1028, 100, ''), (1029, 100, ''), (1030, 100, ''),
+(1031, 100, ''), (1032, 100, ''), (1033, 100, ''), (1034, 100, ''), (1035, 100, ''),
+(1036, 100, ''), (1037, 100, ''), (1038, 100, ''), (1039, 100, ''), (1040, 100, ''),
+(1041, 100, ''), (1042, 100, ''), (1043, 100, ''), (1044, 100, ''), (1045, 100, ''),
+(1046, 100, ''), (1047, 100, ''), (1048, 100, ''), (1049, 100, ''), (1050, 100, ''),
+(1051, 100, ''), (1052, 100, ''), (1053, 100, ''), (1054, 100, ''), (1055, 100, ''),
+(1056, 100, ''), (1057, 100, ''), (1058, 100, ''), (1059, 100, ''), (1060, 100, ''),
+(1061, 100, ''), (1062, 100, ''), (1063, 100, ''), (1064, 100, ''), (1065, 100, ''),
+(1066, 100, ''), (1067, 100, ''), (1068, 100, ''), (1069, 100, ''), (1070, 100, ''),
+(1071, 100, ''), (1072, 100, ''), (1073, 100, ''), (1074, 100, ''), (1075, 100, ''),
+(1076, 100, ''), (1077, 100, ''), (1078, 100, ''), (1079, 100, ''), (1080, 100, ''),
+(1081, 100, ''), (1082, 100, ''), (1083, 100, ''), (1084, 100, ''), (1085, 100, ''),
+(1086, 100, ''), (1087, 100, ''), (1088, 100, ''), (1089, 100, ''), (1090, 100, ''),
+(1091, 100, ''), (1092, 100, ''), (1093, 100, ''), (1094, 100, ''), (1095, 100, ''),
+(1096, 100, ''), (1097, 100, ''), (1098, 100, ''), (1099, 100, ''), (1100, 100, ''),
+(1101, 100, ''), (1102, 100, ''), (1103, 100, ''), (1104, 100, ''), (1105, 100, ''),
+(1106, 100, ''), (1107, 100, ''), (1108, 100, ''), (1109, 100, ''), (1110, 100, ''),
+(1111, 100, ''), (1112, 100, ''), (1113, 100, ''), (1114, 100, ''), (1115, 100, ''),
+(1116, 100, ''), (1117, 100, ''), (1118, 100, ''), (1119, 100, ''), (1120, 100, ''),
+(1121, 100, ''), (1122, 100, ''), (1123, 100, ''), (1124, 100, ''), (1125, 100, ''),
+(1126, 100, ''), (1127, 100, ''), (1128, 100, ''), (1129, 100, ''), (1130, 100, ''),
+(1131, 100, ''), (1132, 100, ''), (1133, 100, ''), (1134, 100, ''), (1135, 100, ''),
+(1136, 100, ''), (1137, 100, ''), (1138, 100, ''), (1139, 100, ''), (1140, 100, ''),
+(1141, 100, ''), (1142, 100, ''), (1143, 100, ''), (1144, 100, ''), (1145, 100, ''),
+(1146, 100, ''), (1147, 100, ''), (1148, 100, ''), (1149, 100, ''), (1150, 100, ''),
+(1151, 100, ''), (1152, 100, ''), (1153, 100, ''), (1154, 100, ''), (1155, 100, ''),
+(1156, 100, ''), (1157, 100, ''), (1158, 100, ''), (1159, 100, ''), (1160, 100, ''),
+(1161, 100, ''), (1162, 100, ''), (1163, 100, ''), (1164, 100, ''), (1165, 100, ''),
+(1166, 100, ''), (1167, 100, ''), (1168, 100, ''), (1169, 100, ''), (1170, 100, ''),
+(1171, 100, ''), (1172, 100, ''), (1173, 100, ''), (1174, 100, ''), (1175, 100, ''),
+(1176, 100, ''), (1177, 100, ''), (1178, 100, ''), (1179, 100, ''), (1180, 100, ''),
+(1181, 100, ''), (1182, 100, ''), (1183, 100, ''), (1184, 100, ''), (1185, 100, ''),
+(1186, 100, ''), (1187, 100, ''), (1188, 100, ''), (1189, 100, ''), (1190, 100, ''),
+(1191, 100, ''), (1192, 100, ''), (1193, 100, ''), (1194, 100, ''), (1195, 100, ''),
+(1196, 100, ''), (1197, 100, ''), (1198, 100, ''), (1199, 100, ''), (1200, 100, '');
+COMMIT;
+# Step 1: Insert target record with empty string and delete it
+# This creates a delete-marked record that will be found by row_ins_must_modify_rec()
+BEGIN;
+INSERT INTO t_space VALUES (1392684638434107392, 1250056650086289408, '');
+DELETE FROM t_space WHERE id=1392684638434107392;
+COMMIT;
+# Step 2: Insert with spaces - search finds '' (collation treats as equal)
+# but binary comparison shows length difference (0 vs 2)
+# With page near threshold, deleting small record and inserting larger one
+# may cause page data size to drop below BTR_CUR_PAGE_COMPRESS_LIMIT (50% of page)
+# This triggers DB_UNDERFLOW -> pessimistic update path
+BEGIN;
+INSERT INTO t_space VALUES (1392684638434107392, 1250056650086289408, '  ');
+COMMIT;
+# Test 3.2c.2: Empty string to single space - Path 4B (pessimistic update)
+# Pre-fill page again to ensure pessimistic update
+BEGIN;
+INSERT INTO t_space VALUES 
+(2001, 200, ''), (2002, 200, ''), (2003, 200, ''), (2004, 200, ''), (2005, 200, ''),
+(2006, 200, ''), (2007, 200, ''), (2008, 200, ''), (2009, 200, ''), (2010, 200, ''),
+(2011, 200, ''), (2012, 200, ''), (2013, 200, ''), (2014, 200, ''), (2015, 200, ''),
+(2016, 200, ''), (2017, 200, ''), (2018, 200, ''), (2019, 200, ''), (2020, 200, ''),
+(2021, 200, ''), (2022, 200, ''), (2023, 200, ''), (2024, 200, ''), (2025, 200, ''),
+(2026, 200, ''), (2027, 200, ''), (2028, 200, ''), (2029, 200, ''), (2030, 200, ''),
+(2031, 200, ''), (2032, 200, ''), (2033, 200, ''), (2034, 200, ''), (2035, 200, ''),
+(2036, 200, ''), (2037, 200, ''), (2038, 200, ''), (2039, 200, ''), (2040, 200, ''),
+(2041, 200, ''), (2042, 200, ''), (2043, 200, ''), (2044, 200, ''), (2045, 200, ''),
+(2046, 200, ''), (2047, 200, ''), (2048, 200, ''), (2049, 200, ''), (2050, 200, '');
+COMMIT;
+BEGIN;
+INSERT INTO t_space VALUES (3001, 200, '');
+DELETE FROM t_space WHERE id=3001;
+# Insert with single space - triggers pessimistic update
+INSERT INTO t_space VALUES (3002, 200, ' ');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name=' ';
+id	unit_id	nick_name
+1001	100	
+1002	100	
+1003	100	
+1004	100	
+1005	100	
+1006	100	
+1007	100	
+1008	100	
+1009	100	
+1010	100	
+1011	100	
+1012	100	
+1013	100	
+1014	100	
+1015	100	
+1016	100	
+1017	100	
+1018	100	
+1019	100	
+1020	100	
+1021	100	
+1022	100	
+1023	100	
+1024	100	
+1025	100	
+1026	100	
+1027	100	
+1028	100	
+1029	100	
+1030	100	
+1031	100	
+1032	100	
+1033	100	
+1034	100	
+1035	100	
+1036	100	
+1037	100	
+1038	100	
+1039	100	
+1040	100	
+1041	100	
+1042	100	
+1043	100	
+1044	100	
+1045	100	
+1046	100	
+1047	100	
+1048	100	
+1049	100	
+1050	100	
+1051	100	
+1052	100	
+1053	100	
+1054	100	
+1055	100	
+1056	100	
+1057	100	
+1058	100	
+1059	100	
+1060	100	
+1061	100	
+1062	100	
+1063	100	
+1064	100	
+1065	100	
+1066	100	
+1067	100	
+1068	100	
+1069	100	
+1070	100	
+1071	100	
+1072	100	
+1073	100	
+1074	100	
+1075	100	
+1076	100	
+1077	100	
+1078	100	
+1079	100	
+1080	100	
+1081	100	
+1082	100	
+1083	100	
+1084	100	
+1085	100	
+1086	100	
+1087	100	
+1088	100	
+1089	100	
+1090	100	
+1091	100	
+1092	100	
+1093	100	
+1094	100	
+1095	100	
+1096	100	
+1097	100	
+1098	100	
+1099	100	
+1100	100	
+1101	100	
+1102	100	
+1103	100	
+1104	100	
+1105	100	
+1106	100	
+1107	100	
+1108	100	
+1109	100	
+1110	100	
+1111	100	
+1112	100	
+1113	100	
+1114	100	
+1115	100	
+1116	100	
+1117	100	
+1118	100	
+1119	100	
+1120	100	
+1121	100	
+1122	100	
+1123	100	
+1124	100	
+1125	100	
+1126	100	
+1127	100	
+1128	100	
+1129	100	
+1130	100	
+1131	100	
+1132	100	
+1133	100	
+1134	100	
+1135	100	
+1136	100	
+1137	100	
+1138	100	
+1139	100	
+1140	100	
+1141	100	
+1142	100	
+1143	100	
+1144	100	
+1145	100	
+1146	100	
+1147	100	
+1148	100	
+1149	100	
+1150	100	
+1151	100	
+1152	100	
+1153	100	
+1154	100	
+1155	100	
+1156	100	
+1157	100	
+1158	100	
+1159	100	
+1160	100	
+1161	100	
+1162	100	
+1163	100	
+1164	100	
+1165	100	
+1166	100	
+1167	100	
+1168	100	
+1169	100	
+1170	100	
+1171	100	
+1172	100	
+1173	100	
+1174	100	
+1175	100	
+1176	100	
+1177	100	
+1178	100	
+1179	100	
+1180	100	
+1181	100	
+1182	100	
+1183	100	
+1184	100	
+1185	100	
+1186	100	
+1187	100	
+1188	100	
+1189	100	
+1190	100	
+1191	100	
+1192	100	
+1193	100	
+1194	100	
+1195	100	
+1196	100	
+1197	100	
+1198	100	
+1199	100	
+1200	100	
+2001	200	
+2002	200	
+2003	200	
+2004	200	
+2005	200	
+2006	200	
+2007	200	
+2008	200	
+2009	200	
+2010	200	
+2011	200	
+2012	200	
+2013	200	
+2014	200	
+2015	200	
+2016	200	
+2017	200	
+2018	200	
+2019	200	
+2020	200	
+2021	200	
+2022	200	
+2023	200	
+2024	200	
+2025	200	
+2026	200	
+2027	200	
+2028	200	
+2029	200	
+2030	200	
+2031	200	
+2032	200	
+2033	200	
+2034	200	
+2035	200	
+2036	200	
+2037	200	
+2038	200	
+2039	200	
+2040	200	
+2041	200	
+2042	200	
+2043	200	
+2044	200	
+2045	200	
+2046	200	
+2047	200	
+2048	200	
+2049	200	
+2050	200	
+3002	200	 
+1392684638434107392	1250056650086289408	  
+COMMIT;
+# Test 3.2c.3: Spaces to empty string - Path 4B (pessimistic update, reverse direction)
+BEGIN;
+INSERT INTO t_space VALUES 
+(4001, 300, '   '), (4002, 300, '   '), (4003, 300, '   '), (4004, 300, '   '), (4005, 300, '   '),
+(4006, 300, '   '), (4007, 300, '   '), (4008, 300, '   '), (4009, 300, '   '), (4010, 300, '   '),
+(4011, 300, '   '), (4012, 300, '   '), (4013, 300, '   '), (4014, 300, '   '), (4015, 300, '   '),
+(4016, 300, '   '), (4017, 300, '   '), (4018, 300, '   '), (4019, 300, '   '), (4020, 300, '   '),
+(4021, 300, '   '), (4022, 300, '   '), (4023, 300, '   '), (4024, 300, '   '), (4025, 300, '   '),
+(4026, 300, '   '), (4027, 300, '   '), (4028, 300, '   '), (4029, 300, '   '), (4030, 300, '   '),
+(4031, 300, '   '), (4032, 300, '   '), (4033, 300, '   '), (4034, 300, '   '), (4035, 300, '   '),
+(4036, 300, '   '), (4037, 300, '   '), (4038, 300, '   '), (4039, 300, '   '), (4040, 300, '   '),
+(4041, 300, '   '), (4042, 300, '   '), (4043, 300, '   '), (4044, 300, '   '), (4045, 300, '   '),
+(4046, 300, '   '), (4047, 300, '   '), (4048, 300, '   '), (4049, 300, '   '), (4050, 300, '   ');
+COMMIT;
+BEGIN;
+INSERT INTO t_space VALUES (5001, 300, '   ');
+DELETE FROM t_space WHERE id=5001;
+# Insert with empty string - length changes from 3 to 0, triggers pessimistic update
+INSERT INTO t_space VALUES (5002, 300, '');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='';
+id	unit_id	nick_name
+1001	100	
+1002	100	
+1003	100	
+1004	100	
+1005	100	
+1006	100	
+1007	100	
+1008	100	
+1009	100	
+1010	100	
+1011	100	
+1012	100	
+1013	100	
+1014	100	
+1015	100	
+1016	100	
+1017	100	
+1018	100	
+1019	100	
+1020	100	
+1021	100	
+1022	100	
+1023	100	
+1024	100	
+1025	100	
+1026	100	
+1027	100	
+1028	100	
+1029	100	
+1030	100	
+1031	100	
+1032	100	
+1033	100	
+1034	100	
+1035	100	
+1036	100	
+1037	100	
+1038	100	
+1039	100	
+1040	100	
+1041	100	
+1042	100	
+1043	100	
+1044	100	
+1045	100	
+1046	100	
+1047	100	
+1048	100	
+1049	100	
+1050	100	
+1051	100	
+1052	100	
+1053	100	
+1054	100	
+1055	100	
+1056	100	
+1057	100	
+1058	100	
+1059	100	
+1060	100	
+1061	100	
+1062	100	
+1063	100	
+1064	100	
+1065	100	
+1066	100	
+1067	100	
+1068	100	
+1069	100	
+1070	100	
+1071	100	
+1072	100	
+1073	100	
+1074	100	
+1075	100	
+1076	100	
+1077	100	
+1078	100	
+1079	100	
+1080	100	
+1081	100	
+1082	100	
+1083	100	
+1084	100	
+1085	100	
+1086	100	
+1087	100	
+1088	100	
+1089	100	
+1090	100	
+1091	100	
+1092	100	
+1093	100	
+1094	100	
+1095	100	
+1096	100	
+1097	100	
+1098	100	
+1099	100	
+1100	100	
+1101	100	
+1102	100	
+1103	100	
+1104	100	
+1105	100	
+1106	100	
+1107	100	
+1108	100	
+1109	100	
+1110	100	
+1111	100	
+1112	100	
+1113	100	
+1114	100	
+1115	100	
+1116	100	
+1117	100	
+1118	100	
+1119	100	
+1120	100	
+1121	100	
+1122	100	
+1123	100	
+1124	100	
+1125	100	
+1126	100	
+1127	100	
+1128	100	
+1129	100	
+1130	100	
+1131	100	
+1132	100	
+1133	100	
+1134	100	
+1135	100	
+1136	100	
+1137	100	
+1138	100	
+1139	100	
+1140	100	
+1141	100	
+1142	100	
+1143	100	
+1144	100	
+1145	100	
+1146	100	
+1147	100	
+1148	100	
+1149	100	
+1150	100	
+1151	100	
+1152	100	
+1153	100	
+1154	100	
+1155	100	
+1156	100	
+1157	100	
+1158	100	
+1159	100	
+1160	100	
+1161	100	
+1162	100	
+1163	100	
+1164	100	
+1165	100	
+1166	100	
+1167	100	
+1168	100	
+1169	100	
+1170	100	
+1171	100	
+1172	100	
+1173	100	
+1174	100	
+1175	100	
+1176	100	
+1177	100	
+1178	100	
+1179	100	
+1180	100	
+1181	100	
+1182	100	
+1183	100	
+1184	100	
+1185	100	
+1186	100	
+1187	100	
+1188	100	
+1189	100	
+1190	100	
+1191	100	
+1192	100	
+1193	100	
+1194	100	
+1195	100	
+1196	100	
+1197	100	
+1198	100	
+1199	100	
+1200	100	
+2001	200	
+2002	200	
+2003	200	
+2004	200	
+2005	200	
+2006	200	
+2007	200	
+2008	200	
+2009	200	
+2010	200	
+2011	200	
+2012	200	
+2013	200	
+2014	200	
+2015	200	
+2016	200	
+2017	200	
+2018	200	
+2019	200	
+2020	200	
+2021	200	
+2022	200	
+2023	200	
+2024	200	
+2025	200	
+2026	200	
+2027	200	
+2028	200	
+2029	200	
+2030	200	
+2031	200	
+2032	200	
+2033	200	
+2034	200	
+2035	200	
+2036	200	
+2037	200	
+2038	200	
+2039	200	
+2040	200	
+2041	200	
+2042	200	
+2043	200	
+2044	200	
+2045	200	
+2046	200	
+2047	200	
+2048	200	
+2049	200	
+2050	200	
+3002	200	 
+4001	300	   
+4002	300	   
+4003	300	   
+4004	300	   
+4005	300	   
+4006	300	   
+4007	300	   
+4008	300	   
+4009	300	   
+4010	300	   
+4011	300	   
+4012	300	   
+4013	300	   
+4014	300	   
+4015	300	   
+4016	300	   
+4017	300	   
+4018	300	   
+4019	300	   
+4020	300	   
+4021	300	   
+4022	300	   
+4023	300	   
+4024	300	   
+4025	300	   
+4026	300	   
+4027	300	   
+4028	300	   
+4029	300	   
+4030	300	   
+4031	300	   
+4032	300	   
+4033	300	   
+4034	300	   
+4035	300	   
+4036	300	   
+4037	300	   
+4038	300	   
+4039	300	   
+4040	300	   
+4041	300	   
+4042	300	   
+4043	300	   
+4044	300	   
+4045	300	   
+4046	300	   
+4047	300	   
+4048	300	   
+4049	300	   
+4050	300	   
+5002	300	
+1392684638434107392	1250056650086289408	  
+COMMIT;
+# Test 3.2c.4: Two spaces to four spaces - Path 4B (pessimistic update)
+BEGIN;
+INSERT INTO t_space VALUES 
+(6001, 400, '  '), (6002, 400, '  '), (6003, 400, '  '), (6004, 400, '  '), (6005, 400, '  '),
+(6006, 400, '  '), (6007, 400, '  '), (6008, 400, '  '), (6009, 400, '  '), (6010, 400, '  '),
+(6011, 400, '  '), (6012, 400, '  '), (6013, 400, '  '), (6014, 400, '  '), (6015, 400, '  '),
+(6016, 400, '  '), (6017, 400, '  '), (6018, 400, '  '), (6019, 400, '  '), (6020, 400, '  '),
+(6021, 400, '  '), (6022, 400, '  '), (6023, 400, '  '), (6024, 400, '  '), (6025, 400, '  '),
+(6026, 400, '  '), (6027, 400, '  '), (6028, 400, '  '), (6029, 400, '  '), (6030, 400, '  '),
+(6031, 400, '  '), (6032, 400, '  '), (6033, 400, '  '), (6034, 400, '  '), (6035, 400, '  '),
+(6036, 400, '  '), (6037, 400, '  '), (6038, 400, '  '), (6039, 400, '  '), (6040, 400, '  '),
+(6041, 400, '  '), (6042, 400, '  '), (6043, 400, '  '), (6044, 400, '  '), (6045, 400, '  '),
+(6046, 400, '  '), (6047, 400, '  '), (6048, 400, '  '), (6049, 400, '  '), (6050, 400, '  ');
+COMMIT;
+BEGIN;
+INSERT INTO t_space VALUES (7001, 400, '  ');
+DELETE FROM t_space WHERE id=7001;
+# Insert with different number of spaces - triggers pessimistic update
+INSERT INTO t_space VALUES (7002, 400, '    ');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='    ';
+id	unit_id	nick_name
+1001	100	
+1002	100	
+1003	100	
+1004	100	
+1005	100	
+1006	100	
+1007	100	
+1008	100	
+1009	100	
+1010	100	
+1011	100	
+1012	100	
+1013	100	
+1014	100	
+1015	100	
+1016	100	
+1017	100	
+1018	100	
+1019	100	
+1020	100	
+1021	100	
+1022	100	
+1023	100	
+1024	100	
+1025	100	
+1026	100	
+1027	100	
+1028	100	
+1029	100	
+1030	100	
+1031	100	
+1032	100	
+1033	100	
+1034	100	
+1035	100	
+1036	100	
+1037	100	
+1038	100	
+1039	100	
+1040	100	
+1041	100	
+1042	100	
+1043	100	
+1044	100	
+1045	100	
+1046	100	
+1047	100	
+1048	100	
+1049	100	
+1050	100	
+1051	100	
+1052	100	
+1053	100	
+1054	100	
+1055	100	
+1056	100	
+1057	100	
+1058	100	
+1059	100	
+1060	100	
+1061	100	
+1062	100	
+1063	100	
+1064	100	
+1065	100	
+1066	100	
+1067	100	
+1068	100	
+1069	100	
+1070	100	
+1071	100	
+1072	100	
+1073	100	
+1074	100	
+1075	100	
+1076	100	
+1077	100	
+1078	100	
+1079	100	
+1080	100	
+1081	100	
+1082	100	
+1083	100	
+1084	100	
+1085	100	
+1086	100	
+1087	100	
+1088	100	
+1089	100	
+1090	100	
+1091	100	
+1092	100	
+1093	100	
+1094	100	
+1095	100	
+1096	100	
+1097	100	
+1098	100	
+1099	100	
+1100	100	
+1101	100	
+1102	100	
+1103	100	
+1104	100	
+1105	100	
+1106	100	
+1107	100	
+1108	100	
+1109	100	
+1110	100	
+1111	100	
+1112	100	
+1113	100	
+1114	100	
+1115	100	
+1116	100	
+1117	100	
+1118	100	
+1119	100	
+1120	100	
+1121	100	
+1122	100	
+1123	100	
+1124	100	
+1125	100	
+1126	100	
+1127	100	
+1128	100	
+1129	100	
+1130	100	
+1131	100	
+1132	100	
+1133	100	
+1134	100	
+1135	100	
+1136	100	
+1137	100	
+1138	100	
+1139	100	
+1140	100	
+1141	100	
+1142	100	
+1143	100	
+1144	100	
+1145	100	
+1146	100	
+1147	100	
+1148	100	
+1149	100	
+1150	100	
+1151	100	
+1152	100	
+1153	100	
+1154	100	
+1155	100	
+1156	100	
+1157	100	
+1158	100	
+1159	100	
+1160	100	
+1161	100	
+1162	100	
+1163	100	
+1164	100	
+1165	100	
+1166	100	
+1167	100	
+1168	100	
+1169	100	
+1170	100	
+1171	100	
+1172	100	
+1173	100	
+1174	100	
+1175	100	
+1176	100	
+1177	100	
+1178	100	
+1179	100	
+1180	100	
+1181	100	
+1182	100	
+1183	100	
+1184	100	
+1185	100	
+1186	100	
+1187	100	
+1188	100	
+1189	100	
+1190	100	
+1191	100	
+1192	100	
+1193	100	
+1194	100	
+1195	100	
+1196	100	
+1197	100	
+1198	100	
+1199	100	
+1200	100	
+2001	200	
+2002	200	
+2003	200	
+2004	200	
+2005	200	
+2006	200	
+2007	200	
+2008	200	
+2009	200	
+2010	200	
+2011	200	
+2012	200	
+2013	200	
+2014	200	
+2015	200	
+2016	200	
+2017	200	
+2018	200	
+2019	200	
+2020	200	
+2021	200	
+2022	200	
+2023	200	
+2024	200	
+2025	200	
+2026	200	
+2027	200	
+2028	200	
+2029	200	
+2030	200	
+2031	200	
+2032	200	
+2033	200	
+2034	200	
+2035	200	
+2036	200	
+2037	200	
+2038	200	
+2039	200	
+2040	200	
+2041	200	
+2042	200	
+2043	200	
+2044	200	
+2045	200	
+2046	200	
+2047	200	
+2048	200	
+2049	200	
+2050	200	
+3002	200	 
+4001	300	   
+4002	300	   
+4003	300	   
+4004	300	   
+4005	300	   
+4006	300	   
+4007	300	   
+4008	300	   
+4009	300	   
+4010	300	   
+4011	300	   
+4012	300	   
+4013	300	   
+4014	300	   
+4015	300	   
+4016	300	   
+4017	300	   
+4018	300	   
+4019	300	   
+4020	300	   
+4021	300	   
+4022	300	   
+4023	300	   
+4024	300	   
+4025	300	   
+4026	300	   
+4027	300	   
+4028	300	   
+4029	300	   
+4030	300	   
+4031	300	   
+4032	300	   
+4033	300	   
+4034	300	   
+4035	300	   
+4036	300	   
+4037	300	   
+4038	300	   
+4039	300	   
+4040	300	   
+4041	300	   
+4042	300	   
+4043	300	   
+4044	300	   
+4045	300	   
+4046	300	   
+4047	300	   
+4048	300	   
+4049	300	   
+4050	300	   
+5002	300	
+6001	400	  
+6002	400	  
+6003	400	  
+6004	400	  
+6005	400	  
+6006	400	  
+6007	400	  
+6008	400	  
+6009	400	  
+6010	400	  
+6011	400	  
+6012	400	  
+6013	400	  
+6014	400	  
+6015	400	  
+6016	400	  
+6017	400	  
+6018	400	  
+6019	400	  
+6020	400	  
+6021	400	  
+6022	400	  
+6023	400	  
+6024	400	  
+6025	400	  
+6026	400	  
+6027	400	  
+6028	400	  
+6029	400	  
+6030	400	  
+6031	400	  
+6032	400	  
+6033	400	  
+6034	400	  
+6035	400	  
+6036	400	  
+6037	400	  
+6038	400	  
+6039	400	  
+6040	400	  
+6041	400	  
+6042	400	  
+6043	400	  
+6044	400	  
+6045	400	  
+6046	400	  
+6047	400	  
+6048	400	  
+6049	400	  
+6050	400	  
+7002	400	    
+1392684638434107392	1250056650086289408	  
+COMMIT;
+# Test 3.2c.5: Empty string to spaces - Path 4A (optimistic non-in-place update)
+# Strategy: Use sparse page (not near threshold) to allow optimistic update
+# Field size changes but page has enough space for delete+insert
+# This triggers optimistic non-in-place update (not pessimistic)
+DROP TABLE IF EXISTS t_space_opt;
+Warnings:
+Note	1051	Unknown table 'test.t_space_opt'
+CREATE TABLE t_space_opt (
+id BIGINT PRIMARY KEY,
+unit_id BIGINT NOT NULL,
+nick_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+KEY auto_shard_key_nick_name (nick_name) COMMENT 'hippo_index'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
+# Insert only a few records to keep page sparse
+BEGIN;
+INSERT INTO t_space_opt VALUES (1, 100, ''), (2, 100, ''), (3, 100, ''), (4, 100, ''), (5, 100, '');
+COMMIT;
+# Step 1: Insert target record with empty string and delete it
+BEGIN;
+INSERT INTO t_space_opt VALUES (100, 100, '');
+DELETE FROM t_space_opt WHERE id=100;
+COMMIT;
+# Step 2: Insert with spaces - page has enough space
+# This triggers optimistic non-in-place update (Path 4A)
+# btr_cur_optimistic_update succeeds, delete+insert within same page
+BEGIN;
+INSERT INTO t_space_opt VALUES (100, 100, '  ');
+SELECT * FROM t_space_opt FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='  ';
+id	unit_id	nick_name
+1	100	
+2	100	
+3	100	
+4	100	
+5	100	
+100	100	  
+COMMIT;
+# Test 3.2c.6: Single space to multiple spaces - Path 4A (optimistic non-in-place)
+BEGIN;
+INSERT INTO t_space_opt VALUES (200, 200, ' ');
+DELETE FROM t_space_opt WHERE id=200;
+# Insert with more spaces - optimistic update succeeds
+INSERT INTO t_space_opt VALUES (200, 200, '   ');
+SELECT * FROM t_space_opt FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='   ';
+id	unit_id	nick_name
+1	100	
+2	100	
+3	100	
+4	100	
+5	100	
+100	100	  
+200	200	   
+COMMIT;
+# Test 3.2c.7: Verify all records are correctly stored
+SELECT id, unit_id, LENGTH(nick_name) as nick_name_len, 
+CASE WHEN nick_name = '' THEN '(empty)' 
+WHEN nick_name = ' ' THEN '(1 space)' 
+WHEN nick_name = '  ' THEN '(2 spaces)'
+            WHEN nick_name = '   ' THEN '(3 spaces)'
+            WHEN nick_name = '    ' THEN '(4 spaces)'
+            ELSE nick_name END as nick_name_display
+FROM t_space FORCE INDEX(auto_shard_key_nick_name) ORDER BY id;
+id	unit_id	nick_name_len	nick_name_display
+1001	100	0	(empty)
+1002	100	0	(empty)
+1003	100	0	(empty)
+1004	100	0	(empty)
+1005	100	0	(empty)
+1006	100	0	(empty)
+1007	100	0	(empty)
+1008	100	0	(empty)
+1009	100	0	(empty)
+1010	100	0	(empty)
+1011	100	0	(empty)
+1012	100	0	(empty)
+1013	100	0	(empty)
+1014	100	0	(empty)
+1015	100	0	(empty)
+1016	100	0	(empty)
+1017	100	0	(empty)
+1018	100	0	(empty)
+1019	100	0	(empty)
+1020	100	0	(empty)
+1021	100	0	(empty)
+1022	100	0	(empty)
+1023	100	0	(empty)
+1024	100	0	(empty)
+1025	100	0	(empty)
+1026	100	0	(empty)
+1027	100	0	(empty)
+1028	100	0	(empty)
+1029	100	0	(empty)
+1030	100	0	(empty)
+1031	100	0	(empty)
+1032	100	0	(empty)
+1033	100	0	(empty)
+1034	100	0	(empty)
+1035	100	0	(empty)
+1036	100	0	(empty)
+1037	100	0	(empty)
+1038	100	0	(empty)
+1039	100	0	(empty)
+1040	100	0	(empty)
+1041	100	0	(empty)
+1042	100	0	(empty)
+1043	100	0	(empty)
+1044	100	0	(empty)
+1045	100	0	(empty)
+1046	100	0	(empty)
+1047	100	0	(empty)
+1048	100	0	(empty)
+1049	100	0	(empty)
+1050	100	0	(empty)
+1051	100	0	(empty)
+1052	100	0	(empty)
+1053	100	0	(empty)
+1054	100	0	(empty)
+1055	100	0	(empty)
+1056	100	0	(empty)
+1057	100	0	(empty)
+1058	100	0	(empty)
+1059	100	0	(empty)
+1060	100	0	(empty)
+1061	100	0	(empty)
+1062	100	0	(empty)
+1063	100	0	(empty)
+1064	100	0	(empty)
+1065	100	0	(empty)
+1066	100	0	(empty)
+1067	100	0	(empty)
+1068	100	0	(empty)
+1069	100	0	(empty)
+1070	100	0	(empty)
+1071	100	0	(empty)
+1072	100	0	(empty)
+1073	100	0	(empty)
+1074	100	0	(empty)
+1075	100	0	(empty)
+1076	100	0	(empty)
+1077	100	0	(empty)
+1078	100	0	(empty)
+1079	100	0	(empty)
+1080	100	0	(empty)
+1081	100	0	(empty)
+1082	100	0	(empty)
+1083	100	0	(empty)
+1084	100	0	(empty)
+1085	100	0	(empty)
+1086	100	0	(empty)
+1087	100	0	(empty)
+1088	100	0	(empty)
+1089	100	0	(empty)
+1090	100	0	(empty)
+1091	100	0	(empty)
+1092	100	0	(empty)
+1093	100	0	(empty)
+1094	100	0	(empty)
+1095	100	0	(empty)
+1096	100	0	(empty)
+1097	100	0	(empty)
+1098	100	0	(empty)
+1099	100	0	(empty)
+1100	100	0	(empty)
+1101	100	0	(empty)
+1102	100	0	(empty)
+1103	100	0	(empty)
+1104	100	0	(empty)
+1105	100	0	(empty)
+1106	100	0	(empty)
+1107	100	0	(empty)
+1108	100	0	(empty)
+1109	100	0	(empty)
+1110	100	0	(empty)
+1111	100	0	(empty)
+1112	100	0	(empty)
+1113	100	0	(empty)
+1114	100	0	(empty)
+1115	100	0	(empty)
+1116	100	0	(empty)
+1117	100	0	(empty)
+1118	100	0	(empty)
+1119	100	0	(empty)
+1120	100	0	(empty)
+1121	100	0	(empty)
+1122	100	0	(empty)
+1123	100	0	(empty)
+1124	100	0	(empty)
+1125	100	0	(empty)
+1126	100	0	(empty)
+1127	100	0	(empty)
+1128	100	0	(empty)
+1129	100	0	(empty)
+1130	100	0	(empty)
+1131	100	0	(empty)
+1132	100	0	(empty)
+1133	100	0	(empty)
+1134	100	0	(empty)
+1135	100	0	(empty)
+1136	100	0	(empty)
+1137	100	0	(empty)
+1138	100	0	(empty)
+1139	100	0	(empty)
+1140	100	0	(empty)
+1141	100	0	(empty)
+1142	100	0	(empty)
+1143	100	0	(empty)
+1144	100	0	(empty)
+1145	100	0	(empty)
+1146	100	0	(empty)
+1147	100	0	(empty)
+1148	100	0	(empty)
+1149	100	0	(empty)
+1150	100	0	(empty)
+1151	100	0	(empty)
+1152	100	0	(empty)
+1153	100	0	(empty)
+1154	100	0	(empty)
+1155	100	0	(empty)
+1156	100	0	(empty)
+1157	100	0	(empty)
+1158	100	0	(empty)
+1159	100	0	(empty)
+1160	100	0	(empty)
+1161	100	0	(empty)
+1162	100	0	(empty)
+1163	100	0	(empty)
+1164	100	0	(empty)
+1165	100	0	(empty)
+1166	100	0	(empty)
+1167	100	0	(empty)
+1168	100	0	(empty)
+1169	100	0	(empty)
+1170	100	0	(empty)
+1171	100	0	(empty)
+1172	100	0	(empty)
+1173	100	0	(empty)
+1174	100	0	(empty)
+1175	100	0	(empty)
+1176	100	0	(empty)
+1177	100	0	(empty)
+1178	100	0	(empty)
+1179	100	0	(empty)
+1180	100	0	(empty)
+1181	100	0	(empty)
+1182	100	0	(empty)
+1183	100	0	(empty)
+1184	100	0	(empty)
+1185	100	0	(empty)
+1186	100	0	(empty)
+1187	100	0	(empty)
+1188	100	0	(empty)
+1189	100	0	(empty)
+1190	100	0	(empty)
+1191	100	0	(empty)
+1192	100	0	(empty)
+1193	100	0	(empty)
+1194	100	0	(empty)
+1195	100	0	(empty)
+1196	100	0	(empty)
+1197	100	0	(empty)
+1198	100	0	(empty)
+1199	100	0	(empty)
+1200	100	0	(empty)
+2001	200	0	(empty)
+2002	200	0	(empty)
+2003	200	0	(empty)
+2004	200	0	(empty)
+2005	200	0	(empty)
+2006	200	0	(empty)
+2007	200	0	(empty)
+2008	200	0	(empty)
+2009	200	0	(empty)
+2010	200	0	(empty)
+2011	200	0	(empty)
+2012	200	0	(empty)
+2013	200	0	(empty)
+2014	200	0	(empty)
+2015	200	0	(empty)
+2016	200	0	(empty)
+2017	200	0	(empty)
+2018	200	0	(empty)
+2019	200	0	(empty)
+2020	200	0	(empty)
+2021	200	0	(empty)
+2022	200	0	(empty)
+2023	200	0	(empty)
+2024	200	0	(empty)
+2025	200	0	(empty)
+2026	200	0	(empty)
+2027	200	0	(empty)
+2028	200	0	(empty)
+2029	200	0	(empty)
+2030	200	0	(empty)
+2031	200	0	(empty)
+2032	200	0	(empty)
+2033	200	0	(empty)
+2034	200	0	(empty)
+2035	200	0	(empty)
+2036	200	0	(empty)
+2037	200	0	(empty)
+2038	200	0	(empty)
+2039	200	0	(empty)
+2040	200	0	(empty)
+2041	200	0	(empty)
+2042	200	0	(empty)
+2043	200	0	(empty)
+2044	200	0	(empty)
+2045	200	0	(empty)
+2046	200	0	(empty)
+2047	200	0	(empty)
+2048	200	0	(empty)
+2049	200	0	(empty)
+2050	200	0	(empty)
+3002	200	1	(empty)
+4001	300	3	(empty)
+4002	300	3	(empty)
+4003	300	3	(empty)
+4004	300	3	(empty)
+4005	300	3	(empty)
+4006	300	3	(empty)
+4007	300	3	(empty)
+4008	300	3	(empty)
+4009	300	3	(empty)
+4010	300	3	(empty)
+4011	300	3	(empty)
+4012	300	3	(empty)
+4013	300	3	(empty)
+4014	300	3	(empty)
+4015	300	3	(empty)
+4016	300	3	(empty)
+4017	300	3	(empty)
+4018	300	3	(empty)
+4019	300	3	(empty)
+4020	300	3	(empty)
+4021	300	3	(empty)
+4022	300	3	(empty)
+4023	300	3	(empty)
+4024	300	3	(empty)
+4025	300	3	(empty)
+4026	300	3	(empty)
+4027	300	3	(empty)
+4028	300	3	(empty)
+4029	300	3	(empty)
+4030	300	3	(empty)
+4031	300	3	(empty)
+4032	300	3	(empty)
+4033	300	3	(empty)
+4034	300	3	(empty)
+4035	300	3	(empty)
+4036	300	3	(empty)
+4037	300	3	(empty)
+4038	300	3	(empty)
+4039	300	3	(empty)
+4040	300	3	(empty)
+4041	300	3	(empty)
+4042	300	3	(empty)
+4043	300	3	(empty)
+4044	300	3	(empty)
+4045	300	3	(empty)
+4046	300	3	(empty)
+4047	300	3	(empty)
+4048	300	3	(empty)
+4049	300	3	(empty)
+4050	300	3	(empty)
+5002	300	0	(empty)
+6001	400	2	(empty)
+6002	400	2	(empty)
+6003	400	2	(empty)
+6004	400	2	(empty)
+6005	400	2	(empty)
+6006	400	2	(empty)
+6007	400	2	(empty)
+6008	400	2	(empty)
+6009	400	2	(empty)
+6010	400	2	(empty)
+6011	400	2	(empty)
+6012	400	2	(empty)
+6013	400	2	(empty)
+6014	400	2	(empty)
+6015	400	2	(empty)
+6016	400	2	(empty)
+6017	400	2	(empty)
+6018	400	2	(empty)
+6019	400	2	(empty)
+6020	400	2	(empty)
+6021	400	2	(empty)
+6022	400	2	(empty)
+6023	400	2	(empty)
+6024	400	2	(empty)
+6025	400	2	(empty)
+6026	400	2	(empty)
+6027	400	2	(empty)
+6028	400	2	(empty)
+6029	400	2	(empty)
+6030	400	2	(empty)
+6031	400	2	(empty)
+6032	400	2	(empty)
+6033	400	2	(empty)
+6034	400	2	(empty)
+6035	400	2	(empty)
+6036	400	2	(empty)
+6037	400	2	(empty)
+6038	400	2	(empty)
+6039	400	2	(empty)
+6040	400	2	(empty)
+6041	400	2	(empty)
+6042	400	2	(empty)
+6043	400	2	(empty)
+6044	400	2	(empty)
+6045	400	2	(empty)
+6046	400	2	(empty)
+6047	400	2	(empty)
+6048	400	2	(empty)
+6049	400	2	(empty)
+6050	400	2	(empty)
+7002	400	4	(empty)
+1392684638434107392	1250056650086289408	2	(empty)
+# Cleanup space test tables
+DROP TABLE t_space;
+DROP TABLE t_space_opt;
+########################################################################
+# Test 4: DELETE - Trigger row_sec_assert_tid_in_rec()
+########################################################################
+# Test 4.1: Delete by primary key
+# Triggers delete-mark on HIPPO index at lizard0btr0cur.cc:382
+BEGIN;
+DELETE FROM t1 WHERE id=9;
+# Verify deleted record not visible via HIPPO index
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=1100 ORDER BY id;
+id	val	data
+1	1100	data1_updated
+3	1100	data3
+5	1100	data5
+7	1100	data7
+8	1100	data8
+COMMIT;
+# Test 4.2: Delete by indexed column
+BEGIN;
+DELETE FROM t1 WHERE val=1100;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+COMMIT;
+########################################################################
+# Test 5: REPEATABLE READ - Stricter MVCC test with FORCE INDEX
+########################################################################
+DROP TABLE IF EXISTS t2;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+val INT,
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1,10), (2,20), (3,30), (4,40), (5,50);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# con1: Establish snapshot with FORCE INDEX
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+id	val
+2	20
+3	30
+4	40
+5	50
+BEGIN;
+INSERT INTO t2 VALUES (6, 25);
+UPDATE t2 SET val=35 WHERE id=3;
+DELETE FROM t2 WHERE id=5;
+COMMIT;
+# con1: Should still see old snapshot via HIPPO index
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+id	val
+2	20
+3	30
+4	40
+5	50
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=25;
+id	val
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=30;
+id	val
+3	30
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=50;
+id	val
+5	50
+COMMIT;
+# con1: New transaction sees new data
+BEGIN;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+id	val
+2	20
+3	35
+4	40
+6	25
+COMMIT;
+########################################################################
+# Test 6: Multiple HIPPO indexes - All trigger assertions
+########################################################################
+DROP TABLE IF EXISTS t3;
+Warnings:
+Note	1051	Unknown table 'test.t3'
+CREATE TABLE t3 (
+pk INT PRIMARY KEY,
+a INT,
+b INT,
+c VARCHAR(50),
+KEY idx_a (a) COMMENT 'hippo_index',
+KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+# Test 6.1: INSERT into table with multiple HIPPO indexes
+INSERT INTO t3 VALUES 
+(1, 10, 20, 'data1'),
+(2, 10, 30, 'data2'),
+(3, 20, 20, 'data3'),
+(4, 20, 40, 'data4'),
+(5, 30, 50, 'data5');
+# Verify both HIPPO indexes
+SELECT index_name, index_page_type FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE table_name='t3' AND index_page_type='HIPPO_INDEX' ORDER BY index_name;
+index_name	index_page_type
+idx_a	HIPPO_INDEX
+idx_b	HIPPO_INDEX
+# Test 6.2: Query using different HIPPO indexes
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=10 ORDER BY pk;
+pk	a	b	c
+1	10	20	data1
+2	10	30	data2
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=20 ORDER BY pk;
+pk	a	b	c
+1	10	20	data1
+3	20	20	data3
+# Test 6.3: UPDATE affects both HIPPO indexes
+BEGIN;
+UPDATE t3 SET a=15, b=25 WHERE pk=1;
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=15;
+pk	a	b	c
+1	15	25	data1
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=25;
+pk	a	b	c
+1	15	25	data1
+COMMIT;
+# Test 6.4: DELETE removes from both HIPPO indexes
+BEGIN;
+DELETE FROM t3 WHERE pk=5;
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=30;
+pk	a	b	c
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=50;
+pk	a	b	c
+COMMIT;
+########################################################################
+# Test 7: Mixed DML in single transaction
+########################################################################
+DROP TABLE IF EXISTS t4;
+Warnings:
+Note	1051	Unknown table 'test.t4'
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+val INT,
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t4 VALUES (1,10), (2,20), (3,30), (4,40), (5,50);
+# Test 7.1: Mix INSERT/UPDATE/DELETE in one transaction
+BEGIN;
+INSERT INTO t4 VALUES (6, 15);
+UPDATE t4 SET val=25 WHERE id=2;
+DELETE FROM t4 WHERE id=4;
+INSERT INTO t4 VALUES (7, 35);
+UPDATE t4 SET val=55 WHERE id=5;
+# Verify changes via HIPPO index
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val >= 15 ORDER BY id;
+id	val
+2	25
+3	30
+5	55
+6	15
+7	35
+COMMIT;
+# Test 7.2: Verify final state
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val < 30 ORDER BY id;
+id	val
+1	10
+2	25
+6	15
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val >= 30 ORDER BY id;
+id	val
+3	30
+5	55
+7	35
+########################################################################
+# Test 8: UPDATE edge cases - additional scenarios
+########################################################################
+DROP TABLE IF EXISTS t5;
+Warnings:
+Note	1051	Unknown table 'test.t5'
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+idx_col INT,
+non_idx_col VARCHAR(100),
+KEY idx_col (idx_col) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t5 VALUES (1, 100, 'data1'), (2, 200, 'data2'), (3, 300, 'data3');
+# Test 8.1: Update indexed column to new value (Path 1: DELETE+INSERT)
+BEGIN;
+UPDATE t5 SET idx_col=150 WHERE id=1;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=150;
+id	idx_col	non_idx_col
+1	150	data1
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=100;
+id	idx_col	non_idx_col
+COMMIT;
+# Test 8.2: Update non-indexed column only
+# Note: For HIPPO index, this still goes through secondary index update
+BEGIN;
+UPDATE t5 SET non_idx_col='data2_modified' WHERE id=2;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=200;
+id	idx_col	non_idx_col
+2	200	data2_modified
+COMMIT;
+# Test 8.3: Update both indexed and non-indexed columns
+BEGIN;
+UPDATE t5 SET idx_col=350, non_idx_col='data3_both_modified' WHERE id=3;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=350;
+id	idx_col	non_idx_col
+3	350	data3_both_modified
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=300;
+id	idx_col	non_idx_col
+COMMIT;
+# Test 8.4: Update with same value (optimization may skip)
+BEGIN;
+UPDATE t5 SET idx_col=150 WHERE id=1;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=150;
+id	idx_col	non_idx_col
+1	150	data1
+COMMIT;
+# Test 8.5: Multiple consecutive updates on same record
+BEGIN;
+UPDATE t5 SET non_idx_col='update1' WHERE id=2;
+UPDATE t5 SET non_idx_col='update2' WHERE id=2;
+UPDATE t5 SET non_idx_col='update3' WHERE id=2;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=200;
+id	idx_col	non_idx_col
+2	200	update3
+COMMIT;
+########################################################################
+# Test 9: Concurrent UPDATE scenarios
+########################################################################
+DROP TABLE IF EXISTS t6;
+Warnings:
+Note	1051	Unknown table 'test.t6'
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+val INT,
+KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+INSERT INTO t6 VALUES (1,10), (2,20), (3,30);
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val >= 10 ORDER BY id;
+id	val
+1	10
+2	20
+3	30
+BEGIN;
+UPDATE t6 SET val=15 WHERE id=1;
+INSERT INTO t6 VALUES (4, 25);
+COMMIT;
+# con1: Should see old snapshot via HIPPO index
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val >= 10 ORDER BY id;
+id	val
+1	10
+2	20
+3	30
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val=15;
+id	val
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val=25;
+id	val
+COMMIT;
+########################################################################
+# Test 10: Verify all assertions were triggered (summary)
+########################################################################
+# If test reaches here without crash, all assertions passed:
+#
+# DELETE assertion:
+#   - row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+#
+# INSERT assertions (four paths):
+#
+#   Path 1: Normal INSERT (most common)
+#      - row_sec_assert_tid_in_entry() at row0ins.cc:3108
+#
+#   Path 2: INSERT by unmark delete-marked record
+#      - Condition: same ordering keys, n_fields=0
+#      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#
+#   Path 3: INSERT by in-place update (charset/case)
+#      - Condition: same ordering keys, n_fields>0 (case diff)
+#      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#
+#   Path 4: INSERT by non-in-place update (field size change)
+#      - Condition: same ordering keys, n_fields>0, old_len != new_len
+#      - Path 4A: btr_cur_optimistic_update() succeeds (non-in-place)
+#      - Path 4B: btr_cur_optimistic_update() fails -> btr_cur_pessimistic_update()
+#      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#
+# UPDATE = DELETE + INSERT (INSERT uses one of four paths above)
+#
+# TRX_ID is correctly written in all scenarios!
+SELECT 'All TRX_ID assertions passed!' as result;
+result
+All TRX_ID assertions passed!
+########################################################################
+# Cleanup
+########################################################################
+DROP TABLE t1, t2, t3, t4, t5, t6;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;

@@ -32,6 +32,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created September 24, 2007 Vasil Dimov
  *******************************************************/
 
+#ifndef ha0storage_h
+#define INNODB_HA0STORAGE_IC_STANDALONE
+#include "ha0storage.h"
+#undef INNODB_HA0STORAGE_IC_STANDALONE
+#endif /* !ha0storage_h */
 #include "ha0storage.h"
 #include "hash0hash.h"
 #include "mem0mem.h"

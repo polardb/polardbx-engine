@@ -36,27 +36,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "buf0block_hint.h"
 #include "buf0types.h"
 #include "fil0fil.h"
-#include "page0types.h"
 #include "rem0types.h"
 #include "trx0types.h"
-#include "ut0mutex.h"
 
 #include "lizard0mon.h"
+#include "lizard0rem0types.h"
 #include "lizard0txn0rec0types.h"
-#include "lizard0ut.h"
 
 struct mtr_t;
 struct dict_index_t;
 struct page_zip_des_t;
 struct txn_rec_t;
 struct btr_pcur_t;
+struct btr_cur_t;
+struct que_thr_t;
+struct row_prebuilt_t;
 
 namespace lizard {
-
-/*----------------------------------------------------------------*/
-/* Lizard cleanout structure and function. */
-/*----------------------------------------------------------------*/
-
 /*----------------------------------------------------------------*/
 /* Lizard cleanout structure and function. */
 /*----------------------------------------------------------------*/
@@ -99,6 +95,12 @@ extern bool opt_gpp_cleanout_disable;
 /** Whether disable the ddl cleanout when read */
 extern bool opt_ddl_cleanout_disable;
 
+/** Whether disable the commit cleanout when dml. */
+extern bool opt_commit_cleanout_disable;
+
+/** Whether disable the parallel cleanout when count star */
+extern bool opt_count_star_cleanout_disable;
+
 /* Commit cleanout max num. */
 extern ulint srv_commit_cleanout_max_rows;
 
@@ -106,6 +108,20 @@ extern ulint srv_commit_cleanout_max_rows;
  * still clean */
 extern ulint srv_cleanout_dirty_threshold;
 
+/** Query cleanout level */
+extern uint32_t srv_query_cleanout_level;
+
+/** Query cleanout level */
+enum query_cleanout_level_t {
+  /** Ignore cleanout if try see ok. */
+  QC_NONE = 0,
+  /** Try to cleanout if tcn hit, avoid by lookuping txn slot.*/
+  QC_NO_SLOT = 1,
+  /** skip try see and make sure cleanout and generate full redo log */
+  QC_ALL = 2
+};
+
+typedef enum query_cleanout_level_t qc_level_t;
 /*----------------------------------------------------------------*/
 /* Cleanout by cursor.
  *
@@ -115,12 +131,13 @@ class Cursor {
  public:
   explicit Cursor()
       : m_old_stored(false),
-        m_old_rec(nullptr),
+        m_old_reg(),
         m_block(nullptr),
         m_index(nullptr),
         m_modify_clock(0),
         m_block_when_stored(),
-        m_log_mode(MTR_LOG_ALL) {
+        m_log_mode(MTR_LOG_ALL),
+        m_restored(false) {
     m_block_when_stored.clear();
   }
 
@@ -138,7 +155,12 @@ class Cursor {
    * @retval		true	successful */
   bool store_position(const btr_cur_t *bcur, mtr_log_t log_mode);
 
-  bool restore_position(mtr_t *mtr, ut::Location location);
+  bool restore_position(mtr_t *mtr, ut::Location location, ulint n_recs);
+
+  ulint cleanout_txn(reg_t reg, txn_rec_t &txn_rec, txn_layout_t layout,
+                     mtr_t *mtr);
+
+  ulint cleanout_gpp(ulint gpp_no, ulint gpp_no_offset, mtr_t *mtr);
 
   /** inc page cleanouts */
   void inc_cleanouts(mtr_t *mtr);
@@ -148,27 +170,28 @@ class Cursor {
   /* Reset the cursor. */
   void reset() {
     m_old_stored = false;
-    m_old_rec = nullptr;
+    m_old_reg = REG_NULL;
     m_block = nullptr;
     m_index = nullptr;
     m_modify_clock = 0;
     m_block_when_stored.clear();
     m_log_mode = MTR_LOG_ALL;
+    m_restored = false;
   }
 
   bool stored() const { return m_old_stored; }
 
   buf_block_t *get_block() const { return m_block; }
   dict_index_t *get_index() const { return m_index; }
-  rec_t *get_old_rec() const { return m_old_rec; }
+  reg_t get_old_reg() const { return m_old_reg; }
 
  private:
-  void set_log_mode(mtr_t *mtr);
+  void set_log_mode(mtr_t *mtr, ulint n_recs);
 
  protected:
   bool m_old_stored;
 
-  rec_t *m_old_rec;
+  reg_t m_old_reg;
 
   buf_block_t *m_block;
 
@@ -179,6 +202,8 @@ class Cursor {
   buf::Block_hint m_block_when_stored;
 
   mtr_log_t m_log_mode;
+
+  bool m_restored;
 };
 
 /*----------------------------------------------------------------*/
@@ -253,12 +278,82 @@ class TCursor : public Cursor {
 
   txn_layout_t get_layout() const { return m_layout; }
 
+  bool is_txn_rec_committed() const { return m_txn_rec.is_committed(); }
+
  private:
   void clear() {
     m_txn_rec.reset();
     m_layout = TL_NONE;
     m_stored = false;
   }
+
+ private:
+  txn_rec_t m_txn_rec;
+
+  txn_layout_t m_layout;
+
+  bool m_stored;
+};
+
+/** TCodex has a TCursor, and stores extra records. */
+class TCodex {
+ private:
+  /** How many recs on same page can be saved to cleanout after scan. */
+  constexpr static size_t MAX_SCAN_REC_NUM = 5;
+
+ public:
+  explicit TCodex() : m_cursor(), m_n_recs(0) {}
+  TCodex(const TCodex &other)
+      : m_cursor(other.m_cursor), m_n_recs(other.m_n_recs) {
+    std::copy(other.m_recs, other.m_recs + MAX_SCAN_REC_NUM, m_recs);
+  }
+
+  TCodex &operator=(const TCodex &other) {
+    if (this != &other) {
+      m_cursor = other.m_cursor;
+      m_n_recs = other.m_n_recs;
+      std::copy(other.m_recs, other.m_recs + MAX_SCAN_REC_NUM, m_recs);
+    }
+    return (*this);
+  }
+
+  ulint cleanout();
+
+  bool is_on_same_page(const btr_cur_t *bcur) const {
+    return m_cursor.is_on_same_page(bcur);
+  }
+
+  /** Clean records and reset the cursor. */
+  void reset() {
+    m_cursor.reset();
+    m_n_recs = 0;
+  }
+
+  /** Store position, layout and extra record
+   *
+   * @retval	true	if successful
+   * */
+  bool store(const btr_cur_t *bcur, const txn_layout_t &layout,
+             mtr_log_t log_mode, reg_t reg, txn_rec_t txn_rec) {
+    if (m_n_recs >= MAX_SCAN_REC_NUM) return false;
+    m_recs[m_n_recs].old_reg = reg;
+    m_recs[m_n_recs].old_txn_rec = txn_rec;
+    m_n_recs++;
+    return m_cursor.store(bcur, txn_rec, layout, log_mode);
+  }
+  /** Store extra record
+   *
+   * @retval	true	if successful
+   * */
+  bool store(reg_t reg, txn_rec_t txn_rec) {
+    if (m_n_recs >= MAX_SCAN_REC_NUM) return false;
+    m_recs[m_n_recs].old_reg = reg;
+    m_recs[m_n_recs].old_txn_rec = txn_rec;
+    m_n_recs++;
+    return true;
+  }
+
+ private:
   /** Cleanout Clover layout txn record.
    *
    * @retval	How many record was cleanouted.*/
@@ -268,12 +363,16 @@ class TCursor : public Cursor {
    * @retval	How many record was cleanouted.*/
   ulint cleanout_bamboo_rec();
 
- private:
-  txn_rec_t m_txn_rec;
-
-  txn_layout_t m_layout;
-
-  bool m_stored;
+  TCursor m_cursor;
+  struct extra_rec_t {
+    reg_t old_reg;
+    txn_rec_t old_txn_rec;
+  };
+  /** Extra records stored in same page as current cursor for cleanout. */
+  extra_rec_t m_recs[MAX_SCAN_REC_NUM];
+  /** How many extra records stored in same page as current cursor for cleanout.
+   */
+  ulint m_n_recs;
 };
 
 /*----------------------------------------------------------------*/
@@ -367,7 +466,7 @@ class Cleanout {
    *
    * @retval		txn cursor for cleanout.
    * */
-  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+  virtual void collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
                                const txn_layout_t &layout,
                                mtr_log_t log_mode) = 0;
 
@@ -387,8 +486,10 @@ class Cleanout {
 /*------------------------------------------------------------------------*/
 class Scan_cleanout : public Cleanout {
  private:
-  /** How many cursors can be saved to cleanout after scan. */
-  constexpr static size_t MAX_CURSORS = 3;
+  /** How many cursors can be saved to cleanout for txn after scan. */
+  constexpr static size_t MAX_TXN_CURSORS = 2;
+  /** How many cursors can be saved to cleanout for gpp after scan. */
+  constexpr static size_t MAX_GPP_CURSORS = 3;
 
  public:
   explicit Scan_cleanout()
@@ -408,7 +509,7 @@ class Scan_cleanout : public Cleanout {
    *
    * @retval		txn cursor for cleanout.
    * */
-  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+  virtual void collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
                                const txn_layout_t &layout,
                                mtr_log_t log_mode) override;
 
@@ -440,23 +541,28 @@ class Scan_cleanout : public Cleanout {
 
   bool is_empty() const { return m_txn_num == 0 && m_gpp_num == 0; }
 
-  /** Acquire a txn cursor and store record position for cleanout.
+  /** Acquire a new codex for txn.
+   *
+   * @param[in]		bcur
+   * @param[in]		txn_rec
+   * @param[in]		layout
+   * @param[in]		log_mode
+   *
+   * @retval		cursor or nullptr if unavailable slot
+   */
+  TCodex *acquire_new_codex(const btr_cur_t *bcur, const txn_layout_t &layout,
+                            mtr_log_t log_mode, reg_t reg,
+                            const txn_rec_t &txn_rec);
+
+  /** Acquire a txn cursor with extra records and store record position for
+   * cleanout.
    *
    * @param[in]		pcursor
    * @param[in]		committed txn rec
    *
    * @retval		cursor or nullptr if disable or unavailable slot */
-  TCursor *request_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
-                       const txn_layout_t &layout, mtr_log_t log_mode) {
-    TCursor *cur = nullptr;
-    if (m_txn_num < MAX_CURSORS) {
-      m_txn_cursors[m_txn_num].reset();
-      cur = &m_txn_cursors[m_txn_num++];
-      cur->store(bcur, txn_rec, layout, log_mode);
-    }
-
-    return cur;
-  }
+  TCodex *request_codex(const btr_cur_t *bcur, const txn_layout_t &layout,
+                       mtr_log_t log_mode, const txn_rec_t &txn_rec);
 
   /** Acquire a gpp cursor and store record position for cleanout.
    *
@@ -467,7 +573,7 @@ class Scan_cleanout : public Cleanout {
   GCursor *request_gpp(const btr_cur_t *bcur, const ulint gpp_no_offset,
                        mtr_log_t log_mode) {
     GCursor *cur = nullptr;
-    if (m_gpp_num < MAX_CURSORS) {
+    if (m_gpp_num < MAX_GPP_CURSORS) {
       m_gpp_cursors[m_gpp_num].reset();
       cur = &m_gpp_cursors[m_gpp_num++];
       cur->store(bcur, gpp_no_offset, log_mode);
@@ -482,10 +588,10 @@ class Scan_cleanout : public Cleanout {
   }
 
  private:
-  TCursor m_txn_cursors[MAX_CURSORS];
+  TCodex m_txn_cursors[MAX_TXN_CURSORS];
   ulint m_txn_num;
 
-  GCursor m_gpp_cursors[MAX_CURSORS];
+  GCursor m_gpp_cursors[MAX_GPP_CURSORS];
   ulint m_gpp_num;
 };
 
@@ -520,7 +626,7 @@ class Commit_cleanout : public Cleanout {
    *
    * @retval		txn cursor for cleanout.
    * */
-  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+  virtual void collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
                                const txn_layout_t &layout,
                                mtr_log_t log_mode) override;
 
@@ -562,7 +668,6 @@ class Commit_cleanout : public Cleanout {
   }
   ulint count() const { return m_static_num + m_dynamic_num; }
   bool is_empty() const { return count() == 0; }
-
 
   /** Acquire a txn cursor and store record position for cleanout.
    *
@@ -616,18 +721,18 @@ class Commit_cleanout : public Cleanout {
   txn_rec_t m_txn_rec;
 };
 
-class DDL_cleanout : public Cleanout {
+class Pread_cleanout : public Cleanout {
  private:
   /** How many cursors can be saved to cleanout ddl. */
   constexpr static size_t MAX_CURSORS = 1024;
 
  public:
-  explicit DDL_cleanout()
-      : Cleanout(), m_cursor(), m_old_recs(), m_txn_recs(), m_rec_nums{0} {}
+  explicit Pread_cleanout()
+      : Cleanout(), m_cursor(), m_old_regs(), m_txn_recs(), m_rec_nums{0} {}
 
-  virtual ~DDL_cleanout() override { 
+  virtual ~Pread_cleanout() override {
     ut_ad(m_rec_nums == 0);
-    clear(); 
+    clear();
   }
 
   virtual void execute() override;
@@ -640,7 +745,7 @@ class DDL_cleanout : public Cleanout {
    *
    * @retval		txn cursor for cleanout.
    * */
-  virtual TCursor *collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
+  virtual void collect_txn(const btr_cur_t *bcur, const txn_rec_t &txn_rec,
                                const txn_layout_t &layout,
                                mtr_log_t log_mode) override;
 
@@ -656,7 +761,7 @@ class DDL_cleanout : public Cleanout {
     ut_ad(0);
     return nullptr;
   }
-
+  
  private:
   void clear() {
     m_rec_nums = 0;
@@ -668,7 +773,7 @@ class DDL_cleanout : public Cleanout {
    * haven't change. */
   TCursor m_cursor;
 
-  rec_t *m_old_recs[MAX_CURSORS];
+  reg_t m_old_regs[MAX_CURSORS];
   txn_rec_t m_txn_recs[MAX_CURSORS];
 
   ulint m_rec_nums;
@@ -677,7 +782,7 @@ class DDL_cleanout : public Cleanout {
 /** Cleanout runtime context for pcursor. */
 struct cleanout_ctx_t {
  public:
-  explicit cleanout_ctx_t(btr_pcur_t *pcur);
+  explicit cleanout_ctx_t(trx_t *trx, btr_pcur_t *pcur);
 
   explicit cleanout_ctx_t(btr_pcur_t *pcur, Cleanout *cleanout);
 
@@ -685,7 +790,9 @@ struct cleanout_ctx_t {
 
   /**Setting mtr log mode. */
   cleanout_ctx_t &operator()(const mtr_log_t log_mode) {
-    if (opt_cleanout_write_redo) {
+    m_qc_level = static_cast<qc_level_t>(srv_query_cleanout_level);
+
+    if (opt_cleanout_write_redo || m_qc_level == QC_ALL) {
       m_log_mode = MTR_LOG_ALL;
     } else {
       m_log_mode = log_mode;
@@ -696,18 +803,29 @@ struct cleanout_ctx_t {
     return *this;
   }
 
+  /** Whether cleanout context is usable. */
   bool is_usable() const { return m_cleanout != nullptr && m_bcur != nullptr; }
+
+  /** Get query cleanout level. */
+  qc_level_t qc_level() const {
+    ut_ad(m_setting);
+    return m_qc_level;
+  }
 
   Cleanout *cleanout() { return m_cleanout; }
 
+  /** Collect txn record for cleanout.
+   @param[in]		txn rec
+   @param[in]		rec layout */
   void collect_txn(const txn_rec_t &txn_rec, const txn_layout_t &layout) {
     ut_ad(is_usable());
     ut_ad(m_setting);
-    m_tcursor = m_cleanout->collect_txn(m_bcur, txn_rec, layout, m_log_mode);
+    m_cleanout->collect_txn(m_bcur, txn_rec, layout, m_log_mode);
 
     return;
   }
-
+  /** Collect gpp record for cleanout.
+   @param[in]		gpp no offset within record */
   void collect_gpp(const ulint gpp_no_offset) {
     ut_ad(is_usable());
     ut_ad(m_setting);
@@ -716,6 +834,8 @@ struct cleanout_ctx_t {
     return;
   }
 
+  /** Address gpp if missing.
+   @param[in]	gpp no */
   void address_gpp_if_missing(const gpp_no_t gpp_no) {
     if (m_gcursor) {
       m_gcursor->set_gpp_no(gpp_no);
@@ -724,21 +844,23 @@ struct cleanout_ctx_t {
 
   btr_cur_t *btr_cur() { return m_bcur; }
 
+  trx_t *trx() { return m_trx; }
+
  public:
+  trx_t *m_trx;
   /** Btree position of record */
   btr_cur_t *m_bcur;
   /** Container which save tcursor or gcursor to cleanout later.*/
   Cleanout *m_cleanout;
-  /** Saved txn cursor. */
-  TCursor *m_tcursor;
   /** Saved gpp cursor. */
   GCursor *m_gcursor;
   /** future cleanout mtr log mode. */
   mtr_log_t m_log_mode;
   /** whether log mode was set. */
   bool m_setting;
+  /** query cleanout level. */
+  qc_level_t m_qc_level;
 };
-
 
 /**
   Collect rows updated in current transaction.

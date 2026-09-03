@@ -4,15 +4,16 @@
 #include "storage/innobase/include/ut0log.h"
 namespace polarx {
 
-PSI_mutex_key key_LOCK_slow_query_user_pattern;
-mysql_mutex_t LOCK_slow_query_user_pattern;
+PSI_mutex_key key_LOCK_slow_query_user_config;
+mysql_mutex_t LOCK_slow_query_user_config;
+
 
 Background_poller *g_background_poller = nullptr;
 
 void check_sqb_user_pattern(THD *thd) {
   if (!sqb_enable_slow_query_block) return;
 
-  MUTEX_LOCK(lock_slow_query_user_pattern, &LOCK_slow_query_user_pattern);
+  MUTEX_LOCK(lock_slow_query_user_config, &LOCK_slow_query_user_config);
 
   const std::string user_pattern = sqb_user_pattern;
   const char *user_name = thd->security_context()->priv_user().str;
@@ -46,6 +47,32 @@ Sqb_config get_sqb_config() {
   return config;
 }
 
+bool check_pushdown_username(THD *thd) {
+  std::string pushdown_username_copy = "";
+  {
+    /** Get pushdown username from CN, which is need to do regex match. */
+    MUTEX_LOCK(lock_thd_sysvar, &thd->LOCK_thd_sysvar);
+
+    const char *pushdown_username =
+        thd->variables.polarx_slow_query_pushdown_username;
+    if (pushdown_username == nullptr) return false;
+
+    DBUG_EXECUTE_IF("sleep_pushdown_username", sleep(20););
+
+    pushdown_username_copy = pushdown_username;
+  }
+
+  MUTEX_LOCK(lock_slow_query_user_config, &LOCK_slow_query_user_config);
+
+  const std::string user_pattern = sqb_user_pattern;
+
+  if (user_pattern == "" || pushdown_username_copy == "") return false;
+
+  std::regex pattern(user_pattern);
+  /** Only when set patern and match, block will be triggered */
+  return std::regex_search(pushdown_username_copy, pattern);
+}
+
 void Search_process_list::operator()(THD *thd_to_kill) {
   if (!thd_to_kill) return;
 
@@ -53,14 +80,14 @@ void Search_process_list::operator()(THD *thd_to_kill) {
   if (!thd_to_kill->security_context()->has_account_assigned()) return;
 
   MUTEX_LOCK(lock_thd_data, &thd_to_kill->LOCK_thd_data);
-
-  if (!thd_to_kill->sqb_should_block ||
-      thd_to_kill->killed == THD::KILL_CONNECTION ||
+  bool should_block =
+      check_pushdown_username(thd_to_kill) || thd_to_kill->sqb_should_block;
+  if (!should_block || thd_to_kill->killed == THD::KILL_CONNECTION ||
       thd_to_kill->slave_thread || !thd_to_kill->sqb_is_block_command()) {
     return;
   }
 
-  pthread_t thread_id = thd_to_kill->real_id;
+  pthread_t thread_id = thd_to_kill->sql_current_thread_id;
 
   ulong total_time = 0;
   /** When sqb_start_time is 0, it means the query is ended, cpu usage is 0. */
@@ -69,18 +96,19 @@ void Search_process_list::operator()(THD *thd_to_kill) {
     total_time = get_cur_time_ms() - sqb_start_time;
   }
 
-  double cpu_usage = calculate_cpu_usage(thread_id, total_time, thd_to_kill);
+  auto [cpu_usage, total_cpu_time] = calculate_cpu_usage(thread_id, total_time, thd_to_kill);
   // ib::error() << "cpu_usage: " << cpu_usage << " total_time: " << total_time;
-
+  thd_to_kill->audit_trx_ctx.set_cpu_time_sec(total_cpu_time);
+  thd_to_kill->audit_trx_ctx.set_cpu_time_percent(cpu_usage);
   if (should_kill_query(thd_to_kill, total_time, cpu_usage)) {
     thd_to_kill->awake(THD::KILL_QUERY);
   }
 }
 
-double Search_process_list::calculate_cpu_usage(pthread_t thread_id,
+std::pair<double, ulong> Search_process_list::calculate_cpu_usage(pthread_t thread_id,
                                              ulong total_time,
                                              THD *thd_to_kill) const {
-  if (total_time <= 0) return 0;
+  if (total_time <= 0 || thd_to_kill->sqb_cpu_start_time == 0) return {0, 0};
   clockid_t cid;
   if (thread_id != 0 && pthread_getcpuclockid(thread_id, &cid) == 0) {
     struct timespec ts;
@@ -92,10 +120,10 @@ double Search_process_list::calculate_cpu_usage(pthread_t thread_id,
                            duration_cast<milliseconds>(start_ns).count() -
                            thd_to_kill->sqb_cpu_start_time;
     double res = static_cast<double>(total_cpu_time * 100.0) / total_time;
-    return res;
+    return {res, total_cpu_time};
   }
 
-  return 0;
+  return {0, 0};
 }
 
 bool Search_process_list::should_kill_query(THD *thd_to_kill, ulong total_time,

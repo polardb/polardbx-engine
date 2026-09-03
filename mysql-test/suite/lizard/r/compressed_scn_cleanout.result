@@ -1,0 +1,396 @@
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 9000;
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+SET GLOBAL innodb_purge_stop_now = ON;
+# ============================================================
+# ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1
+# ============================================================
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+c1 INT,
+c2 VARCHAR(200),
+KEY k_c1 (c1)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=1;
+# Insert committed rows that are intentionally left un-cleaned
+# (commit cleanout disabled), at a controlled commit GCN (@base_seq+100).
+SET GLOBAL innodb_commit_cleanout_max_rows = 0;
+SET GLOBAL innodb_txn_cleanout_disable = 1;
+XA START 'zip_scn';
+INSERT INTO t1 VALUES
+(1, 10,  REPEAT('a', 180)),
+(2, 20,  REPEAT('b', 180)),
+(3, 30,  REPEAT('c', 180)),
+(4, 40,  REPEAT('d', 180)),
+(5, 50,  REPEAT('e', 180)),
+(6, 60,  REPEAT('f', 180)),
+(7, 70,  REPEAT('g', 180)),
+(8, 80,  REPEAT('h', 180)),
+(9, 90,  REPEAT('i', 180)),
+(10, 100, REPEAT('j', 180));
+XA END 'zip_scn';
+XA PREPARE 'zip_scn';
+SET innodb_commit_seq = @base_seq + 100;
+XA COMMIT 'zip_scn';
+#
+# 1. Commit cleanout back-fills scn/uba/gcn on the compressed page.
+#    (flush_cleanout() first resets the counters to a 0 baseline)
+#
+SET GLOBAL innodb_commit_cleanout_max_rows = 1000;
+call dbms_stat.flush_cleanout();
+UPDATE t1 SET c1 = c1 + 1 WHERE id <= 6;
+include/assert.inc [commit cleanout must back-fill clustered records on the compressed page (kbs=1)]
+# data correctness after commit cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 2. Read/scan cleanout code path on the compressed page (coverage).
+#
+SET GLOBAL innodb_txn_cleanout_disable = 0;
+SELECT * FROM t1;
+# data unchanged by scan cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 3. Flashback correctness: gcn is read directly from the compressed
+#    record and reconstructs the pre-update snapshot via undo.
+#
+# visible at gcn >= insert commit gcn (@base_seq + 100)
+SELECT COUNT(*) AS visible_cnt FROM t1 AS OF GCN @base_seq + 200;
+visible_cnt
+10
+# invisible at gcn < insert commit gcn
+SELECT COUNT(*) AS invisible_cnt FROM t1 AS OF GCN @base_seq + 50;
+invisible_cnt
+0
+# pre-update snapshot: original c1 values reconstructed from undo
+SELECT id, c1 FROM t1 AS OF GCN @base_seq + 100 ORDER BY id;
+id	c1
+1	10
+2	20
+3	30
+4	40
+5	50
+6	60
+7	70
+8	80
+9	90
+10	100
+DROP TABLE t1;
+SET GLOBAL innodb_commit_cleanout_max_rows = default;
+SET GLOBAL innodb_txn_cleanout_disable = default;
+# ============================================================
+# ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2
+# ============================================================
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+c1 INT,
+c2 VARCHAR(200),
+KEY k_c1 (c1)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=2;
+# Insert committed rows that are intentionally left un-cleaned
+# (commit cleanout disabled), at a controlled commit GCN (@base_seq+100).
+SET GLOBAL innodb_commit_cleanout_max_rows = 0;
+SET GLOBAL innodb_txn_cleanout_disable = 1;
+XA START 'zip_scn';
+INSERT INTO t1 VALUES
+(1, 10,  REPEAT('a', 180)),
+(2, 20,  REPEAT('b', 180)),
+(3, 30,  REPEAT('c', 180)),
+(4, 40,  REPEAT('d', 180)),
+(5, 50,  REPEAT('e', 180)),
+(6, 60,  REPEAT('f', 180)),
+(7, 70,  REPEAT('g', 180)),
+(8, 80,  REPEAT('h', 180)),
+(9, 90,  REPEAT('i', 180)),
+(10, 100, REPEAT('j', 180));
+XA END 'zip_scn';
+XA PREPARE 'zip_scn';
+SET innodb_commit_seq = @base_seq + 100;
+XA COMMIT 'zip_scn';
+#
+# 1. Commit cleanout back-fills scn/uba/gcn on the compressed page.
+#    (flush_cleanout() first resets the counters to a 0 baseline)
+#
+SET GLOBAL innodb_commit_cleanout_max_rows = 1000;
+call dbms_stat.flush_cleanout();
+UPDATE t1 SET c1 = c1 + 1 WHERE id <= 6;
+include/assert.inc [commit cleanout must back-fill clustered records on the compressed page (kbs=2)]
+# data correctness after commit cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 2. Read/scan cleanout code path on the compressed page (coverage).
+#
+SET GLOBAL innodb_txn_cleanout_disable = 0;
+SELECT * FROM t1;
+# data unchanged by scan cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 3. Flashback correctness: gcn is read directly from the compressed
+#    record and reconstructs the pre-update snapshot via undo.
+#
+# visible at gcn >= insert commit gcn (@base_seq + 100)
+SELECT COUNT(*) AS visible_cnt FROM t1 AS OF GCN @base_seq + 200;
+visible_cnt
+10
+# invisible at gcn < insert commit gcn
+SELECT COUNT(*) AS invisible_cnt FROM t1 AS OF GCN @base_seq + 50;
+invisible_cnt
+0
+# pre-update snapshot: original c1 values reconstructed from undo
+SELECT id, c1 FROM t1 AS OF GCN @base_seq + 100 ORDER BY id;
+id	c1
+1	10
+2	20
+3	30
+4	40
+5	50
+6	60
+7	70
+8	80
+9	90
+10	100
+DROP TABLE t1;
+SET GLOBAL innodb_commit_cleanout_max_rows = default;
+SET GLOBAL innodb_txn_cleanout_disable = default;
+# ============================================================
+# ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4
+# ============================================================
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+c1 INT,
+c2 VARCHAR(200),
+KEY k_c1 (c1)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=4;
+# Insert committed rows that are intentionally left un-cleaned
+# (commit cleanout disabled), at a controlled commit GCN (@base_seq+100).
+SET GLOBAL innodb_commit_cleanout_max_rows = 0;
+SET GLOBAL innodb_txn_cleanout_disable = 1;
+XA START 'zip_scn';
+INSERT INTO t1 VALUES
+(1, 10,  REPEAT('a', 180)),
+(2, 20,  REPEAT('b', 180)),
+(3, 30,  REPEAT('c', 180)),
+(4, 40,  REPEAT('d', 180)),
+(5, 50,  REPEAT('e', 180)),
+(6, 60,  REPEAT('f', 180)),
+(7, 70,  REPEAT('g', 180)),
+(8, 80,  REPEAT('h', 180)),
+(9, 90,  REPEAT('i', 180)),
+(10, 100, REPEAT('j', 180));
+XA END 'zip_scn';
+XA PREPARE 'zip_scn';
+SET innodb_commit_seq = @base_seq + 100;
+XA COMMIT 'zip_scn';
+#
+# 1. Commit cleanout back-fills scn/uba/gcn on the compressed page.
+#    (flush_cleanout() first resets the counters to a 0 baseline)
+#
+SET GLOBAL innodb_commit_cleanout_max_rows = 1000;
+call dbms_stat.flush_cleanout();
+UPDATE t1 SET c1 = c1 + 1 WHERE id <= 6;
+include/assert.inc [commit cleanout must back-fill clustered records on the compressed page (kbs=4)]
+# data correctness after commit cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 2. Read/scan cleanout code path on the compressed page (coverage).
+#
+SET GLOBAL innodb_txn_cleanout_disable = 0;
+SELECT * FROM t1;
+# data unchanged by scan cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 3. Flashback correctness: gcn is read directly from the compressed
+#    record and reconstructs the pre-update snapshot via undo.
+#
+# visible at gcn >= insert commit gcn (@base_seq + 100)
+SELECT COUNT(*) AS visible_cnt FROM t1 AS OF GCN @base_seq + 200;
+visible_cnt
+10
+# invisible at gcn < insert commit gcn
+SELECT COUNT(*) AS invisible_cnt FROM t1 AS OF GCN @base_seq + 50;
+invisible_cnt
+0
+# pre-update snapshot: original c1 values reconstructed from undo
+SELECT id, c1 FROM t1 AS OF GCN @base_seq + 100 ORDER BY id;
+id	c1
+1	10
+2	20
+3	30
+4	40
+5	50
+6	60
+7	70
+8	80
+9	90
+10	100
+DROP TABLE t1;
+SET GLOBAL innodb_commit_cleanout_max_rows = default;
+SET GLOBAL innodb_txn_cleanout_disable = default;
+# ============================================================
+# ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+# ============================================================
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+c1 INT,
+c2 VARCHAR(200),
+KEY k_c1 (c1)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+# Insert committed rows that are intentionally left un-cleaned
+# (commit cleanout disabled), at a controlled commit GCN (@base_seq+100).
+SET GLOBAL innodb_commit_cleanout_max_rows = 0;
+SET GLOBAL innodb_txn_cleanout_disable = 1;
+XA START 'zip_scn';
+INSERT INTO t1 VALUES
+(1, 10,  REPEAT('a', 180)),
+(2, 20,  REPEAT('b', 180)),
+(3, 30,  REPEAT('c', 180)),
+(4, 40,  REPEAT('d', 180)),
+(5, 50,  REPEAT('e', 180)),
+(6, 60,  REPEAT('f', 180)),
+(7, 70,  REPEAT('g', 180)),
+(8, 80,  REPEAT('h', 180)),
+(9, 90,  REPEAT('i', 180)),
+(10, 100, REPEAT('j', 180));
+XA END 'zip_scn';
+XA PREPARE 'zip_scn';
+SET innodb_commit_seq = @base_seq + 100;
+XA COMMIT 'zip_scn';
+#
+# 1. Commit cleanout back-fills scn/uba/gcn on the compressed page.
+#    (flush_cleanout() first resets the counters to a 0 baseline)
+#
+SET GLOBAL innodb_commit_cleanout_max_rows = 1000;
+call dbms_stat.flush_cleanout();
+UPDATE t1 SET c1 = c1 + 1 WHERE id <= 6;
+include/assert.inc [commit cleanout must back-fill clustered records on the compressed page (kbs=8)]
+# data correctness after commit cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 2. Read/scan cleanout code path on the compressed page (coverage).
+#
+SET GLOBAL innodb_txn_cleanout_disable = 0;
+SELECT * FROM t1;
+# data unchanged by scan cleanout
+SELECT id, c1 FROM t1 ORDER BY id;
+id	c1
+1	11
+2	21
+3	31
+4	41
+5	51
+6	61
+7	70
+8	80
+9	90
+10	100
+#
+# 3. Flashback correctness: gcn is read directly from the compressed
+#    record and reconstructs the pre-update snapshot via undo.
+#
+# visible at gcn >= insert commit gcn (@base_seq + 100)
+SELECT COUNT(*) AS visible_cnt FROM t1 AS OF GCN @base_seq + 200;
+visible_cnt
+10
+# invisible at gcn < insert commit gcn
+SELECT COUNT(*) AS invisible_cnt FROM t1 AS OF GCN @base_seq + 50;
+invisible_cnt
+0
+# pre-update snapshot: original c1 values reconstructed from undo
+SELECT id, c1 FROM t1 AS OF GCN @base_seq + 100 ORDER BY id;
+id	c1
+1	10
+2	20
+3	30
+4	40
+5	50
+6	60
+7	70
+8	80
+9	90
+10	100
+DROP TABLE t1;
+SET GLOBAL innodb_commit_cleanout_max_rows = default;
+SET GLOBAL innodb_txn_cleanout_disable = default;
+SET GLOBAL innodb_undo_retention = 0;
+SET GLOBAL innodb_txn_retention = 0;
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_purge_run_now = ON;

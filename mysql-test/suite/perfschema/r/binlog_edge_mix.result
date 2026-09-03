@@ -96,7 +96,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_bh_table(a)
 values (1000), (2000), (3000)
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_tx_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -104,7 +104,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_bh_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_tx_table(a)
 select id from information_schema.processlist
@@ -112,7 +112,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Query	#	#	use `my_replicated_db`; insert into my_bh_table(a)
 select id from information_schema.processlist
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_tx_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -120,7 +120,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_bh_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_tx_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -128,7 +128,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_bh_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_tx_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
@@ -136,7 +136,7 @@ binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_bh_table)
 binlog.000001	#	Write_rows	#	#	table_id: # flags: STMT_END_F
-binlog.000001	#	Query	#	#	COMMIT
+binlog.000001	#	Xid	#	#	COMMIT /* XID */
 binlog.000001	#	Query	#	#	BEGIN
 binlog.000001	#	Table_map	#	#	table_id: # (my_replicated_db.my_tx_table)
 binlog.000001	#	Update_rows	#	#	table_id: # flags: STMT_END_F

@@ -86,11 +86,11 @@ ulint z_first_page_t::get_n_frag_entries() const {
   }
 }
 
-buf_block_t *z_first_page_t::alloc(bool bulk) {
+buf_block_t *z_first_page_t::alloc(InsertContext *ctx) {
   ut_ad(m_block == nullptr);
 
   page_no_t hint = FIL_NULL;
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -164,13 +164,13 @@ std::ostream &z_first_page_t::print_frag_entries(std::ostream &out) const {
 an index page (a page full of z_index_entry_t objects) and service the
 request.
 @return the allocated index entry. */
-z_index_entry_t z_first_page_t::alloc_index_entry(bool bulk) {
+z_index_entry_t z_first_page_t::alloc_index_entry(InsertContext *ctx) {
   flst_base_node_t *free_lst = free_list();
   fil_addr_t first_loc = flst_get_first(free_lst, m_mtr);
 
   if (fil_addr_is_null(first_loc)) {
     z_index_page_t page(m_mtr, m_index);
-    page.alloc(*this, bulk);
+    page.alloc(*this, ctx);
     first_loc = flst_get_first(free_lst, m_mtr);
   }
 
@@ -189,7 +189,7 @@ z_index_entry_t z_first_page_t::alloc_index_entry(bool bulk) {
 an frag node page (a page full of z_frag_entry_t objects) and service the
 request.
 @return the allocated frag entry. */
-z_frag_entry_t z_first_page_t::alloc_frag_entry(bool bulk) {
+z_frag_entry_t z_first_page_t::alloc_frag_entry(InsertContext *ctx) {
   flst_base_node_t *free_lst = free_frag_list();
   flst_base_node_t *used_lst = frag_list();
 
@@ -197,7 +197,7 @@ z_frag_entry_t z_first_page_t::alloc_frag_entry(bool bulk) {
 
   if (fil_addr_is_null(first_loc)) {
     z_frag_node_page_t page(m_mtr, m_index);
-    page.alloc(*this, bulk);
+    page.alloc(*this, ctx);
     first_loc = flst_get_first(free_lst, m_mtr);
   }
 
@@ -212,7 +212,7 @@ z_frag_entry_t z_first_page_t::alloc_frag_entry(bool bulk) {
   return (entry);
 }
 
-frag_id_t z_first_page_t::alloc_fragment(bool bulk, ulint len,
+frag_id_t z_first_page_t::alloc_fragment(InsertContext *ctx, ulint len,
                                          z_frag_page_t &frag_page,
                                          z_frag_entry_t &entry) {
   ut_ad(m_mtr != nullptr);
@@ -282,13 +282,13 @@ frag_id_t z_first_page_t::alloc_fragment(bool bulk, ulint len,
 
   if (fil_addr_is_null(loc)) {
     /* Need to allocate a new fragment page. */
-    buf_block_t *tmp_block = frag_page.alloc(*this, first_page_no + 1, bulk);
+    buf_block_t *tmp_block = frag_page.alloc(*this, first_page_no + 1, ctx);
 
     if (tmp_block == nullptr) {
       return (FRAG_ID_NULL);
     }
 
-    entry = alloc_frag_entry(bulk);
+    entry = alloc_frag_entry(ctx);
 
     if (entry.is_null()) {
       return (FRAG_ID_NULL);

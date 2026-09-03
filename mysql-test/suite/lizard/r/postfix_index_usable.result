@@ -17,6 +17,6 @@ select c1 from t1 force index (c1);
 c1
 11
 select c1 from t1 force index (c1);
-ERROR HY000: The definition of the table required by the flashback query has changed
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 set global innodb_undo_retention = default;
 drop table t1;

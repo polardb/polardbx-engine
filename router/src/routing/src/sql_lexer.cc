@@ -44,6 +44,7 @@
 #include "sql/sql_lex_hash.h"
 #include "sql/sql_yacc.h"
 #include "sql/system_variables.h"
+#include "vidx/vidx_common.h"
 #include "sql_chars.h"  // my_lex_states
 #include "sql_lexer_input_stream.h"
 #include "sql_lexer_thd.h"

@@ -1,0 +1,223 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test btr_pcur_t::guess_position in restore_position.
+--echo # Uses innodb_inject_stress_test_for_guess to skip optimistic (modify_clock)
+--echo # path, forcing cursor restoration through guess_position + open_no_init.
+--echo # Counter values are validated via include/assert.inc.
+--echo #
+
+--echo # Save original values
+--let $orig_innodb_lizard_stat_enabled = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $orig_innodb_inject_stress_test_for_guess = `SELECT @@GLOBAL.innodb_inject_stress_test_for_guess`
+--let $orig_innodb_index_pcur_guess_restore_enabled = `SELECT @@GLOBAL.innodb_index_pcur_guess_restore_enabled`
+--let $orig_innodb_adaptive_hash_index = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+
+--echo # Enable guess mode stress test
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+SET GLOBAL innodb_inject_stress_test_for_guess = ON;
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = ON;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+
+--echo # ============================================================
+--echo # Setup: create table and insert data
+--echo # ============================================================
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL,
+  b VARCHAR(100) NOT NULL,
+  c INT NOT NULL,
+  KEY idx_a (a),
+  KEY idx_c (c)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+delimiter |;
+CREATE PROCEDURE insert_data(IN num_rows INT)
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  START TRANSACTION;
+  WHILE i <= num_rows DO
+    INSERT INTO t1 (a, b, c) VALUES (i, CONCAT('row_', LPAD(i, 5, '0')), i * 10);
+    SET i = i + 1;
+  END WHILE;
+  COMMIT;
+END|
+delimiter ;|
+
+CALL insert_data(500);
+
+--echo # ============================================================
+--echo # Test 1: Range scan on clustered index triggers restore_position
+--echo # guess_position should be attempted and hit.
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100;
+--enable_result_log
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [clustered range scan] pcur guess restore hit+miss should be > 0
+--let $assert_cond = $gr_hit + $gr_miss > 0
+--source include/assert.inc
+
+--let $assert_text = [clustered range scan] pcur guess restore hit should be > 0
+--let $assert_cond = $gr_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 2: Range scan on secondary index (requires back-to-cluster)
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE a BETWEEN 50 AND 150;
+--enable_result_log
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [secondary range scan] pcur guess restore hit+miss should be > 0
+--let $assert_cond = $gr_hit + $gr_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 3: UPDATE with range condition triggers restore_position
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+UPDATE t1 SET b = CONCAT('updated_', LPAD(id, 5, '0')) WHERE id BETWEEN 10 AND 50;
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [range UPDATE] pcur guess restore hit+miss should be > 0
+--let $assert_cond = $gr_hit + $gr_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 4: DELETE with range condition triggers restore_position
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+DELETE FROM t1 WHERE id BETWEEN 450 AND 500;
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [range DELETE] pcur guess restore hit+miss should be > 0
+--let $assert_cond = $gr_hit + $gr_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 5: Verify guess is disabled when parameter is OFF
+--echo # ============================================================
+
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = OFF;
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100;
+--enable_result_log
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [guess disabled] pcur guess restore hit should be 0
+--let $assert_cond = $gr_hit = 0
+--source include/assert.inc
+
+--let $assert_text = [guess disabled] pcur guess restore miss should be 0
+--let $assert_cond = $gr_miss = 0
+--source include/assert.inc
+
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = ON;
+
+--echo # ============================================================
+--echo # Test 6: Cursor across page boundaries (large scan)
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 400;
+--enable_result_log
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [large scan] pcur guess restore hit should be > 0
+--let $assert_cond = $gr_hit > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 7: SELECT FOR UPDATE (BTR_MODIFY_LEAF path)
+--echo # ============================================================
+
+call dbms_stat.flush_gpp();
+
+BEGIN;
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 100 AND 150 FOR UPDATE;
+--enable_result_log
+COMMIT;
+
+--let $gr_hit = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [SELECT FOR UPDATE] pcur guess restore hit+miss should be > 0
+--let $assert_cond = $gr_hit + $gr_miss > 0
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Test 8: Verify stress test parameter bypass (optimistic path
+--echo # is skipped; without the parameter guess would not be invoked
+--echo # because optimistic modify_clock check would succeed)
+--echo # ============================================================
+
+--echo # Turn off stress test -> optimistic should succeed, guess not called
+SET GLOBAL innodb_inject_stress_test_for_guess = OFF;
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50;
+--enable_result_log
+
+--let $gr_hit_opt = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss_opt = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--echo # Turn on stress test -> optimistic skipped, guess should be called
+SET GLOBAL innodb_inject_stress_test_for_guess = ON;
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50;
+--enable_result_log
+
+--let $gr_hit_guess = query_get_value(show global status like "Lizard_index_pcur_guess_restore_hit", Value, 1)
+--let $gr_miss_guess = query_get_value(show global status like "Lizard_index_pcur_guess_restore_miss", Value, 1)
+
+--let $assert_text = [stress param ON] guess calls should be more than when OFF
+--let $assert_cond = $gr_hit_guess + $gr_miss_guess >= $gr_hit_opt + $gr_miss_opt
+--source include/assert.inc
+
+--echo # ============================================================
+--echo # Cleanup
+--echo # ============================================================
+
+DROP TABLE t1;
+DROP PROCEDURE insert_data;
+
+--eval SET GLOBAL innodb_lizard_stat_enabled = $orig_innodb_lizard_stat_enabled
+--eval SET GLOBAL innodb_inject_stress_test_for_guess = $orig_innodb_inject_stress_test_for_guess
+--eval SET GLOBAL innodb_index_pcur_guess_restore_enabled = $orig_innodb_index_pcur_guess_restore_enabled
+--eval SET GLOBAL innodb_adaptive_hash_index = $orig_innodb_adaptive_hash_index

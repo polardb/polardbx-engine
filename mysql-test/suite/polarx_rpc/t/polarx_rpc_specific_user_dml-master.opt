@@ -1,0 +1,1 @@
+--enable_polarx_rpc=1 --polarx_specific_user_list='dml_allow_user' --forbid_execute_dml_all=ON

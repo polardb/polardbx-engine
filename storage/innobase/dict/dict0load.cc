@@ -63,6 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "rem0cmp.h"
 #include "srv0srv.h"
 #include "srv0start.h"
+#include "ut0math.h"
 
 #include "lizard0btr0btr.h"
 
@@ -478,7 +479,8 @@ static const char *dict_load_index_low(
   (*index)->id = id;
   page_no_t page_no = mach_read_from_4(field);
   page_type_t page_type = lizard::dict_index_legacy_ptype(*index);
-  (*index)->root = {page_no, page_type};
+  (*index)->set_root({page_no, page_type});
+  (*index)->set_pd_capacity(0);
   ut_ad((*index)->page_no());
   (*index)->merge_threshold = merge_threshold;
 
@@ -2936,7 +2938,7 @@ names which must be loaded
 subsequently to load all the
 foreign key constraints. */
 {
-  ulint tuple_buf[(DTUPLE_EST_ALLOC(1) + sizeof(ulint) - 1) / sizeof(ulint)];
+  ulint tuple_buf[ut::div_ceil(DTUPLE_EST_ALLOC(1), sizeof(ulint))];
   btr_pcur_t pcur;
   dtuple_t *tuple;
   dfield_t *dfield;

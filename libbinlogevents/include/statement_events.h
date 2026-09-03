@@ -542,8 +542,24 @@ class Query_event : public Binary_log_event {
 
     /*
       Replicate opt_index_format_panda_enabled.
+      Private codes are allocated from 255 downward (deployment order).
     */
-    Q_OPT_INDEX_FORMAT_PANDA_ENABLED = 255
+    Q_OPT_INDEX_FORMAT_PANDA_ENABLED = 255,
+
+    /*
+      Replicate recycle_bin_table_name.
+    */
+    Q_OPT_RECYCLE_BIN_TABLE_NAME = 254,
+
+    /*
+      Replicate opt_index_format_hippo_enabled.
+    */
+    Q_OPT_INDEX_FORMAT_HIPPO_ENABLED = 253,
+
+    /*
+      Replicate opt_index_format_spc_enabled.
+    */
+    Q_OPT_INDEX_FORMAT_SPC_ENABLED = 252
   };
   const char *query;
   const char *db;
@@ -560,9 +576,9 @@ class Query_event : public Binary_log_event {
   unsigned long data_len;
   /*
     Copies data into the buffer in the following fashion
-    +--------+-----------+------+------+---------+----+-------+----+
-    | catlog | time_zone | user | host | db name | \0 | Query | \0 |
-    +--------+-----------+------+------+---------+----+-------+----+
+  +--------+-----------+------+------+---------+----+-------+----+------------------------+
+  | catlog | time_zone | user | host | db name | \0 | Query | \0 | recycle_bin_table_name | 
+  +--------+-----------+------+------+---------+----+-------+----+------------------------+
   */
   int fill_data_buf(unsigned char *dest, unsigned long len);
 
@@ -666,6 +682,13 @@ class Query_event : public Binary_log_event {
   uint8_t opt_index_format_gpp_enabled;
 
   uint8_t opt_index_format_panda_enabled;
+
+  uint8_t recycle_bin_table_name_len;
+  const char* recycle_bin_table_name;
+
+  uint8_t opt_index_format_hippo_enabled;
+
+  uint8_t opt_index_format_spc_enabled;
 
   /**
     The constructor will be used while creating a Query_event, to be

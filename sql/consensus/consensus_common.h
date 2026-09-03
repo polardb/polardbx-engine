@@ -23,8 +23,9 @@
 #ifndef CONSENSUS_CORE_INCLUDED
 #define CONSENSUS_CORE_INCLUDED
 
+#include <vector>
 #include "lex_string.h"
-#include "sql/bl_consensus_log.h"
+#include "my_inttypes.h"
 
 #define CONSENSUS_MAX_NODE_NUMBER 100
 
@@ -39,6 +40,7 @@ typedef struct Consensus_show_global_result {
   ulonglong match_index;
   ulonglong next_index;
   LEX_CSTRING role;
+  LEX_CSTRING has_voted;
   LEX_CSTRING force_sync;
   ulonglong election_weight;
   ulonglong learner_source;
@@ -77,10 +79,6 @@ typedef struct Consensus_show_logs_result {
   ulonglong start_log_index;
 } Consensus_show_logs_result;
 
-void collect_show_global_results(
-    MEM_ROOT *mem_root, std::vector<Consensus_show_global_result *> &results);
-void collect_show_local_results(MEM_ROOT *mem_root,
-                                Consensus_show_local_result *results);
 void collect_show_logs_results(
     MEM_ROOT *mem_root, std::vector<Consensus_show_logs_result *> &results);
 

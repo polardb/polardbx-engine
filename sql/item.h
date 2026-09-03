@@ -37,7 +37,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "column_encrypted_type.h"
+#include "column_encryption/column_encryption_type.h"
 #include "decimal.h"
 #include "field_types.h"  // enum_field_types
 #include "lex_string.h"
@@ -1577,6 +1577,16 @@ class Item : public Parse_tree_node {
     collation.set_numeric();
     decimals = fsp;
     max_length = MAX_DATETIME_WIDTH + fsp + (fsp > 0 ? 1 : 0);
+  }
+
+  /**
+    Set the data type of the Item to be VECTOR.
+  */
+  void set_data_type_vector(uint32 max_l) {
+    set_data_type(MYSQL_TYPE_VARCHAR);
+    collation.set(&my_charset_bin, DERIVATION_IMPLICIT);
+    decimals = DECIMAL_NOT_SPECIFIED;
+    max_length = max_l;
   }
 
   /**
@@ -3181,13 +3191,13 @@ class Item : public Parse_tree_node {
   /// Set accumulated properties for an Item
   void set_accum_properties(const Item *item) {
     m_accum_properties = item->m_accum_properties;
-    m_encrypted_type = item->m_encrypted_type;
+    m_encryption_type = item->m_encryption_type;
   }
 
   /// Add more accumulated properties to an Item
   void add_accum_properties(const Item *item) {
     m_accum_properties |= item->m_accum_properties;
-    m_encrypted_type |= item->m_encrypted_type;
+    m_encryption_type |= item->m_encryption_type;
   }
 
   /// Set the "has subquery" property
@@ -3238,15 +3248,6 @@ class Item : public Parse_tree_node {
 
   /// Set the property: this item is a call to GROUPING
   void set_grouping_func() { m_accum_properties |= PROP_GROUPING_FUNC; }
-
-  ///@return true if this item or any of underlying items is a encrypted column.
-  bool has_encrypted_column() const {
-    return m_accum_properties & PROP_ENCRYPTED_COLUMN;
-  }
-
-  /// Set the property: this item or one of its underlying items is a encrypted
-  /// column.
-  void set_encrypted_column() { m_accum_properties |= PROP_ENCRYPTED_COLUMN; }
 
   /// Whether this Item was created by the IN->EXISTS subquery transformation
   virtual bool created_by_in2exists() const { return false; }
@@ -3475,19 +3476,25 @@ class Item : public Parse_tree_node {
   */
   static constexpr uint16 PROP_GROUPING_FUNC = 0x0020;
 
-  /** Set if the item or one or more of the underlying items is a encrypted
-   * item. */
-  static constexpr uint16 PROP_ENCRYPTED_COLUMN = 0x8000;
-
   uint16 m_accum_properties;
 
-  /** Encrypted type of the item if PROP_ENCRYPTED_COLUMN is set.*/
-  uint16 m_encrypted_type;
+  /** Just like m_accum_properties, but m_encryption_type are accumulated across
+   * subqueries and functions. */
+  komodo::Encryption_type m_encryption_type;
 
  public:
-  uint16 encrypted_type() const { return m_encrypted_type; }
-  void reset_encrypted_type() {
-    m_encrypted_type = COULUMN_ENCRYPTED_TYPE_NONE;
+  komodo::Encryption_type encryption_type() const { return m_encryption_type; }
+
+  komodo::Encryption_type has_encryption_type() const {
+    return komodo::has_encryption_type(m_encryption_type);
+  }
+
+  void add_encryption_type(komodo::Encryption_type type) {
+    m_encryption_type |= type;
+  }
+
+  void reset_encryption_type() {
+    m_encryption_type = komodo::COLUMN_ENCRYPTION_TYPE_NONE;
   }
 
  public:
@@ -4130,7 +4137,7 @@ class Item_field : public Item_ident {
   typedef Item_ident super;
 
  protected:
-  void set_encrypted_type(Field *field);
+  void set_encryption_type(Field *field);
   void set_field(Field *field);
   void fix_after_pullout(Query_block *parent_query_block,
                          Query_block *removed_query_block) override {
@@ -5778,7 +5785,7 @@ class Item_ref : public Item_ident {
       itself.
     */
     m_accum_properties &= PROP_ROLLUP_EXPR;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(ref_item());
   }
 

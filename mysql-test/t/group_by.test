@@ -3453,3 +3453,27 @@ ANALYZE TABLE t1, t2;
 SELECT DISTINCT t1.x FROM t1, t2 WHERE t1.x = t2.pk GROUP BY t1.pk;
 
 DROP TABLE t1, t2;
+
+
+--echo #
+--echo # Bug#34891365: mysqld asan crash at Field_blob::pack when blob agg 
+--echo #
+
+CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `k` int NOT NULL DEFAULT '0',
+  `c` char(120) NOT NULL DEFAULT '',
+  `pad` longblob,
+  PRIMARY KEY (`id`),
+  KEY `k_1` (`k`)
+);
+
+insert into t1 (k, pad) select rand() * 100, repeat(substring(TABLE_NAME, 1, 1), 500000) from information_schema.columns where TABLE_SCHEMA='mysql' order by TABLE_NAME limit 100;
+
+--replace_column 1 #  2 ##
+SELECT k, min(CRC32(pad)) from t1  force index(k) where k > 2 and k < 80 group by k order by k limit 10;
+
+--replace_column 1 #
+SELECT min(CRC32(pad)) from t1 force index(k) where k > 2 and k < 88;
+
+DROP TABLE t1;

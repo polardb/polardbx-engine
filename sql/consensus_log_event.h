@@ -244,6 +244,7 @@ class Consensus_empty_log_event final
 #endif
 
   size_t get_data_size() override { return 0; }
+  size_t get_event_length() { return LOG_EVENT_HEADER_LEN + get_data_size(); }
 
 #if defined(MYSQL_SERVER)
   enum_skip_reason do_shall_skip(Relay_log_info *) override {
@@ -254,6 +255,8 @@ class Consensus_empty_log_event final
 #endif
 
   static const char *SET_STRING;
+
+  static const size_t LENGTH = LOG_EVENT_HEADER_LEN;
 
  private:
   static const size_t SET_STRING_LENGTH = 17;

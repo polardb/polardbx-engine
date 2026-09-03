@@ -1,0 +1,265 @@
+##############################################################
+# Default-path matrix: vidx_force_non_indep = OFF.            #
+#                                                              #
+# Verify need_independent_trx (sql/vidx/vidx_index.cc) routes #
+# row-driven DDL away from the Attachable_trx_rw per-row path #
+# while plain DML keeps using it.                              #
+#                                                              #
+# Empirical matrix on vidx tables (recorded in .result):       #
+#                                                              #
+#  Statement                       | Path observed             #
+#  ---------------------------------|--------------------------#
+#  CREATE INDEX … ALGORITHM=INPLACE | rejected (vidx itself    #
+#                                   | short-circuits inplace   #
+#                                   | at sql_table.cc:17737    #
+#                                   | for any table carrying  #
+#                                   | a vector index)          #
+#  ALTER RENAME COLUMN … INPLACE    | same — rejected           #
+#  OPTIMIZE TABLE                   | falls back to             #
+#                                   | "recreate + analyze"      #
+#                                   | (copy algorithm)          #
+#  ALTER … ALGORITHM=COPY (rebuild) | row-driven copy           #
+#  CREATE TABLE … SELECT (CTAS)     | row-driven INSERT         #
+#  TRUNCATE TABLE                   | row-driven                #
+#  ALTER ADD VECTOR INDEX           | vidx-internal build       #
+#                                   | (not via hlindexes_on_*)  #
+#                                                              #
+# Invariant under test (force_non_indep = OFF, default):       #
+#   - Plain DML increments Vidx_indep_dml_commit                #
+#   - Every DDL form keeps the counter flat — either because    #
+#     the statement is rejected before reaching                 #
+#     hlindexes_on_* (inplace short-circuit), or because the    #
+#     DDL branch in need_independent_trx is taken (CTAS /       #
+#     ALTER copy / TRUNCATE / OPTIMIZE recreate), or because    #
+#     the path is vidx-internal (ADD VECTOR INDEX).             #
+#                                                              #
+# We use --disable_abort_on_error so rejected statements are   #
+# recorded but do not abort the test.  Whether each inplace    #
+# form should succeed is a separate workstream tracked         #
+# alongside vidx's inplace-alter coverage gap.                 #
+##############################################################
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+# We accept any per-statement error here to map out exactly which
+# DDL forms fail on vidx tables; the assertions later are about
+# the counter, not about whether each DDL is supported.
+--disable_abort_on_error
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+--echo
+--echo ##############################################
+--echo # Axis B baseline: DML uses indep path        #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic_b0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[5,5,5]'));
+
+SELECT VARIABLE_VALUE INTO @ic_b1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic_b1 > @ic_b0 AS dml_uses_indep_path;
+
+--echo
+--echo ##############################################
+--echo # A1.a CREATE INDEX inplace (secondary)       #
+--echo #      vidx short-circuits inplace check on   #
+--echo #      tables with a vector index             #
+--echo #      (sql_table.cc:17737), so INPLACE is    #
+--echo #      rejected before reaching the storage   #
+--echo #      engine; statement errors and counter   #
+--echo #      stays flat.                            #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+CREATE INDEX idx_a ON t1(a) ALGORITHM=INPLACE;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS inplace_create_index_no_indep;
+
+DROP INDEX idx_a ON t1;
+
+--echo
+--echo ##############################################
+--echo # A1.b OPTIMIZE TABLE                         #
+--echo #      vidx short-circuits inplace, so        #
+--echo #      OPTIMIZE falls back to "recreate +     #
+--echo #      analyze" (copy algorithm).  Even via   #
+--echo #      copy, need_independent_trx routes the  #
+--echo #      writes through the DDL branch, so      #
+--echo #      counter stays flat.                    #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+OPTIMIZE TABLE t1;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS optimize_table_no_indep;
+
+--echo
+--echo ##############################################
+--echo # A1.c ALTER inplace (rename column)          #
+--echo #      Even RENAME COLUMN — normally a free   #
+--echo #      inplace metadata-only change — is      #
+--echo #      rejected by the same vidx short-       #
+--echo #      circuit at sql_table.cc:17737 because  #
+--echo #      the table carries a vector index.      #
+--echo #      Counter unchanged.                     #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+ALTER TABLE t1 RENAME COLUMN a TO aa, ALGORITHM=INPLACE;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS alter_inplace_no_indep;
+
+# Restore (also INPLACE → also rejected, matrix continues to hold)
+ALTER TABLE t1 RENAME COLUMN aa TO a, ALGORITHM=INPLACE;
+
+--echo
+--echo ##############################################
+--echo # A2.a ALTER TABLE ALGORITHM=COPY             #
+--echo #      Row-driven DDL: copy_data_between_     #
+--echo #      tables → ha_write_row → hlindexes_on_  #
+--echo #      _insert.  DDL branch taken; aux        #
+--echo #      committed inside outer DDL trx, NOT    #
+--echo #      via hlindex_indep_dml.                 #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+ALTER TABLE t1 ENGINE=InnoDB, ALGORITHM=COPY;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS alter_copy_no_indep;
+
+--echo
+--echo ##############################################
+--echo # A2.b CREATE TABLE ... SELECT (CTAS)         #
+--echo #      Row-driven DDL: SELECT result          #
+--echo #      INSERTed into new table via            #
+--echo #      ha_write_row.  DDL branch taken.       #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB AS SELECT a, v FROM t1;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS ctas_no_indep;
+SELECT COUNT(*) > 0 AS ctas_rows_present FROM t2;
+
+--echo
+--echo ##############################################
+--echo # A2.c TRUNCATE TABLE                         #
+--echo #      sql_command = SQLCOM_TRUNCATE,         #
+--echo #      CF_AUTO_COMMIT_TRANS set.              #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+TRUNCATE TABLE t2;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS truncate_no_indep;
+SELECT COUNT(*) AS rows_after_truncate FROM t2;
+
+--echo
+--echo ##############################################
+--echo # A1.d ALTER ADD VECTOR INDEX inplace         #
+--echo #      vidx-specific build path: writes aux   #
+--echo #      via hlindex_create + mhnsw_insert,    #
+--echo #      not via hlindexes_on_*.                #
+--echo ##############################################
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3)
+) ENGINE = InnoDB;
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT('[1,2,3]'));
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT('[4,5,6]'));
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS add_vector_index_no_indep;
+
+DROP TABLE t3;
+
+--echo
+--echo ##############################################
+--echo # Final correctness: ANN works on t1 after    #
+--echo # the full DDL gauntlet                       #
+--echo ##############################################
+
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # Final: DML on t1 still uses indep path     #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+INSERT INTO t1(a, v) VALUES (99, VEC_FROMTEXT('[9,9,9]'));
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 > @ic0 AS dml_after_ddl_still_indep;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+DROP TABLE t2;
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

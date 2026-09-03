@@ -136,6 +136,7 @@ events_statements_history_long
 events_transactions_history_long
 events_waits_history_long
 disabled_threads	thread_type
+innodb/srv_cycle_thread	BACKGROUND
 innodb/srv_error_monitor_thread	BACKGROUND
 innodb/srv_file_purge_thread	BACKGROUND
 innodb/srv_gp_wait_timeout_thread	BACKGROUND
@@ -173,6 +174,7 @@ events_statements_history_long
 events_transactions_history_long
 events_waits_history_long
 disabled_threads	thread_type
+innodb/srv_cycle_thread	BACKGROUND
 innodb/srv_error_monitor_thread	BACKGROUND
 innodb/srv_file_purge_thread	BACKGROUND
 innodb/srv_gp_wait_timeout_thread	BACKGROUND

@@ -54,7 +54,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "sync0sync.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dd.h"
 #include "lizard0undo.h"
 
 /** An integer randomly initialized at startup used to make a temporary
@@ -606,7 +606,7 @@ bool dict_col_default_t::operator!=(const dict_col_default_t &other) {
 /** Check whether index can be used by transaction
 @param[in] trx          transaction*/
 bool dict_index_t::is_usable(const trx_t *trx,
-                             const lizard::Snapshot_vision *snapshot_vision) {
+                             const komodo::Snapshot_vision *snapshot_vision) {
   /* Indexes that are being created are not usable. */
   if (!is_clustered() && dict_index_is_online_ddl(this)) {
     return false;
@@ -718,58 +718,6 @@ ulint dict_index_t::get_col_no(ulint pos) const {
   return (dict_col_get_no(get_col(pos)));
 }
 
-/** Returns the position of a system column in an index.
-@param[in] type         DATA_ROW_ID, ...
-@return position, ULINT_UNDEFINED if not contained */
-ulint dict_index_t::get_sys_col_pos(ulint type) const {
-  ut_ad(magic_n == DICT_INDEX_MAGIC_N);
-  ut_ad(!dict_index_is_ibuf(this));
-
-  if (is_clustered()) {
-    return (dict_col_get_clust_pos(table->get_sys_col(type), this));
-  }
-
-  return (get_col_pos(dict_table_get_sys_col_no(table, type)));
-}
-
-/** Looks for column n in an index.
-@param[in]      n               column number
-@param[in]      inc_prefix      true=consider column prefixes too
-@param[in]      is_virtual      true==virtual column
-@return position in internal representation of the index;
-ULINT_UNDEFINED if not contained */
-ulint dict_index_t::get_col_pos(ulint n, bool inc_prefix,
-                                bool is_virtual) const {
-  const dict_field_t *field;
-  const dict_col_t *col;
-  ulint pos;
-  ulint n_fields;
-
-  ut_ad(magic_n == DICT_INDEX_MAGIC_N);
-
-  if (is_virtual) {
-    col = &(dict_table_get_nth_v_col(table, n)->m_col);
-  } else {
-    col = table->get_col(n);
-  }
-
-  if (is_clustered()) {
-    return (dict_col_get_clust_pos(col, this));
-  }
-
-  n_fields = dict_index_get_n_fields(this);
-
-  for (pos = 0; pos < n_fields; pos++) {
-    field = get_field(pos);
-
-    if (col == field->col && (inc_prefix || field->prefix_len == 0)) {
-      return (pos);
-    }
-  }
-
-  return (ULINT_UNDEFINED);
-}
-
 /** Frees an index memory object. */
 void dict_mem_index_free(dict_index_t *index) /*!< in: index */
 {
@@ -879,6 +827,28 @@ bool dict_foreign_set_validate(const dict_foreign_set &fk_set) {
 bool dict_foreign_set_validate(const dict_table_t &table) {
   return (dict_foreign_set_validate(table.foreign_set) &&
           dict_foreign_set_validate(table.referenced_set));
+}
+
+bool dict_foreign_t::is_fts_col_affected() const {
+  /* The check is skipped:
+     - if the table has no full text index defined.
+     - if it is a self referential foreign constaint. This is because
+       in the context of cascading DML operation, only the referenced
+       table is relevant for the validation even if the current table
+       has FTS index.*/
+  if (!foreign_table->fts || foreign_table == referenced_table) {
+    return false;
+  }
+
+  for (ulint i = 0; i < n_fields; i++) {
+    const dict_col_t *col = foreign_index->get_col(i);
+    if (dict_table_is_fts_column(foreign_table->fts->indexes,
+                                 dict_col_get_no(col),
+                                 col->is_virtual()) != ULINT_UNDEFINED) {
+      return true;
+    }
+  }
+  return false;
 }
 #endif /* !UNIV_HOTBACKUP */
 

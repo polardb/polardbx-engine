@@ -633,6 +633,7 @@ ha_rows check_quick_select(THD *thd, RANGE_OPT_PARAM *param, uint idx,
       param->table->quick_n_ranges[keynr] = seq.range_count;
       param->table->quick_condition_rows =
           min(param->table->quick_condition_rows, rows);
+      param->table->quick_rows_canonical[keynr] = rows;
     }
     param->table->possible_quick_keys.set_bit(keynr);
   }

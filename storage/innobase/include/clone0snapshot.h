@@ -45,7 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <map>
 #include <vector>
 
-#include "lizard0txn.h"
+#include "lizard0txn0types.h"
 
 struct Clone_file_ctx {
   /** File state:

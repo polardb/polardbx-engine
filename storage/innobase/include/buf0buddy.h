@@ -67,6 +67,8 @@ bool buf_buddy_realloc(buf_pool_t *buf_pool, void *buf, ulint size);
 @param[in]      buf_pool        buffer pool instance */
 void buf_buddy_condense_free(buf_pool_t *buf_pool);
 
+#ifndef INNODB_BUF0BUDDY_IC_STANDALONE
 #include "buf0buddy.ic"
+#endif /* !INNODB_BUF0BUDDY_IC_STANDALONE */
 
 #endif /* buf0buddy_h */

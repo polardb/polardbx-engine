@@ -584,7 +584,8 @@ AccessPath *create_table_access_path(THD *thd, TABLE *table,
  */
 unique_ptr_destroy_only<RowIterator> init_table_iterator(
     THD *thd, TABLE *table, AccessPath *range_scan, Table_ref *table_ref,
-    POSITION *position, bool ignore_not_found_rows, bool count_examined_rows);
+    POSITION *position, bool ignore_not_found_rows, bool count_examined_rows,
+    komodo::guess_mode_t gmode);
 
 /**
   A short form for when there's no range scan, recursive CTEs or cost
@@ -595,7 +596,15 @@ inline unique_ptr_destroy_only<RowIterator> init_table_iterator(
     THD *thd, TABLE *table, bool ignore_not_found_rows,
     bool count_examined_rows) {
   return init_table_iterator(thd, table, nullptr, nullptr, nullptr,
-                             ignore_not_found_rows, count_examined_rows);
+                             ignore_not_found_rows, count_examined_rows,
+                             komodo::GM_NONE);
+}
+
+inline unique_ptr_destroy_only<RowIterator> init_table_iterator(
+    THD *thd, TABLE *table, bool ignore_not_found_rows,
+    bool count_examined_rows, komodo::guess_mode_t gmode) {
+  return init_table_iterator(thd, table, nullptr, nullptr, nullptr,
+                             ignore_not_found_rows, count_examined_rows, gmode);
 }
 
 AccessPath *ConnectJoins(plan_idx upper_first_idx, plan_idx first_idx,

@@ -790,7 +790,11 @@ int ResponseNode::next(InternalDataSet &dataset) {
   int ret = HA_EXEC_SUCCESS;
   // reset for next row
   dataset.reset_found();
-  left_tree_->next(dataset);
+  ret = left_tree_->next(dataset);
+  if (ret != HA_EXEC_SUCCESS) {
+    // Propagate error immediately, don't try to write row
+    return ret;
+  }
   // TODO: return error message instead of empty message.
   // When error occurs, found should always be false.
   if (dataset.found() && !dataset.is_aggr()) {

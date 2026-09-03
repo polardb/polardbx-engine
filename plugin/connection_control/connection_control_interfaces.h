@@ -61,6 +61,12 @@ class Connection_event_records {
 */
 class Connection_event_observer {
  public:
+  Connection_event_observer(bool enabled) : m_enabled(enabled) {}
+
+  virtual bool enabled() const { return m_enabled; }
+
+  virtual void set_enabled(bool enabled) { m_enabled = enabled; }
+
   virtual bool notify_event(MYSQL_THD thd,
                             Connection_event_coordinator_services *coordinator,
                             const mysql_event_connection *connection_event,
@@ -69,8 +75,16 @@ class Connection_event_observer {
       Connection_event_coordinator_services *coordinator,
       opt_connection_control variable, void *new_value,
       Error_handler *error_handler) = 0;
+
+  virtual bool notify_event(Connection_event_coordinator_services *,
+                            const mysql_event_polarx_connection_control *event,
+                            Error_handler *) = 0;
+
   virtual ~Connection_event_observer() { /* Nothing to see here! */
   }
+
+ private:
+  bool m_enabled;
 };
 
 /* Status variable action enum */

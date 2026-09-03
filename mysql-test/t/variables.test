@@ -85,9 +85,9 @@ drop table t1;
 #
 set GLOBAL max_join_size=10;
 set max_join_size=100;
-# Setting max_join_size value to 1000 to fetch the below session variables as the
+# Setting max_join_size value to 10000 to fetch the below session variables as the
 # rows returned are > 100
-set max_join_size=1000;
+set max_join_size=10000;
 show variables like 'max_join_size';
 # Restoring max_join_size value back to 100.
 set max_join_size=100;
@@ -123,7 +123,7 @@ show global variables like 'max_join_size';
 --replace_result 18446744073709551615 HA_POS_ERROR 4294967295 HA_POS_ERROR
 select * from performance_schema.global_variables where variable_name like 'max_join_size';
 --enable_warnings
-set @@max_join_size=1000, @@global.max_join_size=2000;
+set @@max_join_size=10000, @@global.max_join_size=2000;
 select @@local.max_join_size, @@global.max_join_size;
 select @@identity,  length(@@version)>0;
 select @@VERSION=version();

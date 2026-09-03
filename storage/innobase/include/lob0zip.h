@@ -135,15 +135,18 @@ class zInserter : private BaseInserter {
   is be valid.  If validation fails, this function doesn't return.
   @return true if valid. */
   bool validate_blobrefs() const {
-    const ulint *offsets = m_ctx->get_offsets();
+    Slice *slc = m_ctx->slc();
 
-    for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
-      if (!rec_offs_nth_extern(m_ctx->index(), offsets, i)) {
+    for (ulint i = 0; i < rec_offs_n_fields(slc->offsets()); i++) {
+      if (!rec_offs_nth_extern(m_ctx->index(), slc->offsets(), i)) {
         continue;
       }
 
-      byte *field_ref =
-          btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(), offsets, i);
+      // byte *field_ref =
+      //     btr_rec_get_field_ref(m_ctx->index(), m_ctx->rec(), slc, i);
+      DSlice *dslc = dynamic_cast<DSlice *>(slc);
+      ut_a(dslc);
+      byte *field_ref = dslc->get_lob_field_ref(i);
 
       ref_t blobref(field_ref);
 

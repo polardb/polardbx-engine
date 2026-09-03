@@ -1,0 +1,157 @@
+SET @base_seq = (SELECT CAST(variable_value AS UNSIGNED) FROM performance_schema.global_status WHERE variable_name = 'Lizard_current_gcn');
+show global variables like "have_xa_advance_retention_gcn";
+Variable_name	Value
+have_xa_advance_retention_gcn	YES
+create table t1 (version int);
+insert into t1 values (1);
+set global innodb_undo_retention = 1800;
+set xa_detach_on_prepare = false;
+SHOW STATUS LIKE "lizard_retention_gcn";
+Variable_name	Value
+Lizard_retention_gcn	####
+CALL DBMS_UNDO.PURGE_STATUS();
+HISTORY_LENGTH	CURRENT_SCN	CURRENT_GCN	PURGED_SCN	PURGED_UTC	PURGED_GCN	ERASED_SCN	ERASED_UTC	ERASED_GCN	CYCLED_SCN	CYCLED_UTC	CYCLED_GCN	TXN_HISTORY_LENGTH	RETENTION_GCN
+####	####	####	####	####	####	####	####	####	####	####	####	####	####
+###############################
+# case 1
+###############################
+set innodb_commit_seq = base + 100
+update t1 set version = 2;
+set innodb_commit_seq = base + 200
+update t1 set version = 3;
+set innodb_snapshot_seq = base + 1
+select * from t1;
+version
+1
+set innodb_snapshot_seq = base + 100
+select * from t1;
+version
+2
+set innodb_snapshot_seq = base + 200
+select * from t1;
+version
+3
+call dbms_xa.advance_retention_gcn_no_flush(base + 101)
+select * from t1;
+version
+3
+set innodb_snapshot_seq = base + 100
+select * from t1;
+ERROR HY000: Snapshot too old
+set innodb_snapshot_seq = base + 199
+select * from t1;
+version
+2
+set innodb_snapshot_seq = base + 200
+select * from t1;
+version
+3
+call dbms_xa.advance_retention_gcn_no_flush(base + 201)
+select * from t1;
+version
+3
+set innodb_snapshot_seq = base + 100
+select * from t1;
+ERROR HY000: Snapshot too old
+set innodb_snapshot_seq = base + 199
+select * from t1;
+ERROR HY000: Snapshot too old
+set innodb_snapshot_seq = base + 200
+select * from t1;
+ERROR HY000: Snapshot too old
+set innodb_snapshot_seq = base + 201
+select * from t1;
+version
+3
+###############################
+# case 2
+###############################
+xa start 'retention_gcn_t2_b1';
+update t1 set version = 4;
+xa end 'retention_gcn_t2_b1';
+xa prepare 'retention_gcn_t2_b1';
+set innodb_commit_seq = base + 300
+xa commit 'retention_gcn_t2_b1';
+xa start 'retention_gcn_t2_b2';
+update t1 set version = 5;
+xa end 'retention_gcn_t2_b2';
+xa prepare 'retention_gcn_t2_b2';
+set innodb_commit_seq = base + 400
+xa commit 'retention_gcn_t2_b2';
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_gcn == actual_gcn]
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_gcn == actual_gcn]
+call dbms_xa.advance_retention_gcn_no_flush(base + 301)
+set debug="+d,purged_txn_always_reused";
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_gcn == actual_gcn]
+set debug="-d,purged_txn_always_reused";
+###############################
+# case 3
+###############################
+set xa_detach_on_prepare = on;
+call dbms_xa.advance_gcn_no_flush(base + 500)
+xa start 'retention_gcn_t3_b1';
+update t1 set version = 6;
+xa end 'retention_gcn_t3_b1';
+xa prepare 'retention_gcn_t3_b1';
+call dbms_xa.advance_retention_gcn_no_flush(base + 600)
+include/assert.inc [expect_status == actual_status]
+set innodb_commit_seq = base + 700
+xa commit 'retention_gcn_t3_b1';
+call dbms_xa.advance_retention_gcn_no_flush(base + 700)
+set debug="+d,purged_txn_always_reused";
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_gcn == actual_gcn]
+set debug="-d,purged_txn_always_reused";
+call dbms_xa.advance_retention_gcn_no_flush(base + 701)
+set debug="+d,purged_txn_always_reused";
+include/assert.inc [expect_status == actual_status]
+set debug="-d,purged_txn_always_reused";
+set xa_detach_on_prepare = default;
+###############################
+# case 4: Also purged, if beyond innodb_undo_retention.
+###############################
+call dbms_xa.advance_retention_gcn_no_flush(base + 800)
+xa start 'retention_gcn_t4_b1';
+update t1 set version = 7;
+xa end 'retention_gcn_t4_b1';
+xa prepare 'retention_gcn_t4_b1';
+set innodb_commit_seq = base + 900
+xa commit 'retention_gcn_t4_b1';
+# Can not advance purge.
+set debug="+d,purged_txn_always_reused";
+include/assert.inc [expect_status == actual_status]
+include/assert.inc [expect_gcn == actual_gcn]
+# Can advance purge because of beyond innodb_undo_retention (= 0)
+set global innodb_undo_retention = 0;
+include/assert.inc [expect_status == actual_status]
+set debug="-d,purged_txn_always_reused";
+###############################
+# case 5: Monotonicity is not enforced for updates to `retention_gcn`
+###############################
+call dbms_xa.advance_retention_gcn_no_flush(1);
+SHOW STATUS LIKE "lizard_retention_gcn";
+Variable_name	Value
+Lizard_retention_gcn	1
+call dbms_xa.advance_retention_gcn_no_flush(0);
+SHOW STATUS LIKE "lizard_retention_gcn";
+Variable_name	Value
+Lizard_retention_gcn	0
+###############################
+# case 6: Set 0 to disable this feature
+###############################
+begin;
+update t1 set version = 8;
+set innodb_commit_seq = base + 1000
+commit;
+call dbms_xa.advance_retention_gcn_no_flush(0);
+###############################
+# Cleanup
+###############################
+set xa_detach_on_prepare = on;
+set global innodb_undo_retention = default;
+call dbms_xa.advance_retention_gcn_no_flush(0);
+drop table t1;

@@ -82,7 +82,9 @@
 #include "sql/system_variables.h"
 #include "sql_string.h"
 #include "tztime.h"  // convert_time_zone_displacement
+#include "vidx/vidx_func.h"  // vidx::Item_typecast_vector
 #include "sql/sql_implicit_element.h"
+#include "sql/item_ai_func.h"
 
 /**
   @addtogroup GROUP_PARSER
@@ -503,6 +505,38 @@ class Instantiator<Function_class, 2, 4> {
 
   Item *instantiate(THD *thd, PT_item_list *args) {
     switch (args->elements()) {
+      case 2:
+        return new (thd->mem_root)
+            Function_class(POS(), (*args)[0], (*args)[1]);
+      case 3:
+        return new (thd->mem_root)
+            Function_class(POS(), (*args)[0], (*args)[1], (*args)[2]);
+      case 4:
+        return new (thd->mem_root) Function_class(POS(), (*args)[0], (*args)[1],
+                                                  (*args)[2], (*args)[3]);
+      default:
+        assert(false);
+        return nullptr;
+    }
+  }
+};
+
+/**
+  Instantiates a function class with between one and four arguments.
+
+  @tparam Function_class The class that implements the function. Does not need
+  to inherit Item_func.
+*/
+template <typename Function_class>
+class Instantiator<Function_class, 1, 4> {
+ public:
+  static const uint Min_argcount = 1;
+  static const uint Max_argcount = 4;
+
+  Item *instantiate(THD *thd, PT_item_list *args) {
+    switch (args->elements()) {
+      case 1:
+        return new (thd->mem_root) Function_class(POS(), (*args)[0]);
       case 2:
         return new (thd->mem_root)
             Function_class(POS(), (*args)[0], (*args)[1]);
@@ -1375,6 +1409,16 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"ADDTIME", SQL_FN(Item_func_add_time, 2)},
     {"AES_DECRYPT", SQL_FN_V(Item_func_aes_decrypt, 2, 6)},
     {"AES_ENCRYPT", SQL_FN_V(Item_func_aes_encrypt, 2, 6)},
+    {"AI_CLASSIFY", SQL_FN_V(Item_func_ai_classify, 2, 4)},
+    {"AI_EMBEDDING", SQL_FN_V(Item_func_ai_embedding, 1, 3)},
+    {"AI_EXTRACT", SQL_FN_V(Item_func_ai_extract, 2, 4)},
+    {"AI_PARSE_DOCUMENT", SQL_FN_V(Item_func_ai_parse_document, 1, 4)},
+    {"AI_PROMPT", SQL_FN_V(Item_func_ai_prompt, 1, 3)},
+    {"AI_RANK", SQL_FN_V(Item_func_ai_rank, 2, 4)},
+    {"AI_SIMILARITY", SQL_FN_V(Item_func_ai_similarity, 2, 4)},
+    {"AI_SUMMARIZE", SQL_FN_V(Item_func_ai_summarize, 1, 4)},
+    {"AI_TEXT2SQL", SQL_FN_V(Item_func_ai_text2sql, 1, 3)},
+    {"AI_VL_EMBEDDING", SQL_FN_V(Item_func_ai_vl_embedding, 1, 3)},
     {"ALTER_TYPE", SQL_FN(Item_func_alter_type, 1)},
     {"ANY_VALUE", SQL_FN(Item_func_any_value, 1)},
     {"ASIN", SQL_FN(Item_func_asin, 1)},
@@ -1664,6 +1708,19 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"TO_BASE64", SQL_FN(Item_func_to_base64, 1)},
     {"TO_DAYS", SQL_FN(Item_func_to_days, 1)},
     {"TO_SECONDS", SQL_FN(Item_func_to_seconds, 1)},
+    {"VEC_DISTANCE", SQL_FN(vidx::Item_func_vec_distance, 2)},
+    {"VEC_DISTANCE_EUCLIDEAN",
+     SQL_FN(vidx::Item_func_vec_distance_euclidean, 2)},
+    {"VEC_DISTANCE_COSINE", SQL_FN(vidx::Item_func_vec_distance_cosine, 2)},
+    {"VEC_DISTANCE_INNER_PRODUCT",
+     SQL_FN(vidx::Item_func_vec_distance_inner_product, 2)},
+    {"VEC_FROMTEXT", SQL_FN(vidx::Item_func_vec_fromtext, 1)},
+    {"TO_VECTOR", SQL_FN(vidx::Item_func_vec_fromtext, 1)},
+    {"STRING_TO_VECTOR", SQL_FN(vidx::Item_func_vec_fromtext, 1)},
+    {"VEC_TOTEXT", SQL_FN(vidx::Item_func_vec_totext, 1)},
+    {"FROM_VECTOR", SQL_FN(vidx::Item_func_vec_totext, 1)},
+    {"VECTOR_TO_STRING", SQL_FN(vidx::Item_func_vec_totext, 1)},
+    {"VECTOR_DIM", SQL_FN(vidx::Item_func_vector_dim, 1)},
     {"UCASE", SQL_FN(Item_func_upper, 1)},
     {"UNCOMPRESS", SQL_FN(Item_func_uncompress, 1)},
     {"UNCOMPRESSED_LENGTH", SQL_FN(Item_func_uncompressed_length, 1)},
@@ -1790,7 +1847,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"INTERNAL_IS_ENABLED_ROLE",
      SQL_FN_INTERNAL(Item_func_internal_is_enabled_role, 2)},
     {"CAN_ACCESS_IMPLICIT_OBJECT",
-     SQL_FN_INTERNAL(Item_func_can_access_implicit_object, 1)}
+     SQL_FN_INTERNAL(Item_func_can_access_implicit_object, 1)},
+    {"POLARDBX_HASHER", SQL_FN_V(Item_func_polardbx_hasher, 1, 12)}
     };
 
 using Native_functions_hash = std::unordered_map<std::string, Create_func *>;
@@ -1986,6 +2044,25 @@ static bool validate_cast_type_and_extract_length(
       *length = len;
       return false;
     }
+    case ITEM_CAST_VECTOR: {
+      if (as_array) {
+        my_error(ER_NOT_SUPPORTED_YET, MYF(0), "CAST-ing data to array of VECTOR");
+        return true;
+      }
+      // No dimension specified -> -1 means "do not check".
+      longlong dims = -1;
+      if (c_len) {
+        int error;
+        dims = my_strtoll10(c_len, nullptr, &error);
+        if (error != 0 || dims <= 0 ||
+            static_cast<ulonglong>(dims) > vidx::MAX_DIMENSIONS) {
+          my_error(ER_WRONG_ARGUMENTS, MYF(0), "CAST AS VECTOR");
+          return true;
+        }
+      }
+      *length = dims;
+      return false;
+    }
     case ITEM_CAST_DOUBLE:
       if (as_array) {
         my_error(ER_NOT_SUPPORTED_YET, MYF(0),
@@ -2135,6 +2212,8 @@ Item *create_func_cast(THD *thd, const POS &pos, Item *arg,
       return new (thd->mem_root) Item_typecast_multipolygon(pos, arg);
     case ITEM_CAST_GEOMETRYCOLLECTION:
       return new (thd->mem_root) Item_typecast_geometrycollection(pos, arg);
+    case ITEM_CAST_VECTOR:
+      return new (thd->mem_root) vidx::Item_typecast_vector(pos, arg, length);
   }
 
   /* purecov: begin deadcode */

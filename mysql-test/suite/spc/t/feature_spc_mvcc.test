@@ -1,0 +1,250 @@
+### Purpose ###
+#
+# Verify that MVCC consistent read works correctly for SPC indexes:
+#   - Snapshot isolation: reader sees old version through SPC index
+#   - Semi-consistent read: reader sees last committed version
+#   - Version chain traversal via row_vers_build_for_consistent_read
+#   - Version chain traversal via row_vers_build_for_semi_consistent_read
+#
+# This test relies on DEBUG assertions inside trx_undo_prev_version_build()
+# to verify the first argument is always the page-latched record (reg),
+# not the loop iteration variable (version).
+#
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/have_innodb_max_16k.inc
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo #
+--echo # PART 1: Consistent read sees old version through SPC index
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id   INT PRIMARY KEY,
+  c    VARCHAR(120),
+  pad  VARCHAR(60),
+  KEY  idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 110), REPEAT('x', 60));
+INSERT INTO t1 VALUES (2, REPEAT('a', 110), REPEAT('y', 60));
+INSERT INTO t1 VALUES (3, REPEAT('a', 110), REPEAT('z', 60));
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--echo # Open a snapshot in con1 before the update
+--connection con1
+BEGIN;
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+--echo # Modify records in default connection
+--connection default
+UPDATE t1 SET c = REPEAT('b', 110) WHERE id = 1;
+UPDATE t1 SET c = REPEAT('b', 110) WHERE id = 2;
+DELETE FROM t1 WHERE id = 3;
+INSERT INTO t1 VALUES (4, REPEAT('a', 110), REPEAT('w', 60));
+
+--echo # con1 must still see old snapshot through SPC index
+--connection con1
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+SELECT id, c FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+
+--echo # Verify checksum consistency between SPC index and primary key
+WITH
+  ck_spc AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+    FROM t1 FORCE INDEX (idx_c)
+  ),
+  ck_pk AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+    FROM t1 FORCE INDEX (PRIMARY)
+  )
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+COMMIT;
+
+--echo # After commit, con1 sees current data
+BEGIN;
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+COMMIT;
+
+--connection default
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: Multiple updates - deep version chain traversal
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+INSERT INTO t1 VALUES (4, REPEAT('a', 100));
+INSERT INTO t1 VALUES (5, REPEAT('a', 100));
+
+--echo # Open snapshot at version V0
+--connection con1
+BEGIN;
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+--echo # Build a deep version chain: 5 updates per row
+--connection default
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('d', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('e', 100)) WHERE id IN (1,2,3,4,5);
+UPDATE t1 SET c = CONCAT(REPEAT('f', 100)) WHERE id IN (1,2,3,4,5);
+
+--echo # con1 must traverse the deep chain back to V0
+--connection con1
+SELECT id, c FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+WITH
+  ck_spc AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+    FROM t1 FORCE INDEX (idx_c)
+  ),
+  ck_pk AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+    FROM t1 FORCE INDEX (PRIMARY)
+  )
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+COMMIT;
+
+--connection default
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: Concurrent write and consistent read
+--echo # con1 holds a snapshot while default updates half the rows.
+--echo # Use a small dataset (20 rows, short values) to avoid page split.
+--echo #
+
+--connection default
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+SET GLOBAL innodb_purge_stop_now = ON;
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(30),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 20) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT('aaa', $i));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t1;
+
+--echo # Open snapshot
+--connection con1
+BEGIN;
+--let $snap_count = `SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c)`
+
+--echo # Perform heavy modifications in default
+--connection default
+--disable_query_log
+let $i = 1;
+while ($i <= 10) {
+  eval UPDATE t1 SET c = CONCAT('bbb', $i) WHERE id = $i;
+  inc $i;
+}
+--enable_query_log
+
+--echo # con1 must still see snapshot count
+--connection con1
+--let $curr_count = `SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c)`
+--let $assert_text = Snapshot count must not change during concurrent update
+--let $assert_cond = $curr_count = $snap_count
+--source include/assert.inc
+
+WITH
+  ck_spc AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)
+  ),
+  ck_pk AS (
+    SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY)
+  )
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+COMMIT;
+
+--connection default
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Semi-consistent read through SPC index
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 2;
+UPDATE t1 SET c = REPEAT('c', 100) WHERE id = 2;
+
+--echo # con2 locks id=2 with an uncommitted update
+--connection con2
+BEGIN;
+UPDATE t1 SET c = REPEAT('z', 100) WHERE id = 2;
+
+--echo # default UPDATE under READ-COMMITTED: semi-consistent read on id=2
+--echo # sees last committed version (c='ccc'), does not match WHERE, skips id=2
+--connection default
+--let $orig_isolation = `SELECT @@SESSION.transaction_isolation`
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+
+UPDATE t1 SET c = REPEAT('y', 100) WHERE c = REPEAT('a', 100);
+
+--connection con2
+ROLLBACK;
+
+--connection default
+--eval SET SESSION transaction_isolation = '$orig_isolation'
+
+SELECT id, LEFT(c,3) AS c_prefix FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+--connection default
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--disconnect con1
+--disconnect con2

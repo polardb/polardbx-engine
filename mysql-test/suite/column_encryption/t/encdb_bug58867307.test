@@ -1,0 +1,90 @@
+# Bug57620682 Encdb would crash when kernel passes NULL to encdb_rule_hook.
+--source include/have_debug.inc
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+select user();
+
+set global column_encryption = on;
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Run function 'encdb_expected_length' in plugin 'encdb' failed");
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Run function 'encdb_encrypt' in plugin 'encdb' failed");
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Run function 'encdb_rule_func' in plugin 'encdb' failed");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+create table t1 (c1 int, c2 float);
+insert into t1 values (1, 1.85), (2, 2.85);
+
+SET DEBUG="+d, simulate_encdb_rule_hook_null_2";
+echo # This SQL would crash before fix, now return plaintext;
+select * from t1;
+SET DEBUG="-d, simulate_encdb_rule_hook_null_2";
+
+echo # Add rule for testing encryption hook and length hook;
+SELECT encdb_rule_op('add','{"name":"rule1","enabled":true,"meta":{"databases":["*"],"tables":["*"],"columns":["*"]}}');
+
+SET DEBUG="+d, simulate_encdb_len_hook_null";
+echo # This SQL would crash before fix, now report error;
+--error ER_ENCDB_HOOK_ERROR
+select * from t1;
+SET DEBUG="-d, simulate_encdb_len_hook_null";
+
+SET DEBUG="+d, simulate_encdb_encrypt_hook_null";
+echo #This SQL would crash before fix, now report error;
+--error ER_ENCDB_HOOK_ERROR
+select * from t1;
+SET DEBUG="-d, simulate_encdb_encrypt_hook_null";
+
+SET DEBUG="+d, simulate_encdb_encrypt_hook_not_enough_space";
+echo # This SQL would crash before fix,  now report error;
+--error ER_ENCDB_HOOK_ERROR
+select * from t1;
+SET DEBUG="-d, simulate_encdb_encrypt_hook_not_enough_space";
+
+echo # Test multiple situations where empty priv user appears. For this part, we only care if error is thorwn, so we are ignoring outputs.;
+echo # User use algo SM4_128_CBC, which is different from system default option;
+--disable_result_log
+select encdb_rule_op('grant','{"restrictedAccess":["root"]}');
+
+echo # Test insufficient argunments to function.;
+--error ER_CANT_INITIALIZE_UDF
+select encdb_generate_mek_request();
+
+echo # User use algo SM4_128_CBC, which is different from system default option.;
+select encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+                                                        '00112233445566778899aabbccddeeff', 'SM4_128_CBC'));
+SET DEBUG="+d, simulate_encdb_expected_length_empty_user";
+SET DEBUG="+d, simulate_encdb_encrypt_hook_empty_user";
+echo # Test empty user passed to expected_length hook and encrypt hook, should return randomly encrypted data.;
+select * from t1;
+SET DEBUG="-d, simulate_encdb_expected_length_empty_user";
+SET DEBUG="-d, simulate_encdb_encrypt_hook_empty_user";
+
+SET DEBUG="+d, simulate_encdb_rule_hook_empty_user";
+echo # Test empty user passed to rule hook.;
+select * from t1;
+SET DEBUG="-d, simulate_encdb_rule_hook_empty_user";
+
+echo # User use system default option.;
+select encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+                                                        '00112233445566778899aabbccddeeff'));
+SET DEBUG="+d, simulate_encdb_expected_length_empty_user";
+SET DEBUG="+d, simulate_encdb_encrypt_hook_empty_user";
+echo # Test empty user passed to expected_length hook and encrypt hook, should return randomly encrypted data.;
+select * from t1;
+SET DEBUG="-d, simulate_encdb_expected_length_empty_user";
+SET DEBUG="-d, simulate_encdb_encrypt_hook_empty_user";
+
+SET DEBUG="+d, simulate_encdb_rule_hook_empty_user";
+echo # Test empty user passed to rule hook.;
+select * from t1;
+SET DEBUG="-d, simulate_encdb_rule_hook_empty_user";
+--enable_result_log
+
+echo # Delete rule;
+SELECT encdb_rule_op('delete','["rule1"]');
+delete from mysql.encdb_auth_users;
+
+set global column_encryption = off;
+drop table t1;
+drop function encdb_decrypt;
+drop function encdb_generate_mek_request;

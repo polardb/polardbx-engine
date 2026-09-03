@@ -6,6 +6,7 @@
 # Install connection_control plugin
 INSTALL PLUGIN connection_control SONAME 'CONNECTION_CONTROL_LIB';
 INSTALL PLUGIN connection_control_failed_login_attempts SONAME 'CONNECTION_CONTROL_LIB';
+INSTALL PLUGIN connection_control_refuse_statistic SONAME 'CONNECTION_CONTROL_LIB';
 # Performance schema
 # Verify the instrumentation provided
 SELECT * FROM performance_schema.setup_instruments
@@ -36,25 +37,25 @@ connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u1'@'localhost' (using password: YES)
 connect(localhost,u2,efgh,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
-# connection_control_failed_login_attempts should contain entries
+# connection_control_refuse_statistic should contain entries
 # for u1@localhost and u2@localhost
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	2
-'u2'@'localhost'	1
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		2	UNLOCKED
+'u2'@'localhost'		1	UNLOCKED
 connect(localhost,u3,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u3'@'localhost' (using password: NO)
 connect(localhost,u2,haha,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
 connect(localhost,u3,efgh,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
-# connection_control_failed_login_attempts should contain entries
+# connection_control_refuse_statistic should contain entries
 # for u1@localhost, u2@localhost and u3@localhost
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	2
-'u2'@'localhost'	2
-'u3'@'localhost'	2
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		2	UNLOCKED
+'u2'@'localhost'		2	UNLOCKED
+'u3'@'localhost'		2	UNLOCKED
 connect(localhost,u2,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u2'@'localhost' (using password: NO)
 connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
@@ -62,11 +63,11 @@ ERROR 28000: Access denied for user 'u1'@'localhost' (using password: YES)
 connect(localhost,u3,efgh,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
 # failed connection counts should have increased for all users
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	3
-'u2'@'localhost'	3
-'u3'@'localhost'	3
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		3	UNLOCKED
+'u2'@'localhost'		3	UNLOCKED
+'u3'@'localhost'		3	UNLOCKED
 connect(localhost,u2,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u2'@'localhost' (using password: NO)
 connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
@@ -80,38 +81,38 @@ ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
 connect(localhost,u1,haha,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u1'@'localhost' (using password: YES)
 # Try various queries
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
 WHERE USERHOST = '\'u1\'@\'localhost\'';
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	6
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		6	UNLOCKED
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
 WHERE USERHOST LIKE '%u2%';
-USERHOST	FAILED_ATTEMPTS
-'u2'@'localhost'	4
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u2'@'localhost'		4	UNLOCKED
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
 WHERE FAILED_ATTEMPTS > 4;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	6
-'u3'@'localhost'	5
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		6	UNLOCKED
+'u3'@'localhost'		5	UNLOCKED
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
 WHERE FAILED_ATTEMPTS > 5;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	6
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		6	UNLOCKED
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
 WHERE FAILED_ATTEMPTS < 5;
-USERHOST	FAILED_ATTEMPTS
-'u2'@'localhost'	4
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u2'@'localhost'		4	UNLOCKED
 CREATE USER viewer@localhost IDENTIFIED BY 'abcd';
 GRANT CONNECTION_ADMIN ON *.* TO viewer@localhost;
 # After successful login,  corresponding entry should disappear
 # from the view
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u3'@'localhost'	5
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u3'@'localhost'		5	UNLOCKED
 DROP USER viewer@localhost;
 # A user without privileges should not be able to any information
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
 connect(localhost,u1,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u1'@'localhost' (using password: NO)
 connect(localhost,u3,haha,test,MASTER_PORT,MASTER_SOCKET);
@@ -119,11 +120,11 @@ ERROR 28000: Access denied for user 'u3'@'localhost' (using password: YES)
 connect(localhost,u2,efgh,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u2'@'localhost' (using password: YES)
 # Subsequent failed attempts should put entries back in the view
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	1
-'u2'@'localhost'	1
-'u3'@'localhost'	1
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		1	UNLOCKED
+'u2'@'localhost'		1	UNLOCKED
+'u3'@'localhost'		1	UNLOCKED
 connect(localhost,u4,,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u4'@'localhost' (using password: NO)
 connect(localhost,u5,haha,test,MASTER_PORT,MASTER_SOCKET);
@@ -131,14 +132,11 @@ ERROR 28000: Access denied for user 'u5'@'localhost' (using password: YES)
 connect(localhost,u6,efgh,test,MASTER_PORT,MASTER_SOCKET);
 ERROR 28000: Access denied for user 'u6'@'localhost' (using password: YES)
 # Attempts by invalid accounts should be shown in the view
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-USERHOST	FAILED_ATTEMPTS
-'u1'@'localhost'	1
-'u2'@'localhost'	1
-'u3'@'localhost'	1
-'u4'@'localhost'	1
-'u5'@'localhost'	1
-'u6'@'localhost'	1
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+USERHOST	IP	FAILED_ATTEMPTS	STATUS
+'u1'@'localhost'		1	UNLOCKED
+'u2'@'localhost'		1	UNLOCKED
+'u3'@'localhost'		1	UNLOCKED
 
 # ----------------------------------------------------------------------
 
@@ -153,5 +151,6 @@ DROP USER u3@localhost;
 # Uninstall connection_control plugin
 UNINSTALL PLUGIN connection_control;
 UNINSTALL PLUGIN connection_control_failed_login_attempts;
+UNINSTALL PLUGIN connection_control_refuse_statistic;
 
 # ----------------------------------------------------------------------

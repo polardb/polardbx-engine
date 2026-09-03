@@ -33,10 +33,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0ext.h"
 #include "lob0lob.h"
 
-#ifdef UNIV_NONINL
-#include "row0ext.ic"
-#endif
-
 #include "btr0cur.h"
 
 /** Fills the column prefix cache of an externally stored column.

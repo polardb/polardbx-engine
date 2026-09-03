@@ -1,0 +1,28 @@
+SET @save_debug = @@GLOBAL.debug;
+SET GLOBAL debug = '+d,vidx_ddl_worker_bind_fail';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+ERROR HY000: Build vector index `vector index` in `vidx_ddl_worker_bind_fail`.`#sql-TEMP` (aux_tab: direct build) failed: graph construction failed (see server log)
+SET GLOBAL debug = @save_debug;
+VERDICT 1 injected bind failure fails the ALTER: PASS
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT COUNT(*) AS probe_rows FROM (
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[5,3,3,3,3,3,3,3]')) LIMIT 3
+) p;
+probe_rows
+3
+VERDICT 2 clean rebuild after failure: PASS
+ALTER TABLE t1 DROP INDEX vi;
+SET SESSION debug = '+d,vidx_ddl_worker_open_shortfall';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SELECT @@warning_count AS warnings;
+warnings
+0
+SET SESSION debug = '-d,vidx_ddl_worker_open_shortfall';
+SELECT COUNT(*) AS probe_rows FROM (
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[5,3,3,3,3,3,3,3]')) LIMIT 3
+) p;
+probe_rows
+3
+VERDICT 3 optional worker open failure degrades cleanly: PASS

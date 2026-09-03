@@ -1,0 +1,35 @@
+CREATE DATABASE recycle_mysqlbinlog;
+USE recycle_mysqlbinlog;
+CREATE TABLE t_unused(id INT);
+CREATE TABLE t_unsafe(id INT);
+CREATE TABLE t_max(id INT);
+CREATE TABLE t_repeat_1(id INT);
+CREATE TABLE t_repeat_2(id INT);
+CREATE TABLE t_no_name(id INT);
+SET SESSION recycle_bin = ON;
+FLUSH LOGS;
+SET SESSION recycle_bin_table_name = 'unused_by_alter';
+ALTER TABLE t_unused ADD COLUMN c1 INT;
+SET SESSION recycle_bin_table_name =
+CONCAT('quote''*/line', CHAR(10), 'tail');
+DROP TABLE t_unsafe;
+SET SESSION recycle_bin_table_name = REPEAT('中', 50);
+TRUNCATE TABLE t_max;
+SET SESSION recycle_bin_table_name = 'repeat_name';
+DROP TABLE t_repeat_1;
+SET SESSION recycle_bin_table_name = 'repeat_name';
+DROP TABLE t_repeat_2;
+Warnings:
+Warning	7589	Table 'repeat_name' already exists in recycle_bin
+ALTER TABLE t_no_name ADD COLUMN c1 INT;
+FLUSH LOGS;
+# Unsafe bytes are encoded only when a DDL consumes the name.
+/*!80032 SET @@session.recycle_bin_table_name=0x71756f7465272a2f6c696e650a7461696c*//*!*/;
+# Identical one-shot names are printed for both Query_events.
+2
+# ALTER and missing event state do not emit recycle name assignments.
+CALL dbms_recycle.purge_table('quote''*/line\ntail');
+CALL dbms_recycle.purge_table('中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中');
+CALL dbms_recycle.purge_table('repeat_name');
+SET SESSION recycle_bin = OFF;
+DROP DATABASE recycle_mysqlbinlog;

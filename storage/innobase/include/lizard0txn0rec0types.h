@@ -33,9 +33,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn0rec0types_h
 #define lizard0txn0rec0types_h
 
+#include "lizard0gcs0service.h"
+#include "lizard0txn0service.h"
+#include "lizard0txn0slot0uba0types.h"
 #include "rem0types.h"
 
-#include "lizard0undo0types.h"
+
+struct dict_index_t;
 
 /**Transactional field layout class.
  *
@@ -46,10 +50,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 enum txn_layout_t {
   /** None txn fields */
   TL_NONE = -1,
-  /** [SCN, UBA, GCN]*/
+  /** [ TRX_ID, ROLL_PTR, SCN, UBA, GCN]*/
   TL_CLOVER = 0,
-  /** [SCN, UBA] */
-  TL_BAMBOO = 1
+  /** [TRX_ID, ROLL_PTR, SCN, UBA] */
+  TL_BAMBOO = 1,
+  /** [TRX_ID] */
+  TL_LOTUS = 2,
 };
 
 typedef enum txn_layout_t txn_layout_t;
@@ -111,8 +117,10 @@ struct txn_rec_t {
         gcn(gcn_arg) {}
 
   /** Construct txn attributes from rec offsets. */
-  txn_rec_t(const rec_t *rec, const dict_index_t *index, const ulint *offsets,
+  txn_rec_t(const Slice *slc, const dict_index_t *index,
             const txn_layout_t &layout);
+
+  void copy_from_txn_desc(const trx_t *trx);
 
   /** Whether txn has committed through undo_ptr commit flag.
    *
@@ -122,7 +130,7 @@ struct txn_rec_t {
    * @retval	true	commit
    * @retval	false	active */
   bool is_committed() const {
-    if (!undo_ptr_is_active(undo_ptr)) {
+    if (!undo_addr_t::decode_active(undo_ptr)) {
       ut_ad(trx_id != 0 && scn != SCN_NULL);
       return true;
     } else {
@@ -157,10 +165,10 @@ struct txn_rec_t {
            gcn == GCN_NULL;
   }
 
-  slot_ptr_t slot() const { return undo_ptr_get_slot(undo_ptr); }
-  csr_t csr() const { return undo_ptr_get_csr(undo_ptr); }
-  bool is_slave() const { return undo_ptr_is_slave(undo_ptr); }
-  void clear_slave() { undo_ptr_clear_slave(&undo_ptr); }
+  slot_ptr_t slot() const { return undo_addr_t::decode_slot(undo_ptr); }
+  csr_t csr() const { return undo_addr_t::decode_csr(undo_ptr); }
+  bool is_slave() const { return undo_addr_t::decode_slave(undo_ptr); }
+  void clear_slave() { undo_addr_t::clear_slave(&undo_ptr); }
 
   /**
    * Determine whether a lookup of the txn is needed based on the different
@@ -173,7 +181,7 @@ struct txn_rec_t {
       return true;
     }
 
-    ut_ad(!undo_ptr_is_active(undo_ptr));
+    ut_ad(!undo_addr_t::decode_active(undo_ptr));
     switch (vision_ccr) {
       case CCR_SCN:
         return (scn == SCN_NULL);
@@ -187,6 +195,13 @@ struct txn_rec_t {
         return false;
     }
   }
+
+  /** Confirm txn rec validation
+   * @param[in]	txn rec
+   * @param[in]	dict index
+   *
+   * @retval	true	valid */
+  bool is_validate(const dict_index_t *index) const;
 };
 
 #endif

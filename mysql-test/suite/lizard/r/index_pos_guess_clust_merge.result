@@ -1,0 +1,260 @@
+#
+# Test index merge with gpp infos.
+# Counter values are validated via include/assert.inc rather than
+# hard-coded SHOW status output, to avoid flakiness from cumulative
+# cross-test counter drift.
+#
+# Save original values
+# enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+# Create table t
+CREATE TABLE IF NOT EXISTS t (
+id  INT AUTO_INCREMENT PRIMARY KEY,
+a   VARCHAR(10) NOT NULL,
+b   INT         NOT NULL,
+c   INT         NOT NULL,
+d   CHAR(1)     NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+# Insert data into table t
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE val_a VARCHAR(10);
+DECLARE val_b INT;
+DECLARE val_c INT;
+DECLARE val_d CHAR(1);
+START TRANSACTION;
+WHILE i <= num_rows DO
+SET val_a = CONCAT('NO', LPAD(i, 4, '0'));
+SET val_b = i * 10;
+SET val_c = val_b * 5;
+SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+# Insert 1000 rows into table t.
+CALL insert_t_data(1000);
+# Create indexes on table t.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+# ============================================================
+# Warm up: verify secondary index GPP info is valid via point lookups.
+# ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t WHERE a = 'NO0001';
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM t WHERE b = 10;
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM t WHERE c = 100 and d = 'B';
+id	a	b	c	d
+2	NO0002	20	100	B
+include/assert.inc [[warmup] index scan guess clust hit+miss should be > 0]
+## BEGIN TEST FOR INTERSECTION MERGE -------------------------------
+# Check whether the intersection index merge with valid gpp hits
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SHOW VARIABLES LIKE 'innodb_adaptive_hash_index';
+Variable_name	Value
+innodb_adaptive_hash_index	OFF
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_a,PRIMARY) */ * FROM t WHERE a = "NO0001" AND id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+include/assert.inc [[intersection merge valid gpp] hit+miss should be > 0]
+# Check whether the intersection index merge with gpp can hit when one of the secondary index's gpp info is invalid
+OPTIMIZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t	optimize	status	OK
+DROP INDEX idx_b ON t;
+CREATE INDEX idx_b ON t(b);
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	1	100.00	Using intersect(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`b` = 10) and (`test`.`t`.`a` = 'NO0001'))
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+include/assert.inc [[intersection merge partial valid gpp] hit+miss should be > 0]
+#  Check whether the intersection index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+include/assert.inc [[intersection merge invalid gpp] miss should be > 0]
+SET DEBUG='-d,set_gpp_null';
+## END TEST FOR INTERSECTION MERGE -------------------------------
+# DROP TABLE t;
+DROP TABLE t;
+# Re-create the table t and re-insert the data;
+# Create table t;
+CREATE TABLE IF NOT EXISTS t (
+id  INT AUTO_INCREMENT PRIMARY KEY,
+a   VARCHAR(10) NOT NULL,
+b   INT         NOT NULL,
+c   INT         NOT NULL,
+d   CHAR(1)     NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+# Insert data into table t;
+CALL insert_t_data(1000);
+# Create indexes on table t.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+# Warm up secondary indexes after recreation.
+call dbms_stat.flush_gpp();
+SELECT * FROM t WHERE a = 'NO0001';
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM t WHERE b = 10;
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM t WHERE c = 100 and d = 'B';
+id	a	b	c	d
+2	NO0002	20	100	B
+include/assert.inc [[warmup #2] index scan guess clust hit+miss should be > 0]
+# BEGIN TEST FOR UNION MERGE -------------------------------
+# Check the condition of UNION MERGE
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	PRIMARY,idx_b	idx_b,PRIMARY	4,4	NULL	100	100.00	Using union(idx_b,PRIMARY); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_b`, `PRIMARY`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`b` = 1000) or (`test`.`t`.`id` < 100))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	2	100.00	Using union(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0011') or (`test`.`t`.`b` = 200))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_cd	idx_a,idx_cd	42,8	NULL	2	100.00	Using union(idx_a,idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0100') or ((`test`.`t`.`d` = 'A') and (`test`.`t`.`c` = 50)))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 )OR (c = 50 AND d = "A");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b,idx_cd	idx_a,idx_b,idx_cd	42,4,8	NULL	2	100.00	Using union(intersect(idx_a,idx_b),idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where (((`test`.`t`.`b` = 100) and (`test`.`t`.`a` = 'NO0100')) or ((`test`.`t`.`d` = 'A') and (`test`.`t`.`c` = 50)))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0111" OR b < 100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	10	100.00	Using sort_union(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0111') or (`test`.`t`.`b` < 100))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_cd	idx_a,idx_cd	42,4	NULL	2	100.00	Using sort_union(idx_a,idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0101') or (`test`.`t`.`c` = 10))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	1	100.00	Using intersect(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`b` = 100) and (`test`.`t`.`a` = 'NO0001'))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 ) OR (c = 50 OR d = "A");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	ALL	idx_a,idx_b,idx_cd	NULL	NULL	NULL	1000	10.09	Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where (((`test`.`t`.`b` = 100) and (`test`.`t`.`a` = 'NO0100')) or (`test`.`t`.`c` = 50) or (`test`.`t`.`d` = 'A'))
+# Check whether the union index merge with valid gpp hits
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+include/assert.inc [[union merge valid gpp] hit+miss should be > 0]
+#  Check whether the union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+include/assert.inc [[union merge invalid gpp] miss should be > 0]
+SET DEBUG='-d,set_gpp_null';
+## END TEST FOR UNION MERGE -------------------------------
+# BEGIN TEST FOR SORT-UNION MERGE -------------------------------
+# Check the condition of SORT-UNION MERGE
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 OR b < 20 ;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	PRIMARY,idx_b	idx_b,PRIMARY	4,4	NULL	10	100.00	Using sort_union(idx_b,PRIMARY); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_b`, `PRIMARY`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`id` < 10) or (`test`.`t`.`b` < 20))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	2	100.00	Using sort_union(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0101') or (`test`.`t`.`b` < 20))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b	idx_a,idx_b	42,4	NULL	101	100.00	Using sort_union(idx_a,idx_b); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` < 'NO0101') or (`test`.`t`.`b` < 20))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_cd	idx_a,idx_cd	42,4	NULL	2	100.00	Using sort_union(idx_a,idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0101') or (`test`.`t`.`c` = 10))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_cd	idx_a,idx_cd	42,4	NULL	2	100.00	Using sort_union(idx_a,idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0101') or (`test`.`t`.`c` < 10))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 10 OR (c = 5000 AND d = "A");
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	index_merge	idx_a,idx_b,idx_cd	idx_a,idx_b,idx_cd	42,4,8	NULL	3	100.00	Using sort_union(idx_a,idx_b,idx_cd); Using where
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_a`, `idx_b`, `idx_cd`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`a` = 'NO0001') or (`test`.`t`.`b` < 10) or ((`test`.`t`.`d` = 'A') and (`test`.`t`.`c` = 5000)))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 AND b < 20;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	range	PRIMARY,idx_b	idx_b	4	NULL	1	5.00	Using index condition
+Warnings:
+Note	1003	/* select#1 */ select /*+ INDEX_MERGE(`t`@`select#1` `idx_b`, `PRIMARY`) */ `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`id` < 10) and (`test`.`t`.`b` < 20))
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_cd) */ * FROM t WHERE c < 10 AND d < 'b';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t	NULL	range	idx_cd	idx_cd	4	NULL	1	33.33	Using index condition
+Warnings:
+Warning	3614	Invalid number of arguments for hint INDEX_MERGE(`t`  `idx_cd`)
+Note	1003	/* select#1 */ select `test`.`t`.`id` AS `id`,`test`.`t`.`a` AS `a`,`test`.`t`.`b` AS `b`,`test`.`t`.`c` AS `c`,`test`.`t`.`d` AS `d` from `test`.`t` where ((`test`.`t`.`c` < 10) and (`test`.`t`.`d` < 'b'))
+# Check whether the sort-union index merge with valid gpp hits
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+include/assert.inc [[sort-union merge valid gpp] index_merge hit+miss should be > 0]
+#  Check whether the sort-union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+include/assert.inc [[sort-union merge invalid gpp] index_merge miss should be > 0]
+SET DEBUG='-d,set_gpp_null';
+# END TEST FOR SORT-UNION MERGE -------------------------------
+# END ALL TEST -------------------------------
+DROP TABLE t;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+DROP PROCEDURE insert_t_data;
+# Restore original values
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_index_purge_guess_clust_enabled = 1;
+SET GLOBAL innodb_index_scan_guess_clust_enabled = 1;
+SET GLOBAL innodb_adaptive_hash_index = 0;
+SET GLOBAL innodb_polarx_btree_search_mode = 1;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';

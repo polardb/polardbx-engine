@@ -32,6 +32,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define ddl0impl_file_reader_h
 
 #include "ddl0impl-buffer.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+#include "lizard0rem0types.h"
 
 namespace ddl {
 
@@ -56,8 +59,8 @@ struct File_reader : private ut::Non_copyable {
 
   /** Destructor. */
   ~File_reader() noexcept {
-    if (m_aux_buf != nullptr) {
-      ut::delete_arr(m_aux_buf);
+    if (m_aux_boc.buf != nullptr) {
+      ut::delete_arr(m_aux_boc.buf);
     }
   }
 
@@ -105,16 +108,17 @@ struct File_reader : private ut::Non_copyable {
   [[nodiscard]] dberr_t next() noexcept;
 
  public:
-  using Offsets = std::vector<ulint, ut::allocator<ulint>>;
+  // using Offsets = std::vector<ulint, ut::allocator<ulint>>;
 
   /** Index that the records belong to. */
   dict_index_t *m_index{};
 
   /** Pointer to current row. */
-  const mrec_t *m_mrec{};
+  // const mrec_t *m_mrec{};
 
   /** Columns offsets. */
-  Offsets m_offsets{};
+  // Offsets m_offsets{};
+  DDL_slice_ctx m_slc_ctx{};
 
   /** File handle to read from. */
   const Unique_os_file_descriptor &m_file;
@@ -135,7 +139,7 @@ struct File_reader : private ut::Non_copyable {
   Bounds m_bounds{};
 
   /** Auxiliary buffer for records that span across pages. */
-  byte *m_aux_buf{};
+  boc_t m_aux_boc{};
 
   /** IO buffer size in bytes. */
   size_t m_buffer_size{};

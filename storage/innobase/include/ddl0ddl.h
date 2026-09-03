@@ -30,7 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef ddl0ddl_h
 #define ddl0ddl_h
 
-#include "dd/lizard_policy_types.h"
+#include "dd/komodo0dd0policy0types.h"
 #include "fts0fts.h"
 #include "lock0types.h"
 #include "os0file.h"
@@ -59,6 +59,13 @@ struct Parallel_cursor;
 
 /** Innodb B-tree index fill factor for bulk load. */
 extern long fill_factor;
+
+/** Maximum number of times the page can be encoded by using prefix
+compression. */
+extern ulong spc_encode_attempts;
+
+/** Minimum data save ratio for prefix compression. */
+extern ulong spc_encode_threshold;
 
 /** Variable specifying the number of FTS parser threads to use. */
 extern ulong fts_parser_threads;
@@ -130,7 +137,7 @@ struct Index_defn {
   uint32_t m_srid{};
 
   /** Secondary engine attribute from dd index */
-  lizard::Ha_se_attr_hint m_se_attr_hint;
+  komodo::dd_se_attrs_t m_se_attrs;
 };
 
 /** Structure for reporting duplicate records. */
@@ -142,7 +149,7 @@ struct Dup {
   /** Report a duplicate key.
   @param[in] entry              For reporting duplicate key.
   @param[in] offsets            Row offsets */
-  void report(const mrec_t *entry, const ulint *offsets) noexcept;
+  void report(const Slice *slc) noexcept;
 
   /** @return true if no duplicates reported yet. */
   [[nodiscard]] bool empty() const noexcept { return m_n_dup == 0; }
@@ -256,7 +263,7 @@ UNIV_PFS_IO defined, register the file descriptor with Performance Schema.
 [[nodiscard]] dict_index_t *create_index(
     trx_t *trx, dict_table_t *tableconst, Index_defn *index_def,
     const dict_add_v_col_t *add_v,
-    const lizard::Ha_index_hint *index_hint) noexcept;
+    const komodo::Dict_index_hint *index_hint) noexcept;
 
 /** Drop a table. The caller must have ensured that the background stats
 thread is not processing the table. This can be done by calling
@@ -453,7 +460,7 @@ struct Context {
     dberr_t expected{DB_SUCCESS};
 
     if (m_err.compare_exchange_strong(expected, err)) {
-      ut_a(m_err_key_number == std::numeric_limits<size_t>::max());
+      ut_ad(m_err_key_number == std::numeric_limits<size_t>::max());
       m_err_key_number = m_key_numbers[id];
     }
   }
@@ -557,8 +564,10 @@ struct Context {
 
   /** Handle auto increment.
   @param[in] row                Row with autoinc column.
+  @param[in] heap               Heap to use for allocation of autoinc column.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t handle_autoinc(const dtuple_t *row) noexcept;
+  [[nodiscard]] dberr_t handle_autoinc(const dtuple_t *row,
+                                       mem_heap_t *heap) noexcept;
 
   /** @return true if any virtual columns are involved. */
   [[nodiscard]] bool has_virtual_columns() const noexcept;

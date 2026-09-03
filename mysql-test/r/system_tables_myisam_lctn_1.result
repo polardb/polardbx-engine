@@ -48,6 +48,14 @@ END WHILE;
 END$
 CALL test_system_table_alter_engine();
 @table_name
+MYSQL.AI_FUNCTION_CONFIG
+ERROR
+Storage engine 'MyISAM' does not support system tables. [mysql.ai_function_config]
+@table_name
+MYSQL.AI_MODEL_CONFIG
+ERROR
+Storage engine 'MyISAM' does not support system tables. [mysql.ai_model_config]
+@table_name
 MYSQL.COLUMNS_PRIV
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.columns_priv]
@@ -71,6 +79,12 @@ Storage engine 'MyISAM' does not support system tables. [mysql.db]
 MYSQL.DEFAULT_ROLES
 ERROR
 Storage engine 'MyISAM' does not support system tables. [mysql.default_roles]
+@table_name
+MYSQL.ENCDB_AUTH_USERS
+@table_name
+MYSQL.ENCDB_KMS_META
+@table_name
+MYSQL.ENCDB_SENSITIVE_RULES
 @table_name
 MYSQL.ENGINE_COST
 ERROR
@@ -255,6 +269,10 @@ SET i = i + 1;
 END WHILE;
 END$
 CALL test_create_system_table();
+SEVERITY	ERRNO	MESSAGE
+Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.ai_function_config]
+SEVERITY	ERRNO	MESSAGE
+Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.ai_model_config]
 SEVERITY	ERRNO	MESSAGE
 Warning	1726	Storage engine 'MyISAM' does not support system tables. [mysql.columns_priv]
 SEVERITY	ERRNO	MESSAGE

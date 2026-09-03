@@ -9,7 +9,7 @@ ERROR_CODE_NUM	ERROR_CODE_MESSAGE
 7506	Snapshot (as of) expression can only be appear in select from list tables
 7507	The snapshot to find is out of range, please adjust scn history configuration
 7508	Flashback query encountered an internal error
-7509	The definition of the table required by the flashback query has changed
+7509	The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
 7510	Snapshot too old
 7511	Sequence '%-.192s.%-.192s' has run out.
 7512	Sequence '%-.192s.%-.192s' structure or number is invalid.
@@ -79,12 +79,27 @@ ERROR_CODE_NUM	ERROR_CODE_MESSAGE
 7576	Empty XA transactions not allowed from @@consensus_disable_empty_xa.
 7577	PING check(%llu) failed with %s.
 7578	Variable '%-.64s' cannot be enabled because '%-.64s' is enabled/disabled
-7579	The authentication of user is denied for entering the wrong password multiple times with the period.
+7579	The user %s from IP: %s has been locked for multiple wrong passwords.
 7580	License file not found. Please check the file path in the configuration file.
 7581	%s. Please check the license file or connect with support team.
 7582	License file is invalid(%s). Please check the license file or connect with support team.
 7583	Beyond the authorization limits(%s). Please check the license file or connect with support team.
 7584	DBMS_LICENSE is disabled for current version.
-7585	Transaction is too big, please split it into smaller transactions.
+7585	Transaction is too big, please split it into smaller transactions or change variable max_trx_affected_rows.
 7586	Slow query blocker, query killed bacause exceeding time limit, change variable polarx_slow_query_block_exec_timeout.
 7587	Slow query blocker, query killed bacause cpu usage high and exceeding time limit, change variable polarx_slow_query_block_cpu_percent_threshold and polarx_slow_query_block_exec_timeout_for_cpu_exceed.
+7588	Failed to register InnoDB and allocate update undo log for transaction when inserting into blackhole table
+7589	Table '%-.192s' already exists in recycle_bin
+7590	 Failed to compress the page for secondary index using prefix compression. 
+7591	EncDB function '%s' failed with message "%s"
+7592	EncDB function '%s' failed with message "%s"
+7593	Transfer of encrypted or masked columns is not allowed in this statement.
+7594	Creating vector columns or indexes is disabled.
+7595	Value of type '%.16s, size: %zu' cannot be converted to 'vector(%zu)' type.
+7596	Data cannot be converted to a valid vector: '%.*s'
+7597	Cannot determine distance type for VEC_DISTANCE: no vector index found on the column. Use VEC_DISTANCE_EUCLIDEAN, VEC_DISTANCE_COSINE or VEC_DISTANCE_INNER_PRODUCT to specify the distance type explicitly.
+7598	Invalid binary vector format. Must use IEEE standard float representation in little-endian format. Use VEC_FromText() to generate it.
+7599	Incorrect usage of vector index: %s
+7600	%s vector index `%s` in `%s`.`%s` (aux_tab: %s) failed: %s
+7601	CAST to vector(%u) failed: input has %u dimensions
+7602	High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.

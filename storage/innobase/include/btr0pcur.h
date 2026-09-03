@@ -233,8 +233,8 @@ struct btr_pcur_t {
 
   /** Free old_rec_buf. */
   void free_rec_buf() {
-    ut::free(m_old_rec_buf);
-    m_old_rec_buf = nullptr;
+    ut::free(m_old_rec_boc.buf);
+    m_old_rec_boc.reset();
   }
 
   void free_cleanout() {
@@ -287,6 +287,10 @@ struct btr_pcur_t {
   /** Returns the current record (const version).
   @return pointer to the record */
   const rec_t *get_rec() const;
+
+  reg_t get_reg();
+
+  creg_t get_creg() const;
 
 #ifndef UNIV_HOTBACKUP
   /** Gets the up_match value for a pcur after a search.
@@ -443,6 +447,19 @@ struct btr_pcur_t {
   }
 
  private:
+  /** Guess restore - latch same page (without modify_clock check)
+  and binary-search within it. Only applicable when m_rel_pos == BTR_PCUR_ON.
+  @param[in]      index       The index
+  @param[in]      tuple       Search tuple built from stored record prefix
+  @param[in]      mode        PAGE_CUR_LE, PAGE_CUR_G, etc.
+  @param[in]      latch_mode  BTR_SEARCH_LEAF or BTR_MODIFY_LEAF
+  @param[in,out]  mtr         Mini-transaction
+  @param[in]      location    Caller location
+  @return true if successfully positioned on the same record */
+  bool guess_position(dict_index_t *index, const dtuple_t *tuple,
+                      page_cur_mode_t mode, ulint latch_mode, mtr_t *mtr,
+                      ut::Location location);
+
   /** Moves the persistent cursor backward if it is on the first record
   of the page. Commits mtr. Note that to prevent a possible deadlock, the
   operation first stores the position of the cursor, commits mtr, acquires
@@ -473,7 +490,7 @@ struct btr_pcur_t {
 
   /** if cursor position is stored, contains an initial segment of the
   latest record cursor was positioned either on, before or after */
-  rec_t *m_old_rec{nullptr};
+  reg_t m_old_reg{};
 
   /** number of fields in old_rec */
   ulint m_old_n_fields{0};
@@ -503,7 +520,7 @@ struct btr_pcur_t {
   memory which should be freed if not needed anymore! */
 
   /** nullptr, or a dynamically allocated buffer for old_rec */
-  byte *m_old_rec_buf{nullptr};
+  boc_t m_old_rec_boc;
 
   /** old_rec_buf size if old_rec_buf is not nullptr */
   size_t m_buf_size{0};
@@ -527,8 +544,8 @@ inline void btr_pcur_t::init(size_t read_level) {
   set_fetch_type(Page_fetch::NORMAL);
 
   m_old_stored = false;
-  m_old_rec_buf = nullptr;
-  m_old_rec = nullptr;
+  m_old_rec_boc.reset();
+  m_old_reg = {};
   m_btr_cur.rtr_info = nullptr;
   m_read_level = read_level;
   import_ctx = nullptr;
@@ -656,6 +673,10 @@ inline btr_cur_t *btr_pcur_t::get_btr_cur() {
   return (const_cast<btr_cur_t *>(&m_btr_cur));
 }
 
+inline reg_t btr_pcur_t::get_reg() { return {get_rec(), MLOC_IN_PAGE}; }
+
+inline creg_t btr_pcur_t::get_creg() const { return {get_rec(), MLOC_IN_PAGE}; }
+
 #ifdef UNIV_DEBUG
 inline page_cur_t *btr_pcur_t::get_page_cur() {
   return (btr_cur_get_page_cur(get_btr_cur()));
@@ -737,7 +758,7 @@ inline const rec_t *btr_pcur_t::get_rec() const {
 #ifndef UNIV_HOTBACKUP
 
 inline ulint btr_pcur_t::get_rel_pos() const {
-  ut_ad(m_old_rec != nullptr);
+  ut_ad(m_old_reg.is_not_null());
   ut_ad(m_old_stored);
   ut_ad(m_pos_state == BTR_PCUR_WAS_POSITIONED ||
         m_pos_state == BTR_PCUR_IS_POSITIONED);
@@ -753,11 +774,11 @@ inline void btr_pcur_t::close() {
     m_btr_cur.rtr_info = nullptr;
   }
 
-  m_old_rec = nullptr;
+  m_old_reg.reset();
   m_btr_cur.page_cur.rec = nullptr;
   m_btr_cur.page_cur.block = nullptr;
 
-  m_old_rec = nullptr;
+  m_old_reg.reset();
   m_old_stored = false;
 
   m_latch_mode = BTR_NO_LATCHES;
@@ -923,10 +944,10 @@ inline void btr_pcur_t::move_before_first_on_page() {
 inline void btr_pcur_t::reset() {
   free_rec_buf();
 
-  m_old_rec_buf = nullptr;
+  m_old_rec_boc.reset();
   m_btr_cur.index = nullptr;
   m_btr_cur.page_cur.rec = nullptr;
-  m_old_rec = nullptr;
+  m_old_reg.reset();
   m_old_n_fields = 0;
   m_old_stored = false;
 

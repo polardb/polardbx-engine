@@ -793,6 +793,7 @@ bool optimize_aggregated_query(THD *thd, Query_block *select,
 
 /* from sql_delete.cc, used by opt_range.cc */
 extern "C" int refpos_order_cmp(const void *arg, const void *a, const void *b);
+extern "C" int refpos_order_cmp_with_gpp(const void *arg, const void *a, const void *b);
 
 /// The name of store_key instances that represent constant items.
 constexpr const char *STORE_KEY_CONST_NAME = "const";

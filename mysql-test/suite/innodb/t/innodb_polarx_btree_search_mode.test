@@ -1,0 +1,189 @@
+# This testcase is mainly written by AI, so don't blame me if you think it's shit.
+--echo #
+--echo # Test for Polardbx B-tree search mode and traditional AHI dual-mode system
+--echo #
+
+--disable_query_log
+--let $innodb_adaptive_hash_index_original = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $innodb_polarx_btree_search_mode_original = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+--let $innodb_lizard_stat_enabled_original = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--enable_query_log
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+
+--echo # Test 1: Verify innodb_metrics are accessible
+SELECT COUNT(*) FROM information_schema.innodb_metrics WHERE name LIKE '%adaptive_hash_search%';
+
+--echo # Test 2: Test actual AHI functionality with table operations
+--echo # Create a table and insert data to trigger AHI
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50), value INT);
+INSERT INTO t1 VALUES (1, 'test1', 100), (2, 'test2', 200), (3, 'test3', 300);
+
+--echo # Test with both parameters ON first - both should work
+SET GLOBAL innodb_adaptive_hash_index = ON;
+SET GLOBAL innodb_polarx_btree_search_mode = ON;
+SELECT SLEEP(1);
+
+--echo # Get initial metrics for both traditional AHI and Polardbx
+--disable_query_log
+--let $traditional_hit_initial = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_initial = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_initial = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_initial = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--enable_query_log
+
+--echo # Perform some point lookups that would normally use AHI
+SELECT * FROM t1 WHERE id = 1;
+SELECT * FROM t1 WHERE id = 2;
+SELECT * FROM t1 WHERE id = 3;
+
+--echo # Check both metrics - both should change
+--disable_query_log
+--let $traditional_hit_after = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_after = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_after = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_after = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--let $traditional_hit_diff = `SELECT $traditional_hit_after - $traditional_hit_initial`
+--let $traditional_miss_diff = `SELECT $traditional_miss_after - $traditional_miss_initial`
+--let $hit_diff = `SELECT $polarx_hit_after - $polarx_hit_initial`
+--let $miss_diff = `SELECT $polarx_miss_after - $polarx_miss_initial`
+--enable_query_log
+
+--echo # Assert: Both metrics should change when both modes are ON
+--let $assert_text= Traditional AHI metrics should change when both modes are ON
+--let $assert_cond= ($traditional_hit_diff + $traditional_miss_diff) > 0
+--source include/assert.inc
+
+--let $assert_text= Polardbx metrics should change when both modes are ON
+--let $assert_cond= ($hit_diff + $miss_diff) > 0
+--source include/assert.inc
+
+--echo # Test: Close only innodb_adaptive_hash_index, AHI should still work
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SELECT SLEEP(1);
+
+--echo # Get metrics before operations
+--disable_query_log
+--let $traditional_hit_before_off_ahi = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_before_off_ahi = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_before_off_ahi = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_before_off_ahi = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--enable_query_log
+
+--echo # Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+SELECT * FROM t1 WHERE id = 2;
+SELECT * FROM t1 WHERE id = 3;
+
+--echo # Check metrics - traditional AHI should not change, Polardbx should still change
+--disable_query_log
+--let $traditional_hit_after_off_ahi = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_after_off_ahi = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_after_off_ahi = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_after_off_ahi = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--let $traditional_hit_diff_off_ahi = `SELECT $traditional_hit_after_off_ahi - $traditional_hit_before_off_ahi`
+--let $traditional_miss_diff_off_ahi = `SELECT $traditional_miss_after_off_ahi - $traditional_miss_before_off_ahi`
+--let $hit_diff_off_ahi = `SELECT $polarx_hit_after_off_ahi - $polarx_hit_before_off_ahi`
+--let $miss_diff_off_ahi = `SELECT $polarx_miss_after_off_ahi - $polarx_miss_before_off_ahi`
+--enable_query_log
+
+--echo # Assert: Traditional AHI metrics should not change, but Polardbx should still work
+--let $assert_text= Traditional AHI metrics should not change when only traditional AHI is OFF
+--let $assert_cond= ($traditional_hit_diff_off_ahi + $traditional_miss_diff_off_ahi) = 0
+--source include/assert.inc
+
+--let $assert_text= Polardbx metrics should still change when only traditional AHI is OFF
+--let $assert_cond= ($hit_diff_off_ahi + $miss_diff_off_ahi) > 0
+--source include/assert.inc
+
+--echo # Test: Close only innodb_polarx_btree_search_mode, AHI should still work
+SET GLOBAL innodb_adaptive_hash_index = ON;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+SELECT SLEEP(1);
+
+--echo # Get metrics before operations
+--disable_query_log
+--let $traditional_hit_before_off_polarx = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_before_off_polarx = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_before_off_polarx = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_before_off_polarx = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--enable_query_log
+
+--echo # Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+SELECT * FROM t1 WHERE id = 2;
+SELECT * FROM t1 WHERE id = 3;
+
+--echo # Check metrics - Polardbx should not change, traditional AHI should still change
+--disable_query_log
+--let $traditional_hit_after_off_polarx = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_after_off_polarx = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_after_off_polarx = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_after_off_polarx = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--let $traditional_hit_diff_off_polarx = `SELECT $traditional_hit_after_off_polarx - $traditional_hit_before_off_polarx`
+--let $traditional_miss_diff_off_polarx = `SELECT $traditional_miss_after_off_polarx - $traditional_miss_before_off_polarx`
+--let $hit_diff_off_polarx = `SELECT $polarx_hit_after_off_polarx - $polarx_hit_before_off_polarx`
+--let $miss_diff_off_polarx = `SELECT $polarx_miss_after_off_polarx - $polarx_miss_before_off_polarx`
+--enable_query_log
+
+--echo # Assert: Polardbx metrics should not change, but traditional AHI should still work
+--let $assert_text= Polardbx metrics should not change when only Polardbx mode is OFF
+--let $assert_cond= ($hit_diff_off_polarx + $miss_diff_off_polarx) = 0
+--source include/assert.inc
+
+--let $assert_text= Traditional AHI metrics should still change when only Polardbx mode is OFF
+--let $assert_cond= ($traditional_hit_diff_off_polarx + $traditional_miss_diff_off_polarx) > 0
+--source include/assert.inc
+
+--echo # Test with both parameters OFF - AHI should be completely disabled
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SELECT SLEEP(1);
+
+--echo # Get metrics before operations
+--disable_query_log
+--let $traditional_hit_before_both_off = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_before_both_off = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_before_both_off = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_before_both_off = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--enable_query_log
+
+--echo # Perform lookups again
+SELECT * FROM t1 WHERE id = 1;
+SELECT * FROM t1 WHERE id = 2;
+SELECT * FROM t1 WHERE id = 3;
+
+--echo # Check both metrics - should not change (both parameters OFF)
+--disable_query_log
+--let $traditional_hit_after_both_off = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches'`
+--let $traditional_miss_after_both_off = `SELECT COUNT FROM information_schema.innodb_metrics WHERE name = 'adaptive_hash_searches_btree'`
+--let $polarx_hit_after_both_off = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_hit'`
+--let $polarx_miss_after_both_off = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Lizard_polarx_btree_search_mode_miss'`
+--let $traditional_hit_diff_both_off = `SELECT $traditional_hit_after_both_off - $traditional_hit_before_both_off`
+--let $traditional_miss_diff_both_off = `SELECT $traditional_miss_after_both_off - $traditional_miss_before_both_off`
+--let $hit_diff_both_off = `SELECT $polarx_hit_after_both_off - $polarx_hit_before_both_off`
+--let $miss_diff_both_off = `SELECT $polarx_miss_after_both_off - $polarx_miss_before_both_off`
+--enable_query_log
+
+--echo # Assert: Both traditional AHI and Polardbx metrics should not change when both parameters are OFF
+--let $assert_text= Traditional AHI hit metrics should not change when both parameters are OFF
+--let $assert_cond= $traditional_hit_diff_both_off = 0
+--source include/assert.inc
+
+--let $assert_text= Traditional AHI miss metrics should not change when both parameters are OFF
+--let $assert_cond= $traditional_miss_diff_both_off = 0
+--source include/assert.inc
+
+--let $assert_text= Polardbx hit metrics should not change when both parameters are OFF
+--let $assert_cond= $hit_diff_both_off = 0
+--source include/assert.inc
+
+--let $assert_text= Polardbx miss metrics should not change when both parameters are OFF
+--let $assert_cond= $miss_diff_both_off = 0
+--source include/assert.inc
+
+--echo # Cleanup
+DROP TABLE t1;
+
+--echo # Restore original settings
+--eval SET GLOBAL innodb_adaptive_hash_index = $innodb_adaptive_hash_index_original;
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $innodb_polarx_btree_search_mode_original;
+--eval SET GLOBAL innodb_lizard_stat_enabled = $innodb_lizard_stat_enabled_original;

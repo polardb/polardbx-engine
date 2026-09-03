@@ -1617,8 +1617,9 @@ void Partition_helper::ph_position(const uchar *record) {
     assert(m_ordered_rec_buffer);
     assert(!m_curr_key_info[1]);
     assert(uint2korr(m_queue->top()) == m_last_part);
-    /* We already have the ref and part id. */
-    memcpy(m_handler->ref, m_queue->top(), m_handler->ref_length);
+    /* We already have the ref, GPP and part id. */
+    memcpy(m_handler->ref, m_queue->top(),
+           m_handler->ref_length + m_handler->gpp_length);
   } else {
     DBUG_PRINT("info", ("m_last_part: %u", m_last_part));
     int2store(m_handler->ref, m_last_part);
@@ -1693,7 +1694,7 @@ int Partition_helper::init_record_priority_queue() {
       m_rec_offset = PARTITION_BYTES_IN_POS;
       m_ref_usage = REF_NOT_USED;
     } else {
-      m_rec_offset = m_handler->ref_length;
+      m_rec_offset = m_handler->ref_length + m_handler->gpp_length;
       m_ref_usage = REF_STORED_IN_PQ;
     }
     alloc_len = used_parts * (m_rec_offset + m_rec_length);

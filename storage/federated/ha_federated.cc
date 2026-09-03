@@ -3190,7 +3190,7 @@ int ha_federated::rnd_pos_by_record(uchar *record [[maybe_unused]]) {
 
   if (stored_result) {
     position(record);
-    error = ha_rnd_pos(record, ref);
+    error = ha_rnd_pos(record, ref, komodo::GM_NONE);
   }
 
   ha_rnd_end();

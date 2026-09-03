@@ -36,7 +36,7 @@ TEST(consensus, paxos_purgeLog_normal) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir31", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
@@ -87,7 +87,7 @@ TEST(consensus, paxos_purgeLog_nopurge_forcepurge) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir41", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
@@ -142,7 +142,7 @@ TEST(consensus, paxos_purgeLog_disable_appliedIndex) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir51", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
@@ -193,7 +193,7 @@ TEST(consensus, paxos_purgeLog_local) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 10000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir41", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);

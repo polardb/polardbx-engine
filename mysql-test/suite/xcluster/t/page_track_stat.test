@@ -1,0 +1,139 @@
+--source include/paxos.inc
+
+--source include/not_valgrind.inc
+--source include/not_windows.inc
+#--source include/have_innodb.inc
+--source include/have_binlog_format_row.inc
+--source include/have_log_bin.inc
+
+# connect 3 server. must have test database
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+--connection conn1
+INSTALL COMPONENT "file://component_mysqlbackup";
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+--sleep 5
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+--sleep 5
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+
+--replace_column 2 #
+show global status like '%page_track%';
+
+show global status like '%page_track_backup_last_pages%';
+show global status like '%page_track_purge_count%';
+
+
+SET GLOBAL mysqlbackup.backupid = '101753283420356608';
+--let $start_lsn=`SELECT mysqlbackup_page_track_get_start_lsn()`
+--let $end_lsn=`select $start_lsn+100`
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_get_changed_pages($start_lsn, $end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_backup_last_pages%';
+SET GLOBAL mysqlbackup.backupid = default;
+
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_purge_up_to($end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_purge_count%';
+
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_purge_up_to($end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_purge_count%';
+
+--replace_column 2 #
+show global status like '%page_track%';
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+UNINSTALL COMPONENT "file://component_mysqlbackup";
+
+--connection conn2
+INSTALL COMPONENT "file://component_mysqlbackup";
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+--sleep 5
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+--sleep 5
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(1);
+--replace_column 1 #
+SELECT mysqlbackup_page_track_get_start_lsn();
+
+--replace_column 2 #
+show global status like '%page_track%';
+
+show global status like '%page_track_backup_last_pages%';
+show global status like '%page_track_purge_count%';
+
+
+SET GLOBAL mysqlbackup.backupid = '101753283420356608';
+--let $start_lsn=`SELECT mysqlbackup_page_track_get_start_lsn()`
+--let $end_lsn=`select $start_lsn+100`
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_get_changed_pages($start_lsn, $end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_backup_last_pages%';
+SET GLOBAL mysqlbackup.backupid = default;
+
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_purge_up_to($end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_purge_count%';
+
+--disable_result_log
+--disable_query_log
+--eval SELECT mysqlbackup_page_track_purge_up_to($end_lsn);
+--enable_query_log
+--enable_result_log
+show global status like '%page_track_purge_count%';
+
+--replace_column 2 #
+show global status like '%page_track%';
+
+
+--replace_column 1 #
+SELECT mysqlbackup_page_track_set(0);
+UNINSTALL COMPONENT "file://component_mysqlbackup";
+
+

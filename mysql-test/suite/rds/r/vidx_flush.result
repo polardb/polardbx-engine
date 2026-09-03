@@ -1,0 +1,215 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Prepare - Create table with vector index and insert data
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[4,5,6,7,8]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[5,6,7,8,9]'));
+SELECT id, VEC_TOTEXT(v) FROM t1;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+4	[4,5,6,7,8]
+5	[5,6,7,8,9]
+
+# 2. Execute ANN query (to establish cache)
+# First query
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+
+# 3. FLUSH TABLES - then execute same ANN query
+FLUSH TABLES;
+# Query after FLUSH TABLES - should return same results
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+
+# 4. FLUSH TABLE t1 - single table flush
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,2,3,4]'));
+FLUSH TABLE t1;
+# Query after single table flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0,1,2,3,4]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+6	[0,1,2,3,4]
+1	[1,2,3,4,5]
+2	[2,3,4,5,6]
+
+# 5. FLUSH TABLES WITH READ LOCK
+FLUSH TABLES WITH READ LOCK;
+# ANN query under read lock should succeed (read-only operation)
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+6	[0,1,2,3,4]
+2	[2,3,4,5,6]
+# Multiple ANN queries under read lock
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,4,5,6,7]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+3	[3,4,5,6,7]
+2	[2,3,4,5,6]
+4	[4,5,6,7,8]
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,6,7,8,9]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+5	[5,6,7,8,9]
+4	[4,5,6,7,8]
+3	[3,4,5,6,7]
+# Regular SELECT under read lock should also succeed
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+6
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id <= 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+
+# 6. INSERT under read lock should fail
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'));
+ERROR HY000: Can't execute the query because you have a conflicting read lock
+# UPDATE under read lock should fail
+UPDATE t1 SET v = VEC_FROMTEXT('[10,10,10,10,10]') WHERE id = 1;
+ERROR HY000: Can't execute the query because you have a conflicting read lock
+# DELETE under read lock should fail
+DELETE FROM t1 WHERE id = 1;
+ERROR HY000: Can't execute the query because you have a conflicting read lock
+
+# 7. UNLOCK TABLES and resume normal operations
+UNLOCK TABLES;
+# INSERT should succeed after unlock
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'));
+# UPDATE should succeed after unlock
+UPDATE t1 SET v = VEC_FROMTEXT('[10,10,10,10,10]') WHERE id = 1;
+# Verify data
+SELECT id, VEC_TOTEXT(v) FROM t1;
+id	VEC_TOTEXT(v)
+1	[10,10,10,10,10]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+4	[4,5,6,7,8]
+5	[5,6,7,8,9]
+6	[0,1,2,3,4]
+7	[9,9,9,9,9]
+# ANN query should work normally
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+7	[9,9,9,9,9]
+1	[10,10,10,10,10]
+5	[5,6,7,8,9]
+
+# 8. Multiple FLUSH operations
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[11,11,11,11,11]'));
+FLUSH TABLES;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[12,12,12,12,12]'));
+FLUSH TABLES;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[13,13,13,13,13]'));
+FLUSH TABLES;
+# Verify all data persisted correctly
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[10,10,10,10,10]
+2	[2,3,4,5,6]
+3	[3,4,5,6,7]
+4	[4,5,6,7,8]
+5	[5,6,7,8,9]
+6	[0,1,2,3,4]
+7	[9,9,9,9,9]
+8	[11,11,11,11,11]
+9	[12,12,12,12,12]
+10	[13,13,13,13,13]
+# ANN query after multiple flushes
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[12,12,12,12,12]')), id LIMIT 3;
+id	VEC_TOTEXT(v)
+9	[12,12,12,12,12]
+8	[11,11,11,11,11]
+10	[13,13,13,13,13]
+
+# 9. FLUSH TABLES t1 FOR EXPORT (if supported)
+FLUSH TABLES t1 FOR EXPORT;
+UNLOCK TABLES;
+# Verify table is still accessible
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+10
+
+# 10. FLUSH with multiple tables
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[2,2,2,2,2]'));
+FLUSH TABLES t1, t2;
+# ANN queries on both tables after flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+id	VEC_TOTEXT(v)
+6	[0,1,2,3,4]
+2	[2,3,4,5,6]
+SELECT id, VEC_TOTEXT(v) FROM t2 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1,1]')) LIMIT 2;
+id	VEC_TOTEXT(v)
+1	[1,1,1,1,1]
+2	[2,2,2,2,2]
+
+# 11. Transaction with FLUSH
+START TRANSACTION;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[20,20,20,20,20]'));
+# Query within transaction before commit
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 1;
+id	VEC_TOTEXT(v)
+11	[20,20,20,20,20]
+COMMIT;
+FLUSH TABLES;
+# Query after commit and flush
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 1;
+id	VEC_TOTEXT(v)
+11	[20,20,20,20,20]
+
+# 12. FLUSH TABLES followed by DDL
+FLUSH TABLES;
+ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT '0',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ANN query after DDL
+SELECT id, VEC_TOTEXT(v), extra FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	VEC_TOTEXT(v)	extra
+6	[0,1,2,3,4]	0
+2	[2,3,4,5,6]	0
+3	[3,4,5,6,7]	0
+
+# 13. Cleanup
+DROP TABLE t2;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

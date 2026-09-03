@@ -1,0 +1,598 @@
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+CREATE FUNCTION get_part_id(tbl_name VARCHAR(64), part_name VARCHAR(64))
+RETURNS BIGINT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+DECLARE tid BIGINT;
+SELECT table_id INTO tid FROM information_schema.innodb_tables
+WHERE name = CONCAT('test/', tbl_name, '#p#', part_name);
+RETURN tid;
+END//
+
+================================================================
+Category P1: Partition No-Rebuild DDLs
+================================================================
+
+--- P1.1: ADD PARTITION (RANGE) ---
+# ADD PARTITION adds an empty partition; existing partitions NOT rebuilt
+CREATE TABLE p1_add_part (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20)
+);
+INSERT INTO p1_add_part VALUES (5, 'Alice'), (15, 'Bob');
+SET @ts_p1_add = NOW(6);
+SELECT get_part_id('p1_add_part', 'p0') INTO @p0_before;
+SELECT get_part_id('p1_add_part', 'p1') INTO @p1_before;
+ALTER TABLE p1_add_part ADD PARTITION (PARTITION p2 VALUES LESS THAN MAXVALUE);
+SELECT get_part_id('p1_add_part', 'p0') INTO @p0_after;
+SELECT get_part_id('p1_add_part', 'p1') INTO @p1_after;
+include/assert.inc [ADD PARTITION should not change p0 table_id]
+include/assert.inc [ADD PARTITION should not change p1 table_id]
+# p0 and p1 table_ids unchanged (verified above) -> normal traversal
+SELECT * FROM p1_add_part AS OF TIMESTAMP @ts_p1_add ORDER BY id;
+id	name
+5	Alice
+15	Bob
+
+--- P1.2: DROP PARTITION (RANGE) ---
+# Surviving partitions not rebuilt; dropped partition data is gone
+CREATE TABLE p1_drop_part (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p1_drop_part VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+SET @ts_p1_drop = NOW(6);
+# Update id=15 (in p1) after snapshot; id=25 (in p2) unmodified
+UPDATE p1_drop_part SET name = 'Bob_v2' WHERE id = 15;
+SELECT get_part_id('p1_drop_part', 'p1') INTO @p1_before;
+SELECT get_part_id('p1_drop_part', 'p2') INTO @p2_before;
+# DROP PARTITION p0: removes id=5. Surviving p1, p2 table_ids unchanged.
+ALTER TABLE p1_drop_part DROP PARTITION p0;
+SELECT get_part_id('p1_drop_part', 'p1') INTO @p1_after;
+SELECT get_part_id('p1_drop_part', 'p2') INTO @p2_after;
+include/assert.inc [DROP PARTITION should not change surviving p1 table_id]
+include/assert.inc [DROP PARTITION should not change surviving p2 table_id]
+# id=5 (dropped partition): no longer in any partition -> not found
+SELECT id, name FROM p1_drop_part AS OF TIMESTAMP @ts_p1_drop WHERE id = 5;
+id	name
+# id=15 (p1, updated after @ts): undo traversal -> shows old 'Bob'
+# id=25 (p2, unmodified): directly visible -> 'Charlie'
+SELECT * FROM p1_drop_part AS OF TIMESTAMP @ts_p1_drop ORDER BY id;
+id	name
+15	Bob
+25	Charlie
+
+--- P1.3: LIST partition ADD PARTITION ---
+CREATE TABLE p1_list (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+PARTITION p_lo VALUES IN (1, 2, 3),
+PARTITION p_hi VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p1_list VALUES (1, 'Alice'), (4, 'Bob');
+SET @ts_p1_list = NOW(6);
+ALTER TABLE p1_list ADD PARTITION (PARTITION p_xl VALUES IN (11, 12, 13, 14, 15));
+# ADD PARTITION (LIST): existing partitions not rebuilt -> normal traversal
+SELECT * FROM p1_list AS OF TIMESTAMP @ts_p1_list ORDER BY id;
+id	name
+1	Alice
+4	Bob
+
+--- P1.4: RENAME INDEX on HASH partition ---
+CREATE TABLE p1_rename_idx (id INT, name VARCHAR(64), PRIMARY KEY(id),
+INDEX idx_old(name))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p1_rename_idx VALUES (1, 'Alice'), (2, 'Bob');
+SET @ts_p1_ridx = NOW(6);
+ALTER TABLE p1_rename_idx RENAME INDEX idx_old TO idx_new;
+# RENAME INDEX: no rebuild -> normal traversal (use renamed index)
+SELECT * FROM p1_rename_idx AS OF TIMESTAMP @ts_p1_ridx FORCE INDEX(idx_new)
+ORDER BY name;
+id	name
+1	Alice
+2	Bob
+
+================================================================
+Category P2: INSTANT DDL on Partitioned Tables
+================================================================
+
+--- P2.1: ADD COLUMN (INSTANT) on RANGE partition ---
+CREATE TABLE p2_add_col (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p2_add_col VALUES (1, 'Alice'), (11, 'Bob');
+SET @ts_p2_add = NOW(6);
+SELECT get_part_id('p2_add_col', 'p0') INTO @p0_before;
+ALTER TABLE p2_add_col ADD COLUMN email VARCHAR(128) DEFAULT 'n/a', ALGORITHM=INSTANT;
+SELECT get_part_id('p2_add_col', 'p0') INTO @p0_after;
+include/assert.inc [INSTANT ADD COLUMN should not change partition table_id]
+# INSTANT ADD COLUMN: no rebuild -> normal traversal
+# Historical rows show DEFAULT value for new column
+SELECT * FROM p2_add_col AS OF TIMESTAMP @ts_p2_add ORDER BY id;
+id	name	email
+1	Alice	n/a
+11	Bob	n/a
+
+--- P2.2: DROP COLUMN (INSTANT) on HASH partition ---
+CREATE TABLE p2_drop_col (id INT, name VARCHAR(64), age INT, PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p2_drop_col VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+SET @ts_p2_drop = NOW(6);
+ALTER TABLE p2_drop_col DROP COLUMN age, ALGORITHM=INSTANT;
+# INSTANT DROP COLUMN: no rebuild -> normal traversal
+SELECT * FROM p2_drop_col AS OF TIMESTAMP @ts_p2_drop ORDER BY id;
+id	name
+1	Alice
+2	Bob
+
+--- P2.3: ADD VIRTUAL COLUMN on LIST partition ---
+CREATE TABLE p2_vcol (id INT, price INT, qty INT, PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+PARTITION p_small VALUES IN (1, 2, 3),
+PARTITION p_large VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p2_vcol VALUES (1, 100, 5), (4, 200, 3);
+SET @ts_p2_vcol = NOW(6);
+ALTER TABLE p2_vcol ADD COLUMN total INT AS (price * qty) VIRTUAL;
+# ADD VIRTUAL COLUMN: no rebuild -> normal traversal
+SELECT * FROM p2_vcol AS OF TIMESTAMP @ts_p2_vcol ORDER BY id;
+id	price	qty	total
+1	100	5	500
+4	200	3	600
+
+================================================================
+Category P3: ADD INDEX -> ER_AS_OF_TABLE_DEF_CHANGED (ha_innopart)
+================================================================
+
+--- P3.1: ADD INDEX on RANGE partition ---
+CREATE TABLE p3_range (id INT, name VARCHAR(64), score INT, PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p3_range VALUES (1, 'Alice', 90), (11, 'Bob', 85), (21, 'Charlie', 80);
+SET @ts_p3_range = NOW(6);
+ALTER TABLE p3_range ADD INDEX idx_name(name);
+ALTER TABLE p3_range ADD INDEX idx_score(score);
+# Via PRIMARY -> success (clustered index, always usable)
+SELECT id, name FROM p3_range AS OF TIMESTAMP @ts_p3_range
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+11	Bob
+21	Charlie
+# Via idx_name (did not exist at snapshot) -> ER_AS_OF_TABLE_DEF_CHANGED
+# Exercises ha_innopart::change_active_index
+SELECT id, name FROM p3_range AS OF TIMESTAMP @ts_p3_range FORCE INDEX(idx_name);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Via idx_score (did not exist at snapshot) -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, score FROM p3_range AS OF TIMESTAMP @ts_p3_range FORCE INDEX(idx_score);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- P3.2: ADD INDEX on HASH partition ---
+CREATE TABLE p3_hash (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 4;
+INSERT INTO p3_hash VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie'), (4, 'David');
+SET @ts_p3_hash = NOW(6);
+ALTER TABLE p3_hash ADD INDEX idx_name(name);
+# HASH partition, FORCE INDEX via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p3_hash AS OF TIMESTAMP @ts_p3_hash FORCE INDEX(idx_name);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Via PRIMARY -> success
+SELECT id, name FROM p3_hash AS OF TIMESTAMP @ts_p3_hash
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+2	Bob
+3	Charlie
+4	David
+
+--- P3.3: ADD INDEX on LIST partition ---
+CREATE TABLE p3_list (id INT, name VARCHAR(64), val INT, PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+PARTITION p0 VALUES IN (1, 2, 3, 4, 5),
+PARTITION p1 VALUES IN (6, 7, 8, 9, 10),
+PARTITION p2 VALUES IN (11, 12, 13, 14, 15)
+);
+INSERT INTO p3_list VALUES (1, 'Alice', 10), (8, 'Bob', 20), (12, 'Charlie', 30);
+SET @ts_p3_list = NOW(6);
+ALTER TABLE p3_list ADD INDEX idx_val(val);
+# LIST partition, via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, val FROM p3_list AS OF TIMESTAMP @ts_p3_list FORCE INDEX(idx_val);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Via PRIMARY -> success
+SELECT id, name FROM p3_list AS OF TIMESTAMP @ts_p3_list
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+8	Bob
+12	Charlie
+
+================================================================
+Category P4: INPLACE Rebuild on Partitioned Tables
+================================================================
+
+--- P4.1: ALTER TABLE FORCE on RANGE partition ---
+# 3 partitions: p0 (id=1), p1 (id=11), p2 (id=21)
+# Update p0 and p1 rows after @ts; leave p2 row unmodified
+CREATE TABLE p4_force (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p4_force VALUES (1, 'Alice'), (11, 'Bob'), (21, 'Charlie');
+SET @ts_p4_force = NOW(6);
+UPDATE p4_force SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_force SET name = 'Bob_v2' WHERE id = 11;
+SELECT get_part_id('p4_force', 'p0') INTO @p0_before;
+SELECT get_part_id('p4_force', 'p1') INTO @p1_before;
+SELECT get_part_id('p4_force', 'p2') INTO @p2_before;
+ALTER TABLE p4_force FORCE;
+SELECT get_part_id('p4_force', 'p0') INTO @p0_after;
+SELECT get_part_id('p4_force', 'p1') INTO @p1_after;
+SELECT get_part_id('p4_force', 'p2') INTO @p2_after;
+include/assert.inc [FORCE should change p0 table_id (INPLACE rebuild)]
+include/assert.inc [FORCE should change p1 table_id (INPLACE rebuild)]
+include/assert.inc [FORCE should change p2 table_id (INPLACE rebuild)]
+# id=21 (p2, unmodified): current value = historical value -> returned directly
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 21;
+id	name
+21	Charlie
+# id=1 (p0, updated after @ts): UPDATE roll_ptr preserved, old table_id
+# -> table_id mismatch after rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 1;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# id=11 (p1, updated after @ts): same mechanism -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_force AS OF TIMESTAMP @ts_p4_force WHERE id = 11;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Full scan: first updated row encountered -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_force AS OF TIMESTAMP @ts_p4_force;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- P4.2: OPTIMIZE TABLE on HASH partition ---
+CREATE TABLE p4_optimize (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 3;
+INSERT INTO p4_optimize VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie');
+SET @ts_p4_opt = NOW(6);
+# Update id=1 and id=2; leave id=3 unmodified
+UPDATE p4_optimize SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_optimize SET name = 'Bob_v2' WHERE id = 2;
+OPTIMIZE TABLE p4_optimize;
+Table	Op	Msg_type	Msg_text
+test.p4_optimize	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.p4_optimize	optimize	status	OK
+# id=3 (unmodified): current value = historical value -> returned directly
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 3;
+id	name
+3	Charlie
+# id=1 and id=2 (updated after @ts): ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 1;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+SELECT id, name FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt WHERE id = 2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Full scan -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_optimize AS OF TIMESTAMP @ts_p4_opt;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- P4.3: ROW_FORMAT change on LIST partition ---
+CREATE TABLE p4_rowfmt (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+PARTITION p_odd VALUES IN (1, 3, 5, 7, 9),
+PARTITION p_even VALUES IN (2, 4, 6, 8, 10)
+);
+INSERT INTO p4_rowfmt VALUES (1, 'Alice'), (2, 'Bob');
+SET @ts_p4_rf = NOW(6);
+UPDATE p4_rowfmt SET name = 'Alice_v2' WHERE id = 1;
+UPDATE p4_rowfmt SET name = 'Bob_v2' WHERE id = 2;
+ALTER TABLE p4_rowfmt ROW_FORMAT = COMPRESSED;
+# ROW_FORMAT change (INPLACE rebuild) -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p4_rowfmt AS OF TIMESTAMP @ts_p4_rf;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+================================================================
+Category P5: COPY Rebuild on Partitioned Tables
+================================================================
+
+--- P5.1: MODIFY COLUMN (shrink) on RANGE partition ---
+CREATE TABLE p5_shrink (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_shrink VALUES (1, 'Alice'), (11, 'Bob');
+SET @ts_p5_shrink = NOW(6);
+SELECT get_part_id('p5_shrink', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_shrink', 'p1') INTO @p1_before;
+ALTER TABLE p5_shrink MODIFY COLUMN name VARCHAR(32);
+SELECT get_part_id('p5_shrink', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_shrink', 'p1') INTO @p1_after;
+include/assert.inc [MODIFY shrink should change p0 table_id (COPY rebuild)]
+include/assert.inc [MODIFY shrink should change p1 table_id (COPY rebuild)]
+# COPY rebuild: all rows newly inserted by DDL -> empty result
+SELECT * FROM p5_shrink AS OF TIMESTAMP @ts_p5_shrink;
+id	name
+
+--- P5.2: REORGANIZE PARTITION (partial rebuild) ---
+# p0 (id=5) and p1 (id=15) will be reorganized (COPY rebuilt)
+# p2 (id=25) will NOT be reorganized -> normal traversal
+CREATE TABLE p5_reorg (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_reorg VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+SET @ts_p5_reorg = NOW(6);
+# Update id=5 (in p0, will be reorganized) after snapshot
+UPDATE p5_reorg SET name = 'Alice_v2' WHERE id = 5;
+SELECT get_part_id('p5_reorg', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_reorg', 'p1') INTO @p1_before;
+SELECT get_part_id('p5_reorg', 'p2') INTO @p2_before;
+# Reorganize p0 + p1: splits boundary 10 -> 8
+ALTER TABLE p5_reorg REORGANIZE PARTITION p0, p1 INTO (
+PARTITION p0 VALUES LESS THAN (8),
+PARTITION p1 VALUES LESS THAN (20)
+);
+SELECT get_part_id('p5_reorg', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_reorg', 'p1') INTO @p1_after;
+SELECT get_part_id('p5_reorg', 'p2') INTO @p2_after;
+include/assert.inc [REORGANIZE should change p0 table_id (rebuilt)]
+include/assert.inc [REORGANIZE should change p1 table_id (rebuilt)]
+include/assert.inc [REORGANIZE should NOT change p2 table_id (not rebuilt)]
+# p0 and p1: new table_ids (COPY rebuilt)
+# p2: UNCHANGED table_id (not reorganized)
+
+# id=5 (reorganized p0, updated after @ts):
+# COPY rebuild creates fresh INSERT undo for the new partition,
+# disconnecting the old undo chain -> empty result (not ER_AS_OF_TABLE_DEF_CHANGED)
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 5;
+id	name
+# id=15 (reorganized p1, unmodified): COPY rebuilt -> empty result
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 15;
+id	name
+# id=25 (p2, NOT reorganized): table_id unchanged -> normal traversal -> visible
+SELECT id, name FROM p5_reorg AS OF TIMESTAMP @ts_p5_reorg WHERE id = 25;
+id	name
+25	Charlie
+
+--- P5.3: TRUNCATE PARTITION (single partition replacement) ---
+# Only p1 is truncated/recreated. p0 and p2 keep their table_id and
+# remain visible to AS OF before the truncate. p1 becomes a new empty
+# physical generation, so pre-truncate rows from p1 are not visible.
+CREATE TABLE p5_trunc_part (
+id INT,
+name VARCHAR(64),
+PRIMARY KEY(id),
+KEY idx_name(name)
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p5_trunc_part VALUES (5, 'Alice'), (15, 'Bob'), (25, 'Charlie');
+SET @ts_p5_trunc = NOW(6);
+SELECT get_part_id('p5_trunc_part', 'p0') INTO @p0_before;
+SELECT get_part_id('p5_trunc_part', 'p1') INTO @p1_before;
+SELECT get_part_id('p5_trunc_part', 'p2') INTO @p2_before;
+ALTER TABLE p5_trunc_part TRUNCATE PARTITION p1;
+SELECT get_part_id('p5_trunc_part', 'p0') INTO @p0_after;
+SELECT get_part_id('p5_trunc_part', 'p1') INTO @p1_after;
+SELECT get_part_id('p5_trunc_part', 'p2') INTO @p2_after;
+include/assert.inc [TRUNCATE PARTITION should not change p0 table_id]
+include/assert.inc [TRUNCATE PARTITION should change p1 table_id]
+include/assert.inc [TRUNCATE PARTITION should not change p2 table_id]
+# Current table has only rows from untruncated partitions.
+SELECT * FROM p5_trunc_part ORDER BY id;
+id	name
+5	Alice
+25	Charlie
+# Insert a new row into the truncated partition after TRUNCATE.
+INSERT INTO p5_trunc_part VALUES (16, 'Bob_after_truncate');
+# The current table includes the new p1 row.
+SELECT * FROM p5_trunc_part ORDER BY id;
+id	name
+5	Alice
+16	Bob_after_truncate
+25	Charlie
+# p1 row before TRUNCATE is gone from the current physical mapping.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id = 15;
+id	name
+# p1 row inserted after TRUNCATE is not visible to the pre-truncate snapshot.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id = 16;
+id	name
+# p0 and p2 were not rebuilt -> normal traversal.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) WHERE id IN (5, 25) ORDER BY id;
+id	name
+5	Alice
+25	Charlie
+# Full PRIMARY scan returns only rows from untruncated partitions.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+5	Alice
+25	Charlie
+# Secondary path on the truncated partition also returns empty.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name = 'Bob';
+id	name
+# Secondary path does not expose the post-truncate p1 row either.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name = 'Bob_after_truncate';
+id	name
+# Secondary path on untruncated partitions remains usable.
+SELECT id, name FROM p5_trunc_part AS OF TIMESTAMP @ts_p5_trunc
+FORCE INDEX(idx_name) WHERE name IN ('Alice', 'Charlie') ORDER BY name;
+id	name
+5	Alice
+25	Charlie
+
+================================================================
+Category P6: Complex Multi-Timestamp Scenario
+================================================================
+CREATE TABLE p6_complex (id INT, name VARCHAR(64), score INT, PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p_low  VALUES LESS THAN (10),
+PARTITION p_mid  VALUES LESS THAN (20),
+PARTITION p_high VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p6_complex VALUES (1, 'Alice', 90), (11, 'Bob', 85), (21, 'Charlie', 80);
+# Timestamp T1: initial state (3 rows across 3 partitions, no extra index)
+SET @ts_p6_t1 = NOW(6);
+INSERT INTO p6_complex VALUES (5, 'Dave', 95);
+# Timestamp T2: 4 rows (Dave added to p_low)
+SET @ts_p6_t2 = NOW(6);
+# ADD COLUMN (INSTANT, no rebuild) + ADD INDEX (no rebuild)
+ALTER TABLE p6_complex ADD COLUMN level VARCHAR(16) DEFAULT 'junior', ALGORITHM=INSTANT;
+ALTER TABLE p6_complex ADD INDEX idx_score(score);
+# Timestamp T3: ADD COLUMN + ADD INDEX applied
+SET @ts_p6_t3 = NOW(6);
+UPDATE p6_complex SET level = 'senior', score = 91 WHERE id = 1;
+UPDATE p6_complex SET level = 'mid'              WHERE id = 11;
+# Timestamp T4: rows 1 and 11 updated
+SET @ts_p6_t4 = NOW(6);
+
+--- P6.1: AS OF T1 (3 rows, no idx_score, level shows DEFAULT) ---
+SELECT id, name, score, level FROM p6_complex AS OF TIMESTAMP @ts_p6_t1
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name	score	level
+1	Alice	90	junior
+11	Bob	85	junior
+21	Charlie	80	junior
+# Via idx_score (new index path) -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT id, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t1 FORCE INDEX(idx_score);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- P6.2: AS OF T2 (4 rows: Alice/Dave in p_low, Bob in p_mid, Charlie in p_high) ---
+SELECT id, name, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t2
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name	score
+1	Alice	90
+5	Dave	95
+11	Bob	85
+21	Charlie	80
+
+--- P6.3: AS OF T3 (after ADD INDEX; idx_score now valid for AS OF) ---
+SELECT id, score FROM p6_complex AS OF TIMESTAMP @ts_p6_t3
+FORCE INDEX(idx_score) ORDER BY score;
+id	score
+21	80
+11	85
+1	90
+5	95
+
+--- P6.4: AS OF T4 (after updates to id=1 and id=11) ---
+SELECT id, name, score, level FROM p6_complex AS OF TIMESTAMP @ts_p6_t4
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name	score	level
+1	Alice	91	senior
+5	Dave	95	junior
+11	Bob	85	mid
+21	Charlie	80	junior
+
+--- P6.5: Cross-partition traversal at T1 using PRIMARY ---
+SELECT id, name FROM p6_complex AS OF TIMESTAMP @ts_p6_t1
+FORCE INDEX(PRIMARY) WHERE id BETWEEN 1 AND 25 ORDER BY id;
+id	name
+1	Alice
+11	Bob
+21	Charlie
+
+================================================================
+Category P7: cross_ddl OFF on Partitioned Tables
+================================================================
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+--- P7.1: ADD INDEX on RANGE (cross_ddl OFF) ---
+CREATE TABLE p7_add_idx (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p7_add_idx VALUES (1, 'Alice'), (11, 'Bob');
+SET @ts_p7_idx = NOW(6);
+ALTER TABLE p7_add_idx ADD INDEX idx_name(name);
+# cross_ddl OFF: new index -> ER_AS_OF_TABLE_DEF_CHANGED (not INDEX_NOT_EXIST)
+SELECT id, name FROM p7_add_idx AS OF TIMESTAMP @ts_p7_idx FORCE INDEX(idx_name);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Via PRIMARY (clustered, se_private_data unchanged) -> success
+SELECT id, name FROM p7_add_idx AS OF TIMESTAMP @ts_p7_idx
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+11	Bob
+
+--- P7.2: INSTANT ADD COLUMN on HASH (cross_ddl OFF) ---
+CREATE TABLE p7_instant (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY HASH(id) PARTITIONS 2;
+INSERT INTO p7_instant VALUES (1, 'Alice'), (2, 'Bob');
+SET @ts_p7_inst = NOW(6);
+ALTER TABLE p7_instant ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+# cross_ddl OFF: INSTANT DDL overwrites se_private_data -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p7_instant AS OF TIMESTAMP @ts_p7_inst;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Non-AS-OF: normal query works fine
+SELECT * FROM p7_instant ORDER BY id;
+id	name	age
+1	Alice	0
+2	Bob	0
+
+--- P7.3: FORCE rebuild on LIST (cross_ddl OFF) ---
+CREATE TABLE p7_force (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY LIST (id) (
+PARTITION p_low  VALUES IN (1, 2, 3),
+PARTITION p_high VALUES IN (4, 5, 6, 7, 8, 9, 10)
+);
+INSERT INTO p7_force VALUES (1, 'Alice'), (5, 'Bob');
+SET @ts_p7_force = NOW(6);
+UPDATE p7_force SET name = 'Alice_v2' WHERE id = 1;
+ALTER TABLE p7_force FORCE;
+# cross_ddl OFF: FORCE rebuild -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM p7_force AS OF TIMESTAMP @ts_p7_force;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- P7.4: Parameter switch (DDL under OFF, query under ON) ---
+# When INSTANT DDL runs under OFF: se_private_data IS overwritten.
+# When query runs under ON: clustered index is always let through
+# (ON path bypasses modification_visible for clustered index) -> success.
+CREATE TABLE p7_switch (id INT, name VARCHAR(64), PRIMARY KEY(id))
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO p7_switch VALUES (1, 'Alice'), (11, 'Bob');
+SET @ts_p7_sw = NOW(6);
+# DDL under OFF: INSTANT ADD COLUMN overwrites se_private_data
+ALTER TABLE p7_switch ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+SET SESSION as_of_cross_ddl_enabled = ON;
+# Query under ON: clustered index always visible (ON code path) -> success
+SELECT id, name FROM p7_switch AS OF TIMESTAMP @ts_p7_sw
+FORCE INDEX(PRIMARY) ORDER BY id;
+id	name
+1	Alice
+11	Bob
+
+================================================================
+Cleanup
+================================================================
+DROP TABLE IF EXISTS p1_add_part, p1_drop_part, p1_list, p1_rename_idx;
+DROP TABLE IF EXISTS p2_add_col, p2_drop_col, p2_vcol;
+DROP TABLE IF EXISTS p3_range, p3_hash, p3_list;
+DROP TABLE IF EXISTS p4_force, p4_optimize, p4_rowfmt;
+DROP TABLE IF EXISTS p5_shrink, p5_reorg, p5_trunc_part;
+DROP TABLE IF EXISTS p6_complex;
+DROP TABLE IF EXISTS p7_add_idx, p7_instant, p7_force, p7_switch;
+DROP FUNCTION IF EXISTS get_part_id;
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

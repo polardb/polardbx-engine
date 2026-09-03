@@ -1,0 +1,182 @@
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+#
+# Regression tests for CCL bugfixes:
+#   1. Ordered keyword matching must advance past every matched keyword,
+#      so the same occurrence can not satisfy repeated keywords.
+#   2. Dynamic slot must survive rule deletion while a statement that
+#      retrieved the slot is still running (use-after-free protection).
+#   3. del_all_ccl_rule commits atomically on success path.
+#   4. Queue bucket resize keeps hint queries safe and functional.
+#
+
+call mtr.add_suppression("mysql.concurrency_control");
+
+connection default;
+
+create database ccl_bf_db;
+create table ccl_bf_db.t1(id int, name varchar(100));
+insert into ccl_bf_db.t1 values(1, 'xpchild');
+commit;
+
+--echo #
+--echo # 1. ordered keyword match must move past matched keyword
+--echo #
+
+# 1.1 The same occurrence must not satisfy a repeated keyword.
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "kworda;kworda");
+update mysql.concurrency_control set ordered = 'Y';
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+# single occurrence: must NOT match, matched stays 0
+select "kworda";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+# two occurrences: must match once
+select "kworda then kworda";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+# 1.2 Ordered two-keyword rule respects the order of appearance.
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "kwordb;kwordc");
+update mysql.concurrency_control set ordered = 'Y';
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+# wrong order: no match
+select "kwordc before kwordb";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+# right order: match
+select "kwordb before kwordc";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+# 1.3 Disordered rule still matches regardless of order.
+update mysql.concurrency_control set ordered = 'N';
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+select "kwordc before kwordb";
+--replace_column 1 #
+call dbms_ccl.show_ccl_rule();
+
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+--echo #
+--echo # 2. rule deletion while statement is running on a dynamic slot
+--echo #
+
+# Exhaust all static slots (64 + 64 queue max), the tail rules
+# will bind dynamically allocated slots.
+delimiter |;
+create procedure ccl_bf_db.LoopAddRule()
+begin
+  declare i int default 0;
+  declare kw varchar(100);
+  while i < 130 do
+    set kw = concat('dynkw', i);
+    call dbms_ccl.add_ccl_rule('select', '', '', 30, kw);
+    set i = i + 1;
+  end while;
+end |
+delimiter ;|
+
+call ccl_bf_db.LoopAddRule();
+
+# This intact rule binds a dynamic slot since static ones are exhausted.
+call dbms_ccl.add_ccl_rule("select", "ccl_bf_db", "t1", 10, "");
+
+connect(con_bf1, localhost, root,,);
+connection con_bf1;
+# Long running statement holds the dynamic slot reference.
+--send select sleep(3) from ccl_bf_db.t1
+
+connection default;
+let $wait_condition= select count(*) = 1 from information_schema.processlist
+  where state = 'User sleep' and info like '%from ccl_bf_db.t1%';
+--source include/wait_condition.inc
+
+# Delete all rules (destroys the rules and releases their slots) while
+# the statement above is still running: must not crash nor UAF.
+call dbms_ccl.del_all_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+
+connection con_bf1;
+--reap
+
+# Server must stay healthy after the slot is finally dropped.
+select * from ccl_bf_db.t1;
+
+connection default;
+disconnect con_bf1;
+call dbms_ccl.show_ccl_rule();
+select count(*) from mysql.concurrency_control;
+
+drop procedure ccl_bf_db.LoopAddRule;
+
+--echo #
+--echo # 3. del_all_ccl_rule success path is committed
+--echo #
+
+call dbms_ccl.add_ccl_rule("select", "ccl_bf_db", "t1", 20, "");
+call dbms_ccl.add_ccl_rule("update", "ccl_bf_db", "t1", 20, "");
+select count(*) from mysql.concurrency_control;
+
+call dbms_ccl.del_all_ccl_rule();
+# Both the table and the cache must be empty after deletion.
+select count(*) from mysql.concurrency_control;
+call dbms_ccl.show_ccl_rule();
+
+# Reload from table must stay empty (deletion was committed).
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+
+--echo #
+--echo # 4. queue bucket resize with hint queries
+--echo #
+
+SET @old_ccl_queue_bucket_count = @@global.ccl_queue_bucket_count;
+SET @old_ccl_queue_bucket_size = @@global.ccl_queue_bucket_size;
+
+set global ccl_queue_bucket_count = 2;
+set global ccl_queue_bucket_size = 8;
+
+select /*+ ccl_queue_value(7) */ * from ccl_bf_db.t1;
+call dbms_ccl.show_ccl_queue();
+
+# Resize between hint queries, then the bucket set is rebuilt.
+set global ccl_queue_bucket_count = 4;
+
+select /*+ ccl_queue_value(7) */ * from ccl_bf_db.t1;
+update /*+ ccl_queue_field("id") */ ccl_bf_db.t1 set name = 'y' where id = 1;
+call dbms_ccl.show_ccl_queue();
+
+call dbms_ccl.flush_ccl_queue();
+call dbms_ccl.show_ccl_queue();
+
+SET @@global.ccl_queue_bucket_count = @old_ccl_queue_bucket_count;
+SET @@global.ccl_queue_bucket_size = @old_ccl_queue_bucket_size;
+call dbms_ccl.flush_ccl_queue();
+
+--echo #
+--echo # cleanup
+--echo #
+
+truncate table mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+
+drop database ccl_bf_db;
+
+--enable_ps_protocol

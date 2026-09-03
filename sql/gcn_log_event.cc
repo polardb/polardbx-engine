@@ -360,7 +360,7 @@ Log_event::enum_skip_reason Gcn_log_event::do_shall_skip(Relay_log_info *rli) {
   return Log_event::continue_group(rli);
 }
 
-void Gcn_log_event::copy_to_xa_spec(XA_specification *xa_spec,
+void Gcn_log_event::copy_to_xa_spec(komodo::XA_specification *xa_spec,
                                     MEM_ROOT *mem_root) const {
   gcn_tuple_t gcn_tuple;
   xa_branch_t xa_branch;
@@ -376,17 +376,17 @@ void Gcn_log_event::copy_to_xa_spec(XA_specification *xa_spec,
   }
   /** Generate the policy and set it. */
   if (is_pmmt_gcn()) {
-    lizard::Binlog_ac_prepare_policy cpolicy;
+    komodo::Binlog_ac_prepare_policy cpolicy;
     cpolicy.init(gcn_tuple, xa_branch);
     /** Just call decide here, but actually do nothing */
-    cpolicy.decide(nullptr);
+    cpolicy.decide(nullptr, false);
 
     xa_spec->set_when_recovery(cpolicy.clone(mem_root));
   } else {
-    lizard::Binlog_commit_policy cpolicy;
+    komodo::Binlog_commit_policy cpolicy;
     cpolicy.init(gcn_tuple);
     /** Just call decide here, but actually do nothing */
-    cpolicy.decide(nullptr);
+    cpolicy.decide(nullptr, false);
 
     xa_spec->set_when_recovery(cpolicy.clone(mem_root));
   }

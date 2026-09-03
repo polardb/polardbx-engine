@@ -1,0 +1,188 @@
+#
+# Test 1: Basic XA PREPARE + ROLLBACK with secondary index
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+INDEX (a)
+) ENGINE = InnoDB;
+INSERT INTO t1(a) SELECT 1;
+SELECT * FROM t1;
+id	a
+1	1
+XA START 'xa_sec_idx_rollback_1';
+INSERT INTO t1(a) SELECT 1;
+UPDATE t1 SET a = a + 1;
+XA END 'xa_sec_idx_rollback_1';
+XA PREPARE 'xa_sec_idx_rollback_1';
+XA ROLLBACK 'xa_sec_idx_rollback_1';
+# After XA ROLLBACK, data should be unchanged
+SELECT * FROM t1;
+id	a
+1	1
+DROP TABLE t1;
+#
+# Test 2: XA PREPARE + ROLLBACK with multiple secondary indexes
+#
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b VARCHAR(20) NOT NULL,
+INDEX idx_a (a),
+INDEX idx_b (b)
+) ENGINE = InnoDB;
+INSERT INTO t2(a, b) VALUES (1, 'hello'), (2, 'world');
+SELECT * FROM t2 ORDER BY id;
+id	a	b
+1	1	hello
+2	2	world
+XA START 'xa_sec_idx_rollback_2';
+INSERT INTO t2(a, b) VALUES (3, 'foo');
+UPDATE t2 SET a = a + 10, b = CONCAT(b, '_updated') WHERE id = 1;
+DELETE FROM t2 WHERE id = 2;
+XA END 'xa_sec_idx_rollback_2';
+XA PREPARE 'xa_sec_idx_rollback_2';
+XA ROLLBACK 'xa_sec_idx_rollback_2';
+# After XA ROLLBACK, data should be unchanged
+SELECT * FROM t2 ORDER BY id;
+id	a	b
+1	1	hello
+2	2	world
+DROP TABLE t2;
+#
+# Test 3: Multiple XA PREPARE + ROLLBACK cycles on same table
+#
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+val INT NOT NULL,
+INDEX (val)
+) ENGINE = InnoDB;
+INSERT INTO t3(val) VALUES (100);
+SELECT * FROM t3;
+id	val
+1	100
+# Cycle 1
+XA START 'xa_cycle_1';
+UPDATE t3 SET val = val + 1;
+INSERT INTO t3(val) SELECT 200;
+XA END 'xa_cycle_1';
+XA PREPARE 'xa_cycle_1';
+XA ROLLBACK 'xa_cycle_1';
+SELECT * FROM t3;
+id	val
+1	100
+# Cycle 2
+XA START 'xa_cycle_2';
+UPDATE t3 SET val = val + 1;
+INSERT INTO t3(val) SELECT 300;
+XA END 'xa_cycle_2';
+XA PREPARE 'xa_cycle_2';
+XA ROLLBACK 'xa_cycle_2';
+SELECT * FROM t3;
+id	val
+1	100
+# Cycle 3: commit this time to verify table is still functional
+XA START 'xa_cycle_3';
+UPDATE t3 SET val = val + 1;
+XA END 'xa_cycle_3';
+XA PREPARE 'xa_cycle_3';
+XA COMMIT 'xa_cycle_3';
+SELECT * FROM t3;
+id	val
+1	101
+DROP TABLE t3;
+#
+# Test 4: UNIQUE INDEX (Panda path) with INSERT + UPDATE + DELETE
+#
+CREATE TABLE t4 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b INT NOT NULL,
+UNIQUE INDEX idx_a (a),
+UNIQUE INDEX idx_b (b)
+) ENGINE = InnoDB;
+INSERT INTO t4(a, b) VALUES (10, 100), (20, 200), (30, 300);
+SELECT * FROM t4 ORDER BY id;
+id	a	b
+1	10	100
+2	20	200
+3	30	300
+XA START 'xa_unique_idx_rollback';
+INSERT INTO t4(a, b) VALUES (40, 400);
+UPDATE t4 SET a = a + 1000, b = b + 1000 WHERE id = 1;
+DELETE FROM t4 WHERE id = 2;
+XA END 'xa_unique_idx_rollback';
+XA PREPARE 'xa_unique_idx_rollback';
+XA ROLLBACK 'xa_unique_idx_rollback';
+# After XA ROLLBACK, data should be unchanged
+SELECT * FROM t4 ORDER BY id;
+id	a	b
+1	10	100
+2	20	200
+3	30	300
+DROP TABLE t4;
+#
+# Test 5: DELETE-only XA with non-unique and unique indexes
+#
+CREATE TABLE t5 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b INT NOT NULL,
+INDEX idx_a (a),
+UNIQUE INDEX idx_b (b)
+) ENGINE = InnoDB;
+INSERT INTO t5(a, b) VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+SELECT * FROM t5 ORDER BY id;
+id	a	b
+1	1	10
+2	2	20
+3	3	30
+4	4	40
+XA START 'xa_delete_only';
+DELETE FROM t5 WHERE id = 1;
+DELETE FROM t5 WHERE id = 3;
+XA END 'xa_delete_only';
+XA PREPARE 'xa_delete_only';
+XA ROLLBACK 'xa_delete_only';
+# After XA ROLLBACK, all rows should still exist
+SELECT * FROM t5 ORDER BY id;
+id	a	b
+1	1	10
+2	2	20
+3	3	30
+4	4	40
+DROP TABLE t5;
+#
+# Test 6: Disabled panda/hippo (Ancient TL_NONE path)
+#
+SET SESSION opt_index_format_panda_enabled = OFF;
+SET SESSION opt_index_format_hippo_enabled = OFF;
+CREATE TABLE t6 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b INT NOT NULL,
+INDEX idx_a (a),
+UNIQUE INDEX idx_b (b)
+) ENGINE = InnoDB;
+INSERT INTO t6(a, b) VALUES (1, 10), (2, 20), (3, 30);
+SELECT * FROM t6 ORDER BY id;
+id	a	b
+1	1	10
+2	2	20
+3	3	30
+XA START 'xa_ancient_rollback';
+INSERT INTO t6(a, b) VALUES (4, 40);
+UPDATE t6 SET a = a + 100, b = b + 100 WHERE id = 1;
+DELETE FROM t6 WHERE id = 2;
+XA END 'xa_ancient_rollback';
+XA PREPARE 'xa_ancient_rollback';
+XA ROLLBACK 'xa_ancient_rollback';
+# After XA ROLLBACK, data should be unchanged
+SELECT * FROM t6 ORDER BY id;
+id	a	b
+1	1	10
+2	2	20
+3	3	30
+DROP TABLE t6;
+SET SESSION opt_index_format_panda_enabled = DEFAULT;
+SET SESSION opt_index_format_hippo_enabled = DEFAULT;

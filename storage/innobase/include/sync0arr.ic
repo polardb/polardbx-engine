@@ -32,6 +32,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 9/5/1995 Heikki Tuuri
  *******************************************************/
 
+#ifndef sync0arr_h
+#define INNODB_SYNC0ARR_IC_STANDALONE
+#include "sync0arr.h"
+#undef INNODB_SYNC0ARR_IC_STANDALONE
+#endif /* !sync0arr_h */
 extern ulint sync_array_size;
 extern sync_array_t **sync_wait_array;
 

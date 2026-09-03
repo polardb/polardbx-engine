@@ -1,0 +1,274 @@
+##########################################
+# INFORMATION_SCHEMA for VECTOR INDEX     #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare - Create table with vector index
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100),
+  v VECTOR(5),
+  INDEX idx_name(name),
+  VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+
+INSERT INTO t1(name, v) VALUES ('test1', VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(name, v) VALUES ('test2', VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(name, v) VALUES ('test3', VEC_FROMTEXT('[3,4,5,6,7]'));
+
+--echo
+--echo # 2. SHOW CREATE TABLE - should include vector index information
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 3. SHOW INDEX FROM - complete index information
+SHOW INDEX FROM t1;
+
+--echo
+--echo # 4. SHOW TABLE STATUS
+--replace_column 12 # 13 #
+SHOW TABLE STATUS LIKE 't1';
+
+--echo
+--echo # 5. INFORMATION_SCHEMA.STATISTICS - verify vector index fields
+SELECT 
+  TABLE_SCHEMA,
+  TABLE_NAME,
+  INDEX_NAME,
+  SEQ_IN_INDEX,
+  COLUMN_NAME,
+  INDEX_TYPE,
+  NULLABLE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+
+--echo
+--echo # 6. INFORMATION_SCHEMA.COLUMNS - vector column metadata
+SELECT 
+  COLUMN_NAME,
+  ORDINAL_POSITION,
+  COLUMN_DEFAULT,
+  IS_NULLABLE,
+  DATA_TYPE,
+  COLUMN_TYPE,
+  COLUMN_KEY,
+  EXTRA
+FROM INFORMATION_SCHEMA.COLUMNS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+
+--echo
+--echo # 7. INFORMATION_SCHEMA.TABLES - table metadata
+SELECT 
+  TABLE_NAME,
+  TABLE_TYPE,
+  ENGINE,
+  ROW_FORMAT,
+  TABLE_ROWS
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+
+--echo
+--echo # 8. INFORMATION_SCHEMA.INNODB_TABLES - verify auxiliary tables for vector index
+--echo # Vector index auxiliary tables follow pattern: vidx_<table_id>_*
+--let $table_id = `SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1'`
+
+--replace_column 1 # 5 #
+--replace_regex /vidx_[0-9]+_/vidx_XXXX_/
+SELECT 
+  TABLE_ID,
+  NAME,
+  FLAG,
+  N_COLS,
+  SPACE
+FROM INFORMATION_SCHEMA.INNODB_TABLES 
+WHERE NAME LIKE CONCAT(DATABASE(), '/t1') OR NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo
+--echo # 9. INFORMATION_SCHEMA.INNODB_INDEXES - index information including auxiliary
+--replace_column 5 #
+--replace_regex /vidx_[0-9]+_/vidx_XXXX_/
+SELECT 
+  i.NAME AS INDEX_NAME,
+  t.NAME AS TABLE_NAME,
+  i.TYPE,
+  i.N_FIELDS,
+  i.SPACE
+FROM INFORMATION_SCHEMA.INNODB_INDEXES i
+JOIN INFORMATION_SCHEMA.INNODB_TABLES t ON i.TABLE_ID = t.TABLE_ID
+WHERE t.NAME LIKE CONCAT(DATABASE(), '/t1') OR t.NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+
+--echo
+--echo # 10. INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+SELECT 
+  TABLE_NAME,
+  COLUMN_NAME,
+  CONSTRAINT_NAME,
+  ORDINAL_POSITION
+FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION;
+
+--echo
+--echo # 11. INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+SELECT 
+  CONSTRAINT_NAME,
+  CONSTRAINT_TYPE
+FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+
+--echo
+--echo # 12. Create table with multiple indexes including vector
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL,
+  b VARCHAR(50),
+  v VECTOR(10),
+  INDEX idx_a(a),
+  INDEX idx_b(b),
+  UNIQUE INDEX idx_ab(a, b),
+  VECTOR INDEX vi(v) m=32 distance=cosine
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t2;
+SHOW INDEX FROM t2;
+
+--echo # Verify all indexes in INFORMATION_SCHEMA
+SELECT 
+  INDEX_NAME,
+  NON_UNIQUE,
+  COLUMN_NAME,
+  INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't2'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+
+--echo
+--echo # 13. After ALTER TABLE - verify metadata updated
+ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0;
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi_renamed`;
+
+SHOW CREATE TABLE t1;
+SHOW INDEX FROM t1;
+
+SELECT 
+  INDEX_NAME,
+  COLUMN_NAME,
+  INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1' AND INDEX_NAME LIKE '%vi%';
+
+--echo
+--echo # 14. After DROP and recreate vector index
+ALTER TABLE t1 DROP INDEX `vi_renamed`;
+
+SHOW INDEX FROM t1;
+
+SELECT 
+  INDEX_NAME
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+SHOW INDEX FROM t1;
+
+SELECT 
+  INDEX_NAME,
+  COLUMN_NAME,
+  INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+
+--echo
+--echo # 15. INFORMATION_SCHEMA with different databases
+CREATE DATABASE IF NOT EXISTS test_vidx_db;
+USE test_vidx_db;
+
+CREATE TABLE t_other (
+  id INT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+--echo # Query across databases
+SELECT 
+  TABLE_SCHEMA,
+  TABLE_NAME,
+  INDEX_NAME,
+  COLUMN_NAME
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE INDEX_NAME = 'vi' AND TABLE_SCHEMA IN ('test', 'test_vidx_db')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+
+DROP TABLE t_other;
+DROP DATABASE test_vidx_db;
+USE test;
+
+--echo
+--echo # 16. EXPLAIN output for vector index queries
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+EXPLAIN FORMAT=JSON SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo
+--echo # 17. INFORMATION_SCHEMA.INNODB_COLUMNS for vector column
+SELECT 
+  c.NAME AS COLUMN_NAME,
+  c.POS,
+  c.MTYPE,
+  c.LEN
+FROM INFORMATION_SCHEMA.INNODB_COLUMNS c
+JOIN INFORMATION_SCHEMA.INNODB_TABLES t ON c.TABLE_ID = t.TABLE_ID
+WHERE t.NAME LIKE CONCAT(DATABASE(), '/t1')
+ORDER BY c.POS;
+
+--echo
+--echo # 18. Cleanup
+DROP TABLE t2;
+DROP TABLE t1;
+
+--echo
+--echo # 19. Multi-index metadata in INFORMATION_SCHEMA
+CREATE TABLE t_mi (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v1 VECTOR(5),
+  v2 VECTOR(3),
+  VECTOR INDEX vi1(v1) M=16 DISTANCE=euclidean,
+  VECTOR INDEX vi2(v2) M=8 DISTANCE=cosine
+) ENGINE=InnoDB;
+
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'), VEC_FROMTEXT('[0,1,0]'));
+
+--echo # 19a. STATISTICS shows both vector indexes
+SELECT INDEX_NAME, COLUMN_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_mi' AND INDEX_TYPE = 'VECTOR'
+ORDER BY INDEX_NAME;
+
+--echo # 19b. INNODB_TABLES shows multiple vidx_ auxiliary tables
+--replace_regex /vidx_[0-9]+_/vidx_XXXX_/
+SELECT NAME FROM INFORMATION_SCHEMA.INNODB_TABLES
+WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%')
+ORDER BY NAME;
+
+--echo # 19c. VECTOR_INDEXES returns correct rows for multi-index table
+--replace_column 5 HLINDEX_TABLE_NAME
+SELECT INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_mi'
+ORDER BY INDEX_NAME;
+
+--echo # 19d. SHOW INDEX lists both vector indexes with params
+SHOW INDEX FROM t_mi WHERE Index_type = 'VECTOR';
+
+DROP TABLE t_mi;
+
+SET GLOBAL vidx_disabled = ON;

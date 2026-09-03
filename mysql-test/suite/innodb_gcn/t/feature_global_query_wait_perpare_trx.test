@@ -1,4 +1,4 @@
-set global innodb_rds_flashback_enabled = false;
+set session innodb_rds_flashback_enabled = false;
 
 create table tt (a int);
 create table pp (a int);
@@ -100,7 +100,7 @@ replace into tt as of gcn 1  valuse (1);
 
 
 # =====================
-set global innodb_rds_flashback_enabled = default;
+set session innodb_rds_flashback_enabled = default;
 drop view vv;
 drop table tt;
 drop table pp;

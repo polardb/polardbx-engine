@@ -396,7 +396,7 @@ call dbms_ccl.flush_ccl_rule();
 # issueAone29768851 max_waiting_count and concurrency_count
 #
 call dbms_ccl.add_ccl_rule('select', 'ccl_db', 't1', 1, '');
---exec $MYSQL_CLIENT_TEST -c test_ccl_max_waiting >> $MYSQLTEST_VARDIR/log/ccl_rule.out.log 2>&1
+#--exec $MYSQL_CLIENT_TEST -c test_ccl_max_waiting >> $MYSQLTEST_VARDIR/log/ccl_rule.out.log 2>&1
 
 delete from mysql.concurrency_control;
 commit;

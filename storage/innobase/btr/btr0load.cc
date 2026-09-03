@@ -35,15 +35,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "btr0cur.h"
 #include "btr0pcur.h"
 #include "ibuf0ibuf.h"
+#include "lizard0rem0types.h"
 #include "lob0lob.h"
 #include "log0chkp.h"
 
-#include "lizard0row.h"
 #include "lizard0btr0btr.h"
+#include "lizard0page.h"
+#include "lizard0page0dict.h"
+#include "lizard0row.h"
+#include "page0cur.h"
 
 namespace ddl {
 /** Innodb B-tree index fill factor for bulk load. */
 long fill_factor;
+/** Maximum times if the page can be encoded by using prefix compression. */
+ulong spc_encode_attempts;
+/** Minimum free space ratio of data size after encoding. */
+ulong spc_encode_threshold;
 }  // namespace ddl
 
 /** The proper function call sequence of Page_load is as below:
@@ -54,14 +62,12 @@ long fill_factor;
 -- Page_load::page_split(COMPRESSED table only)
 -- Page_load::commit */
 class Page_load : private ut::Non_copyable {
-  using Rec_offsets = ulint *;
-
   /** Page split point descriptor. */
   struct Split_point {
     /** Record being the point of split.
     All records before this record should stay on current on page.
     This record and all following records should be moved to new page. */
-    rec_t *m_rec{};
+    reg_t m_reg{};
 
     /** Number of records before this record. */
     size_t m_n_rec_before{};
@@ -84,7 +90,9 @@ class Page_load : private ut::Non_copyable {
         m_is_comp(dict_table_is_comp(index->table)),
         m_flush_observer(observer),
         m_n_blocks_buf_fixed(0),
-        m_root_page_type(root_page_type) {
+        m_root_page_type(root_page_type),
+        m_can_encode(index->is_spc()),
+        m_encode_count(0) {
     ut_ad(!dict_index_is_spatial(m_index));
   }
 
@@ -105,7 +113,7 @@ class Page_load : private ut::Non_copyable {
   /** Initialize members and allocate page if needed and start mtr.
   @note Must be called and only once right after constructor.
   @return error code */
-  [[nodiscard]] dberr_t init() noexcept;
+  [[nodiscard]] dberr_t init(page_dict_desc_t *page_dict) noexcept;
 
   /** Insert a tuple in the page.
   @param[in]  tuple             Tuple to insert
@@ -186,7 +194,24 @@ class Page_load : private ut::Non_copyable {
   /** Check if table is compressed.
   @return true if table is compressed, false otherwise. */
   [[nodiscard]] bool is_table_compressed() const noexcept {
-    return m_page_zip != nullptr;
+    if (m_page_zip != nullptr) {
+      ut_ad(!m_index->is_spc());
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * @brief Check if we should encode the page
+   *
+   * @return true if should
+   */
+  [[nodiscard]] bool can_encode() const noexcept {
+    if (m_can_encode) {
+      ut_ad(m_index->is_spc());
+      return true;
+    }
+    return false;
   }
 
 #ifdef UNIV_DEBUG
@@ -201,28 +226,35 @@ class Page_load : private ut::Non_copyable {
   @return split record descriptor */
   [[nodiscard]] Split_point get_split_rec() noexcept;
 
+  /**
+   * @brief: Encode the page by using prefix compression.
+   *
+   * @param[in] rec_size the size of the next inserted record.
+   * @return true if error occurs, false otherwise.
+   */
+  [[nodiscard]] bool encode(ulint rec_size) noexcept;
+
   /** Copy given and all following records.
   @param[in]  first_rec         First record to copy */
-  void copy_records(const rec_t *first_rec) noexcept;
+  void copy_records(creg_t first_reg) noexcept;
 
   /** Remove all records after split rec including itself.
   @param[in]  split_point       Split point descriptor */
   void split_trim(const Split_point &split_point) noexcept;
 
   /** Insert a record in the page, check for duplicates too.
-  @param[in]  rec               Record
-  @param[in]  offsets           Record offsets
+  @param[in]  slc               Slice of the record
   @return DB_SUCCESS or error code. */
-  dberr_t insert(const rec_t *rec, Rec_offsets offsets) noexcept;
+  dberr_t insert(Slice *slc) noexcept;
 
   /** Store external record
   Since the record is not logged yet, so we don't log update to the record.
   the blob data is logged first, then the record is logged in bulk mode.
   @param[in]  big_rec           External record
-  @param[in]  offsets           Record offsets
+  @param[in]  slc               Slice of the record
   @return error code */
   [[nodiscard]] dberr_t store_ext(const big_rec_t *big_rec,
-                                  Rec_offsets offsets) noexcept;
+                                  Slice *slc) noexcept;
 
  private:
   /** Memory heap for internal allocation */
@@ -247,7 +279,7 @@ class Page_load : private ut::Non_copyable {
   page_zip_des_t *m_page_zip{};
 
   /** The current rec, just before the next insert rec */
-  rec_t *m_cur_rec{};
+  reg_t m_cur_reg{};
 
   /** The page no */
   page_no_t m_page_no{};
@@ -259,7 +291,7 @@ class Page_load : private ut::Non_copyable {
   const bool m_is_comp{};
 
   /** The heap top in page for next insert */
-  byte *m_heap_top{};
+  boc_t m_heap_top{};
 
   /** User record no */
   size_t m_rec_no{};
@@ -297,10 +329,16 @@ class Page_load : private ut::Non_copyable {
 
   page_type_t m_root_page_type;
 
+  /** Whether the page can be encoded by using prefix compression. */
+  bool m_can_encode{};
+
+  /** Number of times the page has been encoded by using prefix compression. */
+  ulint m_encode_count{};
+
   friend class Btree_load;
 };
 
-dberr_t Page_load::init() noexcept {
+dberr_t Page_load::init(page_dict_desc_t *page_dict) noexcept {
   page_t *new_page;
   page_no_t new_page_no;
   page_zip_des_t *new_page_zip;
@@ -360,12 +398,13 @@ dberr_t Page_load::init() noexcept {
         lizard::btr_page_upgrade_not_root(m_root_page_type, FIL_PAGE_INDEX);
 
     if (new_page_zip) {
+      ut_ad(!m_index->is_spc());
       page_create_zip(alloc.new_block, m_index, m_level, 0, mtr,
                       page_create_type);
     } else {
       ut_ad(!dict_index_is_spatial(m_index));
       page_create(alloc.new_block, mtr, dict_table_is_comp(m_index->table),
-                  page_create_type);
+                  page_create_type, page_dict->data(), page_dict->offsets());
       btr_page_set_level(new_page, nullptr, m_level, mtr);
     }
 
@@ -387,6 +426,19 @@ dberr_t Page_load::init() noexcept {
 
     ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
 
+    /** Root page (page_create when btr_create) inherit the page dict from last
+    page. */
+    if (fil_page_is_spc(new_page)) {
+      ut_ad(page_dir_get_n_heap(new_page) == PAGE_HEAP_NO_USER_LOW);
+      ut_ad(page_get_record_data_size(new_page) == 0);
+
+      page_header_set_ptr(new_page, nullptr, PAGE_HEAP_TOP,
+                          PAGE_DICT_HDR + new_page);
+
+      lizard::page_create_dict(new_page, page_dict->data(),
+                               page_dict->offsets(), mtr);
+    }
+
     btr_page_set_level(new_page, nullptr, m_level, mtr);
   }
 
@@ -400,9 +452,11 @@ dberr_t Page_load::init() noexcept {
   m_page = new_page;
   m_page_zip = new_page_zip;
   m_page_no = new_page_no;
-  m_cur_rec = page_get_infimum_rec(new_page);
+  m_cur_reg = page_get_infimum_reg(new_page);
   ut_ad(m_is_comp == page_is_comp(new_page));
-  m_free_space = page_get_free_space_of_empty(m_is_comp);
+
+  ut_ad(m_is_comp == page_is_comp(m_page));
+  m_free_space = page_get_free_space_of_empty_excl_dict(m_page);
 
   if (ddl::fill_factor == 100 && m_index->is_clustered()) {
     /* Keep default behavior compatible with 5.6 */
@@ -413,7 +467,7 @@ dberr_t Page_load::init() noexcept {
 
   m_padding_space =
       UNIV_PAGE_SIZE - dict_index_zip_pad_optimal_page_size(m_index);
-  m_heap_top = page_header_get_ptr(new_page, PAGE_HEAP_TOP);
+  m_heap_top = page_header_get_heap_top(new_page);
   m_rec_no = page_header_get_field(new_page, PAGE_N_RECS);
 
   m_last_slotted_rec = page_get_infimum_rec(m_page);
@@ -421,55 +475,56 @@ dberr_t Page_load::init() noexcept {
 
   m_modified = true;
 
-  ut_d(m_total_data = 0);
+  ut_d(m_total_data = page_dict_get_size(m_page));
 
   return DB_SUCCESS;
 }
 
-dberr_t Page_load::insert(const rec_t *rec, Rec_offsets offsets) noexcept {
+dberr_t Page_load::insert(Slice *slc) noexcept {
   ut_ad(m_heap != nullptr);
+  ut_ad(slc && slc->is_positioned(m_index));
 
-  auto rec_size = rec_offs_size(offsets);
+  auto rec_size = slc->rec_size();
 
 #ifdef UNIV_DEBUG
   /* Check whether records are in order. */
-  if (!page_rec_is_infimum(m_cur_rec)) {
-    auto old_rec = m_cur_rec;
+  if (!page_rec_is_infimum(m_cur_reg.rec)) {
+    auto old_reg = m_cur_reg;
 
-    auto old_offsets = rec_get_offsets(
-        old_rec, m_index, nullptr, ULINT_UNDEFINED, UT_LOCATION_HERE, &m_heap);
+    Slice_ctx old_slc_ctx(&m_heap);
+    Slice *old_slc = old_slc_ctx.get_offsets(old_reg, m_index, ULINT_UNDEFINED);
 
-    ut_ad(cmp_rec_rec(rec, old_rec, offsets, old_offsets, m_index,
-                      page_is_spatial_non_leaf(old_rec, m_index)) > 0 ||
+    ut_ad(cmp_rec_rec(slc, old_slc, m_index,
+                      page_is_spatial_non_leaf(old_reg.rec, m_index)) > 0 ||
           (m_index->is_multi_value() &&
-           cmp_rec_rec(rec, old_rec, offsets, old_offsets, m_index,
-                       page_is_spatial_non_leaf(old_rec, m_index)) >= 0));
+           cmp_rec_rec(slc, old_slc, m_index,
+                       page_is_spatial_non_leaf(old_reg.rec, m_index)) >= 0));
   }
 
   m_total_data += rec_size;
 #endif /* UNIV_DEBUG */
 
   /* 0. Mark space for record as used (checked e.g. in page_rec_set_next). */
-  page_header_set_ptr(m_page, nullptr, PAGE_HEAP_TOP, m_heap_top + rec_size);
+  page_header_set_ptr(m_page, nullptr, PAGE_HEAP_TOP,
+                      m_heap_top.buf + rec_size);
 
   /* 1. Copy the record to page. */
-  auto insert_rec = rec_copy(m_heap_top, rec, offsets);
-  rec_offs_make_valid(insert_rec, m_index, offsets);
+  auto insert_reg = rec_copy(m_heap_top, slc);
 
   /* 2. Insert the record in the linked list. */
-  rec_t *next_rec = page_rec_get_next(m_cur_rec);
+  rec_t *next_rec = page_rec_get_next(m_cur_reg.rec);
 
-  page_rec_set_next(insert_rec, next_rec);
-  page_rec_set_next(m_cur_rec, insert_rec);
+  page_rec_set_next(insert_reg.rec, next_rec);
+  page_rec_set_next(m_cur_reg.rec, insert_reg.rec);
 
   /* 3. Set the n_owned field in the inserted record to zero,
   and set the heap_no field. */
   if (m_is_comp) {
-    rec_set_n_owned_new(insert_rec, nullptr, 0);
-    rec_set_heap_no_new(insert_rec, PAGE_HEAP_NO_USER_LOW + m_rec_no);
+    rec_set_n_owned_new(insert_reg.rec, nullptr, 0);
+    rec_set_heap_no_new(insert_reg.rec, PAGE_HEAP_NO_USER_LOW + m_rec_no);
   } else {
-    rec_set_n_owned_old(insert_rec, 0);
-    rec_set_heap_no_old(insert_rec, PAGE_HEAP_NO_USER_LOW + m_rec_no);
+    rec_set_n_owned_old(insert_reg.rec, 0);
+    rec_set_heap_no_old(insert_reg.rec, PAGE_HEAP_NO_USER_LOW + m_rec_no);
   }
 
   /* 4. Set member variables. */
@@ -477,12 +532,12 @@ dberr_t Page_load::insert(const rec_t *rec, Rec_offsets offsets) noexcept {
                    page_dir_calc_reserved_space(m_rec_no);
 
   ut_ad(m_free_space >= rec_size + slot_size);
-  ut_ad(m_heap_top + rec_size < m_page + UNIV_PAGE_SIZE);
+  ut_ad(m_heap_top.buf + rec_size < m_page + UNIV_PAGE_SIZE);
 
   m_free_space -= rec_size + slot_size;
-  m_heap_top += rec_size;
+  m_heap_top.buf += rec_size;
   m_rec_no += 1;
-  m_cur_rec = insert_rec;
+  m_cur_reg = insert_reg;
 
   m_modified = true;
 
@@ -494,17 +549,17 @@ dberr_t Page_load::insert(const dtuple_t *tuple, const big_rec_t *big_rec,
   IF_ENABLED("ddl_btree_build_insert_return_interrupt", return DB_INTERRUPTED;)
 
   /* Convert tuple to record. */
-  auto rec_mem = static_cast<byte *>(mem_heap_alloc(m_heap, rec_size));
+  boc_t rec_mem = mem_heap_alloc_boc(m_heap, rec_size);
 
-  auto rec = rec_convert_dtuple_to_rec(rec_mem, m_index, tuple);
+  auto reg = rec_convert_dtuple_to_reg(rec_mem, m_index, tuple);
 
-  Rec_offsets offsets{};
+  Slice_ctx slc_ctx(&m_heap);
+  Slice *slc = slc_ctx.get_offsets(reg, m_index, ULINT_UNDEFINED);
 
-  offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &m_heap);
+  ut_ad(slc->rec_size() == rec_size);
 
   /* Insert the record.*/
-  const auto err = insert(rec, offsets);
+  const auto err = insert(slc);
 
   if (err != DB_SUCCESS) {
     return err;
@@ -515,7 +570,7 @@ dberr_t Page_load::insert(const dtuple_t *tuple, const big_rec_t *big_rec,
   if (big_rec != nullptr) {
     /* The page must be valid as MTR may be committed during LOB insertion. */
     finish();
-    return store_ext(big_rec, offsets);
+    return store_ext(big_rec, slc);
   } else {
     return DB_SUCCESS;
   }
@@ -565,11 +620,11 @@ void Page_load::finish() noexcept {
   page_dir_slot_set_rec(slot, sup_rec);
   page_dir_slot_set_n_owned(slot, nullptr, n_rec_to_assign + 1);
 
-  page_header_set_ptr(m_page, nullptr, PAGE_HEAP_TOP, m_heap_top);
+  page_header_set_ptr(m_page, nullptr, PAGE_HEAP_TOP, m_heap_top.buf);
   page_dir_set_n_heap(m_page, nullptr, PAGE_HEAP_NO_USER_LOW + m_rec_no);
   page_header_set_field(m_page, nullptr, PAGE_N_RECS, m_rec_no);
 
-  page_header_set_ptr(m_page, nullptr, PAGE_LAST_INSERT, m_cur_rec);
+  page_header_set_ptr(m_page, nullptr, PAGE_LAST_INSERT, m_cur_reg.rec);
   page_header_set_field(m_page, nullptr, PAGE_DIRECTION, PAGE_RIGHT);
   page_header_set_field(m_page, nullptr, PAGE_N_DIRECTION, 0);
 
@@ -608,19 +663,20 @@ bool Page_load::compress() noexcept {
 
 dtuple_t *Page_load::get_node_ptr() noexcept {
   /* Create node pointer */
-  auto first_rec = page_rec_get_next(page_get_infimum_rec(m_page));
-  ut_a(page_rec_is_user_rec(first_rec));
+  creg_t first_reg = page_rec_get_next_creg(page_get_infimum_rec(m_page));
+  ut_a(page_rec_is_user_rec(first_reg.rec));
 
   auto node_ptr =
-      dict_index_build_node_ptr(m_index, first_rec, m_page_no, m_heap, m_level);
+      dict_index_build_node_ptr(m_index, first_reg, m_page_no, m_heap, m_level);
 
   return node_ptr;
 }
 
 void Page_load::split(Page_load &new_page_loader) noexcept {
+  ut_ad(!m_index->is_spc());
   auto split_point = get_split_rec();
 
-  new_page_loader.copy_records(split_point.m_rec);
+  new_page_loader.copy_records(split_point.m_reg);
   split_trim(split_point);
 
   ut_ad(new_page_loader.m_modified);
@@ -631,64 +687,132 @@ Page_load::Split_point Page_load::get_split_rec() noexcept {
   ut_a(m_rec_no >= 2);
   ut_a(m_page_zip != nullptr);
   ut_a(page_get_free_space_of_empty(m_is_comp) > m_free_space);
+  ut_ad(!m_index->is_spc());
 
   auto total_used_size = page_get_free_space_of_empty(m_is_comp) - m_free_space;
 
   size_t n_recs{};
-  Rec_offsets offsets{};
   size_t total_recs_size{};
+  Slice_ctx slc_ctx(&m_heap);
+  Slice *slc = nullptr;
 
-  auto rec = page_get_infimum_rec(m_page);
+  auto reg = page_get_infimum_reg(m_page);
 
   do {
-    rec = page_rec_get_next(rec);
-    ut_ad(page_rec_is_user_rec(rec));
+    reg = page_rec_get_next_reg(reg.rec);
+    ut_ad(page_rec_is_user_rec(reg.rec));
 
-    offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &m_heap);
-    total_recs_size += rec_offs_size(offsets);
+    slc = slc_ctx.get_offsets(reg, m_index, ULINT_UNDEFINED);
+    ut_ad(slc->contiguous());
+
+    total_recs_size += slc->rec_size();
     n_recs++;
   } while (total_recs_size + page_dir_calc_reserved_space(n_recs) <
            total_used_size / 2);
 
   /* Keep at least one record on left page */
-  if (page_rec_is_infimum(page_rec_get_prev(rec))) {
-    rec = page_rec_get_next(rec);
-    ut_ad(page_rec_is_user_rec(rec));
+  if (page_rec_is_infimum(page_rec_get_prev(reg.rec))) {
+    reg = page_rec_get_next_reg(reg.rec);
+    ut_ad(page_rec_is_user_rec(reg.rec));
   } else {
     /* rec is to be moved, and this is used as number of records before split */
     --n_recs;
   }
 
-  return Split_point{rec, n_recs};
+  return Split_point{reg, n_recs};
 }
 
 void Page_load::copy_all(const page_t *src_page) noexcept {
   auto inf_rec = page_get_infimum_rec(src_page);
-  auto first_rec = page_rec_get_next_const(inf_rec);
+  auto first_reg = page_rec_get_next_creg(inf_rec);
 
-  ut_ad(page_rec_is_user_rec(first_rec));
+  ut_ad(page_rec_is_user_rec(first_reg.rec));
 
-  copy_records(first_rec);
+  copy_records(first_reg);
 
   ut_ad(m_modified);
 }
 
-void Page_load::copy_records(const rec_t *first_rec) noexcept {
-  Rec_offsets offsets{};
-  const rec_t *rec = first_rec;
+/**
+ * @brief: Encode the page by using prefix compression.
+ *
+ * @param[in] rec_size the size of the next inserted record.
+ * @return true if error occurs, false otherwise.
+ */
+bool Page_load::encode(ulint rec_size) noexcept {
+  /** It is assumed that finish() was called before encode() */
+  ut_ad(!m_modified);
+  ut_a(page_validate(m_page, m_index));
+  ut_a(m_rec_no > 0);
+  ut_ad(m_can_encode);
+
+  lizard::Page_encoder page_encoder(m_index->pd_capacity);
+  page_cur_t page_cur;
+
+  page_cur_position(m_cur_reg.rec, m_block, &page_cur);
+
+  ulint max_insert_size = page_encoder.build(m_page, m_index, 1);
+
+  if (max_insert_size < rec_size) {
+    /** Encoding is not beneficial, just skip it. */
+    return false;
+  }
+
+  if (!lizard::btr_page_encode(&page_cur, m_index, &page_encoder, 1,
+                               max_insert_size, m_mtr)) {
+    ut_d(ut_error);
+    return true;
+  }
+
+  /** Refresh some local variables. */
+  ut_d(m_total_data = page_get_total_data_size(m_page));
+  m_heap_top = page_header_get_heap_top(m_page);
+
+  m_free_space = page_get_free_space_of_empty(m_is_comp) -
+                 page_get_total_data_size(m_page) -
+                 page_dir_calc_reserved_space(m_rec_no);
+
+  /* Invalidate all slots except infimum and supremum. */
+  auto n_slots = page_dir_get_n_slots(m_page);
+  for (size_t slot_idx = 1; slot_idx < n_slots; ++slot_idx) {
+    auto slot = page_dir_get_nth_slot(m_page, slot_idx);
+    page_dir_slot_set_n_owned(slot, nullptr, 0);
+  }
+  page_dir_set_n_slots(m_page, nullptr, 2);
+
+  /* No records assigned to slots.*/
+  m_last_slotted_rec = page_get_infimum_rec(m_page);
+  m_slotted_rec_no = 0;
+
+  /** Restore the cursor postions. */
+  m_cur_reg = page_cur_get_reg(&page_cur);
+
+  m_modified = true;
+
+  /** Decide if we should encode the page next time.  */
+  if (++m_encode_count >= ddl::spc_encode_attempts ||
+      max_insert_size * 100 <=
+          ddl::spc_encode_threshold * page_get_free_space_of_empty(m_is_comp)) {
+    m_can_encode = false;
+  }
+  return false;
+}
+
+void Page_load::copy_records(creg_t first_reg) noexcept {
+  creg_t reg = first_reg;
+  Slice_ctx slc_ctx(&m_heap);
+  Slice *slc = nullptr;
 
   ut_ad(m_rec_no == 0);
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(reg.rec));
 
   do {
-    offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &m_heap);
+    slc = slc_ctx.get_offsets(reg, m_index, ULINT_UNDEFINED);
 
-    insert(rec, offsets);
+    insert(slc);
 
-    rec = page_rec_get_next_const(rec);
-  } while (!page_rec_is_supremum(rec));
+    reg = page_rec_get_next_creg(reg.rec);
+  } while (!page_rec_is_supremum(reg.rec));
 
   ut_ad(m_rec_no > 0);
 }
@@ -705,26 +829,28 @@ void Page_load::split_trim(const Split_point &split_point) noexcept {
   ut_a(new_rec_no > 0);
 
   /* Set last record's next in page */
-  rec_t *new_last_user_rec = page_rec_get_prev(split_point.m_rec);
-  page_rec_set_next(new_last_user_rec, page_get_supremum_rec(m_page));
+  reg_t new_last_user_reg = page_rec_get_prev_reg(split_point.m_reg.rec);
+  page_rec_set_next(new_last_user_reg.rec, page_get_supremum_rec(m_page));
 
   /* Set related members */
   auto old_heap_top = m_heap_top;
 
-  Rec_offsets offsets{};
-  offsets = rec_get_offsets(new_last_user_rec, m_index, offsets,
-                            ULINT_UNDEFINED, UT_LOCATION_HERE, &m_heap);
-  m_heap_top = rec_get_end(new_last_user_rec, offsets);
+  Slice_ctx slc_ctx(&m_heap);
+  Slice *slc = slc_ctx.get_offsets(new_last_user_reg, m_index, ULINT_UNDEFINED);
 
-  m_free_space +=
-      (old_heap_top - m_heap_top) + (page_dir_calc_reserved_space(m_rec_no) -
-                                     page_dir_calc_reserved_space(new_rec_no));
+  ut_ad(slc->contiguous());
+
+  m_heap_top.buf = slc->rec_end();
+
+  m_free_space += (old_heap_top.buf - m_heap_top.buf) +
+                  (page_dir_calc_reserved_space(m_rec_no) -
+                   page_dir_calc_reserved_space(new_rec_no));
   ut_ad(m_free_space > 0);
 
-  m_cur_rec = new_last_user_rec;
+  m_cur_reg = new_last_user_reg;
   m_rec_no = new_rec_no;
 
-  ut_d(m_total_data -= old_heap_top - m_heap_top);
+  ut_d(m_total_data -= old_heap_top.buf - m_heap_top.buf);
 
   /* Invalidate all slots except infimum. */
   auto n_slots = page_dir_get_n_slots(m_page);
@@ -778,12 +904,14 @@ bool Page_load::is_space_available(size_t rec_size) const noexcept {
 bool Page_load::need_ext(const dtuple_t *tuple,
                          size_t rec_size) const noexcept {
   return page_zip_rec_needs_ext(rec_size, m_is_comp, dtuple_get_n_fields(tuple),
-                                m_block->page.size);
+                                m_block->page.size,
+                                page_dict_get_size(buf_block_get_frame(m_block)));
 }
 
-dberr_t Page_load::store_ext(const big_rec_t *big_rec,
-                             Rec_offsets offsets) noexcept {
+dberr_t Page_load::store_ext(const big_rec_t *big_rec, Slice *slc) noexcept {
   ut_ad(m_index->is_clustered());
+  ut_ad(slc->contiguous());
+  ut_ad(slc->is_positioned(m_cur_reg, m_index));
 
   /* Note: not all fields are initialized in btr_pcur. */
   btr_pcur_t btr_pcur;
@@ -793,20 +921,20 @@ dberr_t Page_load::store_ext(const big_rec_t *big_rec,
 
   page_cur_t *page_cur = &btr_pcur.m_btr_cur.page_cur;
   page_cur->index = m_index;
-  page_cur->rec = m_cur_rec;
-  page_cur->offsets = offsets;
+  page_cur->rec = m_cur_reg.rec;
+  page_cur->offsets = slc->offsets();
   page_cur->block = m_block;
 
   dberr_t err = lob::btr_store_big_rec_extern_fields(
-      nullptr, &btr_pcur, nullptr, offsets, big_rec, m_mtr,
+      nullptr, &btr_pcur, nullptr, dynamic_cast<DSlice *>(slc), big_rec, m_mtr,
       lob::OPCODE_INSERT_BULK);
 
-  ut_ad(page_offset(m_cur_rec) == page_offset(page_cur->rec));
+  ut_ad(page_offset(m_cur_reg) == page_offset(page_cur->rec));
 
   /* Reset m_block and m_cur_rec from page cursor, because
   block may be changed during blob insert. */
   m_block = page_cur->block;
-  m_cur_rec = page_cur->rec;
+  m_cur_reg = page_cur_get_reg(page_cur);
   m_page = buf_block_get_frame(m_block);
 
   return err;
@@ -890,7 +1018,7 @@ void Page_load::latch() noexcept {
   / At the end buf_fix_count == M > 0 */
 
   ut_a(m_block->page.buf_fix_count > 0);
-  ut_a(m_cur_rec > m_page && m_cur_rec < m_heap_top);
+  ut_a(m_cur_reg.rec > m_page && m_cur_reg.rec < m_heap_top.buf);
 }
 
 #ifdef UNIV_DEBUG
@@ -916,7 +1044,8 @@ dberr_t Btree_load::page_split(Page_load *page_loader,
                             page_loader->get_level(), m_root_page_type,
                             m_flush_observer);
 
-  err = new_page_loader.init();
+  page_dict_desc_t empty_dict;
+  err = new_page_loader.init(&empty_dict);
 
   if (err != DB_SUCCESS) {
     return err;
@@ -993,21 +1122,25 @@ dberr_t Btree_load::page_commit(Page_load *page_loader,
 }
 
 void Btree_load::log_free_check() noexcept {
-  if (log_free_check_is_required()) {
+  ut_ad(m_n_recs > 0);
+  bool is_req = log_free_check_is_required();
+  DBUG_EXECUTE_IF("btree_load_simulate_log_free", is_req = true;);
+
+  if (is_req) {
     release();
-
     ::log_free_check();
-
     latch();
   }
 }
 
 Btree_load::Btree_load(dict_index_t *index, trx_id_t trx_id,
-                       Flush_observer *observer) noexcept
+                       Flush_observer *observer
+                           IF_DEBUG(, const THD *thd)) noexcept
     : m_index(index), m_trx_id(trx_id), m_flush_observer(observer) {
   ut_a(m_flush_observer != nullptr);
   ut_d(fil_space_inc_redo_skipped_count(m_index->space));
   ut_d(m_index_online = m_index->online_status);
+  ut_d(m_thd = thd);
 
   m_root_page_type = lizard::btr_page_read_root_type(m_index);
 }
@@ -1017,6 +1150,7 @@ Btree_load::~Btree_load() noexcept {
 }
 
 void Btree_load::release() noexcept {
+  ut_ad(m_n_recs > 0);
   auto page_loader = m_page_loaders[0];
   page_loader->release();
 }
@@ -1036,10 +1170,30 @@ dberr_t Btree_load::prepare_space(Page_load *&page_loader, size_t level,
     return DB_SUCCESS;
   }
 
+  if (page_loader->can_encode() && level == 0) { /** Only for leaf pages. */
+    /** Set page links */
+    page_loader->set_next(FIL_NULL);
+
+    /* Finish page modifications. */
+    page_loader->finish();
+
+    IF_ENABLED_THD(m_thd, "ddl_btree_build_spc_encoder_fail",
+                   return DB_SPC_ENCODE_FAILED;)
+
+    if (page_loader->encode(rec_size)) { /** Error occurs */
+      return DB_SPC_ENCODE_FAILED;
+    }
+
+    /** Check it agagin. */
+    if (page_loader->is_space_available(rec_size)) {
+      return DB_SUCCESS;
+    }
+  }
+
   /* Finish page modifications. */
   page_loader->finish();
 
-  IF_ENABLED("ddl_btree_build_oom", return DB_OUT_OF_MEMORY;)
+  IF_ENABLED_THD(m_thd, "ddl_btree_build_oom", return DB_OUT_OF_MEMORY;)
 
   /* Create a sibling page_loader. */
   auto sibling_page_loader = ut::new_withkey<Page_load>(
@@ -1051,7 +1205,8 @@ dberr_t Btree_load::prepare_space(Page_load *&page_loader, size_t level,
   }
 
   {
-    auto err = sibling_page_loader->init();
+    page_dict_desc_t empty_dict;
+    auto err = sibling_page_loader->init(&empty_dict);
 
     if (err != DB_SUCCESS) {
       ut::delete_(sibling_page_loader);
@@ -1116,7 +1271,8 @@ dberr_t Btree_load::insert(dtuple_t *tuple, size_t level) noexcept {
       return DB_OUT_OF_MEMORY;
     }
 
-    err = page_loader->init();
+    page_dict_desc_t empty_dict;
+    err = page_loader->init(&empty_dict);
 
     if (err != DB_SUCCESS) {
       return err;
@@ -1191,6 +1347,9 @@ dberr_t Btree_load::insert(dtuple_t *tuple, size_t level) noexcept {
           })
 
       err = insert(page_loader, tuple, big_rec, rec_size);
+      if (err == DB_SUCCESS) {
+        ++m_n_recs;
+      }
     }
   }
 
@@ -1253,7 +1412,8 @@ dberr_t Btree_load::load_root_page(page_no_t last_page_no) noexcept {
   auto last_page = buf_block_get_frame(last_block);
 
   /* Copy last page to root page. */
-  auto err = page_loader.init();
+  page_dict_desc_t last_page_dict(last_page);
+  auto err = page_loader.init(&last_page_dict);
 
   if (err == DB_SUCCESS) {
     page_loader.copy_all(last_page);
@@ -1334,8 +1494,6 @@ dberr_t Btree_load::build(Cursor &cursor) noexcept {
     if (err != DB_SUCCESS) {
       break;
     }
-
-    ++m_n_recs;
 
     IF_ENABLED("ddl_btree_load_interrupt",
                interrupt_check = TRX_INTERRUPTED_CHECK;);

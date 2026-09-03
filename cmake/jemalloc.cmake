@@ -12,11 +12,24 @@ MACRO (USE_BUNDLED_JEMALLOC)
   SET(BINARY_DIR ${SOURCE_DIR})
   SET(LIBJEMALLOC "libjemalloc")
   IF(WITH_ASAN)
-    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_  --enable-cc-silence")
+    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_  ")
   ELSE()
-    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_  --enable-cc-silence --enable-prof")
+    SET(JEMALLOC_CONFIGURE_OPTS "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1} --with-private-namespace=jemalloc_internal_   --enable-prof")
   ENDIF()
-  SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --with-malloc-conf=background_thread:true")
+  # use common lg-hugepage=2M to avoid arm 512M bugs
+  SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --with-malloc-conf=background_thread:true --with-lg-hugepage=21 ")
+
+  # If --with-lg-page not defined, jemalloc use build system's _SC_PAGESIZE. 
+  # X86_64 only has 4k page size, but aarch64 has 4k/16k/64k page size. 
+  # If aarch64 build system is 4k but running on a 64M page system, 
+  # it will aborts with "Unsupported system page size". 
+  # Fortunately, jemalloc supports a runtime page size smaller or equal to the build time one. 
+  # So we set this to 64K (2^16) for aarch64 architecture.
+  # More discuss: https://github.com/jemalloc/jemalloc/issues/2639
+  IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --with-lg-page=16 ")
+  ENDIF()
+
   IF (CMAKE_BUILD_TYPE MATCHES "Debug" AND NOT APPLE) # see the comment in CMakeLists.txt
     SET(JEMALLOC_CONFIGURE_OPTS "${JEMALLOC_CONFIGURE_OPTS} --enable-debug") # 
   ENDIF()

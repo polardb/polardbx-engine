@@ -33,6 +33,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -52,6 +54,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -73,6 +77,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -92,6 +98,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -113,6 +121,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -132,6 +142,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -153,6 +165,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -173,6 +187,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -192,6 +208,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -230,6 +248,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -249,6 +269,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -270,6 +292,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -289,6 +313,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -310,6 +336,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -329,6 +357,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
@@ -350,6 +380,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -370,6 +402,8 @@ formatID	gtrid_length	bqual_length	data
 finish load
 flush logs;
 insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug
 
@@ -389,6 +423,8 @@ formatID	gtrid_length	bqual_length	data
 1	2	0	xx
 finish load
 flush logs;
+insert into db_crash_9.t2 values(1);
+insert into db_crash_9.t2 values(1);
 insert into db_crash_9.t2 values(1);
 select @@debug;
 @@debug

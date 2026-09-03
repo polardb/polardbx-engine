@@ -1,0 +1,15 @@
+SET GLOBAL mask_internal_user=ON;
+#
+# Password is still masked for a normal connection.
+#
+SELECT authentication_string FROM mysql.user WHERE user = 'polarx_root';
+authentication_string
+******
+#
+# PolarX RPC connection can still authenticate and run statements.
+#
+RUN use test
+
+0 rows affected
+ok
+SET GLOBAL mask_internal_user=OFF;

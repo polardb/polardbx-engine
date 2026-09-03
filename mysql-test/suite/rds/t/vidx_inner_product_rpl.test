@@ -1,0 +1,81 @@
+###############################################################
+# Replication of DISTANCE=INNER_PRODUCT vector index.         #
+# Verifies the metric is carried by the DDL binlog and that   #
+# the replica rebuilds an equivalent HNSW graph (abs2=0       #
+# quantization) producing the same ANN ordering as the master.#
+###############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo #
+--echo # 1. Create an INNER_PRODUCT vector index on the master
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+
+--echo # Normalized (unit) vectors so ANN recall is exact; dot = first comp.
+INSERT INTO t1(id, v) VALUES
+  (1, VEC_FROMTEXT('[1,0,0,0]')),
+  (2, VEC_FROMTEXT('[0.8,0.6,0,0]')),
+  (3, VEC_FROMTEXT('[0.6,0.8,0,0]')),
+  (4, VEC_FROMTEXT('[0,1,0,0]')),
+  (5, VEC_FROMTEXT('[-1,0,0,0]'));
+--source include/sync_slave_sql_with_master.inc
+
+--echo #
+--echo # 2. Replica must carry DISTANCE=INNER_PRODUCT in the table definition
+--echo #
+--source include/rpl_connection_slave.inc
+SET SESSION vidx_hnsw_ef_search = 100;
+SHOW CREATE TABLE t1;
+--echo # Replica ANN ordering matches the expected (id1 > id2 > id3 > id4 > id5)
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]'));
+
+--echo #
+--echo # 3. Master ANN ordering (must equal the replica's)
+--echo #
+--source include/rpl_connection_master.inc
+SET SESSION vidx_hnsw_ef_search = 100;
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]'));
+
+--echo #
+--echo # 4. DML on master replicates and keeps INNER_PRODUCT semantics
+--echo #
+UPDATE t1 SET v = VEC_FROMTEXT('[0.95,0.31225,0,0]') WHERE id = 5;
+DELETE FROM t1 WHERE id = 1;
+INSERT INTO t1(id, v) VALUES (6, VEC_FROMTEXT('[0.99,0.14107,0,0]'));
+--source include/sync_slave_sql_with_master.inc
+
+--echo # Master result after DML (nearest first: id6 0.99 > id5 0.95 > id2 0.8)
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+
+--echo # Replica must produce the identical ordering
+--source include/rpl_connection_slave.inc
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+
+--echo #
+--echo # 5. Cleanup
+--echo #
+SET GLOBAL vidx_disabled = ON;
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

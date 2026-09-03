@@ -1,0 +1,70 @@
+--disable_warnings
+DROP TABLE IF EXISTS c_mdl;
+--enable_warnings
+
+CREATE TABLE c_mdl (
+id INT NOT NULL,
+str VARCHAR(20) NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+connect (conn1,localhost,root,,);
+connect (conn2,localhost,root,,);
+
+#### test start failed case 1
+connection conn1;
+begin;
+insert into c_mdl values (1, "abc", "a");
+select * from c_mdl;
+
+connection conn2;
+SET lock_wait_timeout = 1;
+--error ER_LOCK_WAIT_TIMEOUT
+call polarx.changeset_start('c_mdl', 10000, 1);
+
+connection conn1;
+commit;
+
+connection conn2;
+call polarx.changeset_start('c_mdl', 10000, 1);
+call polarx.changeset_finish('c_mdl');
+
+#### test start failed case 2
+connection conn1;
+begin;
+select * from c_mdl for update;
+
+connection conn2;
+SET lock_wait_timeout = 1;
+--error ER_LOCK_WAIT_TIMEOUT
+call polarx.changeset_start('c_mdl', 10000, 1);
+
+connection conn1;
+commit;
+
+connection conn2;
+call polarx.changeset_start('c_mdl', 10000, 1);
+call polarx.changeset_finish('c_mdl');
+
+
+#### test start success
+connection conn1;
+begin;
+SET lock_wait_timeout = 1;
+select * from c_mdl;
+
+connection conn2;
+SET lock_wait_timeout = 1;
+call polarx.changeset_start('c_mdl', 10000, 1);
+call polarx.changeset_stats('c_mdl');
+
+connection conn1;
+insert into c_mdl values (2, "cde", "b");
+commit;
+
+connection conn2;
+call polarx.changeset_stats('c_mdl');
+call polarx.changeset_finish('c_mdl');
+
+DROP TABLE c_mdl;

@@ -35,25 +35,24 @@ namespace lizard {
  @param[in]   rec       user record
  @param[in]   index     index w/ transaction info
  @param[in]   offsets   rec_get_offsets(rec, index)
+ @param[in/out] clover/bamboo txn rec
+
  @return transaction which has the x-lock, or nullptr if there is none;
  The caller must confirm all positive results by checking if the trx
  is still active. */
-void lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
+void lock_clust_or_panda_rec_some_has_impl(const Slice *slc,
                                            const dict_index_t *index,
-                                           const ulint *offsets,
                                            txn_rec_t *txn_rec);
 
-/** Checks if some transaction has an implicit x-lock on a record.
+/** Checks if some transaction has an implicit x-lock on a record on a secondary
  @param[in]   rec       user record
  @param[in]   index     index w/ transaction info
  @param[in]   offsets   rec_get_offsets(rec, index)
- @return transaction which has the x-lock, or nullptr if there is none;
- The caller must confirm all positive results by checking if the trx
- is still active. */
-trx_id_t lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
-                                               const dict_index_t *index,
-                                               const ulint *offsets);
+ @param[in]   trx       myself
 
+ @retval      transaction if found.*/
+txn_rw_t lock_sec_rec_some_has_impl(const Slice *slc, dict_index_t *index,
+                                    const trx_t *optional_trx);
 /**
  Checks whether an index record with transactional information can be seen in a
  consistent read.
@@ -64,11 +63,14 @@ trx_id_t lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
  @param[in]   vision    consistent read view
  @return true if sees, or false if an earlier version of the index record needed
  */
-bool lock_clust_or_panda_rec_cons_read_sees(const rec_t *rec,
+bool lock_clust_or_panda_rec_cons_read_sees(const Slice *slc,
                                             dict_index_t *index,
-                                            const ulint *offsets,
                                             btr_pcur_t *pcur,
-                                            lizard::Vision *vision);
+                                            lizard::Vision *vision, trx_t *trx);
+
+/** Checks that a non-clustered index record is seen in a consistent read.*/
+bool lock_sec_rec_cons_read_sees(const Slice *slc, const dict_index_t *index,
+                                 const lizard::Vision *vision);
 
 }  // namespace lizard
 #endif

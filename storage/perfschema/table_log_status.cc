@@ -28,7 +28,6 @@
 #include "storage/perfschema/table_log_status.h"
 
 #include "mysql/plugin.h"
-#include "sql/consensus_log_manager.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"
 #include "sql/field.h"
@@ -38,6 +37,7 @@
 #include "storage/perfschema/pfs_instr.h"
 #include "storage/perfschema/pfs_instr_class.h"
 #include "storage/perfschema/table_helper.h"
+#include "sql/komodo0xlog.h"
 
 THR_LOCK table_log_status::m_table_lock;
 

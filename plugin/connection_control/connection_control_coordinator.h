@@ -45,6 +45,8 @@ class Connection_event_coordinator
                     const mysql_event_connection *connection_event);
   void notify_sys_var(Error_handler *error_handler,
                       opt_connection_control variable, void *new_value);
+  bool notify_event(Error_handler *error_handler,
+                    const mysql_event_polarx_connection_control *event);
 
   /* Services provided to observers */
   bool register_event_subscriber(

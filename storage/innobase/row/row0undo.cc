@@ -166,11 +166,10 @@ bool row_undo_search_clust_to_pcur(
   bool found;
   mtr_t mtr;
   row_ext_t **ext;
-  const rec_t *rec;
+  creg_t reg;
   mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   ut_ad(!node->table->skip_alter_undo);
   ut_ad(node->layout == TL_CLOVER);
@@ -187,12 +186,11 @@ bool row_undo_search_clust_to_pcur(
     goto func_exit;
   }
 
-  rec = node->pcur.get_rec();
+  reg = node->pcur.get_reg();
 
-  offsets = rec_get_offsets(rec, clust_index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  slc = sctx.get_offsets(reg, clust_index, ULINT_UNDEFINED);
 
-  found = row_get_rec_roll_ptr(rec, clust_index, offsets) == node->roll_ptr;
+  found = row_get_rec_roll_ptr(slc, clust_index) == node->roll_ptr;
 
 #ifdef UNIV_DEBUG
   if (!found) {
@@ -203,7 +201,7 @@ bool row_undo_search_clust_to_pcur(
 #endif
 
   if (found) {
-    ut_ad(row_get_rec_trx_id(rec, clust_index, offsets) == node->trx->id);
+    ut_ad(row_get_rec_trx_id(slc, clust_index) == node->trx->id);
 
     if (dict_table_has_atomic_blobs(node->table)) {
       /* There is no prefix of externally stored
@@ -218,7 +216,7 @@ bool row_undo_search_clust_to_pcur(
       node->ext = nullptr;
     }
 
-    node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
+    node->row = row_build(ROW_COPY_DATA, clust_index, slc->reg(), slc, nullptr,
                           nullptr, nullptr, ext, node->heap);
 
     lizard::row_undo_alloc_gpp_field(node);
@@ -344,14 +342,15 @@ void row_convert_impl_to_expl_if_needed(btr_cur_t *cursor, undo_node_t *node) {
 
   ut_ad(node->trx->in_rollback);
   auto index = cursor->index;
-  auto rec = btr_cur_get_rec(cursor);
+  auto reg = btr_cur_get_reg(cursor);
   auto block = btr_cur_get_block(cursor);
-  auto heap_no = page_rec_get_heap_no(rec);
+  auto heap_no = page_rec_get_heap_no(reg.rec);
 
   if (heap_no != PAGE_HEAP_NO_SUPREMUM && !dict_index_is_spatial(index) &&
       !index->table->is_temporary() && !index->table->is_intrinsic()) {
-    lock_rec_convert_impl_to_expl(block, rec, index,
-                                  Rec_offsets().compute(rec, index), node->trx);
+    lock_rec_convert_impl_to_expl(
+        block, Slice_ctx().get_offsets(reg, index, ULINT_UNDEFINED), index,
+        node->trx);
   }
 }
 

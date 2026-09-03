@@ -12,6 +12,7 @@ INSERT INTO t1 VALUES (1), (2), (3), (4);
 
 SET @innodb_io_capacity_saved = @@global.innodb_io_capacity;
 SET @innodb_idle_flush_pct_saved = @@global.innodb_idle_flush_pct;
+SET GLOBAL innodb_purge_stop_now = ON;
 
 # Set io capacity to 200
 SET GLOBAL innodb_io_capacity = 200;
@@ -79,4 +80,5 @@ SET GLOBAL innodb_monitor_reset_all = all;
 SELECT COUNT>0 FROM INFORMATION_SCHEMA.INNODB_METRICS
   WHERE NAME='buffer_flush_background_total_pages';
 DROP TABLE t1;
+SET GLOBAL innodb_purge_run_now = ON;
 --source include/innodb_monitor_restore.inc

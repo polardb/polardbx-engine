@@ -78,12 +78,16 @@ struct Parallel_cursor : public Cursor {
 
  private:
   using Heaps = std::vector<mem_heap_t *, ut::allocator<mem_heap_t *>>;
+  using Slc_ctxs = std::vector<std::unique_ptr<Slice_ctx>,
+                               ut::allocator<std::unique_ptr<Slice_ctx>>>;
 
   /** If true then no more rows to scan. */
   bool m_eof{};
 
   /** Heap per thread. */
   Heaps m_heaps{};
+
+  Slc_ctxs m_slc_ctxs{};
 
   /** Index to iterate over. */
   dict_index_t *m_index{};
@@ -153,6 +157,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
   Row_counters n_rows{};
 
   ut_a(m_heaps.empty());
+  ut_a(m_slc_ctxs.empty());
 
   rows.resize(use_n_threads);
   n_rows.resize(rows.size());
@@ -171,6 +176,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
   /* Create the per thread heap for transient memory allocations. */
   for (size_t i = 0; i < use_n_threads; ++i) {
     m_heaps.push_back(mem_heap_create(1024, UT_LOCATION_HERE));
+    m_slc_ctxs.emplace_back(std::make_unique<Slice_ctx>());
 
     if (m_heaps.back() == nullptr) {
       return cleanup(m_heaps, DB_OUT_OF_MEMORY);
@@ -191,7 +197,7 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
   using Thread_ctx = Parallel_reader::Thread_ctx;
 
   Parallel_reader::Config config(FULL_SCAN, index());
-  config.m_is_ddl_parallel_scan = true;
+  config.m_is_ddl_parallel_scan = !lizard::opt_ddl_cleanout_disable;
 
   /** It's possible to create multiple indexes in a single scan. If one of these
    * indexes can skip file sorting, it may lead to the release of page locks,
@@ -297,6 +303,9 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
           err = batch_inserter(thread_ctx);
         }
 
+        /* Reset slice context before clearing heap to avoid use-after-free. */
+        m_slc_ctxs[thread_id]->reset_slice();
+
         /* Reset the heap. Note: row.m_offsets and row.m_ptr are invalid now. */
         mem_heap_empty(m_heaps[thread_id]);
 
@@ -346,28 +355,25 @@ dberr_t Parallel_cursor::scan(Builders &builders) noexcept {
 
         auto &row = rows[thread_id];
         auto heap = m_heaps[thread_id];
-
-        row.m_rec = read_ctx->m_rec;
+        auto &slc_ctx = m_slc_ctxs[thread_id];
 
         row.m_page_no = read_ctx->m_block->page.id.page_no();
         ut_ad(row.m_page_no != FIL_NULL);
 
-        row.m_offsets =
-            rec_get_offsets(row.m_rec, index(), nullptr, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+        row.m_slc = slc_ctx->get_offsets(read_ctx->m_slc->reg(), index(),
+                                         ULINT_UNDEFINED);
 
 #ifdef UNIV_DEBUG
         {
-          const auto rec = row.m_rec;
           const auto is_comp = dict_table_is_comp(m_ctx.m_old_table);
 
-          ut_ad(!rec_get_deleted_flag(rec, is_comp));
+          ut_ad(!rec_get_deleted_flag(row.m_slc->rec(), is_comp));
 
           /* When !online, we are holding a lock on old_table, preventing
           any inserts that could have written a record 'stub' before
           writing out off-page columns. */
           ut_ad(m_ctx.m_online ||
-                !rec_offs_any_null_extern(index(), rec, row.m_offsets));
+                !rec_offs_any_null_extern(index(), row.m_slc));
         }
 #endif /* UNIV_DEBUG */
 
@@ -414,9 +420,9 @@ dberr_t Parallel_cursor::copy_row(size_t thread_id, Row &row) noexcept {
   ut_a(!eof());
 
   auto heap = m_heaps[thread_id];
+  auto &slc_ctx = m_slc_ctxs[thread_id];
 
-  row.m_offsets = rec_get_offsets(row.m_rec, index(), nullptr, ULINT_UNDEFINED,
-                                  UT_LOCATION_HERE, &heap);
+  row.m_slc = slc_ctx->get_offsets(row.m_slc->reg(), index(), ULINT_UNDEFINED);
 
   return row.build(m_ctx, index(), heap, ROW_COPY_DATA);
 }

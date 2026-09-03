@@ -30,12 +30,44 @@
 #include "sql/log_event.h"       // Log_event
 #include "sql/xa.h"              // XID
 
-#include "sql/binlog/lizard0recovery.h"
+#include "sql/binlog/komodo0recovery.h"
 #include "sql/gcn_log_event.h"
+
+
+struct xarecover_st {
+  int len, found_foreign_xids, found_my_xids;
+  XA_recover_txn *list;
+  Xid_commit_list const *commit_list;
+  Xa_state_list *xa_list;
+  komodo::XA_spec_list *spec_list;
+  binlog::Binlog_recovery *recovery;
+  bool dry_run;
+
+  Xa_state_list *xa_list_in_ht;
+};
 
 namespace binlog {
 class Group_specification_recovery;
 }  // namespace binlog
+
+/**
+  Pair of tuples used to store the information about success and failures
+  of committing, rolling back or preparing transactions. Counters are
+  organized as follows
+
+   {
+     {Failed commits, Failed rollbacks, Failed prepares},
+     {Successful commits, Successful rallbacks, Successful prepares}
+   }
+ */
+using recovery_statistics = std::pair<std::tuple<size_t, size_t, size_t>,
+                                      std::tuple<size_t, size_t, size_t>>;
+
+constexpr size_t STATS_FAILURE = 0,    // The failure tuple
+    STATS_SUCCESS = 1;                 // The success tuple
+constexpr size_t STATS_COMMITTED = 0,  // The committed counter
+    STATS_ROLLEDBACK = 1,              // The rolled back counter
+    STATS_PREPARED = 2;                // The preapred counter
 
 namespace binlog {
 /**
@@ -77,8 +109,14 @@ class Binlog_recovery {
                               reader for the last available binary log
                               file.
    */
-  Binlog_recovery(Binlog_file_reader &binlog_file_reader);
+  Binlog_recovery(Binlog_file_reader *binlog_file_reader = nullptr);
   virtual ~Binlog_recovery() = default;
+
+  void set_reader(Binlog_file_reader *binlog_file_reader)
+  {
+    assert(m_reader == nullptr);
+    m_reader = binlog_file_reader;
+  }
 
   /**
     Retrieves the position of the last binlog event that ended a
@@ -156,7 +194,7 @@ class Binlog_recovery {
 
  protected:
   /** File reader for the last available binary log file */
-  Binlog_file_reader &m_reader;
+  Binlog_file_reader *m_reader;
   /** Position of the last binlog event that ended a transaction */
   my_off_t m_valid_pos{0};
   /** Whether or not the event being processed is within a transaction */
@@ -323,7 +361,7 @@ class Binlog_recovery {
    */
   void add_external_xid(std::string const &query,
                         enum_ha_recover_xa_state state,
-                        Binlog_xa_specification::Source xa_spec_source);
+                        komodo::Binlog_xa_specification::Source xa_spec_source);
 
   void process_gtid_event(Gtid_log_event &ev);
 
@@ -333,13 +371,32 @@ class Binlog_recovery {
 
  public:
   void gather_internal_xa_spec(const my_xid xid,
-                               const Binlog_xa_specification &spec);
+                               const komodo::Binlog_xa_specification &spec);
   void gather_external_xa_spec(const XID &xid,
-                               const Binlog_xa_specification &spec);
+                               const komodo::Binlog_xa_specification &spec);
+
+  virtual void recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
+    XA_recover_txn const &xa_trx, my_xid xid,
+    recovery_statistics &stats);
+  virtual void recover_one_external_trx(xarecover_st const &info, handlerton &ht,
+    XA_recover_txn const &xa_trx, recovery_statistics &stats);
+
+  virtual bool recover_prepared_in_tc(handlerton *ht, xarecover_st *info);
+
+  virtual void set_last_leader_term_index(uint64 ) {}
+  virtual uint64 get_last_leader_term_index() { return 0; }
+  virtual void add_external_pending_recovering_trx(handlerton &,
+        enum_ha_recover_xa_state ,
+        enum_ha_recover_xa_state ,
+        const XA_recover_txn *,
+        const komodo::XA_specification &) {}
+  virtual void add_internal_pending_recovering_trx(handlerton &,
+        const XA_recover_txn *,
+        const komodo::XA_specification &) {}
 
  protected:
-  Binlog_xa_specification m_xa_spec;
-  XA_spec_recovery m_xa_spec_recovery;
+  komodo::Binlog_xa_specification m_xa_spec;
+  komodo::XA_spec_recovery m_xa_spec_recovery;
 
   uint32_t m_server_version;
 };

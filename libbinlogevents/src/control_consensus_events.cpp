@@ -71,6 +71,13 @@ Previous_consensus_index_event::Previous_consensus_index_event(
 }
 
 Consensus_cluster_info_event::Consensus_cluster_info_event(
+    unsigned int info_length_arg, const char *info_arg)
+    : Binary_log_event(CONSENSUS_CLUSTER_INFO_EVENT),
+      info_length(info_length_arg) {
+  info = bapi_strndup(info_arg, info_length_arg);
+}
+
+Consensus_cluster_info_event::Consensus_cluster_info_event(
     const char *buf, unsigned int event_len __attribute__((unused)),
     const Format_description_event *description_event)
     : Binary_log_event(&buf, description_event) {
@@ -86,6 +93,10 @@ Consensus_cluster_info_event::Consensus_cluster_info_event(
   memcpy(&info_length, ptr_buffer, sizeof(info_length));
   ptr_buffer += ENCODED_INFO_LENGTH_LENGTH;
   info = bapi_strndup(ptr_buffer, info_length);
+}
+
+Consensus_cluster_info_event::~Consensus_cluster_info_event() {
+  if (info) bapi_free(const_cast<char *>(info));
 }
 
 Consensus_empty_event::Consensus_empty_event(

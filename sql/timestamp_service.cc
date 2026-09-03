@@ -87,7 +87,7 @@ bool TimestampService::open_base_table(thr_lock_type lock_type) {
   Table_ref tables(db, table, lock_type);
 
   tables.sequence_scan.set(Sequence_scan_mode::ITERATION_SCAN);
-  tables.open_strategy = Table_ref::OPEN_IF_EXISTS;
+  tables.open_strategy = Table_ref::OPEN_NORMAL;
 
   if (!open_n_lock_single_table(m_thd, &tables, lock_type, 0)) {
     /*

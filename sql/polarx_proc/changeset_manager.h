@@ -51,11 +51,13 @@ class ChangesetManager {
 
   void operator delete(void *ptr) { my_free(ptr); }
 
-  int start_track(const std::string &table_name, u_int64_t memory_limit);
+  int start_track(const std::string &table_name, uint64_t memory_limit,
+                  bool acquire_lock);
 
   int stop_track(const std::string &table_name);
 
-  int fence_change(const std::string &table_name);
+  int set_backpressure(const std::string &table_name, uint64_t slow_down_trigger,
+                       uint64_t capacity, uint64_t fill_rate);
 
   void close_changeset(const std::string &db_name, const std::string &table_name);
 
@@ -68,11 +70,11 @@ class ChangesetManager {
   /**
    * @brief Report stats of change-set
    *
-   * @param result
+   * @param stats
    * @return int
    */
   int stats(std::map<im::DBTableName, Changeset::Stats> *stats) {
-    polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
+    CautoSpinRWLock lock(rw_lock, false, 2000);
     for (auto &table : changeset_map) {
       auto &full_table_name = table.first;
       auto &changeset = table.second;
@@ -105,14 +107,8 @@ class ChangesetManager {
 
   void commit_change(THD *thd);
 
-  void rollback_change(THD *thd);
-
   static void get_primary_keys(uchar const *record, KEY *key_info,
                                std::string &pk);
-
-  int open_table(const std::string &tableName, TABLE **output) {
-    return open_table(tableName, output, TL_WRITE);
-  }
 
   int open_table(const std::string &tableName, TABLE **output,
                  thr_lock_type lock_type);
@@ -120,10 +116,17 @@ class ChangesetManager {
   static std::atomic_bool changeset_start;
 
   static inline bool is_changeset_enable() {
-    return changeset_start.load() && opt_enable_changeset;
+    return opt_enable_changeset && changeset_start.load();
   }
 
   void erase_all_changeset();
+
+  /**
+   * for xa recover
+   */
+  void save_prepared_changeset(THD *thd, XID *xid);
+
+  bool load_prepared_changeset(THD *thd, XID *xid);
 
  private:
   bool is_changeset_stop(const DBTableName &full_table_name);
@@ -138,7 +141,12 @@ class ChangesetManager {
   void erase_changeset(const DBTableName &full_table_name);
 
   void init_changeset(const DBTableName &full_table_name,
-                      u_int64_t memory_limit);
+                      uint64_t memory_limit);
+
+  void init_backpressure(const DBTableName &full_table_name, uint64_t slow_down_trigger,
+                         uint64_t capacity, uint64_t fill_rate);
+
+  bool check_changeset_effective(const DBTableName &full_table_name, double tokens = 1.0);
 
   Changeset *get_changeset_ptr(const DBTableName &full_table_name);
 
@@ -148,8 +156,14 @@ class ChangesetManager {
 
   Changeset::Stats fetch_changeset_stats(const DBTableName &full_table_name);
 
-  mutable polarx_rpc::CspinRWLock rw_lock;
+  mutable CspinRWLock rw_lock;
   std::unordered_map<im::DBTableName, std::unique_ptr<Changeset>> changeset_map;
+
+  /**
+   * for xa recover
+   */
+  mutable CspinRWLock prepared_rw_lock;
+  std::unordered_map<std::string, std::unordered_map<im::DBTableName, std::unique_ptr<im::ChangeSetCache>>> prepared_changeset_map;
 };
 
 /** Global varaible of changeset */

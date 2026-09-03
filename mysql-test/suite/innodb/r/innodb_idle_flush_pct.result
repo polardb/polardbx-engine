@@ -5,6 +5,7 @@ CREATE TABLE t1 (c INT);
 INSERT INTO t1 VALUES (1), (2), (3), (4);
 SET @innodb_io_capacity_saved = @@global.innodb_io_capacity;
 SET @innodb_idle_flush_pct_saved = @@global.innodb_idle_flush_pct;
+SET GLOBAL innodb_purge_stop_now = ON;
 SET GLOBAL innodb_io_capacity = 200;
 SHOW VARIABLES LIKE "%innodb_io_capacity%";
 Variable_name	Value
@@ -52,3 +53,4 @@ WHERE NAME='buffer_flush_background_total_pages';
 COUNT>0
 0
 DROP TABLE t1;
+SET GLOBAL innodb_purge_run_now = ON;

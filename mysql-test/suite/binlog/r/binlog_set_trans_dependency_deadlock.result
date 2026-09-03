@@ -21,8 +21,6 @@ SET DEBUG_SYNC="now SIGNAL finish_purge";
 SET DEBUG_SYNC="now SIGNAL finish_pfs";
 SET DEBUG_SYNC="now SIGNAL finish_show";
 connection con1;
-Warnings:
-Warning	1868	file binlog.000002 was not purged because it is the active log file.
 disconnect con1;
 connection con2;
 VARIABLE_NAME	VARIABLE_VALUE

@@ -1,0 +1,126 @@
+#
+# Test for acquire_next_key_on_next_rec parameter
+# When enabled (default): Transaction 2's DELETE will wait for lock
+# When disabled: A deadlock will occur
+#
+
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+--echo #
+--echo # Setup
+--echo #
+
+DROP TABLE IF EXISTS t1;
+
+CREATE TABLE t1 (
+  id INT AUTO_INCREMENT,
+  c1 VARCHAR(10),
+  c2 VARCHAR(10),
+  PRIMARY KEY(id),
+  UNIQUE KEY uk_c1_c2 (c1, c2) secondary_engine_attribute '{"panda index":"0"}'
+) ENGINE=InnoDB;
+
+INSERT INTO t1 (c1, c2) VALUES ('c1-1', '222'), ('c1-2', '999');
+
+SELECT * FROM t1;
+
+--echo ########################################################################
+--echo # Test Case 1: acquire_next_key_on_next_rec = ON
+--echo # Expected: Transaction 2's DELETE will wait for lock held by Transaction 1
+--echo ########################################################################
+
+SET GLOBAL innodb_acquire_next_key_on_next_rec = ON;
+SET GLOBAL innodb_lock_wait_timeout = 2;
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo # Transaction 1: Delete and insert
+--connection con1
+BEGIN;
+DELETE FROM t1 WHERE c1 = 'c1-1';
+INSERT INTO t1 (c1, c2) VALUES ('c1-1', '222');
+
+--echo # Transaction 2: Try to delete - should wait for lock
+--connection con2
+SET SESSION innodb_lock_wait_timeout = 2;
+BEGIN;
+--echo # This DELETE should wait for lock and eventually timeout
+--error ER_LOCK_WAIT_TIMEOUT
+DELETE FROM t1 WHERE c1 = 'c1-2';
+ROLLBACK;
+
+--connection con1
+ROLLBACK;
+
+--echo # Verify data is unchanged
+--connection default
+SELECT * FROM t1 ORDER BY id;
+
+--echo ########################################################################
+--echo # Test Case 2: acquire_next_key_on_next_rec = OFF
+--echo # Expected: Deadlock will occur
+--echo ########################################################################
+
+SET GLOBAL innodb_acquire_next_key_on_next_rec = OFF;
+
+--echo # Reset data
+DELETE FROM t1;
+INSERT INTO t1 (c1, c2) VALUES ('c1-1', '222'), ('c1-2', '999');
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Transaction 1: Delete and insert c1-1
+--connection con1
+BEGIN;
+DELETE FROM t1 WHERE c1 = 'c1-1';
+INSERT INTO t1 (c1, c2) VALUES ('c1-1', '222');
+
+--echo # Transaction 2: Delete and insert c1-2
+--connection con2
+BEGIN;
+DELETE FROM t1 WHERE c1 = 'c1-2';
+INSERT INTO t1 (c1, c2) VALUES ('c1-2', '999');
+
+--echo # Transaction 1: Try to insert another row - this will wait
+--connection con1
+SET DEBUG_SYNC = 'lock_wait_will_wait SIGNAL con1_waiting';
+--send INSERT INTO t1 (c1, c2) VALUES ('c1-1', '333')
+
+--echo # Transaction 2: Try to insert another row - should cause deadlock
+--connection con2
+SET DEBUG_SYNC = 'now WAIT_FOR con1_waiting';
+--error 0,ER_LOCK_DEADLOCK
+INSERT INTO t1 (c1, c2) VALUES ('c1-2', '444');
+
+--connection con1
+--error 0,ER_LOCK_DEADLOCK
+--reap
+
+--echo # Rollback both transactions
+--connection con1
+--error 0,ER_LOCK_DEADLOCK
+ROLLBACK;
+
+--connection con2
+--error 0,ER_LOCK_DEADLOCK
+ROLLBACK;
+
+--echo # Verify data is unchanged
+--connection default
+SELECT * FROM t1 ORDER BY id;
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+--disconnect con1
+--disconnect con2
+
+--connection default
+DROP TABLE t1;
+SET GLOBAL innodb_acquire_next_key_on_next_rec = default;
+SET GLOBAL innodb_lock_wait_timeout = default;
+
+--source include/wait_until_count_sessions.inc
+

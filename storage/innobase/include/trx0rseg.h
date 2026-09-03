@@ -39,6 +39,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "univ.i"
 
+#include "lizard0trx0history.h"
+
 /** Gets a rollback segment header.
 @param[in]      space           Space where placed
 @param[in]      page_no         Page number of the header
@@ -129,14 +131,12 @@ They require an upgrade of undo tablespaces and that cannot happen with
 active undo logs.
 @param[in]      purge_queue     queue of rsegs to purge
 @param[in]      erase_heap      heap of rsegs to erase */
-void trx_rsegs_init(lizard::purge_heap_t *purge_queue,
-                    lizard::erase_heap_t *erase_heap);
+void trx_rsegs_init(lizard::pe_heap_t *pe);
 
 /** Initialize rollback segments in parallel
 @param[in]      purge_queue     queue of rsegs to purge
 @param[in]      erase_heap      heap of rsegs to erase */
-void trx_rsegs_parallel_init(lizard::purge_heap_t *purge_queue,
-                             lizard::erase_heap_t *erase_heap);
+void trx_rsegs_parallel_init(lizard::pe_heap_t *pe);
 
 /** Create and initialize a rollback segment object.  Some of
 the values for the fields are read from the segment header page.
@@ -152,9 +152,8 @@ The caller must insert it into the correct list.
 @return own: rollback segment object */
 trx_rseg_t *trx_rseg_mem_create(ulint id, space_id_t space_id,
                                 page_no_t page_no, const page_size_t &page_size,
-                                scn_t gtid_trx_scn,
-                                lizard::purge_heap_t *purge_heap,
-                                lizard::erase_heap_t *erase_heap, mtr_t *mtr);
+                                scn_t gtid_trx_scn, lizard::pe_heap_t *pe,
+                                mtr_t *mtr);
 
 /** Create a rollback segment in the given tablespace. This could be either
 the system tablespace, the temporary tablespace, or an undo tablespace.
@@ -287,6 +286,8 @@ constexpr uint32_t RSEG_ARRAY_RESERVED_BYTES = 200;
 constexpr uint32_t RSEG_ARRAY_SLOT_SIZE = 4;
 /*------------------------------------------------------------- */
 
+#ifndef INNODB_TRX0RSEG_IC_STANDALONE
 #include "trx0rseg.ic"
+#endif /* !INNODB_TRX0RSEG_IC_STANDALONE */
 
 #endif

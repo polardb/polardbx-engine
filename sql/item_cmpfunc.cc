@@ -2035,6 +2035,21 @@ bool Arg_comparator::compare_null_values() {
   return result;
 }
 
+void Item_bool_func::set_created_by_in2exists() {
+  m_created_by_in2exists = true;
+  // When a condition is created by IN to EXISTS transformation,
+  // it re-uses the expressions that are part of the query. As a
+  // result we need to increment the reference count
+  // for these expressions.
+  WalkItem(this, enum_walk::PREFIX | enum_walk::SUBQUERY, [](Item *inner_item) {
+    // Reference counting matters only for referenced items.
+    if (inner_item->type() == REF_ITEM) {
+      down_cast<Item_ref *>(inner_item)->ref_item()->increment_ref_count();
+    }
+    return false;
+  });
+}
+
 const char *Item_bool_func::bool_transform_names[10] = {"is true",
                                                         "is false",
                                                         "is null",
@@ -5876,7 +5891,7 @@ void Item_cond::update_used_tables() {
 
   used_tables_cache = 0;
   m_accum_properties = 0;
-  reset_encrypted_type();
+  reset_encryption_type();
 
   if (functype() == COND_AND_FUNC && ignore_unknown())
     not_null_tables_cache = 0;
@@ -7015,7 +7030,7 @@ void Item_equal::update_used_tables() {
   not_null_tables_cache = used_tables_cache = 0;
   if (cond_false) return;
   m_accum_properties = 0;
-  reset_encrypted_type();
+  reset_encryption_type();
   while ((item = li++)) {
     item->update_used_tables();
     used_tables_cache |= item->used_tables();

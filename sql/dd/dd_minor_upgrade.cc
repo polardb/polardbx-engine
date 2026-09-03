@@ -45,8 +45,24 @@ namespace dd {
   ---------------------------
   InnoDB IO statistics:
     INFORMATION_SCHEMA.IO_STATISTICS
+
+  3. Published in Commit 8b42352ff74a5c8f311214a5de38fbc548f8fd64
+  ---------------------------
+  Consensus statistics:
+    information_schema.CONSENSUS_HA_HISTORY
+
+  4. Published by Vector Index visibility
+  ---------------------------
+  information_schema.VECTOR_INDEXES
+
+  5. Published by Vector Index auxiliary table join fix
+  ---------------------------
+  information_schema.VECTOR_INDEXES
+    The join escapes the underscores of the auxiliary table name pattern, the
+    unescaped ones were LIKE wildcards and produced rows built from another
+    table's auxiliary table whenever one se_private_id was a prefix of another.
 */
-static const uint EXTRA_IS_DD_VERSION = 2;
+static const uint EXTRA_IS_DD_VERSION = 5;
 /**
   Version for PFS tables.
   PLS increase it if update PFS table structure.
@@ -86,8 +102,30 @@ static const String_type EXTRA_MYSQLD_VERSION_UPGRADED_STRING(
   3. Published by Recycle bin
   ------------------------------------------
   __recycle_bin__
+
+  4. Published by AI model management
+  ------------------------------------------
+  mysql.ai_model_config
+
+  5. Published by Column Encryption
+  ------------------------------------------
+  mysql.encdb_auth_users
+  mysql.encdb_sensitive_rules
+
+  6. Published by AI function default model management
+  ----------------------------------------------------
+  mysql.ai_function_config
+
+  7. Published by Column Encryption (KMS meta)
+  ------------------------------------------
+  mysql.encdb_kms_meta
+
+  8. Published by Column Encryption (rule description)
+  ----------------------------------------------------
+  mysql.encdb_sensitive_rules.description
+
 */
-static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 3;
+static const uint EXTRA_MYSQLD_VERSION_UPGRADED = 8;
 
 static const unsigned int UNKNOWN_EXTRA_VERSION = -1;
 

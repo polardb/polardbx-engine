@@ -2,7 +2,8 @@
 #define HANDLER_INCLUDED
 
 /*
-   Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+   Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -71,7 +72,9 @@
 #include "thr_lock.h"            // thr_lock_type
 #include "typelib.h"
 
-#include "sql/lizard0handler.h"
+#include "komodo0sql0guess0clust.h"
+#include "sql/komodo0handler.h"
+#include "sql/komodo0handler0types.h"
 #include "sql/sql_statistics_common.h"  // Stats_data
 
 class Alter_info;
@@ -120,6 +123,9 @@ class Tablespace;
 
 namespace lizard {
 class Ha_var_hint;
+}
+namespace binlog {
+class Binlog_recovery;
 }
 
 constexpr const ha_rows EXTRA_RECORDS{10};
@@ -687,6 +693,7 @@ enum legacy_db_type {
   DB_TYPE_TEMPTABLE,
   DB_TYPE_FIRST_DYNAMIC = 42,
   DB_TYPE_SEQUENCE_DB,
+  DB_TYPE_HLINDEX_HELPER,
   DB_TYPE_DEFAULT = 127  // Must be last
 };
 
@@ -952,7 +959,8 @@ enum enum_schema_tables : int {
   SCH_ALISQL_CONSENSUS_STATUS,
   SCH_ALISQL_CLUSTER_CONSENSUS_MEMBERSHIP_CHANGE,
   SCH_CONSENSUS_COMMIT_POSITION,
-  SCH_LAST = SCH_CONSENSUS_COMMIT_POSITION
+  SCH_CONSENSUS_HA_HISTORY,
+  SCH_LAST = SCH_CONSENSUS_HA_HISTORY
 };
 
 enum ha_stat_type { HA_ENGINE_STATUS, HA_ENGINE_LOGS, HA_ENGINE_MUTEX };
@@ -1476,18 +1484,18 @@ enum xa_status_code {
 };
 
 typedef xa_status_code (*commit_by_xid_t)(handlerton *hton, XID *xid,
-                                          XA_specification *spec);
+                                          komodo::XA_specification *spec);
 
 typedef xa_status_code (*rollback_by_xid_t)(handlerton *hton, XID *xid,
-                                            XA_specification *xa_spec);
+                                            komodo::XA_specification *xa_spec);
 
 /**
   Instructs the storage engine to mark the externally coordinated
   transactions identified by the XID parameters as prepared in the server
   TC.
  */
-using set_prepared_in_tc_by_xid_t =
-    xa_status_code (*)(handlerton *hton, XID *xid, XA_specification *xa_spec);
+using set_prepared_in_tc_by_xid_t = xa_status_code (*)(
+    handlerton *hton, XID *xid, komodo::XA_specification *xa_spec);
 
 /**
   Create handler object for the table in the storage engine.
@@ -3368,6 +3376,13 @@ class Alter_inplace_info {
   static const HA_ALTER_FLAGS ALTER_COLUMN_VISIBILITY = 1ULL << 49;
 
   /**
+    VARCHAR column extension that would normally be inplace, but requires
+    table rebuild due to SPC index pd_capacity recalculation. The column
+    must be part of an SPC index.
+  */
+  static const HA_ALTER_FLAGS ALTER_COLUMN_EQUAL_PACK_IN_SPC = 1ULL << 50;
+
+  /**
     Create options (like MAX_ROWS) for the new version of table.
 
     @note The referenced instance of HA_CREATE_INFO object was already
@@ -3527,7 +3542,7 @@ class Alter_inplace_info {
   */
   const char *unsupported_reason;
 
-  lizard::Ha_var_hint *var_hint;
+  komodo::dd_var_options_t *var_options;
 
   Alter_inplace_info(HA_CREATE_INFO *create_info_arg,
                      Alter_info *alter_info_arg, bool error_if_not_empty_arg,
@@ -3554,7 +3569,7 @@ class Alter_inplace_info {
         online(false),
         handler_trivial_ctx(0),
         unsupported_reason(nullptr),
-        var_hint(nullptr) {}
+        var_options(nullptr) {}
 
   ~Alter_inplace_info() { destroy(handler_ctx); }
 
@@ -4485,6 +4500,12 @@ class handler {
   uint active_index;
   /** Length of ref (1-8 or the clustered key length) */
   uint ref_length;
+  /** Guess Primary PageNO length.
+   *
+   *  General length is equal with SQL_GPP_NO_LEGNTH, pls modify it within
+   *  ha_xxxx::open() if necessary for different storage engine.
+   * */
+  uint gpp_length;
   FT_INFO *ft_handler;
   enum { NONE = 0, INDEX, RND, SAMPLING } inited;
   bool implicit_emptied; /* Can be !=0 only if HEAP */
@@ -4642,6 +4663,7 @@ class handler {
         key_used_on_scan(MAX_KEY),
         active_index(MAX_KEY),
         ref_length(sizeof(my_off_t)),
+        gpp_length(komodo::SQL_GPP_LENGTH),
         ft_handler(nullptr),
         inited(NONE),
         implicit_emptied(false),
@@ -4729,7 +4751,7 @@ class handler {
   int ha_rnd_end();
   int ha_rnd_next(uchar *buf);
   // See the comment on m_update_generated_read_fields.
-  int ha_rnd_pos(uchar *buf, uchar *pos);
+  int ha_rnd_pos(uchar *buf, uchar *pos, komodo::guess_mode_t gmode);
   int ha_index_read_map(uchar *buf, const uchar *key, key_part_map keypart_map,
                         enum ha_rkey_function find_flag);
   int ha_index_read_last_map(uchar *buf, const uchar *key,
@@ -4790,7 +4812,8 @@ class handler {
   bool ha_check_and_repair(THD *thd);
   int ha_disable_indexes(uint mode);
   int ha_enable_indexes(uint mode);
-  int ha_discard_or_import_tablespace(bool discard, uint import_tablespace_option,
+  int ha_discard_or_import_tablespace(bool discard,
+                                      uint import_tablespace_option,
                                       dd::Table *table_def);
   int ha_rename_table(const char *from, const char *to,
                       const dd::Table *from_table_def, dd::Table *to_table_def);
@@ -5477,6 +5500,20 @@ class handler {
   /// @see index_read_map().
   virtual int rnd_pos(uchar *buf, uchar *pos) = 0;
 
+  /** Wrapper function for rnd_pos that allows passing guess clust context. */
+  virtual int guess_pos(uchar *buf, uchar *pos, komodo::guess_mode_t gmode) {
+    (void)gmode;
+    ut_ad(gmode != komodo::GM_NONE);
+    return rnd_pos(buf, pos);
+  }
+
+  /** General function for rnd_pos */
+  int gen_pos(uchar *buf, uchar *pos, komodo::guess_mode_t gmode) {
+    if (gmode == komodo::GM_NONE) return rnd_pos(buf, pos);
+
+    return guess_pos(buf, pos, gmode);
+  }
+
   virtual int ft_read(uchar *) { return HA_ERR_WRONG_COMMAND; }
 
  public:
@@ -5493,7 +5530,7 @@ class handler {
     if (error != 0) return error;
 
     position(record);
-    error = ha_rnd_pos(record, ref);
+    error = ha_rnd_pos(record, ref, komodo::GM_NONE);
 
     ha_rnd_end();
     return error;
@@ -5591,6 +5628,44 @@ class handler {
                         ulong cache_size [[maybe_unused]]) {
     return extra(operation);
   }
+
+  /**
+    Temporarily override the lock wait timeout for subsequent operations.
+
+    When @p seconds is non-zero, the current lock wait timeout is saved
+    and replaced with @p seconds.  When @p seconds is zero, the original
+    timeout saved by a previous call is restored.
+
+    This is used by the vector index (HNSW) to shorten the lock wait
+    timeout on replica apply threads so that write operations conflicting
+    with recovered PREPARED XA transactions fail quickly (e.g. 1 s)
+    instead of waiting the full default timeout (e.g. 50 s).
+
+    The default implementation is a no-op.  Storage engines that expose
+    a per-session lock wait timeout (e.g., InnoDB) should override.
+
+    @param  seconds  new timeout in seconds; 0 means restore original
+  */
+  virtual void set_lock_wait_timeout(ulong seconds [[maybe_unused]]) {}
+
+  /**
+    Temporarily switch read operations to use consistent (non-locking) reads.
+
+    When @p enable is true, subsequent index/rnd read operations will use
+    snapshot reads instead of locking reads, regardless of the current
+    lock mode set by external_lock(). When @p enable is false, the original
+    lock mode is restored.
+
+    This is used by the vector index (HNSW) to read the graph without
+    acquiring row locks, avoiding conflicts with recovered PREPARED XA
+    transactions that may hold locks on the graph table.
+
+    The default implementation is a no-op. Storage engines that support
+    locking reads (e.g., InnoDB) should override this method.
+
+    @param  enable  true to switch to consistent read, false to restore
+  */
+  virtual void set_consistent_read(bool enable [[maybe_unused]]) {}
 
   /**
     Get the handlerton of the storage engine if the SE is capable of
@@ -6748,6 +6823,19 @@ class handler {
   }
 
   /**
+    Analyze SPC statistics and return formatted string.
+
+    @param[in,out] str_out  Output string for formatted SPC statistics
+
+    @retval HA_ADMIN_OK           Success
+    @retval HA_ADMIN_NOT_IMPLEMENTED  Not supported by this engine
+    @retval HA_ADMIN_FAILED       Analysis failed
+  */
+  virtual int analyze_spc(std::string *str_out [[maybe_unused]]) {
+    return HA_ADMIN_NOT_IMPLEMENTED;
+  }
+
+  /**
     @brief Check and repair the table if necessary.
 
     @param thd    Thread object
@@ -6790,7 +6878,9 @@ class handler {
     Discard or import tablespace.
 
     @param  [in]      discard   Indicates whether this is discard operation.
-    @param[in]        option    if value is HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if tablespace exists
+    @param[in]        option    if value is
+    HA_LEX_IMPORT_TABLESPACE_IF_NOT_EXISTS will ignore import tablespace if
+    tablespace exists
     @param  [in,out]  table_def dd::Table object describing the table
                                 in which tablespace needs to be discarded
                                 or imported. This object can be adjusted by
@@ -7217,6 +7307,7 @@ int ha_init(void);
 void ha_end();
 int ha_initialize_handlerton(st_plugin_int *plugin);
 int ha_finalize_handlerton(st_plugin_int *plugin);
+int setup_transaction_participant(st_plugin_int *plugin);
 
 TYPELIB *ha_known_exts();
 int ha_panic(enum ha_panic_function flag);
@@ -7238,7 +7329,8 @@ void ha_drop_database(char *path);
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     bool update_create_info, bool is_temp_table,
-                    dd::Table *table_def, bool recycled = false,
+                    dd::Table *table_def,
+                    bool recycled = false,
                     HA_CREATE_INFO *original_create_info = nullptr);
 
 int ha_delete_table(THD *thd, handlerton *db_type, const char *path,
@@ -7321,12 +7413,14 @@ int ha_rollback_trans(THD *thd, bool all);
   @param xa_state_list Map between XIDs and states of externally
                        coordinated transactions as found in the internal
                        transaction coordinator state.
+  @param recovery xlog recovery object
 
   @return 0 if recovery was successful, non-zero otherwise.
 */
 int ha_recover(Xid_commit_list *commit_list = nullptr,
                Xa_state_list *xa_state_list = nullptr,
-               XA_spec_list *spec_list = nullptr);
+               komodo::XA_spec_list *spec_list = nullptr,
+               binlog::Binlog_recovery *recovery = nullptr);
 
 /**
   Perform SE-specific cleanup after recovery of transactions.

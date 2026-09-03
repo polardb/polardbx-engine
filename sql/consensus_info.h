@@ -110,6 +110,7 @@ class Consensus_info final : public Rpl_info {
   void end_info();
   /* only slave thread do not need force_new_thd */
   int flush_info(bool force, bool force_new_thd);
+  int reinit_cluster_info(bool force_learner);
 
   virtual bool set_info_search_keys(Rpl_info_handler *to) override;
 

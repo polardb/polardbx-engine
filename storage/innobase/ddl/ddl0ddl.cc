@@ -35,10 +35,11 @@ Created 2020-11-01 by Sunny Bains. */
 #include "dict0dd.h"
 #include "handler0alter.h"
 #include "lex_string.h"
+#include "lizard0dd0policy.h"
 #include "lock0lock.h"
 #include "row0log.h"
 
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 
 /* Ignore posix_fadvise() on those platforms where it does not exist */
 #if defined _WIN32
@@ -68,12 +69,12 @@ doc_id_t Fetch_sequence::fetch(const dtuple_t *dtuple) noexcept {
   return doc_id;
 }
 
-void Dup::report(const mrec_t *mrec, const ulint *offsets) noexcept {
+void Dup::report(const Slice *slc) noexcept {
   ++m_n_dup;
 
   if (m_n_dup == 1) {
     auto heap = mem_heap_create(1024, UT_LOCATION_HERE);
-    auto dtuple = row_rec_to_index_entry_low(mrec, m_index, offsets, heap);
+    auto dtuple = row_rec_to_index_entry_low(slc, m_index, heap);
 
     /* Report the first duplicate record, but count all duplicate records. */
     innobase_fields_to_mysql(m_table, m_index, dtuple->fields);
@@ -185,7 +186,7 @@ bool file_create(ddl::file_t *file, const char *path) noexcept {
 
 dict_index_t *create_index(trx_t *trx, dict_table_t *table,
                            Index_defn *index_def, const dict_add_v_col_t *add_v,
-                           const lizard::Ha_index_hint *index_hint) noexcept {
+                           const komodo::Dict_index_hint *index_hint) noexcept {
   const size_t n_fields = index_def->m_n_fields;
 
   ut_ad(!srv_read_only_mode);
@@ -230,8 +231,8 @@ dict_index_t *create_index(trx_t *trx, dict_table_t *table,
   dict_build_index_def(table, index, trx);
 
   page_type_t expected_page_type;
-  lizard::dd_fill_dict_index_format(
-      lizard::ha_ddl_create_index_policy(index_hint, table, index), table,
+  lizard::dd_index_fill_format(
+      lizard::ha_ddl_invoke_index_policy(index_hint, table, index), table,
       index, &expected_page_type);
 
   ut_ad(index->page_no() == FIL_NULL);
@@ -503,13 +504,13 @@ void drop_indexes(trx_t *trx, dict_table_t *table, bool locked) noexcept {
 
 dberr_t Row::build(ddl::Context &ctx, dict_index_t *index, mem_heap_t *heap,
                    size_t type) noexcept {
-  ut_ad(rec_offs_any_null_extern(index, m_rec, m_offsets) == nullptr);
+  ut_ad(rec_offs_any_null_extern(index, m_slc) == nullptr);
 
   /* Build a row based on the clustered index. */
 
-  m_ptr = row_build_w_add_vcol(type, index, m_rec, m_offsets, ctx.m_new_table,
-                               m_add_cols, ctx.m_add_v, ctx.m_col_map, &m_ext,
-                               heap);
+  m_ptr = row_build_w_add_vcol(type, index, m_slc->reg(), m_slc,
+                               ctx.m_new_table, m_add_cols, ctx.m_add_v,
+                               ctx.m_col_map, &m_ext, heap);
 
   /** Deal with gpp column. */
   byte *ptr = static_cast<byte *>(mem_heap_zalloc(heap, DATA_GPP_NO_LEN));
@@ -541,7 +542,7 @@ dberr_t Row::build(ddl::Context &ctx, dict_index_t *index, mem_heap_t *heap,
   }
 
   if (ctx.m_add_autoinc != ULINT_UNDEFINED) {
-    auto err = ctx.handle_autoinc(m_ptr);
+    auto err = ctx.handle_autoinc(m_ptr, heap);
 
     if (err != DB_SUCCESS) {
       return err;

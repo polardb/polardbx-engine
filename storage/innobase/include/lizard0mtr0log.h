@@ -42,6 +42,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 struct dict_index_t;
 
+constexpr size_t REDO_SYS_TID_LEN = 14 /* 5(trx_id pos len) + 9(trx_id len)*/;
+
 constexpr size_t REDO_SYS_FIELDS_LEN =
     14 /* 5(trx_id pos len) + 9(trx_id len)*/ + DATA_ROLL_PTR_LEN;
 
@@ -57,15 +59,21 @@ namespace lizard {
 constexpr uint32_t SEC_EXTRA_FLAG_MASK_GPP = 0x01UL;
 /* The higher 3 bits are used for ITL version. */
 constexpr uint32_t SEC_EXTRA_FLAG_MASK_ITL = 0xE0UL;
-enum SEC_EXTRA_FLAG_ITL { SEC_EXTRA_FLAG_PANDA = 0x20UL };
+enum SEC_EXTRA_FLAG_ITL {
+  SEC_EXTRA_FLAG_PANDA = 0x20UL,
+  SEC_EXTRA_FLAG_HIPPO = 0x40UL,
+  SEC_EXTRA_FLAG_SPC = 0x80UL
+};
 
 /** Get the sec_extra_flag from index.
   @param[in]  index           B-tree index.
-  @param[out] sec_extra_flag  secondary index lizard fields extra flag
-  @param[out] n_sec_fields    number of secondary index lizard fields
+  @param[in]  is_leaf         current record is on leaf page or not.
+  @param[out] sec_extra_flag  secondary index lizard fields extra flag if need.
+  @param[in,out] n_fields     number of secondary index lizard fields
+  @return true if need log sec_extra_flag.
 */
-void get_sec_extra_flag(const dict_index_t *index, uint8_t &sec_extra_flag,
-                        uint8_t &n_sec_fields);
+bool get_sec_extra_flag(const dict_index_t *index, bool is_leaf,
+                        uint8_t *sec_extra_flag, uint16_t *n_fields);
 
 /** Log the sec_extra_flag.
   @param[in]     flag            1 byte flag indicating whether to log
@@ -84,14 +92,15 @@ void log_index_sec_extra_flag(uint8_t flag, uint8_t sec_extra_flag,
   @param[out] sec_extra_flag  read 1 bytes sec_extra_flag
   @param[out] n_sec_fields    count number of secondary index lizard fields
   @param[out] n_s_gfields     count number of secondary GPP fields
+  @param[out] n_s_tfields     count number of secondary TID fields
   @param[out] page_type       page type of root
   @param[out] layout          txn layout
   @return pointer to buffer. */
 byte *parse_index_sec_extra_flag(uint8_t flag, byte *ptr, const byte *end_ptr,
                                  uint8_t &sec_extra_flag, uint8_t &n_sec_fields,
-                                 uint8_t &n_s_gfields, page_type_t &page_type,
-                                 txn_layout_t *layout);
+                                 uint8_t &n_s_gfields, uint8_t &n_s_tfields,
+                                 page_type_t &page_type, txn_layout_t *layout);
 
-} // namespace lizard
+}  // namespace lizard
 
 #endif

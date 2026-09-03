@@ -32,11 +32,22 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0gcs_h
 #define lizard0gcs_h
 
+#include "univ.i"
+
 #include "fsp0types.h"
-#include "lizard0gcs0hist.h"
-#include "lizard0scn.h"
 #include "trx0sys.h"
 #include "trx0types.h"
+
+#include "lizard0cmmt0cache.h"
+#include "lizard0gcs0clean.h"
+#include "lizard0gcs0gcn.h"
+#include "lizard0gcs0read.h"
+#include "lizard0gcs0scn.h"
+#include "lizard0gcs0snapshot.h"
+#include "lizard0gcs0tid.h"
+#include "lizard0gcs0utc.h"
+#include "lizard0trx0cycle.h"
+#include "lizard0txn0slot0types.h"
 
 struct mtr_t;
 
@@ -78,84 +89,41 @@ typedef byte gcs_sysf_t;
 /** The page number of GCS system header in lizard tablespace */
 #define GCS_DATA_PAGE_NO 3
 
-#ifdef UNIV_PFS_MUTEX
-/* GCS scn list mutex PFS key */
-extern mysql_pfs_key_t scn_list_mutex_key;
-/* GCS gcn order mutex PFS key */
-extern mysql_pfs_key_t gcn_order_mutex_key;
-/* GCS gcn persist mutex PFS key */
-extern mysql_pfs_key_t gcn_persist_mutex_key;
-#endif
-
 namespace lizard {
 
-/** Persisted gcn. now for purged gcn and erased gcn. */
-template <unsigned long long POS>
-class Persisted_gcn {
- public:
-  Persisted_gcn() : m_gcn(GCN_INITIAL), m_inited(false) {}
-  virtual ~Persisted_gcn() {}
-
-  void init();
-  /**
-    Attention:
-
-    If flush commit number > m_purged_xcn, it will flush commit number into
-    lizard tablespace, but it didn't sync the redo of modification.  if
-    related undo content has been purged, it mean that those undo's redo
-    has been synced, because the redo of flushing commit number is prior of
-    undo's redo. so it's unnecessary to sync it specially.
-  */
-  void flush(gcn_t gcn);
-
-  gcn_t get();
-
- private:
-  gcn_t read();
-
-  void write(gcn_t gcn);
-
- private:
-  std::atomic<gcn_t> m_gcn;
-  bool m_inited;
-};
-
-using Purged_gcn = Persisted_gcn<GCS_DATA_PURGE_GCN>;
-using Erased_gcn = Persisted_gcn<GCS_DATA_ERASE_GCN>;
-
-class CSnapshot_mgr;
-
-/** GCS Persister container. */
-struct Persisters {
- public:
-  Persisters() : m_scn_persister(), m_gcn_persister() {}
-
-  virtual ~Persisters() {}
-
-  Persister *scn_persister() { return &m_scn_persister; }
-  Persister *gcn_persister() { return &m_gcn_persister; }
-
- private:
-  ScnPersister m_scn_persister;
-  GcnPersister m_gcn_persister;
-};
+struct purge_vision_t;
+struct cycle_vision_t;
 
 class CRecover {
  public:
-  CRecover() : m_need_recovery(false), m_metadata() {}
-  virtual ~CRecover() {}
+  CRecover()
+      : m_need_recovery(false),
+        m_tid_meta(),
+        m_tid_recovered(false),
+        m_scn_meta(),
+        m_scn_recovered(false),
+        m_gcn_meta(),
+        m_gcn_recovered(false) {}
 
+  virtual ~CRecover() {}
   /**
     Raise gcn metadata when parse gcn redo log record.
 
-    @param[in]	gcn	Parsed gcn
-  */
-  void recover_gcn(const gcn_t gcn);
-
+    @param[in]	gcn	Parsed gcn */
+  void recover_gcn(const gcn_meta_t &meta);
   /**
-    Recover the max parsed gcn to current gcn.
-  */
-  void apply_gcn();
+    Raise scn metadata when parse scn redo log record.
+
+    @param[in]	scn	Parsed scn */
+  void recover_scn(const scn_meta_t &meta);
+  /**
+    Raise tid metadata when parse undo log header redo.
+
+    @param[in]	tid	Parsed tid */
+  void recover_tid(const tid_meta_t &meta);
+
+  /** Recover the max parsed cmmt to current cmmt */
+  void apply_cmmt();
 
   void need_recovery(bool value) { m_need_recovery = value; }
 
@@ -163,37 +131,48 @@ class CRecover {
 
  private:
   bool m_need_recovery;
-  PersistentGcsData m_metadata;
+
+  tid_meta_t m_tid_meta;
+  bool m_tid_recovered;
+
+  scn_meta_t m_scn_meta;
+  bool m_scn_recovered;
+
+  gcn_meta_t m_gcn_meta;
+  bool m_gcn_recovered;
 };
 
 /** The memory structure of GCS system */
 struct gcs_t {
-  /** The global scn number which is total order. */
+  // Transaction id.
+  TID tid;
+  /** The scn which is order. */
   SCN scn;
-
-  /** The global gcn number which come from TSO or Inner. */
+  /** The gcn which come from TSO or Inner. */
   GCN gcn;
+  /** Commit time. */
+  UTC utc;
 
-  /** The min active trx id */
-  std::atomic<trx_id_t> min_active_tid;
+  /** Commit number vision. */
+  MVCC mvcc;
 
-  /** A min safe SCN, only used for purge */
-  std::atomic<scn_t> min_safe_scn;
+  /** Commit number snapshot. */
+  CSnapshot csnapshot;
 
-  /*!< Ordered on commited scn of trx_t of all the
-  currenrtly active RW transactions */
-  UT_LIST_BASE_NODE_T(trx_t, scn_list) serialisation_list_scn;
-  /** Persister for gcs metadata. */
-  Persisters persisters;
+  /** Commit number clean by purge/erase system. */
+  CClean cclean;
 
-  /** Protect serialisation list scn */
-  ib_mutex_t m_scn_list_mutex;
+  /** Commit number cache. */
+  Atomic_ccache ccache;
 
-  /** Protect m_gcn order */
-  ib_mutex_t m_gcn_order_mutex;
-
-  /** Serialize gcn persist */
-  ib_mutex_t m_gcn_persist_mutex;
+  /** Prepare also generate commit number if has proposal, it only
+   *  produce gcn, and left scn until real commit.
+   *
+   * @param[in/out]	trx
+   * @param[in/out]	mtr
+   *
+   * @retval	proposal mark */
+  proposal_mark_t new_proposal(trx_t *trx, mtr_t *mtr);
 
   /** Commit by generating all commit number.
    *
@@ -202,41 +181,22 @@ struct gcs_t {
    *
    * @retval	commit mark */
   commit_mark_t new_commit(trx_t *trx, mtr_t *mtr);
-  /** Prepare also generate commit number if has proposal, it only
-   *  produce gcn, and left scn until real commit.
-   *
-   * @param[in/out]	trx
-   * @param[in/out]	mtr
-   *
-   * @retval	proposal mark */
-  proposal_mark_t new_prepare(trx_t *trx, mtr_t *mtr);
 
-  /** Persisted gcn value. */
-  std::atomic<gcn_t> m_persisted_gcn;
-
-  /**
-    Persist gcn if current gcn > persisted gcn.
-
-    @retval	true	if written
-   */
-  bool persist_gcn();
-
-  /** Commit number snapshot. */
-  CSnapshot_mgr csnapshot_mgr;
-  void new_snapshot(const commit_snap_t &snap);
-
-  template <typename T>
-  trx_id_t search_up_limit_tid(const T *lhs);
+  /** Task a global commit system snapshot. */
+  commit_snap_t new_snapshot();
 };
 
+/** GLobal GCS system */
+extern gcs_t *gcs;
+
 /** Initialize GCS system memory structure. */
-void gcs_init();
+extern void gcs_init();
 
 /** Close GCS system structure. */
-void gcs_close();
+extern void gcs_close();
 
 /** Boot GCS system */
-void gcs_boot();
+extern void gcs_boot();
 
 /** Get the address of GCS system header */
 extern gcs_sysf_t *gcs_sysf_get(mtr_t *mtr);
@@ -244,35 +204,109 @@ extern gcs_sysf_t *gcs_sysf_get(mtr_t *mtr);
 /** Create GCS system pages within lizard tablespace */
 extern void gcs_create_sys_pages();
 
-/** GLobal GCS system */
-extern gcs_t *gcs;
+/** Resurrect all recovered trx into gcs structures. */
+extern void gcs_resurrect_trxs();
 
-/** Get current SCN number */
-extern scn_t gcs_load_scn();
-
-/** Get current persisted GCN number */
-extern gcn_t gcs_load_gcn();
-
-extern bool gcs_persist_gcn();
+// see trx0sys.ic
+extern bool gcs_need_rollback();
 
 /**
-  Modify the min active trx id
+  Persist transaction id and commit number.
 
-  @param[in]      the add/removed trx */
-extern void gcs_mod_min_active_tid(trx_t *trx);
+  @retval	true	if written  */
+extern bool gcs_persist_cmmt();
+
+inline Tid_list_t *gcs_tid_list(size_t shard_no) {
+  return gcs->tid.get_list(shard_no);
+}
+
+template <typename F>
+inline bool gcs_iterate_rw_trx(F &&f) {
+  return gcs->tid.latch_and_iterate_trx(std::forward<F>(f));
+}
+
+template <typename F>
+inline bool gcs_iterate_rw_list(F &&f) {
+  return gcs->tid.latch_and_iterate_trx_list(std::forward<F>(f));
+}
+
+/** How many prepared transaction. */
+inline uint64_t gcs_n_prepared_trx() {
+  uint64_t n_prepared_trx = 0;
+  gcs->tid.latch_and_iterate_trx([&n_prepared_trx](trx_t *trx) -> bool {
+    if (trx_state_eq(trx, TRX_STATE_PREPARED)) n_prepared_trx++;
+    return false;
+  });
+  return n_prepared_trx;
+}
+
+/** How many rw transaction. */
+inline uint64_t gcs_n_rw_trx() {
+  uint64_t n_rw_trx = 0;
+  gcs->tid.latch_and_iterate_trx([&n_rw_trx](trx_t *trx) -> bool {
+    n_rw_trx++;
+    return false;
+  });
+  return n_rw_trx;
+}
+
+/** Acquire a rw trx from rw list. */
+inline trx_t *gcs_get_rw_trx() {
+  trx_t *rw_trx = nullptr;
+  bool exist = gcs->tid.latch_and_iterate_trx([&rw_trx](trx_t *trx) -> bool {
+    rw_trx = trx;
+    return true;
+  });
+
+  if (exist) {
+    ut_ad(rw_trx);
+  }
+
+  return rw_trx;
+}
+
+/** Allocate a new tid. */
+inline trx_id_t gcs_new_tid() { return gcs->tid.new_tid(); }
+
+/** Start a new transaction. */
+template <typename F>
+inline trx_id_t gcs_new_tid(trx_t *trx, F &&f) {
+  return gcs->tid.new_tid(trx, std::forward<F>(f));
+}
+
+inline bool gcs_validate_rw_list() { return gcs->tid.validate_trx_list(); }
+
+/** Get current SCN number */
+inline scn_t gcs_load_scn() { return gcs->scn.load_scn(); }
+
+/** Get current persisted GCN number */
+inline gcn_t gcs_load_gcn() { return gcs->gcn.load_gcn(); }
+
+/** Get new trx id. */
+inline trx_id_t gcs_load_next_tid() { return gcs->tid.load_next_tid(); }
+
+/** Peek the min active tid according to txn address.*/
+inline trx_id_t gcs_peek_min_active_tid(const undo_ptr_t &undo_ptr) {
+  slot_addr_t slot_addr(undo_ptr);
+  ut_ad(slot_addr.is_redo());
+
+  return gcs->tid.peek_min_active_tid(slot_addr);
+}
 
 /**
   Get the min active trx id
 
   @retval         the min active id in trx_sys. */
-extern trx_id_t gcs_load_min_active_tid();
+inline trx_id_t gcs_load_min_active_tid() {
+  return gcs->tid.load_min_active_tid();
+}
 
 /**
   In MySQL 8.0:
   * Hold trx_sys::mutex, generate trx->no, add trx to
   trx_sys->serialisation_list
-  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records are
-  ordered.
+  * Hold purge_sys::pq_mutex, add undo rseg to purge_queue. All undo records
+  are ordered.
   * Erase above mutexs, commit in undo header
   * Hold trx_sys::mutex, erase serialisation_list, rw_trx_ids, rw_trx_list,
     the modifications from the committed trx can be seen.
@@ -281,8 +315,8 @@ extern trx_id_t gcs_load_min_active_tid();
   * Hold trx_sys::mutex, generate trx->txn_desc.scn
   * Hold SCN::mutex, add trx to trx_sys->serialisation_list_scn
   * Erase trx_sys::mutex, hold purge_sys::pq_mutex and rseg::mutex, and add
-    undo rseg to purge_queue. So undo records in the same rseg are ordered, but
-    undo records from different rsegs are not ordered in purge_heap.
+    undo rseg to purge_queue. So undo records in the same rseg are ordered,
+  but undo records from different rsegs are not ordered in purge_heap.
   * Erase above mutexs, commit in undo header
   * Hold SCN::mutex, remove trx in trx_sys->serialisation_list_scn,
     and update min_safe_scn.
@@ -298,82 +332,145 @@ extern trx_id_t gcs_load_min_active_tid();
 
   @retval         the min safe commited scn in current lizard sys
 */
-extern scn_t gcs_load_min_safe_scn();
+inline scn_t gcs_load_min_safe_scn() {
+  // assert_lizard_min_safe_scn_valid();
+  /* Get the oldest transaction from serialisation list. */
+  scn_t min_active_scn = gcs->scn.load_min_active_scn();
+  ut_a(min_active_scn > 0);
 
-/** Erase trx in serialisation_list_scn, and update min_safe_scn
+  return min_active_scn - 1;
+}
+
+inline scn_t gcs_traverse_min_safe_scn() {
+  /* Get the oldest transaction from serialisation list. */
+  scn_t min_active_scn = gcs->scn.traverse_min_active_scn();
+  ut_a(min_active_scn > 0);
+
+  return min_active_scn - 1;
+}
+
+/** Erase trx in scn_list_scn, and update min_safe_scn
 @param[in]      trx      trx to be removed */
-void gcs_erase_lists(trx_t *trx);
+inline void gcs_erase_scn(trx_t *trx) { gcs->scn.erase(trx); }
+
+/** Erase trx in rw_list, and update min_active_tid
+@param[in]      trx      trx to be removed */
+inline void gcs_erase_tid(trx_t *trx) { gcs->tid.erase(trx); }
 
 template <typename T>
-extern trx_id_t gcs_search_up_limit_tid(const T *lhs);
+inline trx_id_t gcs_search_up_limit_tid(const T *lhs) {
+  return gcs->csnapshot.search_up_limit_tid(lhs);
+}
 
-extern void gcs_set_gcn_if_bigger(gcn_t gcn);
+inline void gcs_set_gcn_if_bigger(gcn_t gcn) {
+  gcs->gcn.set_gcn_if_bigger(gcn);
+}
 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-/** Check if min_safe_scn is valid */
-void min_safe_scn_valid();
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
+inline void gcs_clean_advance_purge(const commit_order_t &ommt) {
+  gcs->cclean.advance_purge(ommt);
+}
+
+inline void gcs_clean_advance_erase(const commit_order_t &ommt) {
+  gcs->cclean.advance_erase(ommt);
+}
+
+inline void gcs_clean_init_purge() { gcs->cclean.init_purge(); }
+inline void gcs_clean_init_erase() { gcs->cclean.init_erase(); }
+
+inline commit_order_t gcs_clean_cycled_position() { return cycle_sys->last(); }
+
+inline scn_t gcs_clean_purged_scn() { return gcs->cclean.purged_scn(); }
+inline gcn_t gcs_clean_purged_gcn() { return gcs->cclean.purged_gcn(); }
+inline commit_order_t gcs_clean_purged_position() {
+  return gcs->cclean.purged_position();
+}
+
+inline scn_t gcs_clean_erased_scn() { return gcs->cclean.erased_scn(); }
+inline gcn_t gcs_clean_erased_gcn() { return gcs->cclean.erased_gcn(); }
+inline commit_order_t gcs_clean_erased_position() {
+  return gcs->cclean.erased_position();
+}
+
+/** Search from cache and overwrite the txn rec
+ *
+ * @param[in/out]   txn rec
+ * @param[in/out]   txn lookup status
+ *
+ * @retval          cache hit or not */
+inline bool gcs_cache_find(txn_rec_t *txn_rec, txn_status_t *txn_status) {
+  return gcs->ccache.find(txn_rec, txn_status);
+}
+/** Cache Commit Number if txn_rec was looked up.
+ *
+ * @param[in]	txn rec info that looked up
+ * @param[in]	txn status */
+inline void gcs_cache_insert(const txn_rec_t &txn_rec,
+                             const txn_status_t &status) {
+  gcs->ccache.insert(txn_rec, status);
+}
+/** Cache Commit Number after trx commit.
+ *
+ * @param[in]	Committed trx
+ * @param[in]	Allocated commit number  */
+inline void gcs_cache_insert(const trx_t *trx, bool serialised) {
+  gcs->ccache.insert(trx, serialised);
+}
+/** Guess whether rec tid is within the range of tcn cache.
+ *
+ * @param[in]	txn_rec		txn record
+ * @param[in]	up_limit_tid	up limit tid of vision
+ *
+ * @retval		guess result */
+bool gcs_cache_guess(const txn_rec_t &txn_rec, const trx_id_t up_limit_tid);
+/**
+  Assign vision for an active trancaction.
+
+  @param[in]		the transaction to assign vision
+*/
+extern void gcs_vision_open(trx_t *trx);
+
+/**
+  Assign shadow vision for a single shard read.
+
+  @param[in]		the transaction to assign vision
+*/
+extern void gcs_shadow_view_open(trx_t *trx);
+
+/**
+  Release the corresponding element.
+
+  @param[in]		the element will be released
+*/
+extern void gcs_vision_release(Vision *vision);
+
+/**
+  Release the shadow vision so the purge sys can advance
+
+  @param[in]		the element will be released
+*/
+extern void gcs_shadow_view_release(Shadow_view *vision);
+
+/**
+  Get the earliest undestructed element.
+
+  @param[out]		the earliest entry undestructed element
+*/
+extern void gcs_clone_oldest_vision(purge_vision_t *pvision);
+
+/**
+  Get the earliest undestructed element.
+
+  @param[out]		the earliest entry undestructed element
+*/
+extern void gcs_clone_oldest_vision(cycle_vision_t *cvision);
+
+/**
+  Get total size of all active vision
+
+  @retval       total size of all active vision
+*/
+extern ulint gcs_mvcc_size();
 
 }  // namespace lizard
-
-#define scn_list_mutex_enter()                   \
-  do {                                           \
-    ut_ad(lizard::gcs != nullptr);               \
-    mutex_enter(&lizard::gcs->m_scn_list_mutex); \
-  } while (0)
-
-#define scn_list_mutex_exit()                   \
-  do {                                          \
-    ut_ad(lizard::gcs != nullptr);              \
-    mutex_exit(&lizard::gcs->m_scn_list_mutex); \
-  } while (0)
-
-#ifdef UNIV_DEBUG
-#define scn_list_mutex_own() mutex_own(&lizard::gcs->m_scn_list_mutex)
-#endif
-
-#define gcn_order_mutex_enter()                   \
-  do {                                            \
-    ut_ad(lizard::gcs != nullptr);                \
-    mutex_enter(&lizard::gcs->m_gcn_order_mutex); \
-  } while (0)
-
-#define gcn_order_mutex_exit()                   \
-  do {                                           \
-    ut_ad(lizard::gcs != nullptr);               \
-    mutex_exit(&lizard::gcs->m_gcn_order_mutex); \
-  } while (0)
-
-#ifdef UNIV_DEBUG
-#define gcn_order_mutex_own() mutex_own(&lizard::gcs->m_gcn_order_mutex)
-#endif
-
-#define gcn_persist_mutex_enter()                   \
-  do {                                              \
-    ut_ad(lizard::gcs != nullptr);                  \
-    mutex_enter(&lizard::gcs->m_gcn_persist_mutex); \
-  } while (0)
-
-#define gcn_persist_mutex_exit()                   \
-  do {                                             \
-    ut_ad(lizard::gcs != nullptr);                 \
-    mutex_exit(&lizard::gcs->m_gcn_persist_mutex); \
-  } while (0)
-
-#ifdef UNIV_DEBUG
-#define gcn_persist_mutex_own() mutex_own(&lizard::gcs->m_gcn_persist_mutex)
-#endif
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-#define assert_lizard_min_safe_scn_valid() \
-  do {                                     \
-    lizard::min_safe_scn_valid();          \
-  } while (0)
-
-#else
-
-#define assert_lizard_min_safe_scn_valid()
-
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
 #endif  // lizard0gcs_h define

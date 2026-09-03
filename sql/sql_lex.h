@@ -3998,6 +3998,8 @@ struct LEX : public Query_tables_list, public im::Query_blocks_list {
  private:
   /// True if statement references UDF functions
   bool m_has_udf{false};
+  /// True if statement contains MODIFY_ON_UPDATE() function
+  bool m_has_mod_onupd{false};
   bool ignore;
 
  public:
@@ -4005,6 +4007,8 @@ struct LEX : public Query_tables_list, public im::Query_blocks_list {
   void set_ignore(bool ignore_param) { ignore = ignore_param; }
   void set_has_udf() { m_has_udf = true; }
   bool has_udf() const { return m_has_udf; }
+  void set_has_mod_onupd() { m_has_mod_onupd = true; }
+  bool has_mod_onupd() const { return m_has_mod_onupd; }
   st_parsing_options parsing_options;
   Alter_info *alter_info;
   /* Prepared statements SQL syntax:*/

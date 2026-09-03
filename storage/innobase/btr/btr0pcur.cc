@@ -39,6 +39,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0byte.h"
 
 #include "lizard0row0bamboo.h"
+#include "lizard0btr0pcur.h"
+#include "lizard0mon.h"
 
 void btr_pcur_t::store_position(mtr_t *mtr) {
   ut_ad(m_pos_state == BTR_PCUR_IS_POSITIONED);
@@ -49,9 +51,9 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
 
   auto page_cursor = get_page_cur();
 
-  auto rec = page_cur_get_rec(page_cursor);
-  auto page = page_align(rec);
-  auto offs = page_offset(rec);
+  auto reg = page_cur_get_reg(page_cursor);
+  auto page = page_align(reg);
+  auto offs = page_offset(reg);
 
 #ifdef UNIV_DEBUG
   if (dict_index_is_spatial(index)) {
@@ -92,12 +94,12 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
   }
 
   if (page_rec_is_supremum_low(offs)) {
-    rec = page_rec_get_prev(rec);
+    reg = page_rec_get_prev_reg(reg.rec);
 
     m_rel_pos = BTR_PCUR_AFTER;
 
   } else if (page_rec_is_infimum_low(offs)) {
-    rec = page_rec_get_next(rec);
+    reg = page_rec_get_next_reg(reg.rec);
 
     m_rel_pos = BTR_PCUR_BEFORE;
   } else {
@@ -106,8 +108,8 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
 
   m_old_stored = true;
 
-  m_old_rec = dict_index_copy_rec_order_prefix(index, rec, &m_old_n_fields,
-                                               &m_old_rec_buf, &m_buf_size);
+  m_old_reg = dict_index_copy_rec_order_prefix(index, reg, &m_old_n_fields,
+                                               &m_old_rec_boc, &m_buf_size);
   m_block_when_stored.store(block);
 
   m_modify_clock = block->get_modify_clock(
@@ -116,31 +118,34 @@ void btr_pcur_t::store_position(mtr_t *mtr) {
 
 void btr_pcur_t::copy_stored_position(btr_pcur_t *dst, const btr_pcur_t *src) {
   {
-    const auto dst_old_rec_buf = dst->m_old_rec_buf;
+    const auto dst_old_rec_boc = dst->m_old_rec_boc;
     const auto dst_buf_size = dst->m_buf_size;
 
     memcpy(dst, src, sizeof(*dst));
 
-    dst->m_old_rec_buf = dst_old_rec_buf;
+    dst->m_old_rec_boc = dst_old_rec_boc;
     dst->m_buf_size = dst_buf_size;
   }
 
-  if (src->m_old_rec != nullptr) {
+  if (src->m_old_reg.is_not_null()) {
     /* We have an old buffer, but it is too small. */
-    if (dst->m_old_rec_buf != nullptr && dst->m_buf_size < src->m_buf_size) {
-      ut::free(dst->m_old_rec_buf);
-      dst->m_old_rec_buf = nullptr;
+    if (dst->m_old_rec_boc.buf != nullptr &&
+        dst->m_buf_size < src->m_buf_size) {
+      ut::free(dst->m_old_rec_boc.buf);
+      dst->m_old_rec_boc.reset();
     }
     /* We don't have a buffer, but we should have one. */
-    if (dst->m_old_rec_buf == nullptr) {
-      dst->m_old_rec_buf = static_cast<byte *>(
-          ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, src->m_buf_size));
+    if (dst->m_old_rec_boc.buf == nullptr) {
+      dst->m_old_rec_boc =
+          ut::malloc_boc_withkey(UT_NEW_THIS_FILE_PSI_KEY, src->m_buf_size);
       dst->m_buf_size = src->m_buf_size;
     }
 
-    memcpy(dst->m_old_rec_buf, src->m_old_rec_buf, src->m_buf_size);
+    memcpy(dst->m_old_rec_boc.buf, src->m_old_rec_boc.buf, src->m_buf_size);
 
-    dst->m_old_rec = dst->m_old_rec_buf + (src->m_old_rec - src->m_old_rec_buf);
+    dst->m_old_reg = {
+        dst->m_old_rec_boc.buf + (src->m_old_reg.rec - src->m_old_rec_boc.buf),
+        dst->m_old_rec_boc.loc};
   }
   dst->m_old_n_fields = src->m_old_n_fields;
 }
@@ -174,10 +179,14 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr,
     return (false);
   }
 
-  ut_a(m_old_rec != nullptr);
+  ut_a(m_old_reg.is_not_null());
   ut_a(m_old_n_fields > 0);
 
   if (lizard::dict_index_inject_stress_test_for_panda(m_btr_cur.index)) {
+    goto pessimistic_restore;
+  }
+
+  if (lizard::inject_stress_test_for_guess) {
     goto pessimistic_restore;
   }
 
@@ -203,24 +212,16 @@ bool btr_pcur_t::restore_position(ulint latch_mode, mtr_t *mtr,
 
       if (m_rel_pos == BTR_PCUR_ON) {
 #ifdef UNIV_DEBUG
-        const rec_t *rec;
-        const ulint *offsets1;
-        const ulint *offsets2;
+        Slice_ctx slc_ctx1;
+        Slice_ctx slc_ctx2;
+        creg_t reg = get_reg();
 
-        rec = get_rec();
+        slc_ctx1.get_offsets(m_old_reg, index, m_old_n_fields);
+        slc_ctx2.get_offsets(reg, index, m_old_n_fields);
 
-        auto heap = mem_heap_create(256, UT_LOCATION_HERE);
-
-        offsets1 = rec_get_offsets(m_old_rec, index, nullptr, m_old_n_fields,
-                                   UT_LOCATION_HERE, &heap);
-
-        offsets2 = rec_get_offsets(rec, index, nullptr, m_old_n_fields,
-                                   UT_LOCATION_HERE, &heap);
-
-        ut_ad(!cmp_rec_rec(m_old_rec, rec, offsets1, offsets2, index,
-                           page_is_spatial_non_leaf(rec, index), nullptr,
+        ut_ad(!cmp_rec_rec(slc_ctx1.slice(), slc_ctx2.slice(), index,
+                           page_is_spatial_non_leaf(reg.rec, index), nullptr,
                            false));
-        mem_heap_free(heap);
 #endif /* UNIV_DEBUG */
         return (true);
       }
@@ -239,8 +240,9 @@ pessimistic_restore:
   /* If optimistic restoration did not succeed, open the cursor anew */
 
   auto heap = mem_heap_create(256, UT_LOCATION_HERE);
+  Slice_ctx slc_ctx;
 
-  tuple = dict_index_build_data_tuple(index, m_old_rec, m_old_n_fields, heap);
+  tuple = dict_index_build_data_tuple(index, m_old_reg, m_old_n_fields, heap);
 
   /* Save the old search mode of the cursor */
   auto old_mode = m_search_mode;
@@ -259,6 +261,36 @@ pessimistic_restore:
       ut_error;
   }
 
+  /* Guess mode: try page-level re-search before full B-tree search */
+  if ((latch_mode == BTR_SEARCH_LEAF || latch_mode == BTR_MODIFY_LEAF) &&
+      m_rel_pos == BTR_PCUR_ON &&
+      guess_position(index, tuple, mode, latch_mode, mtr, location)) {
+
+#ifdef UNIV_DEBUG
+    ut_ad(is_on_user_rec());
+    ut_ad(!cmp_dtuple_rec(
+        tuple, index,
+        slc_ctx.get_offsets(get_reg(), index, ULINT_UNDEFINED)));
+#endif /* UNIV_DEBUG */
+
+    /* Restore the old search mode */
+    m_search_mode = old_mode;
+
+    /* Update stored position metadata for future restore cycles. */
+    auto block = get_block();
+
+    m_block_when_stored.store(block);
+
+    m_modify_clock = block->get_modify_clock(
+        IF_DEBUG(fsp_is_system_temporary(block->page.id.space())));
+
+    m_old_stored = true;
+
+    mem_heap_free(heap);
+
+    return true;
+  }
+
   open_no_init(index, tuple, mode, latch_mode, 0, mtr, location);
 
   /* Restore the old search mode */
@@ -268,10 +300,8 @@ pessimistic_restore:
         m_rel_pos == BTR_PCUR_AFTER);
 
   if (m_rel_pos == BTR_PCUR_ON && is_on_user_rec() &&
-      !cmp_dtuple_rec(
-          tuple, get_rec(), index,
-          rec_get_offsets(get_rec(), index, nullptr, ULINT_UNDEFINED,
-                          UT_LOCATION_HERE, &heap))) {
+      !cmp_dtuple_rec(tuple, index,
+                      slc_ctx.get_offsets(get_reg(), index, ULINT_UNDEFINED))) {
     /* We have to store the NEW value for the modify clock,
     since the cursor can now be on a different page!
     But we can retain the value of old_rec */

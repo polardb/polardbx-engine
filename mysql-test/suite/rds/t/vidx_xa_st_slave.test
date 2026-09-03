@@ -1,0 +1,455 @@
+####################################################
+# XA + VECTOR INDEX – single-threaded slave       #
+#                                                  #
+# Verifies that the Attachable_trx_rw independent-trx path  #
+# works correctly under slave_parallel_workers=0   #
+# (do_apply_event path, NOT do_apply_event_worker) #
+#                                                  #
+# Key scenario: interleaved XA PREPARE/COMMIT      #
+#   XA PREPARE 'xid1' on t1 -- trx prepared       #
+#   XA PREPARE 'xid2' on t2 -- Attachable_trx_rw needed     #
+#   XA COMMIT  'xid1'                              #
+#   XA COMMIT  'xid2'                              #
+# On ST slave the single applier thread has a      #
+# prepared InnoDB trx after xid1; hlindex DML for  #
+# xid2 must use Attachable_trx_rw to avoid operating on the  #
+# prepared trx context.                            #
+####################################################
+
+# TEST: vidx_xa_st_slave
+#
+# Requires:
+#   vidx_xa_st_slave-slave.opt  -> --slave_parallel_workers=0
+#   vidx_xa_st_slave-master.opt -> --vidx_disabled=OFF --transaction_isolation=RC
+#
+# Covers:
+#   - Single-threaded slave Attachable_trx_rw creation & commit (do_apply_event)
+#   - Interleaved XA PREPARE via two tables (t1, t2)
+#   - Mixed DML (INSERT + UPDATE + DELETE) under XA
+#   - XA ROLLBACK interleaved with COMMIT
+#   - xa_detach_on_prepare OFF / ON
+#   - XA ONE PHASE commit
+#   - Batch INSERT, NULL vector, consecutive ROLLBACK+COMMIT
+#   - ANN search and auxiliary table row-count consistency
+
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--source include/master-slave.inc
+
+# ---- verify slave is single-threaded ----
+--source include/rpl_connection_slave.inc
+--let $workers = `SELECT @@global.slave_parallel_workers`
+--let $assert_text = slave_parallel_workers must be 0
+--let $assert_cond = $workers = 0
+--source include/assert.inc
+
+--disable_warnings
+
+--echo
+--echo ##############################################
+--echo # 1. Setup: create tables + seed data       #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+SET SESSION xa_detach_on_prepare = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# Seed data so the graph has initial nodes
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+INSERT INTO t1(a, v) VALUES (4, VEC_FROMTEXT("[4,4,4]"));
+INSERT INTO t1(a, v) VALUES (5, VEC_FROMTEXT("[5,5,5]"));
+
+INSERT INTO t2(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t2(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t2(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+INSERT INTO t2(a, v) VALUES (4, VEC_FROMTEXT("[4,4,4]"));
+INSERT INTO t2(a, v) VALUES (5, VEC_FROMTEXT("[5,5,5]"));
+
+# Cache aux table IDs
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+
+--echo
+--echo ##############################################
+--echo # 2. Basic XA INSERT on single-threaded     #
+--echo #    slave (do_apply_event path)             #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+XA START 'xa_st_1';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10]"));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT("[11,11,11]"));
+XA END 'xa_st_1';
+XA PREPARE 'xa_st_1';
+XA COMMIT 'xa_st_1';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+DEALLOCATE PREPARE s;
+
+--echo
+--echo ##############################################
+--echo # 3. Interleaved XA PREPARE / COMMIT        #
+--echo #    THE critical scenario for Attachable_trx_rw on   #
+--echo #    single-threaded slave.                  #
+--echo #                                            #
+--echo #    Uses t1 and t2 to avoid hlindex lock   #
+--echo #    conflict on master while producing the #
+--echo #    interleaved binlog pattern:             #
+--echo #      PREPARE1 -> PREPARE2 -> COMMIT1 ->   #
+--echo #      COMMIT2                               #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+# XA1 on t1: PREPARE then detach
+XA START 'xa_inter_1';
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT("[20,20,20]"));
+INSERT INTO t1(a, v) VALUES (21, VEC_FROMTEXT("[21,21,21]"));
+XA END 'xa_inter_1';
+XA PREPARE 'xa_inter_1';
+
+# XA2 on t2: PREPARE (different table → no lock conflict)
+XA START 'xa_inter_2';
+INSERT INTO t2(a, v) VALUES (22, VEC_FROMTEXT("[22,22,22]"));
+INSERT INTO t2(a, v) VALUES (23, VEC_FROMTEXT("[23,23,23]"));
+XA END 'xa_inter_2';
+XA PREPARE 'xa_inter_2';
+
+# Commit both
+XA COMMIT 'xa_inter_1';
+XA COMMIT 'xa_inter_2';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo
+--echo ##############################################
+--echo # 4. Interleaved XA with mixed DML          #
+--echo #    INSERT + UPDATE on t1, DELETE + INSERT  #
+--echo #    on t2, both PREPARE then COMMIT         #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_mix_1';
+INSERT INTO t1(a, v) VALUES (40, VEC_FROMTEXT("[40,40,40]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[1,1,99]") WHERE a = 1;
+XA END 'xa_mix_1';
+XA PREPARE 'xa_mix_1';
+
+XA START 'xa_mix_2';
+DELETE FROM t2 WHERE a = 2;
+INSERT INTO t2(a, v) VALUES (41, VEC_FROMTEXT("[41,41,41]"));
+XA END 'xa_mix_2';
+XA PREPARE 'xa_mix_2';
+
+XA COMMIT 'xa_mix_1';
+XA COMMIT 'xa_mix_2';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 40) ORDER BY a;
+SELECT COUNT(*) AS t2_a2 FROM t2 WHERE a = 2;
+SELECT COUNT(*) AS t2_a41 FROM t2 WHERE a = 41;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 40) ORDER BY a;
+SELECT COUNT(*) AS t2_a2 FROM t2 WHERE a = 2;
+SELECT COUNT(*) AS t2_a41 FROM t2 WHERE a = 41;
+
+--echo
+--echo ##############################################
+--echo # 5. XA ROLLBACK interleaved with COMMIT    #
+--echo #    PREPARE on t1 -> PREPARE on t2 ->      #
+--echo #    ROLLBACK t1 -> COMMIT t2               #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_rb_1';
+INSERT INTO t1(a, v) VALUES (50, VEC_FROMTEXT("[50,50,50]"));
+XA END 'xa_rb_1';
+XA PREPARE 'xa_rb_1';
+
+XA START 'xa_rb_2';
+INSERT INTO t2(a, v) VALUES (51, VEC_FROMTEXT("[51,51,51]"));
+XA END 'xa_rb_2';
+XA PREPARE 'xa_rb_2';
+
+XA ROLLBACK 'xa_rb_1';
+XA COMMIT 'xa_rb_2';
+
+--source include/rpl_sync.inc
+
+--echo # Master: a=50 should NOT exist, a=51 should exist
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a50_count FROM t1 WHERE a = 50;
+SELECT COUNT(*) AS a51_count FROM t2 WHERE a = 51;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a50_count FROM t1 WHERE a = 50;
+SELECT COUNT(*) AS a51_count FROM t2 WHERE a = 51;
+
+--echo
+--echo ##############################################
+--echo # 6. ANN search consistency on ST slave     #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+--sorted_result
+SELECT id, a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+
+--source include/rpl_connection_slave.inc
+--sorted_result
+SELECT id, a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+
+--echo
+--echo ##############################################
+--echo # 7. Row count consistency checkpoint       #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo
+--echo ##############################################
+--echo # 8. xa_detach_on_prepare = OFF             #
+--echo #    Sequential two-phase XA                #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+SET SESSION xa_detach_on_prepare = OFF;
+
+XA START 'xa_detach_off_1';
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT("[60,60,60]"));
+XA END 'xa_detach_off_1';
+XA PREPARE 'xa_detach_off_1';
+XA COMMIT 'xa_detach_off_1';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a60_count FROM t1 WHERE a = 60;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a60_count FROM t1 WHERE a = 60;
+
+--echo
+--echo ##############################################
+--echo # 9. xa_detach_on_prepare = ON with mixed   #
+--echo #    DML (INSERT + UPDATE)                  #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+SET SESSION xa_detach_on_prepare = ON;
+
+XA START 'xa_detach_on_1';
+INSERT INTO t1(a, v) VALUES (61, VEC_FROMTEXT("[61,61,61]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[60,60,99]") WHERE a = 60;
+XA END 'xa_detach_on_1';
+XA PREPARE 'xa_detach_on_1';
+XA COMMIT 'xa_detach_on_1';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a61_count FROM t1 WHERE a = 61;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a61_count FROM t1 WHERE a = 61;
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo
+--echo ##############################################
+--echo # 10. XA ONE PHASE on ST slave              #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_1ph_st';
+INSERT INTO t1(a, v) VALUES (70, VEC_FROMTEXT("[70,70,70]"));
+INSERT INTO t1(a, v) VALUES (71, VEC_FROMTEXT("[71,71,71]"));
+XA END 'xa_1ph_st';
+XA COMMIT 'xa_1ph_st' ONE PHASE;
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a70_71_count FROM t1 WHERE a IN (70, 71);
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a70_71_count FROM t1 WHERE a IN (70, 71);
+
+--echo
+--echo ##############################################
+--echo # 11. Batch INSERT in XA on ST slave        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_batch_st';
+INSERT INTO t1(a, v) VALUES (100, VEC_FROMTEXT("[100,100,100]"));
+INSERT INTO t1(a, v) VALUES (101, VEC_FROMTEXT("[101,101,101]"));
+INSERT INTO t1(a, v) VALUES (102, VEC_FROMTEXT("[102,102,102]"));
+INSERT INTO t1(a, v) VALUES (103, VEC_FROMTEXT("[103,103,103]"));
+INSERT INTO t1(a, v) VALUES (104, VEC_FROMTEXT("[104,104,104]"));
+INSERT INTO t1(a, v) VALUES (105, VEC_FROMTEXT("[105,105,105]"));
+INSERT INTO t1(a, v) VALUES (106, VEC_FROMTEXT("[106,106,106]"));
+INSERT INTO t1(a, v) VALUES (107, VEC_FROMTEXT("[107,107,107]"));
+INSERT INTO t1(a, v) VALUES (108, VEC_FROMTEXT("[108,108,108]"));
+INSERT INTO t1(a, v) VALUES (109, VEC_FROMTEXT("[109,109,109]"));
+XA END 'xa_batch_st';
+XA PREPARE 'xa_batch_st';
+XA COMMIT 'xa_batch_st';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS batch_count FROM t1 WHERE a BETWEEN 100 AND 109;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS batch_count FROM t1 WHERE a BETWEEN 100 AND 109;
+
+--echo
+--echo ##############################################
+--echo # 12. NULL vector INSERT then UPDATE to set #
+--echo #     (null-to-non-null path on ST slave)   #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_null_st';
+INSERT INTO t1(a, v) VALUES (300, NULL);
+INSERT INTO t1(a, v) VALUES (301, NULL);
+XA END 'xa_null_st';
+XA PREPARE 'xa_null_st';
+XA COMMIT 'xa_null_st';
+
+XA START 'xa_set_vec_st';
+UPDATE t1 SET v = VEC_FROMTEXT("[300,300,300]") WHERE a = 300;
+UPDATE t1 SET v = VEC_FROMTEXT("[301,301,301]") WHERE a = 301;
+XA END 'xa_set_vec_st';
+XA PREPARE 'xa_set_vec_st';
+XA COMMIT 'xa_set_vec_st';
+
+--source include/rpl_sync.inc
+
+--echo # Master
+--source include/rpl_connection_master.inc
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (300, 301) ORDER BY a;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (300, 301) ORDER BY a;
+
+--echo
+--echo ##############################################
+--echo # 13. Consecutive XA ROLLBACK + XA COMMIT   #
+--echo #     (Attachable_trx_rw cleanup after rollback)        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+XA START 'xa_rb_reuse_1';
+INSERT INTO t1(a, v) VALUES (400, VEC_FROMTEXT("[400,400,400]"));
+XA END 'xa_rb_reuse_1';
+XA PREPARE 'xa_rb_reuse_1';
+XA ROLLBACK 'xa_rb_reuse_1';
+
+XA START 'xa_rb_reuse_2';
+INSERT INTO t1(a, v) VALUES (401, VEC_FROMTEXT("[401,401,401]"));
+XA END 'xa_rb_reuse_2';
+XA PREPARE 'xa_rb_reuse_2';
+XA COMMIT 'xa_rb_reuse_2';
+
+--source include/rpl_sync.inc
+
+--echo # Master: a=400 NOT exist, a=401 exist
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS a400_count FROM t1 WHERE a = 400;
+SELECT COUNT(*) AS a401_count FROM t1 WHERE a = 401;
+
+--echo # Slave
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS a400_count FROM t1 WHERE a = 400;
+SELECT COUNT(*) AS a401_count FROM t1 WHERE a = 401;
+
+--echo
+--echo ##############################################
+--echo # 14. Final ANN + row count on ST slave     #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS t1_final FROM t1;
+SELECT COUNT(*) AS t2_final FROM t2;
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[300,300,300]")) LIMIT 5;
+
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS t1_final FROM t1;
+SELECT COUNT(*) AS t2_final FROM t2;
+--sorted_result
+SELECT a FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[300,300,300]")) LIMIT 5;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                   #
+--echo ##############################################
+--enable_warnings
+
+--source include/rpl_connection_master.inc
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

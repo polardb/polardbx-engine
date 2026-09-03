@@ -191,6 +191,8 @@ virtual column, stord in the "POS" field of Sys_columns
 @return virtual column sequence */
 static inline ulint dict_get_v_col_pos(ulint pos);
 
+#ifndef INNODB_DICT0CREA_IC_STANDALONE
 #include "dict0crea.ic"
+#endif /* !INNODB_DICT0CREA_IC_STANDALONE */
 
 #endif

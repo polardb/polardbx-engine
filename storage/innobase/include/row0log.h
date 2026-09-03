@@ -106,24 +106,23 @@ bool row_log_col_is_indexed(const dict_index_t *index, ulint v_no);
 /** Logs a delete operation to a table that is being rebuilt.
  This will be merged in row_log_table_apply_delete(). */
 void row_log_table_delete(
-    const rec_t *rec,       /*!< in: clustered index leaf page record,
+    const Slice *slc,       /*!< in: clustered index leaf page record,
                             page X-latched */
     const dtuple_t *ventry, /*!< in: dtuple holding virtual column info */
     dict_index_t *index,    /*!< in/out: clustered index, S-latched
                             or X-latched */
-    const ulint *offsets,   /*!< in: rec_get_offsets(rec,index) */
-    const byte *sys)        /*!< in: DB_TRX_ID,DB_ROLL_PTR that should
-                            be logged, or NULL to use those in rec */
+    // const ulint *offsets,   /*!< in: rec_get_offsets(rec,index) */
+    const byte *sys) /*!< in: DB_TRX_ID,DB_ROLL_PTR that should
+                     be logged, or NULL to use those in rec */
     UNIV_COLD;
 
 /** Logs an update operation to a table that is being rebuilt.
  This will be merged in row_log_table_apply_update(). */
 void row_log_table_update(
-    const rec_t *rec,          /*!< in: clustered index leaf page record,
+    const Slice *slc,          /*!< in: clustered index leaf page record,
                                page X-latched */
     dict_index_t *index,       /*!< in/out: clustered index, S-latched
                                or X-latched */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec,index) */
     const dtuple_t *old_pk,    /*!< in: row_log_table_get_pk()
                                before the update */
     const dtuple_t *new_v_row, /*!< in: dtuple contains the new virtual
@@ -137,26 +136,25 @@ void row_log_table_update(
  @return tuple of PRIMARY KEY,DB_TRX_ID,DB_ROLL_PTR in the rebuilt table,
  or NULL if the PRIMARY KEY definition does not change */
 [[nodiscard]] const dtuple_t *row_log_table_get_pk(
-    const rec_t *rec,     /*!< in: clustered index leaf page record,
-                          page X-latched */
-    dict_index_t *index,  /*!< in/out: clustered index, S-latched
-                          or X-latched */
-    const ulint *offsets, /*!< in: rec_get_offsets(rec,index),
-                          or NULL */
-    byte *sys,            /*!< out: DB_TRX_ID,DB_ROLL_PTR for
-                          row_log_table_delete(), or NULL */
-    mem_heap_t **heap)    /*!< in/out: memory heap where allocated */
+    const Slice *slc,    /*!< in: clustered index leaf page record,
+                         page X-latched */
+    dict_index_t *index, /*!< in/out: clustered index, S-latched
+                         or X-latched */
+    // const ulint *offsets, /*!< in: rec_get_offsets(rec,index),
+    //                       or NULL */
+    byte *sys,         /*!< out: DB_TRX_ID,DB_ROLL_PTR for
+                                        row_log_table_delete(), or NULL */
+    mem_heap_t **heap) /*!< in/out: memory heap where allocated */
     UNIV_COLD;
 
 /** Logs an insert to a table that is being rebuilt.
  This will be merged in row_log_table_apply_insert(). */
 void row_log_table_insert(
-    const rec_t *rec,       /*!< in: clustered index leaf page record,
+    const Slice *slc,       /*!< in: clustered index leaf page record,
                             page X-latched */
     const dtuple_t *ventry, /*!< in: dtuple holding virtual column info */
-    dict_index_t *index,    /*!< in/out: clustered index, S-latched
+    dict_index_t *index)    /*!< in/out: clustered index, S-latched
                             or X-latched */
-    const ulint *offsets)   /*!< in: rec_get_offsets(rec,index) */
     UNIV_COLD;
 /** Notes that a BLOB is being freed during online ALTER TABLE. */
 void row_log_table_blob_free(
@@ -214,6 +212,8 @@ ulint row_log_estimate_work(const dict_index_t *index);
 @param[in]  err     err info */
 void row_log_set_error(dict_index_t *index, const dberr_t err);
 
+#ifndef INNODB_ROW0LOG_IC_STANDALONE
 #include "row0log.ic"
+#endif /* !INNODB_ROW0LOG_IC_STANDALONE */
 
 #endif /* row0log.h */

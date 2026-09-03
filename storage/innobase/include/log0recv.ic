@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 9/20/1997 Heikki Tuuri
  *******************************************************/
 
+#ifndef log0recv_h
+#define INNODB_LOG0RECV_IC_STANDALONE
+#include "log0recv.h"
+#undef INNODB_LOG0RECV_IC_STANDALONE
+#endif /* !log0recv_h */
 #include "univ.i"
 
 /** Returns true if recovery is currently running.

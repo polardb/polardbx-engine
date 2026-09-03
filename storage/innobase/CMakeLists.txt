@@ -67,7 +67,10 @@ SET(INNOBASE_ZIP_DECOMPRESS_SOURCES
   ut/crc32.cc
   ut/ut.cc
   ut/ut0new.cc
-  dict/lizard0dict0mem.cc )
+  dict/lizard0dict0mem.cc
+  rem/lizard0rem0slc.cc
+  rem/lizard0rem0slc0ctx.cc
+  )
 
 SET(INNOBASE_SOURCES
   api/api0api.cc
@@ -159,6 +162,7 @@ SET(INNOBASE_SOURCES
   lob/lob0update.cc
   lob/lob0impl.cc
   lob/lob0lob.cc
+  lob/lizard0lob0lob.cc
   lob/lob0del.cc
   lob/lob0undo.cc
   lob/lob0util.cc
@@ -197,7 +201,7 @@ SET(INNOBASE_SOURCES
   os/os0enc.cc
   os/os0proc.cc
   os/os0event.cc
-	os/os0key.cc
+  os/os0key.cc
   page/page0cur.cc
   page/page0page.cc
   page/page0zip.cc
@@ -260,36 +264,38 @@ SET(INNOBASE_SOURCES
   ut/ut0wqueue.cc
   srv/srv0file.cc
   fil/fil0purge.cc
-	fil/fil0key.cc
+  fil/fil0key.cc
   handler/i_s_ext.cc
-  trx/lizard0scn.cc
+  trx/lizard0gcs0scn.cc
   trx/lizard0gcs.cc
-  dict/lizard0dict.cc
+  dict/lizard0dict0dict.cc
+  dict/lizard0dict0dd.cc
   fil/lizard0fil.cc
   fsp/lizard0fsp.cc
   fsp/lizard0txn0space.cc
   trx/lizard0undo.cc
-  mtr/lizard0mtr.cc
+  mtr/lizard0mtr0mtr.cc
   row/lizard0row.cc
   srv/lizard0mon.cc
   btr/lizard0cleanout.cc
-  trx/lizard0purge.cc
-  trx/lizard0erase.cc
+  trx/lizard0trx0purge.cc
+  trx/lizard0trx0erase.cc
   ut/lizard0log.cc
   ut/lizard0ut.cc
   page/lizard0page.cc
-  read/lizard0read.cc
+  read/lizard0gcs0read.cc
   read/lizard0read0xa.cc
   trx/lizard0trx.cc
-  dict/lizard0gcs0hist.cc
+  trx/lizard0gcs0history.cc
   row/lizard0mysql.cc
   row/lizard0row0gpp.cc
+  row/lizard0row0lotus.cc
+  row/lizard0row0lotus0assert.cc
   trx/lizard0gp.cc
   trx/lizard0xa.cc
-  trx/lizard0tcn.cc
+  trx/lizard0cmmt0cache.cc
   trx/lizard0txn.cc
   trx/lizard0txn0rec.cc
-  trx/lizard0undo0types.cc
   dict/lizard0dict0mem.cc
   data/lizard0data0data.cc
   mtr/lizard0mtr0log.cc
@@ -309,6 +315,7 @@ SET(INNOBASE_SOURCES
   row/lizard0row0umod.cc
   trx/lizard0trx0rec.cc
   dict/lizard0dict0gpp.cc
+  dict/lizard0dict0stats.cc
   row/lizard0row0clover.cc
   row/lizard0row0bamboo.cc
   trx/lizard0trx0rec0clover.cc
@@ -318,6 +325,22 @@ SET(INNOBASE_SOURCES
   btr/lizard0btr0cur0gpp.cc
   btr/lizard0btr0pcur.cc
   row/lizard0row0undo.cc
+  trx/lizard0gcs0snapshot.cc
+  trx/lizard0gcs0clean.cc
+  trx/lizard0gcs0cache.cc
+  trx/lizard0gcs0gcn.cc
+  trx/lizard0gcs0tid.cc
+  trx/lizard0gcs0utc.cc
+  trx/lizard0txn0slot.cc
+  trx/lizard0txn0mem.cc
+  trx/lizard0txn0slot0undo.cc
+  trx/lizard0trx0cycle.cc
+  trx/lizard0trx0history.cc
+  srv/lizard0srv0cycle.cc
+  spc/lizard0spc0encode.cc
+  spc/lizard0page0dict.cc
+  rem/lizard0rem0slc.cc
+  rem/lizard0rem0slc0ctx.cc
   )
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753

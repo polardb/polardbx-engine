@@ -35,7 +35,7 @@ namespace alisql {
  * @brief class for File and Map based Paxos Log
  *
  **/
-class FilePaxosLog : public PaxosLog {
+class FilePaxosLog : public PaxosLogHandler {
  public:
   typedef enum LogType {
     LTMem = 0,
@@ -60,6 +60,8 @@ class FilePaxosLog : public PaxosLog {
   virtual uint64_t append(
       const ::google::protobuf::RepeatedPtrField<LogEntry> &entries);
   virtual uint64_t getLastLogTerm();
+  virtual uint64_t getFirstIndexOfLastFileTerm(const uint64_t) { return 0; }
+  virtual uint64_t getLastIndexOfTerm(const uint64_t) { return 0; }
 
   void appendEmptyEntry();
   virtual uint64_t getLength();

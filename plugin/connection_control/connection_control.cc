@@ -33,6 +33,7 @@
 #include "mysqld_error.h"
 #include "plugin/connection_control/connection_control_coordinator.h" /* g_connection_event_coordinator */
 #include "plugin/connection_control/connection_delay_api.h" /* connection_delay apis */
+#include "plugin/connection_control/connection_refuse_api.h" /* connection_refuse apis */
 
 static SERVICE_TYPE(registry) *reg_srv = nullptr;
 SERVICE_TYPE(log_builtins) *log_bi = nullptr;
@@ -71,12 +72,21 @@ static PSI_mutex_info all_connection_delay_mutex_info[] = {
     {&key_connection_delay_mutex, "connection_delay_mutex", 0, 0,
      PSI_DOCUMENT_ME}};
 
+/** Lock for connection delay event. */
 PSI_rwlock_key key_connection_event_delay_lock;
 
 static PSI_rwlock_info all_connection_delay_rwlock_info[] = {
     {&key_connection_event_delay_lock, "connection_event_delay_lock",
      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}};
 
+/** Lock for connection refuse event. */
+PSI_rwlock_key key_connection_event_refuse_lock;
+
+static PSI_rwlock_info all_connection_refuse_rwlock_info[] = {
+    {&key_connection_event_refuse_lock, "connection_event_refuse_lock",
+     PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}};
+
+/** Connection delay wait condition. */
 PSI_cond_key key_connection_delay_wait = PSI_NOT_INSTRUMENTED;
 
 static PSI_cond_info all_connection_delay_cond_info[] = {
@@ -104,6 +114,11 @@ static void init_performance_schema() {
 
   int count_stage = array_elements(all_connection_delay_stage_info);
   mysql_stage_register(category, all_connection_delay_stage_info, count_stage);
+
+  const char *refuse_category = "conn_refuse";
+  int count_refuse_rwlock = array_elements(all_connection_refuse_rwlock_info);
+  mysql_rwlock_register(refuse_category, all_connection_refuse_rwlock_info,
+                        count_refuse_rwlock);
 }
 
 /**
@@ -122,20 +137,26 @@ static int connection_control_notify(MYSQL_THD thd,
                                      mysql_event_class_t event_class,
                                      const void *event) {
   DBUG_TRACE;
+  int res = 0;
   try {
     if (event_class == MYSQL_AUDIT_CONNECTION_CLASS) {
-      const struct mysql_event_connection *connection_event =
-          (const struct mysql_event_connection *)event;
       Connection_control_error_handler error_handler;
       /** Notify event coordinator */
-      g_connection_event_coordinator->notify_event(thd, &error_handler,
-                                                   connection_event);
+      g_connection_event_coordinator->notify_event(
+          thd, &error_handler,
+          reinterpret_cast<const mysql_event_connection *>(event));
+    } else if (event_class == MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS) {
+      Connection_control_error_handler error_handler;
+      res = g_connection_event_coordinator->notify_event(
+          &error_handler,
+          reinterpret_cast<const mysql_event_polarx_connection_control *>(
+              event));
     }
   } catch (...) {
     /* Happily ignore any bad behavior */
   }
 
-  return 0;
+  return res;
 }
 
 /**
@@ -175,6 +196,14 @@ static int connection_control_init(MYSQL_PLUGIN plugin_info) {
     return 1;
   }
 
+  if (init_connection_refuse_event((Connection_event_coordinator_services *)
+                                       g_connection_event_coordinator,
+                                   &error_handler)) {
+    delete g_connection_event_coordinator;
+    deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
+    return 1;
+  }
+
   return 0;
 }
 
@@ -190,6 +219,7 @@ static int connection_control_deinit(void *arg [[maybe_unused]]) {
   delete g_connection_event_coordinator;
   g_connection_event_coordinator = nullptr;
   connection_control::deinit_connection_delay_event();
+  connection_control::deinit_connection_refuse_event();
   connection_control_plugin_info = nullptr;
 
   deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
@@ -201,21 +231,26 @@ static struct st_mysql_audit connection_control_descriptor = {
     MYSQL_AUDIT_INTERFACE_VERSION, /* interface version */
     nullptr,                       /* release_thd() */
     connection_control_notify,     /* event_notify() */
-    {
-        0, /* MYSQL_AUDIT_GENERAL_CLASS */
-        (unsigned long)MYSQL_AUDIT_CONNECTION_CONNECT |
-            MYSQL_AUDIT_CONNECTION_CHANGE_USER, /* MYSQL_AUDIT_CONNECTION_CLASS
-                                                 */
-        0,                                      /* MYSQL_AUDIT_PARSE_CLASS */
-        0, /* MYSQL_AUDIT_AUTHORIZATION_CLASS */
-        0, /* MYSQL_AUDIT_TABLE_ACCESS_CLASS */
-        0, /* MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS */
-        0, /* MYSQL_AUDIT_SERVER_STARTUP_CLASS */
-        0, /* MYSQL_AUDIT_SERVER_SHUTDOWN_CLASS */
-        0, /* MYSQL_AUDIT_COMMAND_CLASS */
-        0, /* MYSQL_AUDIT_QUERY_CLASS */
-        0, /* MYSQL_AUDIT_STORED_PROGRAM_CLASS */
-    }      /* class mask */
+    {0,                            /* MYSQL_AUDIT_GENERAL_CLASS */
+     (unsigned long)MYSQL_AUDIT_CONNECTION_CONNECT |
+         MYSQL_AUDIT_CONNECTION_CHANGE_USER, /* MYSQL_AUDIT_CONNECTION_CLASS
+                                              */
+     0,                                      /* MYSQL_AUDIT_PARSE_CLASS */
+     0, /* MYSQL_AUDIT_AUTHORIZATION_CLASS */
+     0, /* MYSQL_AUDIT_TABLE_ACCESS_CLASS */
+     0, /* MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS */
+     0, /* MYSQL_AUDIT_SERVER_STARTUP_CLASS */
+     0, /* MYSQL_AUDIT_SERVER_SHUTDOWN_CLASS */
+     0, /* MYSQL_AUDIT_COMMAND_CLASS */
+     0, /* MYSQL_AUDIT_QUERY_CLASS */
+     0, /* MYSQL_AUDIT_STORED_PROGRAM_CLASS */
+     0, /* MYSQL_AUDIT_AUTHENTICATION_CLASS*/
+     0, /* MYSQL_AUDIT_MESSAGE_CLASS */
+     0, /* MYSQL_AUDIT_RDS_CONNECTION_CLASS */
+     0, /* MYSQL_AUDIT_RDS_QUERY_CLASS */
+     (unsigned long)MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK |
+         MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CHECK,
+     /* MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS */} /* class mask */
 };
 
 /**
@@ -563,6 +598,20 @@ mysql_declare_plugin(audit_log){
      "I_S table providing a view into failed attempts statistics",
      PLUGIN_LICENSE_GPL,
      connection_control_failed_attempts_view_init,
+     nullptr,
+     nullptr,
+     0x0100,
+     nullptr,
+     nullptr,
+     nullptr,
+     0},
+    {MYSQL_INFORMATION_SCHEMA_PLUGIN,
+     &connection_control_refuse_statistic_view,
+     "CONNECTION_CONTROL_REFUSE_STATISTIC",
+     PLUGIN_AUTHOR_ORACLE,
+     "I_S table providing a view about connection control refuse statistics",
+     PLUGIN_LICENSE_GPL,
+     connection_control_refuse_statistic_view_init,
      nullptr,
      nullptr,
      0x0100,

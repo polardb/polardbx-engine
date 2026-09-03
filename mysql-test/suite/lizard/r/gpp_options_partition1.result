@@ -4,6 +4,7 @@
 set global innodb_lizard_stat_enabled=on;
 create database gpp_options;
 set opt_index_format_gpp_enabled=true;
+set opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_options.t1 (
 a int NOT NULL,
 b int NOT NULL,
@@ -45,6 +46,7 @@ include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match th
 # Test export and import partition.
 CREATE DATABASE gpp_tmp;
 set opt_index_format_gpp_enabled=true;
+set opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_tmp.t1 (
 a int NOT NULL,
 b int NOT NULL,
@@ -113,6 +115,7 @@ include/assert.inc [The options for gpp_options.t1.b_c should match the expected
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
 # Test REORGANIZE PARTITION
 SET opt_index_format_gpp_enabled=false;
+set opt_index_format_hippo_enabled=false;
 ALTER TABLE gpp_options.t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LESS THAN (4), PARTITION p1a VALUES LESS THAN (5));
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
@@ -122,16 +125,16 @@ include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match 
 insert into gpp_options.t1 values (9,9,9,'99999');
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=1 condition]
-include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=1 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=1 condition]
+include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]
+include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b_c should match the expected IFT=0 condition]
 SET opt_index_format_gpp_enabled=false;
 create table gpp_options.exchange_table (a int, b int not null, c int not null, pad varchar(8192), primary key (a),key (b),key `b_c` (b,c)) engine=innodb;
 insert into gpp_options.exchange_table values (8,8,8,'88888');
 ALTER TABLE gpp_options.t1 EXCHANGE PARTITION p2 WITH TABLE gpp_options.exchange_table WITHOUT VALIDATION;
 include/assert.inc [The options for gpp_options.exchange_table.b should match the expected IFT=1 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.exchange_table.b should match the expected IFT=1 condition]
-include/assert.inc [The options for gpp_options.exchange_table.b_c should match the expected IFT=1 condition]
-include/assert.inc [The actual gpp hit/miss for gpp_options.exchange_table.b_c should match the expected IFT=1 condition]
+include/assert.inc [The options for gpp_options.exchange_table.b_c should match the expected IFT=0 condition]
+include/assert.inc [The actual gpp hit/miss for gpp_options.exchange_table.b_c should match the expected IFT=0 condition]
 include/assert.inc [The options for gpp_options.t1.b should match the expected IFT=0 condition]
 include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match the expected IFT=0 condition]
 include/assert.inc [The options for gpp_options.t1.b_c should match the expected IFT=0 condition]

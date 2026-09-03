@@ -1,0 +1,44 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE PROCEDURE p_hot_upd(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 1500 DO
+UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, "]")) WHERE id = (j % 40) + 1;
+SET j = j + 1;
+END WHILE;
+END$$
+CREATE PROCEDURE p_neighbor_ins(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 1000 DO
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT("[", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, "]")));
+SET j = j + 1;
+END WHILE;
+END$$
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_hot_upd(13);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_hot_upd(29);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_neighbor_ins(5);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p_neighbor_ins(17);
+== save_neighbors_only cross-revive deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+DROP PROCEDURE p_hot_upd;
+DROP PROCEDURE p_neighbor_ins;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

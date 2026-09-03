@@ -1,0 +1,333 @@
+# ================================================================
+# Test: AS OF queries with cross_ddl OFF (backward compatibility)
+#
+# Validates that when as_of_cross_ddl_enabled = OFF, behavior
+# is identical to pre-modification code. Covers:
+#   B1: INSTANT DDL -> ER_AS_OF_TABLE_DEF_CHANGED (conditional fix)
+#   B2: Non-INSTANT, no-rebuild DDLs -> same as pre-modification
+#   B3: Rebuild DDLs -> ER_AS_OF_TABLE_DEF_CHANGED
+#   B4: Parameter switching (ON <-> OFF)
+#   C2: Non-AS-OF query regression (cross_ddl OFF)
+# ================================================================
+
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+# ################################################################
+#   B1: INSTANT DDL -> ER_AS_OF_TABLE_DEF_CHANGED
+#   (conditional fix core validation)
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo B1: INSTANT DDL (cross_ddl OFF) -> ER_AS_OF_TABLE_DEF_CHANGED
+--echo ================================================================
+
+--echo
+--echo --- B1.1 ADD COLUMN (INSTANT) ---
+CREATE TABLE b1_add (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO b1_add VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b1_add = NOW(6);
+sleep 2;
+
+ALTER TABLE b1_add ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+
+--echo # cross_ddl OFF: INSTANT DDL overwrites index se_private_data -> error
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b1_add AS OF TIMESTAMP @ts_b1_add;
+
+--echo # Non-AS-OF: normal query works fine
+SELECT * FROM b1_add ORDER BY id;
+
+--echo
+--echo --- B1.2 DROP COLUMN (INSTANT) ---
+CREATE TABLE b1_drop (id INT PRIMARY KEY, name VARCHAR(64), age INT, INDEX idx_name(name));
+INSERT INTO b1_drop VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+
+sleep 2;
+SET @ts_b1_drop = NOW(6);
+sleep 2;
+
+ALTER TABLE b1_drop DROP COLUMN age, ALGORITHM=INSTANT;
+
+--echo # cross_ddl OFF: INSTANT DDL overwrites index se_private_data -> error
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b1_drop AS OF TIMESTAMP @ts_b1_drop;
+
+--echo # Non-AS-OF: normal query works fine
+SELECT * FROM b1_drop ORDER BY id;
+
+
+# ################################################################
+#   B2: Non-INSTANT, no-rebuild DDLs
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo B2: Non-INSTANT, no-rebuild DDLs (cross_ddl OFF)
+--echo ================================================================
+
+--echo
+--echo --- B2.1 RENAME COLUMN -> success ---
+CREATE TABLE b2_rename (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO b2_rename VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b2_rename = NOW(6);
+sleep 2;
+
+ALTER TABLE b2_rename RENAME COLUMN name TO full_name;
+
+--echo # No index rebuild, modification_visible=true -> success
+SELECT * FROM b2_rename AS OF TIMESTAMP @ts_b2_rename;
+
+--echo
+--echo --- B2.2 ADD INDEX -> PK success, new index error ---
+CREATE TABLE b2_idx (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO b2_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b2_idx = NOW(6);
+sleep 2;
+
+ALTER TABLE b2_idx ADD INDEX idx_name(name);
+
+--echo # Via PRIMARY -> success (PK creation SCN unchanged)
+SELECT * FROM b2_idx AS OF TIMESTAMP @ts_b2_idx FORCE INDEX(PRIMARY);
+
+--echo # Via new index -> ER_AS_OF_TABLE_DEF_CHANGED (cross_ddl OFF uses old error code)
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b2_idx AS OF TIMESTAMP @ts_b2_idx FORCE INDEX(idx_name);
+
+--echo
+--echo --- B2.3 DROP INDEX -> success ---
+CREATE TABLE b2_drop_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO b2_drop_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b2_drop_idx = NOW(6);
+sleep 2;
+
+ALTER TABLE b2_drop_idx DROP INDEX idx_name;
+
+--echo # No rebuild -> success
+SELECT * FROM b2_drop_idx AS OF TIMESTAMP @ts_b2_drop_idx;
+
+--echo
+--echo --- B2.4 RENAME INDEX -> success ---
+CREATE TABLE b2_rename_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_old(name));
+INSERT INTO b2_rename_idx VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b2_rename_idx = NOW(6);
+sleep 2;
+
+ALTER TABLE b2_rename_idx RENAME INDEX idx_old TO idx_new;
+
+--echo # No rebuild -> success
+SELECT * FROM b2_rename_idx AS OF TIMESTAMP @ts_b2_rename_idx;
+
+--echo
+--echo --- B2.5 ALTER COLUMN DEFAULT -> success ---
+CREATE TABLE b2_default (id INT PRIMARY KEY, name VARCHAR(64) DEFAULT 'unknown');
+INSERT INTO b2_default VALUES (1, 'Alice');
+
+sleep 2;
+SET @ts_b2_default = NOW(6);
+sleep 2;
+
+ALTER TABLE b2_default ALTER COLUMN name SET DEFAULT 'nobody';
+
+--echo # No rebuild -> success
+SELECT * FROM b2_default AS OF TIMESTAMP @ts_b2_default;
+
+
+# ################################################################
+#   B3: Rebuild DDLs -> ER_AS_OF_TABLE_DEF_CHANGED
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo B3: Rebuild DDLs (cross_ddl OFF) -> ER_AS_OF_TABLE_DEF_CHANGED
+--echo ================================================================
+
+# --- Create tables and record timestamp ---
+
+CREATE TABLE b3_force (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO b3_force VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE b3_copy (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO b3_copy VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE b3_rowfmt (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO b3_rowfmt VALUES (1, 'Alice'), (2, 'Bob');
+
+CREATE TABLE b3_type (id INT PRIMARY KEY, val INT);
+INSERT INTO b3_type VALUES (1, 100), (2, 200);
+
+CREATE TABLE b3_pk (id INT NOT NULL, val INT NOT NULL, PRIMARY KEY(id));
+INSERT INTO b3_pk VALUES (1, 100), (2, 200);
+
+sleep 2;
+SET @ts_b3 = NOW(6);
+sleep 2;
+
+# --- UPDATE to ensure undo chain traversal ---
+UPDATE b3_force SET name = 'Alice_v2' WHERE id = 1;
+UPDATE b3_force SET name = 'Bob_v2' WHERE id = 2;
+
+--echo
+--echo --- B3.1 ALTER TABLE FORCE (INPLACE REBUILD) ---
+ALTER TABLE b3_force FORCE;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b3_force AS OF TIMESTAMP @ts_b3;
+
+--echo
+--echo --- B3.2 MODIFY COLUMN shrink (COPY REBUILD) ---
+ALTER TABLE b3_copy MODIFY COLUMN name VARCHAR(32);
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b3_copy AS OF TIMESTAMP @ts_b3;
+
+--echo
+--echo --- B3.3 CHANGE ROW_FORMAT (INPLACE REBUILD) ---
+ALTER TABLE b3_rowfmt ROW_FORMAT = COMPRESSED;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b3_rowfmt AS OF TIMESTAMP @ts_b3;
+
+--echo
+--echo --- B3.4 MODIFY COLUMN type change (COPY REBUILD) ---
+ALTER TABLE b3_type MODIFY COLUMN val BIGINT;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b3_type AS OF TIMESTAMP @ts_b3;
+
+--echo
+--echo --- B3.5 DROP PK + ADD PK (INPLACE REBUILD) ---
+ALTER TABLE b3_pk DROP PRIMARY KEY, ADD PRIMARY KEY(val);
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM b3_pk AS OF TIMESTAMP @ts_b3;
+
+
+# ################################################################
+#   B4: Parameter switching
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo B4: Parameter switching (ON <-> OFF)
+--echo ================================================================
+
+--echo
+--echo --- B4.1 DDL under ON, query under OFF -> OFF behavior ---
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+CREATE TABLE b4_on_off (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO b4_on_off VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b4_1 = NOW(6);
+sleep 2;
+
+ALTER TABLE b4_on_off ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+
+--echo # Switch to OFF before query
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+--echo # Bug #33937504 fix: INSTANT DDL now always overwrites ALL indexes' runtime
+--echo # trx_id/uba/scn/gcn (regardless of cross_ddl setting). So the runtime
+--echo # metadata reflects the INSTANT DDL, not the original creation.
+--echo # Query under OFF: dd_index_modification_visible() checks runtime trx_id/scn,
+--echo # which is the INSTANT DDL's SCN (after @ts_b4_1) -> not visible -> error.
+--error 7509
+SELECT * FROM b4_on_off AS OF TIMESTAMP @ts_b4_1;
+
+--echo
+--echo --- B4.2 DDL under OFF, query under ON -> ON behavior ---
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+CREATE TABLE b4_off_on (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO b4_off_on VALUES (1, 'Alice'), (2, 'Bob');
+
+sleep 2;
+SET @ts_b4_2 = NOW(6);
+sleep 2;
+
+ALTER TABLE b4_off_on ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+
+--echo # Switch to ON before query
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+--echo # DDL happened while OFF. Bug #33937504 fix always overwrites runtime metadata.
+--echo # Query under ON: dd_index_modification_visible() uses visible-from trx id path.
+--echo # Both clustered and secondary indexes have the same visible-from trx id (from CREATE TABLE),
+--echo # so REBUILD path -> visible -> success.
+SELECT * FROM b4_off_on AS OF TIMESTAMP @ts_b4_2;
+
+
+# ################################################################
+#   C2: Non-AS-OF query regression (cross_ddl OFF)
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo C2: Non-AS-OF query regression (cross_ddl OFF)
+--echo ================================================================
+
+SET SESSION as_of_cross_ddl_enabled = OFF;
+
+--echo
+--echo --- C2.1 INSTANT DDL + FLUSH + normal queries ---
+CREATE TABLE c2_instant (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO c2_instant VALUES (1, 'Alice'), (2, 'Bob');
+
+ALTER TABLE c2_instant ADD COLUMN age INT DEFAULT 0, ALGORITHM=INSTANT;
+FLUSH TABLES;
+
+--echo # Normal SELECT via PRIMARY
+SELECT * FROM c2_instant FORCE INDEX(PRIMARY) ORDER BY id;
+--echo # Normal SELECT via secondary index
+SELECT name FROM c2_instant FORCE INDEX(idx_name) ORDER BY name;
+
+--echo # DML after INSTANT DDL
+INSERT INTO c2_instant VALUES (3, 'Charlie', 30);
+UPDATE c2_instant SET name = 'Alice_v2' WHERE id = 1;
+DELETE FROM c2_instant WHERE id = 2;
+
+SELECT * FROM c2_instant FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo
+--echo --- C2.2 Various DDLs + normal queries ---
+CREATE TABLE c2_ddl (id INT PRIMARY KEY, name VARCHAR(64), val INT);
+INSERT INTO c2_ddl VALUES (1, 'Alice', 100), (2, 'Bob', 200);
+
+--echo # ADD INDEX
+ALTER TABLE c2_ddl ADD INDEX idx_val(val);
+SELECT val FROM c2_ddl FORCE INDEX(idx_val) ORDER BY val;
+
+--echo # RENAME COLUMN
+ALTER TABLE c2_ddl RENAME COLUMN name TO full_name;
+SELECT * FROM c2_ddl ORDER BY id;
+
+--echo # DML after DDLs
+INSERT INTO c2_ddl VALUES (3, 'Charlie', 300);
+SELECT * FROM c2_ddl ORDER BY id;
+
+
+# ################################################################
+#   Cleanup
+# ################################################################
+
+--echo
+--echo ================================================================
+--echo Cleanup
+--echo ================================================================
+
+DROP TABLE IF EXISTS b1_add, b1_drop;
+DROP TABLE IF EXISTS b2_rename, b2_idx, b2_drop_idx, b2_rename_idx, b2_default;
+DROP TABLE IF EXISTS b3_force, b3_copy, b3_rowfmt, b3_type, b3_pk;
+DROP TABLE IF EXISTS b4_on_off, b4_off_on;
+DROP TABLE IF EXISTS c2_instant, c2_ddl;
+
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

@@ -1,0 +1,230 @@
+### Purpose ###
+#
+# Verify that flashback (AS OF TIMESTAMP) queries work correctly through
+# SPC secondary indexes:
+#   - Basic flashback reads old data via SPC index
+#   - Flashback after UPDATE sees pre-update values via SPC index
+#   - Flashback after DELETE sees deleted rows via SPC index
+#   - Flashback with purge: ensures purged history is properly handled
+#   - Checksum: SPC index == PRIMARY KEY at flashback point
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+SET GLOBAL innodb_txn_retention = 36000;
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo #
+--echo # PART 1: Basic flashback read through SPC index
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('b', 100));
+INSERT INTO t1 VALUES (3, REPEAT('c', 100));
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--sleep 2
+SET @ts_before_update = NOW();
+--sleep 2
+
+--echo # Modify data after recording timestamp
+UPDATE t1 SET c = REPEAT('x', 100) WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+INSERT INTO t1 VALUES (4, REPEAT('d', 100));
+
+--echo # Current state: id=1 updated, id=2 deleted, id=4 inserted
+SELECT id, LEFT(c,1) AS cp FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+
+--echo # Flashback via PK should see old data
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (PRIMARY) ORDER BY id;
+
+--echo # Flashback via SPC index should see old data
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (idx_c) ORDER BY id;
+
+--echo # Flashback checksum: SPC == PK at the flashback point
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_before_update FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: Flashback after multiple updates - deep version chain
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 20) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Ensure SPC conversion is complete before recording timestamp
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--sleep 2
+SET @ts_v0 = NOW();
+--sleep 2
+
+--echo # Update round 1
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100), id) WHERE id <= 10;
+
+--sleep 2
+SET @ts_v1 = NOW();
+--sleep 2
+
+--echo # Update round 2
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100), id) WHERE id <= 10;
+
+--echo # Flashback to V0: all rows should have 'a' prefix
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_v0 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_v0 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Flashback to V1: id<=10 should have 'b' prefix
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_v1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_v1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 3: Flashback with concurrent snapshot
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('a', 100));
+
+--echo # Ensure SPC conversion is complete before recording timestamp
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+CREATE TABLE ts_share (ts TIMESTAMP NOT NULL);
+--sleep 2
+INSERT INTO ts_share VALUES (NOW());
+--sleep 2
+
+--echo # con1 opens a snapshot via BEGIN
+--connection con1
+SET @ts_snap = (SELECT ts FROM ts_share);
+BEGIN;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--echo # default modifies data
+--connection default
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+INSERT INTO t1 VALUES (4, REPEAT('d', 100));
+
+--echo # con1 flashback query should see old data through SPC
+--connection con1
+SELECT id, LEFT(c,1) AS cp FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (idx_c) ORDER BY id;
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk
+             FROM t1 AS OF TIMESTAMP @ts_snap FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+COMMIT;
+
+--connection default
+DROP TABLE ts_share;
+DROP TABLE t1;
+
+--echo #
+--echo # PART 4: Flashback after purge - Snapshot too old
+--echo #
+
+--connection default
+SET GLOBAL innodb_txn_retention = 0;
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+
+--sleep 2
+SET @ts_old = NOW();
+--sleep 2
+
+UPDATE t1 SET c = REPEAT('b', 100) WHERE id = 1;
+
+--echo # Run purge to remove old version
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+--sleep 2
+
+--echo # Flashback to purged timestamp should fail with Snapshot too old
+--error ER_SNAPSHOT_TOO_OLD
+SELECT * FROM t1 AS OF TIMESTAMP @ts_old FORCE INDEX (idx_c);
+
+DROP TABLE t1;
+
+--echo # Cleanup
+--connection default
+SET GLOBAL innodb_txn_retention = DEFAULT;
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--disconnect con1
+--disconnect con2

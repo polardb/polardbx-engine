@@ -34,7 +34,8 @@
 #include "fil0key.h"
 #include "fil0purge.h"
 #include "i_s.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
+#include "lizard0mon.h"
 #include "mysql/plugin.h"
 #include "sql/dd/cache/dictionary_client.h"
 #include "sql/dd/dictionary.h"
@@ -598,7 +599,7 @@ static int innodb_gpp_stats_fill_table(THD *thd, Table_ref *tables, Item *) {
   table = tables->table;
   fields = table->field;
 
-  lizard::Collector collector = lizard::Collector(result);
+  lizard::Gpp_index_stat_collector collector(result);
   dict_sys->for_each_table(collector);
 
   for (auto &stat : result) {
@@ -763,8 +764,10 @@ static int innodb_index_status_init(void *p) {
   DBUG_RETURN(0);
 }
 
-/** I_S.innodb_index_status version. */
-static constexpr uint8_t EXTRA_IS_PLUGIN_IS_VERSION = 1;
+/** I_S.innodb_index_status version.
+    Bumped to 2: columns changed from (OPTIONS) to
+    (GPP_ENABLED, INDEX_PAGE_TYPE). */
+static constexpr uint8_t EXTRA_IS_PLUGIN_IS_VERSION = 2;
 
 /** I_S.innodb_* views version. It would be X.Y and X should be the server major
  *  * version while Y is the InnoDB I_S views version, starting from 1 */

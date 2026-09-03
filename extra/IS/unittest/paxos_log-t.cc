@@ -24,7 +24,7 @@
 
 using namespace alisql;
 
-TEST(PaxosLog, basic) {
+TEST(PaxosLogHandler, basic) {
   std::string dir = "paxosLogTestBasic";
   RDPaxosLog *log = new RDPaxosLog(dir, true, 4 * 1024 * 1024);
   EXPECT_EQ(0, log->getLastLogIndex());
@@ -52,7 +52,7 @@ TEST(PaxosLog, basic) {
   deleteDir(dir.c_str());
 }
 
-TEST(PaxosLog, truncate_speed) {
+TEST(PaxosLogHandler, truncate_speed) {
   std::string dir = "paxosLogTestBasic";
   RDPaxosLog *log = new RDPaxosLog(dir, true, 4 * 1024 * 1024);
 
@@ -92,7 +92,7 @@ TEST(PaxosLog, truncate_speed) {
   deleteDir(dir.c_str());
 }
 
-TEST(PaxosLog, memlog) {
+TEST(PaxosLogHandler, memlog) {
   std::string dir = "paxosLogTestMemlog";
   MemPaxosLog *log = new MemPaxosLog();
   log->appendEmptyEntry();

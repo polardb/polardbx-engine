@@ -35,7 +35,7 @@ namespace alisql {
  * MemPaxosLog is used in learner node
  *
  */
-class MemPaxosLog : public PaxosLog {
+class MemPaxosLog : public PaxosLogHandler {
  public:
   /**
    * init a MemPaxosLog
@@ -68,6 +68,8 @@ class MemPaxosLog : public PaxosLog {
   virtual void truncateForward(uint64_t lastIndex);
   virtual int getMetaData(const std::string &key, uint64_t *value);
   virtual int setMetaData(const std::string &key, const uint64_t value);
+  virtual uint64_t getFirstIndexOfLastFileTerm(const uint64_t) { return 0; }
+  virtual uint64_t getLastIndexOfTerm(const uint64_t) { return 0; }
 
   void appendEmptyEntry();
   void setAppendTimeout(uint64_t t) { appendTimeout_ = t; }

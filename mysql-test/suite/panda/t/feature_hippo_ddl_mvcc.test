@@ -1,0 +1,299 @@
+####### Hippo Index - Online DDL MVCC Behavior ###########
+#
+# Test MVCC visibility and MDL lock behavior during online DDL
+# Focus: Verify correct visibility at different DDL phases
+#
+# ============================================================
+# Online DDL MDL Lock Phases:
+# ============================================================
+#
+# Phase 1: PREPARE
+#   - Acquire MDL_SHARED_UPGRADABLE
+#   - Waits for existing transactions to finish
+#   - Test: Transaction BEFORE DDL blocks DDL
+#
+# Phase 2: EXECUTE
+#   - Hold MDL_SHARED_UPGRADABLE
+#   - New DML/SELECT can proceed (MDL_SHARED_READ/WRITE compatible)
+#   - Bulk load + row log apply
+#   - Test: DML DURING DDL works correctly
+#
+# Phase 3: COMMIT
+#   - Upgrade to MDL_EXCLUSIVE
+#   - Blocks all new transactions briefly
+#   - Test: Transaction during commit phase is blocked
+#
+# ============================================================
+
+--source include/have_debug.inc
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+connect (con3,localhost,root,,);
+
+SET opt_index_format_hippo_enabled=on;
+SET GLOBAL innodb_lock_wait_timeout = 2;
+SET innodb_lock_wait_timeout = 2;
+
+
+--echo ##################################################################
+--echo # Test 1: MDL behavior during ADD INDEX
+--echo ##################################################################
+
+connection default;
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val INT NOT NULL,
+  data VARCHAR(100)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3');
+
+
+--echo # Phase 1: Transaction BEFORE DDL blocks DDL
+connection con1;
+BEGIN;
+SELECT * FROM t1 WHERE val=10;  # Holds MDL_SHARED_READ
+
+connection con2;
+SET lock_wait_timeout = 2;
+--error ER_LOCK_WAIT_TIMEOUT
+ALTER TABLE t1 ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE;
+
+connection con1;
+COMMIT;
+
+
+--echo # Phase 2: DML DURING DDL works
+connection con2;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+--send ALTER TABLE t1 ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE
+
+connection con3;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+
+--echo # These should succeed during DDL execute phase
+BEGIN;
+SELECT * FROM t1 WHERE val=10;  # MDL_SHARED_READ is compatible
+INSERT INTO t1 VALUES (4, 40, 'new_row');
+UPDATE t1 SET data='updated' WHERE id=1;
+DELETE FROM t1 WHERE id=3;
+COMMIT;
+
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+
+connection con2;
+--reap
+
+
+--echo # Phase 3: Commit phase blocks new transactions
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'alter_table_inplace_before_commit SIGNAL before_commit WAIT_FOR continue_commit';
+--send ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0, ALGORITHM=INPLACE
+
+connection con3;
+SET DEBUG_SYNC = 'now WAIT_FOR before_commit';
+
+--echo # This should timeout (DDL holds MDL_EXCLUSIVE)
+connection con1;
+SET lock_wait_timeout = 2;
+--error ER_LOCK_WAIT_TIMEOUT
+SELECT * FROM t1 WHERE val=10;
+
+connection con3;
+SET DEBUG_SYNC = 'now SIGNAL continue_commit';
+
+connection con2;
+--reap
+
+
+--echo # Verify final state
+connection default;
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=40;
+
+DROP TABLE t1;
+
+
+--echo ##################################################################
+--echo # Test 2: MDL behavior during table rebuild (DROP PK + ADD PK)
+--echo ##################################################################
+
+connection default;
+CREATE TABLE t2 (
+  id INT NOT NULL,
+  val INT NOT NULL,
+  data VARCHAR(100),
+  PRIMARY KEY(id),
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES (1, 100, 'row1'), (2, 200, 'row2'), (3, 300, 'row3');
+
+
+--echo # Phase 1: Transaction BEFORE DDL blocks DDL
+connection con1;
+BEGIN;
+SELECT * FROM t2 WHERE val=100;  # Holds MDL
+
+connection con2;
+SET lock_wait_timeout = 2;
+--error ER_LOCK_WAIT_TIMEOUT
+ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+
+connection con1;
+COMMIT;
+
+
+--echo # Phase 2: DML DURING rebuild works
+connection con2;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+--send ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE
+
+connection con3;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+
+--echo # These should succeed during DDL execute phase
+BEGIN;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=100;
+INSERT INTO t2 VALUES (4, 400, 'new_row');
+UPDATE t2 SET data='updated' WHERE id=1;
+DELETE FROM t2 WHERE id=3;
+COMMIT;
+
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+
+connection con2;
+--reap
+
+
+--echo # Verify PK changed and hippo index still works
+connection default;
+SHOW CREATE TABLE t2;
+SELECT * FROM t2 ORDER BY val;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=400;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=300;  # empty (deleted)
+
+DROP TABLE t2;
+
+
+--echo ##################################################################
+--echo # Test 3: MVCC snapshot visibility during DDL
+--echo ##################################################################
+
+connection default;
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  val INT NOT NULL
+) ENGINE=InnoDB;
+
+INSERT INTO t3 VALUES (1, 10), (2, 20), (3, 30);
+
+--echo # Start DDL
+connection con2;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+--send ALTER TABLE t3 ADD KEY idx_val (val) COMMENT 'hippo_index', ALGORITHM=INPLACE, LOCK=NONE
+
+connection con1;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+
+--echo # Start a snapshot read before modifications
+BEGIN;
+SELECT * FROM t3 ORDER BY id;  # Snapshot: sees (1,10), (2,20), (3,30)
+
+--echo # Make modifications in another transaction
+connection con3;
+BEGIN;
+UPDATE t3 SET val=11 WHERE id=1;
+INSERT INTO t3 VALUES (4, 40);
+DELETE FROM t3 WHERE id=2;
+COMMIT;
+
+--echo # Snapshot read should still see old data
+connection con1;
+SELECT * FROM t3 ORDER BY id;  # Should still see (1,10), (2,20), (3,30)
+COMMIT;
+
+--echo # After commit, should see new data
+SELECT * FROM t3 ORDER BY id;  # Should see (1,11), (3,30), (4,40)
+
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+
+connection con2;
+--reap
+
+--echo # Verify hippo index is correct after DDL
+connection default;
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=11;
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=40;
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=10;  # empty (updated)
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=20;  # empty (deleted)
+
+DROP TABLE t3;
+
+
+--echo ##################################################################
+--echo # Test 4: Concurrent reads via hippo index during DDL
+--echo ##################################################################
+
+connection default;
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  val INT NOT NULL,
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t4 VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);
+
+--echo # Start table rebuild
+connection con2;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+--send ALTER TABLE t4 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE
+
+connection con1;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+
+--echo # Multiple concurrent reads via hippo index during DDL
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val BETWEEN 10 AND 30 ORDER BY val;
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val > 30 ORDER BY val;
+
+--echo # Modifications during DDL
+BEGIN;
+UPDATE t4 SET val=15 WHERE id=1;
+INSERT INTO t4 VALUES (6, 60);
+COMMIT;
+
+--echo # Read again
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val=15;
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val=60;
+
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+
+connection con2;
+--reap
+
+--echo # Verify final state
+connection default;
+SELECT * FROM t4 ORDER BY val;
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val IN (15, 60) ORDER BY val;
+
+DROP TABLE t4;
+
+
+--echo ##################################################################
+--echo # Cleanup
+--echo ##################################################################
+
+connection default;
+SET DEBUG_SYNC = 'RESET';
+
+disconnect con1;
+disconnect con2;
+disconnect con3;
+
+SET opt_index_format_hippo_enabled=default;
+SET GLOBAL innodb_lock_wait_timeout = DEFAULT;

@@ -27,11 +27,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define SYS_VARS_CONSENSUS_INCLUDE
 #include "include/my_inttypes.h"
 
-extern bool opt_old_show_timestamp;
 extern ulonglong opt_cluster_id;
 extern bool opt_cluster_log_type_instance;
 extern ulonglong opt_consensus_log_cache_size;
-extern bool opt_consensus_disable_fifo_cache;
 extern bool opt_consensus_prefetch_fast_fetch;
 extern ulonglong opt_consensus_prefetch_cache_size;
 extern ulonglong opt_consensus_prefetch_window_size;
@@ -40,10 +38,6 @@ extern ulonglong opt_consensus_max_log_size;
 extern ulonglong opt_consensus_large_trx_split_size;
 extern ulonglong opt_consensus_new_follower_threshold;
 extern ulonglong opt_consensus_new_leader_max_apply_delay_seconds;
-extern bool opt_consensus_large_trx;
-extern bool opt_consensus_check_large_event;
-extern ulonglong opt_consensus_large_event_size_limit;
-extern ulonglong opt_consensus_large_event_count_limit;
 extern ulonglong opt_consensus_large_event_split_size;
 extern uint opt_consensus_send_timeout;
 extern uint opt_consensus_connect_timeout;
@@ -64,6 +58,7 @@ extern ulong opt_consensus_large_batch_ratio;
 extern ulonglong opt_consensus_max_delay_index;
 extern ulonglong opt_consensus_min_delay_index;
 extern bool opt_consensus_optimistic_heartbeat;
+extern bool opt_consensus_disable_sync_for_large_trx;
 extern ulong opt_consensus_sync_follower_meta_interval;
 extern bool opt_mts_recover_use_index;
 extern ulong opt_consensus_log_level;
@@ -82,22 +77,16 @@ extern char *opt_consensus_server_ip;
 extern ulonglong opt_consensus_server_port;
 extern char *opt_diagnose_excluded_vars_list;
 extern ulonglong opt_consensus_check_commit_index_interval;
-extern bool opt_enable_consensus_leader;
-extern ulonglong opt_truncate_consensus_log;
-extern bool opt_append_consensus_log;
 extern bool opt_reset_consensus_prefetch_cache;
-extern ulonglong opt_read_consensus_log;
 extern bool opt_consensus_checksum;
 extern bool opt_consensus_disable_election;
 extern bool opt_consensus_dynamic_easyindex;
 extern bool opt_consensus_easy_pool_size;
-extern char *opt_cluster_purged_gtid;
 extern bool opt_cluster_force_change_meta;
 extern bool opt_cluster_learner_node;
 extern char *opt_cluster_info;
 extern uint64 opt_consensus_start_index;
 extern uint64 opt_consensus_max_wait_seconds_for_next_trx_index;
-extern bool opt_cluster_dump_meta;
 extern ulonglong opt_cluster_current_term;
 extern ulonglong opt_cluster_force_recover_index;
 extern ulonglong opt_cluster_follower_force_recover_index;
@@ -119,13 +108,14 @@ extern ulonglong opt_consensus_wait_unfinished_bgc_timeout;
 extern bool opt_consensus_disable_commit_before_change_leader;
 extern bool opt_consensus_disable_empty_xa;
 extern bool opt_enable_consensus;
+extern bool opt_consensus_enable_reset_master;
+extern bool opt_consensus_hide_leader_xpaxos_channel;
+extern bool opt_consensus_repl_skip_polarx_event;
 
 extern bool opt_consensuslog_revise;
-extern bool opt_recover_snapshot;
 extern ulong thread_stack_warning;
 extern ulong opt_configured_event_scheduler;
 extern bool opt_consensus_reset_mts_info;
-
-extern std::atomic<int64> xa_finishing_count;
+extern ulonglong opt_consensus_max_pipeline_entry_size;
 
 #endif

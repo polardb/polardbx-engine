@@ -1,0 +1,39 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+# Enable the RDS privilege strategy on BOTH primary and replica
+set global opt_enable_rds_priv_strategy=on;
+set global opt_enable_rds_priv_strategy=on;
+create user 'repl_u'@'%';
+#
+# 1. Explicit GRANT ... AS by a SUPER user (root): binlogged WITH the AS
+#    clause; the strategy-ON replica applier must apply it (not blocked).
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'repl_u'@'%' as 'root'@'localhost' with role DEFAULT;
+#
+# 2. Plain global GRANT with --partial_revokes ON: the server injects a
+#    synthesized AS clause into the binlog; must also replicate.
+grant BACKUP_ADMIN on *.* to 'repl_u'@'%';
+# primary state
+select user, host, priv from mysql.global_grants where user='repl_u' order by priv;
+user	host	priv
+repl_u	%	BACKUP_ADMIN
+repl_u	%	SYSTEM_VARIABLES_ADMIN
+# Wait for the replica to catch up.  If the fix had wrongly blocked the
+# applier, the SQL thread would have errored and this sync would fail.
+#
+# On the REPLICA: both privileges were applied -> replication is healthy.
+select user, host, priv from mysql.global_grants where user='repl_u' order by priv;
+user	host	priv
+repl_u	%	BACKUP_ADMIN
+repl_u	%	SYSTEM_VARIABLES_ADMIN
+#
+###########################################################################
+# Cleanup
+###########################################################################
+#
+drop user 'repl_u'@'%';
+set global opt_enable_rds_priv_strategy=off;
+set global opt_enable_rds_priv_strategy=off;
+include/rpl_end.inc

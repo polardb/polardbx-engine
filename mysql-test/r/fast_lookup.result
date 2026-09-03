@@ -1,0 +1,237 @@
+SET SESSION sql_mode = 'TRADITIONAL';
+SHOW GLOBAL VARIABLES LIKE "polarx_optimizer_rbo_mode";
+Variable_name	Value
+polarx_optimizer_rbo_mode	ON
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+INSERT INTO t1 VALUES (1,2),(2,3),(3,4),(4,5);
+SELECT * FROM t1 WHERE a = 2;
+a	b
+2	3
+SET global polarx_optimizer_rbo_mode = on;
+SELECT * FROM t1 WHERE a = 2;
+a	b
+2	3
+EXPLAIN SELECT * FROM t1 WHERE a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '2' AS `a`,'3' AS `b` from `test`.`t1` where true
+EXPLAIN SELECT * FROM t1 WHERE 2 = a;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '2' AS `a`,'3' AS `b` from `test`.`t1` where true
+EXPLAIN SELECT b FROM t1 WHERE a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '3' AS `b` from `test`.`t1` where true
+EXPLAIN FORMAT=JSON SELECT * FROM t1 WHERE a = 2;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "1.00"
+    },
+    "table": {
+      "table_name": "t1",
+      "access_type": "const",
+      "possible_keys": [
+        "PRIMARY"
+      ],
+      "key": "PRIMARY",
+      "used_key_parts": [
+        "a"
+      ],
+      "key_length": "4",
+      "ref": [
+        "const"
+      ],
+      "rows_examined_per_scan": 1,
+      "rows_produced_per_join": 1,
+      "filtered": "100.00",
+      "using_fast_lookup": true,
+      "cost_info": {
+        "read_cost": "0.00",
+        "eval_cost": "0.10",
+        "prefix_cost": "0.00",
+        "data_read_per_join": "16"
+      },
+      "used_columns": [
+        "a",
+        "b"
+      ]
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select '2' AS `a`,'3' AS `b` from `test`.`t1` where true
+EXPLAIN SELECT * FROM t1 WHERE a = 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	no matching row in const table
+Warnings:
+Note	1003	/* select#1 */ select NULL AS `a`,NULL AS `b` from `test`.`t1` where multiple equal(5, NULL)
+SELECT * FROM t1 WHERE a = 5;
+a	b
+EXPLAIN SELECT * FROM t1 WHERE a = 1 and b = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b` from `test`.`t1` where true
+EXPLAIN SELECT * FROM t1 WHERE a = 1 and b = 12;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Impossible WHERE noticed after reading const tables
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b` from `test`.`t1` where false
+EXPLAIN SELECT * FROM t1 WHERE a > 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	PRIMARY	PRIMARY	4	NULL	3	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (`test`.`t1`.`a` > 1)
+EXPLAIN SELECT * FROM t1 WHERE a = '1';
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b` from `test`.`t1` where true
+EXPLAIN SELECT * FROM t1 GROUP BY b;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` group by `test`.`t1`.`b`
+EXPLAIN SELECT * FROM t1 GROUP BY b having a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	Using temporary
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` group by `test`.`t1`.`b` having (`test`.`t1`.`a` = 2)
+EXPLAIN SELECT * FROM t1 WHERE a = 2 limit 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	Zero limit
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1` where (`test`.`t1`.`a` = 2) limit 0
+EXPLAIN SELECT COUNT(*) FROM t1 WHERE a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `COUNT(*)` from `test`.`t1` where true
+EXPLAIN SELECT MAX(b) FROM t1 WHERE a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select max('3') AS `MAX(b)` from `test`.`t1` where true
+EXPLAIN SELECT * FROM (SELECT * FROM t1) as t1_derived;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	4	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`a` AS `a`,`test`.`t1`.`b` AS `b` from `test`.`t1`
+CREATE TABLE t2 (a INT, b INT, c INT, PRIMARY KEY(a, b));
+INSERT INTO t2 VALUES(1,2,3),(2,3,4),(3,4,5);
+EXPLAIN SELECT * FROM t2 WHERE a = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	ref	PRIMARY	PRIMARY	4	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`a` AS `a`,`test`.`t2`.`b` AS `b`,`test`.`t2`.`c` AS `c` from `test`.`t2` where (`test`.`t2`.`a` = 1)
+EXPLAIN SELECT * FROM t2 WHERE a = 1 and b = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	const	PRIMARY	PRIMARY	8	const,const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b`,'3' AS `c` from `test`.`t2` where true
+SELECT * FROM t2 WHERE a = 1 and b = 2;
+a	b	c
+1	2	3
+CREATE TABLE t3 (a BIGINT PRIMARY KEY, b INT);
+INSERT INTO t3 VALUES (1, 2),(2,3),(3,4);
+EXPLAIN SELECT * FROM t3 WHERE a = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t3	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b` from `test`.`t3` where true
+SELECT * FROM t3 WHERE a = 1;
+a	b
+1	2
+CREATE TABLE t4 (a varchar(64) PRIMARY KEY, b INT);
+INSERT INTO t4 VALUES ('aa', 1), (2, 4), (3,5);
+EXPLAIN SELECT * FROM t4 WHERE a = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	ALL	PRIMARY	NULL	NULL	NULL	3	33.33	Using where
+Warnings:
+Warning	1739	Cannot use ref access on index 'PRIMARY' due to type or collation conversion on field 'a'
+Warning	1739	Cannot use range access on index 'PRIMARY' due to type or collation conversion on field 'a'
+Note	1003	/* select#1 */ select `test`.`t4`.`a` AS `a`,`test`.`t4`.`b` AS `b` from `test`.`t4` where (`test`.`t4`.`a` = 2)
+SELECT * FROM t4 WHERE a = 2;
+a	b
+2	4
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: 'aa'
+CREATE TABLE t5 (a INT, b INT, UNIQUE KEY(a));
+INSERT INTO t5 VALUES (1,2),(2,3);
+EXPLAIN SELECT * FROM t5 WHERE a = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t5	NULL	const	a	a	5	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b` from `test`.`t5` where true
+SELECT * FROM t5 WHERE a = 1;
+a	b
+1	2
+CREATE TABLE t6 (a INT PRIMARY KEY, b INT, c INT, UNIQUE KEY(b));
+INSERT INTO t6 VALUES (1,2,3),(2,3,4),(3,4,5);
+EXPLAIN SELECT * FROM t6 WHERE a = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t6	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b`,'3' AS `c` from `test`.`t6` where true
+EXPLAIN SELECT * FROM t6 WHERE b = 2;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t6	NULL	const	b	b	5	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `a`,'2' AS `b`,'3' AS `c` from `test`.`t6` where true
+CREATE TABLE t7 (a INT, b INT, KEY(a));
+INSERT INTO t7 VALUES (1,2),(1,3);
+EXPLAIN SELECT * FROM t7 WHERE a = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t7	NULL	ref	a	a	5	const	2	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t7`.`a` AS `a`,`test`.`t7`.`b` AS `b` from `test`.`t7` where (`test`.`t7`.`a` = 1)
+SELECT * FROM t7 WHERE a = 1 ORDER BY a;
+a	b
+1	2
+1	3
+CREATE TABLE t8 (
+c1 INT NOT NULL,
+c2 INT DEFAULT NULL,
+PRIMARY KEY (c1),
+KEY i_c2(c2)
+);
+INSERT INTO t8 VALUE(1, 1);
+EXPLAIN SELECT * FROM t8 FORCE INDEX(i_c2) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	index	i_c2	i_c2	5	NULL	1	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t8`.`c1` AS `c1`,`test`.`t8`.`c2` AS `c2` from `test`.`t8` FORCE INDEX (`i_c2`) where (`test`.`t8`.`c1` = 1)
+EXPLAIN SELECT * FROM t8 USE INDEX(i_c2) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	index	i_c2	i_c2	5	NULL	1	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t8`.`c1` AS `c1`,`test`.`t8`.`c2` AS `c2` from `test`.`t8` USE INDEX (`i_c2`) where (`test`.`t8`.`c1` = 1)
+EXPLAIN SELECT * FROM t8 IGNORE INDEX(i_c2) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `c1`,'1' AS `c2` from `test`.`t8` IGNORE INDEX (`i_c2`) where true
+EXPLAIN SELECT * FROM t8 FORCE INDEX(primary) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `c1`,'1' AS `c2` from `test`.`t8` FORCE INDEX (PRIMARY) where true
+EXPLAIN SELECT * FROM t8 USE INDEX(primary) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Directly search via Primary Index
+Warnings:
+Note	1003	/* select#1 */ select '1' AS `c1`,'1' AS `c2` from `test`.`t8` USE INDEX (PRIMARY) where true
+EXPLAIN SELECT * FROM t8 IGNORE INDEX(primary) WHERE c1 = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t8	NULL	index	i_c2	i_c2	5	NULL	1	100.00	Using where; Using index
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t8`.`c1` AS `c1`,`test`.`t8`.`c2` AS `c2` from `test`.`t8` IGNORE INDEX (PRIMARY) where (`test`.`t8`.`c1` = 1)
+SET global polarx_optimizer_rbo_mode = default;
+DROP TABLE t1, t2, t3, t4, t5, t6, t7, t8;

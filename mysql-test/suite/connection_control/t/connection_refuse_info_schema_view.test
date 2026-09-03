@@ -55,11 +55,11 @@ connect(fail_con_u1, localhost, u1,haha,,,,SSL);
 --error ER_ACCESS_DENIED_ERROR
 connect(fail_con_u2, localhost, u2,efgh,,,,SSL);
 
--- echo # connection_control_failed_login_attempts should contain entries
+-- echo # connection_control_refuse_statistic should contain entries
 -- echo # for u1@localhost and u2@localhost
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
@@ -71,11 +71,11 @@ connect(fail_con_u2, localhost, u2,haha,,,,SSL);
 --error ER_ACCESS_DENIED_ERROR
 connect(fail_con_u3, localhost, u3,efgh,,,,SSL);
 
--- echo # connection_control_failed_login_attempts should contain entries
+-- echo # connection_control_refuse_statistic should contain entries
 -- echo # for u1@localhost, u2@localhost and u3@localhost
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
@@ -90,7 +90,7 @@ connect(fail_con_u3, localhost, u3,efgh,,,,SSL);
 -- echo # failed connection counts should have increased for all users
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
@@ -116,23 +116,23 @@ connect(fail_con_u1, localhost, u1,haha,,,,SSL);
 -- echo # Try various queries
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
   WHERE USERHOST = '\'u1\'@\'localhost\'';
   
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
   WHERE USERHOST LIKE '%u2%';
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
   WHERE FAILED_ATTEMPTS > 4;
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
   WHERE FAILED_ATTEMPTS > 5;
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic
   WHERE FAILED_ATTEMPTS < 5;
   
 connect(con_u1, localhost, u1,abcd,,,,SSL);
@@ -147,7 +147,7 @@ connect(con_viewer, localhost, viewer,abcd,,,,SSL);
 --echo # After successful login,  corresponding entry should disappear
 --echo # from the view
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 connection default;
 disconnect con_viewer;
 DROP USER viewer@localhost;
@@ -155,7 +155,7 @@ DROP USER viewer@localhost;
 connect(con_u3, localhost, u3,abcd,,,,SSL);
 --echo # A user without privileges should not be able to any information
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 connection default;
 --disconnect con_u3
@@ -172,7 +172,7 @@ connect(fail_con_u2, localhost, u2,efgh,,,,SSL);
 
 -- echo # Subsequent failed attempts should put entries back in the view
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --replace_result $MASTER_MYSOCK MASTER_SOCKET $MASTER_MYPORT MASTER_PORT
 --error ER_ACCESS_DENIED_ERROR
@@ -186,7 +186,7 @@ connect(fail_con_u6, localhost, u6,efgh,,,,SSL);
 
 -- echo # Attempts by invalid accounts should be shown in the view
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --echo
 --echo # ----------------------------------------------------------------------

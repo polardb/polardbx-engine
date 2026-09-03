@@ -84,7 +84,7 @@ class Session_sysvar_resource_manager {
     Frees the old allocated memory, memdup()'s the given val to a new memory
     address & updates the session variable pointer.
   */
-  bool update(char **var, char *val, size_t val_len);
+  bool update(char **var, const char *val, size_t val_len);
 
   void claim_memory_ownership(bool claim);
 

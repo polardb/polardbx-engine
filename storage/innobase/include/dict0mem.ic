@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 1/8/1996 Heikki Tuuri
  ***********************************************************************/
 
+#ifndef dict0mem_h
+#define INNODB_DICT0MEM_IC_STANDALONE
+#include "dict0mem.h"
+#undef INNODB_DICT0MEM_IC_STANDALONE
+#endif /* !dict0mem_h */
 #include "data0type.h"
 #include "dict0mem.h"
 #include "fil0fil.h"
@@ -65,13 +70,15 @@ static inline void dict_mem_fill_index_struct(
 
   index->n_v_gfields = 0;
   index->n_s_gfields = 0;
+  index->n_s_tfields = 0;
 
   /* Assign a ulint to a 4-bit-mapped field.
   Only the low-order 4 bits are assigned. */
   index->type = type;
 #ifndef UNIV_HOTBACKUP
   index->space = (unsigned int)space;
-  index->root = PAGE_MARK_NULL;
+  index->set_root(PAGE_MARK_NULL);
+  index->set_pd_capacity(0);
   index->merge_threshold = DICT_INDEX_MERGE_THRESHOLD_DEFAULT;
 #endif /* !UNIV_HOTBACKUP */
   index->table_name = table_name;
@@ -81,7 +88,19 @@ static inline void dict_mem_fill_index_struct(
   of an empty mem block */
   index->allow_duplicates = false;
   index->nulls_equal = false;
-  index->disable_ahi = false;
+  /* AHI is globally turned off in this branch.  Pin per-index disable_ahi to
+  true at construction time so that:
+    - btr_search_build_page_hash_index always short-circuits, no block ever
+      gets block->ahi.index pointing back to this index;
+    - search_info->ref_count stays 0 for the whole lifetime of the index,
+      which makes btr_drop_ahi_for_table / btr_drop_ahi_for_index and
+      btr_search_await_no_reference all degenerate to a noop.
+  The global sysvar `innodb_adaptive_hash_index` and the runtime switch
+  btr_search_enabled are intentionally left functional, so existing test
+  cases and tools that toggle them keep compiling and running unchanged --
+  they simply have no observable effect because every index already opts
+  out at the per-index level. */
+  index->disable_ahi = true;
   index->last_ins_cur = nullptr;
   index->last_sel_cur = nullptr;
 #ifndef UNIV_HOTBACKUP

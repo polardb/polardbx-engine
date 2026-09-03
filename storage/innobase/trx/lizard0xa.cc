@@ -30,11 +30,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2021-08-10 by Jianwei.zhao
  *******************************************************/
 
+#include "clone0repl.h"
 #include "ha_innodb.h"
 #include "trx0sys.h"
 
 #include "m_ctype.h"
 #include "mysql/plugin.h"
+#include "sql/binlog/komodo0binlog0xa0specification.h"
 #include "sql/sql_class.h"
 #include "sql/xa.h"
 #include "sql/sql_class.h"
@@ -42,9 +44,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0gcs.h"
 #include "lizard0ha_innodb.h"
-#include "lizard0read0types.h"
+#include "lizard0txn0slot.h"
 #include "lizard0undo.h"
-#include "lizard0ut.h"
 #include "lizard0xa.h"
 #include "lizard0xa0types.h"
 
@@ -226,7 +227,7 @@ XA_specification_strategy::XA_specification_strategy(const trx_t *trx)
  */
 bool XA_specification_strategy::has_gtid() const {
   auto binlog_xa_spec =
-      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+      dynamic_cast<komodo::Binlog_xa_specification *>(m_xa_spec);
 
   if (binlog_xa_spec && binlog_xa_spec->has_gtid()) {
     return true;
@@ -240,21 +241,21 @@ bool XA_specification_strategy::has_gtid() const {
 trx_undo_t::Gtid_storage XA_specification_strategy::decide_gtid_storage() {
   trx_undo_t::Gtid_storage storage = trx_undo_t::Gtid_storage::NONE;
   auto binlog_xa_spec =
-      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+      dynamic_cast<komodo::Binlog_xa_specification *>(m_xa_spec);
   ut_ad(has_gtid());
   ut_ad(binlog_xa_spec->is_legal_source());
 
   switch (binlog_xa_spec->source()) {
-    case binlog::Binlog_xa_specification::Source::NONE:
+    case komodo::Binlog_xa_specification::Source::NONE:
       ut_a(0);
       break;
-    case binlog::Binlog_xa_specification::Source::COMMIT:
+    case komodo::Binlog_xa_specification::Source::COMMIT:
       storage = trx_undo_t::Gtid_storage::COMMIT;
       break;
-    case binlog::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE:
-    case binlog::Binlog_xa_specification::Source::XA_PREPARE:
-    case binlog::Binlog_xa_specification::Source::XA_COMMIT:
-    case binlog::Binlog_xa_specification::Source::XA_ROLLBACK:
+    case komodo::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE:
+    case komodo::Binlog_xa_specification::Source::XA_PREPARE:
+    case komodo::Binlog_xa_specification::Source::XA_COMMIT:
+    case komodo::Binlog_xa_specification::Source::XA_ROLLBACK:
       storage = trx_undo_t::Gtid_storage::PREPARE_AND_COMMIT;
       break;
   }
@@ -280,7 +281,7 @@ void XA_specification_strategy::overwrite_gtid_storage(trx_t *trx) {
 /** Fill gtid info from xa spec. */
 void XA_specification_strategy::get_gtid_info(Gtid_desc *gtid_desc) {
   auto binlog_xa_spec =
-      dynamic_cast<binlog::Binlog_xa_specification *>(m_xa_spec);
+      dynamic_cast<komodo::Binlog_xa_specification *>(m_xa_spec);
   ut_ad(has_gtid());
 
   gtid_desc->m_version = GTID_VERSION;
@@ -315,7 +316,7 @@ void XA_specification_strategy::overwrite_xa(trx_t *trx) const {
 }
 
 Guard_xa_specification::Guard_xa_specification(trx_t *trx,
-                                               XA_specification *xa_spec,
+                                               komodo::XA_specification *xa_spec,
                                                bool prepare)
     : m_trx(trx), m_xa_spec(xa_spec) {
   ut_ad(trx);
@@ -440,16 +441,43 @@ const XID *get_external_xid_from_thd(THD *thd) {
           false if not found.
 */
 bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
-  trx_state_t state;
-
   std::lock_guard<TrxSysLockable> lock_guard(TrxSysLockable::instance());
-  for (auto trx : trx_sys->rw_trx_list) {
+
+  // for (auto trx : trx_sys->rw_trx_list) {
+  //   trx_mutex_enter(trx);
+  //   trx_state_t state = trx->state.load(std::memory_order_relaxed);
+  //   trx_mutex_exit(trx);
+
+  //   if (state != TRX_STATE_PREPARED || !trx->xid->eq(xid)) {
+  //     continue;
+  //   }
+
+  //   /**
+  //     1. The transaction was detached once. So the undo state must be at
+  //        least PREPARED_IN_TC.
+  //     2. Holding the trx_sys mutex, so cannot become
+  //        TRX_STATE_COMMITTED_IN_MEMORY.
+
+  //     3. Holding the XID_STATE lock, so no concurrent commits or rollbacks
+  //     are
+  //        in progress.
+  //   */
+  //   ut_a(trx->mysql_thd == nullptr);
+  //   ut_a(trx_is_prepared_in_tc(trx));
+
+  //   info->status = XA_status::DETACHED_PREPARE;
+  //   info->init_by_txn_undo(trx->id, trx_undo_get_txn(trx));
+  //   return true;
+  // }
+
+  // Still hold trx_sys mutex to promise attach/detach state.
+  return gcs_iterate_rw_trx([&xid, &info](trx_t *trx) -> bool {
     trx_mutex_enter(trx);
-    state = trx->state.load(std::memory_order_relaxed);
+    trx_state_t state = trx->state.load(std::memory_order_relaxed);
     trx_mutex_exit(trx);
 
     if (state != TRX_STATE_PREPARED || !trx->xid->eq(xid)) {
-      continue;
+      return false;
     }
 
     /**
@@ -457,6 +485,7 @@ bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
          least PREPARED_IN_TC.
       2. Holding the trx_sys mutex, so cannot become
          TRX_STATE_COMMITTED_IN_MEMORY.
+
       3. Holding the XID_STATE lock, so no concurrent commits or rollbacks are
          in progress.
     */
@@ -464,11 +493,10 @@ bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
     ut_a(trx_is_prepared_in_tc(trx));
 
     info->status = XA_status::DETACHED_PREPARE;
-    info->init_by_txn_undo(trx->id, trx_undo_get_txn(trx));
-    return true;
-  }
+    info->init_by_txn_undo(trx->id, trx_get_txn_undo(trx));
 
-  return false;
+    return true;
+  });
 }
 
 /**
@@ -482,17 +510,63 @@ bool trx_search_detach_prepare_by_xid(const XID *xid, MyXAInfo *info) {
           false if not found.
 */
 bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
-  bool is_recovered;
-  trx_state_t state;
-
   std::lock_guard<TrxSysLockable> lock_guard(TrxSysLockable::instance());
-  for (auto trx : trx_sys->rw_trx_list) {
+
+  //  for (auto trx : trx_sys->rw_trx_list) {
+  //    trx_mutex_enter(trx);
+  //    bool is_recovered = trx->is_recovered;
+  //    trx_state_t state = trx->state.load(std::memory_order_relaxed);
+  //    trx_mutex_exit(trx);
+  //
+  //    if (!is_recovered) continue;
+  //
+  //    switch (state) {
+  //      case TRX_STATE_COMMITTED_IN_MEMORY:
+  //      case TRX_STATE_NOT_STARTED:
+  //      case TRX_STATE_FORCED_ROLLBACK:
+  //        /** recovered transaction can only be TRX_STATE_PREPARED or
+  //        TRX_STATE_ACTIVE. See trx_lists_init_at_db_start. */
+  //        ut_error;
+  //        break;
+  //      case TRX_STATE_PREPARED:
+  //        if (trx->xid->eq(xid)) {
+  //          /** In actual use, the transaction_cache will be searched first,
+  //          and then the transaction information will be searched in the
+  //          engine. So actually can't come into here. */ return false;
+  //        }
+  //        continue;
+  //      case TRX_STATE_ACTIVE:
+  //        if (!trx->xid->eq(xid)) {
+  //          continue;
+  //        }
+  //        break;
+  //    }
+  //
+  //    /**
+  //      1. The trx that (is_recovered = 1 && state == TRX_STATE_ACTIVE) must
+  //      being
+  //         rollbacked backgroud.
+  //      2. Holding trx_sys mutex, so can't be committed and can't be freed.
+  //      3. NOTES: Assume that the trx must not in transaction cache. So no one
+  //         can attach it.
+  //
+  //      So trx->xid can be read safely.
+  //    */
+  //    ut_a(is_recovered && state == TRX_STATE_ACTIVE && trx->xid->eq(xid));
+  //
+  //    /** Attached by background thread. */
+  //    *info = MY_XA_INFO_ATTACH;
+  //
+  //    return true;
+  //  }
+  //
+  return gcs_iterate_rw_trx([&xid, &info](trx_t *trx) -> bool {
     trx_mutex_enter(trx);
-    is_recovered = trx->is_recovered;
-    state = trx->state.load(std::memory_order_relaxed);
+    bool is_recovered = trx->is_recovered;
+    trx_state_t state = trx->state.load(std::memory_order_relaxed);
     trx_mutex_exit(trx);
 
-    if (!is_recovered) continue;
+    if (!is_recovered) return false;
 
     switch (state) {
       case TRX_STATE_COMMITTED_IN_MEMORY:
@@ -501,7 +575,7 @@ bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
         /** recovered transaction can only be TRX_STATE_PREPARED or
         TRX_STATE_ACTIVE. See trx_lists_init_at_db_start. */
         ut_error;
-        break;
+        return false;
       case TRX_STATE_PREPARED:
         if (trx->xid->eq(xid)) {
           /** In actual use, the transaction_cache will be searched first, and
@@ -509,10 +583,10 @@ bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
           actually can't come into here. */
           return false;
         }
-        continue;
+        return false;
       case TRX_STATE_ACTIVE:
         if (!trx->xid->eq(xid)) {
-          continue;
+          return false;
         }
         break;
     }
@@ -531,10 +605,9 @@ bool trx_search_rollback_background_by_xid(const XID *xid, MyXAInfo *info) {
     /** Attached by background thread. */
     *info = MY_XA_INFO_ATTACH;
 
-    return true;
-  }
 
-  return false;
+    return true;
+  });
 }
 
 static bool txn_find_slot_quick(const XID *xid, const slot_ptr_t slot_ptr_hint,
@@ -584,17 +657,27 @@ bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info,
   }
 
   switch (txn_slot.state) {
-    case TXN_UNDO_LOG_COMMITED:
-    case TXN_UNDO_LOG_PURGED:
-    case TXN_UNDO_LOG_ERASED:
+    case txn_slot_t::COMMITED:
+    case txn_slot_t::PURGED:
+    case txn_slot_t::ERASED:
       if (!txn_slot.tags_allocated()) {
         /** Found old format, not support. */
         *info = MY_XA_INFO_NOT_SUPPORT;
         break;
       }
+
+#if defined UNIV_DEBUG
+      /** Purged TXN will always be reused one day. */
+      if (txn_slot.state == txn_slot_t::PURGED &&
+          DBUG_EVALUATE_IF("purged_txn_always_reused", 1, 0)) {
+        found = false;
+        break;
+      }
+#endif
+
       info->init_by_txn_slot(&txn_slot);
       break;
-    case TXN_UNDO_LOG_ACTIVE:
+    case txn_slot_t::ACTIVE:
       /** Skip txn in active state. */
       found = false;
       break;
@@ -607,7 +690,7 @@ bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info,
 
 bool trx_slot_check_validity(const trx_t *trx) {
   THD *thd;
-  const txn_undo_ptr_t *undo_ptr;
+  const txn_slot_ptr_t *undo_ptr;
 
   thd = trx->mysql_thd;
   undo_ptr = &trx->rsegs.m_txn;

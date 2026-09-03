@@ -27,7 +27,7 @@
 
 namespace alisql {
 
-class Consensus;
+class Protocol;
 
 bool MyParseFromArray(google::protobuf::MessageLite &msg, const void *data,
                       int size);
@@ -69,7 +69,7 @@ class easy_eio_start_wrapper;
  **/
 class Service {
  public:
-  explicit Service(Consensus *cons);
+  explicit Service(Protocol *cons);
   virtual ~Service() = default;
 
   // todo delete confusing default value of this function parameters
@@ -101,7 +101,7 @@ class Service {
   typedef std::shared_ptr<CallbackBase> CallbackType;
   class ServiceEvent {
    public:
-    Consensus *cons;
+    Protocol *cons;
     ulong type;
     void *arg;
     void *arg1;
@@ -136,8 +136,8 @@ class Service {
   static int process(easy_request_t *r, void *args);
 
   std::shared_ptr<EasyNet> getEasyNet() { return net_; }
-  Consensus *getConsensus() { return cons_; }
-  void setConsensus(Consensus *cons) { cons_ = cons; }
+  Protocol *getConsensus() { return cons_; }
+  void setConsensus(Protocol *cons) { cons_ = cons; }
   easy_thread_pool_t *getWorkPool() { return workPool_; }
   easy_thread_pool_t *getHeartbeatPool() { return heartbeatPool_; }
   ThreadTimerService *getThreadTimerService() { return tts_.get(); }
@@ -154,7 +154,7 @@ class Service {
   easy_thread_pool_t *heartbeatPool_;
   std::shared_ptr<EasyNet> net_;
   std::shared_ptr<ThreadTimerService> tts_;
-  Consensus *cons_;
+  Protocol *cons_;
 
   std::shared_ptr<easy_eio_start_wrapper> eio_start_wrapper_ = nullptr;
 };      /* end of class Service */

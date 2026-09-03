@@ -36,6 +36,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include <stdlib.h>
 #include <sys/types.h>
 #include <time.h>
+#include <charconv>
 
 #include "client/client_priv.h"
 #include "client/client_query_attributes.h"
@@ -52,6 +53,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "my_io.h"
 #include "my_loglevel.h"
 #include "my_macros.h"
+#include "mysys_err.h"
 #include "typelib.h"
 #include "user_registration.h"
 #include "violite.h"
@@ -169,8 +171,15 @@ static bool debug_info_flag, debug_check_flag;
 static bool column_types_flag;
 static bool preserve_comments = false;
 static ulong opt_max_allowed_packet, opt_net_buffer_length;
-static uint verbose = 0, opt_silent = 0, opt_mysql_port = 0,
-            opt_local_infile = 0;
+static uint verbose = 0, opt_silent = 0, opt_local_infile = 0;
+
+static char *hosts_str = nullptr; /** To record the original host string */
+static char *ports_str = nullptr; /** To record the original port string */
+static std::vector<std::string> host_list; /** To record the parsed host list */
+static std::vector<uint> port_list;        /** To record the parsed port list */
+static char *current_host = nullptr;       /** Current host of the connection */
+static uint current_port = 0;              /** Current port of the connection */
+
 static uint opt_enable_cleartext_plugin = 0;
 static bool using_opt_enable_cleartext_plugin = false;
 static uint my_end_arg;
@@ -179,7 +188,6 @@ static char *opt_bind_addr = nullptr;
 static int connect_flag = CLIENT_INTERACTIVE;
 static bool opt_binary_mode = false;
 static bool opt_connect_expired_password = false;
-static char *current_host;
 static char *dns_srv_name;
 static char *current_db;
 static char *current_user = nullptr;
@@ -328,7 +336,12 @@ static int com_nopager(String *str, char *), com_pager(String *str, char *),
 
 static int read_and_execute(bool interactive);
 static bool init_connection_options(MYSQL *mysql);
-static int sql_connect(char *host, char *database, char *user, uint silent);
+static int sql_connect(char *host, uint port, char *database, char *user,
+                       uint silent);
+static int sql_connect_with_hosts_and_ports(std::vector<std::string> &hosts,
+                                            std::vector<uint> &ports,
+                                            char *database, char *user,
+                                            uint silent);
 static const char *server_version_string(MYSQL *mysql);
 static int put_info(const char *str, INFO_TYPE info, uint error = 0,
                     const char *sql_state = nullptr);
@@ -1150,6 +1163,17 @@ static COMMANDS commands[] = {
 
 static const char *load_default_groups[] = {"mysql", "client", nullptr};
 
+enum class Print_method { PUT_INFO, TEE_FPRINTF };
+
+// A struct to cache error messages for multiple hosts and ports
+struct Cache_error_info {
+  std::string message;
+  INFO_TYPE info_type;
+  uint error_number;
+  std::string sqlstate;
+  Print_method print_method;
+};
+
 #ifdef HAVE_READLINE
 /*
  HIST_ENTRY is defined for libedit, but not for the real readline
@@ -1340,7 +1364,8 @@ int main(int argc, char *argv[]) {
   completion_hash_init(&ht, 128);
   memset(&mysql, 0, sizeof(mysql));
   global_attrs = new client_query_attributes();
-  if (sql_connect(current_host, current_db, current_user, opt_silent)) {
+  if (sql_connect_with_hosts_and_ports(host_list, port_list, current_db,
+                                       current_user, opt_silent)) {
     quick = true;  // Avoid history
     status.exit_status = 1;
     mysql_end(-1);
@@ -1495,6 +1520,8 @@ void mysql_end(int sig) {
   free_passwords();
   my_free(opt_mysql_unix_port);
   my_free(current_db);
+  my_free(hosts_str);
+  my_free(ports_str);
   my_free(current_host);
   my_free(dns_srv_name);
   my_free(current_user);
@@ -1595,7 +1622,7 @@ static void kill_query(const char *reason) {
                                      nullptr, "", 0);
   else
     ret = mysql_real_connect(kill_mysql, current_host, current_user, nullptr,
-                             "", opt_mysql_port, opt_mysql_unix_port, 0);
+                             "", current_port, opt_mysql_unix_port, 0);
   if (!ret) {
 #ifdef HAVE_SETNS
     if (opt_network_namespace) (void)restore_original_network_namespace();
@@ -1759,7 +1786,7 @@ static struct my_option my_long_options[] = {
      nullptr, 0, nullptr},
     {"no-beep", 'b', "Turn off beep on error.", &opt_nobeep, &opt_nobeep,
      nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"host", 'h', "Connect to host.", &current_host, &current_host, nullptr,
+    {"host", 'h', "Connect to host.", &hosts_str, &hosts_str, nullptr,
      GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"dns-srv-name", 0, "Connect to a DNS SRV resource", &dns_srv_name,
      &dns_srv_name, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
@@ -1809,7 +1836,7 @@ static struct my_option my_long_options[] = {
      "/etc/services, "
 #endif
      "built-in default (" STRINGIFY_ARG(MYSQL_PORT) ").",
-     &opt_mysql_port, &opt_mysql_port, nullptr, GET_UINT, REQUIRED_ARG, 0, 0, 0,
+     &ports_str, &ports_str, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
     {"prompt", OPT_PROMPT, "Set the mysql prompt to this value.",
      &current_prompt, &current_prompt, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0,
@@ -2107,12 +2134,120 @@ bool get_one_option(int optid, const struct my_option *opt [[maybe_unused]],
   return false;
 }
 
+static inline bool is_negative_num(const char *num) {
+  while (my_isspace(&my_charset_latin1, *num)) num++;
+
+  return (*num == '-');
+}
+
+static int parse_host_and_port(const char *host_str, const char *port_str,
+                               std::vector<std::string> &hosts,
+                               std::vector<unsigned int> &ports) {
+  /** 0. Compatibility with old mysql client cause we have change port from
+   * GET_INT to GET_STR_ALLOC. For GET_INT, empty value is not allowed. */
+  int error = 0;
+  if (port_str && strlen(port_str) == 0) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_OPTION_WITH_EMPTY_VALUE,
+                             my_progname, "port");
+    return EXIT_ARGUMENT_REQUIRED;
+  }
+  /** 1. Parse port */
+  std::string_view port_view =
+      (port_str != nullptr ? std::string_view(port_str) : std::string_view());
+  while (port_view.length() != 0) {
+    size_t token_end = port_view.find_first_of(",");
+    size_t remove_prefix = token_end + 1;
+    if (token_end == std::string_view::npos) {
+      token_end = port_view.length();
+      remove_prefix = port_view.length();
+    }
+    std::string token(port_view.substr(0, token_end));
+    uint port = 0;
+    if (token.size() > 0) {
+      char buf[255];
+      ulonglong value = 0;
+      if (is_negative_num(token.c_str())) {
+        my_getopt_error_reporter(WARNING_LEVEL,
+                                 EE_ADJUSTED_ULONGLONG_VALUE_FOR_OPTION, "Port",
+                                 token.c_str(), ullstr(value, buf));
+      } else {
+        int err = 0;
+        value = eval_num_suffix<ulonglong>(token.c_str(), &err, "Port");
+        if (err) {
+          error = EXIT_UNKNOWN_SUFFIX;
+          break;
+        } else {
+          if (value > UINT_MAX) {
+            port = UINT_MAX;
+            my_getopt_error_reporter(WARNING_LEVEL,
+                                     EE_ADJUSTED_UNSIGNED_VALUE_FOR_OPTION,
+                                     "port", token.c_str(), ullstr(port, buf));
+          } else {
+            port = (uint)value;
+          }
+        }
+      }
+    }
+    ports.emplace_back(port);
+    port_view.remove_prefix(remove_prefix);
+  }
+  if (error) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+                             "Failed to parse Ports", port_str, "port");
+    return error;
+  }
+
+  /** 2. Parse host */
+  std::string_view host_view =
+      (host_str != nullptr ? std::string_view(host_str) : std::string_view());
+  while (host_view.length() != 0) {
+    size_t token_end = host_view.find_first_of(",");
+    size_t remove_prefix = token_end + 1;
+    if (token_end == std::string_view::npos) {
+      token_end = host_view.length();
+      remove_prefix = host_view.length();
+    }
+    std::string_view token = host_view.substr(0, token_end);
+
+    host_view.remove_prefix(remove_prefix);
+    hosts.emplace_back(token);
+  }
+  if (error) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+                             "Failed to parse Hosts", host_str, "host");
+    return error;
+  }
+
+  /** 3. Adjust the hosts and ports */
+  if (host_list.size() == 0) {
+    host_list.emplace_back("");
+  }
+  if (port_list.size() == 0) {
+    port_list.emplace_back(0);
+  }
+  if (hosts.size() != ports.size()) {
+    if (hosts.size() > 1 && ports.size() > 1) {
+      my_getopt_error_reporter(
+          ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+          "The number of ports doesn't match the number of hosts", port_str,
+          "port");
+      return EXIT_ARGUMENT_INVALID;
+    }
+    if (hosts.size() < ports.size()) {
+      hosts.resize(ports.size(), hosts[0]);
+    } else {
+      ports.resize(hosts.size(), ports[0]);
+    }
+  }
+  return 0;
+}
+
 static int get_options(int argc, char **argv) {
   char *tmp, *pagpoint;
   int ho_error;
 
   tmp = (char *)getenv("MYSQL_HOST");
-  if (tmp) current_host = my_strdup(PSI_NOT_INSTRUMENTED, tmp, MYF(MY_WME));
+  if (tmp) hosts_str = my_strdup(PSI_NOT_INSTRUMENTED, tmp, MYF(MY_WME));
 
   pagpoint = getenv("PAGER");
   if (!((char *)(pagpoint))) {
@@ -2132,6 +2267,11 @@ static int get_options(int argc, char **argv) {
   if ((ho_error =
            handle_options(&argc, &argv, my_long_options, get_one_option)))
     exit(ho_error);
+
+  /** Here, we parse the host and the port */
+  int parse_error =
+      parse_host_and_port(hosts_str, ports_str, host_list, port_list);
+  if (parse_error) exit(parse_error);
 
   if (mysql_options(nullptr, MYSQL_OPT_MAX_ALLOWED_PACKET,
                     &opt_max_allowed_packet) ||
@@ -4177,7 +4317,7 @@ static int com_connect(String *buffer, char *line) {
     buffer->length(0);  // command used
   } else
     opt_rehash = false;
-  error = sql_connect(current_host, current_db, current_user, 0);
+  error = sql_connect(current_host, current_port, current_db, current_user, 0);
   opt_rehash = save_rehash;
 
   if (connected) {
@@ -4526,8 +4666,8 @@ static int get_quote_count(const char *line) {
   return quote_count;
 }
 
-static int sql_real_connect(char *host, char *database, char *user, char *,
-                            uint silent) {
+static int sql_real_connect(const char *host, char *database, char *user,
+                            char *, unsigned int port, uint silent) {
   if (connected) {
     connected = false;
 #ifdef HAVE_SETNS
@@ -4579,8 +4719,8 @@ static int sql_real_connect(char *host, char *database, char *user, char *,
                                      database,
                                      connect_flag | CLIENT_MULTI_STATEMENTS);
   else
-    ret = mysql_real_connect(&mysql, host, user, nullptr, database,
-                             opt_mysql_port, opt_mysql_unix_port,
+    ret = mysql_real_connect(&mysql, host, user, nullptr, database, port,
+                             opt_mysql_unix_port,
                              connect_flag | CLIENT_MULTI_STATEMENTS);
   if (!ret) {
 #ifdef HAVE_SETNS
@@ -4663,6 +4803,125 @@ static int sql_real_connect(char *host, char *database, char *user, char *,
   }
   execute_buffer_conversion_done = true;
 #endif /* _WIN32 */
+
+  charset_info = mysql.charset;
+
+  connected = true;
+  mysql.reconnect = debug_info_flag;  // We want to know if this happens
+#ifdef HAVE_READLINE
+  build_completion_hash(opt_rehash, true);
+#endif
+  return 0;
+}
+
+static int sql_real_connect_silently(
+    const char *host, char *database, char *user, char *, unsigned int port,
+    std::vector<Cache_error_info> &multiple_error) {
+  if (connected) {
+    connected = false;
+#ifdef HAVE_SETNS
+    if (opt_network_namespace) (void)release_network_namespace_resources();
+#endif
+    mysql_close(&mysql);
+  }
+
+  auto cache_error = [&multiple_error](
+                         const char *str, INFO_TYPE type = INFO_ERROR,
+                         uint error = 0, const char *sqlstate = nullptr,
+                         Print_method method = Print_method::PUT_INFO) {
+    Cache_error_info info;
+    if (str) info.message.append(str);
+    info.info_type = type;
+    info.error_number = error;
+    if (sqlstate) info.sqlstate.append(sqlstate);
+    info.print_method = method;
+    multiple_error.emplace_back(info);
+  };
+
+  mysql_init(&mysql);
+  if (init_connection_options(&mysql)) {
+    const char *err = mysql_error(&mysql);
+    if (err && *err) {
+      cache_error(err, INFO_ERROR, mysql_errno(&mysql), mysql_sqlstate(&mysql));
+    }
+    return ignore_errors ? -1 : 1;
+  }
+
+#ifdef HAVE_SETNS
+  if (opt_network_namespace && set_network_namespace(opt_network_namespace)) {
+    char msgbuf[PATH_MAX];
+    snprintf(msgbuf, sizeof(msgbuf), "Network namespace error: %s",
+             strerror(errno));
+    cache_error(msgbuf, INFO_ERROR);
+
+    return ignore_errors ? -1 : 1;  // Abort
+  }
+#endif
+
+  MYSQL *ret;
+  if (dns_srv_name)
+    ret = mysql_real_connect_dns_srv(&mysql, dns_srv_name, user, nullptr,
+                                     database,
+                                     connect_flag | CLIENT_MULTI_STATEMENTS);
+  else
+    ret = mysql_real_connect(&mysql, host, user, nullptr, database, port,
+                             opt_mysql_unix_port,
+                             connect_flag | CLIENT_MULTI_STATEMENTS);
+  if (!ret) {
+#ifdef HAVE_SETNS
+    if (opt_network_namespace) (void)restore_original_network_namespace();
+#endif
+    if (mysql_errno(&mysql) == ER_MUST_CHANGE_PASSWORD_LOGIN) {
+      cache_error(
+          "Please use --connect-expired-password option or "
+          "invoke mysql in interactive mode.\n");
+      multiple_error.back().print_method = Print_method::TEE_FPRINTF;
+      return ignore_errors ? -1 : 1;
+    }
+
+    cache_error(mysql_error(&mysql), INFO_ERROR, mysql_errno(&mysql),
+                mysql_sqlstate(&mysql));
+
+    if (mysql_errno(&mysql) != CR_CONN_HOST_ERROR &&
+        mysql_errno(&mysql) != CR_CONNECTION_ERROR) {
+      return ignore_errors ? -1 : 1;  // Abort
+    }
+    return -1;  // Retryable
+  }
+
+  /* do user registration */
+  if (opt_fido_register_factor) {
+    char errmsg[FN_REFLEN];
+    if (user_device_registration(&mysql, opt_fido_register_factor, errmsg)) {
+      cache_error(errmsg, INFO_ERROR);
+      return 1;
+    }
+  }
+
+#ifdef HAVE_SETNS
+  if (opt_network_namespace && restore_original_network_namespace()) {
+    char msgbuf[PATH_MAX];
+    snprintf(msgbuf, sizeof(msgbuf), "Network namespace error: %s",
+             strerror(errno));
+    cache_error(msgbuf, INFO_ERROR);
+
+    return ignore_errors ? -1 : 1;  // Abort
+  }
+#endif
+
+  if (ssl_client_check_post_connect_ssl_setup(
+          &mysql,
+          [&cache_error](const char *err) { cache_error(err, INFO_ERROR); }))
+    return 1;
+
+  void *new_ssl_session_data = mysql_get_ssl_session_data(&mysql, 0, nullptr);
+  if (new_ssl_session_data != nullptr) {
+    if (ssl_session_data != nullptr)
+      mysql_free_ssl_session_data(&mysql, ssl_session_data);
+    ssl_session_data = new_ssl_session_data;
+  } else {
+    DBUG_PRINT("error", ("unable to save SSL session"));
+  }
 
   charset_info = mysql.charset;
 
@@ -4786,13 +5045,14 @@ static bool init_connection_options(MYSQL *mysql) {
   return false;
 }
 
-static int sql_connect(char *host, char *database, char *user, uint silent) {
+static int sql_connect(char *host, uint port, char *database, char *user,
+                       uint silent) {
   bool message = false;
   uint count = 0;
   int error;
   for (;;) {
-    if ((error = sql_real_connect(host, database, user, nullptr, wait_flag)) >=
-        0) {
+    if ((error = sql_real_connect(host, database, user, nullptr, port,
+                                  wait_flag)) >= 0) {
       if (count) {
         tee_fputs("\n", stderr);
         (void)fflush(stderr);
@@ -4812,6 +5072,49 @@ static int sql_connect(char *host, char *database, char *user, uint silent) {
       count++;
     }
   }
+}
+
+static int sql_connect_with_hosts_and_ports(std::vector<std::string> &hosts,
+                                            std::vector<uint> &ports,
+                                            char *database, char *user, uint) {
+  std::vector<int> errors(hosts.size(), 0);
+
+  std::vector<Cache_error_info> multiple_error;
+
+  for (size_t i = 0; i < hosts.size(); ++i) {
+    my_free(current_host);
+    current_host = hosts[i].empty() ? nullptr
+                                    : my_strdup(PSI_NOT_INSTRUMENTED,
+                                                hosts[i].c_str(), MYF(MY_WME));
+    current_port = ports[i];
+
+    // Try to connect silently, don't print any error messages but cache it.
+    errors[i] = sql_real_connect_silently(current_host, database, user, nullptr,
+                                          current_port, multiple_error);
+    if (errors[i] == 0) {  // Connection successful
+      return 0;
+    } else {
+      if (errors[i] < 0 && !ignore_errors) {
+        errors[i] = 1;
+      }
+    }
+  }
+
+  // Print all cached error messages
+  for (size_t i = 0; i < multiple_error.size(); ++i) {
+    if (multiple_error[i].print_method == Print_method::PUT_INFO) {
+      put_info(multiple_error[i].message.c_str(), multiple_error[i].info_type,
+               multiple_error[i].error_number,
+               multiple_error[i].sqlstate.c_str());
+    } else {
+      tee_fprintf(stdout, "%s", multiple_error[i].message.c_str());
+    }
+  }
+
+  for (size_t i = 0; i < errors.size(); ++i) {
+    if (errors[i] > 0) return 1;
+  }
+  return -1;
 }
 
 static int com_status(String *buffer [[maybe_unused]],

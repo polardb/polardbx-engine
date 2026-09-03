@@ -197,8 +197,8 @@ System	MY-025031	XPaxos	[Recovery] Found max consensus index from pending_recove
 System	MY-025031	XPaxos	[Recovery] wait_commit_index_in_recovery end, recover_status 0, start_apply_index 0, current commitIndex 1, last_leader_term_index 0
 System	MY-025030	XPaxos	start consensus_commit_pos_watcher thread
 System	MY-025022	Server	Gtid_in_table : 
-System	MY-025030	XPaxos	ConsensusLogManager::wait_follower_upgraded, consensus term: 2, consensus index: 0
-System	MY-025030	XPaxos	ConsensusLogManager::wait_follower_upgraded finish, error 0
+System	MY-025030	XPaxos	Consensus_log_manager::wait_follower_upgraded, consensus term: 2, consensus index: 0
+System	MY-025030	XPaxos	Consensus_log_manager::wait_follower_upgraded finish, error 0
 
 # FR-1.4.1 Show the log-error-verbosity applies
 # We passed --log-error-verbosity=3 at start-up. Show that we have Notes.

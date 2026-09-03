@@ -71,21 +71,21 @@ Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 show index from t1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		tables	SHOW_STATISTICS	Table	Table	253	256	2	N	#	0	255
-def			SHOW_STATISTICS	Non_unique	Non_unique	3	2	1	N	32769	0	63
-def			SHOW_STATISTICS	Key_name	Key_name	253	256	7	Y	0	0	255
-def		index_column_usage	SHOW_STATISTICS	Seq_in_index	Seq_in_index	3	10	1	N	36897	0	63
-def			SHOW_STATISTICS	Column_name	Column_name	253	256	1	Y	0	0	255
-def			SHOW_STATISTICS	Collation	Collation	253	4	1	Y	0	0	255
-def			SHOW_STATISTICS	Cardinality	Cardinality	8	21	1	Y	32768	0	63
-def			SHOW_STATISTICS	Sub_part	Sub_part	8	21	0	Y	32768	0	63
-def					Packed	6	0	0	Y	32896	0	63
-def			SHOW_STATISTICS	Null	Null	253	12	0	N	1	0	255
-def			SHOW_STATISTICS	Index_type	Index_type	253	44	5	N	129	0	255
-def			SHOW_STATISTICS	Comment	Comment	253	32	0	N	1	0	255
-def		indexes	SHOW_STATISTICS	Index_comment	Index_comment	253	8192	0	N	#	0	255
-def			SHOW_STATISTICS	Visible	Visible	253	12	3	N	1	0	255
-def			SHOW_STATISTICS	Expression	Expression	252	4294967295	0	Y	144	0	255
+def			show_keys	Table	Table	253	256	2	N	129	0	255
+def			show_keys	Non_unique	Non_unique	8	12	1	N	32769	0	63
+def			show_keys	Key_name	Key_name	252	201326592	7	Y	16	0	255
+def			show_keys	Seq_in_index	Seq_in_index	8	12	1	N	32769	0	63
+def			show_keys	Column_name	Column_name	253	256	1	Y	0	0	255
+def			show_keys	Collation	Collation	253	4	1	Y	0	0	255
+def			show_keys	Cardinality	Cardinality	8	21	1	Y	32768	0	63
+def			show_keys	Sub_part	Sub_part	8	21	0	Y	32768	0	63
+def			show_keys	Packed	Packed	254	0	0	Y	128	0	63
+def			show_keys	Null	Null	253	12	0	N	1	0	255
+def			show_keys	Index_type	Index_type	253	44	5	N	129	0	255
+def			show_keys	Comment	Comment	253	32	0	N	1	0	255
+def			show_keys	Index_comment	Index_comment	252	67108860	0	Y	144	0	255
+def			show_keys	Visible	Visible	253	12	3	N	1	0	255
+def			show_keys	Expression	Expression	252	4294967295	0	Y	144	0	255
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	PRIMARY	1	a	A	5	NULL	NULL		BTREE			YES	NULL
 t1	1	b	1	b	A	2	NULL	NULL		BTREE			YES	NULL
@@ -531,21 +531,21 @@ PRIMARY KEY(field1(750))
 );
 show index from t1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		tables	SHOW_STATISTICS	Table	Table	253	64	2	N	#	0	63
-def			SHOW_STATISTICS	Non_unique	Non_unique	3	2	1	N	32769	0	63
-def			SHOW_STATISTICS	Key_name	Key_name	253	64	7	Y	0	0	63
-def		index_column_usage	SHOW_STATISTICS	Seq_in_index	Seq_in_index	3	10	1	N	36897	0	63
-def			SHOW_STATISTICS	Column_name	Column_name	253	64	6	Y	0	0	63
-def			SHOW_STATISTICS	Collation	Collation	253	1	1	Y	0	0	63
-def			SHOW_STATISTICS	Cardinality	Cardinality	8	21	1	Y	32768	0	63
-def			SHOW_STATISTICS	Sub_part	Sub_part	8	21	3	Y	32768	0	63
-def					Packed	6	0	0	Y	32896	0	63
-def			SHOW_STATISTICS	Null	Null	253	3	0	N	1	0	63
-def			SHOW_STATISTICS	Index_type	Index_type	253	11	5	N	129	0	63
-def			SHOW_STATISTICS	Comment	Comment	253	8	0	N	1	0	63
-def		indexes	SHOW_STATISTICS	Index_comment	Index_comment	253	2048	0	N	#	0	63
-def			SHOW_STATISTICS	Visible	Visible	253	3	3	N	1	0	63
-def			SHOW_STATISTICS	Expression	Expression	252	4294967295	0	Y	144	0	63
+def			show_keys	Table	Table	253	64	2	N	129	0	63
+def			show_keys	Non_unique	Non_unique	8	12	1	N	32769	0	63
+def			show_keys	Key_name	Key_name	252	50331648	7	Y	16	0	63
+def			show_keys	Seq_in_index	Seq_in_index	8	12	1	N	32769	0	63
+def			show_keys	Column_name	Column_name	253	64	6	Y	0	0	63
+def			show_keys	Collation	Collation	253	1	1	Y	0	0	63
+def			show_keys	Cardinality	Cardinality	8	21	1	Y	32768	0	63
+def			show_keys	Sub_part	Sub_part	8	21	3	Y	32768	0	63
+def			show_keys	Packed	Packed	254	0	0	Y	128	0	63
+def			show_keys	Null	Null	253	3	0	N	1	0	63
+def			show_keys	Index_type	Index_type	253	11	5	N	129	0	63
+def			show_keys	Comment	Comment	253	8	0	N	1	0	63
+def			show_keys	Index_comment	Index_comment	252	16777215	0	Y	144	0	63
+def			show_keys	Visible	Visible	253	3	3	N	1	0	63
+def			show_keys	Expression	Expression	252	4294967295	0	Y	144	0	63
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	PRIMARY	1	field1	A	0	750	NULL		BTREE			YES	NULL
 drop table t1;
@@ -749,21 +749,21 @@ t1	CREATE TABLE `t1` (
 ----------------------------------------------------------------
 SHOW INDEX FROM t1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		tables	SHOW_STATISTICS	Table	Table	253	192	2	N	#	0	33
-def			SHOW_STATISTICS	Non_unique	Non_unique	3	2	1	N	32769	0	63
-def			SHOW_STATISTICS	Key_name	Key_name	253	192	7	Y	0	0	33
-def		index_column_usage	SHOW_STATISTICS	Seq_in_index	Seq_in_index	3	10	1	N	36897	0	63
-def			SHOW_STATISTICS	Column_name	Column_name	253	192	1	Y	0	0	33
-def			SHOW_STATISTICS	Collation	Collation	253	3	1	Y	0	0	33
-def			SHOW_STATISTICS	Cardinality	Cardinality	8	21	1	Y	32768	0	63
-def			SHOW_STATISTICS	Sub_part	Sub_part	8	21	0	Y	32768	0	63
-def					Packed	6	0	0	Y	32896	0	63
-def			SHOW_STATISTICS	Null	Null	253	9	0	N	1	0	33
-def			SHOW_STATISTICS	Index_type	Index_type	253	33	5	N	129	0	33
-def			SHOW_STATISTICS	Comment	Comment	253	24	0	N	1	0	33
-def		indexes	SHOW_STATISTICS	Index_comment	Index_comment	253	6144	0	N	#	0	33
-def			SHOW_STATISTICS	Visible	Visible	253	9	3	N	1	0	33
-def			SHOW_STATISTICS	Expression	Expression	252	4294967295	0	Y	144	0	33
+def			show_keys	Table	Table	253	192	2	N	129	0	33
+def			show_keys	Non_unique	Non_unique	8	12	1	N	32769	0	63
+def			show_keys	Key_name	Key_name	252	150994944	7	Y	16	0	33
+def			show_keys	Seq_in_index	Seq_in_index	8	12	1	N	32769	0	63
+def			show_keys	Column_name	Column_name	253	192	1	Y	0	0	33
+def			show_keys	Collation	Collation	253	3	1	Y	0	0	33
+def			show_keys	Cardinality	Cardinality	8	21	1	Y	32768	0	63
+def			show_keys	Sub_part	Sub_part	8	21	0	Y	32768	0	63
+def			show_keys	Packed	Packed	254	0	0	Y	128	0	63
+def			show_keys	Null	Null	253	9	0	N	1	0	33
+def			show_keys	Index_type	Index_type	253	33	5	N	129	0	33
+def			show_keys	Comment	Comment	253	24	0	N	1	0	33
+def			show_keys	Index_comment	Index_comment	252	50331645	0	Y	144	0	33
+def			show_keys	Visible	Visible	253	9	3	N	1	0	33
+def			show_keys	Expression	Expression	252	4294967295	0	Y	144	0	33
 Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
 t1	0	PRIMARY	1	c	A	0	NULL	NULL		BTREE			YES	NULL
 ----------------------------------------------------------------

@@ -32,7 +32,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
  ***********************************************************************/
 
 #include "debug_sync.h"
-#include "lizard0btr0btr.h"
 #include "my_config.h"
 
 #include <stdlib.h>
@@ -60,6 +59,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "que0types.h"
 #include "row0sel.h"
 #endif /* !UNIV_HOTBACKUP */
+
+#include "lizard0btr0btr.h"
+#include "lizard0rec0spc.h"
+#include "lizard0rem0slc0ctx.h"
 
 #if defined UNIV_HOTBACKUP && defined UNIV_DEBUG
 static inline bool dict_non_lru_find_table(const dict_table_t *x) {
@@ -126,12 +129,14 @@ extern uint ibuf_debug;
 #include "ut0new.h"
 #endif /* !UNIV_HOTBACKUP */
 
+#include "lizard0cmmt0types.h"
 #include "lizard0data0types.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dd.h"
+#include "lizard0dict0dict.h"
 #include "lizard0dict0gpp.h"
+#include "lizard0gcs.h"
 #include "lizard0rem0lrec.h"
 #include "lizard0row0bamboo.h"
-#include "lizard0scn.h"
 #include "lizard0undo.h"
 
 static_assert(DATA_ROW_ID == 0, "DATA_ROW_ID != 0");
@@ -2056,7 +2061,7 @@ ulint dict_index_node_ptr_max_size(const dict_index_t *index) /*!< in: index */
   ulint i;
   /* maximum possible storage size of a record */
   ulint rec_max_size;
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   if (dict_index_is_ibuf(index)) {
     /* cannot estimate accurately */
@@ -2098,7 +2103,7 @@ ulint dict_index_node_ptr_max_size(const dict_index_t *index) /*!< in: index */
     /* Determine the maximum length of the index field. */
 
     field_max_size = col->get_fixed_size(comp);
-    if (field_max_size) {
+    if (field_max_size && field->fixed_len) {
       /* dict_index_add_col() should guarantee this */
       ut_ad(!field->prefix_len || field->fixed_len == field->prefix_len);
       /* Fixed lengths are not encoded
@@ -2180,13 +2185,12 @@ void get_field_max_size(const dict_table_t *table, const dict_index_t *index,
   case in rec_get_converted_size_comp() for
   REC_STATUS_ORDINARY records. */
 
-  field_max_size = col->get_fixed_size(comp);
-  if (field_max_size && field->fixed_len != 0) {
+  if (field->fixed_len != 0) {
     /* dict_index_add_col() should guarantee this */
     ut_ad(!field->prefix_len || field->fixed_len == field->prefix_len);
     /* Fixed lengths are not encoded in ROW_FORMAT=COMPACT. */
-    field_ext_max_size = 0;
-    rec_max_size += field_max_size;
+    /* fixed_len already accounts for an index prefix. */
+    rec_max_size += field->fixed_len;
     return;
   }
 
@@ -2397,7 +2401,7 @@ that we can avoid calling the costly rec_get_offsets() in many cases. That is:
 static void dict_index_try_cache_rec_offsets(dict_index_t *index) {
   ut_ad(index->rec_cache.offsets == nullptr);
   ut_ad(index->rec_cache.nullable_cols == 0);
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
   const auto n_unique_in_tree = dict_index_get_n_unique_in_tree(index);
 
   ut_a(0 < n_unique_in_tree);
@@ -2437,6 +2441,7 @@ static void dict_index_try_cache_rec_offsets(dict_index_t *index) {
   rec_offs_set_n_alloc(offsets, offsets_len);
   rec_offs_set_n_fields(offsets, n_unique_in_tree);
   rec_init_fixed_offsets(index, offsets);
+  // TODO: check it.
 
   for (size_t i = 0; i < n_unique_in_tree; i++) {
     if (!(index->get_field(i)->col->prtype & DATA_NOT_NULL)) {
@@ -2498,7 +2503,7 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
                                                     expected_or_real_page_type);
   }
 
-  assert_lizard_dict_index_gstored_check(new_index);
+  ut_ad(lizard::dict_index_check_gstored(new_index));
 
   /* Set the n_fields value in new_index to the actual defined
   number of fields in the cache internal representation */
@@ -2523,6 +2528,7 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
     new_index->rtr_srs.reset(index->rtr_srs->clone());
 
   if (dict_index_too_big_for_tree(table, new_index, strict)) {
+    ut_ad(table->is_compressed() || new_index->is_clustered());
     if (strict) {
       dict_mem_index_free(new_index);
       dict_mem_index_free(index);
@@ -2580,8 +2586,9 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
   new_index->table_name = table->name.m_name;
   new_index->search_info = btr_search_info_create(new_index->heap);
 
-  new_index->root = root;
-  assert_lizard_page_mark_consistent(new_index->root);
+  new_index->set_root(root);
+  new_index->set_pd_capacity(
+      lizard::dict_index_determine_pd_capacity(new_index));
 
   rw_lock_create(index_tree_rw_lock_key, &new_index->lock, LATCH_ID_INDEX_TREE);
 
@@ -2688,7 +2695,7 @@ static void dict_index_remove_from_cache_low(
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
   ut_ad(index->magic_n == DICT_INDEX_MAGIC_N);
   ut_ad(dict_sys_mutex_own());
-  assert_lizard_dict_index_gstored_check(index);
+  ut_ad(lizard::dict_index_check_gstored(index));
 
   /* No need to acquire the dict_index_t::lock here because
   there can't be any active operations on this index (or table). */
@@ -2760,6 +2767,21 @@ void dict_index_remove_from_cache(dict_table_t *table, /*!< in/out: table */
                                   dict_index_t *index) /*!< in, own: index */
 {
   dict_index_remove_from_cache_low(table, index, false);
+}
+
+std::vector<table_id_t> dict_get_all_table_ids() {
+  std::vector<table_id_t> ids;
+  mutex_enter(&dict_sys->mutex);
+  ids.reserve(dict_sys->table_LRU.get_length() +
+              dict_sys->table_non_LRU.get_length());
+  for (dict_table_t *table : dict_sys->table_LRU) {
+    ids.push_back(table->id);
+  }
+  for (dict_table_t *table : dict_sys->table_non_LRU) {
+    ids.push_back(table->id);
+  }
+  mutex_exit(&dict_sys->mutex);
+  return ids;
 }
 
 /** Duplicate a virtual column information
@@ -3294,13 +3316,16 @@ static dict_index_t *dict_index_build_internal_non_clust(
 
   lizard::dict_index_add_sec_functional_cols(new_index, index, table,
                                              expected_page_type);
-
   ut::free(indexed);
 
   if (dict_index_is_unique(index)) {
     new_index->n_uniq = index->n_fields;
   } else {
-    new_index->n_uniq = new_index->n_def - new_index->n_s_gfields;
+    /* new_index->root.page_type has not been set to expected_page_type, so we
+     * cannot rely on dict_index_n_sec_functional_fields to calculate n_uniq
+     * directly. */
+    new_index->n_uniq =
+        new_index->n_def - new_index->n_s_gfields - new_index->n_s_tfields;
   }
 
   /* Set the n_fields value in new_index to the actual defined
@@ -3710,8 +3735,8 @@ bool dict_index_check_search_tuple(
 /** Builds a node pointer out of a physical record and a page number.
  @return own: node pointer */
 dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, /*!< in: index */
-                                    const rec_t *rec,  /*!< in: record for which
-                                                       to build node  pointer */
+                                    creg_t reg,        /*!< in: record for which
+                                                             to build node  pointer */
                                     page_no_t page_no, /*!< in: page number to
                                                        put in node pointer */
                                     mem_heap_t *heap, /*!< in: memory heap where
@@ -3731,7 +3756,7 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, /*!< in: index */
     contains the page number of the child page */
 
     ut_a(!dict_table_is_comp(index->table));
-    n_unique = rec_get_n_fields_old_raw(rec);
+    n_unique = rec_get_n_fields_old_raw(reg.rec);
 
     if (level > 0) {
       ut_a(n_unique > 1);
@@ -3762,7 +3787,7 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, /*!< in: index */
 
   dtype_set(dfield_get_type(field), DATA_SYS_CHILD, DATA_NOT_NULL, 4);
 
-  rec_copy_prefix_to_dtuple(tuple, rec, index, n_unique, heap);
+  rec_copy_prefix_to_dtuple(tuple, reg, index, n_unique, heap);
   dtuple_set_info_bits(tuple,
                        dtuple_get_info_bits(tuple) | REC_STATUS_NODE_PTR);
 
@@ -3773,20 +3798,20 @@ dtuple_t *dict_index_build_node_ptr(const dict_index_t *index, /*!< in: index */
   return (tuple);
 }
 
-rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
-                                        const rec_t *rec, ulint *n_fields,
+reg_t dict_index_copy_rec_order_prefix(const dict_index_t *index, creg_t reg,
+                                       ulint *n_fields,
 
-                                        byte **buf, size_t *buf_size) {
+                                       boc_t *boc, size_t *buf_size) {
   ulint n;
 
-  UNIV_PREFETCH_R(rec);
-  assert_lizard_dict_index_check(index);
+  UNIV_PREFETCH_R(reg.rec);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   if (dict_index_is_ibuf(index)) {
     ut_a(!dict_table_is_comp(index->table));
-    n = rec_get_n_fields_old_raw(rec);
+    n = rec_get_n_fields_old_raw(reg.rec);
   } else {
-    if (page_is_leaf(page_align(rec))) {
+    if (page_is_leaf(page_align(reg))) {
       n = dict_index_get_n_unique_in_tree(index);
     } else {
       n = dict_index_get_n_unique_in_tree_nonleaf(index);
@@ -3799,48 +3824,50 @@ rec_t *dict_index_copy_rec_order_prefix(const dict_index_t *index,
     }
 
     if (lizard::dict_index_is_panda(index)) {
-      if (!lizard::rec_panda_contains_null_in_unique(index, rec)) {
+      if (!lizard::rec_panda_contains_null_in_unique(index, reg.rec)) {
         n = dict_index_get_n_unique(index);
       }
     }
 
     if (lizard::dict_index_inject_stress_test_for_panda(index)) {
       if (dict_table_is_comp(index->table)) {
-        ut_ad(rec_get_status(rec) != REC_STATUS_INFIMUM &&
-              rec_get_status(rec) != REC_STATUS_SUPREMUM);
+        ut_ad(rec_get_status(reg.rec) != REC_STATUS_INFIMUM &&
+              rec_get_status(reg.rec) != REC_STATUS_SUPREMUM);
       } else {
-        ut_ad(rec_get_n_fields_old(rec, index) > 1);
+        ut_ad(rec_get_n_fields_old(reg.rec, index) > 1);
       }
       auto heap = mem_heap_create(256, UT_LOCATION_HERE);
-      dtuple_t *tuple = dict_index_build_data_tuple(index, rec, n, heap);
+      dtuple_t *tuple = dict_index_build_data_tuple(index, reg, n, heap);
       ut_a(lizard::row_index_entry_contains_null_in_unique(index, tuple) ==
-           lizard::rec_panda_contains_null_in_unique(index, rec));
+           lizard::rec_panda_contains_null_in_unique(index, reg.rec));
       mem_heap_free(heap);
     }
   }
 
   *n_fields = n;
-  return (rec_copy_prefix_to_buf(rec, index, n, buf, buf_size));
+
+  return row_copy_prefix(boc, buf_size, Slice_ctx().get_offsets(reg, index, n),
+                         n);
 }
 
 /** Builds a typed data tuple out of a physical record.
  @return own: data tuple */
 dtuple_t *dict_index_build_data_tuple(
     const dict_index_t *index, /*!< in: index tree */
-    const rec_t *rec,          /*!< in: record for which to build data tuple */
+    creg_t reg,                /*!< in: record for which to build data tuple */
     ulint n_fields,            /*!< in: number of data fields */
     mem_heap_t *heap)          /*!< in: memory heap where tuple created */
 {
   dtuple_t *tuple;
 
   ut_ad(dict_table_is_comp(index->table) ||
-        n_fields <= rec_get_n_fields_old(rec, index));
+        n_fields <= rec_get_n_fields_old(reg.rec, index));
 
   tuple = dtuple_create(heap, n_fields);
 
   dict_index_copy_types(tuple, index, n_fields);
 
-  rec_copy_prefix_to_dtuple(tuple, rec, index, n_fields, heap);
+  rec_copy_prefix_to_dtuple(tuple, reg, index, n_fields, heap);
 
   ut_ad(dtuple_check_typed(tuple));
 
@@ -4380,11 +4407,11 @@ void dict_persist_to_dd_table_buffer() {
 
   mutex_exit(&dict_persist->mutex);
 
-  /** Try to write gcn. */
-  bool written_gcn = lizard::gcs_persist_gcn();
+  /** Try to write tid/scn/gcn. */
+  bool written_cmmt = lizard::gcs_persist_cmmt();
   persisted_lsn = log_get_lsn(*log_sys);
 
-  if (persisted || written_gcn) {
+  if (persisted || written_cmmt) {
     log_write_up_to(*log_sys, persisted_lsn, true);
   }
 }
@@ -5226,21 +5253,21 @@ void DDTableBuffer::create_tuples() {
 
   /** SCN ID: TXN_DESC_DM */
   scn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_SCN_ID_LEN));
-  lizard::trx_write_scn(scn_buf, txn_desc);
+  lizard::txn_desc_write_scn(scn_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, scn_buf, DATA_SCN_ID_LEN);
 
   /** UNDO_PTR: always TXN_DESC_DM */
   undo_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_UNDO_PTR_LEN));
-  lizard::trx_write_undo_ptr(undo_buf, txn_desc);
+  lizard::txn_desc_write_undo_ptr(undo_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_UNDO_PTR);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, undo_buf, DATA_UNDO_PTR_LEN);
 
   /** GCN ID: always TXN_DESC_DM */
   gcn_buf = static_cast<byte *>(mem_heap_alloc(m_heap, DATA_GCN_ID_LEN));
-  lizard::trx_write_gcn(gcn_buf, txn_desc);
+  lizard::txn_desc_write_gcn(gcn_buf, txn_desc);
   col = m_index->table->get_sys_col(DATA_GCN_ID);
   dfield = dtuple_get_nth_field(m_replace_tuple, dict_col_get_no(col));
   dfield_set_data(dfield, gcn_buf, DATA_GCN_ID_LEN);
@@ -5384,8 +5411,7 @@ void DDTableBuffer::close() {
 @return update vector of differing fields without system columns,
 or NULL if there isn't any different field */
 upd_t *DDTableBuffer::update_set_metadata(const dtuple_t *entry,
-                                          const rec_t *rec) {
-  ulint offsets[N_FIELDS + 1 + REC_OFFS_HEADER_SIZE];
+                                          const btr_pcur_t *pcur) {
   upd_field_t *upd_field;
   const dfield_t *version_field;
   const dfield_t *metadata_dfield;
@@ -5393,17 +5419,20 @@ upd_t *DDTableBuffer::update_set_metadata(const dtuple_t *entry,
   const byte *version;
   ulint len;
   upd_t *update;
+  creg_t reg = pcur->get_creg();
 
-  rec_offs_init(offsets);
-  rec_offs_set_n_fields(offsets, N_FIELDS);
-  rec_init_offsets_comp_ordinary(rec, false, m_index, offsets);
-  ut_ad(!rec_get_deleted_flag(rec, 1));
+  DD_slice_ctx dsctx;
+  DSlice *dslc = nullptr;
+  dslc = dsctx.get_offsets(reg, m_index, N_FIELDS + 1 + REC_OFFS_HEADER_SIZE,
+                           N_FIELDS);
 
-  version = rec_get_nth_field(nullptr, rec, offsets, VERSION_FIELD_NO, &len);
+  ut_ad(!rec_get_deleted_flag(reg.rec, 1));
+
+  version = dslc->get_nth_field(nullptr, VERSION_FIELD_NO, &len);
   ut_ad(len == 8);
   version_field = dtuple_get_nth_field(entry, VERSION_FIELD_NO);
 
-  metadata = rec_get_nth_field(nullptr, rec, offsets, METADATA_FIELD_NO, &len);
+  metadata = dslc->get_nth_field(nullptr, METADATA_FIELD_NO, &len);
   metadata_dfield = dtuple_get_nth_field(entry, METADATA_FIELD_NO);
 
   if (dfield_data_is_binary_equal(version_field, 8, version) &&
@@ -5487,10 +5516,11 @@ dberr_t DDTableBuffer::replace(table_id_t id, uint64_t version,
   ut_ad(!rec_get_deleted_flag(pcur.get_rec(), true));
 
   /* Prepare to update the record. */
-  upd_t *update = update_set_metadata(entry, pcur.get_rec());
+  upd_t *update = update_set_metadata(entry, &pcur);
 
   if (update != nullptr) {
-    ulint *cur_offsets = nullptr;
+    Slice_ctx sctx;
+    Slice *slc = nullptr;
     big_rec_t *big_rec;
     static const ulint flags =
         (BTR_CREATE_FLAG | BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
@@ -5498,7 +5528,7 @@ dberr_t DDTableBuffer::replace(table_id_t id, uint64_t version,
     const txn_layout_t layout = lizard::dict_index_txn_layout(m_index);
 
     error = btr_cur_pessimistic_update(
-        flags, layout, pcur.get_btr_cur(), &cur_offsets, &m_dynamic_heap,
+        flags, layout, pcur.get_btr_cur(), &slc, &sctx, &m_dynamic_heap,
         m_replace_heap, &big_rec, update, 0, nullptr, 0, 0, &mtr);
     ut_a(error == DB_SUCCESS);
     /* We don't have big rec in this table */
@@ -5575,19 +5605,21 @@ std::string *DDTableBuffer::get(table_id_t id, uint64_t *version) {
                               &mtr);
 
   if (cursor.low_match == dtuple_get_n_fields(m_search_tuple)) {
-    ulint offsets[N_FIELDS + 1 + REC_OFFS_HEADER_SIZE];
-    rec_offs_init(offsets);
-    rec_offs_set_n_fields(offsets, N_FIELDS);
-    rec_t *rec = btr_cur_get_rec(&cursor);
-    rec_init_offsets_comp_ordinary(rec, false, m_index, offsets);
-    ut_ad(!rec_get_deleted_flag(rec, true));
+    DD_slice_ctx dsctx;
+    DSlice *dslc = nullptr;
+
+    creg_t reg = btr_cur_get_reg(&cursor);
+    dslc = dsctx.get_offsets(reg, m_index, N_FIELDS + 1 + REC_OFFS_HEADER_SIZE,
+                             N_FIELDS);
+
+    ut_ad(!rec_get_deleted_flag(reg.rec, true));
 
     const byte *rec_version =
-        rec_get_nth_field(nullptr, rec, offsets, VERSION_FIELD_NO, &len);
+        dslc->get_nth_field(nullptr, VERSION_FIELD_NO, &len);
     ut_ad(len == 8);
     *version = mach_read_from_8(rec_version);
 
-    field = rec_get_nth_field(nullptr, rec, offsets, METADATA_FIELD_NO, &len);
+    field = dslc->get_nth_field(nullptr, METADATA_FIELD_NO, &len);
 
     ut_ad(len != UNIV_SQL_NULL);
   } else {

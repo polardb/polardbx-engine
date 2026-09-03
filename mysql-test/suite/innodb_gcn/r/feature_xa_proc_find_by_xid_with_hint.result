@@ -15,8 +15,8 @@ xa start 'fbx_t1';
 update t1 set balance = balance - 10 where id = 1;
 update t1 set balance = balance + 10 where id = 2;
 xa end 'fbx_t1';
-set innodb_commit_seq = #commit_gcn
 call dbms_xa.prepare_with_trx_slot(#gtrid, #bqual, #formatID)
+set innodb_commit_seq = #commit_gcn
 xa commit 'fbx_t1';
 include/assert.inc [expect_status == actual_status]
 connection con1;

@@ -519,7 +519,7 @@ struct node_page_t : public basic_page_t {
   @param[in]    trx_id  transaction identifier. */
   void import(trx_id_t trx_id);
 
-  buf_block_t *alloc(first_page_t &first_page, bool bulk);
+  buf_block_t *alloc(first_page_t &first_page, InsertContext *ctx);
 
   buf_block_t *load_x(page_id_t page_id, page_size_t page_size) {
     m_block =
@@ -843,7 +843,7 @@ struct z_index_page_t {
 
   /** Allocate an ZLOB index page.
   @return the buffer block of the allocated zlob index page. */
-  buf_block_t *alloc(z_first_page_t &first, bool bulk);
+  buf_block_t *alloc(z_first_page_t &first, InsertContext *ctx);
 
   void import(trx_id_t trx_id);
 
@@ -927,10 +927,9 @@ struct z_data_page_t {
 
   /** Allocate one data page.
   @param[in]    hint    hint page number for allocation.
-  @param[in]    bulk    true if bulk operation (OPCODE_INSERT_BULK)
-                          false otherwise.
+  @param[in]    ctx     insert context providing index/is_bulk.
   @return the allocated buffer block. */
-  buf_block_t *alloc(page_no_t hint, bool bulk);
+  buf_block_t *alloc(page_no_t hint, InsertContext *ctx);
 
   /** Free this data page holding the zlob data. */
   void dealloc() {
@@ -1069,7 +1068,7 @@ struct z_frag_node_page_t {
 
   /** Allocate a fragment nodes page.
   @return buffer block of the allocated fragment nodes page or nullptr. */
-  buf_block_t *alloc(z_first_page_t &first, bool bulk);
+  buf_block_t *alloc(z_first_page_t &first, InsertContext *ctx);
 
   void dealloc() {
     btr_page_free_low(m_index, m_block, ULINT_UNDEFINED, m_mtr);
@@ -1590,10 +1589,9 @@ struct z_frag_page_t {
   /** Allocate the fragment page.
   @param[in]    first   first page of this LOB.
   @param[in]    hint    hint page number for allocation.
-  @param[in]    bulk    true if bulk operation (OPCODE_INSERT_BULK)
-                          false otherwise.
+  @param[in]    ctx     insert context providing index/is_bulk.
   @return the allocated buffer block. */
-  buf_block_t *alloc(z_first_page_t &first, page_no_t hint, bool bulk);
+  buf_block_t *alloc(z_first_page_t &first, page_no_t hint, InsertContext *ctx);
 
   /** Free the fragment page along with its entry.
   @param[in]   first   first page of LOB.
@@ -1928,11 +1926,11 @@ struct z_frag_page_t {
 @param[in]  len        Length of the blob.
 @param[out] out_entry  Newly inserted index entry. can be NULL.
 @param[in]  mtr        Mini-transaction
-@param[in]  bulk       true if it is bulk operation, false otherwise.
+@param[in]  ctx        insert context providing index/is_bulk.
 @return DB_SUCCESS on success, error code on failure. */
 dberr_t z_insert_chunk(dict_index_t *index, z_first_page_t &first, trx_t *trx,
                        byte *blob, ulint len, z_index_entry_t *out_entry,
-                       mtr_t *mtr, bool bulk);
+                       mtr_t *mtr, InsertContext *ctx);
 
 }  // namespace lob
 

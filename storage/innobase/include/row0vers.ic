@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2/6/1997 Heikki Tuuri
  *******************************************************/
 
+#ifndef row0vers_h
+#define INNODB_ROW0VERS_IC_STANDALONE
+#include "row0vers.h"
+#undef INNODB_ROW0VERS_IC_STANDALONE
+#endif /* !row0vers_h */
 #include "dict0dict.h"
 #include "log0recv.h"
 #include "page0page.h"

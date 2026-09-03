@@ -134,6 +134,7 @@ select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in
 --echo # cannot push down limit, order by column does not match
 explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id2 limit 1, 2;
 select id1, id2 ,c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id2 limit 1, 2;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) and id1 >= 10 and id1 < 30 order by id2 limit 2,3;
 
 --echo # can push down limit with ICP
 explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 in (1, 2, 5, 7) and k3 > 0 order by k3 limit 3, 2;
@@ -156,6 +157,17 @@ explain format=tree select id1, id2, c,k17 from sbtest2 force index(uk) where k1
 --echo # push down limit on a uk, it's OK
 explain format=tree select id1, id2, c,k17 from sbtest2 force index(uk) where k1 in (10, 20) and id1 in (1, 2, 5) and k17 in (17, 34) order by k17 limit 2, 2;
 select id1, id2, c,k17 from sbtest2 force index(uk) where k1 in (10, 20) and id1 in (1, 2, 5) and k17 in (17, 34) order by k17 limit 2, 2;
+
+--echo # should not pushdown since it is not a equality range
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 > 9 order by k2 limit 3,2;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 < 40 order by k2 limit 3,2;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 > 9 and k1 < 40 order by k2 limit 3,2;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (9, 10) and k2 < 40 order by id1 limit 3,2;
+
+# support closed interval
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 >= 10 order by id1 limit 2,3;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 = 11 and id1 <= 30  order by id1 limit 2,3;
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) and id1 >= 10 and id1 < 30 order by id1 limit 2,3;
 
 # test procedure call
 --disable_warnings
@@ -185,5 +197,78 @@ call proc_test(10, 20, 11, 21);
 
 drop procedure proc_test;
 
+# Boundary test cases
+--echo # Testing empty result set scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (999, 888) and k2 in (777, 666) order by id1 limit 1,1;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (999, 888) and k2 in (777, 666) order by id1 limit 1,1;
+
+--echo # Testing single range scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) order by id1 limit 2,3;
+select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) order by id1 limit 2,3;
+
+--echo # Testing large offset scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 10,5;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 10,5;
+
+--echo # Testing limit equal to zero scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 0;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 0;
+
+--echo # Testing offset without limit scenario (should not be pushed down)
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 5, 18446744073709551615;
+
+--echo # Testing combination of multi-column IN conditions
+explain format=tree select id1, id2, c from sbtest2 force index(key2) where k1 in (10, 11, 20) and k2 in (20, 21) and k3 in (3, 20, 37, 54) order by k4 limit 2, 3;
+select id1, id2, c from sbtest2 force index(key2) where k1 in (10, 11, 20) and k2 in (20, 21) and k3 in (3, 20, 37, 54) order by k4 limit 2, 3;
+
+--echo # Testing NULL value handling
+INSERT INTO sbtest2 (id1, id2, k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, c) VALUES (7, 1, 30, NULL, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 'Record NULL');
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (30, 20) and k2 is null order by id1 limit 0,1;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (30, 20) and k2 is null order by id1 limit 0,1;
+
+--echo # Testing handling of very large numeric values
+INSERT INTO sbtest2 (id1, id2, k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, c) VALUES (9, 1, 2147483647, 2147483646, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 'Record max int');
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (2147483647, 10) and k2 in (2147483646, 21) order by id1 limit 1,4;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (2147483647, 10) and k2 in (2147483646, 21) order by id1 limit 1,4;
+
+--echo # Testing tuple IN condition
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where (k1,k2) in ((10, 20), (20,20), (10, 11), (20, 21)) order by id1 limit 1,3;
+select id1, id2, c from sbtest2 force index(key1) where (k1,k2) in ((10, 20), (20,20), (10, 11), (20, 21)) order by id1 limit 1,3;
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where (k1,k2)=(10,20) or (k1,k2)=(20,20) or (k1,k2)=(10,11) or (k1,k2)=(20, 21) order by id1 limit 2,1;
+select id1, id2, c from sbtest2 force index(key1) where (k1,k2)=(10,20) or (k1,k2)=(20,20) or (k1,k2)=(10,11) or (k1,k2)=(20, 21) order by id1 limit 2,1;
+
+--echo # Testing full-covering ICP scenario where all conditions are part of the index
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 order by id1 limit 3, 2;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 order by id1 limit 3, 2;
+
+--echo # Testing ICP scenario where some conditions are not part of the index and limit cannot be pushed down
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 and k16 > 0 order by id1 limit 3, 2;
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 and k16 > 0 order by id1 limit 3, 2;
+
 drop table sbtest2;
+
+--echo # Testing generated columns
+CREATE TABLE `sbtest_mixed_virtual_cols` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `value1` int NOT NULL DEFAULT '0',
+  `value2` int NOT NULL DEFAULT '0',
+  `stored_col` int GENERATED ALWAYS AS ((`value1` * 2)) STORED,
+  `virtual_col` int GENERATED ALWAYS AS ((`value1` + `value2`)) VIRTUAL,
+  PRIMARY KEY (`id`),
+  KEY `idx_stored_col_value2` (`stored_col`,`value2`),
+  KEY `idx_virtual_col_value1` (`virtual_col`,`value1`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO sbtest_mixed_virtual_cols (value1, value2) VALUES (10, 5), (2, 100), (15, 8), (4, 90), (12, 12), (6, 70), (18, 3), (8, 60), (20, 1), (1, 150), (10, 11), (5, 10), (7, 10);
+
+--echo # Testing stored column, limit can be pushed down
+explain format = tree select id, value1, value2, stored_col from sbtest_mixed_virtual_cols force index(idx_stored_col_value2) where stored_col in (2,4,6) order by value2 limit 0, 3;
+select id, value1, value2, stored_col from sbtest_mixed_virtual_cols force index(idx_stored_col_value2) where stored_col in (2,4,6) order by value2 limit 0, 3;
+
+--echo # Testing virtual column, limit cannot be pushed down
+explain format=tree select id, value1, value2, virtual_col from sbtest_mixed_virtual_cols force index(idx_virtual_col_value1) where virtual_col in (21,15,24) order by value1 limit 2,1;
+select id, value1, value2, virtual_col from sbtest_mixed_virtual_cols force index(idx_virtual_col_value1) where virtual_col in (21,15,24) order by value1 limit 2,1;
+
+drop table sbtest_mixed_virtual_cols;
 set pushdown_range_limit=false;

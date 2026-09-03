@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 3/26/1996 Heikki Tuuri
  *******************************************************/
 
+#if !defined(UNIV_HOTBACKUP)
+#ifndef trx0trx_h
+#define INNODB_TRX0TRX_IC_STANDALONE
+#include "trx0trx.h"
+#undef INNODB_TRX0TRX_IC_STANDALONE
+#endif /* !trx0trx_h */
 /*
 #include "read0read.h"
 */
@@ -260,14 +266,14 @@ static const lizard::Vision *trx_get_vision(const trx_t *trx) {
 // @param trx              Get the active view for this transaction, if one exists
 // @return the transaction's read view or NULL if one not assigned. */
 // static inline ReadView *trx_get_read_view(trx_t *trx) {
-//   return (!MVCC::is_view_active(trx->read_view) ? nullptr : trx->read_view);
+//   return (!XVCC::is_view_active(trx->read_view) ? nullptr : trx->read_view);
 // }
 // 
 // /**
 // @param trx              Get the active view for this transaction, if one exists
 // @return the transaction's read view or NULL if one not assigned. */
 // static inline const ReadView *trx_get_read_view(const trx_t *trx) {
-//   return (!MVCC::is_view_active(trx->read_view) ? nullptr : trx->read_view);
+//   return (!XVCC::is_view_active(trx->read_view) ? nullptr : trx->read_view);
 // }
 
 /**
@@ -325,3 +331,4 @@ static inline const trx_t *trx_arbitrate(const trx_t *requestor,
 
   return (nullptr);
 }
+#endif /* !defined(UNIV_HOTBACKUP) */

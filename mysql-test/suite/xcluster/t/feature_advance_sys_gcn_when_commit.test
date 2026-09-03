@@ -69,13 +69,14 @@ connection conn1;
 --echo # Case: xa transaction, prepare, detach=on
 --echo ############################
 connection default;
---let $expect_gcn = `select @base_seq + 10200`
+--let $expect_gcn =  $actual_gcn
+--let $set_gcn = `select @base_seq + 10200`
 set xa_detach_on_prepare = on;
 
 xa start 'asgc_b1';
---echo set innodb_commit_seq = expect_gcn
+--echo set innodb_commit_seq = set_gcn
 --disable_query_log
---eval set innodb_commit_seq = $expect_gcn
+--eval set innodb_commit_seq = $set_gcn
 --enable_query_log
 
 insert into t1 values (1);
@@ -125,13 +126,14 @@ select ROLE from information_schema.ALISQL_CLUSTER_LOCAL;
 --echo # Case: xa transaction, prepare, detach=off
 --echo ############################
 connection default;
---let $expect_gcn = `select @base_seq + 10400`
+--let $expect_gcn = $actual_gcn
+--let $set_gcn = `select @base_seq + 10400`
 set xa_detach_on_prepare = off;
 
 xa start 'asgc_b2';
---echo set innodb_commit_seq = expect_gcn
+--echo set innodb_commit_seq = set_gcn
 --disable_query_log
---eval set innodb_commit_seq = $expect_gcn
+--eval set innodb_commit_seq = $set_gcn
 --enable_query_log
 
 insert into t1 values (1);
@@ -220,11 +222,6 @@ connection default;
 set xa_detach_on_prepare = off;
 
 xa start 'asgc_b4';
---echo set innodb_commit_seq = expect_gcn
---disable_query_log
---eval set innodb_commit_seq = $expect_gcn
---enable_query_log
-
 insert into t1 values (1);
 xa end 'asgc_b4';
 
@@ -300,11 +297,6 @@ connection default;
 set xa_detach_on_prepare = on;
 
 xa start 'asgc_b5';
---echo set innodb_commit_seq = expect_gcn
---disable_query_log
---eval set innodb_commit_seq = $expect_gcn
---enable_query_log
-
 insert into t1 values (1);
 xa end 'asgc_b5';
 

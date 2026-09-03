@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #ifndef _gis0geo_h
 #define _gis0geo_h
 
+#include "lizard0rem0types.h"
 #include "page0types.h"
 #include "sql/gis/rtree_support.h"
 
@@ -42,7 +43,7 @@ class Spatial_reference_system;
 struct rtr_split_node_t {
   double square;  /* square of the mbr.*/
   int n_node;     /* which group in.*/
-  uchar *key;     /* key. */
+  reg_t key;      /* key. */
   double *coords; /* mbr. */
 };
 
@@ -67,7 +68,7 @@ int split_rtree_node(
     int size2,                                /*!< in: initial group sizes */
     double **d_buffer,                        /*!< in/out: buffer.*/
     int n_dim,                                /*!< in: dimensions. */
-    uchar *first_rec,                         /*!< in: the first rec. */
+    reg_t first_reg,                          /*!< in: the first rec. */
     const dd::Spatial_reference_system *srs); /*!< in: SRS of R-tree */
 
 /** Compares two keys a and b depending on mode

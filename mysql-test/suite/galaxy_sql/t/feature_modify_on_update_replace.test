@@ -1,0 +1,207 @@
+--echo #
+--echo # Test MODIFY_ON_UPDATE with REPLACE statements.
+--echo # Verifies conditional update semantics: MODIFY_ON_UPDATE fields
+--echo # only fire when non-MOD_ONUPD columns actually differ from the old row.
+--echo #
+
+--echo # -------------------------------------------------------
+--echo # 1. REPLACE with conflict - other columns changed
+--echo # -------------------------------------------------------
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val VARCHAR(50),
+  version INT DEFAULT 0
+);
+
+INSERT INTO t1 VALUES (1, 'hello', 1);
+
+--echo # REPLACE with different val: version should be updated to 99
+REPLACE INTO t1 (id, val, version) VALUES (1, 'world', MODIFY_ON_UPDATE(99));
+SELECT id, val, version FROM t1 WHERE id = 1;
+
+DROP TABLE t1;
+
+--echo # -------------------------------------------------------
+--echo # 2. REPLACE with conflict - no column changed
+--echo # -------------------------------------------------------
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  val VARCHAR(50),
+  version INT DEFAULT 0
+);
+
+INSERT INTO t2 VALUES (1, 'hello', 1);
+
+--echo # REPLACE with same val: version should keep old value (1)
+REPLACE INTO t2 (id, val, version) VALUES (1, 'hello', MODIFY_ON_UPDATE(99));
+SELECT id, val, version FROM t2 WHERE id = 1;
+
+DROP TABLE t2;
+
+--echo # -------------------------------------------------------
+--echo # 3. REPLACE with no conflict (pure INSERT)
+--echo # -------------------------------------------------------
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  val VARCHAR(50),
+  version INT DEFAULT 0
+);
+
+INSERT INTO t3 VALUES (1, 'hello', 1);
+
+--echo # REPLACE with new id: MODIFY_ON_UPDATE evaluates normally
+REPLACE INTO t3 (id, val, version) VALUES (2, 'new_row', MODIFY_ON_UPDATE(42));
+SELECT * FROM t3 ORDER BY id;
+
+DROP TABLE t3;
+
+--echo # -------------------------------------------------------
+--echo # 4. Multiple MODIFY_ON_UPDATE columns in REPLACE
+--echo # -------------------------------------------------------
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  val VARCHAR(50),
+  version INT DEFAULT 0,
+  modifier VARCHAR(50) DEFAULT 'none'
+);
+
+INSERT INTO t4 VALUES (1, 'hello', 1, 'user_a');
+
+--echo # Both MOD_ONUPD columns should fire when val changes
+REPLACE INTO t4 (id, val, version, modifier) VALUES (1, 'world', MODIFY_ON_UPDATE(2), MODIFY_ON_UPDATE('user_b'));
+SELECT * FROM t4 WHERE id = 1;
+
+--echo # Neither should fire when val is the same
+REPLACE INTO t4 (id, val, version, modifier) VALUES (1, 'world', MODIFY_ON_UPDATE(99), MODIFY_ON_UPDATE('user_z'));
+SELECT * FROM t4 WHERE id = 1;
+
+DROP TABLE t4;
+
+--echo # -------------------------------------------------------
+--echo # 5. All columns are MODIFY_ON_UPDATE (no regular column changes)
+--echo # -------------------------------------------------------
+CREATE TABLE t5 (
+  id INT PRIMARY KEY,
+  version INT DEFAULT 0,
+  tag VARCHAR(20) DEFAULT 'init'
+);
+
+INSERT INTO t5 VALUES (1, 1, 'old');
+
+--echo # Only id matches (not MOD_ONUPD), version and tag are MOD_ONUPD
+--echo # Since no non-MOD_ONUPD column besides id changed, MOD_ONUPD should NOT fire
+REPLACE INTO t5 (id, version, tag) VALUES (1, MODIFY_ON_UPDATE(99), MODIFY_ON_UPDATE('new'));
+SELECT * FROM t5 WHERE id = 1;
+
+DROP TABLE t5;
+
+--echo # -------------------------------------------------------
+--echo # 6. REPLACE with MODIFY_ON_UPDATE on INT - version increment
+--echo # -------------------------------------------------------
+CREATE TABLE t6 (
+  id INT PRIMARY KEY,
+  data TEXT,
+  counter BIGINT DEFAULT 0
+);
+
+INSERT INTO t6 VALUES (1, 'original data', 10);
+
+--echo # Data changed - counter should update to 100
+REPLACE INTO t6 (id, data, counter) VALUES (1, 'modified data', MODIFY_ON_UPDATE(100));
+SELECT id, data, counter FROM t6 WHERE id = 1;
+
+--echo # Data NOT changed - counter should stay 100
+REPLACE INTO t6 (id, data, counter) VALUES (1, 'modified data', MODIFY_ON_UPDATE(999));
+SELECT id, data, counter FROM t6 WHERE id = 1;
+
+DROP TABLE t6;
+
+--echo # -------------------------------------------------------
+--echo # 7. REPLACE with NULL value in MODIFY_ON_UPDATE
+--echo # -------------------------------------------------------
+CREATE TABLE t7 (
+  id INT PRIMARY KEY,
+  val INT,
+  marker VARCHAR(20) DEFAULT 'active'
+);
+
+INSERT INTO t7 VALUES (1, 100, 'active');
+
+--echo # val changed: marker should be set to NULL
+REPLACE INTO t7 (id, val, marker) VALUES (1, 200, MODIFY_ON_UPDATE(NULL));
+SELECT id, val, marker FROM t7 WHERE id = 1;
+
+--echo # val NOT changed: marker should stay NULL (old value)
+REPLACE INTO t7 (id, val, marker) VALUES (1, 200, MODIFY_ON_UPDATE('revived'));
+SELECT id, val, marker FROM t7 WHERE id = 1;
+
+DROP TABLE t7;
+
+--echo # -------------------------------------------------------
+--echo # 8. REPLACE with DECIMAL column
+--echo # -------------------------------------------------------
+CREATE TABLE t8 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  price DECIMAL(10,2) DEFAULT 0.00
+);
+
+INSERT INTO t8 VALUES (1, 'widget', 9.99);
+
+--echo # Name changed - price should update
+REPLACE INTO t8 (id, name, price) VALUES (1, 'gadget', MODIFY_ON_UPDATE(19.99));
+SELECT * FROM t8 WHERE id = 1;
+
+--echo # Name NOT changed - price should stay
+REPLACE INTO t8 (id, name, price) VALUES (1, 'gadget', MODIFY_ON_UPDATE(99.99));
+SELECT * FROM t8 WHERE id = 1;
+
+DROP TABLE t8;
+
+--echo # -------------------------------------------------------
+--echo # 9. Mixed: some columns MOD_ONUPD, some regular, with conflict
+--echo # -------------------------------------------------------
+CREATE TABLE t9 (
+  id INT PRIMARY KEY,
+  col_a INT,
+  col_b INT,
+  mod_col INT DEFAULT 0
+);
+
+INSERT INTO t9 VALUES (1, 10, 20, 0);
+
+--echo # col_a changed (10->11), col_b same: mod_col should fire
+REPLACE INTO t9 (id, col_a, col_b, mod_col) VALUES (1, 11, 20, MODIFY_ON_UPDATE(1));
+SELECT * FROM t9 WHERE id = 1;
+
+--echo # col_a same, col_b changed (20->21): mod_col should fire
+REPLACE INTO t9 (id, col_a, col_b, mod_col) VALUES (1, 11, 21, MODIFY_ON_UPDATE(2));
+SELECT * FROM t9 WHERE id = 1;
+
+--echo # Both same: mod_col should NOT fire (stays 2)
+REPLACE INTO t9 (id, col_a, col_b, mod_col) VALUES (1, 11, 21, MODIFY_ON_UPDATE(99));
+SELECT * FROM t9 WHERE id = 1;
+
+DROP TABLE t9;
+
+--echo # -------------------------------------------------------
+--echo # 10. REPLACE on table with UNIQUE key (not PK)
+--echo # -------------------------------------------------------
+CREATE TABLE t10 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(100) UNIQUE,
+  name VARCHAR(50),
+  login_count INT DEFAULT 0
+);
+
+INSERT INTO t10 (email, name, login_count) VALUES ('a@test.com', 'Alice', 5);
+
+--echo # Conflict on UNIQUE email, name changed: login_count should fire
+REPLACE INTO t10 (email, name, login_count) VALUES ('a@test.com', 'Bob', MODIFY_ON_UPDATE(10));
+SELECT email, name, login_count FROM t10 WHERE email = 'a@test.com';
+
+--echo # Conflict on UNIQUE email, name NOT changed but AUTO_INCREMENT id changed: login_count should fire
+REPLACE INTO t10 (email, name, login_count) VALUES ('a@test.com', 'Bob', MODIFY_ON_UPDATE(99));
+SELECT email, name, login_count FROM t10 WHERE email = 'a@test.com';
+
+DROP TABLE t10;

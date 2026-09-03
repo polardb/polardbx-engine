@@ -3589,6 +3589,9 @@ static void set_data_type_from_cast_type(Item *item, Cast_target cast_type,
       my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON",
                "GEOMETRYCOLLECTION");
       return;
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return;
   }
 
   assert(false); /* purecov: deadcode */
@@ -3724,6 +3727,9 @@ static void print_cast_type(Cast_target cast_type, const Item *item,
       str->append(STRING_WITH_LEN("geometrycollection"));
       return;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      str->append(STRING_WITH_LEN("vector"));
+      return;
   }
   assert(false); /* purecov: deadcode */
 }
@@ -3769,6 +3775,8 @@ static enum Item_result json_cast_result_type(Cast_target cast_type) {
     case ITEM_CAST_GEOMETRYCOLLECTION:
       return INVALID_RESULT;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      return INVALID_RESULT;
   }
 
   assert(false); /* purecov: deadcode */
@@ -4431,6 +4439,9 @@ Item_func_json_value::create_json_value_default(THD *thd, Item *item) {
                "GEOMETRYCOLLECTION");
       return nullptr;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return nullptr;
   }
 
   return default_value;
@@ -4744,6 +4755,9 @@ String *Item_func_json_value::val_str(String *buffer) {
                "GEOMETRYCOLLECTION");
       return nullptr;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return nullptr;
   }
   assert(false); /* purecov: deadcode */
   return nullptr;
@@ -4793,6 +4807,9 @@ double Item_func_json_value::val_real() {
                "GEOMETRYCOLLECTION");
       return 0.0;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return 0.0;
   }
   assert(false); /* purecov: deadcode */
   return 0.0;
@@ -4845,6 +4862,9 @@ longlong Item_func_json_value::val_int() {
                "GEOMETRYCOLLECTION");
       return 0;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return 0;
   }
   assert(false); /* purecov: deadcode */
   return 0;
@@ -4895,6 +4915,9 @@ my_decimal *Item_func_json_value::val_decimal(my_decimal *value) {
                "GEOMETRYCOLLECTION");
       return nullptr;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return nullptr;
   }
   assert(false); /* purecov: deadcode */
   return nullptr;
@@ -4946,6 +4969,9 @@ bool Item_func_json_value::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
                "GEOMETRYCOLLECTION");
       return true;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return true;
   }
   assert(false); /* purecov: deadcode */
   return true;
@@ -4997,6 +5023,9 @@ bool Item_func_json_value::get_time(MYSQL_TIME *ltime) {
                "GEOMETRYCOLLECTION");
       return true;
       /* purecov: end */
+    case ITEM_CAST_VECTOR:
+      my_error(ER_NOT_SUPPORTED_YET, MYF(0), "JSON_VALUE RETURNING VECTOR");
+      return true;
   }
   assert(false); /* purecov: deadcode */
   return true;

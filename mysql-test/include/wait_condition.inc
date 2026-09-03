@@ -9,7 +9,6 @@
 #
 #    let $wait_condition=
 #      SELECT c = 3 FROM t;
-#    [let $explicit_default_wait_timeout= N] # to override the default reset
 #    --source include/wait_condition.inc
 #
 #   OR
@@ -42,6 +41,11 @@ if (!$explicit_default_wait_timeout)
   --let $wait_timeout= 0
 }
 
+# Under ASAN, operations are significantly slower so increase wait timeout
+if ($ASAN_OPTIONS) {
+  let $wait_counter= `SELECT $wait_counter * 6`;
+}
+
 # Keep track of how many times the wait condition is tested
 # This is used by some tests (e.g., main.status)
 let $wait_condition_reps= 0;
@@ -68,6 +72,29 @@ if (!$success)
   if ($show_rpl_debug_info)
   {
     --source include/show_rpl_debug_info.inc
+    --die Timeout in wait_condition.inc for $wait_condition
+  }
+
+  if ($show_consensus_debug_info)
+  {
+    select * from information_schema.alisql_cluster_local;
+    select * from information_schema.alisql_cluster_global;
+
+    # connect (_consensus_server1_,127.0.0.1,root,,test,$MYPORT_1);
+    # select * from information_schema.alisql_cluster_local;
+    # select * from information_schema.alisql_cluster_global;
+    # disconnect _consensus_server1_;
+
+    # connect (_consensus_server2_,127.0.0.1,root,,test,$MYPORT_2);
+    # select * from information_schema.alisql_cluster_local;
+    # select * from information_schema.alisql_cluster_global;
+    # disconnect _consensus_server2_;
+
+    # connect (_consensus_server3_,127.0.0.1,root,,test,$MYPORT_3);
+    # select * from information_schema.alisql_cluster_local;
+    # select * from information_schema.alisql_cluster_global;
+    # disconnect _consensus_server3_;
+
     --die Timeout in wait_condition.inc for $wait_condition
   }
 }

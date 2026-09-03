@@ -128,13 +128,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout0safe.h"
 #include "lizard0fsp.h"
 #include "lizard0gcs.h"
-#include "lizard0gcs0hist.h"
+#include "lizard0gcs0history.h"
 #include "lizard0gp.h"
 #include "lizard0txn0space.h"
 #include "lizard0undo.h"
-#include "lizard0undo0types.h"
-#include "lizard0erase.h"
+#include "lizard0trx0erase.h"
 #include "lizard0undo0retent.h"
+#include "lizard0trx0history.h"
+#include "lizard0srv0cycle.h"
 
 #include "srv0file.h"
 
@@ -211,6 +212,7 @@ mysql_pfs_key_t srv_error_monitor_thread_key;
 mysql_pfs_key_t srv_lock_timeout_thread_key;
 mysql_pfs_key_t srv_master_thread_key;
 mysql_pfs_key_t srv_monitor_thread_key;
+mysql_pfs_key_t srv_cycle_thread_key;
 mysql_pfs_key_t srv_purge_thread_key;
 mysql_pfs_key_t srv_worker_thread_key;
 mysql_pfs_key_t trx_recovery_rollback_thread_key;
@@ -1076,7 +1078,8 @@ dberr_t srv_undo_tablespaces_upgrade() {
   rsegs and undo tablespaces they are in from being deleted.
   These transactions must be either committed or rolled back by
   the mysql server.*/
-  if (trx_sys->n_prepared_trx > 0) {
+  //if (trx_sys->n_prepared_trx > 0) {
+  if (lizard::gcs_n_prepared_trx() > 0) {
     ib::warn(ER_IB_MSG_1094);
     return (DB_SUCCESS);
   }
@@ -1583,8 +1586,7 @@ dberr_t srv_start(bool create_new_db) {
   page_no_t tablespace_size_in_header;
   dberr_t err;
   mtr_t mtr;
-  lizard::purge_heap_t *purge_heap = nullptr;
-  lizard::erase_heap_t *erase_heap = nullptr;
+  lizard::pe_heap_t *hp = nullptr;
 
   assert(srv_dict_metadata == nullptr);
   /* Reset the start state. */
@@ -1941,7 +1943,9 @@ dberr_t srv_start(bool create_new_db) {
   err = lizard::srv_lizard_space.open_or_create(create_new_db,
                                                 &sum_of_lizard_sizes);
 
-  if (err != DB_SUCCESS) srv_init_abort(err);
+  if (err != DB_SUCCESS) {
+    return srv_init_abort(err);
+  }
 
   if (dblwr::is_enabled() && ((err = dblwr::open()) != DB_SUCCESS)) {
     return srv_init_abort(err);
@@ -2006,20 +2010,17 @@ dberr_t srv_start(bool create_new_db) {
     after the double write buffers haves been created. */
     trx_sys_create_sys_pages();
 
-    trx_purge_sys_mem_create();
+    /** clean/purge/erase memory structure. */
+    lizard::trx_history_sys_mem_create();
 
-    lizard::trx_erase_sys_mem_create();
-
-    std::tie(purge_heap, erase_heap) = trx_sys_init_at_db_start();
+    hp = trx_sys_init_at_db_start();
 
     /* The purge system needs to create the purge view and
     therefore requires that the trx_sys is inited. */
 
-    trx_purge_sys_initialize(srv_threads.m_purge_workers_n, purge_heap);
+    lizard::trx_history_sys_initialize(hp);
 
-    lizard::trx_erase_sys_initialize(srv_threads.m_purge_workers_n, erase_heap);
-
-    lizard::undo_retention_init();
+    lizard::Undo_manager::instance().init();
 
     err = dict_create();
 
@@ -2225,7 +2226,7 @@ dberr_t srv_start(bool create_new_db) {
     }
 
     /** Persist if needed. */
-    if (lizard::gcs_persist_gcn()) {
+    if (lizard::gcs_persist_cmmt()) {
       ut_a(redo_writes_allowed);
       /* Flush logs to persist the changes. */
       log_buffer_flush_to_disk(*log_sys);
@@ -2425,16 +2426,14 @@ dberr_t srv_start(bool create_new_db) {
       return (srv_init_abort(err));
     }
 
-    trx_purge_sys_mem_create();
-
-    lizard::trx_erase_sys_mem_create();
+    lizard::trx_history_sys_mem_create();
 
     /* The purge system needs to create the purge view and
     therefore requires that the trx_sys is inited. */
-    std::tie(purge_heap, erase_heap) = trx_sys_init_at_db_start();
+    hp = trx_sys_init_at_db_start();
 
     if (srv_is_upgrade_mode) {
-      if (!purge_heap->empty()) {
+      if (!hp->purge_heap->empty()) {
         ib::info(ER_IB_MSG_1144);
         srv_upgrade_old_undo_found = true;
       }
@@ -2448,16 +2447,14 @@ dberr_t srv_start(bool create_new_db) {
       srv_undo_tablespaces_upgrade();
     }
 
-    DBUG_EXECUTE_IF("check_no_undo", ut_ad(purge_heap->empty()););
+    DBUG_EXECUTE_IF("check_no_undo", ut_ad(hp->purge_heap->empty()););
 
     /* The purge system needs to create the purge view and
     therefore requires that the trx_sys and trx lists were
     initialized in trx_sys_init_at_db_start(). */
-    trx_purge_sys_initialize(srv_threads.m_purge_workers_n, purge_heap);
+    lizard::trx_history_sys_initialize(hp);
 
-    lizard::trx_erase_sys_initialize(srv_threads.m_purge_workers_n, erase_heap);
-
-    lizard::undo_retention_init();
+    lizard::Undo_manager::instance().init();
   }
 
   /* Open temp-tablespace and keep it open until shutdown. */
@@ -2666,7 +2663,7 @@ void srv_dict_recover_on_restart() {
   that the data dictionary tables will be free of any locks.
   The data dictionary latch should guarantee that there is at
   most one data dictionary transaction active at a time. */
-  if (srv_force_recovery < SRV_FORCE_NO_TRX_UNDO && trx_sys_need_rollback()) {
+  if (srv_force_recovery < SRV_FORCE_NO_TRX_UNDO && lizard::gcs_need_rollback()) {
     trx_rollback_or_clean_recovered(false);
   }
 
@@ -2722,6 +2719,13 @@ void srv_start_purge_threads() {
   if (srv_start_state_is_set(SRV_START_STATE_PURGE)) {
     return;
   }
+
+  srv_threads.m_cycle_coordinator = os_thread_create(
+      srv_cycle_thread_key, 0, lizard::srv_cycle_coordinator_thread);
+
+  srv_threads.m_cycle_coordinator.start();
+
+  lizard::srv_start_wait_for_cycle_to_start();
 
   srv_threads.m_purge_coordinator =
       os_thread_create(srv_purge_thread_key, 0, srv_purge_coordinator_thread);
@@ -2779,7 +2783,7 @@ void srv_start_threads(bool bootstrap) {
   }
 
   if (!bootstrap && srv_force_recovery < SRV_FORCE_NO_TRX_UNDO &&
-      trx_sys_need_rollback()) {
+      lizard::gcs_need_rollback()) {
     /* Rollback all recovered transactions that are
     not in committed nor in XA PREPARE state. */
     srv_threads.m_trx_recovery_rollback = os_thread_create(
@@ -2939,6 +2943,8 @@ void srv_pre_dd_shutdown() {
     ut_a(!srv_thread_is_active(srv_threads.m_ts_alter_encrypt));
     ut_a(!srv_thread_is_active(srv_threads.m_file_purge));
 
+    ut_a(!srv_thread_is_active(srv_threads.m_cycle_coordinator));
+
     /* In read-only mode, there is no master thread. */
     ut_a(!srv_thread_is_active(srv_threads.m_master));
 
@@ -3024,6 +3030,16 @@ void srv_pre_dd_shutdown() {
 
   srv_shutdown_set_state(SRV_SHUTDOWN_PURGE);
 
+  for (uint32_t count = 1;
+       srv_thread_is_active(srv_threads.m_cycle_coordinator); ++count) {
+    lizard::srv_cycle_wakeup();
+    if (count % SHUTDOWN_SLEEP_ROUNDS == 0) {
+      ib::info(ER_IB_MSG_1152);
+    }
+    std::this_thread::sleep_for(
+        std::chrono::microseconds(SHUTDOWN_SLEEP_TIME_US));
+  }
+
   for (uint32_t count = 1; srv_purge_threads_active(); ++count) {
     srv_purge_wakeup();
     if (count % SHUTDOWN_SLEEP_ROUNDS == 0) {
@@ -3052,6 +3068,7 @@ void srv_pre_dd_shutdown() {
     std::this_thread::sleep_for(
         std::chrono::microseconds(SHUTDOWN_SLEEP_TIME_US));
   }
+
   if (srv_start_state_is_set(SRV_START_STATE_SCN_HIST)) {
     lizard::srv_scn_history_thread_deinit();
   }
@@ -3389,7 +3406,7 @@ void srv_shutdown() {
 
   /* This must be disabled before closing the buffer pool
   and closing the data dictionary.  */
-  btr_search_disable();
+  btr_search_disable_by_internal();
 
   ibuf_close();
   ddl_log_close();
@@ -3399,7 +3416,7 @@ void srv_shutdown() {
   lock_sys_close();
   trx_pool_close();
 
-  lizard::Undo_retention::destroy();
+  lizard::Undo_manager::instance().destory();
   lizard::txn_undo_hash_close();
   lizard::gcs_close();
   lizard::gp_sys_destroy();

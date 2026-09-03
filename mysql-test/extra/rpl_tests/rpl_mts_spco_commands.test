@@ -90,7 +90,39 @@ SET @@global.binlog_transaction_dependency_tracking = COMMIT_ORDER;
 --let $mts_add_debug_point =
 
 --let $mts_spco_skip_init_statement= 1
---let $mts_spco_start_statement= CREATE TABLE t3(a INT PRIMARY KEY)Engine=MyISAM; INSERT INTO t3 VALUES(1),(2),(3)
+--let $mts_spco_start_statement= DROP TABLE IF EXISTS t31; CREATE TABLE t3(a INT PRIMARY KEY)Engine=MyISAM; INSERT INTO t3 VALUES(1),(2),(3)
+
+--let $mts_spco_block_statement = BEGIN; INSERT INTO t2 VALUES (1)
+--let $mts_spco_parallel_statement1 = BEGIN; INSERT INTO t2 VALUES (1); COMMIT; BEGIN; INSERT INTO t2 VALUES (2); COMMIT; SET TIMESTAMP = 100; REPAIR TABLE t3
+--let $mts_spco_parallel_statement2 = BEGIN; INSERT INTO t2 VALUES (3); COMMIT; BEGIN; INSERT INTO t2 VALUES (4); COMMIT; BEGIN; INSERT INTO t2 VALUES (5); COMMIT
+
+--let $mts_spco_assert_text1 = Verify table t2 has 0 rows
+--let $mts_spco_assert_cond1 = "[SELECT count(*) COUNT FROM t2, COUNT, 1]" = "0"
+
+--let $mts_spco_rollback_statement = ROLLBACK
+
+--let $mts_spco_end_statement = TRUNCATE TABLE t1; TRUNCATE TABLE t2; DROP TABLE t3
+
+--source extra/rpl_tests/rpl_mts_replica_preserve_commit_order_nobinlog.inc
+
+# Refresh master connection to reset TIMESTAMP value
+--disconnect master
+--let $rpl_connection_name= master
+--let $rpl_server_number= 1
+--source include/rpl_connect.inc
+--inc $tc_count
+
+
+--echo
+--echo #################################################################
+--echo # $tc_count. Check for REPAIR TABLE
+--echo #################################################################
+
+--let $mts_num_preceding_trans= 5
+--let $mts_add_debug_point =
+
+--let $mts_spco_skip_init_statement= 1
+--let $mts_spco_start_statement= DROP TABLE IF EXISTS t31; CREATE TABLE t3(a INT PRIMARY KEY)Engine=InnoDB; INSERT INTO t3 VALUES(1),(2),(3)
 
 --let $mts_spco_block_statement = BEGIN; INSERT INTO t2 VALUES (1)
 --let $mts_spco_parallel_statement1 = BEGIN; INSERT INTO t2 VALUES (1); COMMIT; BEGIN; INSERT INTO t2 VALUES (2); COMMIT; SET TIMESTAMP = 100; REPAIR TABLE t3
@@ -120,7 +152,38 @@ SET @@global.binlog_transaction_dependency_tracking = COMMIT_ORDER;
 --let $mts_num_preceding_trans= 5
 --let $mts_add_debug_point =
 
---let $mts_spco_start_statement = CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = InnoDB; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB
+--let $mts_spco_start_statement = DROP TABLE IF EXISTS t31; CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = InnoDB; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB
+--let $mts_spco_skip_init_statement= 1
+
+--let $mts_spco_block_statement = BEGIN; INSERT INTO t4 VALUES (1)
+--let $mts_spco_parallel_statement1 = BEGIN; INSERT INTO t4 VALUES (1); COMMIT; BEGIN; INSERT INTO t4 VALUES (2); COMMIT; OPTIMIZE TABLE t3
+--let $mts_spco_parallel_statement2 = BEGIN; INSERT INTO t4 VALUES (3); COMMIT; BEGIN; INSERT INTO t4 VALUES (4); COMMIT; BEGIN; INSERT INTO t4 VALUES (5); COMMIT
+
+--let $mts_spco_assert_text1 = Verify table t4 is empty
+--let $mts_spco_assert_cond1 = "[SELECT count(*) COUNT FROM t4, COUNT, 1]" = "0"
+
+--let $mts_spco_rollback_statement = ROLLBACK
+
+--let $mts_spco_end_statement = DROP TABLE t3; DROP TABLE t4
+
+--source extra/rpl_tests/rpl_mts_replica_preserve_commit_order_nobinlog.inc
+
+# Refresh master connection to reset TIMESTAMP value
+--disconnect master
+--let $rpl_connection_name= master
+--let $rpl_server_number= 1
+--source include/rpl_connect.inc
+--inc $tc_count
+
+--echo
+--echo #################################################################
+--echo # $tc_count. Check for OPTIMIZE TABLE
+--echo #################################################################
+
+--let $mts_num_preceding_trans= 5
+--let $mts_add_debug_point =
+
+--let $mts_spco_start_statement = DROP TABLE IF EXISTS t31; CREATE TABLE t3 (c1 INT PRIMARY KEY) ENGINE = MyISAM; CREATE TABLE t4 (c1 INT PRIMARY KEY) ENGINE = InnoDB
 --let $mts_spco_skip_init_statement= 1
 
 --let $mts_spco_block_statement = BEGIN; INSERT INTO t4 VALUES (1)

@@ -30,9 +30,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-12-06 by Jianwei.zhao
  *******************************************************/
 
+#include "lizard0data0types.h"
 #include "row0row.h"
 
+#include "lizard0dbg.h"
+#include "lizard0rem0slc.h"
 #include "lizard0row0bamboo.h"
+#include "lizard0trx.h"
 #include "lizard0undo.h"
 
 namespace lizard {
@@ -58,7 +62,8 @@ void row_upd_index_entry_bamboo_field(que_thr_t *thr, dtuple_t *entry,
     txn_desc = &txn_sys_t::instance()->txn_desc_temp;
   } else {
     trx_t *trx = thr_get_trx(thr);
-    assert_txn_desc_allocated(trx);
+    ut_ad(trx->txn_desc.is_slot_alloced());
+    ut_ad(trx->txn_desc.is_cmmt_initial());
     txn_desc = &trx->txn_desc;
   }
 
@@ -66,7 +71,7 @@ void row_upd_index_entry_bamboo_field(que_thr_t *thr, dtuple_t *entry,
   pos = index->get_sys_col_pos(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_scn(ptr, txn_desc);
+  trx_write_scn(ptr, txn_desc->cmmt.scn);
   pos++;
 
   /** 2. Populate UBA */
@@ -74,7 +79,7 @@ void row_upd_index_entry_bamboo_field(que_thr_t *thr, dtuple_t *entry,
 
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_undo_ptr(ptr, txn_desc);
+  trx_write_undo_ptr(ptr, txn_desc->undo_ptr);
 }
 
 /**
@@ -97,19 +102,19 @@ void row_upd_rec_write_bamboo(byte *ptr, const scn_t scn,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_write_bamboo(rec_t *rec, const dict_index_t *index,
-                              const ulint *offsets, const scn_t scn,
-                              const undo_ptr_t uba) {
-  ut_ad(rec_offs_validate(rec, index, offsets));
+void row_upd_rec_write_bamboo(Slice *slc, const dict_index_t *index,
+                              const scn_t scn, const undo_ptr_t uba) {
+  ut_ad(slc->is_positioned(index));
+  ut_ad(slc->contiguous());
   ut_ad(dict_index_is_panda(index));
 
-  ulint len;
-  ulint offset = rec_get_nth_field_offs(
-      index, offsets, index->get_sys_col_pos(DATA_SCN_ID), &len);
+  ulint len = 0;
+  ulint offset =
+      slc->get_nth_sys_field_offs(DATA_SCN_ID, ULINT_UNDEFINED, &len);
   ut_ad(len == DATA_SCN_ID_LEN);
 
-  trx_write_scn(rec + offset, scn);
-  trx_write_undo_ptr(rec + offset + DATA_SCN_ID_LEN, uba);
+  trx_write_scn(slc->rec() + offset, scn);
+  trx_write_undo_ptr(slc->rec() + offset + DATA_SCN_ID_LEN, uba);
 }
 
 /**
@@ -120,18 +125,18 @@ void row_upd_rec_write_bamboo(rec_t *rec, const dict_index_t *index,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_desc  txn description
 */
-void row_upd_rec_bamboo_fields_low(rec_t *rec, page_zip_des_t *page_zip,
-                                   const dict_index_t *index,
-                                   const ulint *offsets, const scn_t scn,
+void row_upd_rec_bamboo_fields_low(Slice *slc, page_zip_des_t *page_zip,
+                                   const dict_index_t *index, const scn_t scn,
                                    const undo_ptr_t uba) {
+  ut_ad(slc->contiguous());
   ut_ad(dict_index_is_panda(index));
-  assert_undo_ptr_allocated(uba);
+  ut_ad(undo_addr_t::decode_is_allocated(uba));
 
   if (page_zip) {
     /** panda didn't support compress table. */
     ut_a(0);
   } else {
-    row_upd_rec_write_bamboo(rec, index, offsets, scn, uba);
+    row_upd_rec_write_bamboo(slc, index, scn, uba);
   }
 }
 
@@ -144,16 +149,16 @@ void row_upd_rec_bamboo_fields_low(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_rec   scn/uba info
 */
-void row_upd_rec_bamboo_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
+void row_upd_rec_bamboo_fields_in_cleanout(Slice *slc, page_zip_des_t *page_zip,
                                            const dict_index_t *index,
-                                           const ulint *offsets,
                                            const txn_rec_t *txn_rec) {
   ut_ad(dict_index_is_panda(index));
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_temporary());
+  ut_ad(slc->contiguous());
 
   lizard_ut_ad(txn_rec->is_committed());
-  row_upd_rec_bamboo_fields_low(rec, page_zip, index, offsets, txn_rec->scn,
+  row_upd_rec_bamboo_fields_low(slc, page_zip, index, txn_rec->scn,
                                 txn_rec->undo_ptr);
 }
 
@@ -164,14 +169,18 @@ void row_upd_rec_bamboo_fields_in_cleanout(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      offsets
 */
 static ulint row_get_bamboo_offset(const dict_index_t *index, ulint type,
-                                   const ulint *offsets) {
+                                   const Slice *slc) {
   ulint offset = 0;
   ut_ad(!index->table->is_temporary());
   ut_ad(index->is_panda());
 
   offset = index->trx_id_offset;
   if (!offset) {
-    offset = row_get_trx_id_offset(index, offsets);
+    offset = row_get_trx_id_offset(index, slc);
+  }
+
+  if (type == DATA_TRX_ID) {
+    return offset;
   }
 
   switch (type) {
@@ -205,28 +214,29 @@ static ulint row_get_bamboo_offset(const dict_index_t *index, ulint type,
   @param[in]      offsets     rec_get_offsets(rec, index)
   @param[out]     txn_rec     lizard transaction attributes
 */
-void row_get_bamboo_txn_rec(const rec_t *rec, const dict_index_t *index,
-                            const ulint *offsets, txn_rec_t *txn_rec) {
+void row_get_bamboo_txn_rec(const Slice *slc, const dict_index_t *index,
+                            txn_rec_t *txn_rec) {
   ulint offset;
 
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
+  ut_ad(slc->contiguous());
   ut_ad(index->is_panda());
 
-  offset = row_get_bamboo_offset(index, DATA_TRX_ID, offsets);
+  offset = row_get_bamboo_offset(index, DATA_TRX_ID, slc);
 
-  txn_rec->trx_id = trx_read_trx_id(rec + offset);
+  txn_rec->trx_id = trx_read_trx_id(slc->rec() + offset);
   offset += (DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN);
 
-  txn_rec->scn = trx_read_scn(rec + offset);
+  txn_rec->scn = trx_read_scn(slc->rec() + offset);
   offset += DATA_SCN_ID_LEN;
 
-  txn_rec->undo_ptr = trx_read_undo_ptr(rec + offset);
+  txn_rec->undo_ptr = trx_read_undo_ptr(slc->rec() + offset);
 
   /** GCN didn't exist on bamboo layout record.*/
   txn_rec->gcn = GCN_NULL;
 
   /** Confirm validation of txn rec. */
-  ut_ad(lizard::txn_rec_validate(txn_rec, index));
+  ut_ad(txn_rec->is_validate(index));
 }
 
 /**
@@ -237,20 +247,21 @@ void row_get_bamboo_txn_rec(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      cleanout
 */
-bool row_bamboo_has_cleanout(const rec_t *rec, const dict_index_t *index,
-                             const ulint *offsets) {
-  undo_addr_t undo_addr;
+bool row_bamboo_has_cleanout(const Slice *slc, const dict_index_t *index) {
   txn_rec_t txn_rec;
   ut_ad(index->is_panda());
   ut_ad(!index->table->is_temporary());
+  ut_ad(slc->is_positioned(index));
+  ut_ad(slc->contiguous());
+
   /**
     Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
   */
-  if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
-    row_get_bamboo_txn_rec(rec, index, offsets, &txn_rec);
-    undo_addr.decode(txn_rec.undo_ptr);
+  if (rec_get_status(slc->rec()) == REC_STATUS_ORDINARY) {
+    row_get_bamboo_txn_rec(slc, index, &txn_rec);
+    undo_addr_t undo_addr(txn_rec.undo_ptr);
     /** UBA is valid */
-    undo_addr_validation(&undo_addr, index);
+    ut_ad(undo_addr.is_validate(index));
     /** commit */
     ut_a(txn_rec.is_committed());
     /** valid scn */
@@ -267,24 +278,23 @@ bool row_bamboo_has_cleanout(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      Success
 */
-bool row_bamboo_is_valid(const rec_t *rec, const dict_index_t *index,
-                         const ulint *offsets) {
-  undo_addr_t undo_addr;
+bool row_bamboo_is_valid(const Slice *slc, const dict_index_t *index) {
   txn_rec_t txn_rec;
   ut_ad(index->is_panda());
   ut_ad(!index->table->is_temporary());
+  ut_ad(slc->contiguous());
 
   /**
     Skip the REC_STATUS_NODE_PTR, REC_STATUS_INFIMUM, REC_STATUS_SUPREMUM
     Skip the non-compact record
   */
-  if (rec_get_status(rec) == REC_STATUS_ORDINARY) {
-    row_get_bamboo_txn_rec(rec, index, offsets, &txn_rec);
+  if (rec_get_status(slc->rec()) == REC_STATUS_ORDINARY) {
+    row_get_bamboo_txn_rec(slc, index, &txn_rec);
 
-    undo_addr.decode(txn_rec.undo_ptr);
+    undo_addr_t undo_addr(txn_rec.undo_ptr);
 
     /** UBA is valid */
-    undo_addr_validation(&undo_addr, index);
+    ut_ad(undo_addr.is_validate(index));
 
     /** Scn and trx state are matched */
     ut_a(txn_rec.is_active() == (txn_rec.scn == SCN_NULL));
@@ -365,15 +375,15 @@ byte *row_upd_parse_bamboo_vals(const byte *ptr, const byte *end_ptr,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-void row_upd_rec_bamboo_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
+void row_upd_rec_bamboo_fields_in_recovery(Slice *slc, page_zip_des_t *page_zip,
                                            const dict_index_t *index, ulint pos,
-                                           const ulint *offsets,
                                            const scn_t scn,
                                            const undo_ptr_t undo_ptr) {
   /** index->type (Log_Dummy) will not be set rightly if it's non-compact
   format, see function **mlog_parse_index** */
-  ut_ad(!rec_offs_comp(offsets) || dict_index_is_panda(index));
-  ut_ad(rec_offs_validate(rec, NULL, offsets));
+  ut_ad(!rec_offs_comp(slc->offsets()) || dict_index_is_panda(index));
+  ut_ad(slc->validate());
+  ut_ad(slc->contiguous());
 
   /** Lizard: This assertion is left, because we wonder if
   there will be a false case */
@@ -396,8 +406,7 @@ void row_upd_rec_bamboo_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
     byte *field;
     ulint len;
 
-    field =
-        const_cast<byte *>(rec_get_nth_field(index, rec, offsets, pos, &len));
+    field = slc->get_nth_field(index, pos, &len);
     ut_ad(len == DATA_SCN_ID_LEN);
 
     row_upd_rec_write_bamboo(field, scn, undo_ptr);

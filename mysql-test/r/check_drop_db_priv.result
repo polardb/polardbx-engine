@@ -1,0 +1,35 @@
+DROP DATABASE IF EXISTS test_drop_db_priv;
+DROP USER IF EXISTS 'test_drop_user'@'localhost';
+SET GLOBAL polarx_security_enhancement_mode = OFF;
+CREATE DATABASE test_drop_db_priv;
+CREATE USER 'test_drop_user'@'localhost';
+GRANT DROP ON test_drop_db_priv.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+DROP DATABASE test_drop_db_priv;
+CREATE DATABASE test_drop_db_priv;
+SET GLOBAL polarx_security_enhancement_mode = ON;
+DROP DATABASE test_drop_db_priv;
+ERROR 42000: Access denied; you need (at least one of) the DROP_DATABASE_ADMIN privilege(s) for this operation
+DROP DATABASE IF EXISTS test_drop_db_priv;
+CREATE DATABASE test_drop_db_priv;
+REVOKE DROP ON test_drop_db_priv.* FROM 'test_drop_user'@'localhost';
+GRANT DROP ON *.* TO 'test_drop_user'@'localhost';
+GRANT ALL ON test_drop_db_priv.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+DROP DATABASE test_drop_db_priv;
+ERROR 42000: Access denied; you need (at least one of) the DROP_DATABASE_ADMIN privilege(s) for this operation
+GRANT DROP_DATABASE_ADMIN ON *.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+DROP DATABASE test_drop_db_priv;
+CREATE DATABASE test_drop_db_priv;
+REVOKE DROP_DATABASE_ADMIN ON *.* FROM 'test_drop_user'@'localhost';
+GRANT SUPER ON *.* TO 'test_drop_user'@'localhost';
+Warnings:
+Warning	1287	The SUPER privilege identifier is deprecated
+FLUSH PRIVILEGES;
+DROP DATABASE test_drop_db_priv;
+SET GLOBAL polarx_security_enhancement_mode = OFF;
+DROP USER 'test_drop_user'@'localhost';
+DROP DATABASE IF EXISTS test_drop_db_priv;
+Warnings:
+Note	1008	Can't drop database 'test_drop_db_priv'; database doesn't exist

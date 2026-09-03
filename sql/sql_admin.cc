@@ -58,6 +58,7 @@
 #include "sql/dd/string_type.h"              // dd::String_type
 #include "sql/dd/types/abstract_table.h"     // dd::enum_table_type
 #include "sql/dd/types/table.h"              // dd::Table
+#include "vidx/vidx_index.h"                 // vidx::dd_table_is_hlindex
 #include "sql/debug_sync.h"                  // DEBUG_SYNC
 #include "sql/derror.h"                      // ER_THD
 #include "sql/handler.h"
@@ -694,6 +695,14 @@ static Check_result check_for_upgrade(THD *thd, dd::String_type &sname,
     false Message sent to net (admin operation went ok)
     true  Message should be sent by caller
           (admin operation or network communication failed)
+
+  stmt_binlogged (in/out): When non-null the caller asks mysql_admin_table
+  to write the statement-level binlog event for the single-table
+  HA_ADMIN_TRY_ALTER path (InnoDB default OPTIMIZE) while the ALTER's
+  MDL_EXCLUSIVE is still held; the flag is set to true on success so
+  the caller can skip the legacy post-release write.  Pass nullptr to
+  preserve the historical behavior (caller writes binlog after release).
+  See BUG#115730.
 */
 static bool mysql_admin_table(
     THD *thd, Table_ref *tables, HA_CHECK_OPT *check_opt,
@@ -701,7 +710,8 @@ static bool mysql_admin_table(
     bool repair_table_use_frm, uint extra_open_options,
     int (*prepare_func)(THD *, Table_ref *, HA_CHECK_OPT *),
     int (handler::*operator_func)(THD *, HA_CHECK_OPT *), int check_view,
-    Alter_info *alter_info, bool need_to_acquire_shared_backup_lock) {
+    Alter_info *alter_info, bool need_to_acquire_shared_backup_lock,
+    bool *stmt_binlogged = nullptr) {
   /*
     Prevent InnoDB from automatically committing InnoDB
     transaction each time data-dictionary tables are closed after
@@ -722,6 +732,9 @@ static bool mysql_admin_table(
         thd->variables.gtid_next.type == ANONYMOUS_GTID) &&
        (!thd->skip_gtid_rollback));
   bool ignore_grl_on_analyze = operator_func == &handler::ha_analyze;
+  // True when the statement targets exactly one table; used by the
+  // BUG#115730 binlog-under-MDL path in the HA_ADMIN_TRY_ALTER branch.
+  const bool single_table = (tables != nullptr && tables->next_local == nullptr);
   DBUG_TRACE;
 
   mem_root_deque<Item *> field_list(thd->mem_root);
@@ -973,6 +986,19 @@ static bool mysql_admin_table(
     if (table->schema_table) {
       result_code = HA_ADMIN_NOT_IMPLEMENTED;
       goto send_result;
+    }
+
+    /* Reject OPTIMIZE/ANALYZE/REPAIR on vidx aux table — ALTER-recreate
+       would rotate its TABLE_ID and crash the next base-table OPTIMIZE.
+       CHECK (open_for_modify=false) stays allowed as read-only.  Aux is
+       only openable when the sysvar is ON, so skip in the common case. */
+    if (open_for_modify && opt_show_vidx_hlindex_tables) {
+      const dd::Table *aux_dd = nullptr;
+      if (!thd->dd_client()->acquire(table->db, table->table_name, &aux_dd) &&
+          aux_dd != nullptr && vidx::dd_table_is_hlindex(aux_dd)) {
+        my_error(ER_NOT_ALLOWED_COMMAND, MYF(0));
+        goto err;
+      }
     }
 
     if ((table->table->db_stat & HA_READ_ONLY) && open_for_modify) {
@@ -1288,6 +1314,14 @@ static bool mysql_admin_table(
           /* Don't forget to pre-open temporary tables. */
           result_code = (open_temporary_tables(thd, table) ||
                          mysql_recreate_table(thd, table, false));
+          DBUG_EXECUTE_IF("admin_try_alter_fail_after_recreate", {
+            if (!result_code) {
+              if (thd->get_stmt_da()->is_ok())
+                thd->get_stmt_da()->reset_diagnostics_area();
+              my_error(ER_UNKNOWN_ERROR, MYF(0));
+              result_code = true;
+            }
+          });
         }
         /*
           mysql_recreate_table() can push OK or ERROR.
@@ -1304,6 +1338,19 @@ static bool mysql_admin_table(
                        DISABLE_GTID_AND_SPCO_IF_SPCO_ACTIVE);
           trans_commit_stmt(thd, ignore_grl_on_analyze);
           trans_commit(thd, ignore_grl_on_analyze);
+        }
+        /*
+          BUG#115730: write binlog under the MDL_EXCLUSIVE held from
+          mysql_recreate_table's ALTER TABLE, before releasing it.
+          X blocks all other MDL types, so a concurrent XA PREPARE
+          cannot share our last_committed in BGC.
+        */
+        if (!result_code && single_table &&
+            stmt_binlogged != nullptr && !*stmt_binlogged &&
+            !thd->lex->no_write_to_binlog) {
+          if (write_bin_log(thd, true, thd->query().str, thd->query().length))
+            goto err;
+          *stmt_binlogged = true;
         }
         close_thread_tables(thd);
         thd->mdl_context.release_transactional_locks();
@@ -1775,6 +1822,7 @@ error:
 bool Sql_cmd_optimize_table::execute(THD *thd) {
   Table_ref *first_table = thd->lex->query_block->get_table_list();
   bool res = true;
+  bool stmt_binlogged = false;
   DBUG_TRACE;
 
   if (check_table_access(thd, SELECT_ACL | INSERT_ACL, first_table, false,
@@ -1785,12 +1833,13 @@ bool Sql_cmd_optimize_table::execute(THD *thd) {
             ? mysql_recreate_table(thd, first_table, true)
             : mysql_admin_table(thd, first_table, &thd->lex->check_opt,
                                 "optimize", TL_WRITE, true, false, 0, nullptr,
-                                &handler::ha_optimize, 0, m_alter_info, true);
-  /* ! we write after unlocking the table */
-  if (!res && !thd->lex->no_write_to_binlog) {
-    /*
-      Presumably, OPTIMIZE and binlog writing doesn't require synchronization
-    */
+                                &handler::ha_optimize, 0, m_alter_info, true,
+                                &stmt_binlogged);
+  // Single-table HA_ADMIN_TRY_ALTER already wrote binlog under MDL
+  // (BUG#115730); fall back to the legacy post-release write for
+  // mysql_recreate_table (SPECIAL_NO_NEW_FUNC), fulltext_only=ON
+  // (HA_ADMIN_OK), multi-table, and TRY_ALTER failure cases.
+  if (!res && !stmt_binlogged && !thd->lex->no_write_to_binlog) {
     res = write_bin_log(thd, true, thd->query().str, thd->query().length);
   }
   thd->lex->query_block->m_table_list.first = first_table;

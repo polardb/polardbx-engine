@@ -1,0 +1,23 @@
+CREATE TEMPORARY TABLE t_tmp (
+id INT PRIMARY KEY,
+v VARCHAR(200) CHARACTER SET latin1 COLLATE latin1_swedish_ci,
+KEY idx_v (v)
+) ENGINE=InnoDB;
+SET GLOBAL innodb_buf_flush_list_now = ON;
+SELECT COUNT(*) AS dirty_bitmap_pages_baseline
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE SPACE = @temp_space AND PAGE_NUMBER = 1 AND OLDEST_MODIFICATION > 0;
+dirty_bitmap_pages_baseline
+0
+SELECT COUNT(*) AS dirty_bitmap_pages_after_updates
+FROM INFORMATION_SCHEMA.INNODB_BUFFER_PAGE
+WHERE SPACE = @temp_space AND PAGE_NUMBER = 1 AND OLDEST_MODIFICATION > 0;
+dirty_bitmap_pages_after_updates
+0
+SELECT COUNT(*) FROM t_tmp;
+COUNT(*)
+300
+SELECT COUNT(*) FROM t_tmp FORCE INDEX(idx_v) WHERE v LIKE 'val%';
+COUNT(*)
+300
+DROP TEMPORARY TABLE t_tmp;

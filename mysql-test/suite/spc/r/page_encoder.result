@@ -1,0 +1,61 @@
+#
+# Case 1: Normal page split with page_encoder_fill_pd_capacity
+#
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SET opt_index_format_spc_enabled = 1;
+ALTER TABLE t1 ADD INDEX c(c);
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+INSERT INTO t1 (c) VALUES (REPEAT('a', 120));
+INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 119), 'b'));
+INSERT INTO t1 (c) VALUES (REPEAT('x', 120));
+INSERT INTO t1 (c) VALUES (REPEAT('y', 120));
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+SET SESSION debug = '-d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 0;
+DROP TABLE t1;
+#
+# Case 2: Test capacity boundary with safety margin added back (should succeed)
+#
+CREATE TABLE t2 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SET opt_index_format_spc_enabled = 1;
+SET SESSION debug = '+d,set_pd_capacity_specified';
+SET GLOBAL innodb_dbug_pd_capacity = 15482 + 500;
+ALTER TABLE t2 ADD INDEX c(c);
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+INSERT INTO t2 (c) VALUES (REPEAT('a', 120));
+INSERT INTO t2 (c) VALUES (CONCAT(REPEAT('a', 119), 'b'));
+INSERT INTO t2 (c) VALUES (REPEAT('x', 120));
+INSERT INTO t2 (c) VALUES (REPEAT('y', 120));
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+4
+SET SESSION debug = '-d,page_encoder_fill_pd_capacity';
+SET SESSION debug = '-d,set_pd_capacity_specified';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 0;
+DROP TABLE t2;
+#
+# Case 3: Test capacity overflow (should crash with assertion failure)
+#
+CREATE TABLE t3 (id INT NOT NULL AUTO_INCREMENT, c VARBINARY(120) NOT NULL DEFAULT '',
+PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SET opt_index_format_spc_enabled = 1;
+SET SESSION debug = '+d,set_pd_capacity_specified';
+SET GLOBAL innodb_dbug_pd_capacity = 15482 + 501;
+ALTER TABLE t3 ADD INDEX c(c);
+SET SESSION debug = '+d,page_encoder_fill_pd_capacity';
+SET GLOBAL innodb_limit_insert_spc_encode_debug = 2;
+INSERT INTO t3 (c) VALUES (REPEAT('a', 120));
+INSERT INTO t3 (c) VALUES (CONCAT(REPEAT('a', 119), 'b'));
+INSERT INTO t3 (c) VALUES (REPEAT('x', 120));
+INSERT INTO t3 (c) VALUES (REPEAT('y', 120));
+ERROR HY000: Lost connection to MySQL server during query
+# restart: --debug=+d,set_pd_capacity_specified --debug=+d,page_encoder_fill_pd_capacity --innodb_dbug_pd_capacity=15983
+SET GLOBAL debug='-d,set_pd_capacity_specified';
+SET GLOBAL DEBUG='-d,page_encoder_fill_pd_capacity';
+DROP TABLE t3;

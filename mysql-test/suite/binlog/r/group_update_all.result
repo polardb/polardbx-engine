@@ -1,3 +1,4 @@
+reset master;
 set global transaction_isolation = 'READ-COMMITTED';
 set session transaction_isolation = 'READ-COMMITTED';
 ###test for configuration setting
@@ -478,28 +479,28 @@ update            t1 set a=a-1 where id = 1;;
 update                t1 set a=a-1 where id = 1;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Query	#	updating	update                t1 set a=a-1 where id = 1
 #	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 delete from t1 where id = 1;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 1
-#	root	localhost	test	Query	#	updating	update                t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Query	#	updating	delete from t1 where id = 1
+#	root	localhost	test	Query	#	updating	update                t1 set a=a-1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 select count(*) from performance_schema.data_lock_waits;
 count(*)
@@ -517,44 +518,44 @@ id	a
 update t1 set a=a-1 where id = 1;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Query	#	updating	update t1 set a=a-1 where id = 1
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
 LOCK_TYPE	LOCK_MODE	LOCK_STATUS
 TABLE	IX	GRANTED
-RECORD	X,REC_NOT_GAP	WAITING
 TABLE	IX	GRANTED
 RECORD	X,REC_NOT_GAP	GRANTED
+RECORD	X,REC_NOT_GAP	WAITING
 commit;
 set debug_sync='update_unlock_after WAIT_FOR go';
 update t1 set a=a-1 where id = 1;;
 select * from t1 /* 1 */ where id=1 for update;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Query	#	statistics	select * from t1 /* 1 */ where id=1 for update
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 select LOCK_TYPE, LOCK_MODE, LOCK_STATUS from performance_schema.data_locks where object_name = 't1';
 LOCK_TYPE	LOCK_MODE	LOCK_STATUS
 TABLE	IX	GRANTED
-RECORD	X,REC_NOT_GAP	WAITING
 TABLE	IX	GRANTED
 RECORD	X,REC_NOT_GAP	GRANTED
+RECORD	X,REC_NOT_GAP	WAITING
 set debug_sync='now signal go';
 id	a
 1	998
@@ -567,14 +568,14 @@ select ID into @id from information_schema.PROCESSLIST where INFO like 'update  
 kill @id;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 2
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 set debug_sync='now signal go';
 ERROR HY000: Got error 112 - '' during COMMIT
@@ -704,10 +705,10 @@ ERROR HY000: Got error 113 - '' during COMMIT
 ERROR HY000: Got error 114 - '' during COMMIT
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -730,10 +731,10 @@ id	a
 1	999
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -756,10 +757,10 @@ id	a
 1	998
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -782,10 +783,10 @@ id	a
 1	998
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -1024,10 +1025,10 @@ update /* 2 */ t1 set a=100000000000 where id = 1;;
 ERROR 22003: Out of range value for column 'a' at row 1
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -1050,10 +1051,10 @@ id	a
 1	997
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -1076,10 +1077,10 @@ id	a
 1	996
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -1135,12 +1136,12 @@ set debug_sync='update_unlock_before WAIT_FOR go';
 update /* 2 */ t1 set a=a-1 where id = 1;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	hotspot wait for commit	update t1 set a=a-1 where id = 1
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update /* 1 */ t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	debug sync point: update_unlock_before	update /* 2 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update /* 1 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	hotspot wait for commit	update t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
@@ -1166,13 +1167,13 @@ update t1 set a=a-1 where id = 1;;
 update /* 3 */ t1 set a=a-1 where id = 1;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	updating	update /* 3 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Query	#	debug sync point: update_unlock_after	update t1 set a=a-1 where id = 1
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Query	#	updating	update /* 3 */ t1 set a=a-1 where id = 1
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 set debug_sync='now SIGNAL go';
@@ -1360,39 +1361,39 @@ set debug_sync='follower_wait_all_done_after_wait WAIT_FOR go1';
 update            t1 set a=a-1 where id = 2;;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	updating hotspot collecting	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Query	#	updating hotspot collecting	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 set debug_sync='now signal go';
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	debug sync point: leader_enter_commit_done	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 select ID into @id from information_schema.PROCESSLIST where INFO like 'update       t1 set a%';
 kill @id;
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Sleep	#		NULL
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
 #	root	localhost	test	Killed	#	hotspot wait for commit	update       t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
-#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
-#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Query	#	debug sync point: leader_enter_commit_done	update t1 set a=a-1 where id = 2
+#	root	localhost	test	Query	#	hotspot wait for commit	update            t1 set a=a-1 where id = 2
 #	root	localhost	test	Query	#	init	show processlist
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
+#	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 set debug_sync='now signal go1';
 set debug_sync='now signal go1';
@@ -1416,8 +1417,8 @@ id	a
 4	1000
 show processlist;
 Id	User	Host	db	Command	Time	State	Info
-#	root	localhost	test	Query	#	init	show processlist
 #	event_scheduler	localhost	NULL	Daemon	#	Waiting on empty queue	NULL
+#	root	localhost	test	Query	#	init	show processlist
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL
 #	root	localhost	test	Sleep	#		NULL

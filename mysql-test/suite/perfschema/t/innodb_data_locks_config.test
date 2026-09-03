@@ -1,68 +1,103 @@
 --disable_query_log
 call mtr.add_suppression("The transaction .* holds too many locks which exceeds the configured pfs_data_locks_max_locks_per_batch");
 --enable_query_log
-
+ 
 CREATE TABLE t1 (id INT PRIMARY KEY) Engine=InnoDB;
-INSERT INTO t1 VALUES (0),(10),(20),(30),(40),(50),(60),(70),(80),(90);
-
+INSERT INTO t1 VALUES (0);
+ 
 --connect (C1, localhost, root,,)
 --connect (C2, localhost, root,,)
 --connect (C3, localhost, root,,)
 --connect (C4, localhost, root,,)
+--connect (C5, localhost, root,,)
+--connect (C6, localhost, root,,)
+--connect (C7, localhost, root,,)
+--connect (C8, localhost, root,,)
+--connect (C9, localhost, root,,)
+--connect (C10, localhost, root,,)
+ 
+--connection default
+  BEGIN;
+  SELECT * FROM t1 where id=0 FOR UPDATE;
 
 --connection C1
-  BEGIN;
-  SELECT * FROM t1 where id<=50 FOR UPDATE;
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
 
 --connection C2
-  START TRANSACTION READ ONLY;
-  SELECT * FROM t1 where id>=60 and id<=90 LOCK IN SHARE MODE;
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
 
 --connection C3
-  START TRANSACTION READ ONLY;
-  SELECT * FROM t1 where id=70 LOCK IN SHARE MODE;
-
-sleep 5;
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
 
 --connection C4
-  START TRANSACTION READ ONLY;
-  SELECT * FROM t1 where id=80 LOCK IN SHARE MODE;
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C5
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C6
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C7
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C8
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C9
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
+
+--connection C10
+  --send SELECT * FROM t1 where id=0 FOR UPDATE;
 
 --connection default
-  SELECT
-    object_name,
-    index_name,
-    lock_type,
-    lock_mode,
-    lock_status,
-    lock_data
-  FROM performance_schema.data_locks
-  ORDER BY ENGINE_TRANSACTION_ID,index_name,index_name,lock_type,lock_mode,lock_status,lock_data;
-
+  SELECT COUNT(*) FROM performance_schema.data_lock_waits;
+ 
   SET GLOBAL innodb_pfs_data_locks_max_locks_per_batch = 3;
-  SELECT
-    object_name,
-    index_name,
-    lock_type,
-    lock_mode,
-    lock_status,
-    lock_data
-  FROM performance_schema.data_locks
-  ORDER BY ENGINE_TRANSACTION_ID,index_name,index_name,lock_type,lock_mode,lock_status,lock_data;
+  SELECT COUNT(*) FROM performance_schema.data_lock_waits;
 
+  SET GLOBAL innodb_pfs_data_locks_max_locks_per_batch = 1;
+  SELECT COUNT(*) FROM performance_schema.data_lock_waits;
+
+  SET GLOBAL innodb_pfs_data_locks_max_locks_per_batch = 0;
+  SELECT COUNT(*) FROM performance_schema.data_lock_waits;
+
+  SET GLOBAL innodb_pfs_data_locks_max_locks_per_batch = 1024*1024*1024;
+  SELECT COUNT(*) FROM performance_schema.data_lock_waits;
+
+--connection default
+  COMMIT;
 --connection C1
-  ROLLBACK;
+  --reap
 --connection C2
-  ROLLBACK;
+  --reap
 --connection C3
-  ROLLBACK;
+  --reap
 --connection C4
-  ROLLBACK;
-
+  --reap
+--connection C5
+  --reap
+--connection C6
+  --reap
+--connection C7
+  --reap
+--connection C8
+  --reap
+--connection C9
+  --reap
+--connection C10
+  --reap
+ 
 --connection default
 --disconnect C1
 --disconnect C2
 --disconnect C3
 --disconnect C4
+--disconnect C5
+--disconnect C6
+--disconnect C7
+--disconnect C8
+--disconnect C9
+--disconnect C10
 SET GLOBAL innodb_pfs_data_locks_max_locks_per_batch = default;
 DROP TABLE t1;

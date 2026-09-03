@@ -362,8 +362,7 @@ static bool rtr_pcur_getnext_from_path(
         rw_lock_s_lock(&block->lock, UT_LOCATION_HERE);
       }
 
-      lock_prdt_lock(block, &prdt, index, LOCK_S, LOCK_PREDICATE,
-                     btr_cur->rtr_info->thr);
+      lock_prdt_lock(block, &prdt, index, btr_cur->rtr_info->thr);
 
       if (rw_latch == RW_NO_LATCH) {
         rw_lock_s_unlock(&(block->lock));
@@ -456,7 +455,8 @@ bool rtr_pcur_move_to_next(const dtuple_t *tuple, page_cur_mode_t mode,
 
     mutex_exit(&rtr_info->matches->rtr_match_mutex);
 
-    cursor->m_btr_cur.page_cur.rec = rec.r_rec;
+    ut_ad(rec.r_reg.in_page());
+    cursor->m_btr_cur.page_cur.rec = rec.r_reg.rec;
     cursor->m_btr_cur.page_cur.block = &rtr_info->matches->block;
 
     DEBUG_SYNC_C("rtr_pcur_move_to_next_return");
@@ -475,18 +475,16 @@ bool rtr_pcur_move_to_next(const dtuple_t *tuple, page_cur_mode_t mode,
 static bool rtr_compare_cursor_rec(
     dict_index_t *index, /*!< in: index */
     btr_cur_t *cursor,   /*!< in: Cursor to check */
-    page_no_t page_no,   /*!< in: desired child page number */
-    mem_heap_t **heap)   /*!< in: memory heap */
+    page_no_t page_no)   /*!< in: desired child page number */
 {
-  const rec_t *rec;
-  ulint *offsets;
+  creg_t reg;
+  Slice_ctx slc_ctx;
 
-  rec = btr_cur_get_rec(cursor);
+  reg = btr_cur_get_reg(cursor);
 
-  offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, heap);
+  slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-  return (btr_node_ptr_get_child_page_no(rec, offsets) == page_no);
+  return (btr_node_ptr_get_child_page_no(slc_ctx.slice()) == page_no);
 }
 
 void rtr_pcur_open_low(dict_index_t *index, ulint level, const dtuple_t *tuple,
@@ -586,18 +584,17 @@ void rtr_pcur_open_low(dict_index_t *index, ulint level, const dtuple_t *tuple,
 /** Returns the upper level node pointer to a R-Tree page. It is assumed
 that mtr holds an SX-latch or X-latch on the tree.
 @return rec_get_offsets() of the node pointer record */
-static ulint *rtr_page_get_father_node_ptr(
-    ulint *offsets,     /*!< in: work area for the return value */
-    mem_heap_t *heap,   /*!< in: memory heap to use */
-    btr_cur_t *sea_cur, /*!< in: search cursor */
-    btr_cur_t *cursor,  /*!< in: cursor pointing to user record,
-                        out: cursor on node pointer record,
-                        its page x-latched */
-    mtr_t *mtr)         /*!< in: mtr */
+static Slice *rtr_page_get_father_node_ptr(
+    Slice_ctx *sctx,
+    /* mem_heap_t *heap,*/ /*!< in: memory heap to use */
+    btr_cur_t *sea_cur,                   /*!< in: search cursor */
+    btr_cur_t *cursor, /*!< in: cursor pointing to user record,
+                       out: cursor on node pointer record,
+                       its page x-latched */
+    mtr_t *mtr)        /*!< in: mtr */
 {
   dtuple_t *tuple;
-  rec_t *user_rec;
-  rec_t *node_ptr;
+  reg_t user_reg, node_ptr;
   ulint level;
   page_no_t page_no;
   dict_index_t *index;
@@ -614,14 +611,14 @@ static ulint *rtr_page_get_father_node_ptr(
 
   level = btr_page_get_level(btr_cur_get_page(cursor));
 
-  user_rec = btr_cur_get_rec(cursor);
-  ut_a(page_rec_is_user_rec(user_rec));
+  user_reg = btr_cur_get_reg(cursor);
+  ut_a(page_rec_is_user_rec(user_reg.rec));
 
-  offsets = rec_get_offsets(user_rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-  rtr_get_mbr_from_rec(user_rec, offsets, &mbr);
+  Slice *slc = sctx->get_offsets(user_reg, index, ULINT_UNDEFINED);
+  rtr_get_mbr_from_rec(slc, &mbr);
 
-  tuple = rtr_index_build_node_ptr(index, &mbr, user_rec, page_no, heap);
+  tuple = rtr_index_build_node_ptr(index, &mbr, user_reg.rec, page_no,
+                                   sctx->borrow_heap());
 
   if (sea_cur && !sea_cur->rtr_info) {
     sea_cur = nullptr;
@@ -629,16 +626,15 @@ static ulint *rtr_page_get_father_node_ptr(
 
   rtr_get_father_node(index, level + 1, tuple, sea_cur, cursor, page_no, mtr);
 
-  node_ptr = btr_cur_get_rec(cursor);
-  ut_ad(!page_rec_is_comp(node_ptr) ||
-        rec_get_status(node_ptr) == REC_STATUS_NODE_PTR);
-  offsets = rec_get_offsets(node_ptr, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  node_ptr = btr_cur_get_reg(cursor);
+  ut_ad(!page_rec_is_comp(node_ptr.rec) ||
+        rec_get_status(node_ptr.rec) == REC_STATUS_NODE_PTR);
+  slc = sctx->get_offsets(node_ptr, index, ULINT_UNDEFINED);
 
-  page_no_t child_page = btr_node_ptr_get_child_page_no(node_ptr, offsets);
+  page_no_t child_page = btr_node_ptr_get_child_page_no(slc);
 
   if (child_page != page_no) {
-    const rec_t *print_rec;
+    creg_t print_reg;
 
     ib::fatal error(UT_LOCATION_HERE);
 
@@ -646,17 +642,16 @@ static ulint *rtr_page_get_father_node_ptr(
           << index->table->name << " parent page " << page_no << " child page "
           << child_page;
 
-    print_rec = page_rec_get_next(page_get_infimum_rec(page_align(user_rec)));
-    offsets = rec_get_offsets(print_rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    print_reg =
+        page_rec_get_next_reg(page_get_infimum_rec(page_align(user_reg)));
+    slc = sctx->get_offsets(print_reg, index, ULINT_UNDEFINED);
     error << "; child ";
-    rec_print(error.m_oss, print_rec,
-              rec_get_info_bits(print_rec, rec_offs_comp(offsets)), offsets);
-    offsets = rec_get_offsets(node_ptr, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    rec_print(error.m_oss, slc,
+              rec_get_info_bits(print_reg.rec, rec_offs_comp(slc->offsets())));
+    slc = sctx->get_offsets(node_ptr, index, ULINT_UNDEFINED);
     error << "; parent ";
-    rec_print(error.m_oss, print_rec,
-              rec_get_info_bits(print_rec, rec_offs_comp(offsets)), offsets);
+    rec_print(error.m_oss, slc,
+              rec_get_info_bits(print_reg.rec, rec_offs_comp(slc->offsets())));
 
     error << ". You should dump + drop + reimport the table to"
              " fix the corruption. If the crash happens at"
@@ -665,7 +660,7 @@ static ulint *rtr_page_get_father_node_ptr(
              " recovery. Then dump + drop + reimport.";
   }
 
-  return (offsets);
+  return slc;
 }
 
 /* Get the rtree page father.
@@ -680,16 +675,19 @@ void rtr_page_get_father(dict_index_t *index, buf_block_t *block, mtr_t *mtr,
                          btr_cur_t *sea_cur, btr_cur_t *cursor) {
   mem_heap_t *heap = mem_heap_create(100, UT_LOCATION_HERE);
 #ifdef UNIV_DEBUG
-  ulint *offsets;
+  Slice_ctx sctx(&heap);
+  Slice *slc = nullptr;
 
-  offsets = rtr_page_get_father_block(nullptr, heap, index, block, mtr, sea_cur,
-                                      cursor);
+  slc = rtr_page_get_father_block(&sctx, index, block, mtr, sea_cur,
+                                  cursor);
 
-  ulint page_no = btr_node_ptr_get_child_page_no(cursor->page_cur.rec, offsets);
+  ut_ad(slc->is_positioned(cursor->page_cur.rec, index));
+  ulint page_no = btr_node_ptr_get_child_page_no(slc);
 
   ut_ad(page_no == block->page.id.page_no());
 #else
-  rtr_page_get_father_block(nullptr, heap, index, block, mtr, sea_cur, cursor);
+  Slice_ctx sctx;
+  rtr_page_get_father_block(&sctx, index, block, mtr, sea_cur, cursor);
 #endif
 
   mem_heap_free(heap);
@@ -698,22 +696,22 @@ void rtr_page_get_father(dict_index_t *index, buf_block_t *block, mtr_t *mtr,
 /** Returns the father block to a page. It is assumed that mtr holds
  an X or SX latch on the tree.
  @return rec_get_offsets() of the node pointer record */
-ulint *rtr_page_get_father_block(
-    ulint *offsets,      /*!< in: work area for the return value */
-    mem_heap_t *heap,    /*!< in: memory heap to use */
-    dict_index_t *index, /*!< in: b-tree index */
-    buf_block_t *block,  /*!< in: child page in the index */
-    mtr_t *mtr,          /*!< in: mtr */
-    btr_cur_t *sea_cur,  /*!< in: search cursor, contains information
-                         about parent nodes in search */
-    btr_cur_t *cursor)   /*!< out: cursor on node pointer record,
-                         its page x-latched */
+Slice *rtr_page_get_father_block(
+    Slice_ctx *sctx,
+    /* mem_heap_t *heap, */ /*!< in: memory heap to use */
+    dict_index_t *index,                  /*!< in: b-tree index */
+    buf_block_t *block,                   /*!< in: child page in the index */
+    mtr_t *mtr,                           /*!< in: mtr */
+    btr_cur_t *sea_cur, /*!< in: search cursor, contains information
+                        about parent nodes in search */
+    btr_cur_t *cursor)  /*!< out: cursor on node pointer record,
+                        its page x-latched */
 {
   rec_t *rec =
       page_rec_get_next(page_get_infimum_rec(buf_block_get_frame(block)));
   btr_cur_position(index, rec, block, cursor);
 
-  return (rtr_page_get_father_node_ptr(offsets, heap, sea_cur, cursor, mtr));
+  return rtr_page_get_father_node_ptr(sctx, sea_cur, cursor, mtr);
 }
 
 /** Returns the upper level node pointer to a R-Tree page. It is assumed
@@ -730,7 +728,6 @@ void rtr_get_father_node(
     page_no_t page_no,     /*!< Current page no */
     mtr_t *mtr)            /*!< in: mtr */
 {
-  mem_heap_t *heap = nullptr;
   bool ret = false;
   const rec_t *rec;
   ulint n_fields;
@@ -759,7 +756,7 @@ void rtr_get_father_node(
       btr_cur->rtr_info = sea_cur->rtr_info;
       btr_cur->m_own_rtr_info = false;
       btr_cur->tree_height = sea_cur->tree_height;
-      ut_ad(rtr_compare_cursor_rec(index, btr_cur, page_no, &heap));
+      ut_ad(rtr_compare_cursor_rec(index, btr_cur, page_no));
       goto func_exit;
     }
   }
@@ -803,15 +800,11 @@ void rtr_get_father_node(
     }
   }
 
-  ret = rtr_compare_cursor_rec(index, btr_cur, page_no, &heap);
+  ret = rtr_compare_cursor_rec(index, btr_cur, page_no);
 
   ut_ad(ret);
 
 func_exit:
-  if (heap) {
-    mem_heap_free(heap);
-  }
-
   if (new_rtr && btr_cur->rtr_info) {
     rtr_clean_rtr_info(btr_cur->rtr_info, true);
     btr_cur->rtr_info = nullptr;
@@ -1163,31 +1156,26 @@ static bool rtr_cur_restore_position(
     ut_ad(r_cursor->m_rel_pos == BTR_PCUR_ON);
 #ifdef UNIV_DEBUG
     do {
-      const rec_t *rec;
-      const ulint *offsets1;
-      const ulint *offsets2;
+      creg_t reg;
       ulint comp;
+      Slice_ctx slc_ctx1;
+      Slice_ctx slc_ctx2;
 
-      rec = r_cursor->get_rec();
+      reg = r_cursor->get_reg();
 
-      heap = mem_heap_create(256, UT_LOCATION_HERE);
-      offsets1 =
-          rec_get_offsets(r_cursor->m_old_rec, index, nullptr,
-                          r_cursor->m_old_n_fields, UT_LOCATION_HERE, &heap);
-      offsets2 = rec_get_offsets(rec, index, nullptr, r_cursor->m_old_n_fields,
-                                 UT_LOCATION_HERE, &heap);
+      slc_ctx1.get_offsets(r_cursor->m_old_reg, index, ULINT_UNDEFINED);
+      slc_ctx2.get_offsets(reg, index, ULINT_UNDEFINED);
 
-      comp = rec_offs_comp(offsets1);
+      comp = rec_offs_comp(slc_ctx1.slice()->offsets());
 
-      if (rec_get_info_bits(r_cursor->m_old_rec, comp) &
+      if (rec_get_info_bits(r_cursor->m_old_reg.rec, comp) &
           REC_INFO_MIN_REC_FLAG) {
-        ut_ad(rec_get_info_bits(rec, comp) & REC_INFO_MIN_REC_FLAG);
+        ut_ad(rec_get_info_bits(reg.rec, comp) & REC_INFO_MIN_REC_FLAG);
       } else {
-        ut_ad(!cmp_rec_rec(r_cursor->m_old_rec, rec, offsets1, offsets2, index,
-                           page_is_spatial_non_leaf(rec, index)));
+        ut_ad(!cmp_rec_rec(slc_ctx1.slice(), slc_ctx2.slice(), index,
+                           page_is_spatial_non_leaf(reg.rec, index)));
       }
 
-      mem_heap_free(heap);
     } while (false);
 #endif /* UNIV_DEBUG */
 
@@ -1209,7 +1197,7 @@ static bool rtr_cur_restore_position(
 
   heap = mem_heap_create(256, UT_LOCATION_HERE);
 
-  tuple = dict_index_build_data_tuple(index, r_cursor->m_old_rec,
+  tuple = dict_index_build_data_tuple(index, r_cursor->m_old_reg,
                                       r_cursor->m_old_n_fields, heap);
 
   page_cursor = r_cursor->get_page_cur();
@@ -1231,28 +1219,24 @@ search_again:
       page_cur_search(block, index, tuple, PAGE_CUR_LE, page_cursor);
 
   if (low_match == r_cursor->m_old_n_fields) {
-    const rec_t *rec;
-    const ulint *offsets1;
-    const ulint *offsets2;
+    creg_t reg;
     ulint comp;
+    Slice_ctx slc_ctx1(&heap);
+    Slice_ctx slc_ctx2(&heap);
+    reg = r_cursor->get_reg();
 
-    rec = r_cursor->get_rec();
+    slc_ctx1.get_offsets(r_cursor->m_old_reg, index, ULINT_UNDEFINED);
+    slc_ctx2.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    offsets1 =
-        rec_get_offsets(r_cursor->m_old_rec, index, nullptr,
-                        r_cursor->m_old_n_fields, UT_LOCATION_HERE, &heap);
-    offsets2 = rec_get_offsets(rec, index, nullptr, r_cursor->m_old_n_fields,
-                               UT_LOCATION_HERE, &heap);
+    comp = rec_offs_comp(slc_ctx1.slice()->offsets());
 
-    comp = rec_offs_comp(offsets1);
-
-    if ((rec_get_info_bits(r_cursor->m_old_rec, comp) &
+    if ((rec_get_info_bits(r_cursor->m_old_reg.rec, comp) &
          REC_INFO_MIN_REC_FLAG) &&
-        (rec_get_info_bits(rec, comp) & REC_INFO_MIN_REC_FLAG)) {
+        (rec_get_info_bits(reg.rec, comp) & REC_INFO_MIN_REC_FLAG)) {
       r_cursor->m_pos_state = BTR_PCUR_IS_POSITIONED;
       ret = true;
-    } else if (!cmp_rec_rec(r_cursor->m_old_rec, rec, offsets1, offsets2, index,
-                            page_is_spatial_non_leaf(rec, index))) {
+    } else if (!cmp_rec_rec(slc_ctx1.slice(), slc_ctx2.slice(), index,
+                            page_is_spatial_non_leaf(reg.rec, index))) {
       r_cursor->m_pos_state = BTR_PCUR_IS_POSITIONED;
       ret = true;
     }
@@ -1272,34 +1256,35 @@ search_again:
 
 /** Copy the leaf level R-tree record, and push it to matched_rec in rtr_info */
 static void rtr_leaf_push_match_rec(
-    const rec_t *rec,     /*!< in: record to copy */
+    Slice *slc,           /*!< in: record to copy */
     rtr_info_t *rtr_info, /*!< in/out: search stack */
-    ulint *offsets,       /*!< in: offsets */
     bool is_comp)         /*!< in: is compact format */
 {
-  byte *buf;
+  boc_t boc;
   matched_rec_t *match_rec = rtr_info->matches;
-  rec_t *copy;
+  reg_t copy;
   ulint data_len;
   rtr_rec_t rtr_rec;
 
-  buf = match_rec->block.frame + match_rec->used;
+  boc = {match_rec->block.frame + match_rec->used, MLOC_IN_PAGE};
 
-  copy = rec_copy(buf, rec, offsets);
+  // copy = rec_copy(buf, slc);
+  ut_ad(slc->contiguous());
+  copy = rec_copy(boc, slc);
 
   if (is_comp) {
-    rec_set_next_offs_new(copy, PAGE_NEW_SUPREMUM);
+    rec_set_next_offs_new(copy.rec, PAGE_NEW_SUPREMUM);
   } else {
-    rec_set_next_offs_old(copy, PAGE_OLD_SUPREMUM);
+    rec_set_next_offs_old(copy.rec, PAGE_OLD_SUPREMUM);
   }
 
-  rtr_rec.r_rec = copy;
+  rtr_rec.r_reg = copy;
   rtr_rec.locked = false;
 
   match_rec->matched_recs->push_back(rtr_rec);
   match_rec->valid = true;
 
-  data_len = rec_offs_data_size(offsets) + rec_offs_extra_size(offsets);
+  data_len = slc->row_size();
   match_rec->used += data_len;
 
   ut_ad(match_rec->used < UNIV_PAGE_SIZE);
@@ -1449,12 +1434,12 @@ static void rtr_init_match(
 @param[in] rec Data tuple
 @param[in] offsets Offsets array
 @param[out] mbr Mbr */
-void rtr_get_mbr_from_rec(const rec_t *rec, const ulint *offsets,
-                          rtr_mbr_t *mbr) {
+void rtr_get_mbr_from_rec(const Slice *slc, rtr_mbr_t *mbr) {
   ulint rec_f_len;
   const byte *data;
 
-  data = rec_get_nth_field(nullptr, rec, offsets, 0, &rec_f_len);
+  // data = rec_get_nth_field(nullptr, rec, slc, 0, &rec_f_len);
+  data = const_cast<Slice *>(slc)->get_nth_field(nullptr, 0, &rec_f_len);
 
   rtr_read_mbr(data, mbr);
 }
@@ -1488,23 +1473,17 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
                                page_cur_t *cursor, rtr_info_t *rtr_info) {
   bool found = false;
   const page_t *page;
-  const rec_t *rec;
-  const rec_t *last_rec;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  mem_heap_t *heap = nullptr;
+  creg_t reg, last_reg, best_reg, last_match_reg, first_reg;
   int cmp = 1;
   bool is_leaf;
   double least_inc = DBL_MAX;
-  const rec_t *best_rec;
-  const rec_t *last_match_rec = nullptr;
   ulint level;
   bool match_init = false;
   space_id_t space = block->page.id.space();
   page_cur_mode_t orig_mode = mode;
-  const rec_t *first_rec = nullptr;
 
-  rec_offs_init(offsets_);
+  Slice_ctx slc_ctx;
+  Slice *slc = nullptr;
 
   ut_ad(RTREE_SEARCH_MODE(mode));
 
@@ -1520,26 +1499,24 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
     mode = PAGE_CUR_WITHIN;
   }
 
-  rec = page_dir_slot_get_rec(page_dir_get_nth_slot(page, 0));
+  reg = page_dir_slot_get_creg(page_dir_get_nth_slot(page, 0));
 
-  last_rec = rec;
-  best_rec = rec;
+  last_reg = reg;
+  best_reg = reg;
 
-  if (page_rec_is_infimum(rec)) {
-    rec = page_rec_get_next_const(rec);
+  if (page_rec_is_infimum(reg.rec)) {
+    reg = page_rec_get_next_creg(reg.rec);
   }
 
   /* Check insert tuple size is larger than first rec, and try to
   avoid it if possible */
-  if (mode == PAGE_CUR_RTREE_INSERT && !page_rec_is_supremum(rec)) {
+  if (mode == PAGE_CUR_RTREE_INSERT && !page_rec_is_supremum(reg.rec)) {
     ulint new_rec_size = rec_get_converted_size(index, tuple);
 
-    offsets =
-        rec_get_offsets(rec, index, offsets, dtuple_get_n_fields_cmp(tuple),
-                        UT_LOCATION_HERE, &heap);
+    slc = slc_ctx.get_offsets(reg, index, dtuple_get_n_fields_cmp(tuple));
 
-    if (rec_offs_size(offsets) < new_rec_size) {
-      first_rec = rec;
+    if (slc->rec_size() < new_rec_size) {
+      first_reg = reg;
     }
 
     /* If this is the left-most page of this index level
@@ -1549,14 +1526,13 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
     if (buf_block_get_page_zip(block) &&
         mach_read_from_4(page + FIL_PAGE_PREV) == FIL_NULL &&
         page_get_n_recs(page) >= 2) {
-      rec = page_rec_get_next_const(rec);
+      reg = page_rec_get_next_creg(reg.rec);
     }
   }
 
-  while (!page_rec_is_supremum(rec)) {
-    offsets =
-        rec_get_offsets(rec, index, offsets, dtuple_get_n_fields_cmp(tuple),
-                        UT_LOCATION_HERE, &heap);
+  while (!page_rec_is_supremum(reg.rec)) {
+    slc = slc_ctx.get_offsets(reg, index, dtuple_get_n_fields_cmp(tuple));
+
     if (!is_leaf) {
       switch (mode) {
         case PAGE_CUR_CONTAIN:
@@ -1565,33 +1541,32 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
           /* At non-leaf level, we will need to check
           both CONTAIN and INTERSECT for either of
           the search mode */
-          cmp = cmp_dtuple_rec_with_gis(tuple, rec, offsets, PAGE_CUR_CONTAIN,
+          cmp = cmp_dtuple_rec_with_gis(tuple, slc, PAGE_CUR_CONTAIN,
                                         index->rtr_srs.get());
 
           if (cmp != 0) {
-            cmp = cmp_dtuple_rec_with_gis(
-                tuple, rec, offsets, PAGE_CUR_INTERSECT, index->rtr_srs.get());
+            cmp = cmp_dtuple_rec_with_gis(tuple, slc, PAGE_CUR_INTERSECT,
+                                          index->rtr_srs.get());
           }
           break;
         case PAGE_CUR_DISJOINT:
-          cmp = cmp_dtuple_rec_with_gis(tuple, rec, offsets, mode,
-                                        index->rtr_srs.get());
+          cmp = cmp_dtuple_rec_with_gis(tuple, slc, mode, index->rtr_srs.get());
 
           if (cmp != 0) {
-            cmp = cmp_dtuple_rec_with_gis(
-                tuple, rec, offsets, PAGE_CUR_INTERSECT, index->rtr_srs.get());
+            cmp = cmp_dtuple_rec_with_gis(tuple, slc, PAGE_CUR_INTERSECT,
+                                          index->rtr_srs.get());
           }
           break;
         case PAGE_CUR_RTREE_INSERT:
           double increase;
 
-          cmp = cmp_dtuple_rec_with_gis(tuple, rec, offsets, PAGE_CUR_WITHIN,
+          cmp = cmp_dtuple_rec_with_gis(tuple, slc, PAGE_CUR_WITHIN,
                                         index->rtr_srs.get());
 
           if (cmp != 0) {
             double area{0.0};
-            increase = rtr_rec_cal_increase(tuple, rec, offsets, &area,
-                                            index->rtr_srs.get());
+            increase =
+                rtr_rec_cal_increase(tuple, slc, &area, index->rtr_srs.get());
             /* Once it goes beyond DBL_MAX or
             they are both DBL_MAX, it would not
             make sense to record such value,
@@ -1602,30 +1577,28 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
 
             if (increase < least_inc) {
               least_inc = increase;
-              best_rec = rec;
-            } else if (best_rec && best_rec == first_rec) {
+              best_reg = reg;
+            } else if (best_reg.is_not_null() && best_reg == first_reg) {
               /* if first_rec is set,
               we will try to avoid it */
               least_inc = increase;
-              best_rec = rec;
+              best_reg = reg;
             }
           }
           break;
         case PAGE_CUR_RTREE_GET_FATHER:
-          cmp = cmp_dtuple_rec_with_gis_internal(tuple, rec, offsets,
+          cmp = cmp_dtuple_rec_with_gis_internal(tuple, slc,
                                                  index->rtr_srs.get());
           break;
         default:
           /* WITHIN etc. */
-          cmp = cmp_dtuple_rec_with_gis(tuple, rec, offsets, mode,
-                                        index->rtr_srs.get());
+          cmp = cmp_dtuple_rec_with_gis(tuple, slc, mode, index->rtr_srs.get());
       }
     } else {
       /* At leaf level, INSERT should translate to LE */
       ut_ad(mode != PAGE_CUR_RTREE_INSERT);
 
-      cmp = cmp_dtuple_rec_with_gis(tuple, rec, offsets, mode,
-                                    index->rtr_srs.get());
+      cmp = cmp_dtuple_rec_with_gis(tuple, slc, mode, index->rtr_srs.get());
     }
 
     if (cmp == 0) {
@@ -1643,10 +1616,9 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
           is_loc = (orig_mode == PAGE_CUR_RTREE_LOCATE ||
                     orig_mode == PAGE_CUR_RTREE_GET_FATHER);
 
-          offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                                    UT_LOCATION_HERE, &heap);
+          slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-          page_no = btr_node_ptr_get_child_page_no(rec, offsets);
+          page_no = btr_node_ptr_get_child_page_no(slc);
 
           ut_ad(level >= 1);
 
@@ -1659,7 +1631,7 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
 
           if (is_loc) {
             rtr_non_leaf_insert_stack_push(index, rtr_info->parent_path, level,
-                                           page_no, block, rec, 0);
+                                           page_no, block, reg.rec, 0);
           }
 
           if (!srv_read_only_mode && (rtr_info->need_page_lock || !is_loc)) {
@@ -1676,12 +1648,11 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
           }
 
           /* Collect matched records on page */
-          offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                                    UT_LOCATION_HERE, &heap);
-          rtr_leaf_push_match_rec(rec, rtr_info, offsets, page_is_comp(page));
+          slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+          rtr_leaf_push_match_rec(slc, rtr_info, page_is_comp(page));
         }
 
-        last_match_rec = rec;
+        last_match_reg = reg;
       } else {
         /* This is the insertion case, it will break
         once it finds the first MBR that can accommodate
@@ -1690,13 +1661,13 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
       }
     }
 
-    last_rec = rec;
+    last_reg = reg;
 
-    rec = page_rec_get_next_const(rec);
+    reg = page_rec_get_next_creg(reg.rec);
   }
 
   /* All records on page are searched */
-  if (page_rec_is_supremum(rec)) {
+  if (page_rec_is_supremum(reg.rec)) {
     if (!is_leaf) {
       if (!found) {
         /* No match case, if it is for insertion,
@@ -1705,33 +1676,34 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
         if (mode == PAGE_CUR_RTREE_INSERT) {
           page_no_t child_no;
           ut_ad(least_inc < DBL_MAX);
-          offsets = rec_get_offsets(best_rec, index, offsets, ULINT_UNDEFINED,
-                                    UT_LOCATION_HERE, &heap);
-          child_no = btr_node_ptr_get_child_page_no(best_rec, offsets);
+          slc = slc_ctx.get_offsets(best_reg, index, ULINT_UNDEFINED);
+
+          child_no = btr_node_ptr_get_child_page_no(slc);
 
           rtr_non_leaf_insert_stack_push(index, rtr_info->parent_path, level,
-                                         child_no, block, best_rec, least_inc);
+                                         child_no, block, best_reg.rec,
+                                         least_inc);
 
-          page_cur_position(best_rec, block, cursor);
+          page_cur_position(best_reg.rec, block, cursor);
           rtr_info->mbr_adj = true;
         } else {
           /* Position at the last rec of the
           page, if it is not the leaf page */
-          page_cur_position(last_rec, block, cursor);
+          page_cur_position(last_reg.rec, block, cursor);
         }
       } else {
         /* There are matching records, position
         in the last matching records */
         if (rtr_info) {
-          rec = last_match_rec;
-          page_cur_position(rec, block, cursor);
+          reg = last_match_reg;
+          page_cur_position(reg.rec, block, cursor);
         }
       }
     } else if (rtr_info) {
       /* Leaf level, no match, position at the
       last (supremum) rec */
-      if (!last_match_rec) {
-        page_cur_position(rec, block, cursor);
+      if (last_match_reg.is_null()) {
+        page_cur_position(reg.rec, block, cursor);
         goto func_exit;
       }
 
@@ -1742,57 +1714,51 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
 
       test_rec = match_rec->matched_recs->back();
 #ifdef UNIV_DEBUG
-      ulint offsets_2[REC_OFFS_NORMAL_SIZE];
-      ulint *offsets2 = offsets_2;
-      rec_offs_init(offsets_2);
+      Slice_ctx slc_ctx2;
+      Slice *slc2 = nullptr;
 
       ut_ad(found);
 
       /* Verify the record to be positioned is the same
       as the last record in matched_rec vector */
-      offsets2 = rec_get_offsets(test_rec.r_rec, index, offsets2,
-                                 ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+      slc2 = slc_ctx2.get_offsets(test_rec.r_reg, index, ULINT_UNDEFINED);
 
-      offsets = rec_get_offsets(last_match_rec, index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+      slc = slc_ctx.get_offsets(last_match_reg, index, ULINT_UNDEFINED);
 
-      ut_ad(cmp_rec_rec(test_rec.r_rec, last_match_rec, offsets2, offsets,
-                        index, false) == 0);
+      ut_ad(cmp_rec_rec(slc2, slc, index, false) == 0);
 #endif /* UNIV_DEBUG */
       /* Pop the last match record and position on it */
       match_rec->matched_recs->pop_back();
-      page_cur_position(test_rec.r_rec, &match_rec->block, cursor);
+      page_cur_position(test_rec.r_reg.rec, &match_rec->block, cursor);
     }
   } else {
     if (mode == PAGE_CUR_RTREE_INSERT) {
       page_no_t child_no;
-      ut_ad(!last_match_rec && rec);
+      ut_ad(last_match_reg.is_null() && reg.is_not_null());
 
-      offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+      slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-      child_no = btr_node_ptr_get_child_page_no(rec, offsets);
+      child_no = btr_node_ptr_get_child_page_no(slc);
 
       rtr_non_leaf_insert_stack_push(index, rtr_info->parent_path, level,
-                                     child_no, block, rec, 0);
+                                     child_no, block, reg.rec, 0);
 
     } else if (rtr_info && found && !is_leaf) {
-      rec = last_match_rec;
+      reg = last_match_reg;
     }
 
-    page_cur_position(rec, block, cursor);
+    page_cur_position(reg.rec, block, cursor);
   }
 
 #ifdef UNIV_DEBUG
   /* Verify that we are positioned at the same child page as pushed in
   the path stack */
-  if (!is_leaf && (!page_rec_is_supremum(rec) || found) &&
+  if (!is_leaf && (!page_rec_is_supremum(reg.rec) || found) &&
       mode != PAGE_CUR_RTREE_INSERT) {
     page_no_t page_no;
 
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
-    page_no = btr_node_ptr_get_child_page_no(rec, offsets);
+    slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+    page_no = btr_node_ptr_get_child_page_no(slc);
 
     if (rtr_info && found) {
       rtr_node_path_t *path = rtr_info->path;
@@ -1804,9 +1770,5 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
 #endif /* UNIV_DEBUG */
 
 func_exit:
-  if (UNIV_LIKELY_NULL(heap)) {
-    mem_heap_free(heap);
-  }
-
   return (found);
 }

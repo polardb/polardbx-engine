@@ -133,6 +133,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 /** @{ */
 
+ulong redo_log_file_cache_pct = 50;
+
 /** Validates that new log files might be created. */
 static void log_files_create_allowed_validate();
 
@@ -442,6 +444,12 @@ Requirement: log.m_files_mutex acquired before calling this function
 
 @param[in,out]  log       redo log */
 static void log_files_mark_consumed_files(log_t &log);
+/** Marks up to a specified limit of redo log files that have been consumed by
+all registered redo log consumers as consumed. This allows recycling or removing
+those files later when log_files_process_consumed_files() is called.
+
+@param[in,out] log redo log */
+static void log_files_mark_consumed_files_with_limit(log_t &log);
 
 /** Removes the given consumed redo log file. This is called when the redo log
 files marked as consumed are being processed (recycled or removed).
@@ -803,6 +811,25 @@ static void log_files_mark_consumed_files(log_t &log) {
       log_files_mark_consumed_file(log, file.m_id);
     }
   });
+}
+
+/** Mark redo log consumed files according to checkpoint lsn. */
+static void log_files_mark_consumed_files_with_limit(log_t &log) {
+  log_files_access_allowed_validate(log);
+
+  const lsn_t oldest_lsn = log_files_oldest_needed_lsn(log);
+
+  log_files_validate_current_file(log);
+
+  auto mark_consumed_file = [&](const Log_file &file) -> bool {
+    if (!file.m_consumed && file.m_end_lsn <= oldest_lsn) {
+      log_files_mark_consumed_file(log, file.m_id);
+      return true;
+    }
+    return false;
+  };
+  log_files_for_each(log.m_files, redo_log_file_cache_pct,
+                     mark_consumed_file);
 }
 
 namespace log_files {
@@ -1234,7 +1261,7 @@ static Log_files_governor_iteration_result log_files_governor_iteration_low(
   log_files_adjust_unused_files_sizes(log);
 
   if (log_files::is_consumption_needed(log)) {
-    log_files_mark_consumed_files(log);
+    log_files_mark_consumed_files_with_limit(log);
   }
   if (log_files_number_of_consumed_files(log.m_files) != 0) {
     if (has_writer_mutex) {

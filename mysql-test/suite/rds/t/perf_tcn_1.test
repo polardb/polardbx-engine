@@ -28,7 +28,8 @@ set autocommit=1;
 --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
 --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
 --enable_query_log
-show global status like '%tcn_cache%';
+show global status like '%tcn_cache_hit%';
+show global status like '%tcn_cache_miss%';
 
 
 disconnect conn1;
@@ -39,7 +40,8 @@ connection conn2;
 --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
 --eval select count(*) from db_1.t1 as of gcn $my_gcn where id > 0
 --enable_query_log
-show global status like '%tcn_cache%';
+show global status like '%tcn_cache_hit%';
+show global status like '%tcn_cache_miss%';
 
 drop table db_1.t1;
 drop database db_1;

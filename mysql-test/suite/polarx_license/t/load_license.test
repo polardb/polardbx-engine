@@ -248,11 +248,30 @@ show variables like 'polarx_license_path';
 call dbms_license.show_info();
 set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_type';
 
+# simulate the error of non-exist extra params (port-range)
+# There will not be constraints if not exist
+set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_port_range';
+call dbms_license.check_license('test_license24.perm');
+set GLOBAL polarx_license_path ='test_license24.perm';
+show variables like 'polarx_license_path';
+# should have no constraints
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_port_range';
+
+# simulate the error of extra params (port_range):invalid
+set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_params_port_range';
+call dbms_license.check_license('test_license25.perm');
+--error ER_LICENSE_FILE_CORRUPTED
+set GLOBAL polarx_license_path ='test_license25.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_params_port_range';
+
 # simulate the error of non-exist extra params (max_connections)
 # There will not be constraints if not exist
 set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_max_connections';
-call dbms_license.check_license('test_license24.perm');
-set GLOBAL polarx_license_path ='test_license24.perm';
+call dbms_license.check_license('test_license26.perm');
+set GLOBAL polarx_license_path ='test_license26.perm';
 show variables like 'polarx_license_path';
 # should have no constraints
 call dbms_license.show_info();
@@ -260,9 +279,9 @@ set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_max_connection
 
 # simulate the error of extra params (max_connections):invalid
 set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_max_connections';
-call dbms_license.check_license('test_license25.perm');
+call dbms_license.check_license('test_license27.perm');
 --error ER_LICENSE_FILE_CORRUPTED
-set GLOBAL polarx_license_path ='test_license25.perm';
+set GLOBAL polarx_license_path ='test_license27.perm';
 show variables like 'polarx_license_path';
 call dbms_license.show_info();
 set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_max_connections';
@@ -270,8 +289,8 @@ set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_max_connection
 # simulate the error of non-exist extra params (innodb_buffer_pool_size)
 # There will not be constraints if not exist
 set GLOBAL debug='+d, simulate_polarx_license_missing_extra_param_innodb_buffer_pool_size';
-call dbms_license.check_license('test_license26.perm');
-set GLOBAL polarx_license_path ='test_license26.perm';
+call dbms_license.check_license('test_license28.perm');
+set GLOBAL polarx_license_path ='test_license28.perm';
 show variables like 'polarx_license_path';
 # should have no constraints
 call dbms_license.show_info();
@@ -279,9 +298,9 @@ set GLOBAL debug='-d, simulate_polarx_license_missing_extra_param_innodb_buffer_
 
 # simulate the error of extra params (innodb_buffer_pool_size):invalid
 set GLOBAL debug='+d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
-call dbms_license.check_license('test_license27.perm');
+call dbms_license.check_license('test_license29.perm');
 --error ER_LICENSE_FILE_CORRUPTED
-set GLOBAL polarx_license_path ='test_license27.perm';
+set GLOBAL polarx_license_path ='test_license29.perm';
 show variables like 'polarx_license_path';
 call dbms_license.show_info();
 set GLOBAL debug='-d, simulate_polarx_license_invalid_extra_param_innodb_buffer_pool_size';
@@ -296,27 +315,37 @@ call dbms_license.show_info();
 
 # simulate the error of extra params (type): not support
 set GLOBAL debug='+d, simulate_polarx_license_unsupport_extra_param_type';
-call dbms_license.check_license('test_license28.perm');
+call dbms_license.check_license('test_license30.perm');
 --error ER_LICENSE_FILE_INVALID
-set GLOBAL polarx_license_path ='test_license28.perm';
+set GLOBAL polarx_license_path ='test_license30.perm';
 show variables like 'polarx_license_path';
 call dbms_license.show_info();
 set GLOBAL debug='-d, simulate_polarx_license_unsupport_extra_param_type';
 
-# simulate the error of unauthorized machine
-set GLOBAL debug='+d, simulate_polarx_license_unauthorized_machine';
-call dbms_license.check_license('test_license29.perm');
+# simulate the error of unauthorized mac
+set GLOBAL debug='+d, simulate_polarx_license_unauthorized_mac';
+call dbms_license.check_license('test_license31.perm');
 --error ER_LICENSE_FILE_INVALID
-set GLOBAL polarx_license_path ='test_license29.perm';
+set GLOBAL polarx_license_path ='test_license31.perm';
 show variables like 'polarx_license_path';
 call dbms_license.show_info();
-set GLOBAL debug='-d, simulate_polarx_license_unauthorized_machine';
+set GLOBAL debug='-d, simulate_polarx_license_unauthorized_mac';
+
+# simulate the error of unauthorized port
+set GLOBAL debug='+d, simulate_polarx_license_unauthorized_port';
+call dbms_license.check_license('test_license32.perm');
+--error ER_LICENSE_FILE_INVALID
+set GLOBAL polarx_license_path ='test_license32.perm';
+show variables like 'polarx_license_path';
+call dbms_license.show_info();
+set GLOBAL debug='-d, simulate_polarx_license_unauthorized_port';
+
 
 # simulate of the error of expired license
 set GLOBAL debug='+d, simulate_polarx_license_expired';
-call dbms_license.check_license('test_license30.perm');
+call dbms_license.check_license('test_license33.perm');
 --error ER_LICENSE_FILE_INVALID
-set GLOBAL polarx_license_path ='test_license30.perm';
+set GLOBAL polarx_license_path ='test_license33.perm';
 show variables like 'polarx_license_path';
 call dbms_license.show_info();
 set GLOBAL debug='-d, simulate_polarx_license_expired';

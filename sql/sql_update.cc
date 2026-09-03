@@ -1,4 +1,5 @@
-/* Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/* Copyright (c) 2000, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -54,11 +55,11 @@
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_grant, check_access
 #include "sql/auth/sql_guard.h"
-#include "sql/binlog.h"      // mysql_bin_log
-#include "sql/debug_sync.h"  // DEBUG_SYNC
-#include "sql/derror.h"      // ER_THD
-#include "sql/field.h"       // Field
-#include "sql/filesort.h"    // Filesort
+#include "sql/binlog.h"        // mysql_bin_log
+#include "sql/debug_sync.h"    // DEBUG_SYNC
+#include "sql/derror.h"        // ER_THD
+#include "sql/field.h"         // Field
+#include "sql/filesort.h"      // Filesort
 #include "sql/group_update.h"  // GroupUpdate
 #include "sql/handler.h"
 #include "sql/inventory/inventory_hint.h"
@@ -888,7 +889,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
           init_table_iterator(thd, table, range_scan,
                               /*table_ref=*/nullptr, /*position=*/nullptr,
                               /*ignore_not_found_rows=*/false,
-                              /*count_examined_rows=*/false);
+                              /*count_examined_rows=*/false, komodo::GM_NONE);
       if (iterator == nullptr) return true; /* purecov: inspected */
     }
 
@@ -1052,7 +1053,6 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         */
         int check_result = table_list->view_check_option(thd);
         if (check_result != VIEW_CHECK_OK) {
-
           /*
             Since variable found is decreased, later we cannot distinguish this
             case from the one that found is never increased, group update needs
@@ -1333,22 +1333,22 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
     /* Send eof if it is returning clause */
-    if (returning_stmt.is_returning()){
+    if (returning_stmt.is_returning()) {
       returning_stmt.send_eof(thd);
       thd->set_row_count_func(
           thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
               ? found_rows
               : updated_rows);
-    }
-    else {
-      bool has_err = set_my_ok(thd,
+    } else {
+      bool has_err = set_my_ok(
+          thd,
           thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
               ? found_rows
               : updated_rows,
           id, buff);
       if (has_err) error = 1;
     }
-      
+
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -2010,7 +2010,7 @@ bool Sql_cmd_update::execute_inner(THD *thd) {
   Connect fields with tables and create list of tables that are updated
 */
 
-bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
+bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &list,
                                   Query_expression *u) {
   SQL_I_List<Table_ref> update_list;
   DBUG_TRACE;
@@ -2108,6 +2108,8 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
   }
   if (thd->is_error()) return true;
 
+  if (reject_encryption_transfer(thd, list)) return true;
+
   /* Allocate copy fields */
   size_t max_fields = 0;
   for (uint i = 0; i < update_table_count; i++)
@@ -2147,6 +2149,43 @@ bool Query_result_update::prepare(THD *thd, const mem_root_deque<Item *> &,
   }
 
   assert(!thd->is_error());
+  return false;
+}
+
+/**
+ * For multi-table UPDATE, check that each assigned value's encryption type
+ * either is NONE or matches the target field's encryption type.
+ * Called in prepare() because fields_for_table/values_for_table are only
+ * available after per-table decomposition, and encryption_type() is column
+ * metadata that does not change across rows.
+ */
+bool Query_result_update::reject_encryption_transfer(
+    THD *thd, const mem_root_deque<Item *> &) {
+  DBUG_TRACE;
+
+  if (!thd->enable_column_encryption && !thd->enable_mask_internal_user &&
+      !thd->enable_mask_ai_model_config_api_key) {
+    return false;
+  }
+
+  for (uint i = 0; i < update_table_count; i++) {
+    auto value_it = values_for_table[i]->begin();
+
+    for (Item *fld : *fields_for_table[i]) {
+      Item *value = *value_it++;
+
+      auto value_type =
+          komodo::get_real_encryption_type(value->encryption_type());
+
+      auto fld_type = komodo::get_real_encryption_type(fld->encryption_type());
+
+      if (komodo::has_encryption_type(value_type) && value_type != fld_type) {
+        my_error(ER_COLUMNS_ENCRYPTION_TRANSFER, MYF(0));
+        return true;
+      }
+    }
+  }
+
   return false;
 }
 
@@ -2293,7 +2332,8 @@ static bool AddRowIdAsTempTableField(THD *thd, TABLE *table,
     than 1024 bytes, so use a variable length string field.
   */
   Field_varstring *field = new (thd->mem_root) Field_varstring(
-      table->file->ref_length, false, table->alias, table->s, &my_charset_bin);
+      table->file->ref_length + table->file->gpp_length, false, table->alias,
+      table->s, &my_charset_bin);
   if (field == nullptr) return true;
   field->init(table);
   Item_field *ifield = new (thd->mem_root) Item_field(field);
@@ -2317,8 +2357,8 @@ static void StoreRowId(TABLE *table, TABLE *tmp_table, int field_num,
     table->file->position(table->record[0]);
   }
   tmp_table->visible_field_ptr()[field_num]->store(
-      pointer_cast<const char *>(table->file->ref), table->file->ref_length,
-      &my_charset_bin);
+      pointer_cast<const char *>(table->file->ref),
+      table->file->ref_length + table->file->gpp_length, &my_charset_bin);
 
   /*
     For outer joins a rowid field may have no NOT_NULL_FLAG,
@@ -2346,7 +2386,8 @@ static bool PositionScanOnRow(TABLE *updated_table, TABLE *table,
   if (const int error = table->file->ha_rnd_pos(
           table->record[0],
           const_cast<uchar *>(
-              tmp_table->visible_field_ptr()[field_num]->data_ptr()))) {
+              tmp_table->visible_field_ptr()[field_num]->data_ptr()),
+          komodo::GM_MULTI_UPDATE)) {
     myf error_flags = 0;
     if (updated_table->file->is_fatal_error(error)) {
       error_flags |= ME_FATALERROR;
@@ -2673,6 +2714,9 @@ bool UpdateRowsIterator::DoImmediateUpdatesAndBufferRowIds(
           continue;
         }
 
+        if (im::guard_record(thd(), table, im::Guard_type::GUARD_UPDATE))
+          return true;
+
         if (m_updated_rows == 0) {
           /*
             Inform the main table that we are going to update the table even
@@ -2970,6 +3014,9 @@ bool UpdateRowsIterator::DoDelayedUpdates(bool *trans_safe,
           continue;
         }
 
+        if (im::guard_record(thd(), table, im::Guard_type::GUARD_UPDATE))
+          goto err;
+
         local_error =
             table->file->ha_update_row(table->record[1], table->record[0]);
         if (!local_error)
@@ -3138,11 +3185,12 @@ bool Query_result_update::send_eof(THD *thd) {
   snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
            (long)updated_rows,
            (long)thd->get_stmt_da()->current_statement_cond_count());
-  return ::set_my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+  return ::set_my_ok(
+      thd,
+      thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+          ? found_rows
+          : updated_rows,
+      id, buff);
 }
 
 bool Sql_cmd_update::accept(THD *thd, Select_lex_visitor *visitor) {

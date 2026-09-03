@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 10/16/1994 Heikki Tuuri
  *******************************************************/
 
+#ifndef btr0cur_h
+#define INNODB_BTR0CUR_IC_STANDALONE
+#include "btr0cur.h"
+#undef INNODB_BTR0CUR_IC_STANDALONE
+#endif /* !btr0cur_h */
 #ifndef UNIV_HOTBACKUP
 #endif /* !UNIV_HOTBACKUP */
 #include "btr0btr.h"
@@ -69,6 +74,11 @@ static inline rec_t *btr_cur_get_rec(
   return (page_cur_get_rec(btr_cur_get_page_cur(cursor)));
 }
 #endif /* UNIV_DEBUG */
+
+static inline reg_t btr_cur_get_reg(const btr_cur_t *cursor) {
+  ut_ad(btr_cur_get_rec(cursor));
+  return {btr_cur_get_rec(cursor), MLOC_IN_PAGE};
+}
 
 /** Returns the compressed page on which the tree cursor is positioned.
  @return pointer to compressed page, or NULL if the page is not compressed */
@@ -116,7 +126,8 @@ static inline bool btr_cur_compress_recommendation(
 
   LIMIT_OPTIMISTIC_INSERT_DEBUG(page_get_n_recs(page) * 2, return false);
 
-  if ((page_get_data_size(page) < BTR_CUR_PAGE_COMPRESS_LIMIT(cursor->index)) ||
+  if ((page_get_total_data_size(page) <
+       BTR_CUR_PAGE_COMPRESS_LIMIT(cursor->index)) ||
       ((btr_page_get_next(page, mtr) == FIL_NULL) &&
        (btr_page_get_prev(page, mtr) == FIL_NULL))) {
     /* The page fillfactor has dropped below a predefined
@@ -144,7 +155,7 @@ static inline bool btr_cur_can_delete_without_compress(
 
   page = btr_cur_get_page(cursor);
 
-  if ((page_get_data_size(page) - rec_size <
+  if ((page_get_total_data_size(page) - rec_size <
        BTR_CUR_PAGE_COMPRESS_LIMIT(cursor->index)) ||
       ((btr_page_get_next(page, mtr) == FIL_NULL) &&
        (btr_page_get_prev(page, mtr) == FIL_NULL)) ||

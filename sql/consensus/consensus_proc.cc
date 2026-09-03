@@ -24,11 +24,15 @@
 #include <cstdint>
 #include <vector>
 #include "my_sys.h"
+#include "sql/debug_sync.h"
 #include "mysql/components/services/log_builtins.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/consensus/consensus_common.h"
 #include "sql/item.h"
-#include "sql/protocol.h"
+#include "extra/IS/src/algorithm/paxos.h"
+#include "sql/komodo0xlog.h"
+#include "sql/komodo0xlog0engine.h"
+#include "extra/IS/src/common/paxos_error.h"
 
 /**
   Consensus procedures (dbms_consensus package)
@@ -68,11 +72,9 @@ Sql_cmd *Consensus_proc_refresh_learner_meta::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_refresh_learner_meta::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   std::vector<std::string> info_vector;
-  res = consensus_ptr->changeLearners(alisql::Paxos::CCSyncLearnerAll,
-                                      info_vector);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_refresh_learner_meta(info_vector);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -94,9 +96,7 @@ Sql_cmd *Consensus_proc_force_single_mode::invoke_cmd(
 }
 
 bool Sql_cmd_consensus_proc_force_single_mode::pc_execute(THD *thd) {
-  int res = 0;
-  if (!consensus_ptr) return false;
-  res = consensus_ptr->forceSingleLeader();
+  int res = komodo::xlog_force_single_leader();
   LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
@@ -119,9 +119,7 @@ Sql_cmd *Consensus_proc_force_learner_node::invoke_cmd(
 }
 
 bool Sql_cmd_consensus_proc_force_learner_node::pc_execute(THD *thd) {
-  int res = 0;
-  if (!consensus_ptr) return false;
-  res = consensus_ptr->forceSingleLearner();
+  int res = komodo::xlog_force_single_learner();
   LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
@@ -151,7 +149,7 @@ void Sql_cmd_consensus_proc_show_global::send_result(THD *thd, bool error) {
   }
 
   // fetch the results
-  collect_show_global_results(thd->mem_root, results);
+  komodo::xlog_get_cluster_global_info(results, thd->mem_root);
 
   if (m_proc->send_result_metadata(thd)) return;
 
@@ -210,7 +208,7 @@ void Sql_cmd_consensus_proc_show_local::send_result(THD *thd, bool error) {
   }
 
   // fetch the results
-  collect_show_local_results(thd->mem_root, result);
+  komodo::xlog_get_local_info(*result, thd->mem_root);
 
   if (m_proc->send_result_metadata(thd)) return;
 
@@ -333,14 +331,7 @@ bool Sql_cmd_consensus_proc::check_parameter_num() {
 }
 
 bool Sql_cmd_consensus_proc::check_access(THD *thd) {
-  if (Sql_cmd_proc::check_access(thd)) {
-    return true;
-  }
-  if (opt_consensus_force_recovery) {
-    my_error(ER_CONSENSUS_SERVER_NOT_READY, MYF(0));
-    return true;
-  }
-  return false;
+  return Sql_cmd_proc::check_access(thd);
 }
 
 bool Sql_cmd_consensus_option_last_proc::check_parameter_num() {
@@ -391,7 +382,6 @@ Sql_cmd *Consensus_proc_change_leader::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
   assert(m_consensus_proc->consensus_proc_params().size() == 1);
-  if (!consensus_ptr) return false;
   int res = 0;
 
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
@@ -401,14 +391,7 @@ bool Sql_cmd_consensus_proc_change_leader::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_ptr->leaderTransferPrecheck(node_id);
-  if (res == alisql::PaxosErrorCode::PE_DEFAULT) {
-    xp::system(ER_XP_0) << "begin leaderTransfer to server " << node_id;
-    consensus_log_manager.set_limit_new_trx();
-    consensus_log_manager.wait_old_trx_finish();
-
-    res = consensus_ptr->leaderTransfer(node_id);
-  }
+  res = komodo::xlog_change_leader(node_id);
 
   LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
@@ -435,7 +418,6 @@ Sql_cmd *Consensus_proc_add_learner::invoke_cmd(
 bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
   assert(m_consensus_proc->consensus_proc_params().size() == 1);
   int res = 0;
-  if (!consensus_ptr) return false;
 
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
@@ -446,9 +428,8 @@ bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
 
   std::vector<std::string> info_vector;
   info_vector.emplace_back(addr);
-  res = consensus_ptr->changeLearners(alisql::Paxos::CCOpType::CCAddNode,
-                                      info_vector);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_add_learner(info_vector);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -457,10 +438,9 @@ bool Sql_cmd_consensus_proc_add_learner::pc_execute(THD *thd) {
 }
 
 bool Sql_cmd_consensus_proc_add_learner::prepare(THD *thd) {
-  if (!consensus_ptr) return false;
   if (Sql_cmd_proc::prepare(thd)) return true;
   /* check max node number */
-  if (consensus_ptr->getClusterSize() > CONSENSUS_MAX_NODE_NUMBER) {
+  if (komodo::xlog_get_cluster_size() > CONSENSUS_MAX_NODE_NUMBER) {
     my_error(ER_CONSENSUS_TOO_MANY_NODE, MYF(0));
     return true;
   }
@@ -482,16 +462,14 @@ Sql_cmd *Consensus_proc_add_follower::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_add_follower::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
   auto addr = consensus_proc_params[consensus_proc_params_idx++]->get_string(
       m_list->front());
 
-  res = consensus_ptr->changeMember(
-      alisql::Paxos::CCOpType::CCAddLearnerAutoChange, addr);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_add_follower(addr);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -500,10 +478,9 @@ bool Sql_cmd_consensus_proc_add_follower::pc_execute(THD *thd) {
 }
 
 bool Sql_cmd_consensus_proc_add_follower::prepare(THD *thd) {
-  if (!consensus_ptr) return false;
   if (Sql_cmd_proc::prepare(thd)) return true;
   /* check max node number */
-  if (consensus_ptr->getClusterSize() > CONSENSUS_MAX_NODE_NUMBER) {
+  if (komodo::xlog_get_cluster_size() > CONSENSUS_MAX_NODE_NUMBER) {
     my_error(ER_CONSENSUS_TOO_MANY_NODE, MYF(0));
     return true;
   }
@@ -525,7 +502,6 @@ Sql_cmd *Consensus_proc_drop_learner::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_drop_learner::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -535,9 +511,8 @@ bool Sql_cmd_consensus_proc_drop_learner::pc_execute(THD *thd) {
 
   std::vector<std::string> info_vector;
   info_vector.push_back(addr);
-  res = consensus_ptr->changeLearners(alisql::Paxos::CCOpType::CCDelNode,
-                                      info_vector);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_drop_learner(info_vector);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -560,15 +535,14 @@ Sql_cmd *Consensus_proc_upgrade_learner::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_upgrade_learner::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
   auto addr = consensus_proc_params[consensus_proc_params_idx++]->get_string(
       m_list->front());
 
-  res = consensus_ptr->changeMember(alisql::Paxos::CCOpType::CCAddNode, addr);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_upgrade_learner(addr);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -591,7 +565,6 @@ Sql_cmd *Consensus_proc_downgrade_follower::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_downgrade_follower::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -599,8 +572,8 @@ bool Sql_cmd_consensus_proc_downgrade_follower::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_string(
           m_list->front());
 
-  res = consensus_ptr->downgradeMember(addr);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_downgrade_member(addr);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -623,7 +596,6 @@ Sql_cmd *Consensus_proc_configure_follower::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
 
@@ -639,8 +611,8 @@ bool Sql_cmd_consensus_proc_configure_follower::pc_execute(THD *thd) {
            : consensus_proc_params[consensus_proc_params_idx++]->get_bool(
                  *it++));
 
-  res = consensus_ptr->configureMember(node_id, force_sync, election_weight);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_configure_member(node_id, force_sync, election_weight);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res != 0 && res != 1)
@@ -681,7 +653,6 @@ bool Sql_cmd_consensus_proc_configure_followers::check_parameter_num() {
 
 bool Sql_cmd_consensus_proc_configure_followers::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
 
   size_t consensus_proc_params_idx = 0;
@@ -698,8 +669,8 @@ bool Sql_cmd_consensus_proc_configure_followers::pc_execute(THD *thd) {
       force_syncs.push_back(consensus_proc_params[consensus_proc_params_idx++]->get_bool(*it++));
   }
 
-  res = consensus_ptr->configureMembers(node_ids, force_syncs, election_weights);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_configure_members(node_ids, force_syncs, election_weights);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res != 0 && res != 1)
@@ -722,7 +693,6 @@ Sql_cmd *Consensus_proc_configure_learner::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_configure_learner::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
   int consensus_proc_params_idx = 0;
@@ -737,9 +707,9 @@ bool Sql_cmd_consensus_proc_configure_learner::pc_execute(THD *thd) {
            : consensus_proc_params[consensus_proc_params_idx++]->get_bool(
                  *it++));
 
-  res = consensus_ptr->configureLearner(target_node_id, source_node_id,
-                                        use_applied);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_configure_learner(target_node_id, source_node_id,
+                                       use_applied);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res != 0 && res != 1)
@@ -762,7 +732,6 @@ Sql_cmd *Consensus_proc_fix_cluster_id::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_fix_cluster_id::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -770,9 +739,9 @@ bool Sql_cmd_consensus_proc_fix_cluster_id::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_ptr->setClusterId(cluster_id);
+  res = komodo::xlog_set_cluster_id(cluster_id);
   opt_cluster_id = cluster_id;
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -795,7 +764,6 @@ Sql_cmd *Consensus_proc_fix_matchindex::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_fix_matchindex::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   auto it = m_list->begin();
   int consensus_proc_params_idx = 0;
@@ -805,8 +773,8 @@ bool Sql_cmd_consensus_proc_fix_matchindex::pc_execute(THD *thd) {
   uint64_t match_index =
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(*it++);
 
-  consensus_ptr->forceFixMatchIndex(node_id, match_index);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  komodo::xlog_force_fix_match_index(node_id, match_index);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -829,7 +797,6 @@ Sql_cmd *Consensus_proc_purge_log::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_purge_log::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -837,8 +804,8 @@ bool Sql_cmd_consensus_proc_purge_log::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_ptr->forcePurgeLog(false /* local */, index);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_force_purge_log(false /* local */, index);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -862,7 +829,6 @@ Sql_cmd *Consensus_proc_local_purge_log::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_local_purge_log::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -870,7 +836,7 @@ bool Sql_cmd_consensus_proc_local_purge_log::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_ptr->forcePurgeLog(true /* local */, index);
+  res = komodo::xlog_force_purge_log(true /* local */, index);
   LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
@@ -895,7 +861,6 @@ Sql_cmd *Consensus_proc_force_purge_log::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -903,7 +868,7 @@ bool Sql_cmd_consensus_proc_force_purge_log::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_log_manager.purge_log(index);
+  res = komodo::xlog_purge_log(index);
   LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
@@ -929,7 +894,6 @@ Sql_cmd *Consensus_proc_force_purge_cache::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_force_purge_cache::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -937,9 +901,9 @@ bool Sql_cmd_consensus_proc_force_purge_cache::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_log_manager.get_fifo_cache_manager()->force_purge_cache(index);
+  res = komodo::xlog_force_purge_cache(index);
 
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -964,7 +928,6 @@ Sql_cmd *Consensus_proc_drop_prefetch_channel::invoke_cmd(
 
 bool Sql_cmd_consensus_proc_drop_prefetch_channel::pc_execute(THD *thd) {
   int res = 0;
-  if (!consensus_ptr) return false;
   const auto &consensus_proc_params = m_consensus_proc->consensus_proc_params();
   int consensus_proc_params_idx = 0;
 
@@ -972,9 +935,8 @@ bool Sql_cmd_consensus_proc_drop_prefetch_channel::pc_execute(THD *thd) {
       consensus_proc_params[consensus_proc_params_idx++]->get_uint64_t(
           m_list->front());
 
-  res = consensus_log_manager.get_prefetch_manager()->drop_prefetch_channel(
-      channel_id);
-  LogErr(INFORMATION_LEVEL, ER_CONSENSUS_CMD_LOG,
+  res = komodo::xlog_drop_prefetch_channel(channel_id);
+  LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
          thd->m_main_security_ctx.user().str,
          thd->m_main_security_ctx.host_or_ip().str, thd->query().str, res);
   if (res)
@@ -1027,8 +989,7 @@ uint64_t Consensus_proc_type_node::get_uint64_t(Item *item) const {
   if (item->data_type() == MYSQL_TYPE_LONGLONG) {
     ret = item->val_int();
   } else if (item->data_type() == MYSQL_TYPE_VARCHAR) {
-    ret = consensus_ptr->getConfig()->getServerIdFromAddr(
-        std::string(item->val_str(nullptr)->ptr()));
+    komodo::xlog_get_config_server_id(item, ret);
   } else {
     assert(0);
   }
@@ -1038,7 +999,7 @@ uint64_t Consensus_proc_type_node::get_uint64_t(Item *item) const {
 std::string Consensus_proc_type_node::get_string(Item *item) const {
   std::string ret;
   if (item->data_type() == MYSQL_TYPE_LONGLONG) {
-    ret = consensus_ptr->getConfig()->getServer(item->val_int())->strAddr;
+    komodo::xlog_get_config_server_addr(item, ret);
   } else if (item->data_type() == MYSQL_TYPE_VARCHAR) {
     ret = std::string(item->val_str(nullptr)->ptr());
   } else {
@@ -1068,6 +1029,64 @@ bool Consensus_proc_type_bool::check(Item *item) const {
 
 bool Consensus_proc_type_bool::get_bool(Item *item) const {
   return item != nullptr && item->val_int() != 0;
+}
+
+/**
+  dbms_consensus.get_cidx(...)
+*/
+Proc *Consensus_proc_get_cidx::instance() {
+  static Proc *proc = new Consensus_proc_get_cidx(key_memory_package);
+  return proc;
+}
+
+Sql_cmd *Consensus_proc_get_cidx::invoke_cmd(
+    THD *thd, mem_root_deque<Item *> *list) const {
+  return new (thd->mem_root) Sql_cmd_type(thd, list, this);
+}
+
+void Sql_cmd_consensus_proc_get_cidx::send_result(THD *thd, bool error) {
+  DBUG_ENTER("Sql_cmd_consensus_proc_get_cidx::send_result");
+  ulonglong index;
+  Protocol *protocol = thd->get_protocol();
+
+  if (error) {
+    assert(thd->is_error());
+    DBUG_VOID_RETURN;
+  }
+
+  /**
+    Hold LOCK_log (exclusive) to ensure the returned index is a stable snapshot.
+
+    Typical usage (GCN-based read consistency):
+    1. Get GCN from GMS
+    2. Push sys_GCN on Leader
+    3. Get consensus index (this call) -> index
+    4. On follower: wait until apply_index >= index
+
+    When step 4 is satisfied, all modifications with GCN <= sys_GCN are visible.
+    For this to hold, step 3 must return an index such that: no new consensus_index
+    can be produced between our read and the follower's apply.  We achieve this by
+    holding LOCK_log: ordered_commit's flush stage (process_flush_stage_queue) also
+    acquires LOCK_log before flush_thread_caches() generates new consensus_index.
+    So while we hold LOCK_log, no flush can complete and no new index is produced.
+
+    DEBUG_SYNC get_cidx_acquiring_lock: signals before attempting lock; used by
+    get_cidx_blocked_by_flush.test to verify this thread blocks on LOCK_log.
+  */
+  mysql_mutex_t *lock_log = mysql_bin_log.get_log_lock();
+  DEBUG_SYNC(thd, "get_cidx_acquiring_lock");
+  mysql_mutex_lock(lock_log);
+  index = komodo::xlog_log_manager_get_current_index();
+  mysql_mutex_unlock(lock_log);
+
+  if (m_proc->send_result_metadata(thd)) DBUG_VOID_RETURN;
+
+  protocol->start_row();
+  protocol->store(index);
+  if (protocol->end_row()) DBUG_VOID_RETURN;
+
+  my_eof(thd);
+  DBUG_VOID_RETURN;
 }
 
 }  // namespace im

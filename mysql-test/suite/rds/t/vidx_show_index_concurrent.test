@@ -1,0 +1,741 @@
+##########################################
+# Concurrent stress test for             #
+# SHOW INDEX + I_S.VECTOR_INDEXES        #
+# under DDL/DML racing conditions        #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+--disable_query_log
+
+--echo ########################################
+--echo # Setup: Create tables with vector indexes
+--echo ########################################
+
+CREATE TABLE t_main (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(50),
+  v VECTOR(4),
+  INDEX idx_name(name),
+  VECTOR INDEX vi_main(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+
+CREATE TABLE t_cos (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi_cos(v) distance=cosine
+) ENGINE=InnoDB;
+
+--echo # Insert seed data
+let $i = 1;
+while ($i <= 20)
+{
+  eval INSERT INTO t_main(name, v) VALUES (CONCAT('row_', $i), VEC_FROMTEXT(CONCAT('[', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+
+INSERT INTO t_cos(v) VALUES (VEC_FROMTEXT('[1,2,3]'));
+INSERT INTO t_cos(v) VALUES (VEC_FROMTEXT('[4,5,6]'));
+INSERT INTO t_cos(v) VALUES (VEC_FROMTEXT('[7,8,9]'));
+
+--enable_query_log
+
+--echo # Baseline: verify SHOW INDEX works
+SHOW INDEX FROM t_main;
+SHOW INDEX FROM t_cos;
+
+--echo # Baseline: verify VECTOR_INDEXES works
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, ALGORITHM, METRIC_TYPE, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, INDEX_NAME;
+
+--echo ########################################
+--echo # Scenario 1: Concurrent SHOW INDEX from multiple sessions
+--echo # Risk: UNION ALL derived table construction under contention
+--echo ########################################
+
+--connect (con1, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con2, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con3, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (con4, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # All sessions execute SHOW INDEX simultaneously
+--connection con1
+SHOW INDEX FROM t_main;
+
+--connection con2
+SHOW INDEX FROM t_main;
+
+--connection con3
+SHOW INDEX FROM t_cos;
+
+--connection con4
+SHOW INDEX FROM t_cos;
+
+--connection default
+--echo # Verify no crash and results consistent
+SHOW INDEX FROM t_main;
+
+--echo ########################################
+--echo # Scenario 2: SHOW INDEX while DML is in-flight
+--echo # Risk: DD read racing with aux table modification
+--echo ########################################
+
+--connection con1
+BEGIN;
+INSERT INTO t_main(name, v) VALUES ('inflight_1', VEC_FROMTEXT('[99,99,99,99]'));
+INSERT INTO t_main(name, v) VALUES ('inflight_2', VEC_FROMTEXT('[88,88,88,88]'));
+
+--connection con2
+--echo # SHOW INDEX while con1 has uncommitted DML
+SHOW INDEX FROM t_main;
+
+--connection con3
+--echo # VECTOR_INDEXES query while con1 has uncommitted DML
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+--connection con1
+COMMIT;
+
+--connection con2
+--echo # SHOW INDEX after commit — should be identical structure
+SHOW INDEX FROM t_main;
+
+--connection default
+--echo # Data integrity check
+SELECT COUNT(*) AS row_count FROM t_main;
+
+--echo ########################################
+--echo # Scenario 3: SHOW INDEX racing with DROP INDEX
+--echo # Risk: VECTOR_INDEXES branch returns empty mid-drop, UNION ALL still correct
+--echo ########################################
+
+--connection con2
+--echo # SHOW INDEX before DROP
+SHOW INDEX FROM t_main;
+
+--connection default
+--echo # DROP the vector index
+ALTER TABLE t_main DROP INDEX vi_main;
+
+--connection con3
+--echo # SHOW INDEX after DROP — vector row should be gone
+SHOW INDEX FROM t_main;
+
+--connection con4
+--echo # VECTOR_INDEXES after DROP — should be empty for t_main
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+--echo # Recreate vector index for subsequent tests
+--connection default
+ALTER TABLE t_main ADD VECTOR INDEX vi_main(v) m=16 distance=euclidean;
+
+SHOW INDEX FROM t_main;
+
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+--echo ########################################
+--echo # Scenario 4: SHOW INDEX racing with CREATE INDEX
+--echo # Risk: New VECTOR index appears mid-query in UNION ALL
+--echo ########################################
+
+CREATE TABLE t_add_idx (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  v VECTOR(4)
+) ENGINE=InnoDB;
+
+INSERT INTO t_add_idx(v) VALUES (VEC_FROMTEXT('[1,2,3,4]'));
+INSERT INTO t_add_idx(v) VALUES (VEC_FROMTEXT('[5,6,7,8]'));
+
+--connection con1
+--echo # SHOW INDEX before CREATE VECTOR INDEX
+SHOW INDEX FROM t_add_idx;
+
+--connection default
+ALTER TABLE t_add_idx ADD VECTOR INDEX vi_new(v) distance=cosine;
+
+--connection con2
+--echo # SHOW INDEX after CREATE — must show VECTOR row
+SHOW INDEX FROM t_add_idx;
+
+--connection con3
+SELECT TABLE_NAME, INDEX_NAME, METRIC_TYPE FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_add_idx';
+
+--connection default
+DROP TABLE t_add_idx;
+
+--echo ########################################
+--echo # Scenario 5: VECTOR_INDEXES full scan while DML storms
+--echo # Risk: Full table scan on mysql.tables + DD parse under write load
+--echo ########################################
+
+--disable_query_log
+--connection con1
+BEGIN;
+let $i = 100;
+while ($i <= 120)
+{
+  eval INSERT INTO t_main(name, v) VALUES (CONCAT('storm_', $i), VEC_FROMTEXT(CONCAT('[', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+
+--connection con2
+BEGIN;
+let $i = 200;
+while ($i <= 220)
+{
+  eval INSERT INTO t_main(name, v) VALUES (CONCAT('storm_', $i), VEC_FROMTEXT(CONCAT('[', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+--enable_query_log
+
+--connection con3
+--echo # Full scan VECTOR_INDEXES while DML storms in progress
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, INDEX_NAME;
+
+--connection con4
+--echo # SHOW INDEX while DML storms in progress
+SHOW INDEX FROM t_main;
+SHOW INDEX FROM t_cos;
+
+--connection con1
+COMMIT;
+
+--connection con2
+COMMIT;
+
+--connection default
+SELECT COUNT(*) AS total_after_storm FROM t_main;
+
+--echo ########################################
+--echo # Scenario 6: SHOW INDEX racing with TRUNCATE TABLE
+--echo # Risk: TRUNCATE drops and recreates aux tables; SHOW INDEX UNION reads DD
+--echo ########################################
+
+CREATE TABLE t_trunc (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  v VECTOR(3),
+  VECTOR INDEX vi_trunc(v)
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_trunc(v) VALUES (VEC_FROMTEXT('[1,1,1]'));
+INSERT INTO t_trunc(v) VALUES (VEC_FROMTEXT('[2,2,2]'));
+INSERT INTO t_trunc(v) VALUES (VEC_FROMTEXT('[3,3,3]'));
+--enable_query_log
+
+--echo # Before TRUNCATE
+SHOW INDEX FROM t_trunc;
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_trunc';
+
+--echo # TRUNCATE
+TRUNCATE TABLE t_trunc;
+
+--connection con1
+--echo # After TRUNCATE — index metadata should still exist
+SHOW INDEX FROM t_trunc;
+
+--connection con2
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_trunc';
+
+--connection default
+DROP TABLE t_trunc;
+
+--echo ########################################
+--echo # Scenario 7: Concurrent RENAME TABLE + SHOW INDEX
+--echo # Risk: Table name mismatch between SHOW_STATISTICS and VECTOR_INDEXES branches
+--echo ########################################
+
+CREATE TABLE t_ren (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  v VECTOR(4),
+  INDEX idx_id(id),
+  VECTOR INDEX vi_ren(v)
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_ren(v) VALUES (VEC_FROMTEXT('[1,2,3,4]'));
+--enable_query_log
+
+--connection con1
+SHOW INDEX FROM t_ren;
+
+--connection default
+RENAME TABLE t_ren TO t_ren2;
+
+--connection con2
+SHOW INDEX FROM t_ren2;
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_ren2';
+
+--connection default
+DROP TABLE t_ren2;
+
+--echo ########################################
+--echo # Scenario 8: Rapid DDL cycle + metadata queries
+--echo # Risk: Stale DD cache between CREATE/DROP cycles
+--echo ########################################
+
+let $cycle = 1;
+while ($cycle <= 5)
+{
+  eval CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+  eval INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+
+  SHOW INDEX FROM t_cycle;
+
+  SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+
+  DROP TABLE t_cycle;
+
+  inc $cycle;
+}
+
+--echo ########################################
+--echo # Scenario 9: Cross-database concurrent VECTOR_INDEXES queries
+--echo # Risk: Concurrent DD reads across schemas
+--echo ########################################
+
+CREATE DATABASE IF NOT EXISTS vidx_db_a;
+CREATE DATABASE IF NOT EXISTS vidx_db_b;
+
+--connection con1
+USE vidx_db_a;
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t_a (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_a(v)) ENGINE=InnoDB;
+--disable_query_log
+INSERT INTO t_a VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+--enable_query_log
+
+--connection con2
+USE vidx_db_b;
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t_b (id INT PRIMARY KEY, v VECTOR(5), VECTOR INDEX vi_b(v) distance=cosine) ENGINE=InnoDB;
+--disable_query_log
+INSERT INTO t_b VALUES (1, VEC_FROMTEXT('[1,0,0,0,0]'));
+--enable_query_log
+
+--connection con3
+--echo # Cross-database VECTOR_INDEXES full scan
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, DIMENSION, METRIC_TYPE
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA IN ('vidx_db_a', 'vidx_db_b')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+
+--connection con4
+USE vidx_db_a;
+SHOW INDEX FROM t_a;
+
+--connection con1
+USE vidx_db_b;
+SHOW INDEX FROM t_b;
+
+--connection con1
+USE test;
+--connection con2
+USE test;
+--connection con3
+USE test;
+--connection con4
+USE test;
+
+--connection default
+USE test;
+DROP DATABASE vidx_db_a;
+DROP DATABASE vidx_db_b;
+
+--echo ########################################
+--echo # Scenario 10: SHOW INDEX + ANN query interleaved
+--echo # Risk: UNION ALL query builder contention with optimizer ANN path
+--echo ########################################
+
+--disable_query_log
+--connection con1
+BEGIN;
+let $i = 300;
+while ($i <= 310)
+{
+  eval INSERT INTO t_main(name, v) VALUES (CONCAT('ann_', $i), VEC_FROMTEXT(CONCAT('[', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+COMMIT;
+--enable_query_log
+
+--connection con2
+--echo # SHOW INDEX interleaved with ANN queries
+SHOW INDEX FROM t_main;
+--disable_result_log
+SELECT id, name FROM t_main FORCE INDEX(vi_main)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[300,300,300,300]')) LIMIT 5;
+--enable_result_log
+SHOW INDEX FROM t_main;
+
+--connection con3
+--echo # VECTOR_INDEXES interleaved with ANN
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+--disable_result_log
+SELECT id FROM t_main FORCE INDEX(vi_main)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[305,305,305,305]')) LIMIT 3;
+--enable_result_log
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+--connection default
+
+--echo ########################################
+--echo # Scenario 11: SHOW INDEX with optimizer_switch variations
+--echo # Risk: derived_condition_pushdown=off causes full materialization
+--echo ########################################
+
+--echo # Default (derived_condition_pushdown=on)
+SHOW INDEX FROM t_main;
+
+--echo # Turn off derived_condition_pushdown
+SET SESSION optimizer_switch = 'derived_condition_pushdown=off';
+SHOW INDEX FROM t_main;
+
+--echo # Verify VECTOR_INDEXES also unaffected
+SELECT INDEX_NAME, DIMENSION, METRIC_TYPE FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+SET SESSION optimizer_switch = 'derived_condition_pushdown=on';
+
+--echo ########################################
+--echo # Scenario 12: Repeated SHOW INDEX in tight loop (stress)
+--echo # Risk: Memory leak or resource exhaustion in query builder
+--echo ########################################
+
+--disable_query_log
+--disable_result_log
+let $rep = 1;
+while ($rep <= 50)
+{
+  SHOW INDEX FROM t_main;
+  SHOW INDEX FROM t_cos;
+  SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+  inc $rep;
+}
+--enable_result_log
+--enable_query_log
+
+--echo # No crash after 50 rapid iterations - pass
+
+--echo ########################################
+--echo # Scenario 13: Table with ONLY vector index (no btree)
+--echo # Risk: SHOW_STATISTICS branch returns empty, only VECTOR_INDEXES has rows
+--echo ########################################
+
+CREATE TABLE t_vec_only (
+  id INT NOT NULL,
+  v VECTOR(4),
+  VECTOR INDEX vi_only(v) distance=euclidean
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_vec_only VALUES (1, VEC_FROMTEXT('[1,1,1,1]'));
+--enable_query_log
+
+--echo # SHOW INDEX must return vector row even with no btree index
+SHOW INDEX FROM t_vec_only;
+
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_vec_only';
+
+--echo # Also test SHOW KEYS syntax (alias for SHOW INDEX)
+SHOW KEYS FROM t_vec_only;
+
+--echo # And qualified db.table syntax
+SHOW INDEX FROM test.t_vec_only;
+
+DROP TABLE t_vec_only;
+
+--echo ########################################
+--echo # Scenario 14: DROP TABLE while another session queries metadata
+--echo # Risk: Table disappears mid-UNION evaluation, should error not crash
+--echo ########################################
+
+CREATE TABLE t_drop_race (
+  id INT PRIMARY KEY,
+  v VECTOR(3),
+  INDEX idx_id(id),
+  VECTOR INDEX vi_dr(v)
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_drop_race VALUES (1, VEC_FROMTEXT('[1,1,1]'));
+--enable_query_log
+
+--connection con1
+--echo # Metadata read before DROP
+SHOW INDEX FROM t_drop_race;
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_drop_race';
+
+--connection default
+DROP TABLE t_drop_race;
+
+--connection con2
+--echo # After DROP — expect error, not crash
+--error ER_NO_SUCH_TABLE
+SHOW INDEX FROM t_drop_race;
+
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_drop_race';
+
+--connection default
+
+--echo ########################################
+--echo # Scenario 15: PREPARE/EXECUTE SHOW INDEX across DDL
+--echo # Risk: Prepared statement cache not reflecting DD changes
+--echo ########################################
+
+CREATE TABLE t_prep (
+  id INT PRIMARY KEY,
+  name VARCHAR(20),
+  v VECTOR(3),
+  INDEX idx_name(name),
+  VECTOR INDEX vi_prep(v)
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_prep VALUES (1, 'a', VEC_FROMTEXT('[1,2,3]'));
+--enable_query_log
+
+--echo # PREPARE before DDL
+PREPARE stmt_show FROM 'SHOW INDEX FROM t_prep';
+PREPARE stmt_vi FROM 'SELECT INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?';
+SET @tbl = 't_prep';
+
+EXECUTE stmt_show;
+EXECUTE stmt_vi USING @tbl;
+
+--echo # DDL: drop vector index
+ALTER TABLE t_prep DROP INDEX vi_prep;
+
+--echo # EXECUTE after DDL — should reflect new state (no vector row)
+EXECUTE stmt_show;
+EXECUTE stmt_vi USING @tbl;
+
+--echo # DDL: recreate vector index
+ALTER TABLE t_prep ADD VECTOR INDEX vi_prep2(v) distance=cosine;
+
+--echo # EXECUTE again — should show new vector index
+EXECUTE stmt_show;
+EXECUTE stmt_vi USING @tbl;
+
+DEALLOCATE PREPARE stmt_show;
+DEALLOCATE PREPARE stmt_vi;
+DROP TABLE t_prep;
+
+--echo ########################################
+--echo # Scenario 16: vidx_disabled toggle mid-session
+--echo # Risk: VECTOR_INDEXES branch behavior during feature flag flip
+--echo ########################################
+
+CREATE TABLE t_toggle (
+  id INT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi_tog(v)
+) ENGINE=InnoDB;
+
+--disable_query_log
+INSERT INTO t_toggle VALUES (1, VEC_FROMTEXT('[1,1,1]'));
+--enable_query_log
+
+--echo # With vidx_disabled=OFF — should see vector index
+SET GLOBAL vidx_disabled = OFF;
+SHOW INDEX FROM t_toggle;
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_toggle';
+
+--echo # Toggle to ON mid-session
+SET GLOBAL vidx_disabled = ON;
+
+--connection con1
+SET GLOBAL vidx_disabled = ON;
+--echo # With vidx_disabled=ON — SHOW INDEX behavior
+SHOW INDEX FROM t_toggle;
+--echo # VECTOR_INDEXES should still reflect DD state (view is metadata, not runtime)
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_toggle';
+
+--connection default
+SET GLOBAL vidx_disabled = OFF;
+DROP TABLE t_toggle;
+
+--echo ########################################
+--echo # Scenario 17: Many tables with vector indexes (full scan stress)
+--echo # Risk: VECTOR_INDEXES full scan on 10+ tables
+--echo ########################################
+
+--disable_query_log
+let $t = 1;
+while ($t <= 10)
+{
+  eval CREATE TABLE t_many_$t (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_m(v)) ENGINE=InnoDB;
+  eval INSERT INTO t_many_$t VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+  inc $t;
+}
+--enable_query_log
+
+--echo # Full scan should return all 10 vector indexes + t_main + t_cos
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+
+--echo # Filtered scan (single table) still fast
+SELECT INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_many_5';
+
+--echo # Concurrent full scan from multiple sessions
+--connection con1
+--disable_result_log
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+--enable_result_log
+
+--connection con2
+--disable_result_log
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+--enable_result_log
+
+--connection con3
+--disable_result_log
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+--enable_result_log
+
+--connection default
+--echo # Cleanup many tables
+--disable_query_log
+let $t = 1;
+while ($t <= 10)
+{
+  eval DROP TABLE t_many_$t;
+  inc $t;
+}
+--enable_query_log
+
+--echo ########################################
+--echo # Scenario 18: HLINDEX_TABLE_NAME deep coverage
+--echo # Verify: naming convention, DDL consistency, TRUNCATE survival
+--echo ########################################
+
+--echo # 18.1 Naming convention: HLINDEX_TABLE_NAME matches vidx_*_0 pattern
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+       HLINDEX_TABLE_NAME LIKE 'vidx_%\\_0' AS name_matches_pattern
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+
+--echo # 18.2 Capture HLINDEX_TABLE_NAME before DDL
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT @saved_hlidx := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cos';
+
+--echo # 18.3 DROP + CREATE vector index: HLINDEX_TABLE_NAME should change
+--echo # (new se_private_id => new aux table name)
+ALTER TABLE t_cos DROP INDEX vi_cos;
+ALTER TABLE t_cos ADD VECTOR INDEX vi_cos_new(v) distance=cosine;
+
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+       HLINDEX_TABLE_NAME = @saved_hlidx AS same_as_before
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cos';
+
+--echo # 18.4 TRUNCATE: HLINDEX_TABLE_NAME changes (TRUNCATE drops+recreates aux table, new se_private_id)
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT @hlidx_before_trunc := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+TRUNCATE TABLE t_main;
+
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+       HLINDEX_TABLE_NAME = @hlidx_before_trunc AS same_after_trunc
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+
+--echo # 18.5 RENAME TABLE: HLINDEX_TABLE_NAME unchanged (aux table not renamed)
+CREATE TABLE t_hlidx_ren (
+  id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_hr(v)
+) ENGINE=InnoDB;
+
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT @hlidx_ren := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_hlidx_ren';
+
+RENAME TABLE t_hlidx_ren TO t_hlidx_ren2;
+
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXX_N/
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+       HLINDEX_TABLE_NAME = @hlidx_ren AS same_after_rename
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_hlidx_ren2';
+
+DROP TABLE t_hlidx_ren2;
+
+--echo # 18.6 Recreate t_cos vector index to original for other scenario consistency
+ALTER TABLE t_cos DROP INDEX vi_cos_new;
+ALTER TABLE t_cos ADD VECTOR INDEX vi_cos(v) distance=cosine;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+--connection con1
+--disconnect con1
+--source include/wait_until_disconnected.inc
+
+--connection con2
+--disconnect con2
+--source include/wait_until_disconnected.inc
+
+--connection con3
+--disconnect con3
+--source include/wait_until_disconnected.inc
+
+--connection con4
+--disconnect con4
+--source include/wait_until_disconnected.inc
+
+--connection default
+DROP TABLE t_cos;
+DROP TABLE t_main;
+
+SET GLOBAL vidx_disabled = ON;
+--enable_warnings

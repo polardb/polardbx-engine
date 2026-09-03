@@ -1,0 +1,5 @@
+# This testcase tries to put the InnoDB under stress of truncating and deleting
+# tablespaces, with a buffer pool eviction process run in parallel in some
+# cases, and with innodb_data_file_purge=1.
+
+--source tablespace_truncate_stress.test

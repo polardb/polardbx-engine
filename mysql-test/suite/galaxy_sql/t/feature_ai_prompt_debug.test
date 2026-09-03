@@ -1,0 +1,47 @@
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+
+# Debug test: register models like feature_ai_model then call AI_PROMPT.
+# The kernel does not install default model/function rows; default calls fail
+# until dbms_ai.update_function is called by the control plane.
+--echo # Register some user models first
+--perl
+use strict;
+my $api_key = $ENV{'DASHSCOPE_API_KEY'} || '';
+my $vardir = $ENV{'MYSQLTEST_VARDIR'};
+open(my $fh, '>', "$vardir/tmp/dashscope_key.inc") or die "Cannot write: $!";
+if ($api_key eq '') {
+  print $fh "--let \$_skip_test = 1\n";
+} else {
+  print $fh "--let \$dashscope_api_key = $api_key\n";
+}
+close($fh);
+EOF
+--source $MYSQLTEST_VARDIR/tmp/dashscope_key.inc
+--remove_file $MYSQLTEST_VARDIR/tmp/dashscope_key.inc
+
+if ($_skip_test) {
+  --skip Requires DASHSCOPE_API_KEY environment variable
+}
+
+--disable_query_log
+--eval CALL dbms_ai.register_model('qwen_plus', 'dashscope', 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', 'qwen-plus', '{"api_key":"$dashscope_api_key"}')
+--eval CALL dbms_ai.register_model('qwen_turbo', 'dashscope', 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', 'qwen-turbo', '{"api_key":"$dashscope_api_key"}')
+--enable_query_log
+
+--echo # Update model like feature_ai_model does
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"http://example.com/api"}');
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"}');
+
+--echo # Now try AI_PROMPT without configured default model
+--error ER_WRONG_ARGUMENTS
+SELECT AI_PROMPT('Say exactly one word: hello') IS NOT NULL AS result;
+
+--echo # Also try with explicit model
+SELECT AI_PROMPT('Say exactly one word: blue', 'qwen_turbo') IS NOT NULL AS result;
+
+# Cleanup
+CALL dbms_ai.drop_model('qwen_plus');
+CALL dbms_ai.drop_model('qwen_turbo');
+
+--echo # Done

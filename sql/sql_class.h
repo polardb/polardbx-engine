@@ -113,7 +113,7 @@
 
 #include "ppi/ppi_statement.h"
 
-#include "sql/lizard/lizard_service.h"  // gcn_t, struct MyVisionGCN...
+#include "komodo0service.h"  // gcn_t, struct MyVisionGCN...
 #include "sql/trans_proc/returning_parse.h"
 
 #include "sql/ccl/ccl.h"
@@ -122,9 +122,10 @@
 
 #include "polarx_proc/changeset_common.h"
 
-#include "sql/xa/lizard_cmmt_policy.h"
-#include "sql/lizard_sql_class.h"
+#include "sql/xa/komodo0cmmt0policy.h"
+#include "sql/komodo0sql0class.h"
 
+#include "sql/column_encryption/column_encryption_ctx.h"
 #include "sql/group_update_ctx.h"  // GroupUpdateCtx
 
 namespace im {
@@ -982,11 +983,20 @@ class AUDIT_trx_ctx {
   unsigned long long start_time;
   unsigned long long trx_id;
 
+  unsigned long long cpu_time_sec;
+  double cpu_time_percent;
+  unsigned long long trx_affected_rows;
+  unsigned long long binlog_cache_used;
+
  public:
   AUDIT_trx_ctx() {
     state = AUDIT_TRX_IDLE;
     start_time = 0;
     trx_id = 0;
+    cpu_time_sec = 0;
+    cpu_time_percent = 0;
+    trx_affected_rows = 0;
+    binlog_cache_used = 0;
   }
 
   void start_transaction() {
@@ -999,6 +1009,15 @@ class AUDIT_trx_ctx {
   void end_transaction() { state = AUDIT_TRX_IDLE; }
 
   void set_trx_id(unsigned long long id) { trx_id = id; }
+
+  void set_cpu_time_sec(unsigned long long time) { cpu_time_sec = time; }
+  void set_cpu_time_percent(double usage) { cpu_time_percent = usage; }
+  void set_trx_affected_rows(unsigned long long rows) {
+    trx_affected_rows = rows;
+  }
+  void set_binlog_cache_used(unsigned long long used) {
+    binlog_cache_used = used;
+  }
 };
 
 /**
@@ -1018,7 +1037,17 @@ class THD : public MDL_context_owner,
   */
   Thd_mem_cnt m_mem_cnt;
 
+#ifndef NDEBUG
  private:
+  bool m_already_checked_dml_readonly = false;
+
+ public:
+  void set_dml_readonly_checked(bool checked = true) {
+    m_already_checked_dml_readonly = checked;
+  }
+  bool is_dml_readonly_checked() const { return m_already_checked_dml_readonly; }
+#endif
+
   inline bool is_stmt_prepare() const {
     assert(0);
     return Query_arena::is_stmt_prepare();
@@ -1682,9 +1711,6 @@ class THD : public MDL_context_owner,
   */
   ulonglong start_utime;
 
-  /** Snapshot of mask_internal_user variable. */
-  bool enable_mask_internal_user = false;
-
  private:
   /**
     Time spent waiting for TABLE locks and DATA locks.
@@ -1994,7 +2020,6 @@ class THD : public MDL_context_owner,
     CSS_NONE = 0,
     CSS_SERVER_NOT_READY,
     CSS_LEADERSHIP_CHANGING,
-    CSS_LOG_TOO_LARGE,
     CSS_LEADERSHIP_CHANGED,
     CSS_SHUTDOWN,
     CSS_OTHER
@@ -2004,7 +2029,6 @@ class THD : public MDL_context_owner,
     ER_CONSENSUS_OTHER_ERROR,
     ER_CONSENSUS_SERVER_NOT_READY,
     ER_CONSENSUS_LEADERSHIP_IS_CHANGING,
-    ER_CONSENSUS_LOG_TOO_LARGE,
     ER_CONSENSUS_LEADERSHIP_CHANGED,
     ER_SERVER_SHUTDOWN,
     ER_CONSENSUS_OTHER_ERROR
@@ -2155,7 +2179,7 @@ class THD : public MDL_context_owner,
     /// Transaction state data.
     Transaction_state m_trx_state;
 
-    lizard::Transaction_policy_state m_policy_state;
+    komodo::Transaction_policy_state m_policy_state;
 
    private:
     Attachable_trx(const Attachable_trx &);
@@ -4831,6 +4855,18 @@ class THD : public MDL_context_owner,
                                   len);
   }
 
+  bool set_recycle_name(const char *name, size_t len) {
+    DBUG_EXECUTE_IF("recycle_name_update_oom", {
+      if (name != nullptr) return true;
+    });
+    mysql_mutex_lock(&LOCK_thd_sysvar);
+    const bool error =
+        session_sysvar_res_mgr.update(&variables.recycle_bin_table_name, name,
+                                      len);
+    mysql_mutex_unlock(&LOCK_thd_sysvar);
+    return error;
+  }
+
  private:
   /**
     This flag tells if a secondary storage engine can be used to
@@ -4938,7 +4974,9 @@ class THD : public MDL_context_owner,
  public:
   MyVisionGCN owned_vision_gcn;
 
-  lizard::Commit_policy_ctx cpolicy_ctx;
+  komodo::Commit_policy_ctx cpolicy_ctx;
+
+  komodo::Column_encryption_ctx column_encryption_ctx;
 
   struct im::ST_CONN_ATTR conn_attr;
   /** Returning clause lex */
@@ -4949,10 +4987,28 @@ class THD : public MDL_context_owner,
   /** Used for slow query blocker to judge if need to block. */
   bool sqb_should_block = false;
 
+  /* Indicates if query has vector column. */
+  bool m_query_has_vector_column{false};
+
   /** Total affected rows in the transaction. */
   longlong m_trx_affected_rows;
 
   enum Sqb_ret_error sqb_ret_error;
+
+  /** The thread id of the current thread when every sql. */
+  my_thread_t sql_current_thread_id;
+
+  /** Snapshot of mask_internal_user variable. */
+  bool enable_mask_internal_user = false;
+  /** Snapshot of mask_ai_model_config_api_key variable. */
+  bool enable_mask_ai_model_config_api_key = true;
+  /** Snapshot of opt_encdb variable. */
+  bool enable_column_encryption = false;
+  /** Encdb plugin per-connection data (plugin allocates, THD releases). */
+  void *encdb_session_data = nullptr;
+  void (*encdb_session_data_cleanup)(void *) = nullptr;
+  /** Is the user a polarx system user */
+  bool is_polarx_sys_user = false;
 
 #ifndef NDEBUG
   /** Replaced m_cond_preempt. Protected by LOCK_tx_commit_pending_mutex. */
@@ -4971,7 +5027,8 @@ class THD : public MDL_context_owner,
   COND_tx_commit_pending_cond_var and so on.) */
   mysql_mutex_t LOCK_tx_commit_pending_mutex;
 
-  void reset_trans_policy() {
+void reset_trans_policy() {
+    /** Reset GCN characteristics. */
     variables.innodb_snapshot_gcn = GCN_NULL;
     variables.innodb_commit_gcn = GCN_NULL;
     variables.innodb_current_snapshot_gcn = false;
@@ -4979,13 +5036,12 @@ class THD : public MDL_context_owner,
 
     owned_vision_gcn = GCN_NULL;
 
+    /** Reset commit policy. */
     cpolicy_ctx.reset();
   }
+
   /** For attachable transaction, use single shard instead*/
-  void new_attachable_policy() {
-    reset_trans_policy();
-    cpolicy_ctx.activate_single_shard();
-  }
+  void new_attachable_policy() { reset_trans_policy(); }
 
   ulonglong get_snapshot_gcn() { return variables.innodb_snapshot_gcn; }
 
@@ -5051,6 +5107,11 @@ bool set_my_ok(THD *thd, ulonglong affected_rows, ulonglong id = 0, const char *
 void my_eof(THD *thd);
 
 bool add_item_to_list(THD *thd, Item *item);
+
+/* for changeset */
+void thd_save_prepared_changeset_map(THD *thd, XID *xid);
+bool thd_load_prepared_changeset_map(THD *thd, XID *xid);
+void thd_commit_changeset_map(THD *thd, bool is_rollback);
 
 /*************************************************************************/
 

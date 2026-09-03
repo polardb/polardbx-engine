@@ -31,8 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "fil0fil.h"
-#include "lizard0dict.h"
-#include "lizard0fsp.h"
+#include "lizard0dict0dict.h"
 
 /** Lizard tablespace */
 fil_space_t *fil_space_t::s_lizard_space = nullptr;

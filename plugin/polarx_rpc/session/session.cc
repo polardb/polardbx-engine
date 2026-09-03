@@ -41,6 +41,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/conn_handler/connection_handler_manager.h"
 #include "sql/sql_class.h"
 #include "sql/srv_session.h"
+#include "my_sys.h"
+#include "my_base.h"
 
 #include "../coders/buffering_command_delegate.h"
 #include "../coders/command_delegate.h"
@@ -519,6 +521,7 @@ err_t Csession::sql_stmt_execute(const PolarXRPC::Sql::StmtExecute &msg) {
   err = execute_sql(qb_.get().data(), qb_.get().length(), delegate);
   // sql_print_information("sid %lu run %s done err %d sqlerr %d", sid_,
   // qb_.get().c_str(), err.error, sql_err.error);
+  qb_.clear(); // free memory
   if (err) {
     /// send warning
     send_warnings(*this, encoder_, true);
@@ -730,28 +733,40 @@ err_t Csession::sql_plan_execute(const PolarXRPC::ExecPlan::ExecPlan &msg) {
   if (msg.has_feed_back()) delegate.set_feedback(msg.feed_back());
 
   /// build audit string
-  std::string full_audit;
-  full_audit.reserve(1024);
-  if (msg.has_trace_id()) {
-    full_audit += msg.trace_id();
-    full_audit += '\n';
+  char full_audit[2048];
+  auto full_audit_len = snprintf(
+      full_audit, sizeof(full_audit), "%sselect xplan%s\n/*xplan %s\n%s*/",
+      msg.has_trace_id() ? msg.trace_id().c_str() : "",
+      plan_param_audit_str_builder(thd, msg.parameters()).c_str(),
+      msg.has_plan_digest()
+          ? RawBinary(msg.plan_digest()).to_hex_string().c_str()
+          : "",
+      audit_str.c_str());
+  if (UNLIKELY(full_audit_len < 0)) {
+    full_audit[0] = '\0';
+    full_audit_len = 0;
+  } else if (UNLIKELY(full_audit_len >= static_cast<int>(sizeof(full_audit)))) {
+    full_audit[sizeof(full_audit) - 1] = '\0';
+    full_audit_len = sizeof(full_audit) - 1;
   }
-  if (msg.has_plan_digest()) {
-    RawBinary bin(msg.plan_digest());
-    full_audit += "/*xplan ";
-    full_audit += bin.to_hex_string();
-    full_audit += '\n';
-  } else
-    full_audit += "/*xplan\n";
-  full_audit += audit_str;
-  full_audit += "*/\nselect xplan";
-  full_audit += plan_param_audit_str_builder(thd, msg.parameters());
 
   auto iret = rpc_executor::Executor::instance().execute(
-      *plan_ptr, msg.parameters(), delegate, thd, full_audit.c_str(),
-      full_audit.length());
+      *plan_ptr, msg.parameters(), delegate, thd, full_audit, full_audit_len);
   /// detach via auto detacher in session::run
-  if (iret != 0) return err_t(ER_POLARX_RPC_ERROR_MSG, "Executor error");
+  if (iret != 0) {
+    char errbuf[MYSQL_ERRMSG_SIZE];
+    std::string error_msg;
+    if (iret >= HA_ERR_FIRST && iret <= HA_ERR_LAST) {
+      // Get handler error message using my_strerror
+      my_strerror(errbuf, sizeof(errbuf), iret);
+      error_msg = std::string("Executor error: ") + errbuf + " (error code: " + 
+                  std::to_string(iret) + ")";
+    } else {
+      // For non-handler errors, use error code directly
+      error_msg = "Executor error (error code: " + std::to_string(iret) + ")";
+    }
+    return err_t(ER_POLARX_RPC_ERROR_MSG, error_msg);
+  }
   return err_t::Success();
 }
 

@@ -169,6 +169,21 @@ bool ccl_end_trans(THD *thd, bool rollback);
   @retval         Ccl_error
 */
 Conf_error reload_ccl_rules(THD *thd);
+
+/**
+  Load rules from table for del_all.
+
+  Report client error if failed, whether log error
+  message decided by caller.
+
+  Log warning message if the number of successful loading into cache
+  is not equal to records in table.
+
+  @param[in]      thd           Thread context
+
+  @retval         Ccl_error
+*/
+Conf_error del_all_ccl_rules(THD *thd);
 /**
   Flush ccl cache if force_clean is true and fill new rules.
 
@@ -190,7 +205,7 @@ bool reflush_ccl_cache(Conf_records *records, bool force_clean);
   @retval         false       Success
   @retval         true        Failure
 */
-bool add_ccl_rule(THD *thd, Conf_record *record);
+bool add_ccl_rule(THD *thd, Conf_record *record, ulonglong *rule_id = nullptr);
 /**
   Delete the rule.
   Delete the row or clear the rule cache or both.
@@ -198,6 +213,14 @@ bool add_ccl_rule(THD *thd, Conf_record *record);
   Only report warning message if row or cache not found
 */
 bool del_ccl_rule(THD *thd, Conf_record *record);
+
+/**
+  Delete the rule batch.
+  Delete the row or clear the rule cache or both.
+
+  Only report warning message if row or cache not found
+*/
+bool del_ccl_rule_batch(THD *thd, std::vector<Conf_record *> &records);
 
 } /* namespace im */
 

@@ -275,6 +275,11 @@ struct fil_space_t {
 
   /** Increment the page reference count. */
   void inc_ref() noexcept {
+    /* We assume space is protected from being removed either through
+    n_pending_ops or m_n_ref_count already bumped, OR MDL latch is
+    protecting it, OR it is a private space. Bumping the n_pending_ops
+    can be done only under fil shard mutex and stopping new bumps is also
+    done under this mutex */
     const auto o = m_n_ref_count.fetch_add(1);
     ut_a(o != std::numeric_limits<size_t>::max());
   }
@@ -1300,8 +1305,13 @@ constexpr page_type_t FIL_PAGE_TYPE_ZLOB_FRAG_ENTRY = 29;
 /** See lizard0fil0fil.h */
 constexpr page_type_t FIL_PAGE_INDEX_PANDA = 40;
 
+/** Secondary index page with tid on the rec. */
+constexpr page_type_t FIL_PAGE_INDEX_HIPPO = 41;
+
+constexpr page_type_t FIL_PAGE_INDEX_SPC = 42;
+
 /** Note the highest valid non-index page_type_t. */
-constexpr page_type_t FIL_PAGE_TYPE_LAST = FIL_PAGE_INDEX_PANDA;
+constexpr page_type_t FIL_PAGE_TYPE_LAST = FIL_PAGE_INDEX_SPC;
 
 /** Check whether the page type is sys */
 #define fil_page_type_is_sys(page_type) \

@@ -59,7 +59,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 #include "lizard0data0types.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
+#include "lizard0trx.h"
 #include "lizard0undo.h"
 
 /** Object to handle Log_DDL */
@@ -248,6 +249,9 @@ std::ostream &DDL_Record::print(std::ostream &out) const {
       break;
     case Log_Type::ALTER_UNENCRYPT_TABLESPACE_LOG:
       out << "ALTER UNENCRYPT TABLESPACE";
+      break;
+    case Log_Type::PURGE_FILE_LOG:
+      out << "PURGE FILE";
       break;
     default:
       ut_d(ut_error);
@@ -513,9 +517,9 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
     log_free_check();
   }
 
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
-  assert_lizard_dict_table_check(index->table);
+  ut_ad(lizard::dict_table_check_valid(index->table));
 
   create_tuple(record);
   entry = row_build_index_entry(m_tuple, nullptr, index, m_heap);
@@ -568,11 +572,10 @@ dberr_t DDL_Log_Table::insert(const DDL_Record &record) {
   return (error);
 }
 
-void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, rec_t *rec,
-                                          const ulint *offsets,
+void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, const Slice *slc,
                                           DDL_Record &record) {
   if (is_clustered) {
-    for (ulint i = 0; i < rec_offs_n_fields(offsets); i++) {
+    for (ulint i = 0; i < rec_offs_n_fields(slc->offsets()); i++) {
       const byte *data;
       ulint len;
 
@@ -582,7 +585,7 @@ void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, rec_t *rec,
       }
 
       const dict_index_t *clust_index = m_table->first_index();
-      data = rec_get_nth_field(clust_index, rec, offsets, i, &len);
+      data = const_cast<Slice *>(slc)->get_nth_field(clust_index, i, &len);
 
       if (len != UNIV_SQL_NULL) {
         set_field(data, i, len, record);
@@ -590,16 +593,17 @@ void DDL_Log_Table::convert_to_ddl_record(bool is_clustered, rec_t *rec,
     }
   } else {
     /* For secondary index, only the ID would be stored */
-    record.set_id(parse_id(m_table->first_index()->next(), rec, offsets));
+    ut_ad(slc->index() == m_table->first_index()->next());
+    record.set_id(parse_id(m_table->first_index()->next(), slc));
   }
 }
 
-ulint DDL_Log_Table::parse_id(const dict_index_t *index, rec_t *rec,
-                              const ulint *offsets) {
+ulint DDL_Log_Table::parse_id(const dict_index_t *index, const Slice *slc) {
   ulint len;
   ulint index_offset = index->get_col_pos(s_id_col_no);
 
-  const byte *data = rec_get_nth_field(index, rec, offsets, index_offset, &len);
+  const byte *data =
+      const_cast<Slice *>(slc)->get_nth_field(index, index_offset, &len);
   ut_ad(len == s_id_col_len);
 
   return (mach_read_from_8(data));
@@ -677,9 +681,9 @@ ulint DDL_Log_Table::fetch_value(const byte *data, ulint offset) {
 dberr_t DDL_Log_Table::search_all(DDL_Records &records) {
   mtr_t mtr;
   btr_pcur_t pcur;
-  rec_t *rec;
+  reg_t reg;
   bool move = true;
-  ulint *offsets;
+  Slice_ctx sctx(&m_heap);
   dict_index_t *index = m_table->first_index();
   dberr_t error = DB_SUCCESS;
 
@@ -689,21 +693,20 @@ dberr_t DDL_Log_Table::search_all(DDL_Records &records) {
   pcur.open_at_side(false, index, BTR_SEARCH_LEAF, true, 0, &mtr);
 
   for (; move == true; move = pcur.move_to_prev(&mtr)) {
-    rec = pcur.get_rec();
+    reg = pcur.get_reg();
 
-    if (page_rec_is_infimum(rec) || page_rec_is_supremum(rec)) {
+    if (page_rec_is_infimum(reg.rec) || page_rec_is_supremum(reg.rec)) {
       continue;
     }
 
-    offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &m_heap);
+    Slice *slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    if (rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
+    if (rec_get_deleted_flag(reg.rec, dict_table_is_comp(m_table))) {
       continue;
     }
 
     DDL_Record *record = ut::new_withkey<DDL_Record>(UT_NEW_THIS_FILE_PSI_KEY);
-    convert_to_ddl_record(index->is_clustered(), rec, offsets, *record);
+    convert_to_ddl_record(index->is_clustered(), slc, *record);
     records.push_back(record);
   }
 
@@ -738,9 +741,10 @@ dberr_t DDL_Log_Table::search_by_id(ulint id, dict_index_t *index,
                                     DDL_Records &records) {
   mtr_t mtr;
   btr_pcur_t pcur;
-  rec_t *rec;
+  reg_t reg;
   bool move = true;
-  ulint *offsets;
+  Slice_ctx sctx(&m_heap);
+  Slice *slc = nullptr;
   dberr_t error = DB_SUCCESS;
 
   mtr_start(&mtr);
@@ -750,25 +754,24 @@ dberr_t DDL_Log_Table::search_by_id(ulint id, dict_index_t *index,
                     UT_LOCATION_HERE);
 
   for (; move == true; move = pcur.move_to_next(&mtr)) {
-    rec = pcur.get_rec();
+    reg = pcur.get_reg();
 
-    if (page_rec_is_infimum(rec) || page_rec_is_supremum(rec)) {
+    if (page_rec_is_infimum(reg.rec) || page_rec_is_supremum(reg.rec)) {
       continue;
     }
 
-    offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &m_heap);
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    if (cmp_dtuple_rec(m_tuple, rec, index, offsets) != 0) {
+    if (cmp_dtuple_rec(m_tuple, index, slc) != 0) {
       break;
     }
 
-    if (rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
+    if (rec_get_deleted_flag(reg.rec, dict_table_is_comp(m_table))) {
       continue;
     }
 
     DDL_Record *record = ut::new_withkey<DDL_Record>(UT_NEW_THIS_FILE_PSI_KEY);
-    convert_to_ddl_record(index->is_clustered(), rec, offsets, *record);
+    convert_to_ddl_record(index->is_clustered(), slc, *record);
     records.push_back(record);
   }
 
@@ -781,7 +784,8 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   mtr_t mtr;
   dict_index_t *clust_index = m_table->first_index();
   btr_pcur_t pcur;
-  ulint *offsets;
+  Slice_ctx sctx(&m_heap);
+  Slice *slc = nullptr;
   rec_t *rec;
   dict_index_t *index;
   dtuple_t *row;
@@ -815,19 +819,19 @@ dberr_t DDL_Log_Table::remove(ulint id) {
     return (DB_SUCCESS);
   }
 
-  offsets = rec_get_offsets(pcur.get_rec(), clust_index, nullptr,
-                            ULINT_UNDEFINED, UT_LOCATION_HERE, &m_heap);
+  slc = sctx.get_offsets(pcur.get_reg(), clust_index, ULINT_UNDEFINED);
 
-  row = row_build(ROW_COPY_DATA, clust_index, pcur.get_rec(), offsets, nullptr,
+  row = row_build(ROW_COPY_DATA, clust_index, pcur.get_creg(), slc, nullptr,
                   nullptr, nullptr, nullptr, m_heap);
 
   rec = btr_cur_get_rec(btr_cur);
+  ut_ad(slc->is_positioned(rec, clust_index));
 
   if (!rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
     layout = lizard::dict_index_txn_layout(clust_index);
-    err = btr_cur_del_mark_set_clust_rec(
-        flags, layout, btr_cur_get_block(btr_cur), rec, clust_index, offsets,
-        m_thr, m_tuple, &mtr);
+    err = btr_cur_del_mark_set_clust_rec(flags, layout,
+                                         btr_cur_get_block(btr_cur), slc,
+                                         clust_index, m_thr, m_tuple, &mtr);
   }
 
   pcur.close();
@@ -856,8 +860,8 @@ dberr_t DDL_Log_Table::remove(ulint id) {
   rec = btr_cur_get_rec(btr_cur);
 
   if (!rec_get_deleted_flag(rec, dict_table_is_comp(m_table))) {
-    err =
-        btr_cur_del_mark_set_sec_rec(flags, layout, btr_cur, true, m_thr, &mtr);
+    err = btr_cur_del_mark_set_sec_rec_func(flags, layout, btr_cur, true, m_thr,
+                                            thr_get_trx(m_thr)->id, &mtr);
   }
 
   pcur.close();
@@ -1781,7 +1785,48 @@ void Log_DDL::replay_free_tree_log(space_id_t space_id, page_no_t page_no,
   mtr_t mtr;
   mtr_start(&mtr);
 
-  btr_free_if_exists(page_id_t(space_id, page_no), page_size, index_id, &mtr);
+  /* AHI cleanup contract for FREE_TREE_LOG replay
+  ----------------------------------------------
+  We pass ahi=false here so the FSP-layer per-page free path skips the
+  O(used_pages) buf_page_get_gen(PEEK_IF_IN_POOL) probe used to drop
+  AHI entries.  This is safe because every callsite that registers a
+  FREE_TREE_LOG record (or every recovery scenario that ends up replaying
+  one) guarantees the index has no AHI attached at the moment this replay
+  runs.  The three production scenarios plus the crash-recovery scenario
+  are:
+
+  1) inplace DROP INDEX (handler/handler0alter.cc)
+     The owning thread calls btr_drop_ahi_for_index(index) synchronously
+     right after write_free_tree_log() and before dict_index_remove_from_
+     cache().  By the time the trx commits and post_ddl runs this replay,
+     the index has already been actively scrubbed of AHI references.
+
+  2) DROP TABLE on a shared tablespace (row/row0mysql.cc)
+     write_free_tree_log() is issued for every index up-front.  The same
+     thread later goes through row_drop_table_from_cache() which calls
+     btr_drop_ahi_for_table(table) before dict_table_remove_from_cache().
+     Hence by replay time the table-level AHI sweep has completed.
+
+  3) CREATE INDEX rollback compensation (dict/dict0crea.cc)
+     The compensation record is only made visible when the create trx
+     rolls back; in that case ddl::drop_secondary_indexes() drives
+     dict_index_remove_from_cache(), which in turn waits via
+     btr_search_await_no_reference() until the index's search_info
+     ref_count drops to zero.  The index is therefore AHI-free before
+     post_ddl reaches this replay.
+
+  4) Crash recovery
+     After restart the buffer pool and AHI structures are empty by
+     construction, and the dropped index's dict_index_t is never loaded
+     back into the dict cache (atomic DDL rolls the DD row back together
+     with the trx).  No code path can attach AHI to a dict_index_t that
+     does not exist, so replay observes an empty AHI as well.
+
+  In addition, this branch globally pins dict_index_t::disable_ahi to
+  true (see dict_mem_fill_index_struct), which makes the contract above
+  trivially satisfied for every index in the system. */
+  btr_free_if_exists(page_id_t(space_id, page_no), page_size, index_id,
+                     /*ahi=*/false, &mtr);
 
   mtr_commit(&mtr);
 

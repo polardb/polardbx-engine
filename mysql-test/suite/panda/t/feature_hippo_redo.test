@@ -1,0 +1,155 @@
+################################################################################
+# HIPPO Index REDO Log Recovery Test
+#
+# This test verifies that HIPPO-specific REDO log types are correctly
+# written and recovered after crash:
+#
+# 1. MLOG_PAGE_CREATE_HIPPO (88) - Create a hippo index page
+# 2. MLOG_COMP_PAGE_CREATE_HIPPO (89) - Create a hippo compact index page
+# 3. MLOG_REC_SEC_TID_DELETE_MARK (90) - Mark secondary index record with tid deleted
+#
+# Test Strategy:
+# - For each scenario, create table with HIPPO index
+# - Disable checkpoint, execute DML to generate REDO
+# - Kill server, restart, verify data is correctly recovered
+################################################################################
+
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+
+--echo ########################################################################
+--echo # Test 1: MLOG_PAGE_CREATE_HIPPO / MLOG_COMP_PAGE_CREATE_HIPPO
+--echo # Trigger: Creating new HIPPO index pages via bulk INSERT
+--echo ########################################################################
+
+let $number_of_formats= 3;
+let $i= 1;
+
+--echo # Test 1.1: INSERT to trigger page creation (DYNAMIC format)
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  # Create table with HIPPO index (non-unique secondary index)
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_page (id INT PRIMARY KEY, val INT, data VARCHAR(200), INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB;
+
+  # Insert enough rows to trigger multiple page creations
+  --let $PRODUCE_REDO_STATEMENTS = INSERT INTO t_hippo_page SELECT seq, seq, REPEAT('x', 100) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a, information_schema.columns b LIMIT 500) t;
+
+  --let $CLEANUP_STATEMENTS = SELECT COUNT(*) FROM t_hippo_page; SELECT COUNT(*) FROM t_hippo_page USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_page;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 2: MLOG_REC_SEC_TID_DELETE_MARK
+--echo # Trigger: DELETE operation on HIPPO secondary index
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_del (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_del VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);
+
+  # DELETE triggers MLOG_REC_SEC_TID_DELETE_MARK on HIPPO index
+  --let $PRODUCE_REDO_STATEMENTS = DELETE FROM t_hippo_del WHERE id IN (2, 4);
+
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_del ORDER BY id; SELECT * FROM t_hippo_del USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_del;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 3: MLOG_REC_SEC_TID_DELETE_MARK with UPDATE
+--echo # Trigger: UPDATE on indexed column (delete-mark old + insert new)
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_upd (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_upd VALUES (1, 100), (2, 200), (3, 300);
+
+  # UPDATE indexed column: delete-mark old entry, insert new entry
+  --let $PRODUCE_REDO_STATEMENTS = UPDATE t_hippo_upd SET val = val + 1000 WHERE id = 2;
+
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_upd ORDER BY id; SELECT * FROM t_hippo_upd USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_upd;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 4: Mixed operations (INSERT + UPDATE + DELETE)
+--echo # Trigger: All HIPPO MLOG types in one transaction
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_mix (id INT PRIMARY KEY, val INT, data VARCHAR(100), INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_mix VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');
+
+  # Mixed operations in one transaction
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; INSERT INTO t_hippo_mix VALUES (4, 400, 'd'), (5, 500, 'e'); UPDATE t_hippo_mix SET val = 999 WHERE id = 2; DELETE FROM t_hippo_mix WHERE id = 3; COMMIT;
+
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_mix ORDER BY id; SELECT * FROM t_hippo_mix USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_mix;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 5: ROLLBACK scenario
+--echo # Verify REDO correctly handles rolled-back HIPPO operations
+--echo ########################################################################
+
+let $i= 1;
+while ($i <= $number_of_formats)
+{
+  --let $row_format = `SELECT CASE $i WHEN 1 THEN 'DYNAMIC' WHEN 2 THEN 'REDUNDANT' WHEN 3 THEN 'COMPACT' END`
+  --echo ## Row format: $row_format
+
+  --let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_rb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=$row_format ENGINE=InnoDB; INSERT INTO t_hippo_rb VALUES (1, 100), (2, 200);
+
+  # Committed transaction followed by partial uncommitted work
+  --let $PRODUCE_REDO_STATEMENTS = BEGIN; INSERT INTO t_hippo_rb VALUES (3, 300); COMMIT; BEGIN; INSERT INTO t_hippo_rb VALUES (4, 400); DELETE FROM t_hippo_rb WHERE id = 1;
+
+  # After crash recovery, id=3 should exist, id=4 should not, id=1 should exist
+  --let $CLEANUP_STATEMENTS = SELECT * FROM t_hippo_rb ORDER BY id; SELECT * FROM t_hippo_rb USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_rb;
+
+  --source suite/panda/include/feature_hippo_redo_func.inc
+  inc $i;
+}
+
+--echo ########################################################################
+--echo # Test 6: Page split scenario
+--echo # Trigger: MLOG_PAGE_CREATE_HIPPO via page split
+--echo ########################################################################
+
+--echo ## Testing page split with sequential inserts
+
+--let $PREPARE_STATEMENTS = CREATE TABLE t_hippo_split (id INT PRIMARY KEY, val INT, padding VARCHAR(500), INDEX idx_val(val)) ENGINE=InnoDB;
+
+# Insert many rows with large padding to trigger page splits
+--let $PRODUCE_REDO_STATEMENTS = INSERT INTO t_hippo_split SELECT seq, seq, REPEAT('p', 400) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a LIMIT 200) t;
+
+--let $CLEANUP_STATEMENTS = SELECT COUNT(*) FROM t_hippo_split; SELECT COUNT(*) FROM t_hippo_split USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_split;
+
+--source suite/panda/include/feature_hippo_redo_func.inc
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################
+

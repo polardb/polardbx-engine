@@ -133,12 +133,31 @@ class Sql_cmd_conn_show : public Sql_cmd_conn_proc_base {
 
 class Conn_proc_show : public Conn_proc_base {
   using Sql_cmd_type = Sql_cmd_conn_show;
+  enum enum_column {
+    COLUMN_ID = 0,
+    COLUMN_USER,
+    COLUMN_HOST,
+    COLUMN_DB,
+    COLUMN_COMMENT,
+    COLUMN_LAST
+  };
 
  public:
   explicit Conn_proc_show(PSI_memory_key key) : Conn_proc_base(key) {
+    /* Result set protocol packet */
     m_result_type = Result_type::RESULT_SET;
-    Column_element elements = {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("JDBC_COMMENT"), 65536};
-    m_columns.assign_at(0, elements);
+
+    Column_element elements[COLUMN_LAST] = {
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("ID"), 0},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("USER"), 64},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("HOST"), 64},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("DB"), 64},
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("JDBC_COMMENT"), 1024},
+    };
+
+    for (size_t i = 0; i < COLUMN_LAST; i++) {
+      m_columns.assign_at(i, elements[i]);
+    }
   }
 
   static Proc *instance();

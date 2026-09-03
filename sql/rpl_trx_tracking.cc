@@ -249,6 +249,10 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
        thd->variables.transaction_write_set_extraction) &&
       // must not use foreign keys
       !write_set_ctx->get_has_related_foreign_keys() &&
+      // must not touch tables with HNSW vector index (hlindex auxiliary
+      // table rows are not in the write set due to non-deterministic graph
+      // traversal, so writeset-based parallelism is unsafe)
+      !write_set_ctx->get_has_hlindex() &&
       // it did not broke past the capacity already
       !write_set_ctx->was_write_set_limit_reached();
   bool exceeds_capacity = false;
@@ -311,6 +315,7 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
   } else {
     writeset_has_missing_keys_count += write_set_ctx->get_has_missing_keys();
     writeset_has_related_foreign_keys_count += write_set_ctx->get_has_related_foreign_keys();
+    writeset_has_hlindex_count += write_set_ctx->get_has_hlindex();
     writeset_was_write_set_limit_reached_count += write_set_ctx->was_write_set_limit_reached();
     writeset_cannot_use_count++;
   }

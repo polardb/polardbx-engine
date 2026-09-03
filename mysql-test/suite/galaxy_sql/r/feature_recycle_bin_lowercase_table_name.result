@@ -1,0 +1,60 @@
+call mtr.add_suppression("Fail to recycle table");
+create database db_recycle_test;
+show variables like "lower_case_table_names";
+Variable_name	Value
+lower_case_table_names	1
+------------------------------------------------------
+1. Test recycle table name conversion to lowercase
+-- Verify uppercase table names are converted to lowercase
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle_test;
+SET SESSION recycle_bin = ON;
+SET SESSION recycle_bin_table_name = 'CUSTOM_TABLE_001';
+CREATE TABLE T1(id INT);
+INSERT INTO T1 VALUES(2);
+DROP TABLE T1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+select * from __recycle_bin__.CUSTOM_TABLE_001;
+id
+2
+------------------------------------------------------
+2. Test purge_table with uppercase input
+-- Verify purge works with uppercase table name input
+------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'UPPER_PURGE_TABLE';
+CREATE TABLE T2(id INT);
+INSERT INTO T2 VALUES(3);
+DROP TABLE T2;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	upper_purge_table	db_recycle_test	t2	#	#
+call dbms_recycle.purge_table('UPPER_PURGE_TABLE');
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+------------------------------------------------------
+3. Test restore_table with uppercase input
+-- Verify restore works with uppercase table name input
+-- Note: restore_table returns expected error in single node mode
+------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'UPPER_RESTORE_TABLE';
+CREATE TABLE T3(id INT, name VARCHAR(50));
+INSERT INTO T3 VALUES(4, 'restore_test');
+DROP TABLE T3;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	upper_restore_table	db_recycle_test	t3	#	#
+call dbms_recycle.restore_table('UPPER_RESTORE_TABLE', 'db_recycle_test', 'RestoredTable');
+ERROR HY000: Recycle table failed :  only restore table upper_restore_table on current node, other replicas should be handled separately.
+SHOW TABLES;
+Tables_in_db_recycle_test
+restoredtable
+SELECT * FROM RestoredTable;
+id	name
+4	restore_test
+drop database db_recycle_test;

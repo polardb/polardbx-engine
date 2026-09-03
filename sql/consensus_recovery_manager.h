@@ -22,12 +22,14 @@
 #include "binlog.h"
 #include "handler.h"
 #include "xa.h"
-#include "xa_specification.h"
+#include "xa/komodo0xa0specification.h"
 
 #include <atomic>
 #include <map>
 #include <tuple>
 #include <vector>
+
+namespace komodo {
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_recover_hash_lock;
@@ -55,7 +57,7 @@ class Pending_recovering_trx {
                          enum_ha_recover_xa_state current_state,
                          enum_ha_recover_xa_state next_state,
                          const XA_recover_txn *xa_trx,
-                         const XA_specification &xa_spec,
+                         const komodo::XA_specification &xa_spec,
                          uint64 consensus_index);
 
   ~Pending_recovering_trx();
@@ -91,7 +93,7 @@ class Pending_recovering_trx {
   const enum_ha_recover_xa_state next_state;
   enum_ha_recover_xa_state final_state;
   XA_recover_txn *xa_trx;
-  XA_specification *xa_spec;
+  komodo::XA_specification *xa_spec;
   const uint64 consensus_index;
 };
 
@@ -154,7 +156,6 @@ class Consensus_recovery_manager {
   [[nodiscard]] uint64 get_last_leader_term_index() const {
     return last_leader_term_index;
   }
-
   void set_last_leader_term_index(uint64 last_leader_term_index_arg) {
     last_leader_term_index = last_leader_term_index_arg;
   }
@@ -169,13 +170,13 @@ class Consensus_recovery_manager {
                                   enum_ha_recover_xa_state current_state,
                                   enum_ha_recover_xa_state next_state,
                                   const XA_recover_txn *xa_trx,
-                                  const XA_specification &xa_spec);
+                                  const komodo::XA_specification &xa_spec);
 
   // step 3: truncate pending recovering trx after commit idx
   int truncate_pending_recovering_trxs(uint64 consensus_index);
 
   // step 4: recovering remaining pending recovering trx after truncation
-  int recover_remaining_pending_recovering_trxs();
+  void recover_remaining_pending_recovering_trxs();
 
   void clear();
   void clear_trx_in_binlog();
@@ -200,8 +201,9 @@ class Consensus_recovery_manager {
                                   enum_ha_recover_xa_state prepare_state,
                                   enum_ha_recover_xa_state committed_state,
                                   const XA_recover_txn *xa_trx,
-                                  const XA_specification &xa_spec,
+                                  const komodo::XA_specification &xa_spec,
                                   uint64 consensus_index);
 };
 
+}
 #endif

@@ -47,8 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 
 #ifndef UNIV_HOTBACKUP
-#include "lizard0read0types.h"
-#include "lizard0undo0types.h"
+#include "lizard0gcs0read0types.h"
 #include "que0types.h"
 
 struct urec_trx_t;
@@ -177,10 +176,7 @@ byte *trx_undo_update_rec_get_update(
                                  the update vector, otherwise NULL */
     ulint cmpl_info,             /*!< in: compiler info on secondary
                                  index updates */
-    const rec_t *rec,            /*!< in: case of an update or delete
-                                 marking, the record in the clustered
-                                 index, otherwise NULL */
-    const ulint *offsets,        /*!< in: rec_get_offsets(rec) */
+    const Slice *slc,            /*!< in: rec_get_offsets(rec) */
     roll_ptr_t *roll_ptr);       /*!< out: rollback pointer to the
                                   inserted undo log record,
                                   0 if BTR_NO_UNDO_LOG
@@ -207,10 +203,7 @@ byte *trx_undo_update_rec_get_update(
                                  the update vector, otherwise NULL */
     ulint cmpl_info,             /*!< in: compiler info on secondary
                                  index updates */
-    const rec_t *rec,            /*!< in: case of an update or delete
-                                 marking, the record in the clustered
-                                 index, otherwise NULL */
-    const ulint *offsets,        /*!< in: rec_get_offsets(rec) */
+    const Slice *slc,            /*!< in: rec_get_offsets(rec) */
     const urec_trx_t *urec_trx,  /*!< in: values of itl cols
                                              if reporting row log undo,
                                              nullptr if not. */
@@ -266,18 +259,16 @@ in which case we also set old_vers to NULL.
 @param[in]      lob_undo        LOB undo information.
 @param[in]      vision          If it's a as-of query. (lizard)
 @param[in]      mode            page fetch mode
-@retval true if previous version was built, or if it was an insert or the table
-has been rebuilt
-@retval false if the previous version is earlier than purge_view, or being
-purged, which means that it may have been removed */
-bool trx_undo_prev_version_build(const rec_t *index_rec, mtr_t *index_mtr,
-                                 const rec_t *rec, const dict_index_t *index,
-                                 ulint *offsets, mem_heap_t *heap,
-                                 rec_t **old_vers, mem_heap_t *v_heap,
-                                 const dtuple_t **vrow, ulint v_status,
-                                 lob::undo_vers_t *lob_undo,
-                                 const lizard::Vision *vision, Cache_hint hint,
-                                 const txn_layout_t &layout);
+@return pair of (purge_sees, table_rebuilt).
+  purge_sees is true if previous version was built, or if it was an insert or
+  the table has been rebuilt; false if the previous version is earlier than
+  purge_view, or being purged, which means that it may have been removed.
+  table_rebuilt is true if the table has been rebuilt (table_id mismatch). */
+std::pair<bool, bool> trx_undo_prev_version_build(
+    creg_t index_reg, mtr_t *index_mtr, Slice *slc, const dict_index_t *index,
+    mem_heap_t *heap, reg_t *old_vers, mem_heap_t *v_heap,
+    const dtuple_t **vrow, ulint v_status, lob::undo_vers_t *lob_undo,
+    const lizard::Vision *vision, Cache_hint hint, const txn_layout_t &layout);
 
 #endif /* !UNIV_HOTBACKUP */
 /** Parses a redo log record of adding an undo log record.
@@ -512,7 +503,9 @@ bool trx_undo_rec_is_multi_value(const byte *undo_rec);
 @return remaining part of undo log record after reading these values */
 const byte *trx_undo_rec_get_multi_value(const byte *ptr, dfield_t *field,
                                          mem_heap_t *heap);
+#ifndef INNODB_TRX0REC_IC_STANDALONE
 #include "trx0rec.ic"
+#endif /* !INNODB_TRX0REC_IC_STANDALONE */
 
 #endif /* !UNIV_HOTBACKUP */
 

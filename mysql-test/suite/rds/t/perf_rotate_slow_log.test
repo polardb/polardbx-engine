@@ -1,0 +1,50 @@
+#
+# Test for CSV storage engine avoiding performance schema records during slow_log rotation
+# This test verifies the fix in ha_tina::rotate_table() where mysql_file_rename()
+# uses PSI_NOT_INSTRUMENTED instead of csv_key_file_data to prevent orphaned
+# records in performance_schema.data_lock_wait_summary.
+#
+
+# Save current settings
+SELECT @@global.log_output INTO @saved_log_output;
+SELECT @@global.slow_query_log INTO @saved_slow_query_log;
+
+# Enable slow query log to table
+SET GLOBAL log_output = 'TABLE';
+SET GLOBAL slow_query_log = ON;
+
+# Check performance schema data before rotate
+--let $record_count1= query_get_value('SELECT COUNT(*) FROM performance_schema.file_summary_by_instance WHERE FILE_NAME LIKE "%slow_log%"', COUNT(*), 1)
+--echo record_count1=N
+
+# Perform rotate operation
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+
+# Check performance schema data after rotate
+# Should not have any new records because PSI_NOT_INSTRUMENTED was used
+--let $record_count2= query_get_value('SELECT COUNT(*) FROM performance_schema.file_summary_by_instance WHERE FILE_NAME LIKE "%slow_log%"', COUNT(*), 1)
+--echo record_count2=N
+
+--let $assert_text= Record count before and after rotate should be the same
+--let $assert_cond= "$record_count1" = "$record_count2"
+--source include/assert.inc
+
+# Verify slow_log table still works
+
+# Test multiple rotates to ensure no accumulation
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+SET SESSION rotate_log_table = ON;
+FLUSH SLOW LOGS;
+
+# Final check - should still have no performance schema records
+--let $record_count3= query_get_value('SELECT COUNT(*) FROM performance_schema.file_summary_by_instance WHERE FILE_NAME LIKE "%slow_log%"', COUNT(*), 1)
+--echo record_count3=N
+--let $assert_text= Record count should be the same
+--let $assert_cond= "$record_count2" = "$record_count3"
+--source include/assert.inc
+
+# Restore original settings
+SET GLOBAL log_output = @saved_log_output;
+SET GLOBAL slow_query_log = @saved_slow_query_log;

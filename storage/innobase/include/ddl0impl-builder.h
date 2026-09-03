@@ -186,8 +186,7 @@ struct Builder {
   @param[in] mrec               Current row.
   @param[in,out] heap           Heap for the allocating tuple memory.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t dtuple_copy_blobs(dtuple_t *dtuple, ulint *offsets,
-                                          const mrec_t *mrec,
+  [[nodiscard]] dberr_t dtuple_copy_blobs(dtuple_t *dtuple, const MSlice *slc,
                                           mem_heap_t *heap) noexcept;
 
   /** Write data to disk - in append mode. Increment the file size.
@@ -293,9 +292,8 @@ struct Builder {
   @param[in,out] tuple          Data tuple.
   @param[in] is_sdi             True for SDI Indexes
   @param[in,out] heap           Memory heap */
-  static void copy_blobs(const dict_index_t *index, const mrec_t *mrec,
-                         const ulint *offsets, const page_size_t &page_size,
-                         dtuple_t *tuple,
+  static void copy_blobs(const dict_index_t *index, const Slice *slc,
+                         const page_size_t &page_size, dtuple_t *tuple,
                          IF_DEBUG(bool is_sdi, ) mem_heap_t *heap) noexcept;
 
   /** Cache a row for batch inserts. Currently used by spatial indexes.
@@ -400,7 +398,7 @@ struct Builder {
   m_n_recs is 0 (no records are inserted yet).
   @param[in]  err    Error hit in online build
   @return the cursor error status. */
-  [[nodiscard]] dberr_t online_build_handle_error(dberr_t err) noexcept;
+  [[nodiscard]] dberr_t handle_error(dberr_t err) noexcept;
 
  private:
   /** Buffer ID. */
@@ -522,7 +520,7 @@ struct Merge_cursor : public Load_cursor {
   @param[out] mrec              Current merge record.
   @param[out] offsets           Columns offsets inside mrec.
   @return DB_SUCCESS, DB_END_OF_INDEX or error code. */
-  [[nodiscard]] dberr_t fetch(const mrec_t *&mrec, ulint *&offsets) noexcept;
+  [[nodiscard]] dberr_t fetch(const mrec_t *&mrec, MSlice **slc) noexcept;
 
   /** Move to the next record.
   @return DB_SUCCESS, DB_END_OF_INDEX or error code. */

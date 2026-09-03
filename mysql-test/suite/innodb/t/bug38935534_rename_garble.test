@@ -1,0 +1,30 @@
+--source include/have_debug.inc
+--disable_query_log
+--disable_result_log
+
+# Bug#38935534: old-name lookup must not win over a simultaneous rename.
+CREATE TABLE t1 (
+  id INT NOT NULL,
+  b VARCHAR(4) CHARACTER SET ascii NOT NULL,
+  c INT NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, '0b16', 101);
+
+ALTER TABLE t1 ADD COLUMN instant_marker INT NULL, ALGORITHM=INSTANT;
+
+ALTER TABLE t1
+  CHANGE COLUMN b c VARCHAR(4) CHARACTER SET ascii NOT NULL,
+  CHANGE COLUMN c b INT NOT NULL,
+  ADD KEY k_force (id),
+  ALGORITHM=INPLACE;
+
+--source include/restart_mysqld.inc
+--disable_query_log
+
+--enable_result_log
+SELECT id, HEX(c), b FROM t1;
+--disable_result_log
+
+DROP TABLE t1;

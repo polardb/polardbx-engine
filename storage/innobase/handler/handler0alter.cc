@@ -1,6 +1,7 @@
 /*****************************************************************************
 
-Copyright (c) 2005, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+Copyright (c) 2005, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+2024, Alibaba and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -41,7 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_table.h>
 #include <sql_thd_internal_api.h>
 #include <sys/types.h>
-#include "dd/lizard_policy_types.h"
+#include "dd/komodo0dd0policy0types.h"
 #include "ha_prototypes.h"
 
 #include "dd/cache/dictionary_client.h"
@@ -127,7 +128,9 @@ static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_ALTER_REBUILD =
     Alter_inplace_info::DROP_STORED_COLUMN |
     Alter_inplace_info::ADD_STORED_BASE_COLUMN
     /* ADD_STORED_BASE_COLUMN needs to check innobase_need_rebuild() */
-    | Alter_inplace_info::RECREATE_TABLE;
+    | Alter_inplace_info::RECREATE_TABLE
+    /* ALTER_COLUMN_EQUAL_PACK_LENGTH in SPC INDEX need rebuild. */
+    | Alter_inplace_info::ALTER_COLUMN_EQUAL_PACK_IN_SPC;
 
 /** Operations that require changes to data */
 static const Alter_inplace_info::HA_ALTER_FLAGS INNOBASE_ALTER_DATA =
@@ -416,6 +419,9 @@ static UNIV_COLD void my_error_innodb(
       my_error(ER_TABLESPACE_EXISTS, MYF(0), table);
       break;
 
+    case DB_SPC_ENCODE_FAILED:
+      my_error(ER_SPC_ENCODE_FAILED, MYF(0));
+      break;
 #ifdef UNIV_DEBUG
     case DB_SUCCESS:
     case DB_DUPLICATE_KEY:
@@ -469,7 +475,7 @@ static dd::Column *get_renamed_col(const Alter_inplace_info *ha_alter_info,
   Create_field *cf;
   while ((cf = cf_it++) != nullptr) {
     if (cf->field && cf->field->is_flag_set(FIELD_IS_RENAMED) &&
-        strcmp(cf->change, old_dd_column->name().c_str()) == 0) {
+        innobase_strcasecmp(cf->change, old_dd_column->name().c_str()) == 0) {
       /* This column is being renamed */
       return (const_cast<dd::Column *>(
           dd_find_column(&new_dd_tab->table(), cf->field_name)));
@@ -523,11 +529,11 @@ static void dd_inplace_alter_copy_instant_metadata(
     }
 
     /* Get corresponding dd::column in new table */
-    dd::Column *new_dd_column = const_cast<dd::Column *>(
-        dd_find_column(new_dd_tab, old_dd_column->name().c_str()));
+    dd::Column *new_dd_column =
+        get_renamed_col(ha_alter_info, old_dd_column, new_dd_tab);
     if (new_dd_column == nullptr) {
-      /* This column might have been renamed */
-      new_dd_column = get_renamed_col(ha_alter_info, old_dd_column, new_dd_tab);
+      new_dd_column = const_cast<dd::Column *>(
+          dd_find_column(new_dd_tab, old_dd_column->name().c_str()));
     }
 
     if (new_dd_column == nullptr) {
@@ -1032,6 +1038,10 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
   ha_alter_info->handler_trivial_ctx =
       instant_type_to_int(Instant_Type::INSTANT_IMPOSSIBLE);
 
+  const bool is_instant_requested =
+      ha_alter_info->alter_info->requested_algorithm ==
+      Alter_info::ALTER_TABLE_ALGORITHM_INSTANT;
+
   if (!dict_table_is_partition(m_prebuilt->table)) {
     switch (instant_type) {
       case Instant_Type::INSTANT_IMPOSSIBLE:
@@ -1042,9 +1052,10 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
           /* Still fall back to INPLACE since the behaviour is different */
           break;
         } else if (!((m_prebuilt->table->n_def +
-                      get_num_cols_added(ha_alter_info)) < REC_MAX_N_FIELDS)) {
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+                      get_num_cols_added(ha_alter_info)) <=
+                     REC_MAX_N_USER_FIELDS + DATA_N_SYS_COLS +
+                         DATA_N_LIZARD_COLS)) {
+          if (is_instant_requested) {
             my_error(ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS, MYF(0),
                      m_prebuilt->table->name.m_name);
             return HA_ALTER_ERROR;
@@ -1054,8 +1065,7 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (!is_valid_row_version(
                        m_prebuilt->table->current_row_version + 1)) {
           ut_ad(is_valid_row_version(m_prebuilt->table->current_row_version));
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+          if (is_instant_requested) {
             my_error(ER_INNODB_MAX_ROW_VERSION, MYF(0),
                      m_prebuilt->table->name.m_name);
             return HA_ALTER_ERROR;
@@ -1066,8 +1076,7 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (!Instant_ddl_impl<dd::Table>::is_instant_add_drop_possible(
                        ha_alter_info, table, altered_table,
                        m_prebuilt->table)) {
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+          if (is_instant_requested) {
             /* Return error if either max possible row size already crosses max
             permissible row size or may cross it after add. */
             my_error(ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE, MYF(0));
@@ -2264,13 +2273,14 @@ static void innobase_col_to_mysql(
 @param[in] rec Record
 @param[in] index Index
 @param[in] offsets rec_get_offsets( rec, index, ...) */
-void innobase_rec_to_mysql(struct TABLE *table, const rec_t *rec,
-                           const dict_index_t *index, const ulint *offsets) {
+void innobase_rec_to_mysql(struct TABLE *table, const Slice *slc,
+                           const dict_index_t *index) {
   uint n_fields = table->s->fields;
 
   ut_ad(n_fields ==
         dict_table_get_n_tot_u_cols(index->table) -
             DICT_TF2_FLAG_IS_SET(index->table, DICT_TF2_FTS_HAS_DOC_ID));
+  ut_ad(slc->is_positioned(index));
 
   for (uint i = 0; i < n_fields; i++) {
     Field *field = table->field[i];
@@ -2282,13 +2292,15 @@ void innobase_rec_to_mysql(struct TABLE *table, const rec_t *rec,
 
     ipos = index->get_col_pos(i, true, false);
 
-    if (ipos == ULINT_UNDEFINED || rec_offs_nth_extern(index, offsets, ipos)) {
+    if (ipos == ULINT_UNDEFINED ||
+        rec_offs_nth_extern(index, slc->offsets(), ipos)) {
     null_field:
       field->set_null();
       continue;
     }
 
-    ifield = rec_get_nth_field_instant(rec, offsets, ipos, index, &ilen);
+    ifield =
+        const_cast<Slice *>(slc)->get_nth_field_instant(index, ipos, &ilen);
 
     /* Assign the NULL flag */
     if (ilen == UNIV_SQL_NULL) {
@@ -2643,7 +2655,7 @@ static void innobase_create_index_def(const TABLE *altered_table,
           ? const_cast<const Table *>(new_dd_tab)->indexes()[dd_key_num]
           : nullptr;
   const dd::Index *dd_index = get_dd_index(dd_index_auto);
-  index_def->m_se_attr_hint = key->se_attr_hint;
+  index_def->m_se_attrs = key->se_attrs;
 
   /* If this is a spatial index, we need to fetch the SRID */
   if (key->flags & HA_SPATIAL) {
@@ -3050,7 +3062,7 @@ index for FTS index */
       index_def->m_rebuild = true;
       index_def->m_key_number = std::numeric_limits<size_t>::max();
       index_def->m_is_ngram = false;
-      index_def->m_se_attr_hint = lizard::Ha_se_attr_hint{NULL_CSTR};
+      index_def->m_se_attrs = komodo::dd_se_attrs_t{NULL_CSTR};
       primary_key_number = ULINT_UNDEFINED;
       goto created_clustered;
     } else {
@@ -3143,7 +3155,7 @@ index for FTS index */
     index_def->m_name = FTS_DOC_ID_INDEX_NAME;
     index_def->m_is_ngram = false;
     index_def->m_rebuild = rebuild;
-    index_def->m_se_attr_hint = lizard::Ha_se_attr_hint{NULL_CSTR};
+    index_def->m_se_attrs = komodo::dd_se_attrs_t{NULL_CSTR};
 
     /* TODO: assign a real MySQL key number for this */
     index_def->m_key_number = ULINT_UNDEFINED;
@@ -4421,7 +4433,7 @@ template <typename Table>
   MDL_ticket *mdl = nullptr;
   THD *thd = current_thd;
   bool build_fts_common = false;
-  lizard::Ha_table_hint table_hint{ha_alter_info->var_hint};
+  komodo::Dict_table_hint table_hint{ha_alter_info->var_options};
 
   ha_innobase_inplace_ctx *ctx;
 
@@ -4929,8 +4941,8 @@ template <typename Table>
                               &index_defs[a]);
     }
 
-    lizard::Ha_index_hint index_hint{&index_defs[a].m_se_attr_hint,
-                                     ha_alter_info->var_hint};
+    komodo::Dict_index_hint index_hint{&index_defs[a].m_se_attrs,
+                                       ha_alter_info->var_options};
     ctx->add_index[a] = ddl::create_index(ctx->trx, ctx->new_table,
                                           &index_defs[a], add_v, &index_hint);
 
@@ -5038,7 +5050,7 @@ template <typename Table>
     the trx_t::dict_operation flag on success. */
 
     dict_sys_mutex_exit();
-    lizard::Ha_table_hint table_hint{ha_alter_info->var_hint};
+    komodo::Dict_table_hint table_hint{ha_alter_info->var_options};
     error = fts_create_index_tables(ctx->trx, fts_index, &table_hint);
     dict_sys_mutex_enter();
 
@@ -8117,7 +8129,7 @@ class Altered_partitions {
     m_ins_nodes[new_part_id] = prebuilt->ins_node;
     m_trx_ids[new_part_id] = prebuilt->trx_id;
     if (!prebuilt->sql_stat_start) {
-      m_sql_stat_start.set(new_part_id, false);
+      m_sql_stat_start.reset(new_part_id);
     }
   }
 
@@ -8204,7 +8216,7 @@ bool Altered_partitions::initialize() {
     return (true);
   }
 
-  m_sql_stat_start.init(m_bitset, UT_BITS_IN_BYTES(m_num_new_parts));
+  m_sql_stat_start = {m_bitset, UT_BITS_IN_BYTES(m_num_new_parts)};
 
   return (false);
 }
@@ -8329,12 +8341,12 @@ class alter_part {
   @param[in]    file_per_table  Current value of innodb_file_per_table
   @param[in]    autoinc         Next AUTOINC value to use
   @param[in]    autoextend_size Value of AUTOEXTEND_SIZE for this tablespace
-  @param[in]    var_hint      DDL variables hint from handler
+  @param[in]    var_options      DDL variables hint from handler
   @return 0 or error number */
   int create(const dd::Table *part_table, const char *part_name,
              dd::Partition *dd_part, TABLE *table, const char *tablespace,
              bool file_per_table, uint64_t autoinc, uint64_t autoextend_size,
-             const lizard::Ha_var_hint *var_hint);
+             const komodo::dd_var_options_t *var_options);
 
  protected:
   /** InnoDB transaction, nullptr if not used */
@@ -8391,7 +8403,7 @@ int alter_part::create(const dd::Table *old_part_table, const char *part_name,
                        dd::Partition *dd_part, TABLE *table,
                        const char *tablespace, bool file_per_table,
                        uint64_t autoinc, uint64_t autoextend_size,
-                       const lizard::Ha_var_hint *var_hint) {
+                       const komodo::dd_var_options_t *var_options) {
   ut_ad(m_state == PART_TO_BE_ADDED || m_state == PART_CHANGED);
 
   dd::Table &dd_table = dd_part->table();
@@ -8439,7 +8451,7 @@ int alter_part::create(const dd::Table *old_part_table, const char *part_name,
 
   return (innobase_basic_ddl::create_impl<dd::Partition>(
       current_thd, part_name, table, &create_info, dd_part, file_per_table,
-      false, false, 0, 0, old_part_table, var_hint));
+      false, false, 0, 0, old_part_table, var_options));
 }
 
 typedef std::vector<alter_part *, ut::allocator<alter_part *>> alter_part_array;
@@ -8806,10 +8818,11 @@ class alter_part_add : public alter_part {
                                         &autoextend_size);
 
     bool inherit_metadata = dd_table_has_instant_cols(part_table) ||
-                            m_ha_alter_info->var_hint->should_inherit();
-    int error = create(inherit_metadata ? &part_table : nullptr, part_name,
-                       new_part, altered_table, m_tablespace, m_file_per_table,
-                       m_autoinc, autoextend_size, m_ha_alter_info->var_hint);
+                            m_ha_alter_info->var_options->should_inherit();
+    int error =
+        create(inherit_metadata ? &part_table : nullptr, part_name, new_part,
+               altered_table, m_tablespace, m_file_per_table, m_autoinc,
+               autoextend_size, m_ha_alter_info->var_options);
 
     if (error == 0 && alter_parts::need_copy(m_ha_alter_info)) {
       /* If partition belongs to table with instant columns, copy instant
@@ -9223,11 +9236,11 @@ int alter_part_change::prepare(TABLE *altered_table,
                                       &autoextend_size);
 
   bool inherit_metadata = dd_table_has_instant_cols(part_table) ||
-                          m_ha_alter_info->var_hint->should_inherit();
+                          m_ha_alter_info->var_options->should_inherit();
 
   int error = create(inherit_metadata ? &part_table : nullptr, part_name,
                      new_part, altered_table, m_tablespace, m_file_per_table,
-                     m_autoinc, autoextend_size, m_ha_alter_info->var_hint);
+                     m_autoinc, autoextend_size, m_ha_alter_info->var_options);
 
   if (error == 0) {
     dict_sys_mutex_enter();
@@ -10218,8 +10231,13 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
 
   Instant_Type instant_type = innopart_support_instant(
       ha_alter_info, m_tot_parts, m_part_share, this->table, altered_table);
+
   ha_alter_info->handler_trivial_ctx =
       instant_type_to_int(Instant_Type::INSTANT_IMPOSSIBLE);
+
+  const bool is_instant_requested =
+      ha_alter_info->alter_info->requested_algorithm ==
+      Alter_info::ALTER_TABLE_ALGORITHM_INSTANT;
 
   switch (instant_type) {
     case Instant_Type::INSTANT_IMPOSSIBLE:
@@ -10229,9 +10247,20 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
           Alter_info::ALTER_TABLE_ALGORITHM_INPLACE) {
         break;
       } else if (!((m_prebuilt->table->n_def +
-                    get_num_cols_added(ha_alter_info)) < REC_MAX_N_FIELDS)) {
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+                    get_num_cols_added(ha_alter_info)) <=
+                   REC_MAX_N_USER_FIELDS + DATA_N_SYS_COLS +
+                       DATA_N_LIZARD_COLS)) {
+        if (is_instant_requested) {
+          /* Following is the case when no more columns can be added to the
+          table becuase it has reached maximum allowed user columns */
+          if (altered_table->s->fields > REC_MAX_N_USER_FIELDS) {
+            ha_alter_info->unsupported_reason =
+                innobase_get_err_msg(ER_TOO_MANY_FIELDS);
+            return HA_ALTER_INPLACE_NOT_SUPPORTED;
+          }
+
+          /* In followin case, columns can't be added with INSTANT but if tried
+          with INPLACE/COPY, it is possible to add more columns */
           my_error(ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS, MYF(0),
                    m_prebuilt->table->name.m_name);
           return HA_ALTER_ERROR;
@@ -10241,8 +10270,8 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
       } else if (!is_valid_row_version(m_prebuilt->table->current_row_version +
                                        1)) {
         ut_ad(is_valid_row_version(m_prebuilt->table->current_row_version));
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+
+        if (is_instant_requested) {
           my_error(ER_INNODB_MAX_ROW_VERSION, MYF(0),
                    m_prebuilt->table->name.m_name);
           return HA_ALTER_ERROR;
@@ -10251,8 +10280,7 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
         break;
       } else if (!Instant_ddl_impl<dd::Table>::is_instant_add_drop_possible(
                      ha_alter_info, table, altered_table, m_prebuilt->table)) {
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+        if (is_instant_requested) {
           /* Return error if either max possible row size already crosses max
           permissible row size or may cross it after add. */
           my_error(ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE, MYF(0));
@@ -11072,7 +11100,7 @@ int ha_innopart::exchange_partition_low(uint part_id, dd::Table *part_table,
     }
 
     /* Lizard-4.0: IFT option should be exchanged. */
-    lizard::dd_exchange_index_format(part_index->options(),
+    lizard::dd_index_exchange_format(part_index->options(),
                                      swap_index->options());
   }
 
@@ -11112,7 +11140,7 @@ int ha_innopart::exchange_partition_low(uint part_id, dd::Table *part_table,
   dd_part_adjust_table_id(part_table);
 
   /** Swap the flashback area between partition and table */
-  lizard::dd_exchange_table_fba(dd_part->table().options(),
+  lizard::dd_table_exchange_fba(dd_part->table().options(),
                                 swap_table->options());
 
 func_exit:

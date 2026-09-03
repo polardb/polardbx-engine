@@ -31,6 +31,7 @@ Created 2020-11-01 by Sunny Bains. */
 #include "ddl0impl-buffer.h"
 #include "ddl0impl-builder.h"
 #include "ddl0impl-merge.h"
+#include "rem0rec.h"
 #include "trx0trx.h"
 #include "ut0stage.h"
 
@@ -80,7 +81,7 @@ struct Merge_file_sort::Cursor : private ut::Non_copyable {
   @param[out] mrec              Row read from the file.
   @param[out] offsets           Column offsets inside mrec.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t fetch(const mrec_t *&mrec, ulint *&offsets) noexcept;
+  [[nodiscard]] dberr_t fetch(const mrec_t *&mrec, MSlice **slc) noexcept;
 
   /** Move to the next record.
   @return DB_SUCCESS, DB_END_OF_INDEX or error code. */
@@ -126,12 +127,8 @@ struct Merge_file_sort::Output_file : private ut::Non_copyable {
     const auto n_fields = dict_index_get_n_fields(index);
     const auto i = 1 + REC_OFFS_HEADER_SIZE + n_fields;
 
-    ut_a(m_offsets.empty());
-
-    m_offsets.resize(i);
-
-    m_offsets[0] = i;
-    m_offsets[1] = n_fields;
+    m_slc_ctx.set_n_alloc(i);
+    m_slc_ctx.set_n_fields(n_fields);
   }
 
   /** Write the row to the buffer. If the buffer fills up write the
@@ -140,7 +137,7 @@ struct Merge_file_sort::Output_file : private ut::Non_copyable {
   @param[in] offsets            Column offsets in row.
   @param[in,out] dup            For duplicate checks.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t write(const mrec_t *mrec, const ulint *offsets,
+  [[nodiscard]] dberr_t write(const mrec_t *mrec, const MSlice *slc,
                               Dup *dup) noexcept;
 
   /** Write end of block marker and flush buffer to disk.
@@ -163,13 +160,10 @@ struct Merge_file_sort::Output_file : private ut::Non_copyable {
   @param[in] mrec               Row to write.
   @param[in] offsets            Column offsets in row.
   @param[in,out] dup            For duplicate checks. */
-  void duplicate_check(const mrec_t *mrec, const ulint *offsets,
+  void duplicate_check(const mrec_t *mrec, const MSlice *slc,
                        Dup *dup) noexcept;
 
  private:
-  /** Limit is [start, end]. */
-  using Offsets = std::vector<ulint, ut::allocator<ulint>>;
-
   /** DDL context. */
   ddl::Context &m_ctx;
 
@@ -186,7 +180,7 @@ struct Merge_file_sort::Output_file : private ut::Non_copyable {
   os_offset_t m_offset{};
 
   /** Offsets of the last inserted row. */
-  Offsets m_offsets{};
+  DDL_slice_ctx m_slc_ctx{};
 
   /** Pointer to last record in the output buffer. */
   mrec_t *m_last_mrec{};
@@ -220,8 +214,8 @@ dberr_t Merge_file_sort::Cursor::prepare(Range range,
 }
 
 dberr_t Merge_file_sort::Cursor::fetch(const mrec_t *&mrec,
-                                       ulint *&offsets) noexcept {
-  return m_cursor.fetch(mrec, offsets);
+                                       MSlice **slc) noexcept {
+  return m_cursor.fetch(mrec, slc);
 }
 
 dberr_t Merge_file_sort::Cursor::next() noexcept { return m_cursor.next(); }
@@ -252,18 +246,16 @@ dberr_t Merge_file_sort::Cursor::seek(const file_t *file,
 }
 
 void Merge_file_sort::Output_file::duplicate_check(const mrec_t *mrec,
-                                                   const ulint *offsets,
+                                                   const MSlice *slc,
                                                    Dup *dup) noexcept {
-  if (m_offsets.empty()) {
+  if (m_slc_ctx.empty()) {
     const auto n_fields = dict_index_get_n_fields(dup->m_index);
     const auto n = 1 + REC_OFFS_HEADER_SIZE + n_fields;
 
-    m_offsets.resize(n);
+    m_slc_ctx.set_n_alloc(n);
+    m_slc_ctx.set_n_fields(n_fields);
 
-    m_offsets[0] = n;
-    m_offsets[1] = n_fields;
-
-  } else if (m_last_mrec != nullptr && m_offsets[2] != 0) {
+  } else if (m_last_mrec != nullptr && m_slc_ctx.mslc()->offsets()[3] != 0) {
     auto last_mrec = m_last_mrec;
     size_t extra_size = *last_mrec++;
 
@@ -276,24 +268,27 @@ void Merge_file_sort::Output_file::duplicate_check(const mrec_t *mrec,
     --extra_size;
 
     last_mrec += extra_size;
+    m_slc_ctx.set_mrec(last_mrec);
 
-    auto cmp = cmp_rec_rec_simple(mrec, last_mrec, offsets, &m_offsets[0],
-                                  dup->m_index, dup->m_table);
+    ut_ad(slc->is_positioned(mrec, dup->m_index) &&
+          m_slc_ctx.mslc()->is_positioned(last_mrec, dup->m_index));
+    auto cmp =
+        cmp_rec_rec_simple(slc, m_slc_ctx.mslc(), dup->m_index, dup->m_table);
 
     if (cmp <= 0) {
       ut_a(cmp == 0);
-      dup->report(mrec, offsets);
+      dup->report(slc);
     }
   }
 
-  memcpy(&m_offsets[2], &offsets[2], (m_offsets.size() - 2) * sizeof(*offsets));
+  m_slc_ctx.deep_copy_offsets_body(slc);
 }
 
 dberr_t Merge_file_sort::Output_file::write(const mrec_t *mrec,
-                                            const ulint *offsets,
+                                            const MSlice *slc,
                                             Dup *dup) noexcept {
   if (unlikely(dup != nullptr)) {
-    duplicate_check(mrec, offsets, dup);
+    duplicate_check(mrec, slc, dup);
   }
 
   ++m_n_rows;
@@ -302,7 +297,7 @@ dberr_t Merge_file_sort::Output_file::write(const mrec_t *mrec,
   char prefix[sizeof(uint16_t)];
 
   /* Normalize extra_size. Value 0 signals "end of list". */
-  const auto extra_size = rec_offs_extra_size(offsets);
+  const auto extra_size = slc->extra_size();
   const auto nes = extra_size + 1;
 
   if (likely(nes < 0x80)) {
@@ -314,8 +309,8 @@ dberr_t Merge_file_sort::Output_file::write(const mrec_t *mrec,
     prefix[1] = (byte)nes;
   }
 
-  const auto rec_size = extra_size + rec_offs_data_size(offsets);
-  ut_ad(rec_size == rec_offs_size(offsets));
+  const auto rec_size = extra_size + slc->data_size();
+  ut_ad(rec_size == slc->rec_size());
 
   if (unlikely(m_ptr + rec_size + need >= m_buffer.first + m_buffer.second)) {
     const size_t n_write = m_ptr - m_buffer.first;
@@ -343,7 +338,7 @@ dberr_t Merge_file_sort::Output_file::write(const mrec_t *mrec,
 
   ut_a(m_ptr + rec_size <= m_buffer.first + m_buffer.second);
 
-  memcpy(m_ptr, mrec - extra_size, rec_size);
+  row_copy({m_ptr, MLOC_IN_HEAP}, slc);
   m_ptr += rec_size;
 
   return DB_SUCCESS;
@@ -359,8 +354,8 @@ dberr_t Merge_file_sort::Output_file::flush() noexcept {
   a new range after the flush. */
   m_last_mrec = nullptr;
 
-  if (!m_offsets.empty()) {
-    memset(&m_offsets[2], 0x0, (m_offsets.size() - 2) * sizeof(m_offsets[0]));
+  if (!m_slc_ctx.empty()) {
+    m_slc_ctx.reset_offsets_body();
   }
 
   const auto len = ut_uint64_align_up(m_ptr - m_buffer.first, IO_BLOCK_SIZE);
@@ -407,15 +402,15 @@ Merge_file_sort::Range Merge_file_sort::next_range(
 dberr_t Merge_file_sort::merge_rows(Cursor &cursor,
                                     Output_file &output_file) noexcept {
   dberr_t err;
-  ulint *offsets{};
+  MSlice *slc{};
   const mrec_t *mrec{};
 
-  while ((err = cursor.fetch(mrec, offsets)) == DB_SUCCESS) {
+  while ((err = cursor.fetch(mrec, &slc)) == DB_SUCCESS) {
     /* If we are simply appending from a single partition then enable duplicate
     key checking for the write phase. */
     auto dup = cursor.size() == 0 ? m_merge_ctx->m_dup : nullptr;
 
-    err = output_file.write(mrec, offsets, dup);
+    err = output_file.write(mrec, slc, dup);
 
     if (unlikely(err != DB_SUCCESS)) {
       break;

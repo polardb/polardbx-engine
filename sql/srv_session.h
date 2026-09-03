@@ -1,4 +1,5 @@
-/*  Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/*  Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -94,6 +95,18 @@ class Srv_session {
     Deinitializes the current physical thread for use with session service
   */
   static void deinit_thread();
+
+  /**
+    Swap the thread-local plugin used by Srv_session::open() to attribute
+    new sessions, and return the previous value.
+
+    Used when a plugin opens a session on another plugin's thread (e.g. encdb
+    on a polarx_rpc worker). Caller must restore the returned value.
+
+    @param new_plugin  Plugin pointer to install on the current thread.
+    @return            Previous plugin pointer.
+  */
+  static const void *set_thread_plugin(const void *new_plugin);
 
   /**
     Checks if a plugin has left threads and sessions
@@ -241,6 +254,22 @@ class Srv_session {
                       const struct st_command_service_cbs *command_callbacks,
                       enum cs_text_or_binary text_or_binary,
                       void *callbacks_context);
+
+  using Attached_thd_callback = int (*)(THD *thd, void *context);
+
+  /**
+    Executes a synchronous callback while this session's THD is attached.
+
+    The callback must not retain the THD pointer after it returns. The
+    previously attached session is restored before this method returns.
+
+    @param callback Callback to execute with this session's THD.
+    @param context  Opaque callback context.
+
+    @return callback result, or 1 if the session cannot be attached.
+  */
+  int execute_with_attached_thd(Attached_thd_callback callback,
+                                void *context);
 
   /**
     Set a savepoint.

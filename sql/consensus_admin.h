@@ -20,6 +20,7 @@
 #ifndef CONSENSUS_ADMIN_INCLUDE
 #define CONSENSUS_ADMIN_INCLUDE
 
+#include "my_sqlcommand.h"
 class THD;
 class MYSQL_BIN_LOG;
 class Relay_log_info;
@@ -30,11 +31,9 @@ bool show_consensuslog_events(THD *thd, MYSQL_BIN_LOG *binary_log,
 bool mysql_show_consensuslog_events(THD *thd,
                                     unsigned long long consensus_index);
 bool show_consensus_logs(THD *thd);
-int consensus_command_limit(THD *thd);
 void killall_threads();
 void killall_dump_threads();
 int start_consensus_apply_threads();
-void xpaxos_set_privilege_checks_user();
 int start_slave_threads();
 void stop_slave_threads();
 void binlog_commit_pos_watcher(bool *is_running);
@@ -47,6 +46,8 @@ int calculate_consensus_apply_start_pos(Relay_log_info *rli,
 
 void update_applied_index(const unsigned long long commitIndex);
 
-int check_limit_xa(THD *thd, const bool is_commit_one_phase);
+bool invalid_on_consensus_limited(enum_sql_command cmd,
+                                  bool no_write_to_binlog);
 
+bool invalid_on_logger_limited(enum_sql_command cmd);
 #endif

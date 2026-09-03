@@ -30,13 +30,13 @@ call dbms_tso.get_timestamp("mydb", 'sx');
 create sequence s1 timestamp;
 
 # blank-string parameters provided, error expected
---error ER_TIMESTAMP_SERVICE_ERROR
+--error ER_BAD_DB_ERROR
 call dbms_tso.get_timestamp("", "", 1);
 
---error ER_TIMESTAMP_SERVICE_ERROR
+--error ER_NO_SUCH_TABLE
 call dbms_tso.get_timestamp("mydb", "", 1);
 
---error ER_TIMESTAMP_SERVICE_ERROR
+--error ER_BAD_DB_ERROR
 call dbms_tso.get_timestamp("", "s1", 1);
 
 --error ER_NATIVE_PROC_PARAMETER_MISMATCH

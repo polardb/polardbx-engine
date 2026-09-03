@@ -35,17 +35,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/psi/mysql_rwlock.h"
 #include "mysqld.h"
 
-#include "consensus_fifo_cache_manager.h"
+#include "consensus_cache_manager.h"
+
+namespace komodo {
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_thread_key key_thread_prefetch;
 extern PSI_rwlock_key key_rwlock_ConsensusLog_prefetch_channels_hash;
 #endif
 
-class ConsensusPreFetchChannel {
+class Consensus_prefetch_channel {
  public:
-  ConsensusPreFetchChannel() : inited(false) {}
-  ~ConsensusPreFetchChannel() {}
+  Consensus_prefetch_channel() : inited(false) {}
+  ~Consensus_prefetch_channel() {}
 
   int init(uint64 channel_id, uint64 max_cache_size,
            uint64 prefetch_window_size, uint64 prefetch_wakeup_ratio);
@@ -56,7 +58,7 @@ class ConsensusPreFetchChannel {
                                 uint64 checksum);
   int get_log_from_prefetch_cache(uint64 index, uint64 *term,
                                   std::string &log_content, bool *outer,
-                                  uint *flag, uint64 *checksum);
+                                  uint *flag);
   bool log_exist(uint64 index);
   int reset_prefetch_cache();
 
@@ -157,16 +159,16 @@ class ConsensusPreFetchChannel {
   std::map<uint64, ConsensusLogEntry> large_trx_table;
 };
 
-class ConsensusPreFetchManager {
+class Consensus_prefetch_manager {
  public:
-  ConsensusPreFetchManager() : inited(false) {}
-  ~ConsensusPreFetchManager() {}
+  Consensus_prefetch_manager() : inited(false) {}
+  ~Consensus_prefetch_manager() {}
 
   int init(uint64 max_prefetch_cache_size_arg);
   int cleanup();
 
   int trunc_log_from_prefetch_cache(uint64 index);
-  ConsensusPreFetchChannel *get_prefetch_channel(uint64 channel_id);
+  Consensus_prefetch_channel *get_prefetch_channel(uint64 channel_id);
   int drop_prefetch_channel(uint64 channel_id);
 
   int reset_prefetch_cache();
@@ -185,7 +187,7 @@ class ConsensusPreFetchManager {
 
   int stop_prefetch_threads();
 
-  const std::map<uint64, ConsensusPreFetchChannel *> *get_channels_hash()
+  const std::map<uint64, Consensus_prefetch_channel *> *get_channels_hash()
       const {
     return &prefetch_channels_hash;
   }
@@ -207,7 +209,7 @@ class ConsensusPreFetchManager {
   bool inited;
   PSI_rwlock_key key_LOCK_prefetch_channels_hash;
   mysql_rwlock_t LOCK_prefetch_channels_hash;  // used to protect log cache
-  std::map<uint64, ConsensusPreFetchChannel *> prefetch_channels_hash;
+  std::map<uint64, Consensus_prefetch_channel *> prefetch_channels_hash;
   std::atomic<uint64> max_prefetch_cache_size;
   std::atomic<uint64> prefetch_window_size;
   std::atomic<uint64> prefetch_wakeup_ratio;
@@ -215,4 +217,5 @@ class ConsensusPreFetchManager {
 
 void *run_prefetch(void *arg);
 
+}
 #endif  // MYSQL_CONSENSUS_PREFETCH_MANAGER_H

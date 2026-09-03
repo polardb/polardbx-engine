@@ -294,6 +294,43 @@ PT_derived_table *Select_lex_builder::prepare_derived_table(
   return derived_table;
 }
 
+// Build a bare PT_query_specification (SELECT ... FROM ... WHERE ...)
+// without ORDER BY, for use as one operand of a UNION.
+PT_query_expression_body *
+Select_lex_builder::prepare_query_specification_body() {
+  return new (m_thd->mem_root) PT_query_specification(
+      options, m_select_item_list, m_table_reference_list, m_where_clause);
+}
+
+PT_derived_table *Select_lex_builder::prepare_union_all_derived_table(
+    THD *thd, const POS &pos, Select_lex_builder &lhs, Select_lex_builder &rhs,
+    const LEX_CSTRING &table_alias) {
+  PT_query_expression_body *lhs_body =
+      lhs.prepare_query_specification_body();
+  PT_query_expression_body *rhs_body =
+      rhs.prepare_query_specification_body();
+  if (lhs_body == nullptr || rhs_body == nullptr) return nullptr;
+
+  // is_distinct=false  =>  UNION ALL
+  PT_set_operation *union_body =
+      new (thd->mem_root) PT_union(lhs_body, false, rhs_body);
+  if (union_body == nullptr) return nullptr;
+
+  PT_query_expression *query_expression =
+      new (thd->mem_root) PT_query_expression(union_body);
+  if (query_expression == nullptr) return nullptr;
+
+  PT_subquery *sub_query =
+      new (thd->mem_root) PT_subquery(pos, query_expression);
+  if (sub_query == nullptr) return nullptr;
+
+  Create_col_name_list column_names;
+  column_names.init(thd->mem_root);
+  return new (thd->mem_root)
+      PT_derived_table(/* is_lateral */ false, sub_query, table_alias,
+                       &column_names);
+}
+
 /**
   Prepare a Query_block using all the information information
   added to this Select_lex_builder.

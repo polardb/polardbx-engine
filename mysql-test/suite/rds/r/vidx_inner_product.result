@@ -1,0 +1,691 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2, t3, t_big, t_dim;
+###############################################################
+# 1. Scalar function VEC_DISTANCE_INNER_PRODUCT semantics
+###############################################################
+# Returns the NEGATIVE inner product so ORDER BY ASC = most similar.
+# dot([1,2,3],[1,2,3]) = 14 => -14
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), VEC_FROMTEXT("[1,2,3]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), VEC_FROMTEXT("[1,2,3]"))
+-14
+# Orthogonal vectors: dot = 0 => 0
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,0,0]"), VEC_FROMTEXT("[0,1,0]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,0,0]"), VEC_FROMTEXT("[0,1,0]"))
+-0
+# Negative components: dot([1,-2,3],[1,2,3]) = 1-4+9 = 6 => -6
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,-2,3]"), VEC_FROMTEXT("[1,2,3]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,-2,3]"), VEC_FROMTEXT("[1,2,3]"))
+-6
+# Both negative: dot([-1,-2],[-3,-4]) = 3+8 = 11 => -11
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[-1,-2]"), VEC_FROMTEXT("[-3,-4]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[-1,-2]"), VEC_FROMTEXT("[-3,-4]"))
+-11
+# Fractional components: dot([0.5,0.5],[0.5,0.5]) = 0.5 => -0.5
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0.5,0.5]"), VEC_FROMTEXT("[0.5,0.5]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0.5,0.5]"), VEC_FROMTEXT("[0.5,0.5]"))
+-0.5
+# Symmetry: dot(a,b) == dot(b,a)
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3,4]"), VEC_FROMTEXT("[4,3,2,1]"))
+= VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[4,3,2,1]"), VEC_FROMTEXT("[1,2,3,4]")) AS symmetric;
+symmetric
+1
+# Single-dimension vectors
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[3]"), VEC_FROMTEXT("[4]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[3]"), VEC_FROMTEXT("[4]"))
+-12
+# Large magnitude values (no overflow within float range)
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1000,1000]"), VEC_FROMTEXT("[1000,1000]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1000,1000]"), VEC_FROMTEXT("[1000,1000]"))
+-2000000
+# Zero vector must not crash and yields 0
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0,0,0]"), VEC_FROMTEXT("[1,2,3]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0,0,0]"), VEC_FROMTEXT("[1,2,3]"))
+-0
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0,0,0]"), VEC_FROMTEXT("[0,0,0]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[0,0,0]"), VEC_FROMTEXT("[0,0,0]"))
+-0
+# Mismatched dimensions / NULL => NULL
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), VEC_FROMTEXT("[1,2,3,4]"));
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), VEC_FROMTEXT("[1,2,3,4]"))
+NULL
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), NULL);
+VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"), NULL)
+NULL
+SELECT VEC_DISTANCE_INNER_PRODUCT(NULL, VEC_FROMTEXT("[1,2,3]"));
+VEC_DISTANCE_INNER_PRODUCT(NULL, VEC_FROMTEXT("[1,2,3]"))
+NULL
+SELECT VEC_DISTANCE_INNER_PRODUCT(NULL, NULL);
+VEC_DISTANCE_INNER_PRODUCT(NULL, NULL)
+NULL
+# Wrong argument count
+SELECT VEC_DISTANCE_INNER_PRODUCT(VEC_FROMTEXT("[1,2,3]"));
+ERROR 42000: Incorrect parameter count in the call to native function 'VEC_DISTANCE_INNER_PRODUCT'
+###############################################################
+# 2. DDL: three ways to build a DISTANCE=INNER_PRODUCT index
+###############################################################
+# 2a. Inline in CREATE TABLE
+CREATE TABLE t1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 2b. CREATE VECTOR INDEX ... ON
+CREATE TABLE t2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4)
+) ENGINE=InnoDB;
+CREATE VECTOR INDEX vi ON t2(v) m=8 distance=inner_product;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# 2c. ALTER TABLE ADD VECTOR INDEX
+CREATE TABLE t3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4)
+) ENGINE=InnoDB;
+ALTER TABLE t3 ADD VECTOR INDEX vi(v) distance=inner_product;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2, t3;
+# 2d. Invalid metric name is a parse error (grammar only knows the tokens)
+CREATE TABLE t_bad (
+id INT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) distance=manhattan
+) ENGINE=InnoDB;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'manhattan
+) ENGINE=InnoDB' at line 4
+# 2e. INNER_PRODUCT combined with M boundary values (m=3 ok, m=2 fails)
+CREATE TABLE t_m (
+id INT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=3 distance=inner_product
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t_m;
+Table	Create Table
+t_m	CREATE TABLE `t_m` (
+  `id` int NOT NULL,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=3 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t_m;
+CREATE TABLE t_m (
+id INT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=2 distance=inner_product
+) ENGINE=InnoDB;
+ERROR HY000: M=2 is out of valid range [3, 127].
+###############################################################
+# 3. ANN recall vs brute force on NORMALIZED (unit) vectors.
+#    INNER_PRODUCT is intended for unit-length vectors (see plan
+#    / pgvector guidance); there the dot product equals cosine
+#    similarity and the HNSW graph recalls correctly.
+#    Query q = [1,0,0,0]; dot equals the first component, so the
+#    expected order is strictly id1 > id2 > ... > id7.
+###############################################################
+INSERT INTO t1(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0,0]')),
+(2, VEC_FROMTEXT('[0.8,0.6,0,0]')),
+(3, VEC_FROMTEXT('[0.6,0.8,0,0]')),
+(4, VEC_FROMTEXT('[0,1,0,0]')),
+(5, VEC_FROMTEXT('[-0.6,0.8,0,0]')),
+(6, VEC_FROMTEXT('[-0.8,0.6,0,0]')),
+(7, VEC_FROMTEXT('[-1,0,0,0]'));
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SET SESSION vidx_hnsw_ef_search = 100;
+# Brute force (full scan): exact distance = -dot, ascending
+SELECT id, VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) AS d
+FROM t1 IGNORE INDEX(vi) ORDER BY d, id;
+id	d
+1	-1
+2	-0.800000011920929
+3	-0.6000000238418579
+4	-0
+5	0.6000000238418579
+6	0.800000011920929
+7	1
+# ANN via the vector index must return the SAME ordering (100% recall)
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]'));
+id
+1
+2
+3
+4
+5
+6
+7
+# Top-3 nearest neighbours
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+1
+2
+3
+# Bare VEC_DISTANCE (AUTO) resolves to the index metric => same result
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+1
+2
+3
+###############################################################
+# 4. EXPLAIN routing on a larger table (100 unit vectors) so the
+#    optimizer actually chooses the vector index.
+###############################################################
+CREATE TABLE t_big (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+ANALYZE TABLE t_big;
+Table	Op	Msg_type	Msg_text
+test.t_big	analyze	status	OK
+# 4a. INNER_PRODUCT query hits the index (Extra shows metric=INNER_PRODUCT)
+EXPLAIN SELECT id FROM t_big
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_big	NULL	index	NULL	vi	19	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=100; ef_construction=10; limit=5; metric=INNER_PRODUCT)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_big`.`id` AS `id` from `test`.`t_big` order by VEC_DISTANCE_INNER_PRODUCT(`test`.`t_big`.`v`,VEC_FromText('[1,0,0,0]')) limit 5
+# 4b. Bare VEC_DISTANCE (AUTO) also hits the index as INNER_PRODUCT
+EXPLAIN SELECT id FROM t_big
+ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_big	NULL	index	NULL	vi	19	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=100; ef_construction=10; limit=5; metric=INNER_PRODUCT)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_big`.`id` AS `id` from `test`.`t_big` order by VEC_DISTANCE_INNER_PRODUCT(`test`.`t_big`.`v`,VEC_FromText('[1,0,0,0]')) limit 5
+# 4c. Mismatched metric EUCLIDEAN must NOT use the INNER_PRODUCT index
+EXPLAIN SELECT id FROM t_big
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_big	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_big`.`id` AS `id` from `test`.`t_big` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_big`.`v`,VEC_FromText('[1,0,0,0]')) limit 5
+# 4d. Mismatched metric COSINE must NOT use the INNER_PRODUCT index
+EXPLAIN SELECT id FROM t_big
+ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_big	NULL	ALL	NULL	NULL	NULL	NULL	100	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_big`.`id` AS `id` from `test`.`t_big` order by VEC_DISTANCE_COSINE(`test`.`t_big`.`v`,VEC_FromText('[1,0,0,0]')) limit 5
+DROP TABLE t_big;
+###############################################################
+# 5. DML effect on ANN results (normalized vectors on t1)
+###############################################################
+# 5a. DELETE the current nearest (id1); top-2 becomes id2, id3
+DELETE FROM t1 WHERE id = 1;
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 2;
+id
+2
+3
+# 5b. INSERT a stronger match (dot=0.9); it becomes the nearest
+INSERT INTO t1(id, v) VALUES (8, VEC_FROMTEXT('[0.9,0.43589,0,0]'));
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 2;
+id
+8
+2
+# 5c. UPDATE the farthest (id7) to a near vector (dot=0.95) -> now nearest
+UPDATE t1 SET v = VEC_FROMTEXT('[0.95,0.31225,0,0]') WHERE id = 7;
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+7
+8
+2
+###############################################################
+# 6. Persistence across server restart
+#    __vector_distance__ metadata must survive restart so that
+#    SHOW CREATE still shows INNER_PRODUCT and ANN still works.
+###############################################################
+# restart
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_hnsw_ef_search = 100;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# ANN still returns the post-DML nearest (id7, dot=0.95) first
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+7
+8
+2
+###############################################################
+# 7. mysqldump backup/restore round-trip
+###############################################################
+DROP TABLE t1;
+# Restored structure must still carry DISTANCE=INNER_PRODUCT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Restored data + ANN query consistent with pre-dump state
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 3;
+id
+7
+8
+2
+DROP TABLE t1;
+###############################################################
+# 8. vidx_default_distance system variable
+###############################################################
+SELECT @@SESSION.vidx_default_distance;
+@@SESSION.vidx_default_distance
+EUCLIDEAN
+# 8a. String form
+SET SESSION vidx_default_distance = 'inner_product';
+SELECT @@SESSION.vidx_default_distance;
+@@SESSION.vidx_default_distance
+INNER_PRODUCT
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Index inherits the session default => DISTANCE=INNER_PRODUCT
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=INNER_PRODUCT EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+# 8b. Numeric form (2 == INNER_PRODUCT)
+SET SESSION vidx_default_distance = 2;
+SELECT @@SESSION.vidx_default_distance;
+@@SESSION.vidx_default_distance
+INNER_PRODUCT
+# 8c. GLOBAL scope and connection isolation
+SET GLOBAL vidx_default_distance = 'inner_product';
+SELECT @@GLOBAL.vidx_default_distance;
+@@GLOBAL.vidx_default_distance
+INNER_PRODUCT
+# New connection picks up the GLOBAL default
+SELECT @@SESSION.vidx_default_distance;
+@@SESSION.vidx_default_distance
+INNER_PRODUCT
+SET GLOBAL vidx_default_distance = DEFAULT;
+# 8d. Invalid value is rejected
+SET SESSION vidx_default_distance = 'manhattan';
+ERROR 42000: Variable 'vidx_default_distance' can't be set to the value of 'manhattan'
+SET SESSION vidx_default_distance = DEFAULT;
+SELECT @@SESSION.vidx_default_distance;
+@@SESSION.vidx_default_distance
+EUCLIDEAN
+###############################################################
+# 9. High-dimension / zero / non-normalized edge cases
+###############################################################
+CREATE TABLE t_dim (
+id INT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v) distance=inner_product
+) ENGINE=InnoDB;
+# Unit vectors in 8 dimensions, dot with q=[1,0,...,0] = first comp.
+INSERT INTO t_dim(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0,0,0,0,0,0]')),
+(2, VEC_FROMTEXT('[0.7071,0.7071,0,0,0,0,0,0]')),
+(3, VEC_FROMTEXT('[0,0,0,0,0,0,0,1]')),
+(4, VEC_FROMTEXT('[-0.7071,0.7071,0,0,0,0,0,0]')),
+(5, VEC_FROMTEXT('[-1,0,0,0,0,0,0,0]'));
+ANALYZE TABLE t_dim;
+Table	Op	Msg_type	Msg_text
+test.t_dim	analyze	status	OK
+SET SESSION vidx_hnsw_ef_search = 100;
+# ANN order must match brute force: id1 > id2 > id3 > id4 > id5
+SELECT id FROM t_dim IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0,0,0,0,0]')), id;
+id
+1
+2
+3
+4
+5
+SELECT id FROM t_dim FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0,0,0,0,0]')) LIMIT 3;
+id
+1
+2
+3
+# Zero query vector: every inner product is 0 (no crash, well defined)
+SELECT id, VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0,0,0,0,0,0,0,0]')) AS d
+FROM t_dim IGNORE INDEX(vi) ORDER BY id;
+id	d
+1	-0
+2	-0
+3	-0
+4	-0
+5	-0
+# Zero stored vector mixed with others (brute force, exact)
+UPDATE t_dim SET v = VEC_FROMTEXT('[0,0,0,0,0,0,0,0]') WHERE id = 3;
+SELECT id, VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0,0,0,0,0]')) AS d
+FROM t_dim IGNORE INDEX(vi) ORDER BY d, id;
+id	d
+1	-1
+2	-0.707099974155426
+3	-0
+4	0.707099974155426
+5	1
+DROP TABLE t_dim;
+###############################################################
+# 9b. COSINE zero-vector index/reload semantics.  Scalar
+#     zero-vector semantics live in rds.vidx_cosine_zero_vector
+#     (standalone #14 fix); here we only pin the indexed path:
+#     in-cache and reloaded zero vectors must both keep the
+#     abs2=0.5 => distance 1.0 convention.
+###############################################################
+CREATE TABLE t_cos_zero (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) distance=cosine
+) ENGINE=InnoDB;
+INSERT INTO t_cos_zero(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0]')),
+(2, VEC_FROMTEXT('[0.5,0.8660254,0]')),
+(3, VEC_FROMTEXT('[0,0,0]')),
+(4, VEC_FROMTEXT('[-1,0,0]'));
+ANALYZE TABLE t_cos_zero;
+Table	Op	Msg_type	Msg_text
+test.t_cos_zero	analyze	status	OK
+# HNSW path: zero-vector row orders at distance 1.0
+SELECT id FROM t_cos_zero FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 4;
+id
+1
+2
+3
+4
+# Reload path: evict the share so nodes are re-read from the graph
+# table; the zero vector must keep distance 1.0 (abs2=0.5), not the
+# recomputed EUCLIDEAN abs2=0 which would tie it with id2 at 0.5.
+FLUSH TABLES;
+SELECT id FROM t_cos_zero FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 4;
+id
+1
+2
+3
+4
+DROP TABLE t_cos_zero;
+###############################################################
+# 10. INNER_PRODUCT NEAREST sentinel regression on indexed
+#     non-normalized vectors.  Distances below -1.0 are valid
+#     and must not be pruned during HNSW graph expansion.
+###############################################################
+CREATE TABLE t_dim (
+id INT PRIMARY KEY,
+v VECTOR(2),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+INSERT INTO t_dim(id, v) VALUES
+(1, VEC_FROMTEXT('[0,1]')),
+(2, VEC_FROMTEXT('[10,0]')),
+(3, VEC_FROMTEXT('[9,0]')),
+(4, VEC_FROMTEXT('[8,0]')),
+(5, VEC_FROMTEXT('[-4,0]'));
+ANALYZE TABLE t_dim;
+Table	Op	Msg_type	Msg_text
+test.t_dim	analyze	status	OK
+# Exact brute force distances include valid values below -1.
+SELECT id, VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) AS d
+FROM t_dim IGNORE INDEX(vi) ORDER BY d, id;
+id	d
+2	-10
+3	-9
+4	-8
+1	-0
+5	4
+# ANN must keep those below -1 candidates instead of pruning them.
+SELECT id FROM t_dim FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+2
+3
+4
+# Same-trx read: uncommitted nodes come from the trx-local cache
+# (FVector::create path), committed ones from the reload path;
+# both must carry INNER_PRODUCT abs2 semantics (dist -11 tops).
+BEGIN;
+INSERT INTO t_dim(id, v) VALUES (6, VEC_FROMTEXT('[11,0]'));
+SELECT id FROM t_dim FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+6
+2
+3
+COMMIT;
+# Post-commit read serves all nodes from the shared-cache reload
+# path (load_from_record): ordering must not change.
+SELECT id FROM t_dim FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+6
+2
+3
+# Explicit share eviction: reloaded nodes must not degrade to the
+# recomputed EUCLIDEAN abs2 (which would order as 1,5,4).
+FLUSH TABLES;
+SELECT id FROM t_dim FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+6
+2
+3
+DROP TABLE t_dim;
+###############################################################
+# 10b. Negative-domain search bound regression.  All rows are
+#      [i,1] so every pairwise dot is positive, every distance
+#      is negative and the tracked diameter stays 0.  With a
+#      small ef the best-heap fills and the generosity bound
+#      must stay finite (no NaN freeze) and must never become
+#      tighter than the true furthest kept result.  The graph
+#      is fully connected (30 rows <= 2*m neighbors), so ANN
+#      must return the exact brute-force top-3 for any entry.
+###############################################################
+CREATE TABLE t_neg (
+id INT PRIMARY KEY,
+v VECTOR(2),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+ANALYZE TABLE t_neg;
+Table	Op	Msg_type	Msg_text
+test.t_neg	analyze	status	OK
+# Brute force: largest dot wins, top-3 = 30, 29, 28
+SELECT id FROM t_neg IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+30
+29
+28
+# ANN with ef=4 < 30 rows (best-heap fills): must match exactly
+SET SESSION vidx_hnsw_ef_search = 4;
+SELECT id FROM t_neg FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0]')) LIMIT 3;
+id
+30
+29
+28
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+DROP TABLE t_neg;
+###############################################################
+# 10c. Non-INNER_PRODUCT guard corners.  For EUCLIDEAN the Fix-4
+#      guard branch (d0 <= 0 || d <= 0) is only reachable through
+#      exact-duplicate ties (distance 0) on a fresh share
+#      (diameter 0 after FLUSH).  25 identical rows exceed the
+#      default ef=20 so the best-heap fills while every kept
+#      distance is 0.  Ties make row order legitimately
+#      unspecified, so assert cardinality and membership through
+#      a derived table instead of pinning the order.
+###############################################################
+CREATE TABLE t_dupe (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) distance=euclidean
+) ENGINE=InnoDB;
+ANALYZE TABLE t_dupe;
+Table	Op	Msg_type	Msg_text
+test.t_dupe	analyze	status	OK
+FLUSH TABLES;
+# The inner block must route to the vector index
+EXPLAIN SELECT COUNT(*) FROM (SELECT id FROM t_dupe FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,4,0]')) LIMIT 5) x;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	PRIMARY	<derived2>	NULL	ALL	NULL	NULL	NULL	NULL	5	100.00	NULL
+2	DERIVED	t_dupe	NULL	index	NULL	vi	15	NULL	30	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select count(0) AS `COUNT(*)` from (/* select#2 */ select `test`.`t_dupe`.`id` AS `id` from `test`.`t_dupe` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_dupe`.`v`,VEC_FromText('[3,4,0]')) limit 5) `x`
+# All-tie exact match: LIMIT is not truncated by the bound
+SELECT COUNT(*) AS n FROM (SELECT id FROM t_dupe FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,4,0]')) LIMIT 5) x;
+n
+5
+# Top-10 are all distance-0 duplicates, never the far rows
+SELECT COUNT(*) AS n_dup FROM (SELECT id FROM t_dupe FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,4,0]')) LIMIT 10) x
+WHERE x.id <= 25;
+n_dup
+10
+DROP TABLE t_dupe;
+###############################################################
+# 11. NULL vectors in a nullable INNER_PRODUCT-indexed column
+###############################################################
+CREATE TABLE t_null (
+id INT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v) distance=inner_product
+) ENGINE=InnoDB;
+INSERT INTO t_null(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0,0]')),
+(2, NULL),
+(3, VEC_FROMTEXT('[0.5,0.866,0,0]'));
+ANALYZE TABLE t_null;
+Table	Op	Msg_type	Msg_text
+test.t_null	analyze	status	OK
+SET SESSION vidx_hnsw_ef_search = 100;
+# NULL-vector row (id2) is excluded from ANN results
+SELECT id FROM t_null FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id
+1
+3
+# Scalar on NULL vector returns NULL
+SELECT id, VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) AS d
+FROM t_null IGNORE INDEX(vi) ORDER BY id;
+id	d
+1	-1
+2	NULL
+3	-0.5
+# UPDATE the NULL row to a real vector -> it now participates
+UPDATE t_null SET v = VEC_FROMTEXT('[0.9,0.43589,0,0]') WHERE id = 2;
+SELECT id FROM t_null FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id
+1
+2
+3
+# UPDATE a real vector back to NULL -> it leaves the result set
+UPDATE t_null SET v = NULL WHERE id = 1;
+SELECT id FROM t_null FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0,0]')) LIMIT 5;
+id
+2
+3
+DROP TABLE t_null;
+###############################################################
+# 12. High-dimension (128-d) unit-vector embeddings
+###############################################################
+CREATE TABLE t_hd (
+id INT PRIMARY KEY,
+v VECTOR(128),
+VECTOR INDEX vi(v) m=16 distance=inner_product
+) ENGINE=InnoDB;
+# id1=e1 (dot=1), id2=45-deg (dot~0.7071), id3=e2 (dot=0), id4=-e1 (dot=-1)
+INSERT INTO t_hd(id, v) VALUES
+(1, VEC_FROMTEXT(CONCAT('[1', REPEAT(',0',127), ']'))),
+(2, VEC_FROMTEXT(CONCAT('[0.7071,0.7071', REPEAT(',0',126), ']'))),
+(3, VEC_FROMTEXT(CONCAT('[0,1', REPEAT(',0',126), ']'))),
+(4, VEC_FROMTEXT(CONCAT('[-1', REPEAT(',0',127), ']')));
+ANALYZE TABLE t_hd;
+Table	Op	Msg_type	Msg_text
+test.t_hd	analyze	status	OK
+# Brute force vs ANN must agree: id1 > id2 > id3 > id4
+SELECT id FROM t_hd IGNORE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT(CONCAT('[1', REPEAT(',0',127), ']'))), id;
+id
+1
+2
+3
+4
+SELECT id FROM t_hd FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT(CONCAT('[1', REPEAT(',0',127), ']'))) LIMIT 3;
+id
+1
+2
+3
+DROP TABLE t_hd;
+###############################################################
+# 13. Empty / single-row table boundaries
+###############################################################
+CREATE TABLE t_one (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) distance=inner_product
+) ENGINE=InnoDB;
+# Empty table: ANN returns no rows
+SELECT id FROM t_one FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 5;
+id
+INSERT INTO t_one(id, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+# Single row: returned even when LIMIT exceeds row count
+SELECT id FROM t_one FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 5;
+id
+1
+# After deleting all rows: ANN returns empty again
+DELETE FROM t_one;
+SELECT id FROM t_one FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 5;
+id
+DROP TABLE t_one;
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+SET SESSION vidx_default_distance = DEFAULT;
+SET GLOBAL vidx_disabled = ON;

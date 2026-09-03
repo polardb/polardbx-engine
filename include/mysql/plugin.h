@@ -123,7 +123,9 @@ struct MYSQL_XID {
 #define MYSQL_CLONE_PLUGIN 11             /* The Clone plugin type   */
 #define MYSQL_PERFORMANCE_POINT_PLUGIN 12 /* Performance Point plugin type */
 #define MYSQL_POLARX_LICENSE_PLUGIN 13    /* The PolarX License plugin */
-#define MYSQL_MAX_PLUGIN_TYPE_NUM 14      /* The number of plugin types   */
+#define MYSQL_ENCRYPT_DB_PLUGIN 14        /* The EncDB plugin type */
+#define MYSQL_ENC_CHECKSUM_PLUGIN 15      /* The enc checksum plugin */
+#define MYSQL_MAX_PLUGIN_TYPE_NUM 16      /* The number of plugin types   */
 
 /* We use the following strings to define licenses for plugins */
 #define PLUGIN_LICENSE_PROPRIETARY 0
@@ -763,6 +765,7 @@ int thd_in_lock_tables(const MYSQL_THD thd);
 int thd_tablespace_op(const MYSQL_THD thd);
 long long thd_test_options(const MYSQL_THD thd, long long test_options);
 int thd_sql_command(const MYSQL_THD thd);
+bool thd_sql_recycle_command(const MYSQL_THD thd);
 const char *set_thd_proc_info(MYSQL_THD thd, const char *info,
                               const char *calling_func,
                               const char *calling_file,

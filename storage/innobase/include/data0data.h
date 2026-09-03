@@ -44,6 +44,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <ostream>
 
+class Slice;
+class DSlice;
+
 /** Storage for overflow data in a big record, that is, a clustered
 index record which needs external storage of data fields */
 struct big_rec_t;
@@ -404,7 +407,14 @@ struct multi_value_data {
   If current data array is for INSERT and DELETE, this can(should) be
   nullptr since all values in current array should be handled in these
   two cases. */
-  Bitset *bitset;
+  Bitset<> *bitset;
+
+#ifdef UNIV_DEBUG
+  /** The size of bitmap buffer in bytes. The bitset might point into
+  some prefix of it, and be later made shorter or longer, but not longer
+  than this length of underlying buffer. */
+  size_t bitmap_bytes{};
+#endif
 
   /** Allocate specified number of elements for all arrays and initialize
   the structure accordingly
@@ -509,7 +519,12 @@ struct multi_value_data {
            sizeof(*conv_buf) * multi_value->num_v);
     if (multi_value->bitset != nullptr) {
       ut_ad(bitset != nullptr);
-      *bitset = *multi_value->bitset;
+      ut_ad(multi_value->bitset->size_bytes() <= bitmap_bytes);
+      /* adjust the size to match that of multi_value, but keep pointing to the
+      old buffer */
+      *bitset = Bitset<>(bitset->data(), multi_value->bitset->size_bytes());
+      /* copy the actual data into the buffer from multi_value's buffer */
+      bitset->copy_from(multi_value->bitset->data());
     }
     num_v = multi_value->num_v;
   }
@@ -743,7 +758,7 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  int compare(const rec_t *rec, const dict_index_t *index, const ulint *offsets,
+  int compare(const dict_index_t *index, const Slice *slc,
               ulint *matched_fields) const;
 
   /** Compare a data tuple to a physical record.
@@ -754,11 +769,10 @@ struct dtuple_t {
   @retval 0 if dtuple is equal to rec
   @retval negative if dtuple is less than rec
   @retval positive if dtuple is greater than rec */
-  inline int compare(const rec_t *rec, const dict_index_t *index,
-                     const ulint *offsets) const {
+  inline int compare(const dict_index_t *index, const Slice *slc) const {
     ulint matched_fields{};
 
-    return (compare(rec, index, offsets, &matched_fields));
+    return (compare(index, slc, &matched_fields));
   }
 
   /** Get number of externally stored fields.
@@ -876,6 +890,8 @@ inline std::ostream &operator<<(std::ostream &out, const big_rec_t &obj) {
   return (obj.print(out));
 }
 
+#ifndef INNODB_DATA0DATA_IC_STANDALONE
 #include "data0data.ic"
+#endif /* !INNODB_DATA0DATA_IC_STANDALONE */
 
 #endif

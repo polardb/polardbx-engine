@@ -33,6 +33,7 @@
 
 extern PSI_mutex_key key_connection_delay_mutex;
 extern PSI_rwlock_key key_connection_event_delay_lock;
+extern PSI_rwlock_key key_connection_event_refuse_lock;
 extern PSI_cond_key key_connection_delay_wait;
 extern PSI_stage_info stage_waiting_in_connection_control_plugin;
 

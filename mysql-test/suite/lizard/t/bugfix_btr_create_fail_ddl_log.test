@@ -1,0 +1,35 @@
+--source include/have_debug.inc
+
+--echo #
+--echo # Bug: dict_create_index_tree_in_mem() did not check the root
+--echo # returned by btr_create(). When btr_create() failed (returned
+--echo # FIL_NULL), a FREE_TREE_LOG record with page_no = FIL_NULL
+--echo # (4294967295) was persisted into mysql.innodb_ddl_log. Replaying
+--echo # that record on recovery crashed the server repeatedly with
+--echo # "Trying to access page number 4294967295 ... which is outside
+--echo # the tablespace bounds".
+--echo #
+
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT) ENGINE = InnoDB;
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30);
+
+--echo # Simulate out-of-space failure of btr_create() when building
+--echo # the new index tree. The DDL must fail cleanly instead of
+--echo # logging a FREE_TREE_LOG record with an invalid page number.
+SET SESSION debug = '+d,ib_btr_create_fail_root_seg';
+--error ER_RECORD_FILE_FULL
+ALTER TABLE t1 ADD INDEX idx_b (b);
+SET SESSION debug = '-d,ib_btr_create_fail_root_seg';
+
+--echo # Restart to verify that DDL log recovery does not replay any
+--echo # bad FREE_TREE_LOG record (page_no = FIL_NULL) and crash.
+--source include/restart_mysqld.inc
+
+SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+
+--echo # Index creation succeeds once the failure injection is gone.
+ALTER TABLE t1 ADD INDEX idx_b (b);
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;

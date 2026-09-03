@@ -1,0 +1,61 @@
+CALL mtr.add_suppression("\\[ERROR\\].*");
+CALL mtr.add_suppression("\\[Warning\\].*");
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (id INT PRIMARY KEY, v VECTOR(4), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES
+(1, VEC_FROMTEXT('[1,0,0,0]')),
+(2, VEC_FROMTEXT('[0,1,0,0]')),
+(3, VEC_FROMTEXT('[0,0,1,0]'));
+SELECT NAME INTO @aux_full FROM information_schema.INNODB_TABLES WHERE NAME LIKE 'test/vidx_%' LIMIT 1;
+SELECT TABLE_ID INTO @aux0 FROM information_schema.INNODB_TABLES WHERE NAME = @aux_full;
+===== ON: ALTER aux DISCARD TABLESPACE (gap fixed: now rejected) =====
+ALTER TABLE test.`vidx_XXXXX_X` DISCARD TABLESPACE;
+ERROR 42000: The used command is not allowed with this MySQL version
+# aux TABLE_ID after DISCARD attempt (1=unchanged, expect 1 now):
+SELECT (@aux0 = TABLE_ID) AS aux_unchanged_after_discard
+FROM information_schema.INNODB_TABLES WHERE NAME = @aux_full;
+aux_unchanged_after_discard
+1
+# base OPTIMIZE after DISCARD attempt (must not crash):
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SELECT 'survived after discard probe' AS r1;
+r1
+survived after discard probe
+===== OFF: aux unreachable for all admin/alter DDL =====
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+FLUSH TABLES;
+ALTER TABLE test.`vidx_XXXXX_X` ENGINE=InnoDB;
+ERROR 42S02: Table 'test.vidx_XXXXX_X' doesn't exist
+OPTIMIZE TABLE test.`vidx_XXXXX_X`;
+Table	Op	Msg_type	Msg_text
+test.vidx_XXXXX_X	optimize	Error	Table 'test.vidx_XXXXX_X' doesn't exist
+test.vidx_XXXXX_X	optimize	status	Operation failed
+ANALYZE TABLE test.`vidx_XXXXX_X`;
+Table	Op	Msg_type	Msg_text
+test.vidx_XXXXX_X	analyze	Error	Table 'test.vidx_XXXXX_X' doesn't exist
+test.vidx_XXXXX_X	analyze	status	Operation failed
+REPAIR TABLE test.`vidx_XXXXX_X`;
+Table	Op	Msg_type	Msg_text
+test.vidx_XXXXX_X	repair	Error	Table 'test.vidx_XXXXX_X' doesn't exist
+test.vidx_XXXXX_X	repair	status	Operation failed
+CHECK TABLE test.`vidx_XXXXX_X`;
+Table	Op	Msg_type	Msg_text
+test.vidx_XXXXX_X	check	Error	Table 'test.vidx_XXXXX_X' doesn't exist
+test.vidx_XXXXX_X	check	status	Operation failed
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# base OPTIMIZE still ok after OFF probes:
+OPTIMIZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t1	optimize	status	OK
+SELECT 'survived OFF probe' AS r2;
+r2
+survived OFF probe
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

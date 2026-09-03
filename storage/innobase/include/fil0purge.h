@@ -111,16 +111,10 @@ class File_purge {
     @param[in]    size      Purge max size (bytes)
     @param[in]    force     Whether unlink file directly
 
-    First return in std::pair
-    @retval       -1        Error
-    @retval       0         Success & no file purge
-    @retval       >0        How many purged operation
-
-    Second return in std::pair
-    @retval       size      Truncated file size
+    @retval       size      Truncated file size (0 if no file or error)
 
   */
-  std::pair<int, ulint> purge_file(ulint size, bool force);
+  ulint purge_file(ulint size, bool force);
   /**
     The data file list length
 

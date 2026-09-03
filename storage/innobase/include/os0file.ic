@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2/20/2010 Jimmy Yang
  *******************************************************/
 
+#if !defined(UNIV_NONINL)
+#ifndef os0file_h
+#define INNODB_OS0FILE_IC_STANDALONE
+#include "os0file.h"
+#undef INNODB_OS0FILE_IC_STANDALONE
+#endif /* !os0file_h */
 #include "univ.i"
 
 #ifdef UNIV_PFS_IO
@@ -529,3 +535,4 @@ static inline bool pfs_os_file_delete_if_exists_func(
   return (result);
 }
 #endif /* UNIV_PFS_IO */
+#endif /* !defined(UNIV_NONINL) */

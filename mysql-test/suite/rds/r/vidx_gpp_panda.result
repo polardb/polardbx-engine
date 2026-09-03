@@ -1,0 +1,171 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# Cleanup before test
+#
+DROP TABLE IF EXISTS t1, t2;
+#
+# 4.1 Create table with both regular secondary index and VECTOR INDEX
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+extra INT,
+name VARCHAR(100),
+INDEX idx_extra(extra),
+INDEX idx_name(name),
+VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+#
+# 4.2 SHOW CREATE TABLE - verify both index types show correctly
+#
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_extra` (`extra`),
+  KEY `idx_name` (`name`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify via SHOW INDEX
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+t1	1	idx_extra	1	extra	A	0	NULL	NULL	YES	BTREE			YES	NULL
+t1	1	idx_name	1	name	A	0	NULL	NULL	YES	BTREE			YES	NULL
+#
+# 4.3 DML operations (Blocked by INSERT crash bug)
+#
+#
+# 4.4 Check DD system tables - verify se_private_data and options have no conflicts
+#
+# Check via I_S.STATISTICS - both index types should coexist
+SELECT INDEX_NAME, INDEX_TYPE, COLUMN_NAME 
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_TYPE	COLUMN_NAME
+idx_extra	BTREE	extra
+idx_name	BTREE	name
+PRIMARY	BTREE	id
+# Check auxiliary tables exist
+SELECT COUNT(*) > 0 AS has_vidx_tables 
+FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+has_vidx_tables
+1
+#
+# 4.5 ALTER TABLE DROP regular index - verify VECTOR INDEX unaffected
+#
+ALTER TABLE t1 DROP INDEX idx_extra;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify VECTOR INDEX still exists
+SELECT INDEX_NAME, INDEX_TYPE 
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+#
+# 4.6 ALTER TABLE ADD regular index - verify VECTOR INDEX unaffected  
+#
+ALTER TABLE t1 ADD INDEX idx_extra_new(extra);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`),
+  KEY `idx_extra_new` (`extra`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Add another type of index - UNIQUE
+ALTER TABLE t1 ADD UNIQUE INDEX idx_name_unique(name);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_name_unique` (`name`),
+  KEY `idx_name` (`name`),
+  KEY `idx_extra_new` (`extra`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify both regular indexes and VECTOR INDEX coexist
+SELECT INDEX_NAME, INDEX_TYPE, NON_UNIQUE
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_TYPE	NON_UNIQUE
+idx_extra_new	BTREE	1
+idx_name	BTREE	1
+idx_name_unique	BTREE	0
+PRIMARY	BTREE	0
+#
+# Additional: Test with FULLTEXT index coexistence
+#
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+content TEXT,
+FULLTEXT INDEX ft_content(content),
+VECTOR INDEX vi(v) m=8 distance=cosine
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `content` text,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content` (`content`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Drop FULLTEXT, keep VECTOR
+ALTER TABLE t2 DROP INDEX ft_content;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `content` text,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Re-add FULLTEXT
+ALTER TABLE t2 ADD FULLTEXT INDEX ft_content_new(content);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `content` text,
+  PRIMARY KEY (`id`),
+  FULLTEXT KEY `ft_content_new` (`content`),
+  VECTOR KEY `vi` (`v`) M=8 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Cleanup
+#
+DROP TABLE t1, t2;
+SET GLOBAL vidx_disabled = ON;

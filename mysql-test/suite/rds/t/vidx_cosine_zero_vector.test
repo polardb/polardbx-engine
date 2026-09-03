@@ -1,0 +1,49 @@
+###############################################################
+# COSINE zero-vector scalar semantics (#14, ported from        #
+# 1a431997bd9).                                                 #
+#                                                               #
+# A zero-norm operand makes cosine similarity mathematically    #
+# undefined (0/0 -> NaN).  The engine defines it as similarity  #
+# 0 => distance 1.0, matching the indexed HNSW convention       #
+# (FVector::create keeps zero vectors with abs2=0.5 => distance #
+# 1.0 to everything) and the majority convention of Qdrant /    #
+# Weaviate / hnswlib / OpenSearch.  MySQL filesort has no total  #
+# order for NaN, so returning NaN makes the sort position of    #
+# zero-vector rows nondeterministic.                            #
+#                                                               #
+# Scalar-only coverage: no vector index is created, so this     #
+# test is independent of the HNSW graph and reload paths.       #
+###############################################################
+
+SET GLOBAL vidx_disabled = OFF;
+
+--echo # Zero vs unit: similarity 0 => distance 1, not NaN
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[1,0,0]')) AS d;
+--echo # Symmetry: operand order must not matter
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[0,0,0]')) AS d;
+--echo # Zero vs zero
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[0,0,0]')) AS d;
+--echo # Zero vs arbitrary non-unit vector
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[3,4,0]')) AS d;
+
+--echo # Non-zero sanity is unchanged: identical => 0, opposite => 2
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[1,0,0]')) AS d;
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[-1,0,0]')) AS d;
+
+--echo # Filesort over a plain (unindexed) table: the zero-vector row
+--echo # sorts deterministically at distance 1.0 instead of floating at
+--echo # an undefined NaN position
+CREATE TABLE t_cos_zero (
+  id INT PRIMARY KEY,
+  v VECTOR(3)
+) ENGINE=InnoDB;
+INSERT INTO t_cos_zero(id, v) VALUES
+  (1, VEC_FROMTEXT('[1,0,0]')),
+  (2, VEC_FROMTEXT('[0.5,0.8660254,0]')),
+  (3, VEC_FROMTEXT('[0,0,0]')),
+  (4, VEC_FROMTEXT('[-1,0,0]'));
+SELECT id, ROUND(VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[1,0,0]')), 6) AS d
+  FROM t_cos_zero ORDER BY d, id;
+DROP TABLE t_cos_zero;
+
+SET GLOBAL vidx_disabled = ON;

@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include "my_config.h"
 
 #if defined(__APPLE__)
 #include <sys/sysctl.h>
@@ -80,17 +81,18 @@ static inline size_t _cache_line_size() {
 static inline size_t _cache_line_size() {
   long size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
   if (size == -1) return 64;
-#if defined(__s390x__)
-  // returns 0 on s390x RHEL 7.x
+
+  // Not only RHEL 7.x, Hygon C86 os also LEVEL1_DCACHE_LINESIZE = 0 
+  // Use cmd check: getconf -a | grep CACHE
+  // If read failed finaly, use default CPU_LEVEL1_DCACHE_LINESIZE
   if (size == 0) {
     FILE *p = fopen(
         "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
-    if (p) {
-      fscanf(p, "%ld", &size);
-      fclose(p);
+    if (!p || fscanf(p, "%ld", &size) != 1 || size == 0) {
+      size = CPU_LEVEL1_DCACHE_LINESIZE;
     }
+    if (p) (void)fclose(p);
   }
-#endif
   return static_cast<size_t>(size);
 }
 

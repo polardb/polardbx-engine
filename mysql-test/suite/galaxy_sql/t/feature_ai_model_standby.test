@@ -1,0 +1,96 @@
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+#
+# Test: AI model cache reload on slave/follower.
+# Verifies that CALL dbms_ai.register_model / update_model / update_function /
+# drop_model on the master triggers automatic cache reload on the slave via
+# the Reload framework (Reload_slave_ai_model status counter).
+#
+# Does NOT require DASHSCOPE_API_KEY -- only tests metadata replication.
+#
+
+connection master;
+
+--echo ==============================================================
+--echo  1. Baseline: function metadata rows only, reload counter = 0
+--echo ==============================================================
+
+--sync_slave_with_master
+
+connection slave;
+show global status like 'Reload_slave_ai_model';
+CALL dbms_ai.list_models();
+CALL dbms_ai.show_ai_function();
+
+--echo ==============================================================
+--echo  2. Register model on master -> slave cache refreshed
+--echo ==============================================================
+
+connection master;
+CALL dbms_ai.register_model(
+  'test_slave_llm', 'dashscope',
+  'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+  'qwen-plus',
+  '{"description":"slave reload test"}'
+);
+
+--sync_slave_with_master
+--sleep 1
+
+connection slave;
+show global status like 'Reload_slave_ai_model';
+CALL dbms_ai.describe_model('test_slave_llm');
+
+--echo ==============================================================
+--echo  3. Update model on master -> slave cache refreshed again
+--echo ==============================================================
+
+connection master;
+CALL dbms_ai.update_model('test_slave_llm',
+  '{"description":"slave reload updated"}');
+
+--sync_slave_with_master
+--sleep 1
+
+connection slave;
+show global status like 'Reload_slave_ai_model';
+CALL dbms_ai.describe_model('test_slave_llm');
+
+--echo ==============================================================
+--echo  4. Update function on master -> slave cache refreshed again
+--echo ==============================================================
+
+connection master;
+CALL dbms_ai.update_function('AI_PROMPT', 'test_slave_llm');
+
+--sync_slave_with_master
+--sleep 1
+
+connection slave;
+show global status like 'Reload_slave_ai_model';
+CALL dbms_ai.show_ai_function();
+
+--echo ==============================================================
+--echo  5. Drop model on master -> slave cache refreshed again
+--echo ==============================================================
+
+connection master;
+CALL dbms_ai.drop_model('test_slave_llm');
+
+--sync_slave_with_master
+--sleep 1
+
+connection slave;
+show global status like 'Reload_slave_ai_model';
+--error ER_WRONG_ARGUMENTS
+CALL dbms_ai.describe_model('test_slave_llm');
+CALL dbms_ai.show_ai_function();
+
+--echo ==============================================================
+--echo  Cleanup
+--echo ==============================================================
+
+connection master;
+--sync_slave_with_master
+--source include/rpl_end.inc

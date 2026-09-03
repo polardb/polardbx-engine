@@ -1787,7 +1787,7 @@ bool Dictionary_client::remove_table_dynamic_statistics(
 // Retrieve a schema- and table name by the se private id of the table.
 bool Dictionary_client::get_table_name_by_se_private_id(
     const String_type &engine, Object_id se_private_id,
-    String_type *schema_name, String_type *table_name) {
+    String_type *schema_name, String_type *table_name, bool skip_spi_cache) {
   // Objects to be acquired.
   Table *tab_obj = nullptr;
   Schema *sch_obj = nullptr;
@@ -1799,8 +1799,8 @@ bool Dictionary_client::get_table_name_by_se_private_id(
 
   // Acquire the table uncached, because we cannot acquire a meta data
   // lock since we do not know the table name.
-  if (acquire_uncached_table_by_se_private_id(engine, se_private_id,
-                                              &tab_obj)) {
+  if (acquire_uncached_table_by_se_private_id(engine, se_private_id, &tab_obj,
+                                              skip_spi_cache)) {
     assert(m_thd->is_system_thread() || m_thd->killed || m_thd->is_error());
     return true;
   }
@@ -2063,6 +2063,9 @@ bool Dictionary_client::fetch_schema_table_names_by_engine(
 // specific tables.
 bool Dictionary_client::fetch_schema_table_names_not_hidden_by_se(
     const Schema *schema, std::vector<String_type> *names) const {
+  static_assert(dd::Abstract_table::HT_HIDDEN_HLINDEX ==
+                dd::Abstract_table::HT_HIDDEN_SE);
+
   auto fetch_criteria = [&](Raw_record *r) -> bool {
     return static_cast<dd::Abstract_table::enum_hidden_type>(
                r->read_int(dd::tables::Tables::FIELD_HIDDEN)) !=

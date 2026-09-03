@@ -1,0 +1,165 @@
+### Purpose ###
+#
+# Verify that purge works correctly for SPC indexes:
+#   - Delete-marked records in SPC index are properly purged
+#   - Old versions of updated records are purged
+#   - After purge, SPC index remains consistent with the primary key
+#   - New inserts of same key values work after purge
+#   - Unique constraint detection still works after purge
+#
+
+--source include/have_debug.inc
+--source include/have_innodb_max_16k.inc
+
+SET @old_innodb_stats_auto_recalc = @@innodb_stats_auto_recalc;
+SET GLOBAL innodb_stats_auto_recalc = OFF;
+
+--connect(con1, localhost, root,,)
+
+--echo #
+--echo # PART 1: Purge delete-marked records in SPC index
+--echo #
+# Sequence:
+#   1. Insert 50 rows, purge stopped
+#   2. con1 opens snapshot (sees 50 rows)
+#   3. default DELETEs rows id<=25 and commits
+#   4. Start purge: delete-marked records CANNOT be purged yet because
+#      con1 ReadView keeps the history visible
+#   5. Verify con1 still sees 50 rows through SPC index
+#   6. con1 COMMITs -> ReadView released
+#   7. Purge again: now all 25 delete-marks are actually purged
+#   8. Verify final state: 25 rows, checksum OK
+#   9. Re-insert purged keys succeeds
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+SELECT index_name, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+
+--echo # Step 1: con1 opens snapshot before the DELETE -- sees all 50 rows
+--connection con1
+BEGIN;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+--echo # Step 2: default DELETEs rows id<=25 and commits
+--connection default
+BEGIN;
+DELETE FROM t1 WHERE id <= 25;
+COMMIT;
+
+--echo # Step 3: purge is stopped; del-marks remain, con1 snapshot must still see 50 rows
+
+--echo # con1 must still see 50 rows (snapshot predates DELETE)
+--connection con1
+--let $snapshot_count = `SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c)`
+--let $assert_text = con1 snapshot sees all 50 rows through SPC index even after DELETE
+--let $assert_cond = $snapshot_count = 50
+--source include/assert.inc
+COMMIT;
+
+--echo # Step 4: ReadView released, purge can now physically remove delete-marks
+--connection default
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--let $final_count = `SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c)`
+--let $assert_text = After purge: 25 rows remain in SPC index
+--let $assert_cond = $final_count = 25
+--source include/assert.inc
+
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+--echo # Step 5: re-insert purged keys must succeed (no ghost del-marks blocking)
+BEGIN;
+INSERT INTO t1 VALUES (1,  CONCAT(REPEAT('a', 100), 'reinsert1'));
+INSERT INTO t1 VALUES (10, CONCAT(REPEAT('a', 100), 'reinsert10'));
+INSERT INTO t1 VALUES (25, CONCAT(REPEAT('a', 100), 'reinsert25'));
+COMMIT;
+
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo #
+--echo # PART 2: Purge old versions of updated records
+--echo #
+
+--connection default
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+  id  INT PRIMARY KEY,
+  c   VARCHAR(120),
+  KEY idx_c (c)
+) ENGINE=InnoDB;
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 50) {
+  eval INSERT INTO t1 VALUES ($i, CONCAT(REPEAT('a', 100), $i));
+  inc $i;
+}
+--enable_query_log
+
+--echo # Multiple updates to generate a long version chain
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100)) WHERE id <= 25;
+COMMIT;
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id <= 25;
+COMMIT;
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('d', 100)) WHERE id <= 25;
+COMMIT;
+
+--echo # Run purge: old versions should be purged
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+
+WITH
+  ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+  ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+
+DROP TABLE t1;
+
+--echo # Cleanup
+SET GLOBAL innodb_stats_auto_recalc = @old_innodb_stats_auto_recalc;
+SET GLOBAL innodb_purge_run_now = ON;
+
+--disconnect con1

@@ -6,25 +6,25 @@
 #include "row0log.h"
 #include "lock0lock.h"
 
-#include "lizard0dict.h"
+#include "lizard0btr0cur.h"
+#include "lizard0dict0dict.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #include "lizard0row.h"
 #include "lizard0row0ins.h"
-#include "lizard0btr0cur.h"
 
 extern bool row_allow_duplicates(que_thr_t *thr);
 
 extern dberr_t row_ins_set_rec_lock(lock_mode mode, ulint type,
-                                    const buf_block_t *block, const rec_t *rec,
-                                    dict_index_t *index, const ulint *offsets,
-                                    que_thr_t *thr);
+                                    const buf_block_t *block, const Slice *slc,
+                                    dict_index_t *index, que_thr_t *thr);
 
 extern bool row_ins_dupl_error_with_rec(
-    const rec_t *rec,      /*!< in: user record; NOTE that we assume
-                           that the caller already has a record lock on
-                           the record! */
-    const dtuple_t *entry, /*!< in: entry to insert */
-    dict_index_t *index,   /*!< in: index */
-    const ulint *offsets); /*!< in: rec_get_offsets(rec, index) */
+    const Slice *slc, /*!< in: user record; NOTE that we assume
+                      that the caller already has a record lock on
+                      the record! */
+    const dict_index_t *index,
+    const dtuple_t *entry); /*!< in: entry to insert */
 
 extern dberr_t row_ins_sec_index_entry_by_modify(
     ulint flags,                /*!< in: undo logging and locking flags */
@@ -33,14 +33,14 @@ extern dberr_t row_ins_sec_index_entry_by_modify(
                                 depending on whether mtr holds just a leaf
                                 latch or also a tree latch */
     btr_cur_t *cursor,          /*!< in: B-tree cursor */
-    ulint **offsets,            /*!< in/out: offsets on cursor->page_cur.rec */
-    mem_heap_t *offsets_heap,
-    /*!< in/out: memory heap that can be emptied */
-    mem_heap_t *heap,      /*!< in/out: memory heap */
-    const dtuple_t *entry, /*!< in: index entry to insert */
-    que_thr_t *thr,        /*!< in: query thread */
-    mtr_t *mtr);           /*!< in: mtr; must be committed before
-                            latching any further pages */
+    Slice **slc,                /*!< in/out: slice */
+    Slice_ctx *sctx,            /*!< in/out: context of slice */
+    mem_heap_t *offsets_heap,   /*!< in/out: memory heap that can be emptied */
+    mem_heap_t *heap,           /*!< in/out: memory heap */
+    const dtuple_t *entry,      /*!< in: index entry to insert */
+    que_thr_t *thr,             /*!< in: query thread */
+    mtr_t *mtr);                /*!< in: mtr; must be committed before
+                                 latching any further pages */
 
 namespace lizard {
 
@@ -61,12 +61,11 @@ static inline bool row_ins_panda_must_modify_rec(
     ulint flags, btr_cur_t *cursor, const dtuple_t *entry, que_thr_t *thr,
     mtr_t *mtr) {
   ulint n_unique;
-  rec_t *rec;
+  reg_t reg;
   dict_index_t *index;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
+
   trx_t *trx = thr_get_trx(thr);
   dberr_t err;
 
@@ -84,11 +83,10 @@ static inline bool row_ins_panda_must_modify_rec(
   ut_ad(dtuple_get_n_fields_cmp(entry) == n_unique);
 
   if (cursor->low_match >= n_unique) {
-    rec = btr_cur_get_rec(cursor);
+    reg = btr_cur_get_reg(cursor);
 
-    if (!page_rec_is_infimum(rec)) {
-      offsets = rec_get_offsets(rec, cursor->index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+    if (!page_rec_is_infimum(reg.rec)) {
+      slc = sctx.get_offsets(reg, cursor->index, ULINT_UNDEFINED);
 
       /* We set a lock on the possible duplicate: this
       is needed in logical logging of MySQL to make
@@ -120,7 +118,7 @@ static inline bool row_ins_panda_must_modify_rec(
 
         err = row_ins_set_rec_lock(row_allow_duplicates(thr) ? LOCK_X : LOCK_S,
                                    LOCK_REC_NOT_GAP, btr_cur_get_block(cursor),
-                                   rec, cursor->index, offsets, thr);
+                                   slc, cursor->index, thr);
       }
 
       switch (err) {
@@ -131,7 +129,8 @@ static inline bool row_ins_panda_must_modify_rec(
           goto func_exit;
       }
 
-      if (row_ins_dupl_error_with_rec(rec, entry, cursor->index, offsets)) {
+      ut_ad(slc->is_positioned(reg, cursor->index));
+      if (row_ins_dupl_error_with_rec(slc, cursor->index, entry)) {
       duplicate:
         trx->error_index = cursor->index;
         err = DB_DUPLICATE_KEY;
@@ -144,11 +143,10 @@ static inline bool row_ins_panda_must_modify_rec(
     /** TODO: Don't know how to come into it. <26-09-24, zanye.zjy> */
     ut_error;
 
-    rec = page_rec_get_next(btr_cur_get_rec(cursor));
+    reg = page_rec_get_next_reg(btr_cur_get_rec(cursor));
 
-    if (!page_rec_is_supremum(rec)) {
-      offsets = rec_get_offsets(rec, cursor->index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+    if (!page_rec_is_supremum(reg.rec)) {
+      slc = sctx.get_offsets(reg, cursor->index, ULINT_UNDEFINED);
 
       /* If the SQL-query will update or replace
       duplicate key we will take X-lock for
@@ -157,7 +155,7 @@ static inline bool row_ins_panda_must_modify_rec(
 
       err = row_ins_set_rec_lock(row_allow_duplicates(thr) ? LOCK_X : LOCK_S,
                                  LOCK_REC_NOT_GAP, btr_cur_get_block(cursor),
-                                 rec, cursor->index, offsets, thr);
+                                 slc, cursor->index, thr);
 
       switch (err) {
         case DB_SUCCESS_LOCKED_REC:
@@ -167,7 +165,7 @@ static inline bool row_ins_panda_must_modify_rec(
           goto func_exit;
       }
 
-      if (row_ins_dupl_error_with_rec(rec, entry, cursor->index, offsets)) {
+      if (row_ins_dupl_error_with_rec(slc, cursor->index, entry)) {
         goto duplicate;
       }
     }
@@ -178,9 +176,6 @@ static inline bool row_ins_panda_must_modify_rec(
 
   err = DB_SUCCESS;
 func_exit:
-  if (UNIV_LIKELY_NULL(heap)) {
-    mem_heap_free(heap);
-  }
   return (err);
 }
 
@@ -195,9 +190,8 @@ dberr_t row_ins_panda_sec_index_entry_low(
   dberr_t err = DB_SUCCESS;
   ulint n_unique;
   mtr_t mtr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   rtr_info_t rtr_info;
 
   ut_ad(!index->is_clustered());
@@ -208,7 +202,7 @@ dberr_t row_ins_panda_sec_index_entry_low(
   ut_ad(!dup_chk_only);
 
   /** Lizard: There is no SCN and UBA in secondary index */
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   cursor.thr = thr;
   cursor.rtr_info = nullptr;
@@ -331,21 +325,20 @@ dberr_t row_ins_panda_sec_index_entry_low(
     /* There is already an index entry with a long enough common
     prefix, we must convert the insert into a modify of an
     existing record */
-    offsets = rec_get_offsets(btr_cur_get_rec(&cursor), index, offsets,
-                              ULINT_UNDEFINED, UT_LOCATION_HERE, &offsets_heap);
+    slc = sctx.get_offsets(btr_cur_get_reg(&cursor), index, ULINT_UNDEFINED);
 
-    err = row_ins_sec_index_entry_by_modify(flags, layout, mode, &cursor,
-                                            &offsets, offsets_heap, heap, entry,
+    err = row_ins_sec_index_entry_by_modify(flags, layout, mode, &cursor, &slc,
+                                            &sctx, offsets_heap, heap, entry,
                                             thr, &mtr);
 
   } else {
-    rec_t *insert_rec;
+    // rec_t *insert_rec;
     big_rec_t *big_rec;
 
     if (mode == BTR_MODIFY_LEAF) {
-      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
-                                      &offsets_heap, entry, &insert_rec,
-                                      &big_rec, thr, &mtr);
+      err =
+          btr_cur_optimistic_insert(flags, layout, &cursor, &slc, &sctx,
+                                    &offsets_heap, entry, &big_rec, thr, &mtr);
     } else {
       ut_ad(mode == BTR_MODIFY_TREE);
       if (buf_LRU_buf_pool_running_out()) {
@@ -353,13 +346,13 @@ dberr_t row_ins_panda_sec_index_entry_low(
         goto func_exit;
       }
 
-      err = btr_cur_optimistic_insert(flags, layout, &cursor, &offsets,
-                                      &offsets_heap, entry, &insert_rec,
-                                      &big_rec, thr, &mtr);
+      err =
+          btr_cur_optimistic_insert(flags, layout, &cursor, &slc, &sctx,
+                                    &offsets_heap, entry, &big_rec, thr, &mtr);
       if (err == DB_FAIL) {
-        err = btr_cur_pessimistic_insert(flags, layout, &cursor, &offsets,
-                                         &offsets_heap, entry, &insert_rec,
-                                         &big_rec, thr, &mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, &cursor, &slc, &sctx,
+                                         &offsets_heap, entry, &big_rec, thr,
+                                         &mtr);
       }
     }
 

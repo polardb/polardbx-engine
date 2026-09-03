@@ -1,0 +1,137 @@
+# verify TDE/keyring and enc_checksum are both active before test starts
+SELECT PLUGIN_NAME, PLUGIN_STATUS, PLUGIN_TYPE
+FROM INFORMATION_SCHEMA.PLUGINS
+WHERE PLUGIN_NAME IN ('enc_checksum', 'keyring_file')
+ORDER BY PLUGIN_NAME;
+PLUGIN_NAME	PLUGIN_STATUS	PLUGIN_TYPE
+enc_checksum	ACTIVE	ENC CHECKSUM
+keyring_file	ACTIVE	KEYRING
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	ON
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	ON
+SHOW GLOBAL VARIABLES LIKE 'innodb_verify_enc_checksum';
+Variable_name	Value
+innodb_verify_enc_checksum	OFF
+SELECT @@global.enc_checksum_enabled IN (0,1);
+@@global.enc_checksum_enabled IN (0,1)
+1
+SELECT @@session.enc_checksum_enabled;
+ERROR HY000: Variable 'enc_checksum_enabled' is a GLOBAL variable
+SHOW SESSION VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	ON
+SELECT * FROM performance_schema.global_variables
+WHERE variable_name='enc_checksum_enabled';
+VARIABLE_NAME	VARIABLE_VALUE
+enc_checksum_enabled	ON
+SELECT * FROM performance_schema.session_variables
+WHERE variable_name='enc_checksum_enabled';
+VARIABLE_NAME	VARIABLE_VALUE
+enc_checksum_enabled	ON
+# runtime toggle should switch the active bridge without restart
+SET GLOBAL enc_checksum_enabled = OFF;
+SET SESSION enc_checksum_enabled = OFF;
+ERROR HY000: Variable 'enc_checksum_enabled' is a GLOBAL variable and should be set with SET GLOBAL
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	OFF
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	OFF
+SET GLOBAL enc_checksum_enabled = ON;
+SET SESSION enc_checksum_enabled = ON;
+ERROR HY000: Variable 'enc_checksum_enabled' is a GLOBAL variable and should be set with SET GLOBAL
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	ON
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	ON
+SET GLOBAL enc_checksum_enabled = 1.1;
+ERROR 42000: Incorrect argument type to variable 'enc_checksum_enabled'
+SET GLOBAL enc_checksum_enabled = 1e1;
+ERROR 42000: Incorrect argument type to variable 'enc_checksum_enabled'
+SET GLOBAL enc_checksum_enabled = 'some text';
+ERROR 42000: Variable 'enc_checksum_enabled' can't be set to the value of 'some text'
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+pad LONGBLOB
+) ENGINE=InnoDB ENCRYPTION='Y';
+INSERT INTO t1 VALUES (1, REPEAT('a', 65536));
+SET GLOBAL innodb_buf_flush_list_now = 1;
+# restart with decrypt fault injection after TDE setup is confirmed
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+LENGTH(pad)
+65536
+include/wait_for_pattern_in_file.inc [Database page corruption on disk or a failed file read of page]
+include/assert_grep.inc [legacy crc mismatch is logged when verify_enc_checksum is off]
+include/assert_grep.inc [legacy crc checksum detail is logged when verify_enc_checksum is off]
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+LENGTH(pad)
+65536
+# with verify enabled the same corruption is reported as enc_checksum
+SET GLOBAL innodb_verify_enc_checksum = ON;
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+LENGTH(pad)
+65536
+include/wait_for_pattern_in_file.inc [enc_checksum detected checksum mismatch, page]
+include/assert_grep.inc [enc_checksum mismatch is logged once]
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+SET GLOBAL innodb_verify_enc_checksum = OFF;
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+LENGTH(pad)
+65536
+# with verify enabled but inactive bridge the corruption stays legacy CRC
+SET GLOBAL enc_checksum_enabled = OFF;
+SET GLOBAL innodb_verify_enc_checksum = ON;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	OFF
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	OFF
+SET GLOBAL debug = "+d,enc_checksum_corrupt_ciphertext_byte";
+SELECT LENGTH(pad) FROM t1 WHERE id=1;
+LENGTH(pad)
+65536
+include/wait_for_pattern_in_file.inc [Database page corruption on disk or a failed file read of page]
+include/assert_grep.inc [legacy crc mismatch is logged when enc_checksum is inactive]
+include/assert_grep.inc [enc_checksum mismatch is not logged when bridge is inactive]
+SET GLOBAL debug = "-d,enc_checksum_corrupt_ciphertext_byte";
+SET GLOBAL innodb_verify_enc_checksum = OFF;
+SET GLOBAL enc_checksum_enabled = ON;
+# persisted OFF should survive restart and leave the bridge inactive
+SET PERSIST enc_checksum_enabled = OFF;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	OFF
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	OFF
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	OFF
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	OFF
+SET PERSIST enc_checksum_enabled = ON;
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	ON
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	ON
+SHOW GLOBAL VARIABLES LIKE 'enc_checksum_enabled';
+Variable_name	Value
+enc_checksum_enabled	ON
+SHOW GLOBAL STATUS LIKE 'enc_checksum_active';
+Variable_name	Value
+enc_checksum_active	ON
+RESET PERSIST IF EXISTS enc_checksum_enabled;
+DROP TABLE IF EXISTS t1;

@@ -84,6 +84,7 @@ Usage: $0 [OPTIONS]
   --ledir=DIRECTORY          Look for mysqld in the specified directory
   --open-files-limit=LIMIT   Limit the number of open files
   --core-file-size=LIMIT     Limit core files to the specified size
+  --cpus=LIMIT               Limit xx-malloc narenas count
   --timezone=TZ              Set the system timezone
   --malloc-lib=LIB           Preload shared library LIB if available
   --mysqld=FILE              Use the specified file as mysqld
@@ -289,13 +290,13 @@ parse_arguments() {
       --timezone=*) TZ="$val"; export TZ; ;;
       --malloc-conf=*)
           malloc_conf="$val";
-          export  MALLOC_CONF="$malloc_conf"; ;;
+          export  MALLOC_CONF="$MALLOC_CONF,$malloc_conf"; ;;
       --cpus=*)
           cpus="$val"; 
-          je_narenas_num=$((cpus * 4));
-          export MALLOC_CONF="narenas:$je_narenas_num";
+          je_narenas_num=$((cpus * 1));# default * 4
+          export MALLOC_CONF="$MALLOC_CONF,narenas:$je_narenas_num";
 
-          pt_narenas_num=$((cpus * 2));
+          pt_narenas_num=$((cpus * 1));# default * 8
           export MALLOC_ARENA_MAX="$pt_narenas_num";
           ;;
       --help) usage ;;

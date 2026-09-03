@@ -43,7 +43,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fil0fil.h"
 #include "hash0hash.h"
 #include "ibuf0ibuf.h"
-#include "lizard0tcn.h"
 #include "log0recv.h"
 #include "log0write.h"
 #include "my_dbug.h"
@@ -2178,7 +2177,7 @@ static bool buf_LRU_block_remove_hashed(buf_page_t *bpage, bool zip,
 
         const ulint type = fil_page_get_type(frame);
 
-        if ((type == FIL_PAGE_INDEX || type == FIL_PAGE_RTREE) &&
+        if ((fil_page_type_is_btree_index(type) || type == FIL_PAGE_RTREE) &&
             page_is_leaf(frame)) {
           uint32_t space_id = bpage->id.space();
 

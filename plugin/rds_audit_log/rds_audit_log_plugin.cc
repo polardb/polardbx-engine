@@ -184,7 +184,7 @@ static MYSQL_SYSVAR_ENUM(format,
     nullptr, nullptr, MYSQL_RDS_AUDIT_LOG::PLAIN, &audit_log_format_typelib);
 
 /* PolorDB 8.0 supports MYSQL_V2, we don't */
-const char *log_version_names[] = {"MYSQL_V1", "MYSQL_V3", "MYSQL_V4", NullS};
+const char *log_version_names[] = {"MYSQL_V1", "MYSQL_V3", "MYSQL_V4", "MYSQL_V5", NullS};
 static TYPELIB audit_log_version_typelib = {array_elements(log_version_names) - 1,
                                            "", log_version_names, NULL};
 
@@ -206,7 +206,7 @@ static void audit_log_version_update(THD *thd MY_ATTRIBUTE((unused)),
 
 static MYSQL_SYSVAR_ENUM(version,
     rds_audit_log_version, PLUGIN_VAR_RQCMDARG,
-    "The version of audit log, currently support MYSQL_V1, MYSQL_V3 and MYSQL_V4.",
+    "The version of audit log, currently support MYSQL_V1, MYSQL_V3, MYSQL_V4 and MYSQL_V5.",
     NULL, audit_log_version_update,
     MYSQL_RDS_AUDIT_LOG::MYSQL_V1, &audit_log_version_typelib);
 
@@ -241,6 +241,8 @@ static void rds_audit_log_enabled_update(THD *thd MY_ATTRIBUTE((unused)),
   *static_cast<bool *>(var_ptr) = new_value;
 
   rds_audit_log->set_enable(new_value);
+
+  rds_audit_log_enabled_sync(new_value);
 }
 
 static MYSQL_SYSVAR_BOOL(enabled,
@@ -736,6 +738,8 @@ static int audit_log_plugin_init(void *arg MY_ATTRIBUTE((unused))) {
   if (rds_audit_log->create_flush_thread()) {
     return (1);
   }
+
+  rds_audit_log_enabled_sync(rds_audit_log_enabled);
 
   return (0);
 }

@@ -33,10 +33,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0txn0space_h
 #define lizard0txn0space_h
 
-#include "lizard0txn0service.h"
-#include "ut0new.h"
-
 #include "univ.i"
+#include "ut0new.h"
 
 namespace undo {
 class Tablespace;
@@ -75,18 +73,5 @@ void mark_txn_tablespace(undo::Tablespaces *spaces);
 bool txn_always_first_undo_tablespace(undo::Tablespaces *spaces);
 
 }  // namespace lizard
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-
-#define lizard_verify_txn_tablespace_by_id(id, is)       \
-  do {                                                   \
-    ut_a(lizard::fsp_is_txn_tablespace_by_id(id) == is); \
-  } while (0)
-
-#else
-
-#define lizard_verify_txn_tablespace_by_id(id, is)
-
-#endif
 
 #endif  //

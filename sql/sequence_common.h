@@ -427,7 +427,7 @@ void destroy_hash(collation_unordered_map<K, V> *hash) {
                     CREATE TABLE ...sequence engine
   @retval   false   Not
 */
-bool sequence_create_info(HA_CREATE_INFO *create_info);
+bool sequence_create_info(const HA_CREATE_INFO *create_info);
 
 /**
   Return the item builder of 'NEXTVAL' and 'CURRVAL'

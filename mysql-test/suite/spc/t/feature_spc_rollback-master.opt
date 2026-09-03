@@ -1,0 +1,1 @@
+--innodb_undo_retention=0 --log-error=$MYSQLTEST_VARDIR/log/feature_spc_rollback.err

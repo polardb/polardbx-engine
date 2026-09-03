@@ -1,0 +1,132 @@
+--source include/have_debug.inc
+--source include/big_test.inc
+
+# 4-way concurrent UPDATE stress for ~10-20s.  Lighter-weight regression
+# guard for the IDX_TREF ER_DUP_KEY race observed under sysbench OLTP_RW;
+# vidx_neighbor_save_high_conc.test covers the higher-concurrency variant.
+#
+# Threshold semantics for Vidx_save_retry_dup_key:
+#   The counter conflates two paths (see vidx_dup_key_repro_mini.test
+#   for the fuller rationale):
+#     (1) IDX_TREF pre-check finds a stale neighbor and triggers a
+#         clear-and-retry — a legitimate concurrent insert race.
+#     (2) ha_write_row hits ER_DUP_KEY at write time — the
+#         save_neighbors_only root-cause this test guards against.
+#   Path (1) fires legitimately under concurrency; in this 4-way × 2000
+#   workload (40x mini's 2-way × 200) it is expected to fire on the
+#   order of tens.  Strict 0 here would be flaky AND inconsistent with
+#   mini's <= 5 budget.  We bound by a generous proportional cap of 80
+#   (mini's 5 ceiling × the 16x ops-per-iteration factor; 4-way pre-check
+#   contention is much stronger than 2-way so pre-check rate is super-
+#   linear).  Path (2) regressions overshoot well past 80 — typical
+#   pre-fix observation was 100s within seconds, so the bound preserves
+#   regression catch-rate while removing flake.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 50)
+{
+  eval INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+# Snapshot baselines so the test stays stable when run after other vidx
+# cases bumped the global counters.
+let $b_dup  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_err  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+let $b_dl   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $b_orph = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_partial_orphan'`;
+
+DELIMITER $$;
+CREATE PROCEDURE p1(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;  -- ER_LOCK_DEADLOCK
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;  -- ER_DUP_KEY (counted separately below)
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;  -- ER_DUP_ENTRY
+  WHILE j < 2000 DO
+    UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, "]")) WHERE id = (j % 50) + 1;
+    SET j = j + 1;
+  END WHILE;
+END$$
+DELIMITER ;$$
+
+connect (con1, localhost, root,,);
+connect (con2, localhost, root,,);
+connect (con3, localhost, root,,);
+connect (con4, localhost, root,,);
+
+--connection con1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(1)
+--connection con2
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(2)
+--connection con3
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(3)
+--connection con4
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p1(4)
+
+--connection con1
+--error 0,1213,1022,1062
+--reap
+--connection con2
+--error 0,1213,1022,1062
+--reap
+--connection con3
+--error 0,1213,1022,1062
+--reap
+--connection con4
+--error 0,1213,1022,1062
+--reap
+
+--connection default
+
+let $a_dup  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_err  = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+let $a_dl   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $a_orph = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_update_partial_orphan'`;
+
+let $d_dup  = `SELECT $a_dup - $b_dup`;
+let $d_err  = `SELECT $a_err - $b_err`;
+let $d_dl   = `SELECT $a_dl - $b_dl`;
+let $d_orph = `SELECT $a_orph - $b_orph`;
+
+# Stable result: emit only pre-evaluated 0/1 booleans.  Drop the
+# $d_dl / $d_orph cosmetic echoes — counters are ulonglong so
+# $delta >= 0 is structurally true; the upper-bound dup-key check
+# below is what actually catches regressions.
+let $ok_dup  = `SELECT $d_dup <= 80`;
+let $ok_err  = `SELECT $d_err = 0`;
+--echo == After 4-way concurrent UPDATE:
+--echo save_retry_dup_key_within_threshold=$ok_dup
+--echo indep_dml_commit_error_eq_0=$ok_err
+
+if (`SELECT $d_dup > 80`) {
+  --die Regression: Vidx_save_retry_dup_key delta > 80 under 4-way UPDATE stress (save_neighbors_only regression: dup_key root-cause re-opened)
+}
+if (`SELECT $d_err != 0`) {
+  --die Regression: Vidx_indep_dml_commit_error nonzero (attachable inner-trx commit broke)
+}
+
+disconnect con1;
+disconnect con2;
+disconnect con3;
+disconnect con4;
+
+DROP PROCEDURE p1;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

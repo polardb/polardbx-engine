@@ -35,7 +35,7 @@ namespace im {
 /**
   All the reload type, pls add new type if support more.
 */
-enum Reload_type { RELOAD_OUTLINE = 0, MAX_RELOAD_ENTRY_COUNT };
+enum Reload_type { RELOAD_OUTLINE = 0, RELOAD_AI_MODEL, MAX_RELOAD_ENTRY_COUNT };
 
 /**
   Show status for reload operations.

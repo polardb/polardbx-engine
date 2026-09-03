@@ -378,11 +378,20 @@ extern std::atomic<ulonglong> group_update_ignore_count;
 extern std::atomic<ulonglong> group_update_group_same_count;
 /* END: Variables for RDS */
 
+/* PolarDB-X Variables */
+extern ulong show_single_shard_read_gcn_too_old;
+/* PolarDB-X Variables End */
+
 extern ulonglong sqb_max_trx_affected_rows;
 extern bool polarx_long_trans_external_check;
 extern ulonglong polarx_long_trans_external_threshold;
 
 extern char *sqb_user_pattern;
+
+/* Deprecated AI gateway compatibility sysvars. No longer used by AI calls. */
+extern char *ai_gateway_endpoint;
+extern char *ai_gateway_key;
+extern bool ai_gateway_enabled;
 
 extern ulong sqb_exec_timeout;
 extern ulong sqb_exec_timeout_for_cpu_exceed;
@@ -442,6 +451,10 @@ extern ulong log_error_verbosity;
 extern bool persisted_globals_load;
 extern bool opt_keyring_operations;
 extern bool opt_table_encryption_privilege_check;
+// User-facing only: makes HT_HIDDEN_SE tables (vidx aux, FTS aux) visible
+// in I_S / SHOW TABLES and openable by SELECT/DESC.  Must NOT gate DDL
+// enumeration (DROP DATABASE etc.) — the SE cascade handles aux cleanup.
+extern bool opt_show_vidx_hlindex_tables;
 extern char *opt_keyring_migration_user;
 extern char *opt_keyring_migration_host;
 extern char *opt_keyring_migration_password;
@@ -459,6 +472,7 @@ extern ulong writeset_cannot_use_count;
 extern ulong writeset_exceeds_max_size_count;
 extern ulong writeset_has_missing_keys_count;
 extern ulong writeset_has_related_foreign_keys_count;
+extern ulong writeset_has_hlindex_count;
 extern ulong writeset_was_write_set_limit_reached_count;
 extern ulong writeset_max_size_in_trx;
 extern ulong writeset_max_size_in_history;
@@ -483,10 +497,10 @@ extern PSI_mutex_key key_CONSENSUSLOG_LOCK_commit_pos;
 extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_sequence_stage1_lock;
 extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_term_lock;
 extern PSI_mutex_key key_CONSENSUSLOG_LOCK_ConsensusLog_apply_thread_lock;
-extern PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_stage_change;
+extern PSI_mutex_key key_CONSENSUSLOG_LOCK_Consensus_state_change;
 extern PSI_cond_key key_COND_ConsensusLog_catchup;
 extern PSI_cond_key key_COND_Consensus_state_change;
-extern PSI_thread_key key_thread_consensus_stage_change;
+extern PSI_thread_key key_thread_consensus_state_change;
 extern PSI_thread_key key_thread_consensus_commit_pos_watcher;
 
 extern PSI_mutex_key key_LOCK_tc;
@@ -513,6 +527,7 @@ extern PSI_mutex_key key_mutex_slave_parallel_worker;
 extern PSI_mutex_key key_mutex_slave_parallel_worker_count;
 extern PSI_mutex_key key_structure_guard_mutex;
 extern PSI_mutex_key key_TABLE_SHARE_LOCK_ha_data;
+extern PSI_mutex_key key_TABLE_SHARE_LOCK_share;
 extern PSI_mutex_key key_LOCK_query_plan;
 extern PSI_mutex_key key_LOCK_thd_query;
 extern PSI_mutex_key key_LOCK_cost_const;
@@ -696,6 +711,7 @@ extern PSI_stage_info stage_updating_hotspot_collecting;
 extern PSI_stage_info stage_updating_main_table;
 extern PSI_stage_info stage_updating_reference_tables;
 extern PSI_stage_info stage_user_sleep;
+extern PSI_stage_info stage_vector_index_build;
 extern PSI_stage_info stage_verifying_table;
 extern PSI_stage_info stage_waiting_for_gtid_to_be_committed;
 extern PSI_stage_info stage_waiting_for_handler_commit;
@@ -920,4 +936,11 @@ extern bool opt_persist_sensitive_variables_in_plaintext;
 void persisted_variables_refresh_keyring_support();
 
 extern bool opt_performance_point_enabled;
+
+/* Network buffer shrink configuration */
+extern bool net_buff_shrink_enabled;
+extern uint net_buff_shrink_thresh;
+
+/* polarx security enhancement mode */
+extern bool opt_polarx_security_enhancement_mode;
 #endif /* MYSQLD_INCLUDED */

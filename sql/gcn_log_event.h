@@ -78,6 +78,8 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
     return POST_HEADER_LENGTH + get_gcn_length() + get_branch_count_length();
   }
 
+  size_t get_event_length() { return LOG_EVENT_HEADER_LEN + get_data_size(); }
+
   /**
     Take a glance to determine if it is a complete Gcn_log_event in
     [buf, buf + buf_size)
@@ -117,7 +119,8 @@ class Gcn_log_event : public binary_log::Gcn_event, public Log_event {
     @param[out] xa_spec  XA_specification
     @param[in]   mem_root  MEM_ROOT
   */
-  void copy_to_xa_spec(XA_specification *xa_spec, MEM_ROOT *mem_root) const;
+  void copy_to_xa_spec(komodo::XA_specification *xa_spec,
+                       MEM_ROOT *mem_root) const;
 
  private:
   size_t get_gcn_length() const { return have_gcn() ? GCN_LENGTH : 0; }

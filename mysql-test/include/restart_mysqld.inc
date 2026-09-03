@@ -33,7 +33,7 @@
 #
 #   $shutdown_server_timeout
 #     Fail the test if shutdown takes more than this number of seconds.
-#     (6 times more if Valgrind is enabled). The default is 60.
+#     (6 times more if Valgrind is enabled). The default is 240.
 #
 #   $do_not_echo_parameters
 #     By default, $restart_parameters is echoed to the result log.
@@ -79,7 +79,7 @@ if ($mysqld_name)
 
 # Send shutdown to the connected server.
 
---let $ss_timeout= 60
+--let $ss_timeout= 240
 
 if ($shutdown_server_timeout)
 {

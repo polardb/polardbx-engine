@@ -3,7 +3,7 @@ call mtr.add_suppression("pipe output length = 0");
 select * from information_schema.plugins where plugin_name like '%keyring%';
 PLUGIN_NAME	PLUGIN_VERSION	PLUGIN_STATUS	PLUGIN_TYPE	PLUGIN_TYPE_VERSION	PLUGIN_LIBRARY	PLUGIN_LIBRARY_VERSION	PLUGIN_AUTHOR	PLUGIN_DESCRIPTION	PLUGIN_LICENSE	LOAD_OPTION
 keyring_rds	1.0	ACTIVE	KEYRING	1.1	keyring_rds.so	1.11	Yongping.Liu, Alibaba	fetch authentication data from KMS	GPL	ON
-daemon_keyring_proxy_plugin	1.0	ACTIVE	DAEMON	80032.0	NULL	NULL	Oracle	A plugin that implements the keyring component services atop of the keyring plugin	GPL	FORCE
+daemon_keyring_proxy_plugin	1.0	ACTIVE	DAEMON	80042.0	NULL	NULL	Oracle	A plugin that implements the keyring component services atop of the keyring plugin	GPL	FORCE
 show variables like 'keyring_rds%';
 Variable_name	Value
 keyring_rds_command_timeout_sec	10

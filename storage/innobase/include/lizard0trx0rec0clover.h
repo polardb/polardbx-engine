@@ -33,7 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0trx0rec0clover_h
 #define lizard0trx0rec0clover_h
 
-#include "lizard0txn.h"
+#include "lizard0txn0types.h"
 
 #include "row0upd.h"
 
@@ -48,16 +48,13 @@ extern byte *trx_undo_update_rec_get_clover_cols(const byte *ptr,
                                                  txn_info_t *txn_info);
 
 /** Write clover layout transactional columns into undo record.
- * @param[in/out]  ptr             pointer to undo record
- * @param[in]      index           index handler
- * @param[in]      rec             record
- * @param[in]      offsets         offsets
- * @return         pointer to current position
- */
-byte *trx_undo_update_rec_write_clover_cols(byte *ptr,
-                                            const dict_index_t *index,
-                                            const rec_t *rec,
-                                            const ulint *offsets);
+ * @param[in/out]	ptr             pointer to undo record
+ * @param[in]		slc             record
+ * @param[in]		index           index handler
+ *
+ * @revtal	pointer to current position */
+byte *trx_undo_update_rec_write_clover_cols(byte *ptr, const Slice *slc,
+                                            const dict_index_t *index);
 
 /**
   Write Clover layout fields(scn/undo_ptr/gcn) into the update vector

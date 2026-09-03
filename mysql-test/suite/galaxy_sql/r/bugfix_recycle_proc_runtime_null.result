@@ -1,0 +1,14 @@
+# Runtime NULL from a VARCHAR expression must be rejected safely.
+CALL dbms_recycle.purge_table(NULLIF('purge_name', 'purge_name'));
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.purge_table
+CALL dbms_recycle.restore_table(NULLIF('old_name', 'old_name'));
+ERROR HY000: The 1th parameter didn't match for native procedure dbms_recycle.restore_table
+CALL dbms_recycle.restore_table('old_name',
+NULLIF('new_db', 'new_db'), 'new_name');
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_recycle.restore_table
+CALL dbms_recycle.restore_table('old_name', 'new_db',
+NULLIF('new_name', 'new_name'));
+ERROR HY000: The 3th parameter didn't match for native procedure dbms_recycle.restore_table
+SELECT 1 AS server_is_alive;
+server_is_alive
+1

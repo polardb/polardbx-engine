@@ -1,0 +1,21 @@
+SET @saved_binlog_rows_query_key_content =
+@@GLOBAL.binlog_rows_query_key_content;
+SET @@GLOBAL.binlog_rows_query_key_content = DEFAULT;
+SELECT @@GLOBAL.binlog_rows_query_key_content = FALSE;
+@@GLOBAL.binlog_rows_query_key_content = FALSE
+1
+SET @@GLOBAL.binlog_rows_query_key_content = ON;
+SELECT @@GLOBAL.binlog_rows_query_key_content;
+@@GLOBAL.binlog_rows_query_key_content
+1
+SET @@SESSION.binlog_rows_query_key_content = ON;
+ERROR HY000: Variable 'binlog_rows_query_key_content' is a GLOBAL variable and should be set with SET GLOBAL
+SELECT IF(@@GLOBAL.binlog_rows_query_key_content, "ON", "OFF") =
+VARIABLE_VALUE
+FROM performance_schema.global_variables
+WHERE VARIABLE_NAME = 'binlog_rows_query_key_content';
+IF(@@GLOBAL.binlog_rows_query_key_content, "ON", "OFF") =
+VARIABLE_VALUE
+1
+SET @@GLOBAL.binlog_rows_query_key_content =
+@saved_binlog_rows_query_key_content;

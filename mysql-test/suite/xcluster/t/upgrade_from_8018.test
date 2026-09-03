@@ -82,12 +82,25 @@ let $DATADIR = $old_datadir/data;
 
 --echo # restart 1
 --exec echo "restart:--datadir=$DATADIR --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term  --log_error=$MYSQLTEST_VARDIR/tmp/force-change-meta.log " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
---sleep 10
+# Wait for force-change-meta to log "successfully" before issuing restart 2.
+# A fixed --sleep 10 is insufficient in ASan builds or under high parallel load;
+# the mysqld may still be running force-change-meta when restart 2 is written,
+# causing the server to start with an incomplete datadir and exit 1.
+# NOTE: when upgrading from 8018, mysqld must first complete a full schema
+# upgrade (DD upgrade ~1min + Server upgrade ~1min) before reaching
+# check_force_change_meta; allow up to 300 seconds for this path.
+# Under ASAN the upgrade can take 10+ minutes, so use 900 seconds.
+let $fcm_timeout= 300;
+if ($ASAN_OPTIONS) {
+  let $fcm_timeout= 900;
+}
+--let $fcm_msg= Timeout waiting for force-change-meta after
+--exec bash -c "c=0; while ! grep -q 'Force change meta to system table successfully' $MYSQLTEST_VARDIR/tmp/force-change-meta.log 2>/dev/null; do sleep 1; c=\$((c+1)); if [ \$c -ge $fcm_timeout ]; then echo '$fcm_msg $fcm_timeout seconds. Last log:'; tail -10 $MYSQLTEST_VARDIR/tmp/force-change-meta.log 2>/dev/null; exit 1; fi; done; echo 'force-change-meta completed'"
 
 --echo # restart 2
 --exec echo "restart:--datadir=$DATADIR " > $MYSQLTEST_VARDIR/tmp/mysqld.2.expect
 --enable_reconnect
---sleep 10
+--sleep 5
 --source include/wait_until_connected_again_old.inc
 
 --remove_file $MYSQLTEST_VARDIR/tmp/force-change-meta.log
@@ -95,6 +108,9 @@ let $DATADIR = $old_datadir/data;
 --echo # check
 --connect (follower21,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower21
+# Use a longer apply timeout: after an upgrade, the follower needs time
+# to replay accumulated log entries; 120s is too short under high load.
+let $wait_timeout= 300;
 --source include/wait_apply_catchup.inc
 xa recover;
 select * from test.t1;
@@ -109,6 +125,7 @@ select * from test.t1;
 
 --connect (follower21,127.0.0.1,root,,test,$MYPORT_2)
 --connection follower21
+let $wait_timeout= 300;
 --source include/wait_apply_catchup.inc
 xa recover;
 select * from test.t1;

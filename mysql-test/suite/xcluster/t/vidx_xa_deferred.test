@@ -1,0 +1,370 @@
+##########################################
+# XA Transaction + VECTOR INDEX          #
+# XCluster Leader/Follower Verification  #
+# Verify independent-trx path prevents  #
+# deadlock during XA replay on follower  #
+##########################################
+
+# TEST: vidx_xa_deferred (xcluster)
+#
+# Covers the following code paths:
+#   - hlindexes_on_insert()   via XA INSERT
+#   - hlindexes_on_update()   via XA UPDATE
+#   - hlindexes_on_delete()   via XA DELETE
+#   - hlindexes_on_delete_all() via TRUNCATE TABLE
+#   - XA ROLLBACK after PREPARE
+#   - XA ONE PHASE commit
+#   - Mixed DML (INSERT+UPDATE+DELETE) in single XA
+#   - Multi-row operations in XA
+#   - Normal (non-XA) transaction baseline
+#   - Follower ANN query verification via FORCE INDEX
+
+--source include/paxos.inc
+
+--connect (leader,127.0.0.1,root,,test,$MYPORT_1)
+--connect (follower,127.0.0.1,root,,test,$MYPORT_2)
+
+--echo ########################################
+--echo # Setup on leader                      #
+--echo ########################################
+--connection leader
+
+--disable_warnings
+call mtr.add_suppression("Unsafe statement written to the binary log");
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+--disable_warnings
+
+--echo
+--echo # Insert seed data outside XA
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,2,3,4,10]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[1,2,3,4,9]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[1,2,3,4,8]"));
+INSERT INTO t1(a, v) VALUES (4, VEC_FROMTEXT("[1,2,3,4,7]"));
+INSERT INTO t1(a, v) VALUES (5, VEC_FROMTEXT("[1,2,3,4,6]"));
+
+--echo ########################################
+--echo # Setup on follower                    #
+--echo ########################################
+--source include/wait_follower_catchup.inc
+
+--connection follower
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo ########################################
+--echo # 1. XA INSERT + COMMIT (two-phase)   #
+--echo ########################################
+--connection leader
+
+XA START 'xa_ins_1';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10,10,10]"));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT("[11,11,11,11,11]"));
+XA END 'xa_ins_1';
+XA PREPARE 'xa_ins_1';
+XA COMMIT 'xa_ins_1';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 2. XA UPDATE single row + COMMIT    #
+--echo ########################################
+--connection leader
+
+XA START 'xa_upd_1';
+UPDATE t1 SET v = VEC_FROMTEXT("[50,50,50,50,50]") WHERE id = 1;
+XA END 'xa_upd_1';
+XA PREPARE 'xa_upd_1';
+XA COMMIT 'xa_upd_1';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--echo
+--echo ########################################
+--echo # 3. XA UPDATE multiple rows + COMMIT #
+--echo ########################################
+--connection leader
+
+XA START 'xa_upd_m';
+UPDATE t1 SET v = VEC_FROMTEXT("[20,20,20,20,20]") WHERE id = 2;
+UPDATE t1 SET v = VEC_FROMTEXT("[30,30,30,30,30]") WHERE id = 3;
+XA END 'xa_upd_m';
+XA PREPARE 'xa_upd_m';
+XA COMMIT 'xa_upd_m';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id IN (2,3) ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id IN (2,3) ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 4. XA DELETE single row + COMMIT    #
+--echo ########################################
+--connection leader
+
+XA START 'xa_del_1';
+DELETE FROM t1 WHERE id = 4;
+XA END 'xa_del_1';
+XA PREPARE 'xa_del_1';
+XA COMMIT 'xa_del_1';
+
+--echo # Verify on leader
+SELECT COUNT(*) FROM t1 WHERE id = 4;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT COUNT(*) FROM t1 WHERE id = 4;
+
+--echo
+--echo ########################################
+--echo # 5. XA DELETE multiple rows + COMMIT #
+--echo ########################################
+--connection leader
+
+XA START 'xa_del_m';
+DELETE FROM t1 WHERE id = 5;
+DELETE FROM t1 WHERE id = 6;
+XA END 'xa_del_m';
+XA PREPARE 'xa_del_m';
+XA COMMIT 'xa_del_m';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 6. XA ROLLBACK after PREPARE        #
+--echo ########################################
+--connection leader
+
+XA START 'xa_rb_1';
+INSERT INTO t1(a, v) VALUES (99, VEC_FROMTEXT("[99,99,99,99,99]"));
+XA END 'xa_rb_1';
+XA PREPARE 'xa_rb_1';
+XA ROLLBACK 'xa_rb_1';
+
+--echo # Verify on leader: rolled-back row should NOT exist
+SELECT COUNT(*) FROM t1 WHERE a = 99;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT COUNT(*) FROM t1 WHERE a = 99;
+
+--echo
+--echo ########################################
+--echo # 7. XA mixed DML (INS+UPD+DEL)      #
+--echo ########################################
+--connection leader
+
+XA START 'xa_mix_1';
+INSERT INTO t1(a, v) VALUES (80, VEC_FROMTEXT("[80,80,80,80,80]"));
+UPDATE t1 SET a = 100, v = VEC_FROMTEXT("[100,100,100,100,100]") WHERE id = 2;
+DELETE FROM t1 WHERE id = 3;
+XA END 'xa_mix_1';
+XA PREPARE 'xa_mix_1';
+XA COMMIT 'xa_mix_1';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 8. XA with non-vector + vector mix  #
+--echo ########################################
+--connection leader
+
+XA START 'xa_nv_1';
+UPDATE t1 SET a = 200 WHERE id = 1;
+UPDATE t1 SET a = 201, v = VEC_FROMTEXT("[1,1,1,1,1]") WHERE id = 7;
+XA END 'xa_nv_1';
+XA PREPARE 'xa_nv_1';
+XA COMMIT 'xa_nv_1';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id IN (1, 7) ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE id IN (1, 7) ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 9. XA ONE PHASE commit              #
+--echo ########################################
+--connection leader
+
+XA START 'xa_1ph_1';
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT("[60,60,60,60,60]"));
+XA END 'xa_1ph_1';
+XA COMMIT 'xa_1ph_1' ONE PHASE;
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 60;
+
+--echo
+--echo ########################################
+--echo # 10. Sequential XA transactions      #
+--echo ########################################
+--connection leader
+
+XA START 'xa_seq_1';
+INSERT INTO t1(a, v) VALUES (71, VEC_FROMTEXT("[71,71,71,71,71]"));
+XA END 'xa_seq_1';
+XA PREPARE 'xa_seq_1';
+XA COMMIT 'xa_seq_1';
+
+XA START 'xa_seq_2';
+INSERT INTO t1(a, v) VALUES (72, VEC_FROMTEXT("[72,72,72,72,72]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[73,73,73,73,73]") WHERE a = 71;
+XA END 'xa_seq_2';
+XA PREPARE 'xa_seq_2';
+XA COMMIT 'xa_seq_2';
+
+XA START 'xa_seq_3';
+DELETE FROM t1 WHERE a = 72;
+XA END 'xa_seq_3';
+XA PREPARE 'xa_seq_3';
+XA COMMIT 'xa_seq_3';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo ########################################
+--echo # 11. Normal (non-XA) transaction     #
+--echo ########################################
+--connection leader
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (90, VEC_FROMTEXT("[90,90,90,90,90]"));
+COMMIT;
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 90;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 WHERE a = 90;
+
+--echo
+--echo ########################################
+--echo # 12. TRUNCATE (delete_all path)      #
+--echo ########################################
+--connection leader
+
+TRUNCATE TABLE t1;
+
+--echo # Verify on leader
+SELECT COUNT(*) FROM t1;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo ########################################
+--echo # 13. XA INSERT after TRUNCATE        #
+--echo #     (graph rebuild from scratch)    #
+--echo ########################################
+--connection leader
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1,1,1]"));
+
+XA START 'xa_after_trunc';
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3,3,3]"));
+XA END 'xa_after_trunc';
+XA PREPARE 'xa_after_trunc';
+XA COMMIT 'xa_after_trunc';
+
+--echo # Verify on leader
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,2,2,2]")) LIMIT 3;
+
+--echo # Verify on follower
+--connection follower
+--source include/wait_apply_catchup.inc
+SELECT id, a, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,2,2,2]")) LIMIT 3;
+
+--echo
+--echo ########################################
+--echo # 14. DROP TABLE (cleanup path)       #
+--echo ########################################
+--connection leader
+
+DROP TABLE t1;
+
+--connection follower
+--source include/wait_apply_catchup.inc
+
+--error ER_NO_SUCH_TABLE
+SELECT * FROM t1;
+
+--echo
+--echo ########################################
+--echo # 15. Cleanup                          #
+--echo ########################################
+--enable_warnings
+
+--echo # Wait for all followers to catch up before cleanup
+--connection leader
+--source include/wait_follower_catchup.inc
+
+--disconnect leader
+--disconnect follower

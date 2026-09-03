@@ -3,6 +3,7 @@
 #
 set global innodb_lizard_stat_enabled=on;
 set opt_index_format_gpp_enabled=true;
+SET opt_index_format_hippo_enabled=false;
 create database gpp_options;
 CREATE TABLE gpp_options.t1 (
 a int NOT NULL,
@@ -38,6 +39,7 @@ include/assert.inc [The actual gpp hit/miss for gpp_options.t1.b should match th
 # Export and Import test.
 CREATE DATABASE gpp_tmp;
 SET opt_index_format_gpp_enabled=true;
+SET opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_tmp.t1 (
 a int NOT NULL,
 b int NOT NULL,

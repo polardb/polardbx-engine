@@ -1,0 +1,110 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+DROP TABLE IF EXISTS t_promoted, t_explicit_pk, t_nokey, t_charkey, t_multicol;
+#
+# 1. Promoted primary key (UNIQUE NOT NULL, no explicit PRIMARY KEY).
+#    tref must be varbinary(8), matching the BIGINT row reference.
+#
+CREATE TABLE t_promoted (u BIGINT NOT NULL, v VECTOR(4),
+UNIQUE KEY uk_u(u), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# t_promoted tref: varbinary(8)
+# Every DML must succeed: before the fix the 2nd INSERT already failed.
+INSERT INTO t_promoted VALUES (1, VEC_FROMTEXT('[1,1,1,1]'));
+INSERT INTO t_promoted VALUES (2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_promoted VALUES (72623859790382856, VEC_FROMTEXT('[8,8,8,8]'));
+UPDATE t_promoted SET v = VEC_FROMTEXT('[3,3,3,3]') WHERE u = 2;
+DELETE FROM t_promoted WHERE u = 1;
+SELECT COUNT(*) AS rows_after_dml FROM t_promoted;
+rows_after_dml
+2
+# FORCE INDEX(vi) is required: without it the optimizer picks a
+# filesort plan that never touches the HNSW graph.
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3]')) LIMIT 2;
+u
+2
+72623859790382856
+# Cold cache: forces load_from_record() to compare the stored tref
+# length against ctx->tref_len, which is where the defect surfaced.
+FLUSH TABLES;
+INSERT INTO t_promoted VALUES (4, VEC_FROMTEXT('[4,4,4,4]'));
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4]')) LIMIT 2;
+u
+4
+2
+# Stored references must be the full 8 bytes, not truncated to 6.
+# distinct stored tref lengths: 8
+# Base OPTIMIZE rebuilds the auxiliary table and keeps tref width.
+OPTIMIZE TABLE t_promoted;
+Table	Op	Msg_type	Msg_text
+test.t_promoted	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t_promoted	optimize	status	OK
+# t_promoted tref after OPTIMIZE: varbinary(8)
+SELECT u FROM t_promoted FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4]')) LIMIT 1;
+u
+4
+DROP TABLE t_promoted;
+#
+# 2. Reference lengths for the other key shapes.
+#
+CREATE TABLE t_explicit_pk (u BIGINT NOT NULL PRIMARY KEY, v VECTOR(4),
+VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# explicit BIGINT PRIMARY KEY tref: varbinary(8)
+CREATE TABLE t_nokey (u BIGINT NOT NULL, v VECTOR(4),
+VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# no key at all (hidden row id) tref: varbinary(6)
+CREATE TABLE t_charkey (u CHAR(20) CHARACTER SET utf8mb4 NOT NULL,
+v VECTOR(4), UNIQUE KEY uk(u),
+VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# promoted CHAR(20) utf8mb4 key tref: varbinary(80)
+CREATE TABLE t_multicol (a INT NOT NULL, b BIGINT NOT NULL, v VECTOR(4),
+UNIQUE KEY uk(a,b), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# promoted INT+BIGINT key tref: varbinary(12)
+INSERT INTO t_explicit_pk VALUES (1, VEC_FROMTEXT('[1,1,1,1]')),
+(2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_nokey VALUES (1, VEC_FROMTEXT('[1,1,1,1]')),
+(2, VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_charkey VALUES ('aaa', VEC_FROMTEXT('[1,1,1,1]')),
+('bbb', VEC_FROMTEXT('[2,2,2,2]'));
+INSERT INTO t_multicol VALUES (1, 10, VEC_FROMTEXT('[1,1,1,1]')),
+(2, 20, VEC_FROMTEXT('[2,2,2,2]'));
+SELECT u FROM t_explicit_pk FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+u
+1
+SELECT u FROM t_nokey FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+u
+1
+SELECT u FROM t_charkey FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+u
+aaa
+SELECT a, b FROM t_multicol FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1]')) LIMIT 1;
+a	b
+1	10
+#
+# 3. Adding a UNIQUE NOT NULL key to a key-less vector table promotes
+#    it to the clustered index, so the row reference grows from 6 to 8
+#    bytes.  InnoDB rebuilds the table, the auxiliary table is
+#    recreated with the new length, and DML keeps working (before the
+#    fix this ALTER died with ER_DATA_TOO_LONG on the tref column).
+#
+ALTER TABLE t_nokey ADD UNIQUE KEY uk_u(u);
+# _rowid is only resolvable once a semantic primary key exists:
+SELECT _rowid FROM t_nokey ORDER BY _rowid;
+_rowid
+1
+2
+INSERT INTO t_nokey VALUES (3, VEC_FROMTEXT('[3,3,3,3]'));
+SELECT u FROM t_nokey FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3]')) LIMIT 2;
+u
+3
+2
+DROP TABLE t_explicit_pk, t_nokey, t_charkey, t_multicol;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;

@@ -1,0 +1,119 @@
+##########################################
+# VECTOR INDEX and Temporary Table Test  #
+# (Mutual Exclusion Verification)        #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+DROP TEMPORARY TABLE IF EXISTS tmp1, tmp2, tmp3;
+--enable_warnings
+
+--echo #
+--echo # Scenario 5.1: CREATE TEMPORARY TABLE with VECTOR INDEX -> error expected
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TEMPORARY TABLE tmp1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # Also test with different vector configurations
+--error ER_NOT_SUPPORTED_YET
+CREATE TEMPORARY TABLE tmp1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(128),
+  VECTOR INDEX vi(v) m=16 distance=cosine
+) ENGINE = InnoDB;
+
+--echo #
+--echo # Scenario 5.2: Create temporary table first -> ALTER TABLE ADD VECTOR INDEX -> error expected
+--echo #
+
+CREATE TEMPORARY TABLE tmp2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE tmp2;
+
+--echo # Attempt to add vector index to temporary table
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE tmp2 ADD VECTOR INDEX vi(v);
+
+--error ER_NOT_SUPPORTED_YET
+CREATE VECTOR INDEX vi ON tmp2(v);
+
+DROP TEMPORARY TABLE tmp2;
+
+--echo #
+--echo # Scenario 5.3: CREATE TEMPORARY TABLE t2 LIKE t1 (t1 has vector index) -> check behavior
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Creating temporary table LIKE a table with vector index
+--echo # Should fail because LIKE copies the vector index definition
+--error ER_NOT_SUPPORTED_YET
+CREATE TEMPORARY TABLE tmp3 LIKE t1;
+
+--echo # Verify: tmp3 was not created
+--error ER_BAD_TABLE_ERROR
+DROP TEMPORARY TABLE tmp3;
+
+--echo #
+--echo # Scenario 5.4: CREATE TEMPORARY TABLE AS SELECT * FROM t1 (t1 has vector index) -> check behavior
+--echo #
+
+--echo # Note: AS SELECT does not copy indexes, so no vector index involved
+CREATE TEMPORARY TABLE tmp3 AS SELECT * FROM t1 WHERE 1=0;
+
+SHOW CREATE TABLE tmp3;
+
+--echo # Verify tmp3 does not have vector index (AS SELECT does not copy indexes)
+
+DROP TEMPORARY TABLE tmp3;
+DROP TABLE t1;
+
+--echo #
+--echo # Additional test: Verify temporary table can have VECTOR column without index
+--echo #
+
+CREATE TEMPORARY TABLE tmp_with_vector_col (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100),
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE tmp_with_vector_col;
+
+--echo # Can use vector column in temporary table, just cannot create vector index
+
+DROP TEMPORARY TABLE tmp_with_vector_col;
+
+--echo #
+--echo # Additional test: Global temporary table behavior (if supported)
+--echo #
+
+--error ER_PARSE_ERROR
+CREATE GLOBAL TEMPORARY TABLE gtmp1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # Cleanup
+SET GLOBAL vidx_disabled = ON;

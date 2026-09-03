@@ -56,7 +56,6 @@ start xpaxos_replication;
 select role from information_schema.alisql_cluster_local;
 select count(*) from test.t1;
 
-
 --echo "# case 1 ha to Follower3 failed"
 
 --connection conn2

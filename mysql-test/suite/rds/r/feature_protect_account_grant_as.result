@@ -1,0 +1,198 @@
+set global opt_enable_rds_priv_strategy=on;
+create database test_db;
+create table test_db.t1 (id int primary key);
+insert into test_db.t1 values (1);
+#
+# === Setup ===
+#
+# 'u0': a built-in-style high-privilege account (represents aliyun_root@127.0.0.1):
+#        has SUPER + SYSTEM_VARIABLES_ADMIN WITH GRANT OPTION, the AS-target.
+create user 'u0'@'%';
+grant all privileges on *.* to 'u0'@'%' with grant option;
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%' with grant option;
+# 'u2': an ordinary bystander account, used as an alternate grantee.
+create user 'u2'@'%';
+# Attacker 'u1': broad static privileges incl. global UPDATE (NO SUPER),
+#                WITH GRANT OPTION, plus CONNECTION_ADMIN with grant option.
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+CREATE ROLE, DROP ROLE ON *.* TO 'u1'@'%' WITH GRANT OPTION;
+grant all privileges on test_db.* to 'u1'@'%';
+grant CONNECTION_ADMIN on *.* to 'u1'@'%' with grant option;
+flush privileges;
+# Confirm initial state: u1 has NO SUPER/FILE, only CONNECTION_ADMIN dynamic priv
+select user, host, super_priv, file_priv from mysql.user where user='u1';
+user	host	super_priv	file_priv
+u1	%	N	N
+select user, host, priv from mysql.global_grants where user='u1' order by priv;
+user	host	priv
+u1	%	CONNECTION_ADMIN
+#
+###########################################################################
+# Part A: Attack paths — GRANT ... AS must be rejected (ERROR 7529)
+###########################################################################
+#
+# A.1 THE VULNERABILITY: grab SYSTEM_VARIABLES_ADMIN by impersonating a
+#     built-in SUPER account (root@localhost ~ aliyun_root@127.0.0.1)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.2 Same, impersonating the reserved high-privilege account u0
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'u0'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.3 Other high-value dynamic privileges via AS
+grant ROLE_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+grant BINLOG_ADMIN on *.* to 'u1'@'%' as 'u0'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+grant PERSIST_RO_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.4 Grant the dynamic priv to a THIRD account (not self) via AS
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u2'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.5 AS with WITH ROLE clause (blocked before role activation)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'u0'@'%' with role DEFAULT;
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.6 AS combined with WITH GRANT OPTION on the granted privilege
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' with grant option as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.7 Fail-closed: AS a non-existent account is rejected too (checked
+#     before the AS-user existence lookup, so no info leak either)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'no_such_user'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.8 AS impersonating self: still requires SUPER, still blocked
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'u1'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.9 Prepared statement: dynamic SQL GRANT AS bypass attempt
+prepare stmt from
+"grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost'";
+execute stmt;
+ERROR HY000: Rerserved user or privileges can't be modified
+deallocate prepare stmt;
+# A.10 Static (global) privilege via GRANT AS is blocked too (the gate is
+#      not limited to dynamic privileges): u1 tries to grant a static priv
+#      it holds WITH GRANT OPTION to u2 while impersonating root as grantor.
+#      (GRANT ... AS is only allowed for global privileges, hence ON *.*)
+grant SELECT on *.* to 'u2'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.11 Verify state unchanged after all attacks: u1 gained nothing
+select user, host, priv from mysql.global_grants where user='u1' order by priv;
+user	host	priv
+u1	%	CONNECTION_ADMIN
+select user, host, priv from mysql.global_grants where user='u2' order by priv;
+user	host	priv
+select super_priv, file_priv from mysql.user where user='u1';
+super_priv	file_priv
+N	N
+show grants for 'u2'@'%';
+Grants for u2@%
+GRANT USAGE ON *.* TO `u2`@`%`
+#
+###########################################################################
+# Part B: Normal paths — must NOT be blocked by the fix
+###########################################################################
+#
+# B.1 SUPER user (root) CAN use GRANT ... AS (exempted from the restriction)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u2'@'%' as 'u0'@'%';
+select user, host, priv from mysql.global_grants where user='u2' order by priv;
+user	host	priv
+u2	%	SYSTEM_VARIABLES_ADMIN
+revoke SYSTEM_VARIABLES_ADMIN on *.* from 'u2'@'%';
+# B.2 SUPER user GRANT ... AS with WITH ROLE clause also works
+grant ROLE_ADMIN on *.* to 'u2'@'%' as 'root'@'localhost' with role DEFAULT;
+select user, host, priv from mysql.global_grants where user='u2' order by priv;
+user	host	priv
+u2	%	ROLE_ADMIN
+revoke ROLE_ADMIN on *.* from 'u2'@'%';
+# B.3 SUPER user normal dynamic GRANT without AS works
+grant BINLOG_ADMIN on *.* to 'u2'@'%';
+select user, host, priv from mysql.global_grants where user='u2' order by priv;
+user	host	priv
+u2	%	BINLOG_ADMIN
+revoke BINLOG_ADMIN on *.* from 'u2'@'%';
+# B.4 Non-SUPER u1 normal (non-AS) static GRANT within its rights works
+grant SELECT on test_db.* to 'u2'@'%';
+show grants for 'u2'@'%';
+Grants for u2@%
+GRANT USAGE ON *.* TO `u2`@`%`
+GRANT SELECT ON `test_db`.* TO `u2`@`%`
+revoke SELECT on test_db.* from 'u2'@'%';
+# B.5 Non-guarded table: normal user can freely UPDATE
+update test_db.t1 set id=2 where id=1;
+select * from test_db.t1;
+id
+2
+update test_db.t1 set id=1 where id=2;
+# B.6 SUPER path is truly unchanged: GRANT AS a non-existent account still
+#     returns the ORIGINAL masked error (ER 3546), not our guard error,
+#     proving the gate is a no-op for SUPER users (does not short-circuit).
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u2'@'%' as 'no_such_user'@'localhost';
+ERROR HY000: Either some of the authorization IDs in the AS clause are invalid or the current user lacks privileges to execute the statement.
+#
+###########################################################################
+# Part C: Boundary / edge cases
+###########################################################################
+#
+# C.1 Strategy OFF: GRANT AS restriction lifted (upstream behaviour intact)
+set global opt_enable_rds_priv_strategy=off;
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+select user, host, priv from mysql.global_grants where user='u1' order by priv;
+user	host	priv
+u1	%	CONNECTION_ADMIN
+u1	%	SYSTEM_VARIABLES_ADMIN
+# cleanup the grant obtained while strategy was off
+revoke SYSTEM_VARIABLES_ADMIN on *.* from 'u1'@'%';
+# C.2 Re-enable strategy: restriction resumes
+set global opt_enable_rds_priv_strategy=on;
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# C.3 Defense-in-depth: even WITHOUT AS, a non-SUPER user cannot add a
+#     dynamic-privilege row (guard_insert layer blocks the write), so the
+#     AS clause was the only bypass and it is now closed.
+grant CONNECTION_ADMIN on *.* to 'u2'@'%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# C.4 SUPER user is unaffected by C.3 (grants dynamic priv without AS)
+grant CONNECTION_ADMIN on *.* to 'u2'@'%';
+select user, host, priv from mysql.global_grants where user='u2' order by priv;
+user	host	priv
+u2	%	CONNECTION_ADMIN
+revoke CONNECTION_ADMIN on *.* from 'u2'@'%';
+#
+###########################################################################
+# Part D: Full exploit chain verification (end-to-end, post-fix)
+###########################################################################
+#
+# Step 1: GRANT AS to obtain SYSTEM_VARIABLES_ADMIN → BLOCKED
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u1'@'%' as 'root'@'localhost';
+ERROR HY000: Rerserved user or privileges can't be modified
+# Step 2: Without SYSTEM_VARIABLES_ADMIN, cannot disable the protection
+set global opt_enable_rds_priv_strategy=off;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+# Step 3: Protection still ON → cannot rewrite static privileges either
+update mysql.user set super_priv='Y', file_priv='Y' where user='u1' and host='%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# Step 4: Verify final state — u1 NOT escalated
+show grants for current_user();
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT CONNECTION_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT ALL PRIVILEGES ON `test_db`.* TO `u1`@`%`
+# Confirm no SUPER, no FILE, no SYSTEM_VARIABLES_ADMIN for u1
+select super_priv, file_priv from mysql.user where user='u1';
+super_priv	file_priv
+N	N
+select priv from mysql.global_grants where user='u1' order by priv;
+priv
+CONNECTION_ADMIN
+#
+###########################################################################
+# Cleanup
+###########################################################################
+#
+drop database test_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+drop user 'u2'@'%';
+set global opt_enable_rds_priv_strategy=off;

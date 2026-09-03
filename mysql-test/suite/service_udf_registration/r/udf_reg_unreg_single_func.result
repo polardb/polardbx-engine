@@ -64,6 +64,10 @@ UDF_NAME	UDF_RETURN_TYPE	UDF_TYPE	UDF_LIBRARY	UDF_USAGE_COUNT
 myfunc_int	integer	function	NULL	1
 SELECT * FROM mysql.func;
 name	ret	dl	type
+encdb_process_message	0	encdb_udf.so	function
+encdb_rule_export	0	encdb_udf.so	function
+encdb_rule_op	0	encdb_udf.so	function
+encdb_userauth_export	0	encdb_udf.so	function
 SELECT component_urn FROM mysql.component;
 component_urn
 file://component_udf_reg_only_3_func
@@ -83,6 +87,10 @@ myfunc_double	double	function	NULL	1
 myfunc_int	integer	function	NULL	1
 SELECT * FROM mysql.func;
 name	ret	dl	type
+encdb_process_message	0	encdb_udf.so	function
+encdb_rule_export	0	encdb_udf.so	function
+encdb_rule_op	0	encdb_udf.so	function
+encdb_userauth_export	0	encdb_udf.so	function
 select myfunc_double(1);
 myfunc_double(1)
 49.00

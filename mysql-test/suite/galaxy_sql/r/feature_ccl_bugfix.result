@@ -1,0 +1,144 @@
+call mtr.add_suppression("mysql.concurrency_control");
+create database ccl_bf_db;
+create table ccl_bf_db.t1(id int, name varchar(100));
+insert into ccl_bf_db.t1 values(1, 'xpchild');
+commit;
+#
+# 1. ordered keyword match must move past matched keyword
+#
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "kworda;kworda");
+update mysql.concurrency_control set ordered = 'Y';
+commit;
+call dbms_ccl.flush_ccl_rule();
+select "kworda";
+kworda
+kworda
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#	SELECT			Y	Y	30	0	0	0	0	0	kworda;kworda
+select "kworda then kworda";
+kworda then kworda
+kworda then kworda
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#	SELECT			Y	Y	30	1	0	0	1	0	kworda;kworda
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.add_ccl_rule("select", "", "", 30, "kwordb;kwordc");
+update mysql.concurrency_control set ordered = 'Y';
+commit;
+call dbms_ccl.flush_ccl_rule();
+select "kwordc before kwordb";
+kwordc before kwordb
+kwordc before kwordb
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#	SELECT			Y	Y	30	0	0	0	0	0	kwordb;kwordc
+select "kwordb before kwordc";
+kwordb before kwordc
+kwordb before kwordc
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#	SELECT			Y	Y	30	1	0	0	1	0	kwordb;kwordc
+update mysql.concurrency_control set ordered = 'N';
+commit;
+call dbms_ccl.flush_ccl_rule();
+select "kwordc before kwordb";
+kwordc before kwordb
+kwordc before kwordb
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#	SELECT			Y	N	30	1	0	0	1	0	kwordb;kwordc
+delete from mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+#
+# 2. rule deletion while statement is running on a dynamic slot
+#
+create procedure ccl_bf_db.LoopAddRule()
+begin
+declare i int default 0;
+declare kw varchar(100);
+while i < 130 do
+set kw = concat('dynkw', i);
+call dbms_ccl.add_ccl_rule('select', '', '', 30, kw);
+set i = i + 1;
+end while;
+end |
+call ccl_bf_db.LoopAddRule();
+call dbms_ccl.add_ccl_rule("select", "ccl_bf_db", "t1", 10, "");
+select sleep(3) from ccl_bf_db.t1;
+call dbms_ccl.del_all_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+sleep(3)
+0
+select * from ccl_bf_db.t1;
+id	name
+1	xpchild
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+select count(*) from mysql.concurrency_control;
+count(*)
+0
+drop procedure ccl_bf_db.LoopAddRule;
+#
+# 3. del_all_ccl_rule success path is committed
+#
+call dbms_ccl.add_ccl_rule("select", "ccl_bf_db", "t1", 20, "");
+call dbms_ccl.add_ccl_rule("update", "ccl_bf_db", "t1", 20, "");
+select count(*) from mysql.concurrency_control;
+count(*)
+2
+call dbms_ccl.del_all_ccl_rule();
+select count(*) from mysql.concurrency_control;
+count(*)
+0
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+#
+# 4. queue bucket resize with hint queries
+#
+SET @old_ccl_queue_bucket_count = @@global.ccl_queue_bucket_count;
+SET @old_ccl_queue_bucket_size = @@global.ccl_queue_bucket_size;
+set global ccl_queue_bucket_count = 2;
+set global ccl_queue_bucket_size = 8;
+select /*+ ccl_queue_value(7) */ * from ccl_bf_db.t1;
+id	name
+1	xpchild
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	8	0	0	0
+2	QUEUE	8	1	0	0
+set global ccl_queue_bucket_count = 4;
+select /*+ ccl_queue_value(7) */ * from ccl_bf_db.t1;
+id	name
+1	xpchild
+update /*+ ccl_queue_field("id") */ ccl_bf_db.t1 set name = 'y' where id = 1;
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	8	0	0	0
+2	QUEUE	8	1	0	0
+3	QUEUE	8	0	0	0
+4	QUEUE	8	1	0	0
+call dbms_ccl.flush_ccl_queue();
+call dbms_ccl.show_ccl_queue();
+ID	TYPE	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING
+1	QUEUE	8	0	0	0
+2	QUEUE	8	0	0	0
+3	QUEUE	8	0	0	0
+4	QUEUE	8	0	0	0
+SET @@global.ccl_queue_bucket_count = @old_ccl_queue_bucket_count;
+SET @@global.ccl_queue_bucket_size = @old_ccl_queue_bucket_size;
+call dbms_ccl.flush_ccl_queue();
+#
+# cleanup
+#
+truncate table mysql.concurrency_control;
+commit;
+call dbms_ccl.flush_ccl_rule();
+drop database ccl_bf_db;

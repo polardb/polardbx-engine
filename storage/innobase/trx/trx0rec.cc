@@ -35,8 +35,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sys/types.h>
 
 #include "fsp0fsp.h"
+#include "lizard0rem0types.h"
 #include "mach0data.h"
 #include "mtr0log.h"
+#include "rem0rec.h"
 #include "trx0undo.h"
 #include "ut0dbg.h"
 #ifndef UNIV_HOTBACKUP
@@ -58,11 +60,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "ut0mem.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0dict0gpp.h"
 #include "lizard0row.h"
 #include "lizard0trx0rec.h"
 #include "lizard0txn0rec.h"
+#include "lizard0txn0slot.h"
+#include "lizard0txn0slot0uba0types.h"
 #include "lizard0undo.h"
 
 namespace dd {
@@ -384,6 +388,8 @@ const byte *trx_undo_read_v_idx(const dict_table_t *table, const byte *ptr,
 @return true if stored successfully, false if space is not enough */
 static bool trx_undo_store_multi_value(page_t *undo_page,
                                        const dfield_t *vfield, byte **ptr) {
+  ut_ad(vfield != nullptr);
+
   Multi_value_logger mv_logger(
       static_cast<multi_value_data *>(dfield_get_data(vfield)),
       dfield_get_len(vfield));
@@ -738,7 +744,7 @@ byte *trx_undo_rec_get_row_ref(
   ut_ad(index && ptr && ref && heap);
   ut_a(index->is_clustered() || index->is_panda());
   ut_ad(!index->table->is_intrinsic());
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   ref_len = dict_index_get_n_unique_in_tree(index);
 
@@ -776,7 +782,7 @@ static byte *trx_undo_rec_skip_row_ref(
   ut_ad(index && ptr);
   ut_a(index->is_clustered() || index->is_panda());
   ut_ad(!index->table->is_intrinsic());
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   ref_len = dict_index_get_n_unique_in_tree(index);
 
@@ -1203,9 +1209,7 @@ class Row_update_undo_rec_reporter : public Undo_rec_reporter {
       trx_t *trx,                 /*!< in: transaction */
       dict_index_t *index,        /*!< in: clustered index where update or
                                   delete marking is done */
-      const rec_t *rec,           /*!< in: clustered index record which
-                                  has NOT yet been modified */
-      const ulint *offsets,       /*!< in: rec_get_offsets(rec, index) */
+      const Slice *slc,           /*!< in: rec_get_offsets(rec, index) */
       const upd_t *update,        /*!< in: update vector which tells the
                                   columns to be updated; in the case of
                                   a delete, this should be set to NULL */
@@ -1215,16 +1219,14 @@ class Row_update_undo_rec_reporter : public Undo_rec_reporter {
                                   virtual column info */
       const txn_layout_t &layout) /*!< in: rec txn layout. */
       : Undo_rec_reporter(trx, index, row, layout),
-        m_rec(rec),
-        m_offsets(offsets),
+        m_slc(slc),
         m_update(update),
         m_cmpl_info(cmpl_info) {}
 
   virtual ulint operator()(page_t *undo_page, mtr_t *mtr) const override;
 
  private:
-  const rec_t *m_rec;
-  const ulint *m_offsets;
+  const Slice *m_slc;
   const upd_t *m_update;
   ulint m_cmpl_info;
 };
@@ -1253,8 +1255,7 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
   dict_index_t *index = m_index;
   const dtuple_t *row = m_entry;
   txn_layout_t layout = m_layout;
-  const rec_t *rec = m_rec;
-  const ulint *offsets = m_offsets;
+  const Slice *slc = m_slc;
   const upd_t *update = m_update;
   ulint cmpl_info = m_cmpl_info;
   bool is_2pp = index->table->is_2pp;
@@ -1264,7 +1265,8 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
   ut_ad(txn_layout_is_arranged(layout));
 
   ut_ad(layout == TL_CLOVER || !index->has_row_versions());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
+  ut_ad(slc->contiguous());
   ut_ad(mach_read_from_2(undo_page + TRX_UNDO_PAGE_HDR + TRX_UNDO_PAGE_TYPE) ==
         TRX_UNDO_UPDATE);
   table = index->table;
@@ -1313,9 +1315,9 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
 
   /* Write type compl info. */
   if (!update) {
-    ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(table)));
+    ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(table)));
     type_cmpl = TRX_UNDO_DEL_MARK_REC;
-  } else if (rec_get_deleted_flag(rec, dict_table_is_comp(table))) {
+  } else if (rec_get_deleted_flag(slc->rec(), dict_table_is_comp(table))) {
     type_cmpl = TRX_UNDO_UPD_DEL_REC;
     /* We are about to update a delete marked record.
     We don't typically need the prefix in this case unless
@@ -1354,11 +1356,11 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
   /*----------------------------------------*/
   /* Store the state of the info bits */
 
-  *ptr++ = (byte)rec_get_info_bits(rec, dict_table_is_comp(table));
+  *ptr++ = (byte)rec_get_info_bits(slc->rec(), dict_table_is_comp(table));
 
   /* Store the values of the system columns */
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            index->get_sys_col_pos(DATA_TRX_ID), &flen);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, index->get_sys_col_pos(DATA_TRX_ID), &flen);
   ut_ad(flen == DATA_TRX_ID_LEN);
 
   trx_id = trx_read_trx_id(field);
@@ -1372,8 +1374,8 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
   }
   ptr += mach_u64_write_compressed(ptr, trx_id);
 
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            index->get_sys_col_pos(DATA_ROLL_PTR), &flen);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, index->get_sys_col_pos(DATA_ROLL_PTR), &flen);
   ut_ad(flen == DATA_ROLL_PTR_LEN);
 
   ptr += mach_u64_write_compressed(ptr, trx_read_roll_ptr(field));
@@ -1384,21 +1386,20 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
   /** Lizard: If updating a record whose last modification from a different
   transaction, check if it has been cleanout. */
   if (trx_id != trx->id) {
-    assert_row_txn_has_cleanout(rec, index, offsets, layout);
+    ut_ad(lizard::row_txn_has_cleanout(slc, index, layout));
   }
 
-  ptr = lizard::trx_undo_update_rec_write_txn_cols(ptr, index, rec, offsets,
-                                                   layout);
+  ptr = lizard::trx_undo_update_rec_write_txn_cols(ptr, slc, index, layout);
   /*----------------------------------------*/
   /* Store then the fields required to uniquely determine the
   record which will be modified in the clustered index */
 
   for (i = 0; i < dict_index_get_n_unique_in_tree(index); i++) {
-    field = rec_get_nth_field(index, rec, offsets, i, &flen);
+    field = const_cast<Slice *>(slc)->get_nth_field(index, i, &flen);
 
     /* The ordering columns must not be stored externally. */
-    ut_ad(!rec_offs_nth_extern(index, offsets, i));
-    ut_ad(!rec_offs_nth_default(index, offsets, i));
+    ut_ad(!rec_offs_nth_extern(index, slc->offsets(), i));
+    ut_ad(!rec_offs_nth_default(index, slc->offsets(), i));
     ut_ad(index->get_col(i)->ord_part);
 
     if (trx_undo_left(undo_page, ptr) < 5) {
@@ -1508,14 +1509,15 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
           flen = std::min(flen, max_v_log_len);
         }
       } else {
-        field = rec_get_nth_field_instant(rec, offsets, pos, index, &flen);
+        field =
+            const_cast<Slice *>(slc)->get_nth_field_instant(index, pos, &flen);
       }
 
       if (trx_undo_left(undo_page, ptr) < 15) {
         return 0;
       }
 
-      if (!is_virtual && rec_offs_nth_extern(index, offsets, pos)) {
+      if (!is_virtual && rec_offs_nth_extern(index, slc->offsets(), pos)) {
         ut_ad(!is_multi_val);
         const dict_col_t *col = index->get_col(pos);
         ulint prefix_len = dict_max_field_len_store_undo(table, col);
@@ -1556,7 +1558,7 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
         ut_memcpy(ptr, field, flen);
         ptr += flen;
 
-        if (!is_virtual && rec_offs_nth_extern(index, offsets, pos)) {
+        if (!is_virtual && rec_offs_nth_extern(index, slc->offsets(), pos)) {
           ptr = trx_undo_report_blob_update(undo_page, index, ptr, field, flen,
                                             update, fld, mtr);
 
@@ -1663,9 +1665,10 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
         }
 
         /* Save the old value of field */
-        field = rec_get_nth_field_instant(rec, offsets, pos, index, &flen);
+        field =
+            const_cast<Slice *>(slc)->get_nth_field_instant(index, pos, &flen);
 
-        if (rec_offs_nth_extern(index, offsets, pos)) {
+        if (rec_offs_nth_extern(index, slc->offsets(), pos)) {
           const dict_col_t *col = index->get_col(pos);
           ulint prefix_len = dict_max_field_len_store_undo(table, col);
 
@@ -1744,6 +1747,8 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
         if (update) {
           ut_ad(!row);
           if (update->old_vrow == nullptr) {
+            /* This only happens in cascade update. And virtual column can't be
+            affected, so it is Ok to set it to NULL */
             flen = UNIV_SQL_NULL;
           } else {
             vfield = dtuple_get_nth_v_field(update->old_vrow, col->v_pos);
@@ -1773,6 +1778,11 @@ ulint Row_update_undo_rec_reporter::operator()(page_t *undo_page,
         }
 
         if (col->m_col.is_multi_value()) {
+          dfield_t multi_value_field;
+          if (vfield == nullptr) {
+            dfield_set_null(&multi_value_field);
+            vfield = &multi_value_field;
+          }
           bool suc = trx_undo_store_multi_value(undo_page, vfield, &ptr);
           if (!suc) {
             return 0;
@@ -2238,22 +2248,19 @@ byte *trx_undo_parse_erase_page_end(byte *ptr, byte *end_ptr [[maybe_unused]],
  transaction.
  @return DB_SUCCESS or error code */
 static dberr_t trx_undo_report_operation_func(
-    ulint flags,                        /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
-                                        set, does nothing */
-    const txn_layout_t &layout,         /*!< in: txn layout */
-    ulint op_type,                      /*!< in: TRX_UNDO_INSERT_OP or
-                                        TRX_UNDO_MODIFY_OP */
-    trx_t *trx,                         /*!< in: transaction */
-    dict_index_t *index,                /*!< in: clustered index */
-    const rec_t *rec,                   /*!< in: in case of an update or delete
-                                        marking, the record in the clustered
-                                        index, otherwise NULL */
-    const ulint *offsets,               /*!< in: rec_get_offsets(rec) */
-    const Undo_rec_reporter &reporter,  /*!< in: undo record reporter */
-    roll_ptr_t *roll_ptr)               /*!< out: rollback pointer to the
-                                        inserted undo log record,
-                                        0 if BTR_NO_UNDO_LOG
-                                        flag was specified */
+    ulint flags,                       /*!< in: if BTR_NO_UNDO_LOG_FLAG bit is
+                                       set, does nothing */
+    const txn_layout_t &layout,        /*!< in: txn layout */
+    ulint op_type,                     /*!< in: TRX_UNDO_INSERT_OP or
+                                       TRX_UNDO_MODIFY_OP */
+    trx_t *trx,                        /*!< in: transaction */
+    dict_index_t *index,               /*!< in: clustered index */
+    const Slice *slc,                  /*!< in: rec_get_offsets(rec) */
+    const Undo_rec_reporter &reporter, /*!< in: undo record reporter */
+    roll_ptr_t *roll_ptr)              /*!< out: rollback pointer to the
+                                       inserted undo log record,
+                                       0 if BTR_NO_UNDO_LOG
+                                       flag was specified */
 {
   trx_undo_t *undo;
   page_no_t page_no;
@@ -2267,8 +2274,8 @@ static dberr_t trx_undo_report_operation_func(
 #endif /* UNIV_DEBUG */
 
   ut_a(index->is_clustered() || index->is_panda());
-  ut_ad(!rec || rec_offs_validate(rec, index, offsets));
-  assert_lizard_dict_index_check(index);
+  ut_ad(!slc || slc->is_positioned(index));
+  ut_ad(lizard::dict_index_check_valid(index));
 
   if (flags & BTR_NO_UNDO_LOG_FLAG) {
     *roll_ptr = 0;
@@ -2496,25 +2503,23 @@ err_exit:
 [[nodiscard]] dberr_t trx_undo_report_row_operation(
     ulint flags, const txn_layout_t &layout, ulint op_type, trx_t *trx,
     dict_index_t *index, const dtuple_t *entry, const upd_t *update,
-    ulint cmpl_info, const rec_t *rec, const ulint *offsets,
-    roll_ptr_t *roll_ptr) {
-
+    ulint cmpl_info, const Slice *slc, roll_ptr_t *roll_ptr) {
   switch (op_type) {
     case TRX_UNDO_INSERT_OP:
     {
       Row_insert_undo_rec_reporter reporter(trx, index, entry, layout);
 
       return trx_undo_report_operation_func(flags, layout, op_type, trx, index,
-                                            rec, offsets, reporter, roll_ptr);
+                                            slc, reporter, roll_ptr);
     }
     default:
     {
       ut_ad(op_type == TRX_UNDO_MODIFY_OP);
-      Row_update_undo_rec_reporter reporter(trx, index, rec, offsets, update,
-                                            cmpl_info, entry, layout);
+      Row_update_undo_rec_reporter reporter(trx, index, slc, update, cmpl_info,
+                                            entry, layout);
 
       return trx_undo_report_operation_func(flags, layout, op_type, trx, index,
-                                            rec, offsets, reporter, roll_ptr);
+                                            slc, reporter, roll_ptr);
    }
   }
 }
@@ -2528,12 +2533,12 @@ err_exit:
 [[nodiscard]] dberr_t trx_undo_report_rlog_operation(
     ulint flags, const txn_layout_t &layout, ulint op_type, trx_t *trx,
     dict_index_t *index, const dtuple_t *entry, const upd_t *update,
-    ulint cmpl_info, const rec_t *rec, const ulint *offsets,
-    const urec_trx_t *urec_trx, roll_ptr_t *roll_ptr) {
+    ulint cmpl_info, const Slice *slc, const urec_trx_t *urec_trx,
+    roll_ptr_t *roll_ptr) {
   lizard::Rlog_undo_rec_reporter reporter(op_type, trx, index, entry, urec_trx);
 
-  return trx_undo_report_operation_func(flags, layout, op_type, trx, index, rec,
-                                        offsets, reporter, roll_ptr);
+  return trx_undo_report_operation_func(flags, layout, op_type, trx, index, slc,
+                                        reporter, roll_ptr);
 }
 
 /** Copies an undo record to heap. This function can be called if we know that
@@ -2586,7 +2591,7 @@ err_exit:
     const table_name_t &name, trx_undo_rec_t **undo_rec, bool flashback_area,
     Cache_hint hint, mtr_t *txn_mtr) {
   bool missing_history =
-      lizard::txn_rec_is_missing_history(txn_rec, flashback_area, txn_mtr);
+      lizard::txn_slot_is_missing_history(txn_rec, flashback_area, txn_mtr);
 
   if (!missing_history) {
     *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
@@ -2614,8 +2619,9 @@ err_exit:
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
   lizard::txn_rec_real_state(txn_rec, Cache_hint::KEEP_OLD,
-                             purge_sys->vision.visible_by());
-  missing_history = purge_sys->vision.modifications_visible(txn_rec, name);
+                             purge_sys->pvision.vision()->visible_by());
+  missing_history =
+      purge_sys->pvision.vision()->modifications_visible(txn_rec, name);
 
   if (!missing_history) {
     *undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
@@ -2661,11 +2667,11 @@ err_exit:
 #define ATTRIB_USED_ONLY_IN_DEBUG [[maybe_unused]]
 #endif /* UNIV_DEBUG */
 
-bool trx_undo_prev_version_build(
-    const rec_t *index_rec ATTRIB_USED_ONLY_IN_DEBUG,
-    mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, const rec_t *rec,
-    const dict_index_t *const index, ulint *offsets, mem_heap_t *heap,
-    rec_t **old_vers, mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
+std::pair<bool, bool> trx_undo_prev_version_build(
+    creg_t index_reg ATTRIB_USED_ONLY_IN_DEBUG,
+    mtr_t *index_mtr ATTRIB_USED_ONLY_IN_DEBUG, Slice *slc,
+    const dict_index_t *const index, mem_heap_t *heap, reg_t *old_vers,
+    mem_heap_t *v_heap, const dtuple_t **vrow, ulint v_status,
     lob::undo_vers_t *lob_undo, const lizard::Vision *vision, Cache_hint hint,
     const txn_layout_t &layout) {
   DBUG_TRACE;
@@ -2684,39 +2690,42 @@ bool trx_undo_prev_version_build(
   ulint cmpl_info;
   bool dummy_extern;
   bool is_2pp = false;
-  byte *buf;
+  boc_t boc;
+  bool table_rebuilt = false;
 
   txn_info_t txn_info;
 
   mtr_t txn_mtr;
-  bool is_as_of = vision ? vision->is_asof() : false;
-  bool flashback_area = vision ? vision->is_flashback_area() : false;
+  bool is_asof = vision ? vision->is_asof() : false;
+  bool is_asof_flashback_area =
+      vision ? vision->is_asof_flashback_area() : false;
   ut_ad(txn_layout_is_arranged(layout));
 
   ut_ad(!rw_lock_own(&purge_sys->latch, RW_LOCK_S));
-  ut_ad(mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_S_FIX) ||
-        mtr_memo_contains_page(index_mtr, index_rec, MTR_MEMO_PAGE_X_FIX));
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(mtr_memo_contains_page(index_mtr, index_reg.rec, MTR_MEMO_PAGE_S_FIX) ||
+        mtr_memo_contains_page(index_mtr, index_reg.rec, MTR_MEMO_PAGE_X_FIX));
+  ut_ad(index_reg.in_page());
+  ut_ad(slc->is_positioned(index) && slc->contiguous());
   ut_a(index->is_clustered() || index->is_panda());
 
-  roll_ptr = row_get_rec_roll_ptr(rec, index, offsets);
+  roll_ptr = row_get_rec_roll_ptr(slc, index);
 
-  *old_vers = nullptr;
+  old_vers->reset();
 
   if (trx_undo_roll_ptr_is_insert(roll_ptr)) {
     /* The record rec is the first inserted version */
-    return true;
+    return {true, table_rebuilt};
   }
 
   /** 0 is an invalid value. For the table that was imported, the roll ptr can
   be 0. */
   if (trx_undo_roll_ptr_is_invalid(roll_ptr)) {
-    return true;
+    return {true, table_rebuilt};
   }
 
   /** Lizard begin */
-  txn_rec_t txn_rec(rec, index, offsets, layout);
-  assert_undo_ptr_allocated(txn_rec.undo_ptr);
+  txn_rec_t txn_rec(slc, index, layout);
+  ut_ad(undo_addr_t::decode_is_allocated(txn_rec.undo_ptr));
   /** Lizard end */
 
   /* REDO rollback segments are used only for non-temporary objects.
@@ -2727,8 +2736,8 @@ bool trx_undo_prev_version_build(
 
   mtr_start(&txn_mtr);
   if (trx_undo_get_undo_rec(roll_ptr, &txn_rec, heap, is_temp,
-                            index->table->name, &undo_rec, is_as_of,
-                            flashback_area, hint, &txn_mtr)) {
+                            index->table->name, &undo_rec, is_asof,
+                            is_asof_flashback_area, hint, &txn_mtr)) {
     if (v_status & TRX_UNDO_PREV_IN_PURGE) {
       /* We are fetching the record being purged */
       undo_rec = trx_undo_get_undo_rec_low(roll_ptr, heap, is_temp, hint);
@@ -2736,7 +2745,7 @@ bool trx_undo_prev_version_build(
       mtr_commit(&txn_mtr);
       /* The undo record may already have been purged,
       during purge or semi-consistent read. */
-      return false;
+      return {false, table_rebuilt};
     }
   }
   mtr_commit(&txn_mtr);
@@ -2749,10 +2758,11 @@ bool trx_undo_prev_version_build(
   ut_ad(!type_cmpl.is_rlog());
 
   if (table_id != index->table->id) {
+    table_rebuilt = true;
     /* The table should have been rebuilt, but purge has
     not yet removed the undo log records for the
     now-dropped old table (table_id). */
-    return true;
+    return {true, table_rebuilt};
   }
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
@@ -2789,7 +2799,7 @@ bool trx_undo_prev_version_build(
                                        type_cmpl, txn_info, layout);
   ut_a(ptr);
 
-  if (row_upd_changes_field_size_or_external(index, offsets, update)) {
+  if (row_upd_changes_field_size_or_external(index, slc, update)) {
     /* We should confirm the existence of disowned external data,
     if the previous version record is delete marked. If the trx_id
     of the previous record is seen by purge view, we should treat
@@ -2813,12 +2823,12 @@ bool trx_undo_prev_version_build(
                                 txn_info.gcn};
       lizard::txn_rec_real_state(&undo_txn_rec, Cache_hint::KEEP_OLD, CCR_SCN);
 
-      if (is_as_of) {
-        missing_extern = lizard::txn_rec_is_missing_history(
-            &undo_txn_rec, flashback_area, nullptr);
+      if (is_asof) {
+        missing_extern = lizard::txn_slot_is_missing_history(
+            &undo_txn_rec, is_asof_flashback_area, nullptr);
       } else {
         rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
-        missing_extern = purge_sys->vision.modifications_visible(
+        missing_extern = purge_sys->pvision.vision()->modifications_visible(
             &undo_txn_rec, index->table->name);
         rw_lock_s_unlock(&purge_sys->latch);
       }
@@ -2829,7 +2839,7 @@ bool trx_undo_prev_version_build(
         if (update != nullptr) {
           update->reset();
         }
-        return true;
+        return {true, table_rebuilt};
       }
     }
 
@@ -2839,22 +2849,25 @@ bool trx_undo_prev_version_build(
     those fields that update updates to become externally stored
     fields. Store the info: */
 
-    entry = row_rec_to_index_entry(rec, index, offsets, heap);
+    entry = row_rec_to_index_entry(slc, index, heap);
     /* The page containing the clustered index record
     corresponding to entry is latched in mtr.  Thus the
     following call is safe. */
     row_upd_index_replace_new_col_vals(entry, index, update, heap);
 
-    buf = static_cast<byte *>(
-        mem_heap_alloc(heap, rec_get_converted_size(index, entry)));
+    boc = mem_heap_alloc_boc(heap, rec_get_converted_size(index, entry));
 
-    *old_vers = rec_convert_dtuple_to_rec(buf, index, entry);
+    *old_vers = rec_convert_dtuple_to_reg(boc, index, entry);
   } else {
-    buf = static_cast<byte *>(mem_heap_alloc(heap, rec_offs_size(offsets)));
+    DSlice_ctx dsctx;
+    DSlice *dslc = nullptr;
 
-    *old_vers = rec_copy(buf, rec, offsets);
-    rec_offs_make_valid(*old_vers, index, offsets);
-    row_upd_rec_in_place(*old_vers, index, offsets, update, nullptr);
+    boc = mem_heap_alloc_boc(heap, slc->row_size());
+    dslc = row_copy(boc, slc, &dsctx);
+
+    *old_vers = dslc->reg();
+
+    row_upd_rec_in_place(dslc, index, update, nullptr);
   }
 
   /* Set the old value (which is the after image of an update) in the
@@ -2866,9 +2879,7 @@ bool trx_undo_prev_version_build(
 
 #if defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
   ut_a(!rec_offs_any_null_extern(
-      index, *old_vers,
-      rec_get_offsets(*old_vers, index, nullptr, ULINT_UNDEFINED,
-                      UT_LOCATION_HERE, &heap)));
+      index, Slice_ctx().get_offsets(*old_vers, index, ULINT_UNDEFINED)));
 #endif  // defined UNIV_DEBUG || defined UNIV_BLOB_LIGHT_DEBUG
 
   /* If vrow is not NULL it means that the caller is interested in the values of
@@ -2906,7 +2917,7 @@ bool trx_undo_prev_version_build(
   }
 
   lizard::generic_stats.row_prev_vers_build_cnt.inc();
-  return true;
+  return {true, table_rebuilt};
 }
 
 /** Read virtual column value from undo log

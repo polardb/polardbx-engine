@@ -1,0 +1,620 @@
+########################################################################
+# HIPPO Index - Import/Export Tablespace Test
+#
+# Test Strategy:
+# 1. Test HIPPO index export/import tablespace functionality
+# 2. Verify index format matching between source and target tables:
+#    - HIPPO -> HIPPO: success
+#    - HIPPO -> non-HIPPO: fail (ER_TABLE_SCHEMA_MISMATCH)
+#    - non-HIPPO -> HIPPO: fail (ER_TABLE_SCHEMA_MISMATCH)
+# 3. Verify DML operations after import with TRX_ID assertions
+# 4. Verify MVCC behavior with FORCE INDEX on HIPPO index after import
+# 5. Verify rollback behavior after import
+# 6. Verify TRX_ID update during import (row0import.cc:2470-2476)
+#    - During import, each HIPPO index record's trx_id is updated to
+#      the import transaction's ID via row_upd_rec_lotus_fields_low()
+#    - This ensures imported data is visible to all new transactions
+#
+# Key Code Paths:
+#   - row0import.cc:1138-1146: match_index_columns() checks page_type
+#   - row0import.cc:2470-2476: row_upd_rec_lotus_fields_low() updates trx_id
+#   - row0import.cc:2687: FIL_PAGE_INDEX_HIPPO page type handling
+#   - row0import.cc:3393-3397: cfg file page_type validation
+#
+########################################################################
+
+--source include/have_debug.inc
+
+connect (read_con,localhost,root,,);
+connection default;
+
+# Enable HIPPO index format
+SET opt_index_format_hippo_enabled=on;
+SET opt_index_format_panda_enabled=off;
+
+# Helper table to hold read view
+CREATE TABLE dummy_table (id int primary key);
+INSERT INTO dummy_table VALUES (1);
+
+--echo #####################################
+--echo # Test 1: Basic HIPPO Index Export/Import
+--echo #####################################
+
+CREATE TABLE t1 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  c2 varchar(100),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+# Insert test data
+INSERT INTO t1 VALUES (1, 100, 'hello');
+INSERT INTO t1 VALUES (2, 200, 'world');
+INSERT INTO t1 VALUES (3, 300, 'test');
+
+# Verify HIPPO index type
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+CHECKSUM TABLE t1;
+
+# Start a read view before export
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM dummy_table;
+
+--connection default
+LET $MYSQLD_DATADIR = `SELECT @@datadir`;
+FLUSH TABLE t1 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t1.ibd $MYSQLTEST_VARDIR/tmp/t1.ibd
+--copy_file $MYSQLD_DATADIR/test/t1.cfg $MYSQLTEST_VARDIR/tmp/t1.cfg
+UNLOCK TABLES;
+
+DROP TABLE t1;
+
+# Recreate table with same schema (HIPPO indexes)
+CREATE TABLE t1 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  c2 varchar(100),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+# Verify HIPPO index type before import
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+ALTER TABLE t1 DISCARD TABLESPACE;
+
+--copy_file $MYSQLTEST_VARDIR/tmp/t1.ibd $MYSQLD_DATADIR/test/t1.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t1.cfg $MYSQLD_DATADIR/test/t1.cfg
+
+ALTER TABLE t1 IMPORT TABLESPACE;
+
+# Verify data integrity
+CHECKSUM TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+
+# Verify HIPPO index type after import
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# Test MVCC with FORCE INDEX on HIPPO index
+--echo # Verify MVCC read via HIPPO index after import
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 = 100;
+SELECT c2 FROM t1 FORCE INDEX(idx_c2) WHERE c2 = 'hello';
+
+--connection read_con
+# Old read view should see table changed error
+--error ER_TABLE_DEF_CHANGED
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 = 100;
+COMMIT;
+
+--connection default
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t1.cfg
+
+
+--echo #####################################
+--echo # Test 2: HIPPO -> non-HIPPO Mismatch (should fail)
+--echo #####################################
+
+# Create source table with HIPPO index
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t2 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES (1, 100), (2, 200);
+
+# Verify source is HIPPO
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+FLUSH TABLE t2 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t2.ibd $MYSQLTEST_VARDIR/tmp/t2.ibd
+--copy_file $MYSQLD_DATADIR/test/t2.cfg $MYSQLTEST_VARDIR/tmp/t2.cfg
+UNLOCK TABLES;
+
+DROP TABLE t2;
+
+# Recreate with non-HIPPO index
+SET opt_index_format_hippo_enabled=off;
+CREATE TABLE t2 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+# Verify target is non-HIPPO
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+ALTER TABLE t2 DISCARD TABLESPACE;
+
+--copy_file $MYSQLTEST_VARDIR/tmp/t2.ibd $MYSQLD_DATADIR/test/t2.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t2.cfg $MYSQLD_DATADIR/test/t2.cfg
+
+# Should fail due to index format mismatch
+--error ER_TABLE_SCHEMA_MISMATCH
+ALTER TABLE t2 IMPORT TABLESPACE;
+
+DROP TABLE t2;
+--remove_file $MYSQLD_DATADIR/test/t2.ibd
+--remove_file $MYSQLD_DATADIR/test/t2.cfg
+--remove_file $MYSQLTEST_VARDIR/tmp/t2.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t2.cfg
+
+
+--echo #####################################
+--echo # Test 3: non-HIPPO -> HIPPO Mismatch (should fail)
+--echo #####################################
+
+# Create source table with non-HIPPO index
+SET opt_index_format_hippo_enabled=off;
+CREATE TABLE t3 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t3 VALUES (1, 100), (2, 200);
+
+# Verify source is non-HIPPO
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+FLUSH TABLE t3 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t3.ibd $MYSQLTEST_VARDIR/tmp/t3.ibd
+--copy_file $MYSQLD_DATADIR/test/t3.cfg $MYSQLTEST_VARDIR/tmp/t3.cfg
+UNLOCK TABLES;
+
+DROP TABLE t3;
+
+# Recreate with HIPPO index
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t3 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+# Verify target is HIPPO
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+ALTER TABLE t3 DISCARD TABLESPACE;
+
+--copy_file $MYSQLTEST_VARDIR/tmp/t3.ibd $MYSQLD_DATADIR/test/t3.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t3.cfg $MYSQLD_DATADIR/test/t3.cfg
+
+# Should fail due to index format mismatch
+--error ER_TABLE_SCHEMA_MISMATCH
+ALTER TABLE t3 IMPORT TABLESPACE;
+
+DROP TABLE t3;
+--remove_file $MYSQLD_DATADIR/test/t3.ibd
+--remove_file $MYSQLD_DATADIR/test/t3.cfg
+--remove_file $MYSQLTEST_VARDIR/tmp/t3.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t3.cfg
+
+
+--echo #####################################
+--echo # Test 4: DML after Import (TRX_ID verification via assertions)
+--echo #####################################
+
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t4 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  c2 varchar(100),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+INSERT INTO t4 VALUES (1, 100, 'aaa'), (2, 200, 'bbb');
+
+FLUSH TABLE t4 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t4.ibd $MYSQLTEST_VARDIR/tmp/t4.ibd
+--copy_file $MYSQLD_DATADIR/test/t4.cfg $MYSQLTEST_VARDIR/tmp/t4.cfg
+UNLOCK TABLES;
+
+DROP TABLE t4;
+
+CREATE TABLE t4 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  c2 varchar(100),
+  INDEX idx_c1 (c1),
+  INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+
+ALTER TABLE t4 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t4.ibd $MYSQLD_DATADIR/test/t4.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t4.cfg $MYSQLD_DATADIR/test/t4.cfg
+ALTER TABLE t4 IMPORT TABLESPACE;
+
+--echo # DML operations after import (triggers TRX_ID assertions)
+
+# INSERT - triggers row_sec_assert_tid_in_entry()
+INSERT INTO t4 VALUES (3, 300, 'ccc');
+
+# UPDATE indexed column - triggers DELETE + INSERT path
+UPDATE t4 SET c1 = 101 WHERE id = 1;
+
+# UPDATE non-indexed column (only updates clustered index)
+UPDATE t4 SET c2 = 'AAA' WHERE id = 1;
+
+# DELETE - triggers row_sec_assert_tid_in_rec()
+DELETE FROM t4 WHERE id = 2;
+
+# Verify via MVCC read on HIPPO index
+SELECT c1 FROM t4 FORCE INDEX(idx_c1) ORDER BY c1;
+SELECT c2 FROM t4 FORCE INDEX(idx_c2) ORDER BY c2;
+SELECT * FROM t4 ORDER BY id;
+
+DROP TABLE t4;
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t4.cfg
+
+
+--echo #####################################
+--echo # Test 5: Rollback after Import (TRX_ID=0 verification)
+--echo #####################################
+
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t5 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t5 VALUES (1, 100), (2, 200);
+
+FLUSH TABLE t5 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t5.ibd $MYSQLTEST_VARDIR/tmp/t5.ibd
+--copy_file $MYSQLD_DATADIR/test/t5.cfg $MYSQLTEST_VARDIR/tmp/t5.cfg
+UNLOCK TABLES;
+
+DROP TABLE t5;
+
+CREATE TABLE t5 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t5 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t5.ibd $MYSQLD_DATADIR/test/t5.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t5.cfg $MYSQLD_DATADIR/test/t5.cfg
+ALTER TABLE t5 IMPORT TABLESPACE;
+
+--echo # Rollback INSERT after import
+BEGIN;
+INSERT INTO t5 VALUES (3, 300);
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--echo # Rollback DELETE after import
+BEGIN;
+DELETE FROM t5 WHERE id = 1;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--echo # Rollback UPDATE after import
+BEGIN;
+UPDATE t5 SET c1 = 999 WHERE id = 2;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+
+DROP TABLE t5;
+--remove_file $MYSQLTEST_VARDIR/tmp/t5.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t5.cfg
+
+
+--echo #####################################
+--echo # Test 6: MVCC after Import (concurrent read/write)
+--echo #####################################
+
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t6 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t6 VALUES (1, 100), (2, 200), (3, 300);
+
+# Verify HIPPO index
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t6' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+FLUSH TABLE t6 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t6.ibd $MYSQLTEST_VARDIR/tmp/t6.ibd
+--copy_file $MYSQLD_DATADIR/test/t6.cfg $MYSQLTEST_VARDIR/tmp/t6.cfg
+UNLOCK TABLES;
+
+DROP TABLE t6;
+
+CREATE TABLE t6 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t6 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t6.ibd $MYSQLD_DATADIR/test/t6.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t6.cfg $MYSQLD_DATADIR/test/t6.cfg
+ALTER TABLE t6 IMPORT TABLESPACE;
+
+# After import, start a read transaction on read_con
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# Establish read view on imported table
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--connection default
+# Modify data while read_con holds read view
+INSERT INTO t6 VALUES (4, 400);
+UPDATE t6 SET c1 = 101 WHERE id = 1;
+DELETE FROM t6 WHERE id = 3;
+
+# Current connection sees modifications
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--connection read_con
+# read_con should still see old data (MVCC via HIPPO index)
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+COMMIT;
+
+# After commit, should see current data
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--connection default
+
+DROP TABLE t6;
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t6.cfg
+
+
+--echo #####################################
+--echo # Test 7: Partition Table Import with HIPPO Index
+--echo #####################################
+
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t7 (
+  id int NOT NULL,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+  PARTITION p0 VALUES LESS THAN (100),
+  PARTITION p1 VALUES LESS THAN (200),
+  PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+
+INSERT INTO t7 VALUES (10, 100), (50, 500);
+INSERT INTO t7 VALUES (110, 1100), (150, 1500);
+INSERT INTO t7 VALUES (210, 2100), (250, 2500);
+
+# Verify HIPPO index on partition
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 't7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1' ORDER BY TABLE_NAME;
+
+SELECT SUM(c1) FROM t7;
+
+FLUSH TABLE t7 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t7#p#p0.ibd $MYSQLTEST_VARDIR/tmp/t7_p0.ibd
+--copy_file $MYSQLD_DATADIR/test/t7#p#p0.cfg $MYSQLTEST_VARDIR/tmp/t7_p0.cfg
+UNLOCK TABLES;
+
+DROP TABLE t7;
+
+# Create non-partitioned table and import partition data
+CREATE TABLE t7 (
+  id int NOT NULL,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+# Verify HIPPO index
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t7' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+
+ALTER TABLE t7 DISCARD TABLESPACE;
+--move_file $MYSQLTEST_VARDIR/tmp/t7_p0.ibd $MYSQLD_DATADIR/test/t7.ibd
+--move_file $MYSQLTEST_VARDIR/tmp/t7_p0.cfg $MYSQLD_DATADIR/test/t7.cfg
+
+ALTER TABLE t7 IMPORT TABLESPACE;
+
+# Verify imported partition data
+SELECT * FROM t7 ORDER BY id;
+SELECT c1 FROM t7 FORCE INDEX(idx_c1) ORDER BY c1;
+
+# DML after import
+INSERT INTO t7 VALUES (60, 600);
+UPDATE t7 SET c1 = 501 WHERE id = 50;
+DELETE FROM t7 WHERE id = 10;
+
+SELECT c1 FROM t7 FORCE INDEX(idx_c1) ORDER BY c1;
+
+DROP TABLE t7;
+
+
+--echo #####################################
+--echo # Test 8: Verify TRX_ID Update During Import
+--echo # This test verifies that row_upd_rec_lotus_fields_low() correctly
+--echo # updates each HIPPO record's trx_id to the import transaction ID.
+--echo # (row0import.cc:2470-2476)
+--echo #
+--echo # Test logic:
+--echo # 1. First import: trx_id = T1_import (committed)
+--echo # 2. RR transaction establishes read view (max_trx_id = M)
+--echo # 3. Modify data: trx_id = T_modify, RR sees old data (MVCC works)
+--echo # 4. Second import: if trx_id updated to T2_import (> M),
+--echo #    RR should NOT see data (trx_id > max_trx_id means invisible)
+--echo # 5. If RR still sees data after second import, it means import
+--echo #    correctly updated trx_id (the data is from newly committed
+--echo #    import transaction, visible because import already committed)
+--echo #####################################
+
+SET opt_index_format_hippo_enabled=on;
+
+CREATE TABLE t8 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+INSERT INTO t8 VALUES (1, 100), (2, 200), (3, 300);
+
+# First export
+FLUSH TABLE t8 FOR EXPORT;
+--copy_file $MYSQLD_DATADIR/test/t8.ibd $MYSQLTEST_VARDIR/tmp/t8.ibd
+--copy_file $MYSQLD_DATADIR/test/t8.cfg $MYSQLTEST_VARDIR/tmp/t8.cfg
+UNLOCK TABLES;
+
+DROP TABLE t8;
+
+# First import - trx_id in records will be updated to import trx ID
+CREATE TABLE t8 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t8 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.ibd $MYSQLD_DATADIR/test/t8.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.cfg $MYSQLD_DATADIR/test/t8.cfg
+ALTER TABLE t8 IMPORT TABLESPACE;
+
+--echo # After first import, data should be visible via HIPPO index
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+
+# Start RR transaction and access t8 to establish read view
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+--echo # RR transaction sees imported data
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+
+# Modify data while RR transaction holds read view
+--connection default
+UPDATE t8 SET c1 = 999 WHERE id = 1;
+
+--connection read_con
+--echo # RR transaction should NOT see modification (MVCC works)
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+
+# Restore data and prepare for second export
+--connection default
+UPDATE t8 SET c1 = 100 WHERE id = 1;
+
+# Second export - need to release RR transaction first due to MDL lock
+--connection read_con
+COMMIT;
+
+--connection default
+FLUSH TABLE t8 FOR EXPORT;
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.cfg
+--copy_file $MYSQLD_DATADIR/test/t8.ibd $MYSQLTEST_VARDIR/tmp/t8.ibd
+--copy_file $MYSQLD_DATADIR/test/t8.cfg $MYSQLTEST_VARDIR/tmp/t8.cfg
+UNLOCK TABLES;
+
+# Now establish RR read view BEFORE second import
+# (via dummy_table so we don't block DROP TABLE)
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+--echo # Establish read view BEFORE second import
+SELECT * FROM dummy_table;
+
+--connection default
+DROP TABLE t8;
+
+# Second import - trx_id will be updated to new import trx ID
+CREATE TABLE t8 (
+  id int NOT NULL PRIMARY KEY,
+  c1 int NOT NULL,
+  INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+
+ALTER TABLE t8 DISCARD TABLESPACE;
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.ibd $MYSQLD_DATADIR/test/t8.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/t8.cfg $MYSQLD_DATADIR/test/t8.cfg
+ALTER TABLE t8 IMPORT TABLESPACE;
+
+--echo # After second import with new trx_id
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+
+--connection read_con
+--echo # RR transaction (read view before second import) accesses t8
+--echo # Since table was dropped and recreated, we expect ER_TABLE_DEF_CHANGED
+--error ER_TABLE_DEF_CHANGED
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+COMMIT;
+
+# Verify new transaction sees data correctly
+--connection read_con
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+--echo # New RR transaction should see all data (import committed)
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+COMMIT;
+
+--connection default
+DROP TABLE t8;
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/t8.cfg
+
+
+--echo #####################################
+--echo # Cleanup
+--echo #####################################
+
+--connection read_con
+disconnect read_con;
+
+--connection default
+DROP TABLE dummy_table;
+
+SET opt_index_format_hippo_enabled=default;
+SET opt_index_format_panda_enabled=default;
+
+--echo # Test completed successfully
+

@@ -1,0 +1,95 @@
+SET SESSION sql_mode = 'TRADITIONAL';
+# The default value of polarx_optimizer_rbo_mode should be turned off
+SHOW GLOBAL VARIABLES LIKE "polarx_optimizer_rbo_mode";
+
+# Create a simple table with primary key, and insert some data for testing.
+CREATE TABLE t1 (a INT PRIMARY KEY, b INT);
+
+INSERT INTO t1 VALUES (1,2),(2,3),(3,4),(4,5);
+
+SELECT * FROM t1 WHERE a = 2;
+
+# Turn on the option
+SET global polarx_optimizer_rbo_mode = on;
+
+SELECT * FROM t1 WHERE a = 2;
+EXPLAIN SELECT * FROM t1 WHERE a = 2;
+EXPLAIN SELECT * FROM t1 WHERE 2 = a;
+EXPLAIN SELECT b FROM t1 WHERE a = 2;
+EXPLAIN FORMAT=JSON SELECT * FROM t1 WHERE a = 2;
+
+# Test if the record doesn't exist
+EXPLAIN SELECT * FROM t1 WHERE a = 5;
+SELECT * FROM t1 WHERE a = 5;
+
+# Test other where conditions that fast path is not used
+EXPLAIN SELECT * FROM t1 WHERE a = 1 and b = 2;
+EXPLAIN SELECT * FROM t1 WHERE a = 1 and b = 12;
+EXPLAIN SELECT * FROM t1 WHERE a > 1;
+EXPLAIN SELECT * FROM t1 WHERE a = '1';
+EXPLAIN SELECT * FROM t1 GROUP BY b;
+EXPLAIN SELECT * FROM t1 GROUP BY b having a = 2;
+EXPLAIN SELECT * FROM t1 WHERE a = 2 limit 0;
+EXPLAIN SELECT COUNT(*) FROM t1 WHERE a = 2;
+EXPLAIN SELECT MAX(b) FROM t1 WHERE a = 2;
+EXPLAIN SELECT * FROM (SELECT * FROM t1) as t1_derived;
+
+# Doesn't support table with more than one primary key
+CREATE TABLE t2 (a INT, b INT, c INT, PRIMARY KEY(a, b));
+INSERT INTO t2 VALUES(1,2,3),(2,3,4),(3,4,5);
+
+EXPLAIN SELECT * FROM t2 WHERE a = 1;
+EXPLAIN SELECT * FROM t2 WHERE a = 1 and b = 2;
+SELECT * FROM t2 WHERE a = 1 and b = 2;
+
+# Test bigint
+CREATE TABLE t3 (a BIGINT PRIMARY KEY, b INT);
+INSERT INTO t3 VALUES (1, 2),(2,3),(3,4);
+EXPLAIN SELECT * FROM t3 WHERE a = 1;
+SELECT * FROM t3 WHERE a = 1;
+
+# Test other types of primary index
+CREATE TABLE t4 (a varchar(64) PRIMARY KEY, b INT);
+INSERT INTO t4 VALUES ('aa', 1), (2, 4), (3,5);
+
+EXPLAIN SELECT * FROM t4 WHERE a = 2;
+SELECT * FROM t4 WHERE a = 2;
+
+# Test unique index
+CREATE TABLE t5 (a INT, b INT, UNIQUE KEY(a));
+INSERT INTO t5 VALUES (1,2),(2,3);
+
+EXPLAIN SELECT * FROM t5 WHERE a = 1;
+SELECT * FROM t5 WHERE a = 1;
+
+# Test table with both unique key and primary key
+CREATE TABLE t6 (a INT PRIMARY KEY, b INT, c INT, UNIQUE KEY(b));
+INSERT INTO t6 VALUES (1,2,3),(2,3,4),(3,4,5);
+
+EXPLAIN SELECT * FROM t6 WHERE a = 1;
+EXPLAIN SELECT * FROM t6 WHERE b = 2;
+
+# Test normal secondary index
+CREATE TABLE t7 (a INT, b INT, KEY(a));
+INSERT INTO t7 VALUES (1,2),(1,3);
+EXPLAIN SELECT * FROM t7 WHERE a = 1;
+SELECT * FROM t7 WHERE a = 1 ORDER BY a;
+
+# Test use/force key
+CREATE TABLE t8 (
+  c1 INT NOT NULL,
+  c2 INT DEFAULT NULL,
+  PRIMARY KEY (c1),
+  KEY i_c2(c2)
+);
+INSERT INTO t8 VALUE(1, 1);
+EXPLAIN SELECT * FROM t8 FORCE INDEX(i_c2) WHERE c1 = 1;
+EXPLAIN SELECT * FROM t8 USE INDEX(i_c2) WHERE c1 = 1;
+EXPLAIN SELECT * FROM t8 IGNORE INDEX(i_c2) WHERE c1 = 1;
+EXPLAIN SELECT * FROM t8 FORCE INDEX(primary) WHERE c1 = 1;
+EXPLAIN SELECT * FROM t8 USE INDEX(primary) WHERE c1 = 1;
+EXPLAIN SELECT * FROM t8 IGNORE INDEX(primary) WHERE c1 = 1;
+# Cleanup
+SET global polarx_optimizer_rbo_mode = default;
+
+DROP TABLE t1, t2, t3, t4, t5, t6, t7, t8;

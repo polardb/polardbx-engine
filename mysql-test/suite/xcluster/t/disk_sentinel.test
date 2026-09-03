@@ -1,0 +1,209 @@
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_windows.inc
+--source include/have_binlog_format_row.inc
+--source include/have_log_bin.inc
+
+# Suppress expected errors from simulate_file_write_error debug flag
+--connection default
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+
+--connect (sup2,127.0.0.1,root,,test,$MYPORT_2)
+SET SQL_LOG_BIN=0;
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+SET SQL_LOG_BIN=1;
+--disconnect sup2
+
+--connect (sup3,127.0.0.1,root,,test,$MYPORT_3)
+SET SQL_LOG_BIN=0;
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+SET SQL_LOG_BIN=1;
+--disconnect sup3
+
+--connection default
+
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+
+# ============================================================
+# Phase 1: Leader OFF — sentinel disabled, no fatal expected
+# ============================================================
+--echo # Phase 1: Leader OFF state should not trigger fatal
+
+set global enable_disk_sentinel=OFF;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+--sleep 5
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $assert_select = Disk sentinel: IO problem occurs
+--let $assert_count = 0
+--let $assert_text = No disk sentinel fatal when disabled
+--source include/assert_grep.inc
+
+# ============================================================
+# Phase 2: Leader ON + disk error — fatal must fire
+# ============================================================
+--echo # Phase 2: Leader ON + disk write error should trigger fatal
+
+--exec echo "===DISK_SENTINEL_PHASE_2===" >> $MYSQLTEST_VARDIR/log/mysqld.1.err
+
+set global enable_disk_sentinel=ON;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+--sleep 8
+# Safe teardown: disable sentinel before clearing skip_exit to avoid race
+set global enable_disk_sentinel=OFF;
+--sleep 2
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+
+--perl
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . '/log/mysqld.1.err';
+  my $marker = '===DISK_SENTINEL_PHASE_2===';
+  my $pattern = 'Disk sentinel: IO problem occurs';
+  my $min_count = 2;
+  my $after_marker = 0;
+  my $count = 0;
+  open(FILE, $file) or die("Can't open $file: $!\n");
+  while (<FILE>) {
+    if (/^CURRENT_TEST: /) { $after_marker = 0; $count = 0; }
+    if (/\Q$marker\E/) { $after_marker = 1; $count = 0; }
+    if ($after_marker && /$pattern/) { $count++; }
+  }
+  close(FILE);
+  if ($count < $min_count) {
+    die("Phase 2 FAIL: expected >= $min_count '$pattern' after marker, got $count\n");
+  }
+EOF
+
+# ============================================================
+# Phase 3: Leader ON + IO hang — fatal must fire
+# ============================================================
+--echo # Phase 3: Leader ON + IO hang should trigger fatal
+
+--exec echo "===DISK_SENTINEL_PHASE_3===" >> $MYSQLTEST_VARDIR/log/mysqld.1.err
+
+set global enable_disk_sentinel=ON;
+set global debug="+d,disk_sentinel_io_hang,simulate_skip_exit";
+--sleep 8
+set global enable_disk_sentinel=OFF;
+--sleep 2
+set global debug="-d,disk_sentinel_io_hang,simulate_skip_exit";
+
+--perl
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . '/log/mysqld.1.err';
+  my $marker = '===DISK_SENTINEL_PHASE_3===';
+  my $pattern = 'Disk sentinel: IO problem occurs';
+  my $min_count = 2;
+  my $after_marker = 0;
+  my $count = 0;
+  open(FILE, $file) or die("Can't open $file: $!\n");
+  while (<FILE>) {
+    if (/^CURRENT_TEST: /) { $after_marker = 0; $count = 0; }
+    if (/\Q$marker\E/) { $after_marker = 1; $count = 0; }
+    if ($after_marker && /$pattern/) { $count++; }
+  }
+  close(FILE);
+  if ($count < $min_count) {
+    die("Phase 3 FAIL: expected >= $min_count '$pattern' after marker, got $count\n");
+  }
+EOF
+
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;
+
+# ============================================================
+# Phase 4: Follower — fatal must NOT fire (leader guard)
+# ============================================================
+--echo # Phase 4: Follower should not trigger fatal
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+
+set global enable_disk_sentinel=ON;
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+--sleep 8
+set global enable_disk_sentinel=OFF;
+--sleep 2
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.2.err
+--let $assert_select = Disk sentinel: IO problem occurs
+--let $assert_count = 0
+--let $assert_text = No disk sentinel fatal on follower
+--source include/assert_grep.inc
+
+# Verify sentinel thread did run: write failures should be logged
+--perl
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . '/log/mysqld.2.err';
+  my $pattern = 'Disk sentinel: write failed';
+  my $min_count = 1;
+  my $count = 0;
+  open(FILE, $file) or die("Can't open $file: $!\n");
+  while (<FILE>) {
+    if (/^CURRENT_TEST: /) { $count = 0; }
+    if (/$pattern/) { $count++; }
+  }
+  close(FILE);
+  if ($count < $min_count) {
+    die("Phase 4 FAIL: expected >= $min_count '$pattern' (sentinel should have run), got $count\n");
+  }
+EOF
+
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;
+--disconnect conn2
+
+# ============================================================
+# Phase 5: Logger — fatal must NOT fire (leader guard)
+# ============================================================
+--echo # Phase 5: Logger should not trigger fatal
+
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+--connection conn3
+
+set global enable_disk_sentinel=ON;
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+--sleep 8
+set global enable_disk_sentinel=OFF;
+--sleep 2
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+
+--let $assert_file = $MYSQLTEST_VARDIR/log/mysqld.3.err
+--let $assert_select = Disk sentinel: IO problem occurs
+--let $assert_count = 0
+--let $assert_text = No disk sentinel fatal on logger
+--source include/assert_grep.inc
+
+# Verify sentinel thread did run: write failures should be logged
+--perl
+  my $file = $ENV{'MYSQLTEST_VARDIR'} . '/log/mysqld.3.err';
+  my $pattern = 'Disk sentinel: write failed';
+  my $min_count = 1;
+  my $count = 0;
+  open(FILE, $file) or die("Can't open $file: $!\n");
+  while (<FILE>) {
+    if (/^CURRENT_TEST: /) { $count = 0; }
+    if (/$pattern/) { $count++; }
+  }
+  close(FILE);
+  if ($count < $min_count) {
+    die("Phase 5 FAIL: expected >= $min_count '$pattern' (sentinel should have run), got $count\n");
+  }
+EOF
+
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;
+--disconnect conn3

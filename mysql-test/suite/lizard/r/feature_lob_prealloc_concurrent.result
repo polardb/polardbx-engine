@@ -1,0 +1,66 @@
+DROP TABLE IF EXISTS t_lob_prealloc;
+DROP PROCEDURE IF EXISTS lob_insert_proc;
+DROP PROCEDURE IF EXISTS lob_update_proc;
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+CREATE TABLE t_lob_prealloc (
+id BIGINT PRIMARY KEY,
+b LONGBLOB
+) ENGINE=InnoDB;
+CREATE PROCEDURE lob_insert_proc(IN tid INT, IN n_iters INT)
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE pid BIGINT;
+DECLARE blob_size INT;
+WHILE i < n_iters DO
+SET pid = ((i * 31 + 7) MOD n_iters) + tid * 10000000;
+SET blob_size = 7 * 1024 + FLOOR(RAND() * (64 * 1024 - 7 * 1024 + 1));
+INSERT INTO t_lob_prealloc VALUES (pid, REPEAT('x', blob_size));
+SET i = i + 1;
+END WHILE;
+END$$
+CREATE PROCEDURE lob_update_proc(IN n_iters INT)
+BEGIN
+DECLARE i INT DEFAULT 0;
+DECLARE r INT;
+DECLARE pid BIGINT;
+DECLARE blob_size INT;
+DECLARE total INT;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET pid = NULL;
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+BEGIN
+ROLLBACK;
+END;
+SELECT COUNT(*) INTO total FROM t_lob_prealloc;
+WHILE i < n_iters DO
+SET r = FLOOR(RAND() * total);
+SET pid = NULL;
+SELECT id INTO pid FROM t_lob_prealloc LIMIT r, 1;
+IF pid IS NOT NULL THEN
+SET blob_size = 7 * 1024 + FLOOR(RAND() * (64 * 1024 - 7 * 1024 + 1));
+START TRANSACTION;
+SELECT id FROM t_lob_prealloc WHERE id = pid FOR UPDATE INTO @ignore;
+UPDATE t_lob_prealloc SET b = REPEAT('y', blob_size) WHERE id = pid;
+COMMIT;
+END IF;
+SET i = i + 1;
+END WHILE;
+END$$
+CALL lob_insert_proc(1, 1000);
+CALL lob_insert_proc(2, 1000);
+CALL lob_insert_proc(3, 1000);
+CALL lob_insert_proc(4, 1000);
+SELECT COUNT(*) AS rows_after_insert FROM t_lob_prealloc;
+rows_after_insert
+4000
+CALL lob_update_proc(1000);
+CALL lob_update_proc(1000);
+CALL lob_update_proc(1000);
+CALL lob_update_proc(1000);
+SELECT COUNT(*) AS rows_after_update FROM t_lob_prealloc;
+rows_after_update
+4000
+DROP PROCEDURE lob_insert_proc;
+DROP PROCEDURE lob_update_proc;
+DROP TABLE t_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

@@ -1,0 +1,26 @@
+CREATE DATABASE vidx_prebuild_check_kill;
+USE vidx_prebuild_check_kill;
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(8)
+) ENGINE = InnoDB;
+INSERT INTO t1 VALUES
+(1, VEC_FROMTEXT('[1,2,3,4,5,6,7,8]')),
+(2, VEC_FROMTEXT('[2,3,4,5,6,7,8,9]')),
+(3, NULL);
+SET DEBUG_SYNC = 'vidx_prebuild_scan_row SIGNAL scan_hit WAIT_FOR scan_go';
+CALL dbms_vidx.prebuild_check('vidx_prebuild_check_kill', 't1');
+SET DEBUG_SYNC = 'now WAIT_FOR scan_hit';
+SET DEBUG_SYNC = 'now SIGNAL scan_go';
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC = 'RESET';
+VERDICT 1 mid-scan KILL surfaces ER_QUERY_INTERRUPTED: PASS
+# The interrupted scan left no residue: the same CALL runs clean.
+CALL dbms_vidx.prebuild_check('vidx_prebuild_check_kill', 't1');
+Column	Index_name	Dimensions	M	Rows	Estimated_bytes	Cache_limit_bytes	Build_mode	Suggested_cache_bytes
+v	NULL	8	6	2	EST	SUGGESTED	single-pass	1048576
+VERDICT 2 retry after KILL succeeds: PASS
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_prebuild_check_kill;

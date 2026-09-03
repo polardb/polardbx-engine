@@ -57,7 +57,7 @@ TEST(misc, minMatchIndex)
   std::vector<std::string> strConfig;
   strConfig.emplace_back("127.0.0.1:11001");
   uint64_t timeout= 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog= std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1= new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);

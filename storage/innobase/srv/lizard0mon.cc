@@ -32,11 +32,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "mysql/status_var.h"
 
-#include "lizard0fil0types.h"
 #include "lizard0gcs.h"
 #include "lizard0mon.h"
 #include "lizard0undo.h"
 #include "lizard0undo0retent.h"
+
+#include "dict0mem.h"
 
 namespace lizard {
 
@@ -84,12 +85,14 @@ static void export_lizard_status(void) {
 
   generic_vars.scan_cleanout_txn_clean = generic_stats.scan_cleanout_txn_clean;
   generic_vars.scan_cleanout_gpp_clean = generic_stats.scan_cleanout_gpp_clean;
-  generic_vars.ddl_cleanout_clean = generic_stats.ddl_cleanout_clean;
+  generic_vars.pread_cleanout_clean = generic_stats.pread_cleanout_clean;
   generic_vars.commit_cleanout_clean = generic_stats.commit_cleanout_clean;
 
   generic_vars.current_gcn = gcs_load_gcn();
 
-  generic_vars.purged_gcn = gcs_get_purged_gcn();
+  generic_vars.purged_gcn = gcs_clean_purged_gcn();
+
+  generic_vars.retention_gcn = Undo_manager::instance().get_retention_gcn();
 
   generic_vars.txn_undo_log_recycle = generic_stats.txn_undo_log_recycle;
 
@@ -117,6 +120,12 @@ static void export_lizard_status(void) {
   generic_vars.index_lock_guess_clust_miss =
       generic_stats.index_lock_guess_clust_miss;
 
+  generic_vars.index_pcur_guess_restore_hit =
+      generic_stats.index_pcur_guess_restore_hit;
+
+  generic_vars.index_pcur_guess_restore_miss =
+      generic_stats.index_pcur_guess_restore_miss;
+
   generic_vars.flashback_area_query_cnt = generic_stats.flashback_area_query_cnt;
 
   generic_vars.row_prev_vers_build_cnt = generic_stats.row_prev_vers_build_cnt;
@@ -124,8 +133,52 @@ static void export_lizard_status(void) {
   generic_vars.txn_read_guess_request = generic_stats.txn_read_guess_request;
   generic_vars.txn_read_guess_fail = generic_stats.txn_read_guess_fail;
 
-  generic_vars.tcn_cache_hit = generic_stats.tcn_cache_hit;
-  generic_vars.tcn_cache_miss = generic_stats.tcn_cache_miss;
+  generic_vars.tcn_cache_hit = lizard::gcs->ccache.hit_counter();
+  generic_vars.tcn_cache_miss = lizard::gcs->ccache.miss_counter();
+  generic_vars.tcn_cache_write = lizard::gcs->ccache.write_counter();
+
+  generic_vars.query_wait_count = generic_stats.query_wait_count;
+  generic_vars.query_wait_time = generic_stats.query_wait_time;
+  generic_vars.query_wait_timeout = generic_stats.query_wait_timeout;
+
+  generic_vars.polarx_btree_search_mode_hit =
+      generic_stats.polarx_btree_search_mode_hit;
+  generic_vars.polarx_btree_search_mode_miss =
+      generic_stats.polarx_btree_search_mode_miss;
+
+  generic_vars.n_purge_threads = current_n_purge_threads;
+
+  generic_vars.rowid_intersection_gpp_hit =
+      generic_stats.rowid_intersection_gpp_hit;
+  generic_vars.rowid_intersection_gpp_miss =
+      generic_stats.rowid_intersection_gpp_miss;
+
+  generic_vars.rowid_union_gpp_hit = generic_stats.rowid_union_gpp_hit;
+  generic_vars.rowid_union_gpp_miss = generic_stats.rowid_union_gpp_miss;
+
+  generic_vars.index_merge_gpp_hit = generic_stats.index_merge_gpp_hit;
+  generic_vars.index_merge_gpp_miss = generic_stats.index_merge_gpp_miss;
+
+  generic_vars.multi_range_read_gpp_hit = generic_stats.multi_range_read_gpp_hit;
+  generic_vars.multi_range_read_gpp_miss = generic_stats.multi_range_read_gpp_miss;
+
+  generic_vars.filesort_gpp_hit = generic_stats.filesort_gpp_hit;
+  generic_vars.filesort_gpp_miss = generic_stats.filesort_gpp_miss;
+
+  generic_vars.multi_update_gpp_hit = generic_stats.multi_update_gpp_hit;
+  generic_vars.multi_update_gpp_miss = generic_stats.multi_update_gpp_miss;
+  generic_vars.multi_delete_gpp_hit = generic_stats.multi_delete_gpp_hit;
+  generic_vars.multi_delete_gpp_miss = generic_stats.multi_delete_gpp_miss;
+
+  generic_vars.lob_prealloc_pages = generic_stats.lob_prealloc_pages;
+  generic_vars.lob_prealloc_fail_no_space =
+      generic_stats.lob_prealloc_fail_no_space;
+  generic_vars.lob_prealloc_reject_too_large =
+      generic_stats.lob_prealloc_reject_too_large;
+  generic_vars.lob_prealloc_underestimate_pages =
+      generic_stats.lob_prealloc_underestimate_pages;
+  generic_vars.lob_prealloc_overestimate_pages =
+      generic_stats.lob_prealloc_overestimate_pages;
 }
 
 static SHOW_VAR lizard_status_variables[] = {
@@ -185,19 +238,19 @@ static SHOW_VAR lizard_status_variables[] = {
     {"scan_cleanout_gpp_clean", (char *)&generic_vars.scan_cleanout_gpp_clean,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
-    {"ddl_cleanout_clean", (char *)&generic_vars.ddl_cleanout_clean,
+    {"pread_cleanout_clean", (char *)&generic_vars.pread_cleanout_clean,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
     {"commit_cleanout_clean", (char *)&generic_vars.commit_cleanout_clean,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
-    {"undo_retention_stats", Undo_retention::status, SHOW_CHAR,
-     SHOW_SCOPE_GLOBAL},
-
     {"current_gcn", (char *)&generic_vars.current_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"purged_gcn", (char *)&generic_vars.purged_gcn, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"retention_gcn", (char *)&generic_vars.retention_gcn, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
     {"txn_undo_log_recycle", (char *)&generic_vars.txn_undo_log_recycle,
@@ -235,6 +288,14 @@ static SHOW_VAR lizard_status_variables[] = {
      (char *)&generic_vars.index_lock_guess_clust_miss, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
+    {"index_pcur_guess_restore_hit",
+     (char *)&generic_vars.index_pcur_guess_restore_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"index_pcur_guess_restore_miss",
+     (char *)&generic_vars.index_pcur_guess_restore_miss, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
     {"flashback_area_query_cnt", (char *)&generic_vars.flashback_area_query_cnt,
      SHOW_LONG, SHOW_SCOPE_GLOBAL},
 
@@ -253,6 +314,81 @@ static SHOW_VAR lizard_status_variables[] = {
     {"tcn_cache_miss", (char *)&generic_vars.tcn_cache_miss, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
 
+    {"tcn_cache_write", (char *)&generic_vars.tcn_cache_write, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"query_wait_count", (char *)&generic_vars.query_wait_count, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"query_wait_time", (char *)&generic_vars.query_wait_time, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"query_wait_timeout", (char *)&generic_vars.query_wait_timeout, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"polarx_btree_search_mode_hit",
+     (char *)&generic_vars.polarx_btree_search_mode_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"polarx_btree_search_mode_miss",
+     (char *)&generic_vars.polarx_btree_search_mode_miss, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"n_purge_threads", (char *)&generic_vars.n_purge_threads, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"rowid_intersection_gpp_hit",
+     (char *)&generic_vars.rowid_intersection_gpp_hit, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"rowid_intersection_gpp_miss",
+     (char *)&generic_vars.rowid_intersection_gpp_miss, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"rowid_union_gpp_hit", (char *)&generic_vars.rowid_union_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"rowid_union_gpp_miss", (char *)&generic_vars.rowid_union_gpp_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"index_merge_gpp_hit", (char *)&generic_vars.index_merge_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"index_merge_gpp_miss", (char *)&generic_vars.index_merge_gpp_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"multi_range_read_gpp_hit", (char *)&generic_vars.multi_range_read_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"multi_range_read_gpp_miss",
+     (char *)&generic_vars.multi_range_read_gpp_miss, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
+    {"filesort_gpp_hit", (char *)&generic_vars.filesort_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"filesort_gpp_miss", (char *)&generic_vars.filesort_gpp_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"multi_update_gpp_hit", (char *)&generic_vars.multi_update_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"multi_update_gpp_miss", (char *)&generic_vars.multi_update_gpp_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"multi_delete_gpp_hit", (char *)&generic_vars.multi_delete_gpp_hit,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+    {"multi_delete_gpp_miss", (char *)&generic_vars.multi_delete_gpp_miss,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
+
+    {"lob_prealloc_pages", (char *)&generic_vars.lob_prealloc_pages, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"lob_prealloc_fail_no_space",
+     (char *)&generic_vars.lob_prealloc_fail_no_space, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"lob_prealloc_reject_too_large",
+     (char *)&generic_vars.lob_prealloc_reject_too_large, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"lob_prealloc_underestimate_pages",
+     (char *)&generic_vars.lob_prealloc_underestimate_pages, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+    {"lob_prealloc_overestimate_pages",
+     (char *)&generic_vars.lob_prealloc_overestimate_pages, SHOW_LONG,
+     SHOW_SCOPE_GLOBAL},
+
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 int show_generic_vars(THD *thd, SHOW_VAR *var, char *buff) {
@@ -263,6 +399,36 @@ int show_generic_vars(THD *thd, SHOW_VAR *var, char *buff) {
   var->scope = SHOW_SCOPE_GLOBAL;
 
   return 0;
+}
+
+/** Visitor.
+@param[in]      table   table to visit */
+void Gpp_index_stat_collector::operator()(dict_table_t *table) {
+  for (dict_index_t *index : table->indexes) {
+    if (index->n_s_gfields == 0) {
+      continue;
+    }
+
+    ut_ad(index->is_gstored());
+
+    m_stats.emplace_back(im::Index_gpp_stat{table->name.m_name,
+                                            (const char *)index->name,
+                                            index->gpp_hit, index->gpp_miss});
+  }
+}
+
+/** Visitor.
+@param[in]      table   table to visit */
+void Gpp_index_stat_flusher::operator()(dict_table_t *table) {
+  for (dict_index_t *index : table->indexes) {
+    if (index->n_s_gfields == 0) {
+      continue;
+    }
+
+    ut_ad(index->is_gstored());
+    index->gpp_hit.reset();
+    index->gpp_miss.reset();
+  }
 }
 
 }  // namespace lizard

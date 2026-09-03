@@ -1,0 +1,261 @@
+SET GLOBAL innodb_purge_stop_now = ON;
+#
+# PART 1: INSERT + ROLLBACK
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+BEGIN;
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+INSERT INTO t1 VALUES (5, REPEAT('c', 100));
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+3
+4
+5
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+id
+1
+2
+3
+4
+5
+ROLLBACK;
+# After rollback: only id=1,2 should be visible
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+id
+1
+2
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 2: UPDATE + ROLLBACK
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+20
+BEGIN;
+UPDATE t1 SET c = REPEAT('z', 100) WHERE id <= 10;
+SELECT id, LEFT(c, 3) AS c_prefix FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c_prefix
+1	zzz
+2	zzz
+3	zzz
+4	zzz
+5	zzz
+6	zzz
+7	zzz
+8	zzz
+9	zzz
+10	zzz
+11	aaa
+12	aaa
+13	aaa
+14	aaa
+15	aaa
+16	aaa
+17	aaa
+18	aaa
+19	aaa
+20	aaa
+ROLLBACK;
+# After rollback: all rows should have original 'a' prefix
+SELECT id, LEFT(c, 3) AS c_prefix FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id	c_prefix
+1	aaa
+2	aaa
+3	aaa
+4	aaa
+5	aaa
+6	aaa
+7	aaa
+8	aaa
+9	aaa
+10	aaa
+11	aaa
+12	aaa
+13	aaa
+14	aaa
+15	aaa
+16	aaa
+17	aaa
+18	aaa
+19	aaa
+20	aaa
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 3: DELETE + ROLLBACK
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+INSERT INTO t1 VALUES (5, REPEAT('c', 100));
+BEGIN;
+DELETE FROM t1 WHERE id IN (1, 3, 5);
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+2
+4
+ROLLBACK;
+# After rollback: all 5 rows should reappear
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+3
+4
+5
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 4: Mixed INSERT/UPDATE/DELETE + ROLLBACK
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY AUTO_INCREMENT,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SET GLOBAL innodb_purge_stop_now = ON;
+BEGIN;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+100
+ROLLBACK;
+# After rollback: must be back to original 100 rows, all 'a' prefix
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+100
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+COUNT(*)
+100
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 5: Crash during rollback - idempotent recovery
+# Mimics feature_panda_rollback ib_panda_after_undo_ins pattern.
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, REPEAT('a', 100));
+INSERT INTO t1 VALUES (2, REPEAT('a', 100));
+SET GLOBAL innodb_purge_stop_now = ON;
+BEGIN;
+INSERT INTO t1 VALUES (3, REPEAT('b', 100));
+INSERT INTO t1 VALUES (4, REPEAT('b', 100));
+# Set up sync point: signal after first undo is applied, then kill
+set debug_sync = 'ib_clust_after_undo_ins signal s1 wait_for s2';
+ROLLBACK;
+set debug_sync = 'now wait_for s1';
+# Force a checkpoint before kill
+INSERT INTO t1 VALUES (9999, REPEAT('x', 100));
+# Kill and restart:--debug=d,pause_rollback_on_recovery
+ERROR HY000: Lost connection to MySQL server during query
+# Recovery rollback is paused; insert a new row (id=5) that does not conflict
+INSERT INTO t1 VALUES (5, REPEAT('b', 100));
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+5
+9999
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+id
+1
+2
+5
+9999
+# Resume recovery rollback
+SET GLOBAL debug = '-d,pause_rollback_on_recovery';
+SELECT id FROM t1 FORCE INDEX (idx_c) ORDER BY id;
+id
+1
+2
+5
+9999
+SELECT id FROM t1 FORCE INDEX (PRIMARY) ORDER BY id;
+id
+1
+2
+5
+9999
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+SET GLOBAL innodb_purge_run_now = ON;

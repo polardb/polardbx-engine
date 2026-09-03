@@ -1661,7 +1661,12 @@ int ha_tina::rotate_table(const char *name, const dd::Table *) {
   snprintf(rotate_name_buff, sizeof(rotate_name_buff), "%s_%lu%s", name,
            time(nullptr), CSV_EXT);
 
-  if (mysql_file_rename(csv_key_file_data,
+  /**
+   * Here, we avoid using csv_key_file_data. Performance schema, such as
+   * performance_schema.data_lock_wait_summary, will record it. And we will have
+   * no opportunity to remove it as the old file is hidden for the database.
+   */
+  if (mysql_file_rename(PSI_NOT_INSTRUMENTED,
                         fn_format(name_buff, name, "", CSV_EXT,
                                   MY_REPLACE_EXT | MY_UNPACK_FILENAME),
                         rotate_name_buff, MYF(0)))

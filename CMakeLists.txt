@@ -128,6 +128,12 @@ ENDIF()
 OPTION(WITH_DEBUG "Use dbug/safemutex" OFF)
 OPTION(CHECK_ERRMSG_FORMAT "Check printf format for English error messages" OFF)
 
+# Plugins and components marked TEST_ONLY are used by the test suite only, and
+# are never installed whatever this option says (Bug #85439771). Turn it off to
+# keep them out of the build as well.
+OPTION(WITH_TEST_ONLY_PLUGINS
+  "Build the plugins and components that are only used by the test suite" ON)
+
 # Use a default manufacturer if no manufacturer was identified.
 SET(MANUFACTURER_DOCSTRING
   "Set the entity that appears as the manufacturer of packages that support a manufacturer field.")
@@ -2287,6 +2293,8 @@ CONFIGURE_FILE(config.h.cmake   ${CMAKE_BINARY_DIR}/include/my_config.h)
 CONFIGURE_FILE(config.h.cmake   ${CMAKE_BINARY_DIR}/include/config.h)
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_version.h.in
                ${CMAKE_BINARY_DIR}/include/mysql_version.h )
+CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/include/mysql_build_info.h.in
+               ${CMAKE_BINARY_DIR}/include/mysql_build_info.h )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/sql/sql_builtin.cc.in
     ${CMAKE_BINARY_DIR}/sql/sql_builtin.cc)
 

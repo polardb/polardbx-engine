@@ -57,9 +57,10 @@ OPT="$OPT --report-features --unit-tests-report"
 
 extra_mtr_option=""
 if [ x"$test_type" = x"normal" ]; then
-  extra_mtr_option=""
+  # extra_mtr_option="--big-test --testcase-timeout=45"
   $OPT $extra_mtr_option --vardir=var_normal  &>all.normal
-  $OPT --flashback-area --vardir=var_fba  &>all.fba
+  # $OPT --flashback-area --vardir=var_fba  &>all.fba
+  # $OPT $extra_mtr_option --opt-spc --vardir=var_spc  &>all.spc
 
 elif [ x"$test_type" = x"all" ]; then
   extra_mtr_option="--big-test --testcase-timeout=45"

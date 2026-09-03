@@ -1719,7 +1719,7 @@ doc	id
 {"id": "2", "name": "bar"}	2
 explain SELECT * FROM t1 WHERE id = '2';
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	NULL
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	8	const	1	100.00	Directly search via Primary Index
 Warnings:
 Note	1003	/* select#1 */ select '{"id": "2", "name": "bar"}' AS `doc`,'2' AS `id` from `test`.`t1` where true
 PREPARE s11 FROM "SELECT * FROM t1 WHERE JSON_EXTRACT(doc, '$.id') = ?";

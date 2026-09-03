@@ -52,7 +52,7 @@ TEST(consensus, may_read_mock_log) {
   le.set_value("ccc");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1, rlog2, rlog3;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1, rlog2, rlog3;
   rlog1 = rlog =
       std::make_shared<FilePaxosLog>("paxosLogTestDir1", FilePaxosLog::LTSync);
   EXPECT_EQ(rlog1->getLastLogIndex(), 0);

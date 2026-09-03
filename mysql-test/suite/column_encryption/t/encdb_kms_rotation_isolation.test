@@ -1,0 +1,37 @@
+--echo #
+--echo # Test: KMS rotation does not disrupt existing connection's DEK
+--echo # Created 2026-06-11 by kaiwu.zfy
+--echo #
+
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+set global column_encryption = ON;
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+
+--echo # Step 1: MEK_PROVISION
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(
+    encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+    '00112233445566778899aabbccddeeff'))) IS NOT NULL AS mek_provision_ok;
+
+--echo # Step 2: Register KMS MEK (simulate rotation)
+SELECT encdb_process_message('{"request_type":50, "kms_enc_mek":"bmV3X3JvdGF0ZWRfbWVr", "plaintext":"ZmYwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWU=", "kms_region":"cn-hangzhou", "kms_key_id":"key-rotation-test", "version":0}') IS NOT NULL AS kms_register_ok;
+
+--echo # Step 3: Setup encryption rule
+create table test.t_kms (id int primary key, secret varchar(100));
+insert into test.t_kms values (1, 'hello_world');
+select encdb_rule_op('add', '{"name":"kms_test_rule","enabled":true,"meta":{"databases":["test"],"tables":["t_kms"],"columns":["secret"]}}');
+select encdb_rule_op('grant', '{"restrictedAccess":["root"]}');
+
+--echo # Step 4: Query should still work (DEK isolation)
+--disable_result_log
+SELECT id, secret FROM test.t_kms;
+--enable_result_log
+--echo # If we get here without error, DEK isolation works
+
+--echo # Clean up
+select encdb_rule_op('delete', '"kms_test_rule"');
+DROP TABLE test.t_kms;
+DELETE FROM mysql.encdb_kms_meta;
+drop function encdb_generate_mek_request;
+set global column_encryption = OFF;

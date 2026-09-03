@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created  10/2016 Jimmy Yamg
  *******************************************************/
 
+#ifndef dict0dd_h
+#define INNODB_DICT0DD_IC_STANDALONE
+#include "dict0dd.h"
+#undef INNODB_DICT0DD_IC_STANDALONE
+#endif /* !dict0dd_h */
 #include "sql_table.h"
 #ifndef UNIV_HOTBACKUP
 #include "dict0crea.h"
@@ -139,10 +144,6 @@ inline dd::Index *dd_set_hidden_unique_index(dd::Index *index, const char *name,
   return (index);
 }
 
-/** Returns a cached table object based on table id.
-@param[in]      table_id        table id
-@param[in]      dict_locked     true=data dictionary locked
-@return table, NULL if does not exist */
 inline dict_table_t *dd_table_open_on_id_in_mem(table_id_t table_id,
                                                 bool dict_locked) {
   dict_table_t *table;
@@ -163,10 +164,6 @@ inline dict_table_t *dd_table_open_on_id_in_mem(table_id_t table_id,
   ut_ad(table == nullptr || table->cached);
 
   if (table != nullptr) {
-    if (table->can_be_evicted) {
-      dict_move_to_mru(table);
-    }
-
     table->acquire();
   }
 

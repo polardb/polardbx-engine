@@ -365,7 +365,9 @@ static inline const char *fts_get_suffix_5_7(ulint selected);
 static inline ulint fts_select_index(const CHARSET_INFO *cs, const byte *str,
                                      ulint len);
 
+#ifndef INNODB_FTS0TYPES_IC_STANDALONE
 #include "fts0types.ic"
 #include "fts0vlc.ic"
+#endif /* !INNODB_FTS0TYPES_IC_STANDALONE */
 
 #endif /* INNOBASE_FTS0TYPES_H */

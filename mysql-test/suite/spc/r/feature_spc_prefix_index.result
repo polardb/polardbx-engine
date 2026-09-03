@@ -1,0 +1,128 @@
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VARCHAR(200) CHARACTER SET utf8mb4 NOT NULL,
+t TEXT NOT NULL,
+b VARBINARY(200) NOT NULL
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+CREATE INDEX idx_v_prefix ON t1(v(16))
+SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+CREATE INDEX idx_t_prefix ON t1(t(32))
+SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+CREATE INDEX idx_vb_prefix ON t1(v(8), b(16))
+SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_v_prefix should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_t_prefix should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_vb_prefix should match IS_SPC=1 (got SPC_PAGE)]
+# Verify that SQL metadata retained every prefix width.
+SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME, SUB_PART
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME <> 'PRIMARY'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	SUB_PART
+idx_t_prefix	1	t	32
+idx_v_prefix	1	v	16
+idx_vb_prefix	1	v	8
+idx_vb_prefix	2	b	16
+SET @mb = CONVERT(0xF09F9880 USING utf8mb4);
+INSERT INTO t1 VALUES
+(1, CONCAT(REPEAT(@mb, 16), 'suffix-a'),
+CONCAT(REPEAT('x', 64), 'text-a'),
+CONCAT(REPEAT(0x41, 16), 0x31)),
+(2, CONCAT(REPEAT(@mb, 16), 'suffix-b'),
+CONCAT(REPEAT('x', 64), 'text-b'),
+CONCAT(REPEAT(0x41, 16), 0x32)),
+(3, CONCAT(REPEAT(@mb, 16), 'suffix-c'),
+CONCAT(REPEAT('x', 64), 'text-c'),
+CONCAT(REPEAT(0x41, 16), 0x33));
+# Prefix collisions must recheck the full VARCHAR, TEXT and VARBINARY values.
+SELECT id FROM t1 FORCE INDEX (idx_v_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-b');
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_t_prefix)
+WHERE t = CONCAT(REPEAT('x', 64), 'text-c');
+id
+3
+SELECT id FROM t1 FORCE INDEX (idx_vb_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-a')
+AND b = CONCAT(REPEAT(0x41, 16), 0x31);
+id
+1
+UPDATE t1
+SET v = CONCAT(REPEAT(@mb, 16), 'suffix-updated'),
+t = CONCAT(REPEAT('x', 64), 'text-updated'),
+b = CONCAT(REPEAT(0x41, 16), 0x39)
+WHERE id = 2;
+DELETE FROM t1 WHERE id = 1;
+# Change the stored prefix itself in every SPC prefix index.
+SET @mb_new = CONVERT(0xF09F9A80 USING utf8mb4);
+UPDATE t1
+SET v = CONCAT(REPEAT(@mb_new, 16), 'prefix-updated'),
+t = CONCAT(REPEAT('y', 64), 'text-prefix-updated'),
+b = CONCAT(REPEAT(0x42, 16), 0x39)
+WHERE id = 3;
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT id FROM t1 FORCE INDEX (idx_v_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-updated');
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_t_prefix)
+WHERE t = CONCAT(REPEAT('x', 64), 'text-updated');
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_vb_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-updated')
+AND b = CONCAT(REPEAT(0x41, 16), 0x39);
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_v_prefix)
+WHERE v = CONCAT(REPEAT(@mb_new, 16), 'prefix-updated');
+id
+3
+SELECT id FROM t1 FORCE INDEX (idx_t_prefix)
+WHERE t = CONCAT(REPEAT('y', 64), 'text-prefix-updated');
+id
+3
+SELECT id FROM t1 FORCE INDEX (idx_vb_prefix)
+WHERE v = CONCAT(REPEAT(@mb_new, 16), 'prefix-updated')
+AND b = CONCAT(REPEAT(0x42, 16), 0x39);
+id
+3
+# restart
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_v_prefix should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_t_prefix should match IS_SPC=1 (got SPC_PAGE)]
+include/assert.inc [INDEX_PAGE_TYPE for test.t1.idx_vb_prefix should match IS_SPC=1 (got SPC_PAGE)]
+SET @mb = CONVERT(0xF09F9880 USING utf8mb4);
+SET @mb_new = CONVERT(0xF09F9A80 USING utf8mb4);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT id FROM t1 FORCE INDEX (idx_v_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-updated');
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_t_prefix)
+WHERE t = CONCAT(REPEAT('x', 64), 'text-updated');
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_vb_prefix)
+WHERE v = CONCAT(REPEAT(@mb, 16), 'suffix-updated')
+AND b = CONCAT(REPEAT(0x41, 16), 0x39);
+id
+2
+SELECT id FROM t1 FORCE INDEX (idx_v_prefix)
+WHERE v = CONCAT(REPEAT(@mb_new, 16), 'prefix-updated');
+id
+3
+SELECT id FROM t1 FORCE INDEX (idx_t_prefix)
+WHERE t = CONCAT(REPEAT('y', 64), 'text-prefix-updated');
+id
+3
+SELECT id FROM t1 FORCE INDEX (idx_vb_prefix)
+WHERE v = CONCAT(REPEAT(@mb_new, 16), 'prefix-updated')
+AND b = CONCAT(REPEAT(0x42, 16), 0x39);
+id
+3
+DROP TABLE t1;

@@ -1,0 +1,200 @@
+INSTALL COMPONENT "file://component_mysqlbackup";
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+show global status like '%page_track%';
+Variable_name	Value
+Innodb_page_track_total_page_ids	#
+Innodb_page_track_block_flush_count	#
+Innodb_page_track_buffer_full_wait_flushes	#
+Innodb_page_track_wait_flush_succ_count	#
+Innodb_page_track_wait_flush_timeout_count	#
+Innodb_page_track_wait_flush_failed_count	#
+Innodb_page_track_backup_count	#
+Innodb_page_track_purge_count	#
+Innodb_page_track_is_active	#
+Innodb_page_track_flush_last_time	#
+Innodb_page_track_last_write_space	#
+Innodb_page_track_last_write_page	#
+Innodb_page_track_last_write_block	#
+Innodb_page_track_last_flush_block	#
+Innodb_page_track_backup_last_time	#
+Innodb_page_track_backup_last_pages	#
+Innodb_page_track_purge_last_lsn	#
+Innodb_page_track_current_start_lsn	#
+Innodb_page_track_memory_usage_pct	#
+Innodb_page_track_buffer_available_blocks	#
+Innodb_page_track_flush_lag_seconds	#
+Innodb_page_track_pending_flush_blocks	#
+Innodb_page_track_pending_flush_bytes	#
+Innodb_page_track_checksum_errors	#
+Innodb_page_track_io_errors	#
+show global status like '%page_track_backup_last_pages%';
+Variable_name	Value
+Innodb_page_track_backup_last_pages	0
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	0
+SET GLOBAL mysqlbackup.backupid = '101753283420356608';
+show global status like '%page_track_backup_last_pages%';
+Variable_name	Value
+Innodb_page_track_backup_last_pages	0
+SET GLOBAL mysqlbackup.backupid = default;
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	1
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	1
+show global status like '%page_track%';
+Variable_name	Value
+Innodb_page_track_total_page_ids	#
+Innodb_page_track_block_flush_count	#
+Innodb_page_track_buffer_full_wait_flushes	#
+Innodb_page_track_wait_flush_succ_count	#
+Innodb_page_track_wait_flush_timeout_count	#
+Innodb_page_track_wait_flush_failed_count	#
+Innodb_page_track_backup_count	#
+Innodb_page_track_purge_count	#
+Innodb_page_track_is_active	#
+Innodb_page_track_flush_last_time	#
+Innodb_page_track_last_write_space	#
+Innodb_page_track_last_write_page	#
+Innodb_page_track_last_write_block	#
+Innodb_page_track_last_flush_block	#
+Innodb_page_track_backup_last_time	#
+Innodb_page_track_backup_last_pages	#
+Innodb_page_track_purge_last_lsn	#
+Innodb_page_track_current_start_lsn	#
+Innodb_page_track_memory_usage_pct	#
+Innodb_page_track_buffer_available_blocks	#
+Innodb_page_track_flush_lag_seconds	#
+Innodb_page_track_pending_flush_blocks	#
+Innodb_page_track_pending_flush_bytes	#
+Innodb_page_track_checksum_errors	#
+Innodb_page_track_io_errors	#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+UNINSTALL COMPONENT "file://component_mysqlbackup";
+INSTALL COMPONENT "file://component_mysqlbackup";
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+SELECT mysqlbackup_page_track_set(1);
+mysqlbackup_page_track_set(1)
+#
+SELECT mysqlbackup_page_track_get_start_lsn();
+mysqlbackup_page_track_get_start_lsn()
+#
+show global status like '%page_track%';
+Variable_name	Value
+Innodb_page_track_total_page_ids	#
+Innodb_page_track_block_flush_count	#
+Innodb_page_track_buffer_full_wait_flushes	#
+Innodb_page_track_wait_flush_succ_count	#
+Innodb_page_track_wait_flush_timeout_count	#
+Innodb_page_track_wait_flush_failed_count	#
+Innodb_page_track_backup_count	#
+Innodb_page_track_purge_count	#
+Innodb_page_track_is_active	#
+Innodb_page_track_flush_last_time	#
+Innodb_page_track_last_write_space	#
+Innodb_page_track_last_write_page	#
+Innodb_page_track_last_write_block	#
+Innodb_page_track_last_flush_block	#
+Innodb_page_track_backup_last_time	#
+Innodb_page_track_backup_last_pages	#
+Innodb_page_track_purge_last_lsn	#
+Innodb_page_track_current_start_lsn	#
+Innodb_page_track_memory_usage_pct	#
+Innodb_page_track_buffer_available_blocks	#
+Innodb_page_track_flush_lag_seconds	#
+Innodb_page_track_pending_flush_blocks	#
+Innodb_page_track_pending_flush_bytes	#
+Innodb_page_track_checksum_errors	#
+Innodb_page_track_io_errors	#
+show global status like '%page_track_backup_last_pages%';
+Variable_name	Value
+Innodb_page_track_backup_last_pages	0
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	0
+SET GLOBAL mysqlbackup.backupid = '101753283420356608';
+show global status like '%page_track_backup_last_pages%';
+Variable_name	Value
+Innodb_page_track_backup_last_pages	0
+SET GLOBAL mysqlbackup.backupid = default;
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	1
+show global status like '%page_track_purge_count%';
+Variable_name	Value
+Innodb_page_track_purge_count	1
+show global status like '%page_track%';
+Variable_name	Value
+Innodb_page_track_total_page_ids	#
+Innodb_page_track_block_flush_count	#
+Innodb_page_track_buffer_full_wait_flushes	#
+Innodb_page_track_wait_flush_succ_count	#
+Innodb_page_track_wait_flush_timeout_count	#
+Innodb_page_track_wait_flush_failed_count	#
+Innodb_page_track_backup_count	#
+Innodb_page_track_purge_count	#
+Innodb_page_track_is_active	#
+Innodb_page_track_flush_last_time	#
+Innodb_page_track_last_write_space	#
+Innodb_page_track_last_write_page	#
+Innodb_page_track_last_write_block	#
+Innodb_page_track_last_flush_block	#
+Innodb_page_track_backup_last_time	#
+Innodb_page_track_backup_last_pages	#
+Innodb_page_track_purge_last_lsn	#
+Innodb_page_track_current_start_lsn	#
+Innodb_page_track_memory_usage_pct	#
+Innodb_page_track_buffer_available_blocks	#
+Innodb_page_track_flush_lag_seconds	#
+Innodb_page_track_pending_flush_blocks	#
+Innodb_page_track_pending_flush_bytes	#
+Innodb_page_track_checksum_errors	#
+Innodb_page_track_io_errors	#
+SELECT mysqlbackup_page_track_set(0);
+mysqlbackup_page_track_set(0)
+#
+UNINSTALL COMPONENT "file://component_mysqlbackup";

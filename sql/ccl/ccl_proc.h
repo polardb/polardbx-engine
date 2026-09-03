@@ -316,6 +316,8 @@ class Ccl_proc_show : public Ccl_proc_base {
     COLUMN_MATCHED,
     COLUMN_RUNNING,
     COLUMN_WAITTING,
+    COLUMN_CPEEK,
+    COLUMN_KILLED,
     COLUMN_KEYWORDS,
     COLUMN_LAST
   };
@@ -336,6 +338,8 @@ class Ccl_proc_show : public Ccl_proc_base {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MATCHED"), 0},
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("RUNNING"), 0},
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("WAITTING"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("CONCURRENCY_PEEK"), 0},
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("KILLED_NUM"), 0},
         {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("KEYWORDS"), 256},
     };
 
@@ -480,6 +484,213 @@ class Ccl_proc_show_queue : public Ccl_proc_base {
     return std::string("show_ccl_queue");
   }
 };
+
+/**
+  7) dbms_ccl.del_all_ccl_rule();
+
+  It will delete all rules from mysql.concurrency_table and cache.
+*/
+class Sql_cmd_ccl_proc_del_all : public Sql_cmd_ccl_proc_base {
+ public:
+  explicit Sql_cmd_ccl_proc_del_all(THD *thd, mem_root_deque<Item *> *list,
+                                    const Proc *proc)
+      : Sql_cmd_ccl_proc_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  /* Inherit the default send_result */
+};
+class Ccl_proc_del_all : public Ccl_proc_base {
+  using Sql_cmd_type = Sql_cmd_ccl_proc_del_all;
+
+ public:
+  explicit Ccl_proc_del_all(PSI_memory_key key) : Ccl_proc_base(key) {
+    /* Only OK or ERROR protocol packet */
+    m_result_type = Result_type::RESULT_OK;
+  }
+  /* Singleton instance for del_ccl_rule */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for del_ccl_rule() proc.
+  */
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  ~Ccl_proc_del_all() override {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("del_all_ccl_rule");
+  }
+};
+
+/**
+  8) dbms_ccl.add_ccl_rule_returning();
+
+  It will add new rule and return the rule id.
+*/
+
+class Sql_cmd_ccl_proc_add_returning : public Sql_cmd_ccl_proc_base {
+ public:
+  explicit Sql_cmd_ccl_proc_add_returning(THD *thd,
+                                          mem_root_deque<Item *> *list,
+                                          const Proc *proc)
+      : Sql_cmd_ccl_proc_base(thd, list, proc) {}
+
+  /**
+    Implementation of Proc execution body.
+
+    @param[in]    THD           Thread context
+
+    @retval       true          Failure
+    @retval       false         Success
+  */
+  virtual bool pc_execute(THD *thd) override;
+
+  virtual void send_result(THD *thd, bool error) override;
+
+ private:
+  ulonglong m_rule_id;
+};
+class Ccl_proc_add_returning : public Ccl_proc_base {
+  using Sql_cmd_type = Sql_cmd_ccl_proc_add_returning;
+
+  /* All the parameters */
+  enum enum_parameter {
+    CCL_PARAM_TYPE = 0,
+    CCL_PARAM_SCHEMA,
+    CCL_PARAM_TABLE,
+    CCL_PARAM_CCC,
+    CCL_PARAM_KEYWORDS,
+    CCL_PARAM_LAST
+  };
+
+  /* Corresponding field type */
+  enum_field_types get_field_type(enum_parameter param) {
+    switch (param) {
+      case CCL_PARAM_TYPE:
+      case CCL_PARAM_SCHEMA:
+      case CCL_PARAM_TABLE:
+      case CCL_PARAM_KEYWORDS:
+        return MYSQL_TYPE_VARCHAR;
+      case CCL_PARAM_CCC:
+        return MYSQL_TYPE_LONGLONG;
+      case CCL_PARAM_LAST:
+        assert(0);
+    }
+    return MYSQL_TYPE_LONGLONG;
+  }
+
+ public:
+  explicit Ccl_proc_add_returning(PSI_memory_key key) : Ccl_proc_base(key) {
+    /* Result set protocol packet */
+    m_result_type = Result_type::RESULT_SET;
+
+    Column_element elements = {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("RULE_ID"), 0};
+    m_columns.assign_at(0, elements);
+
+    /* Init parameters */
+    for (size_t i = CCL_PARAM_TYPE; i < CCL_PARAM_LAST; i++) {
+      m_parameters.assign_at(
+          i, get_field_type(static_cast<enum enum_parameter>(i)));
+    }
+  }
+
+  /* Singleton instance for add_ccl_rule */
+  static Proc *instance();
+
+  /**
+    Evoke the sql_cmd object for add_ccl_rule() proc.
+  */
+  virtual Sql_cmd *invoke_cmd(THD *thd,
+                             mem_root_deque<Item *> *list) const override;
+
+  ~Ccl_proc_add_returning() override {}
+
+  /* Proc name */
+  virtual const std::string str() const override {
+    return std::string("add_ccl_rule_returning");
+  }
+};
+
+
+/**
+  3) dbms_ccl.del_ccl_rule_batch();
+
+  It will delete rule from mysql.concurrency_table and cache.
+*/
+class Sql_cmd_ccl_proc_del_batch : public Sql_cmd_ccl_proc_base {
+  public:
+   explicit Sql_cmd_ccl_proc_del_batch(THD *thd, mem_root_deque<Item *> *list,
+                                 const Proc *proc)
+       : Sql_cmd_ccl_proc_base(thd, list, proc) {}
+ 
+   /**
+     Implementation of Proc execution body.
+ 
+     @param[in]    THD           Thread context
+ 
+     @retval       true          Failure
+     @retval       false         Success
+   */
+   virtual bool pc_execute(THD *thd) override;
+ 
+   /* Inherit the default send_result */
+ };
+ 
+ class Ccl_proc_del_batch : public Ccl_proc_base {
+   using Sql_cmd_type = Sql_cmd_ccl_proc_del_batch;
+ 
+   /* All the parameters */
+   enum enum_parameter { CCL_PARAM_ID = 0, CCL_PARAM_LAST };
+ 
+   /* Corresponding field type */
+   enum_field_types get_field_type(enum_parameter param) {
+     switch (param) {
+       case CCL_PARAM_ID:
+         return MYSQL_TYPE_VARCHAR;
+       case CCL_PARAM_LAST:
+         assert(0);
+     }
+     return MYSQL_TYPE_VARCHAR;
+   }
+ 
+  public:
+   explicit Ccl_proc_del_batch(PSI_memory_key key) : Ccl_proc_base(key) {
+     /* Only OK or ERROR protocol packet */
+     m_result_type = Result_type::RESULT_OK;
+ 
+     /* Init parameters */
+     for (size_t i = CCL_PARAM_ID; i < CCL_PARAM_LAST; i++) {
+       m_parameters.assign_at(
+           i, get_field_type(static_cast<enum enum_parameter>(i)));
+     }
+   }
+   /* Singleton instance for del_ccl_rule_batch */
+   static Proc *instance();
+ 
+   /**
+     Invoke the sql_cmd object for del_ccl_rule_batch() proc.
+   */
+   virtual Sql_cmd *invoke_cmd(THD *thd,
+                               mem_root_deque<Item *> *list) const override;
+ 
+   ~Ccl_proc_del_batch() override {}
+ 
+   /* Proc name */
+   virtual const std::string str() const override {
+     return std::string("del_ccl_rule_batch");
+   }
+ };
 
 } /* namespace im */
 

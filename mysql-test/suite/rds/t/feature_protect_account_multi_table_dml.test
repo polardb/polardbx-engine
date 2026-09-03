@@ -1,0 +1,277 @@
+################################################################################
+# SQL Guard: protect system privilege tables from multi-table DML and
+# INSERT ... ON DUPLICATE KEY UPDATE / REPLACE privilege escalation bypass.
+#
+# Issue: #82965037 (#82575878)
+#
+# Background:
+#   im::guard_record() intercepts DML on mysql.user/global_grants/role_edges
+#   before the row is written to the storage engine. Before this fix the guard
+#   only covered single-table INSERT/UPDATE/DELETE; the multi-table DML paths
+#   and the conflict-handling branches in write_record() (ON DUPLICATE KEY
+#   UPDATE / REPLACE) were not covered, allowing a normal user to escalate
+#   privileges or tamper with reserved accounts.
+#
+# Coverage:
+#   - mysql.user / mysql.global_grants / mysql.role_edges (all three guards)
+#   - multi-table UPDATE immediate path and delayed (buffered) path
+#   - multi-table DELETE, INSERT ... SELECT
+#   - INSERT ... ON DUPLICATE KEY UPDATE / REPLACE conflict branches
+#   - LOAD DATA ... REPLACE on guarded tables
+#   - regression: ordinary (unguarded) tables must NOT be affected
+#   - boundary: SUPER user and non-reserved targets are allowed
+#
+# Note: the role_edges guard keys on FROM_USER for insert/delete (guard_update
+#       checks from_user OR to_user), so the role cases below all target a
+#       reserved FROM_USER ('u0').
+################################################################################
+
+connect (con_root, localhost, root,,,$MASTER_MYPORT);
+connection con_root;
+
+set global opt_enable_rds_priv_strategy=on;
+
+create database my_db;
+create table my_db.priv_src (id int primary key);
+insert into my_db.priv_src values (1);
+
+--echo # 'xx' and 'u0' are reserved (maintain) accounts, protected by the guard.
+create user 'xx'@'%';
+create user 'u0'@'%';
+--echo # give u0 a protected dynamic privilege (lands in mysql.global_grants)
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%';
+--echo # ordinary non-reserved accounts (pp: role peer, qq: boundary delete)
+create user 'pp'@'%';
+create user 'qq'@'%';
+--echo # build a role edge whose FROM_USER is the reserved account u0
+grant 'u0'@'%' to 'pp'@'%';
+
+--echo # 'u1' is a normal user holding every privilege except SUPER.
+create user 'u1'@'%';
+grant all privileges on *.* to 'u1'@'%' with grant option;
+revoke super on *.* from 'u1'@'%';
+grant all privileges on my_db.* to 'u1'@'%';
+
+connect (con_u1, localhost, u1,,,$MASTER_MYPORT);
+connection con_u1;
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+
+--echo #
+--echo # Part 1: mysql.user - multi-table DML must not bypass the guard
+--echo #
+
+--echo # 1.1 multi-table UPDATE (immediate path) cannot escalate privilege
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user u, my_db.priv_src b
+  set u.super_priv='Y'
+  where u.user='u1' and b.id=1;
+
+--echo # 1.2 multi-table UPDATE cannot rename a row into a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user u, my_db.priv_src b
+  set u.user='xx'
+  where u.user='u1' and b.id=1;
+
+--echo # 1.3 multi-table UPDATE (delayed/buffered path via self-join) is guarded too
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.user a, mysql.user b
+  set a.super_priv='Y'
+  where a.user='u1' and b.user='u1';
+
+--echo # 1.4 INSERT ... SELECT cannot insert a reserved privilege
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user, super_priv)
+  select '%','zz','Y' from my_db.priv_src where id=1;
+
+--echo # 1.5 INSERT ... SELECT cannot insert a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user)
+  select '%','xx' from my_db.priv_src where id=1;
+
+--echo # 1.6 multi-table DELETE cannot delete a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+delete u from mysql.user u, my_db.priv_src b
+  where u.user='xx' and b.id=1;
+
+--echo #
+--echo # Part 2: mysql.user - INSERT ... ON DUPLICATE KEY UPDATE / REPLACE
+--echo #
+
+--echo # 2.1 a "safe" INSERT value cannot be used to escalate via ON DUPLICATE KEY UPDATE
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user, super_priv) values ('%','u1','N')
+  on duplicate key update super_priv='Y';
+
+--echo # 2.2 INSERT ... SELECT ... ON DUPLICATE KEY UPDATE cannot escalate
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user, super_priv)
+  select '%','u1','N' from my_db.priv_src where id=1
+  on duplicate key update super_priv='Y';
+
+--echo # 2.3 other reserved privileges are protected on ON DUPLICATE KEY UPDATE too
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user, file_priv) values ('%','u1','N')
+  on duplicate key update file_priv='Y';
+
+--echo # 2.4 ON DUPLICATE KEY UPDATE cannot rename a row into a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.user (host, user) values ('%','u1')
+  on duplicate key update user='xx';
+
+--echo # 2.5 REPLACE cannot escalate privilege
+--error ER_RESERVED_USER_OR_PRIVS
+replace into mysql.user (host, user, super_priv) values ('%','u1','Y');
+
+--echo # 2.6 REPLACE cannot overwrite / recreate a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+replace into mysql.user (host, user) values ('%','xx');
+
+--echo #
+--echo # Part 3: mysql.global_grants - multi-table DML must not bypass the guard
+--echo #
+
+--echo # 3.1 INSERT ... SELECT cannot grant a protected dynamic privilege
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+  select 'u1','%','SYSTEM_VARIABLES_ADMIN','Y' from my_db.priv_src where id=1;
+
+--echo # 3.2 multi-table UPDATE cannot tamper with a reserved account's dynamic privilege
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.global_grants g, my_db.priv_src b
+  set g.user='u1'
+  where g.user='u0' and b.id=1;
+
+--echo # 3.3 multi-table DELETE cannot remove a reserved account's dynamic privilege
+--error ER_RESERVED_USER_OR_PRIVS
+delete g from mysql.global_grants g, my_db.priv_src b
+  where g.user='u0' and b.id=1;
+
+--echo #
+--echo # Part 4: mysql.role_edges - multi-table DML must not bypass the guard
+--echo #         (guard keys on FROM_USER, so all cases target from_user='u0')
+--echo #
+
+--echo # 4.1 INSERT ... SELECT cannot create a role edge from a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.role_edges (from_host, from_user, to_host, to_user, with_admin_option)
+  select '%','u0','%','u1','N' from my_db.priv_src where id=1;
+
+--echo # 4.2 multi-table UPDATE cannot tamper with a reserved role edge
+--error ER_RESERVED_USER_OR_PRIVS
+update mysql.role_edges r, my_db.priv_src b
+  set r.with_admin_option='Y'
+  where r.from_user='u0' and b.id=1;
+
+--echo # 4.3 multi-table DELETE cannot remove a reserved role edge
+--error ER_RESERVED_USER_OR_PRIVS
+delete r from mysql.role_edges r, my_db.priv_src b
+  where r.from_user='u0' and b.id=1;
+
+--echo # 4.4 REPLACE cannot create a role edge from a reserved account
+--error ER_RESERVED_USER_OR_PRIVS
+replace into mysql.role_edges (from_host, from_user, to_host, to_user, with_admin_option)
+  values ('%','u0','%','u1','Y');
+
+--echo #
+--echo # Part 5: mysql.global_grants - REPLACE / ON DUPLICATE KEY UPDATE
+--echo #
+
+--echo # 5.1 REPLACE cannot grant a dynamic privilege (guard blocks all non-SUPER INSERT)
+--error ER_RESERVED_USER_OR_PRIVS
+replace into mysql.global_grants (user, host, priv, with_grant_option)
+  values ('u1','%','SYSTEM_VARIABLES_ADMIN','Y');
+
+--echo # 5.2 INSERT ... ON DUPLICATE KEY UPDATE on global_grants is blocked at INSERT
+--error ER_RESERVED_USER_OR_PRIVS
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+  values ('u0','%','SYSTEM_VARIABLES_ADMIN','Y')
+  on duplicate key update with_grant_option='Y';
+
+--echo #
+--echo # Part 6: LOAD DATA ... REPLACE on mysql.user
+--echo #
+
+--echo # 6.1 prepare csv file via root connection
+connection con_root;
+--let $datafile= $MYSQLTEST_VARDIR/tmp/guard_load_test.csv
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval select '%','u1','Y' into outfile '$datafile'
+connection con_u1;
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+
+--echo # 6.2 LOAD DATA REPLACE cannot escalate privilege on a guarded table
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_RESERVED_USER_OR_PRIVS
+--eval load data infile '$datafile' replace into table mysql.user fields terminated by '\t' (host, user, super_priv)
+
+--echo # 6.3 LOAD DATA (plain INSERT path) cannot insert a reserved account
+connection con_root;
+--let $datafile2= $MYSQLTEST_VARDIR/tmp/guard_load_test2.csv
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval select '%','xx' into outfile '$datafile2'
+connection con_u1;
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_RESERVED_USER_OR_PRIVS
+--eval load data infile '$datafile2' into table mysql.user fields terminated by '\t' (host, user)
+
+--echo #
+--echo # Part 7: regression - ordinary (unguarded) tables must NOT be affected
+--echo #         (write_record now calls guard_record for every INSERT, so make
+--echo #          sure a normal business table still works through every path)
+--echo #
+create table my_db.biz (id int primary key, v int);
+insert into my_db.biz values (1,10),(2,20);
+--echo # INSERT ... SELECT into an ordinary table
+insert into my_db.biz select id+100, id*10 from my_db.priv_src;
+--echo # INSERT ... ON DUPLICATE KEY UPDATE on an ordinary table
+insert into my_db.biz values (1,10) on duplicate key update v=v+5;
+--echo # REPLACE on an ordinary table
+replace into my_db.biz values (2,99);
+--echo # multi-table UPDATE on an ordinary table
+update my_db.biz a, my_db.priv_src b set a.v=a.v+1 where a.id=b.id;
+--echo # multi-table DELETE on an ordinary table
+delete a from my_db.biz a, my_db.priv_src b where a.id=b.id;
+--sorted_result
+select * from my_db.biz;
+
+--echo #
+--echo # Part 8: boundary - non-reserved targets and non-protected fields are allowed
+--echo #
+
+--echo # 8.1 multi-table DELETE of a non-reserved account is allowed
+delete u from mysql.user u, my_db.priv_src b
+  where u.user='qq' and b.id=1;
+
+--echo # 8.2 multi-table UPDATE of a non-protected column on a non-reserved
+--echo #     account that holds no reserved privilege is allowed
+update mysql.user u, my_db.priv_src b
+  set u.max_questions=10
+  where u.user='pp' and b.id=1;
+
+--echo #
+--echo # Part 9: a SUPER user (root) is not affected by the guard.
+--echo #
+connection con_root;
+set sql_mode=NO_ENGINE_SUBSTITUTION;
+update mysql.user u, my_db.priv_src b
+  set u.super_priv='N'
+  where u.user='u1' and b.id=1;
+
+--echo #
+--echo # cleanup
+--echo #
+connection con_root;
+--remove_file $MYSQLTEST_VARDIR/tmp/guard_load_test.csv
+--remove_file $MYSQLTEST_VARDIR/tmp/guard_load_test2.csv
+disconnect con_u1;
+drop user 'u1'@'%';
+drop user 'u0'@'%';
+drop user 'xx'@'%';
+drop user 'pp'@'%';
+--echo # qq's mysql.user row was already removed by the boundary DELETE (8.1)
+drop database my_db;
+flush privileges;
+set global opt_enable_rds_priv_strategy=off;
+disconnect con_root;
+connection default;

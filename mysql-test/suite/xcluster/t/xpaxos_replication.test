@@ -4,8 +4,17 @@
 --connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
 
 --connection conn1
+show slave status;
 stop slave;
 CHANGE REPLICATION SOURCE to source_host = '127.0.0.1', source_port = 7806, source_user = 'repl', source_password = '123456' for channel 'aaa';
+
+--let $channel_1= query_get_value("show slave status", Channel_Name, 1)
+--let $channel_2= query_get_value("show slave status", Channel_Name, 2)
+--echo "channel_1:" $channel_1
+--echo "channel_2:" $channel_2
+--let $channel_3= query_get_value("show slave status for channel ''", Channel_Name, 1)
+--echo "channel_3:" $channel_3
+
 STOP REPLICA for channel 'aaa';
 stop slave;
 STOP REPLICA;
@@ -85,3 +94,7 @@ set global relay_log_info_repository='table';
 start xpaxos_replication;
 --enable_warnings
 select count(1) from mysql.slave_relay_log_info where number_of_workers = (select count(1) from mysql.slave_worker_info);
+
+--sleep 2
+--connection conn1
+--source include/wait_follower_catchup.inc

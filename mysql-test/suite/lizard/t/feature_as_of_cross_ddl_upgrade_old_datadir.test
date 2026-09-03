@@ -1,0 +1,158 @@
+# ================================================================
+# Test: AS OF cross-DDL -- upgrade from old datadir without
+#        creator_* DD keys
+#
+# Purpose:
+#   Prove that a datadir written by an older PolarDB-X binary (one
+#   that predates the creator_{trx_id,uba,scn,gcn} DD keys)
+#   can be opened by the current binary with AS OF cross-DDL enabled
+#   and still honor every behavioural rule from the user guide.
+#
+# Fixture:
+#   std_data/upgrade/data_asof_cross_ddl_old_dd.zip is a real datadir
+#   produced by an old mysqld. Its mysql.indexes.se_private_data has
+#   zero creator_* entries -- verified at fixture creation
+#   time. This is intentionally NOT a debug-hook simulation so the
+#   coverage holds on release binaries.
+#
+# Retention:
+#   Old undo/txn records are only usable if they have not been purged.
+#   Both innodb_undo_retention and innodb_txn_retention are pinned to
+#   the maximum value (UINT32_MAX, ~136 years) at BOTH fixture
+#   generation and upgrade startup, so the fixture stays valid
+#   independent of wall-clock time since it was packaged.
+#
+# Scenarios exercised after upgrade:
+#   C1 (no-rebuild):   u_c1_add_col, u_c1_drop_idx must traverse the
+#                      pre-DDL snapshot. Validates fallback to runtime
+#                      index metadata when the new DD keys are absent.
+#   ADD INDEX:         u_add_idx. PK path succeeds; FORCE INDEX on the
+#                      newly added secondary is rejected because the
+#                      snapshot predates the index.
+#   C2 (INPLACE):      u_rebuild_sec. Rebuild-created secondary must be
+#                      rejected with the unified ER_AS_OF_TABLE_DEF_CHANGED
+#                      error -- the equal-trx shortcut has been removed
+#                      so rebuilt secondaries no longer slip through to
+#                      the row/undo table_id check.
+#   C3 (COPY):         u_c3_copy returns empty history.
+#   Bad case:          u_bad_rebuild_overwrite exposes the metadata-loss
+#                      boundary. After old-version ADD INDEX + UPDATE +
+#                      ALTER FORCE, the original ADD INDEX lineage is
+#                      lost; without the unified rejection of secondary
+#                      paths, FORCE INDEX(idx_name) WHERE name='Alice'
+#                      would silently return an empty set (data miss).
+#                      Expected behavior is a hard error.
+#   Post-upgrade bad:  u_add_idx keeps useful old runtime metadata at upgrade
+#                      time. Current-version INSTANT DDL must materialize that
+#                      runtime tuple into creator_* before overwriting runtime;
+#                      a later dd_write_index() must not persist the wrong
+#                      INSTANT creator for the old secondary index.
+#
+# Why this replaces feature_as_of_cross_ddl_upgrade_old_dd.test:
+#   The earlier debug-hook variant modified mysql.indexes directly and
+#   was skipped on release binaries (have_debug). A real old-datadir
+#   zip is the idiomatic upgrade proof in this repository (compare
+#   feature_flashback_area_upgrade / gpp_upgrade) and the only form
+#   that covers both release and debug.
+# ================================================================
+
+--echo # Verify AS OF cross-DDL after upgrading old datadir without visible-from DD keys.
+
+--echo # Stop the default MTR server.
+--source include/shutdown_mysqld.inc
+
+--echo # Copy and unzip the old-version datadir fixture.
+--let $ZIP_FILE= $MYSQLTEST_VARDIR/std_data/upgrade/data_asof_cross_ddl_old_dd.zip
+--copy_file $ZIP_FILE $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd.zip
+--file_exists $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd.zip
+--exec unzip -qo $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd.zip -d $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd
+
+--echo # Restart the current server against the old datadir.
+--let $DATADIR = $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd
+--replace_result $DATADIR DATADIR
+--let $restart_parameters = restart: --datadir=$DATADIR --innodb_undo_retention=4294967295 --innodb_txn_retention=4294967295 --innodb_scn_history_interval=1
+--let $wait_counter=3000
+--source include/start_mysqld.inc
+
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+SELECT scn INTO @scn_before_ddl
+FROM asof_upgrade_snapshots WHERE name = 'before_ddl';
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+
+--echo # Category 1: no-rebuild DDL traverses after loading old DD metadata.
+SELECT * FROM u_c1_add_col AS OF SCN @scn_before_ddl ORDER BY id;
+SELECT * FROM u_c1_drop_idx AS OF SCN @scn_before_ddl ORDER BY id;
+
+--echo # ADD INDEX: primary path works, new index path is rejected.
+SELECT * FROM u_add_idx AS OF SCN @scn_before_ddl
+FORCE INDEX(PRIMARY) ORDER BY id;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM u_add_idx AS OF SCN @scn_before_ddl
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+--echo # Category 2: rebuild-created secondary is rejected with unified DDL-change error.
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM u_rebuild_sec AS OF SCN @scn_before_ddl
+FORCE INDEX(idx_name) WHERE id = 2;
+
+--echo # Category 3: COPY rebuild returns empty history.
+SELECT * FROM u_c3_copy AS OF SCN @scn_before_ddl ORDER BY id;
+
+--echo # Bad case: old DD metadata lost rebuild lineage and must not return empty success.
+--echo # The target snapshot is after ADD INDEX, but before UPDATE + rebuild.
+SELECT * FROM u_bad_rebuild_overwrite ORDER BY id;
+--error ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM u_bad_rebuild_overwrite AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+--echo # Post-upgrade bad case 1: current INSTANT must not lose old-DD fallback creator.
+--echo # Sanity: idx_name is visible for this snapshot before the current-version INSTANT.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+ALTER TABLE u_add_idx ADD COLUMN post_upgrade_marker INT DEFAULT 7,
+ALGORITHM=INSTANT;
+
+--echo # INSTANT discards dict cache; the next open must still use the old creator.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+--echo # Restart only verifies the materialized creator is durable.
+--let $do_not_echo_parameters=1
+--source include/restart_mysqld.inc
+
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+
+--echo # The old secondary must remain visible after restart as a durability check.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+--echo # Post-upgrade bad case 2: later dd_write_index() must not persist wrong creator.
+ALTER TABLE u_add_idx ADD INDEX idx_post_upgrade_marker(post_upgrade_marker);
+
+--echo # Restart again to verify the dd_write_index() write-back is durable and correct.
+--let $do_not_echo_parameters=1
+--source include/restart_mysqld.inc
+
+USE test;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_bad_after_add_idx
+FROM asof_upgrade_snapshots WHERE name = 'bad_after_add_idx';
+
+--echo # The old secondary must remain visible after dd_write_index() write-back + reload.
+SELECT id, name FROM u_add_idx AS OF SCN @scn_bad_after_add_idx
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+
+--echo # Cleanup upgraded datadir server and restart the default MTR server.
+--source include/shutdown_mysqld.inc
+--let $restart_parameters=
+--source include/start_mysqld.inc
+
+--remove_file $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd.zip
+--force-rmdir $MYSQL_TMP_DIR/data_asof_cross_ddl_old_dd

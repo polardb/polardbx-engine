@@ -1,0 +1,359 @@
+
+# ========== Setup ==========
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val VARCHAR(20));
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e');
+CREATE TABLE t2 (id INT PRIMARY KEY, val VARCHAR(20));
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+CREATE USER 'maintain_user'@'localhost';
+GRANT ALL ON *.* TO 'maintain_user'@'localhost';
+CREATE USER 'normal_user'@'localhost';
+GRANT ALL ON *.* TO 'normal_user'@'localhost';
+CREATE USER 'dml_allow_user'@'localhost';
+GRANT ALL ON *.* TO 'dml_allow_user'@'localhost';
+
+# ========== 1. Default value check ==========
+
+SELECT @@GLOBAL.forbid_execute_dml_all;
+@@GLOBAL.forbid_execute_dml_all
+0
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+0
+SELECT @@GLOBAL.polarx_specific_user_list;
+@@GLOBAL.polarx_specific_user_list
+dml_allow_user
+
+# ========== 2. Enable and test blocking ==========
+
+SET SESSION forbid_execute_dml_all = TRUE;
+
+# --- 2.1 DELETE without WHERE: should be blocked ---
+DELETE FROM t1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+
+# --- 2.2 UPDATE without WHERE: should be blocked ---
+UPDATE t1 SET val = 'blocked';
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	a
+
+# --- 2.3 DELETE WHERE 1=1: should be blocked ---
+DELETE FROM t1 WHERE 1=1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+
+# --- 2.4 UPDATE WHERE 1=1: should be blocked ---
+UPDATE t1 SET val = 'blocked' WHERE 1=1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 2.5 DELETE WHERE TRUE: should be blocked ---
+DELETE FROM t1 WHERE TRUE;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 2.6 UPDATE WHERE TRUE: should be blocked ---
+UPDATE t1 SET val = 'blocked' WHERE TRUE;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 2.7 DELETE WHERE 1: should be blocked ---
+DELETE FROM t1 WHERE 1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 2.8 DELETE WHERE 'a'='a': should be blocked ---
+DELETE FROM t1 WHERE 'a'='a';
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# ========== 3. Statements that should NOT be blocked ==========
+
+
+# --- 3.1 DELETE with column condition: should pass ---
+DELETE FROM t1 WHERE id = 5;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+
+# --- 3.2 UPDATE with column condition: should pass ---
+UPDATE t1 SET val = 'updated' WHERE id = 1;
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	updated
+
+# --- 3.3 DELETE with non-indexed column condition: should pass ---
+DELETE FROM t1 WHERE val = 'b';
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+
+# --- 3.4 DELETE WHERE 1=2 (always false): should pass ---
+DELETE FROM t1 WHERE 1=2;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+
+# --- 3.5 DELETE WHERE FALSE: should pass ---
+DELETE FROM t1 WHERE FALSE;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+
+# --- 3.6 UPDATE with combined condition (1=1 AND col): should pass ---
+UPDATE t1 SET val = 'combined' WHERE 1=1 AND id = 3;
+SELECT * FROM t1 WHERE id = 3;
+id	val
+3	combined
+
+# --- 3.7 SELECT without WHERE: should pass (not UPDATE/DELETE) ---
+SELECT * FROM t1;
+id	val
+1	updated
+3	combined
+4	d
+
+# --- 3.8 INSERT: should pass ---
+INSERT INTO t1 VALUES (6, 'new');
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+
+# --- 3.9 EXPLAIN DELETE without WHERE: should pass ---
+EXPLAIN DELETE FROM t1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	DELETE	t1	#	ALL	NULL	#	#	#	#	#	NULL
+Warnings:
+Note	1003	delete from `test`.`t1`
+
+# ========== 4. Multi-table DML ==========
+
+
+# --- 4.1 Multi-table DELETE with JOIN ON: should pass ---
+# INNER JOIN ON condition is merged into where_cond by optimizer,
+# so where_cond is not NULL and not tautological.
+DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id;
+
+# Re-insert deleted rows for further tests
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+# --- 4.2 Multi-table UPDATE with JOIN ON: should pass ---
+UPDATE t1 JOIN t2 ON t1.id = t2.id SET t1.val = t2.val;
+
+# --- 4.3 Multi-table DELETE with real WHERE: should pass ---
+DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id WHERE t1.id = 1;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+
+# --- 4.4 Multi-table DELETE with CROSS JOIN, no WHERE: should be blocked ---
+DELETE t1 FROM t1, t2;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 4.5 Multi-table UPDATE with CROSS JOIN, no WHERE: should be blocked ---
+UPDATE t1, t2 SET t1.val = 'cross';
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 4.6 Multi-table DELETE with CROSS JOIN WHERE 1=1: should be blocked ---
+DELETE t1 FROM t1, t2 WHERE 1=1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# ========== 5. Prepared statements ==========
+
+
+# Ensure data exists for prepared statement tests
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+4
+
+# --- 5.1 Prepared DELETE without WHERE: should be blocked ---
+PREPARE stmt FROM 'DELETE FROM t1';
+EXECUTE stmt;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+DEALLOCATE PREPARE stmt;
+
+# --- 5.2 Prepared DELETE WHERE 1=1: should be blocked ---
+PREPARE stmt FROM 'DELETE FROM t1 WHERE 1=1';
+EXECUTE stmt;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+DEALLOCATE PREPARE stmt;
+
+# --- 5.3 Prepared DELETE with real WHERE: should pass ---
+PREPARE stmt FROM 'DELETE FROM t1 WHERE id = ?';
+SET @id_val = 6;
+EXECUTE stmt USING @id_val;
+DEALLOCATE PREPARE stmt;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+3
+
+# ========== 6. SET_VAR hint bypass ==========
+
+
+# --- 6.1 Hint bypass for DELETE without WHERE ---
+# Should pass with SET_VAR hint
+SELECT /*+ SET_VAR(forbid_execute_dml_all=OFF) */ 1;
+1
+1
+DELETE /*+ SET_VAR(forbid_execute_dml_all=OFF) */ FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+
+# Re-insert data for further tests
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+
+# --- 6.2 Hint bypass for UPDATE without WHERE ---
+UPDATE /*+ SET_VAR(forbid_execute_dml_all=OFF) */ t2 SET val = 'hint';
+SELECT * FROM t2;
+id	val
+1	hint
+2	hint
+3	hint
+
+# ========== 7. Session isolation ==========
+
+# Connection default has forbid_execute_dml_all = TRUE
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+1
+# --- 7.1 New connection should inherit global default (FALSE) ---
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+0
+# DELETE without WHERE should work on con1
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# Re-insert data
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y');
+
+# ========== 8. GLOBAL scope ==========
+
+SET GLOBAL forbid_execute_dml_all = TRUE;
+# --- 8.1 New connection should inherit GLOBAL = TRUE ---
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+1
+DELETE FROM t2;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+# --- 8.2 Session override should work ---
+SET SESSION forbid_execute_dml_all = FALSE;
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+
+# ========== 9. Whitelist (maintain_user_list) bypass ==========
+
+SET GLOBAL forbid_execute_dml_all = TRUE;
+# Re-insert data for whitelist tests
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+
+# --- 9.1 Normal user should be blocked ---
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+1
+DELETE FROM t2;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+UPDATE t2 SET val = 'blocked';
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+DELETE FROM t2 WHERE 1=1;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+UPDATE t2 SET val = 'blocked' WHERE TRUE;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+3
+
+# --- 9.2 Startup user-list match should set session guard OFF ---
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+0
+# DELETE without WHERE: startup user-list user should pass
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# Session override should still work after startup default override
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+SET SESSION forbid_execute_dml_all = TRUE;
+DELETE FROM t2;
+ERROR HY000: High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override.
+
+# --- 9.3 Startup user-list option should be read only ---
+SET GLOBAL polarx_specific_user_list = 'normal_user';
+ERROR HY000: Variable 'polarx_specific_user_list' is a read only variable
+
+# --- 9.4 Maintain user (whitelist) should NOT be blocked ---
+SELECT @@SESSION.forbid_execute_dml_all;
+@@SESSION.forbid_execute_dml_all
+1
+# DELETE without WHERE: maintain user should pass
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# Re-insert data
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+# UPDATE without WHERE: maintain user should pass
+UPDATE t2 SET val = 'maintain_updated';
+SELECT * FROM t2;
+id	val
+1	maintain_updated
+2	maintain_updated
+3	maintain_updated
+# DELETE WHERE 1=1: maintain user should pass
+DELETE FROM t2 WHERE 1=1;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# Re-insert data
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y');
+# UPDATE WHERE TRUE: maintain user should pass
+UPDATE t2 SET val = 'maintain_true' WHERE TRUE;
+SELECT * FROM t2;
+id	val
+1	maintain_true
+2	maintain_true
+
+# --- 9.5 Dynamically add user to whitelist ---
+SET GLOBAL maintain_user_list = 'maintain_user,normal_user';
+# normal_user is now in whitelist, should NOT be blocked
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# Restore maintain_user_list
+SET GLOBAL maintain_user_list = 'maintain_user';
+SET GLOBAL forbid_execute_dml_all = FALSE;
+
+# ========== 10. Disable and verify no blocking ==========
+
+SET SESSION forbid_execute_dml_all = FALSE;
+INSERT INTO t2 VALUES (1, 'x'), (2, 'y'), (3, 'z');
+# --- 10.1 DELETE without WHERE should work now ---
+DELETE FROM t2;
+SELECT COUNT(*) FROM t2;
+COUNT(*)
+0
+# --- 10.2 UPDATE without WHERE should work now ---
+INSERT INTO t1 VALUES (10, 'test');
+UPDATE t1 SET val = 'all_updated';
+SELECT DISTINCT val FROM t1;
+val
+all_updated
+
+# ========== Cleanup ==========
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP USER 'maintain_user'@'localhost';
+DROP USER 'normal_user'@'localhost';
+DROP USER 'dml_allow_user'@'localhost';
+SET GLOBAL maintain_user_list = 'maintain_user';
+SET GLOBAL forbid_execute_dml_all = FALSE;
+SET SESSION forbid_execute_dml_all = FALSE;

@@ -1,0 +1,11 @@
+#
+# Crash recovery of GCS/Lizard clustered-index cleanout redo on
+# ROW_FORMAT=COMPRESSED tables, across representative KEY_BLOCK_SIZE values.
+#
+--source include/have_innodb_16k.inc
+
+--let $kbs = 4
+--source suite/lizard/include/compressed_scn_cleanout_redo.inc
+
+--let $kbs = 8
+--source suite/lizard/include/compressed_scn_cleanout_redo.inc

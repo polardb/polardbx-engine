@@ -24,10 +24,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "sys_vars_consensus.h"
+#include <bits/stdc++.h>
 #include <malloc.h>
-#include "bl_consensus_log.h"          // ConsensusLogManager and alisql::Paxos
-#include "sql/appliedindex_checker.h"  // AppliedIndexChecker
+#include "komodo0consensus0xlog.h"
+#include "komodo0xlog0engine.h"
 #include "sql/events.h"
 #include "sql/log.h"
 #include "sql/sys_vars.h"
@@ -37,15 +37,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_jemalloc.h"
 #endif
 
+#include "sql/komodo0xlog.h"
 #include "sql/replica_read_manager.h"
 
-bool opt_old_show_timestamp = 0;
-bool opt_enable_consensus_leader = 0;
-ulonglong opt_truncate_consensus_log = 0;
-bool opt_append_consensus_log = 0;
-ulonglong opt_read_consensus_log = 0;
 bool opt_reset_consensus_prefetch_cache = 0;
-bool opt_consensus_checksum = 0;
 bool opt_consensus_disable_election = 0;
 bool opt_consensus_dynamic_easyindex = 1;
 bool opt_consensus_easy_pool_size = 0;
@@ -53,15 +48,12 @@ ulonglong opt_cluster_id;
 bool opt_cluster_learner_node;
 bool opt_cluster_log_type_instance;
 char *opt_cluster_info;
-char *opt_cluster_purged_gtid;
 ulonglong opt_cluster_current_term;
 ulonglong opt_cluster_force_recover_index;
 ulonglong opt_cluster_follower_force_recover_index;
 ulonglong opt_consensus_mts_force_apply_index;
 bool opt_cluster_force_change_meta;
-bool opt_cluster_dump_meta;
 ulonglong opt_consensus_log_cache_size;
-bool opt_consensus_disable_fifo_cache;
 bool opt_consensus_prefetch_fast_fetch;
 ulonglong opt_consensus_prefetch_cache_size;
 ulonglong opt_consensus_prefetch_window_size;
@@ -70,10 +62,6 @@ ulonglong opt_consensus_max_log_size;
 ulonglong opt_consensus_large_trx_split_size;
 ulonglong opt_consensus_new_follower_threshold;
 ulonglong opt_consensus_new_leader_max_apply_delay_seconds;
-bool opt_consensus_large_trx;
-bool opt_consensus_check_large_event;
-ulonglong opt_consensus_large_event_size_limit;
-ulonglong opt_consensus_large_event_count_limit;
 ulonglong opt_consensus_large_event_split_size;
 uint opt_consensus_send_timeout;
 uint opt_consensus_connect_timeout;
@@ -92,6 +80,7 @@ ulong opt_consensus_large_batch_ratio = 50;
 ulonglong opt_consensus_max_delay_index;
 ulonglong opt_consensus_min_delay_index;
 bool opt_consensus_optimistic_heartbeat;
+bool opt_consensus_disable_sync_for_large_trx;
 ulong opt_consensus_sync_follower_meta_interval = 1;
 ulong opt_consensus_log_level;
 uint64 opt_consensus_start_index;
@@ -105,7 +94,6 @@ bool opt_consensus_leader_stop_apply;
 ulong opt_consensus_leader_stop_apply_time;
 ulonglong opt_consensus_stop_apply_index;
 ulonglong opt_consensus_force_sync_epoch_diff = 0;
-bool opt_consensus_force_recovery;
 bool opt_enable_appliedindex_checker;
 ulonglong opt_appliedindex_force_delay;
 char *opt_consensus_flow_control = NULL;
@@ -129,35 +117,19 @@ ulonglong opt_consensus_wait_unfinished_bgc_timeout;
 bool opt_consensus_disable_commit_before_change_leader;
 bool opt_consensus_disable_empty_xa;
 bool opt_enable_consensus = true;
+bool opt_consensus_enable_reset_master;
+bool opt_consensus_hide_leader_xpaxos_channel;
+bool opt_consensus_repl_skip_polarx_event;
 bool opt_consensuslog_revise;
-bool opt_recover_snapshot = false;
 ulong thread_stack_warning = 65536;
 ulong opt_configured_event_scheduler = Events::EVENTS_OFF;
 bool opt_consensus_reset_mts_info = false;
 long opt_consensus_weak_read_refresh_timeout = 100;
-
-std::atomic<int64> xa_finishing_count = (0);
-
-static bool fix_consensus_checksum(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setChecksumMode(opt_consensus_checksum);
-  return false;
-}
-
-static Sys_var_bool Sys_consensus_checksum(
-    "consensus_checksum",
-    "Checksum when consensus receive log. Disabled by default.",
-    GLOBAL_VAR(opt_consensus_checksum), CMD_LINE(OPT_ARG), DEFAULT(false),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-    ON_UPDATE(fix_consensus_checksum));
+ulonglong opt_consensus_max_pipeline_entry_size = ULLONG_MAX;
 
 static bool fix_consensus_disable_election(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr) {
-    if (!consensus_ptr->getConsensusAsync() && opt_consensus_disable_election)
-      xp::warn(ER_XP_0) << "Disable election while cluster is not in weak mode.";
-    consensus_ptr->debugDisableElection = opt_consensus_disable_election;
-    consensus_ptr->debugDisableStepDown = opt_consensus_disable_election;
-  }
+
+  komodo::xlog_engine_call_function(&komodo::XLog_engine::set_consensus_disable_election);
   return false;
 }
 
@@ -169,8 +141,8 @@ static Sys_var_bool Sys_consensus_disable_election(
     ON_UPDATE(fix_consensus_disable_election));
 
 static bool fix_consensus_dynamic_easyindex(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
+  komodo::xlog_engine_get_protocol()
+      ->setEnableDynamicEasyIndex(opt_consensus_dynamic_easyindex);
   return false;
 }
 
@@ -182,10 +154,7 @@ static Sys_var_bool Sys_consensus_dynamic_easyindex(
     ON_UPDATE(fix_consensus_dynamic_easyindex));
 
 static bool handle_weak_consensus_mode(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr) {
-    replica_exec_mode_options = opt_weak_consensus_mode ? 2 : 0;
-    consensus_ptr->setConsensusAsync(opt_weak_consensus_mode);
-  }
+  komodo::xlog_engine_call_function(&komodo::XLog_engine::set_consensus_async);
   return false;
 }
 
@@ -197,9 +166,8 @@ static Sys_var_bool Sys_weak_consensus_mode(
 
 static bool handle_consensus_replicate_with_cache_log(sys_var *, THD *,
                                                       enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setReplicateWithCacheLog(
-      opt_consensus_replicate_with_cache_log);
+  komodo::xlog_engine_get_protocol()
+      ->setReplicateWithCacheLog(opt_consensus_replicate_with_cache_log);
   return false;
 }
 
@@ -211,8 +179,8 @@ static Sys_var_bool Sys_consensus_replicate_with_cache_log(
     ON_UPDATE(handle_consensus_replicate_with_cache_log));
 
 static bool handle_consensus_old_compact_mode(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setCompactOldMode(opt_consensus_old_compact_mode);
+  komodo::xlog_engine_get_protocol()->setCompactOldMode(
+      opt_consensus_old_compact_mode);
   return false;
 }
 
@@ -243,8 +211,8 @@ static Sys_var_ulonglong Sys_consensus_stop_apply_index(
 
 static bool fix_consensus_force_sync_epoch_diff(sys_var *, THD *,
                                                 enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setForceSyncEpochDiff(opt_consensus_force_sync_epoch_diff);
+  komodo::xlog_engine_get_protocol()->setForceSyncEpochDiff(
+      opt_consensus_force_sync_epoch_diff);
   return false;
 }
 
@@ -254,10 +222,6 @@ static Sys_var_ulonglong Sys_consensus_force_sync_epoch_diff(
     VALID_RANGE(0, 10000000), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_force_sync_epoch_diff));
 
-static Sys_var_bool Sys_consensus_force_recovery(
-    "consensus_force_recovery", "for innodb_force_recovery",
-    READ_ONLY GLOBAL_VAR(opt_consensus_force_recovery), CMD_LINE(OPT_ARG),
-    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 static Sys_var_bool Sys_force_revise("force_revise", "force revise or not",
                                      SESSION_VAR(opt_force_revise),
                                      CMD_LINE(OPT_ARG), DEFAULT(false),
@@ -270,9 +234,8 @@ static Sys_var_ulonglong Sys_cluster_id("cluster_id", "cluster id",
                                         BLOCK_SIZE(1));
 
 static bool fix_consensus_log_cache_size(sys_var *, THD *, enum_var_type) {
-  if (consensus_log_manager.get_fifo_cache_manager())
-    consensus_log_manager.get_fifo_cache_manager()->set_max_log_cache_size(
-        opt_consensus_log_cache_size);
+  auto fifo_cache = komodo::xlog_engine_get_cache_manager();
+  if (fifo_cache) fifo_cache->resize(opt_consensus_log_cache_size);
   return false;
 }
 
@@ -282,12 +245,6 @@ static Sys_var_ulonglong Sys_consensus_log_cache_size(
     VALID_RANGE(1, ULLONG_MAX), DEFAULT(64 * 1024 * 1024), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_log_cache_size));
-
-static Sys_var_bool Sys_consensus_disable_fifo_cache(
-    "consensus_disable_fifo_cache",
-    "disable consensus fifo cache (run with weak consensus mode)",
-    READ_ONLY GLOBAL_VAR(opt_consensus_disable_fifo_cache), CMD_LINE(OPT_ARG),
-    DEFAULT(false));
 
 static Sys_var_bool Sys_consensuslog_revise(
     "consensuslog_revise", "revise consensuslog end_pos before flush to disk",
@@ -299,8 +256,9 @@ static Sys_var_bool Sys_consensus_prefetch_fast_fetch(
     DEFAULT(false));
 
 static bool fix_consensus_prefetch_cache_size(sys_var *, THD *, enum_var_type) {
-  if (consensus_log_manager.get_prefetch_manager())
-    consensus_log_manager.get_prefetch_manager()->set_max_prefetch_cache_size(
+  komodo::Consensus_prefetch_manager *prefetch_mgr = komodo::xlog_engine_get_prefetch_manager();
+  if (prefetch_mgr)
+    prefetch_mgr->set_max_prefetch_cache_size(
       opt_consensus_prefetch_cache_size);
   return false;
 }
@@ -330,8 +288,9 @@ static Sys_var_ulonglong Sys_consensus_prefetch_cache_size(
 
 static bool fix_consensus_prefetch_window_size(sys_var *, THD *,
                                                enum_var_type) {
-  if (consensus_log_manager.get_prefetch_manager())
-    consensus_log_manager.get_prefetch_manager()->set_prefetch_window_size(
+  komodo::Consensus_prefetch_manager *prefetch_mgr = komodo::xlog_engine_get_prefetch_manager();
+  if (prefetch_mgr)
+    prefetch_mgr->set_prefetch_window_size(
       opt_consensus_prefetch_window_size);
   return false;
 }
@@ -344,8 +303,9 @@ static Sys_var_ulonglong Sys_consensus_prefetch_window_size(
 
 static bool fix_consensus_prefetch_wakeup_ratio(sys_var *, THD *,
                                                 enum_var_type) {
-  if (consensus_log_manager.get_prefetch_manager())
-    consensus_log_manager.get_prefetch_manager()->set_prefetch_wakeup_ratio(
+  komodo::Consensus_prefetch_manager *prefetch_mgr = komodo::xlog_engine_get_prefetch_manager();
+  if (prefetch_mgr)
+    prefetch_mgr->set_prefetch_wakeup_ratio(
       opt_consensus_prefetch_wakeup_ratio);
   return false;
 }
@@ -385,7 +345,7 @@ static bool check_consensus_max_log_size(sys_var *, THD *, set_var *var) {
 static Sys_var_ulonglong Sys_consensus_max_log_size(
     "consensus_max_log_size", "Max one log size. (default: 20M)",
     GLOBAL_VAR(opt_consensus_max_log_size), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1, 1024 * 1024 * 1024), DEFAULT(20 * 1024 * 1024),
+    VALID_RANGE(128, 1024 * 1024 * 1024), DEFAULT(20 * 1024 * 1024),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_consensus_max_log_size), ON_UPDATE(NULL));
 
@@ -404,15 +364,14 @@ static Sys_var_ulonglong Sys_consensus_large_trx_split_size(
     "consensus_large_trx_split_size",
     "Max size to split large trx into multi consensus logs. (default 2M)",
     GLOBAL_VAR(opt_consensus_large_trx_split_size), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1, 62 * 1024 * 1024), DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1),
+    VALID_RANGE(128, 62 * 1024 * 1024), DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_consensus_large_trx_split_size), ON_UPDATE(NULL));
 
 static bool fix_consensus_new_follower_threshold(sys_var *, THD *,
                                                  enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setMaxDelayIndex4NewMember(
-      opt_consensus_new_follower_threshold);
+  komodo::xlog_engine_get_protocol()
+      ->setMaxDelayIndex4NewMember(opt_consensus_new_follower_threshold);
   return false;
 }
 
@@ -425,10 +384,10 @@ static Sys_var_ulonglong Sys_consensus_new_follower_threshold(
     ON_UPDATE(fix_consensus_new_follower_threshold));
 
 static bool fix_consensus_new_leader_max_apply_delay_seconds(sys_var *, THD *,
-                                                 enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setMaxDelaySeconds4NewLeader(
-        opt_consensus_new_leader_max_apply_delay_seconds);
+                                                             enum_var_type) {
+  komodo::xlog_engine_get_protocol()
+      ->setMaxDelaySeconds4NewLeader(
+          opt_consensus_new_leader_max_apply_delay_seconds);
   return false;
 }
 
@@ -439,32 +398,6 @@ static Sys_var_ulonglong Sys_consensus_new_leader_max_apply_delay_seconds(
     VALID_RANGE(0, ULLONG_MAX), DEFAULT(30), BLOCK_SIZE(1), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_new_leader_max_apply_delay_seconds));
-
-static Sys_var_bool Sys_consensus_large_trx(
-    "consensus_large_trx", "support consensus large trx or not",
-    GLOBAL_VAR(opt_consensus_large_trx), CMD_LINE(OPT_ARG), DEFAULT(true),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG);
-
-static Sys_var_bool Sys_consensus_check_large_event(
-    "consensus_check_large_event", "check consensus large event or not",
-    GLOBAL_VAR(opt_consensus_check_large_event), CMD_LINE(OPT_ARG),
-    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
-
-static Sys_var_ulonglong Sys_consensus_large_event_size_limit(
-    "consensus_large_event_size_limit", "Consensus large event size limit",
-    GLOBAL_VAR(opt_consensus_large_event_size_limit), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1 * 1024 * 1024, ULLONG_MAX), DEFAULT(1024 * 1024 * 1024),
-    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG);
-
-static Sys_var_ulonglong Sys_consensus_large_event_count_limit(
-    "consensus_large_event_count_limit",
-    "Consensus large event count limit in one trx",
-    READ_ONLY GLOBAL_VAR(opt_consensus_large_event_count_limit),
-    CMD_LINE(OPT_ARG), VALID_RANGE(1, ULLONG_MAX), DEFAULT(2), BLOCK_SIZE(1),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG);
-
-static Sys_var_deprecated_alias Sys_consensus_large_event_limit(
-    "consensus_large_event_limit", Sys_consensus_large_event_size_limit);
 
 static bool check_consensus_large_event_split_size(sys_var *, THD *,
                                                    set_var *var) {
@@ -482,13 +415,15 @@ static Sys_var_ulonglong Sys_consensus_large_event_split_size(
     "consensus_large_event_split_size",
     "split size for large event, dangerous to change this variable",
     READ_ONLY GLOBAL_VAR(opt_consensus_large_event_split_size),
-    CMD_LINE(OPT_ARG), VALID_RANGE(1, 20 * 1024 * 1024),
+    CMD_LINE(OPT_ARG), VALID_RANGE(128, 20 * 1024 * 1024),
     DEFAULT(2 * 1024 * 1024), BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_consensus_large_event_split_size), ON_UPDATE(NULL));
 
 static bool fix_consensus_send_timeout(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setSendTimeout(opt_consensus_send_timeout);
+  uint64_t val = opt_consensus_send_timeout;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  komodo::xlog_engine_get_protocol()->applySendTimeout(val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
   return false;
 }
 
@@ -500,8 +435,10 @@ static Sys_var_uint Sys_consensus_send_timeout(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_send_timeout));
 
 static bool fix_consensus_connect_timeout(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setConnectTimeout(opt_consensus_connect_timeout);
+  uint64_t val = opt_consensus_connect_timeout;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  komodo::xlog_engine_get_protocol()->applyConnectTimeout(val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
   return false;
 }
 
@@ -516,8 +453,8 @@ static Sys_var_deprecated_alias Sys_consensus_learner_timeout("consensus_learner
                                                       Sys_consensus_connect_timeout);
 
 static bool fix_consensus_learner_pipelining(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
+  komodo::xlog_engine_get_protocol()
+      ->setEnableLearnerPipelining(opt_consensus_learner_pipelining);
   return false;
 }
 
@@ -529,9 +466,8 @@ static Sys_var_bool Sys_consensus_learner_pipelining(
 
 static bool fix_consensus_configure_change_timeout(sys_var *, THD *,
                                                    enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setConfigureChangeTimeout(
-      opt_consensus_configure_change_timeout);
+  komodo::xlog_engine_get_protocol()
+      ->setConfigureChangeTimeout(opt_consensus_configure_change_timeout);
   return false;
 }
 
@@ -543,37 +479,43 @@ static Sys_var_uint Sys_consensus_configure_change_timeout(
     NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_configure_change_timeout));
 
+static bool fix_consensus_election_timeout(sys_var *, THD *, enum_var_type) {
+  uint64_t val = opt_consensus_election_timeout;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  komodo::xlog_engine_get_protocol()->applyElectionTimeout(val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
+  return false;
+}
+
 static Sys_var_uint Sys_consensus_election_timeout(
-    "consensus_election_timeout", "Consensus election timeout",
-    READ_ONLY GLOBAL_VAR(opt_consensus_election_timeout),
+    "consensus_election_timeout", "Consensus election timeout in milliseconds.",
+    GLOBAL_VAR(opt_consensus_election_timeout),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(2000, 200000), DEFAULT(5000),
-    BLOCK_SIZE(1));
+    BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_election_timeout));
 
 static bool fix_consensus_vote_backoff_timeout(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setVoteBackoffTimeout(opt_consensus_vote_backoff_timeout);
+  uint64_t val = opt_consensus_vote_backoff_timeout;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  komodo::xlog_engine_get_protocol()->applyVoteBackoffTimeout(val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
   return false;
 }
 
 static Sys_var_uint Sys_consensus_vote_backoff_timeout(
     "consensus_vote_backoff_timeout",
-    "consensus vote backoff timeout(milliseconds) for election timer",
+    "consensus vote backoff timeout(milliseconds) for election timer, "
+    "zero means use @@consensus_election_timeout",
     GLOBAL_VAR(opt_consensus_vote_backoff_timeout),
-    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 1000000), DEFAULT(1000),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 1000000), DEFAULT(0),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_vote_backoff_timeout));
 
-static bool fix_consensus_heartbeat_interval(sys_var *, THD *,
-                                                   enum_var_type) {
-  if (consensus_ptr) {
-    consensus_ptr->setHeartbeatInterval(opt_consensus_heartbeat_interval);
-
-    if (opt_consensus_connect_timeout == 0)
-      consensus_ptr->setConnectTimeout(opt_consensus_connect_timeout);
-    if (opt_consensus_send_timeout == 0)
-      consensus_ptr->setSendTimeout(opt_consensus_send_timeout);
-  }
-
+static bool fix_consensus_heartbeat_interval(sys_var *, THD *, enum_var_type) {
+  uint64_t val = opt_consensus_heartbeat_interval;
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+  komodo::xlog_engine_get_protocol()->applyHeartbeatInterval(val);
+  mysql_mutex_lock(&LOCK_global_system_variables);
   return false;
 }
 
@@ -586,8 +528,8 @@ static Sys_var_uint Sys_consensus_heartbeat_interval(
     ON_UPDATE(fix_consensus_heartbeat_interval));
 
 static bool fix_consensus_weak_read_refresh_timeout(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setWeakReadRefreshTimeout(opt_consensus_weak_read_refresh_timeout);
+  komodo::xlog_engine_get_protocol()
+      ->setWeakReadRefreshTimeout(opt_consensus_weak_read_refresh_timeout);
   return false;
 }
 
@@ -602,7 +544,7 @@ static Sys_var_long Sys_consensus_weak_read_refresh_timeout(
 
 
 static ulonglong read_consensus_last_apply_index(THD *) {
-  return consensus_ptr ? consensus_ptr->getAppliedIndex() : 0;
+  return komodo::xlog_engine_get_protocol()->getAppliedIndex();
 }
 
 static Sys_var_session_special Sys_consensus_last_apply_index(
@@ -628,8 +570,8 @@ static Sys_var_uint Sys_consensus_heartbeat_thread_count(
     VALID_RANGE(0, 2), DEFAULT(0), BLOCK_SIZE(1));
 
 static bool fix_consensus_max_packet_size(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setMaxPacketSize(opt_consensus_max_packet_size);
+  komodo::xlog_engine_get_protocol()->setMaxPacketSize(
+      opt_consensus_max_packet_size);
   return false;
 }
 
@@ -642,42 +584,7 @@ static Sys_var_ulong Sys_consensus_max_packet_size(
     ON_UPDATE(fix_consensus_max_packet_size));
 
 static bool fix_consensus_msg_compress_option(sys_var *, THD *, enum_var_type) {
-  if (NULL == opt_consensus_msg_compress_option) return false;
-  if (!consensus_ptr)  return false;
-  // format: ip1:port1 type threshold checksum; ip2:port2 type threshold
-  // checksum...
-  std::size_t current, previous = 0;
-  std::string fcstr(opt_consensus_msg_compress_option);
-  std::vector<std::string> splits;
-  current = fcstr.find(';');
-  while (current != std::string::npos) {
-    splits.push_back(fcstr.substr(previous, current - previous));
-    previous = current + 1;
-    current = fcstr.find(';', previous);
-  }
-  splits.push_back(fcstr.substr(previous, current - previous));
-  consensus_ptr->resetMsgCompressOption();
-  for (auto &kv : splits) {
-    if (kv.empty()) continue;
-    char addr[256];
-    uint32 type, threshold, checksum;
-    if (std::sscanf(kv.c_str(), "%s %u %u %u", addr, &type, &threshold,
-                    &checksum) == 4) {
-      std::string address(addr);
-      if (address == "*:*") address = "";
-      if (consensus_ptr->setMsgCompressOption(type, threshold, (bool)checksum,
-                                              address) == 0)
-        xp::warn(ER_XP_0) << "Set consensus server "
-                          << (address == "" ? "all" : address.c_str())
-                          << " msg compress option succeed: type(" << type
-                          << "), threshold(" << threshold << "), checksum("
-                          << checksum << ")";
-      else
-        xp::warn(ER_XP_0) << "Set consensus server "
-                          << (address == "" ? "all" : address.c_str())
-                          << "msg compress option failed, wrong address!";
-    }
-  }
+  komodo::xlog_engine_call_function(&komodo::XLog_engine::set_consensus_msg_compress_option);
   return false;
 }
 
@@ -721,8 +628,8 @@ static Sys_var_charptr Sys_consensus_msg_compress_option(
     ON_UPDATE(fix_consensus_msg_compress_option));
 
 static bool fix_consensus_pipelining_timeout(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setPipeliningTimeout(opt_consensus_pipelining_timeout);
+  komodo::xlog_engine_get_protocol()->setPipeliningTimeout(
+      opt_consensus_pipelining_timeout);
   return false;
 }
 
@@ -735,8 +642,8 @@ static Sys_var_ulong Sys_consensus_pipelining_timeout(
     ON_UPDATE(fix_consensus_pipelining_timeout));
 
 static bool fix_consensus_large_batch_ratio(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setLargeBatchRatio(opt_consensus_large_batch_ratio);
+  komodo::xlog_engine_get_protocol()->setLargeBatchRatio(
+      opt_consensus_large_batch_ratio);
   return false;
 }
 
@@ -748,8 +655,8 @@ static Sys_var_ulong Sys_consensus_large_batch_ratio(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_large_batch_ratio));
 
 static bool fix_consensus_max_delay_index(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setMaxDelayIndex(opt_consensus_max_delay_index);
+  komodo::xlog_engine_get_protocol()->setMaxDelayIndex(
+      opt_consensus_max_delay_index);
   return false;
 }
 
@@ -760,8 +667,8 @@ static Sys_var_ulonglong Sys_consensus_max_delay_index(
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_consensus_max_delay_index));
 
 static bool fix_consensus_min_delay_index(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setMinDelayIndex(opt_consensus_min_delay_index);
+  komodo::xlog_engine_get_protocol()->setMinDelayIndex(
+      opt_consensus_min_delay_index);
   return false;
 }
 
@@ -773,8 +680,8 @@ static Sys_var_ulonglong Sys_consensus_min_delay_index(
 
 static bool fix_consensus_optimistic_heartbeat(sys_var *, THD *,
                                                enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setOptimisticHeartbeat(opt_consensus_optimistic_heartbeat);
+  komodo::xlog_engine_get_protocol()
+      ->setOptimisticHeartbeat(opt_consensus_optimistic_heartbeat);
   return false;
 }
 
@@ -785,11 +692,16 @@ static Sys_var_bool Sys_consensus_optimistic_heartbeat(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(fix_consensus_optimistic_heartbeat));
 
+static Sys_var_bool Sys_consensus_disable_sync_for_large_trx(
+    "consensus_disable_sync_for_large_trx",
+    "consensus_disable_sync_for_large_trx",
+    GLOBAL_VAR(opt_consensus_disable_sync_for_large_trx), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(NULL));
+
 static bool fix_consensus_sync_follower_meta_interval(sys_var *, THD *,
                                                       enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setSyncFollowerMetaInterval(
-      opt_consensus_sync_follower_meta_interval);
+  komodo::xlog_engine_get_protocol()
+      ->setSyncFollowerMetaInterval(opt_consensus_sync_follower_meta_interval);
   return false;
 }
 
@@ -802,7 +714,7 @@ static Sys_var_ulong Sys_consensus_sync_follower_meta_interval(
     ON_UPDATE(fix_consensus_sync_follower_meta_interval));
 
 static bool fix_enable_appliedindex_checker(sys_var *, THD *, enum_var_type) {
-  appliedindex_checker.reset();
+  komodo::xlog_engine_call_function(&komodo::XLog_engine::applied_index_checker_reset);
   return false;
 }
 
@@ -821,31 +733,7 @@ static Sys_var_ulonglong Sys_appliedindex_force_delay(
     NOT_IN_BINLOG);
 
 static bool fix_consensus_flow_control(sys_var *, THD *, enum_var_type) {
-  if (NULL == opt_consensus_flow_control) return false;
-  if (!consensus_ptr) return false;
-  // format: ip1:port1 fc1;ip2:port2 fc2...
-  std::size_t current, previous = 0;
-  std::string fcstr(opt_consensus_flow_control);
-  std::vector<std::string> splits;
-  current = fcstr.find(';');
-  while (current != std::string::npos) {
-    splits.push_back(fcstr.substr(previous, current - previous));
-    previous = current + 1;
-    current = fcstr.find(';', previous);
-  }
-  splits.push_back(fcstr.substr(previous, current - previous));
-  if (splits.size() > 0) consensus_ptr->reset_flow_control();
-  for (auto &kv : splits) {
-    char addr[300];
-    uint64 serverid;
-    int64 fc;
-    if (std::sscanf(kv.c_str(), "%s %ld", addr, &fc) == 2) {
-      serverid = consensus_ptr->getServerIdFromAddr(addr);
-      xp::warn(ER_XP_0) << "Add consensus server " << serverid
-                        << " flow control " << fc;
-      consensus_ptr->set_flow_control(serverid, fc);
-    }
-  }
+  komodo::xlog_engine_call_function(&komodo::XLog_engine::set_consensus_flow_control);
   return false;
 }
 
@@ -860,8 +748,7 @@ static Sys_var_charptr Sys_consensus_flow_control(
 
 static bool fix_consensus_log_level(sys_var *, THD *, enum_var_type) {
   // opt_consensus_log_level + 3 equal to easy log level
-  if (consensus_ptr)
-    consensus_ptr->setAlertLogLevel(
+  komodo::xlog_engine_get_protocol()->setAlertLogLevel(
       alisql::Paxos::AlertLogLevel(opt_consensus_log_level + 3));
   return false;
 }
@@ -884,8 +771,9 @@ static Sys_var_ulonglong Sys_consensus_check_commit_index_interval(
 static bool handler_reset_consensus_prefetch_cache(sys_var *, THD *,
                                                    enum_var_type) {
   DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-  if (consensus_log_manager.get_prefetch_manager())
-    consensus_log_manager.get_prefetch_manager()->reset_prefetch_cache();
+  komodo::Consensus_prefetch_manager *prefetch_mgr = komodo::xlog_engine_get_prefetch_manager();
+  if (prefetch_mgr)
+    prefetch_mgr->reset_prefetch_cache();
   opt_reset_consensus_prefetch_cache = 0;
   DBUG_RETURN(false);
 }
@@ -928,8 +816,12 @@ static Sys_var_bool Sys_session_track_index(
     ON_UPDATE(update_session_track_index));
 
 static bool handle_consensus_force_promote(sys_var *, THD *, enum_var_type) {
-  DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-  if (consensus_ptr && opt_consensus_force_promote) consensus_ptr->forcePromote();
+  DBUG_ENTER("handle_consensus_force_promote");
+  if (opt_consensus_force_promote) {
+    mysql_mutex_unlock(&LOCK_global_system_variables);
+    komodo::xlog_engine_get_protocol()->applyForcePromote(true);
+    mysql_mutex_lock(&LOCK_global_system_variables);
+  }
   opt_consensus_force_promote = 0;
   DBUG_RETURN(false);
 }
@@ -942,7 +834,9 @@ static Sys_var_bool Sys_consensus_force_promote(
 
 static bool handle_consensus_force_leader_transfer(sys_var *, THD *, enum_var_type) {
   DBUG_ENTER("handle_reset_consensus_prefetch_cache");
-  if (opt_consensus_force_leader_transfer) consensus_ptr->setForceLeaderTransfer(true);
+  if (opt_consensus_force_leader_transfer)
+    komodo::xlog_engine_get_protocol()
+        ->setForceLeaderTransfer(true);
   opt_consensus_force_leader_transfer = 0;
   DBUG_RETURN(false);
 }
@@ -962,23 +856,20 @@ static bool handle_print_malloc_stats(sys_var *, THD *, enum_var_type) {
     malloc_stats();
 #endif
   }
-
   opt_print_malloc_stats = 0;
   DBUG_RETURN(false);
 }
 
 static Sys_var_bool Sys_print_malloc_stats(
-    "print_malloc_stats", "print sys mem",
+    "print_malloc_stats", "print sys mem stats",
     GLOBAL_VAR(opt_print_malloc_stats), CMD_LINE(OPT_ARG), DEFAULT(false),
-    NO_MUTEX_GUARD, NOT_IN_BINLOG, NULL,
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(handle_print_malloc_stats));
-
 
 static bool fix_consensus_auto_reset_match_index(sys_var *, THD *,
                                                  enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setEnableAutoResetMatchIndex(
-      opt_consensus_auto_reset_match_index);
+  komodo::xlog_engine_get_protocol()
+      ->setEnableAutoResetMatchIndex(opt_consensus_auto_reset_match_index);
   return false;
 }
 
@@ -990,8 +881,8 @@ static Sys_var_bool Sys_consensus_auto_reset_match_index(
     ON_UPDATE(fix_consensus_auto_reset_match_index));
 
 static bool fix_consensus_learner_heartbeat(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
+  komodo::xlog_engine_get_protocol()
+      ->setEnableLearnerHeartbeat(opt_consensus_learner_heartbeat);
   return false;
 }
 
@@ -1003,9 +894,8 @@ static Sys_var_bool Sys_consensus_learner_heartbeat(
 
 static bool fix_consensus_auto_leader_transfer(sys_var *, THD *,
                                                enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setEnableAutoLeaderTransfer(
-      opt_consensus_auto_leader_transfer);
+  komodo::xlog_engine_get_protocol()
+      ->setEnableAutoLeaderTransfer(opt_consensus_auto_leader_transfer);
   return false;
 }
 
@@ -1018,9 +908,9 @@ static Sys_var_bool Sys_consensus_auto_leader_transfer(
 
 static bool fix_consensus_auto_leader_transfer_check_seconds(sys_var *, THD *,
                                                              enum_var_type) {
-  if (consensus_ptr)
-    consensus_ptr->setAutoLeaderTransferCheckSeconds(
-      opt_consensus_auto_leader_transfer_check_seconds);
+  komodo::xlog_engine_get_protocol()
+      ->setAutoLeaderTransferCheckSeconds(
+          opt_consensus_auto_leader_transfer_check_seconds);
   return false;
 }
 
@@ -1038,6 +928,7 @@ static Sys_var_bool Sys_consensus_safe_for_reset_master(
     SESSION_VAR(opt_consensus_safe_for_reset_master), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
+
 static Sys_var_ulonglong Sys_consensus_wait_milliseconds_before_change_leader(
     "consensus_wait_milliseconds_before_change_leader",
     "the waiting time before change leader",
@@ -1051,6 +942,7 @@ static Sys_var_ulonglong Sys_consensus_wait_unfinished_trx_timeout(
     GLOBAL_VAR(opt_consensus_wait_unfinished_trx_timeout),
     CMD_LINE(OPT_ARG), VALID_RANGE(0, 600000), DEFAULT(5000), BLOCK_SIZE(1),
     NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
 
 static Sys_var_ulonglong Sys_consensus_wait_unfinished_xa_timeout(
     "consensus_wait_unfinished_xa_timeout",
@@ -1073,7 +965,6 @@ static Sys_var_bool Sys_consensus_disable_commit_before_change_leader(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 
-
 static Sys_var_bool Sys_consensus_disable_empty_xa(
     "consensus_disable_empty_xa",
     "disable empty xa for debug",
@@ -1083,7 +974,7 @@ static Sys_var_bool Sys_consensus_disable_empty_xa(
 static Sys_var_bool Sys_enable_consensus(
     "enable_consensus",
     "enable consensus for xcluster node",
-    READ_ONLY GLOBAL_VAR(opt_enable_consensus), CMD_LINE(OPT_ARG),
+    READ_ONLY GLOBAL_VAR(opt_enable_consensus), NO_CMD_LINE,
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
 
@@ -1113,6 +1004,8 @@ extern const char *get_ping_mode_name(const uint64_t ping_mode)
 
 extern uint64_t is_ping_not_matched(const uint64_t ping_mode,
   uint64_t *last_cluster_change_version) {
+
+  auto *protocol = komodo::xlog_engine_get_protocol();
   if (ping_mode == 0)
     return 0;
 
@@ -1122,52 +1015,40 @@ extern uint64_t is_ping_not_matched(const uint64_t ping_mode,
   }
 
   if (ping_mode & PING_MODE_IS_LEADER) {
-    if (!(consensus_ptr
-          && consensus_ptr->getState() == alisql::Paxos::StateType::LEADER))
+    if (!komodo::xlog_engine_leader_role())
       return PING_MODE_IS_LEADER;
   }
 
   if (ping_mode & PING_MODE_IS_WRITEABLE) {
-    if (!(!consensus_ptr
-          || (consensus_ptr->getState() == alisql::Paxos::StateType::LEADER
-              && consensus_log_manager.get_status() == BINLOG_WORKING)))
+    if (!komodo::xlog_engine_leader_role()
+        || !komodo::xlog_engine_binlog_working())
       return PING_MODE_IS_WRITEABLE;
   }
 
   if (ping_mode & PING_MODE_NOT_IN_LEADER_TRANSFER) {
-    if (!(consensus_ptr
-          && !consensus_log_manager.is_in_leader_transfer()))
+    if (komodo::xlog_engine_get_switchover_manager()->is_in_switchover())
       return PING_MODE_NOT_IN_LEADER_TRANSFER;
   }
 
   if (ping_mode & PING_MODE_NO_CLUSTER_CHANGED) {
-    if (!(consensus_ptr
-          && last_cluster_change_version
-          && *last_cluster_change_version != 0
-          && *last_cluster_change_version == consensus_ptr->getClusterChangeVersion())) {
-      if (consensus_ptr && last_cluster_change_version) {
-        if (*last_cluster_change_version == 0) {
-          //init check treate as succ
-          *last_cluster_change_version = consensus_ptr->getClusterChangeVersion();
-        } else {
-          *last_cluster_change_version = consensus_ptr->getClusterChangeVersion();
-          return PING_MODE_NO_CLUSTER_CHANGED;
-        }
-      } else {
-        return PING_MODE_NO_CLUSTER_CHANGED;
-      }
+    if (*last_cluster_change_version == 0) {
+        //init check treate as succ
+        *last_cluster_change_version =
+            protocol->getClusterChangeVersion();
+    } else if (*last_cluster_change_version != protocol->getClusterChangeVersion()) {
+      *last_cluster_change_version =
+          protocol->getClusterChangeVersion();
+      return PING_MODE_NO_CLUSTER_CHANGED;
     }
   }
 
   if (ping_mode & PING_MODE_IS_IN_LEADER_TRANSFER) {
-    if (!(consensus_ptr
-          && consensus_log_manager.is_in_leader_transfer()))
+    if (!komodo::xlog_engine_get_switchover_manager()->is_in_switchover())
       return PING_MODE_IS_IN_LEADER_TRANSFER;
   }
 
   if (ping_mode & PING_MODE_IS_PAXOS_APPLING) {
-    if (!(consensus_ptr
-          && consensus_ptr->getApplyThreadRunning()))
+    if (!(protocol->getApplyThreadRunning()))
       return PING_MODE_IS_PAXOS_APPLING;
   }
 
@@ -1175,8 +1056,7 @@ extern uint64_t is_ping_not_matched(const uint64_t ping_mode,
 }
 
 static bool fix_consensus_server_ip(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-      consensus_ptr->setServerIp(opt_consensus_server_ip);
+  komodo::xlog_engine_get_protocol()->setServerIp(opt_consensus_server_ip);
   return false;
 }
 
@@ -1187,8 +1067,7 @@ static Sys_var_charptr Sys_consensus_server_ip(
     ON_UPDATE(fix_consensus_server_ip));
 
 static bool fix_consensus_server_port(sys_var *, THD *, enum_var_type) {
-  if (consensus_ptr)
-      consensus_ptr->setServerPort(opt_consensus_server_port);
+  komodo::xlog_engine_get_protocol()->setServerPort(opt_consensus_server_port);
   return false;
 }
 
@@ -1212,3 +1091,44 @@ static Sys_var_charptr Sys_diagnose_excluded_vars_list(
     GLOBAL_VAR(opt_diagnose_excluded_vars_list), CMD_LINE(OPT_ARG),
     IN_FS_CHARSET, DEFAULT(DEFAULT_DIAGNOSE_EXCLUDED_VARS_LIST),
     &PLock_diagnose_excluded_vars_list, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+/**
+  If the size of the last entry is bigger than
+  consensus_max_pipeline_entry_size, then the log entry message will not be sent
+  in this time. As a result, the sending will stuck a stall and finnally impact
+  the system throughput.
+
+  So the default value will be set as infinity so that prohibit this mechanism.
+*/
+static bool fix_consensus_max_pipeline_entry_size(sys_var *, THD *, enum_var_type) {
+  komodo::xlog_engine_get_protocol()
+      ->setMaxPipelineEntrySize(opt_consensus_max_pipeline_entry_size);
+  return false;
+}
+static Sys_var_ulonglong Sys_consensus_max_pipeline_entry_size(
+    "consensus_max_pipeline_entry_size",
+    "the max pipeline entry size that will not be sent in this time",
+    GLOBAL_VAR(opt_consensus_max_pipeline_entry_size), CMD_LINE(OPT_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(ULLONG_MAX), BLOCK_SIZE(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
+    ON_UPDATE(fix_consensus_max_pipeline_entry_size));
+
+
+static Sys_var_bool Sys_consensus_enable_reset_master(
+    "consensus_enable_reset_master",
+    "enable reset master cmd for test",
+    GLOBAL_VAR(opt_consensus_enable_reset_master), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_bool Sys_consensus_hide_leader_xpaxos_channel(
+    "consensus_hide_leader_xpaxos_channel",
+    "hide leader xpaxos_channel when show slave status",
+    GLOBAL_VAR(opt_consensus_hide_leader_xpaxos_channel), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_bool Sys_consensus_repl_skip_polarx_event(
+    "consensus_repl_skip_polarx_event",
+    "When enabled, skips sending polarx events to MySQL "
+    "slaves for compatibility.",
+    GLOBAL_VAR(opt_consensus_repl_skip_polarx_event), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);

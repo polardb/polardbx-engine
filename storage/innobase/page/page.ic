@@ -37,6 +37,12 @@ external tools. */
 #ifndef page_page_h
 #define page_page_h
 
+#if !defined(page0page_h) && !defined(zip_decompress_h) && \
+    !defined(zip_decompress_ic)
+#define INNODB_PAGE_PAGE_IC_STANDALONE
+#include "page0page.h"
+#undef INNODB_PAGE_PAGE_IC_STANDALONE
+#endif
 #include "mach0data.h"
 
 static inline uint16_t page_header_get_field(const page_t *page, ulint field) {

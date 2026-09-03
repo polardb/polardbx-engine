@@ -39,7 +39,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 
 // Friend declaration
-// class MVCC;
 
 /** Read view lists the trx ids of those transactions for which a consistent
 read should not see the modifications to the database. */
@@ -271,8 +270,6 @@ read should not see the modifications to the database. */
 //     ut_ad(m_creator_trx_id == 0);
 //     m_creator_trx_id = id;
 //   }
-//
-//   friend class MVCC;
 //
 //  private:
 //   // Disable copying

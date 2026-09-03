@@ -74,7 +74,7 @@ while ($iter <= 2)
 	xa recover;
 	--error ER_XAER_RMFAIL
 	xa prepare 'xx';
-
+	xa commit 'xx';
 
 	--echo # 2$iter. xa commit one phase + crash_before_writing_xid
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -118,7 +118,6 @@ while ($iter <= 2)
 	connection default;
 	select * from db_crash_11.t order by id;
 	xa recover;
-	xa commit 'xx';
 
 	--echo # 4$iter. xa rollback + crash_before_writing_xid
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
@@ -141,7 +140,6 @@ while ($iter <= 2)
 	connection default;
 	select * from db_crash_11.t order by id;
 	xa recover;
-	xa rollback 'xx';
 
 
 	delete from db_crash_11.t;

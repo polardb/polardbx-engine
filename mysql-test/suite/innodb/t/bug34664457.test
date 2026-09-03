@@ -1,0 +1,29 @@
+# Bug#34664457: FK cascade update passes a NULL multi-value field to undo log.
+# Community fix: 6939831b533d.
+
+--source include/have_debug.inc
+
+CREATE TABLE t_parent (
+  id INT PRIMARY KEY
+) ENGINE=InnoDB;
+
+CREATE TABLE t_child (
+  id INT PRIMARY KEY,
+  parent_id INT,
+  doc JSON,
+  CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES t_parent(id)
+    ON UPDATE CASCADE,
+  INDEX idx_tags ((CAST(doc->'$[*]' AS UNSIGNED ARRAY)))
+) ENGINE=InnoDB;
+
+INSERT INTO t_parent VALUES (2);
+INSERT INTO t_child VALUES (100, 2, '[1, 2, 3]');
+
+# The cascade update builds old_vrow == NULL. Buggy code passes a NULL vfield
+# to trx_undo_store_multi_value() and aborts in dfield_get_data().
+UPDATE t_parent SET id = 20 WHERE id = 2;
+
+SELECT id, parent_id, doc FROM t_child;
+
+DROP TABLE t_child;
+DROP TABLE t_parent;

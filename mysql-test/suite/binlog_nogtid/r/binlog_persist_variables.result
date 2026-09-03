@@ -27,7 +27,7 @@ VARIABLE_NAME LIKE '%source%') AND
 'print_gtid_info_during_recovery', 'recovery_apply_binlog'))
 ORDER BY VARIABLE_NAME;
 
-include/assert.inc [Expect 119 variables in the table.]
+include/assert.inc [Expect 125 variables in the table.]
 
 # Test SET PERSIST
 SET PERSIST binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -54,12 +54,15 @@ ERROR HY000: Variable 'binlog_row_event_max_size' is a read only variable
 SET PERSIST binlog_row_image = @@GLOBAL.binlog_row_image;
 SET PERSIST binlog_row_metadata = @@GLOBAL.binlog_row_metadata;
 SET PERSIST binlog_row_value_options = @@GLOBAL.binlog_row_value_options;
+SET PERSIST binlog_rows_query_key_content = @@GLOBAL.binlog_rows_query_key_content;
 SET PERSIST binlog_rows_query_log_events = @@GLOBAL.binlog_rows_query_log_events;
 SET PERSIST binlog_stmt_cache_size = @@GLOBAL.binlog_stmt_cache_size;
 SET PERSIST binlog_transaction_compression = @@GLOBAL.binlog_transaction_compression;
 SET PERSIST binlog_transaction_compression_level_zstd = @@GLOBAL.binlog_transaction_compression_level_zstd;
 SET PERSIST binlog_transaction_dependency_history_size = @@GLOBAL.binlog_transaction_dependency_history_size;
 SET PERSIST binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction_dependency_tracking;
+SET PERSIST consensus_enable_reset_master = @@GLOBAL.consensus_enable_reset_master;
+SET PERSIST consensus_flush_delay_after_replicate = @@GLOBAL.consensus_flush_delay_after_replicate;
 SET PERSIST consensus_replicate_with_cache_log = @@GLOBAL.consensus_replicate_with_cache_log;
 SET PERSIST consensus_safe_for_reset_master = @@GLOBAL.consensus_safe_for_reset_master;
 SET PERSIST disable_binlog_savepoint = @@GLOBAL.disable_binlog_savepoint;
@@ -110,6 +113,8 @@ SET PERSIST max_binlog_cache_size = @@GLOBAL.max_binlog_cache_size;
 SET PERSIST max_binlog_size = @@GLOBAL.max_binlog_size;
 SET PERSIST max_binlog_stmt_cache_size = @@GLOBAL.max_binlog_stmt_cache_size;
 SET PERSIST max_relay_log_size = @@GLOBAL.max_relay_log_size;
+SET PERSIST polarx_binlog_bitmap_mode = @@GLOBAL.polarx_binlog_bitmap_mode;
+SET PERSIST polarx_binlog_writeset_mode = @@GLOBAL.polarx_binlog_writeset_mode;
 SET PERSIST relay_log = @@GLOBAL.relay_log;
 ERROR HY000: Variable 'relay_log' is a read only variable
 SET PERSIST relay_log_basename = @@GLOBAL.relay_log_basename;
@@ -235,6 +240,7 @@ Warnings:
 Warning	1287	'@@slave_type_conversions' is deprecated and will be removed in a future release. Please use replica_type_conversions instead.
 Warning	1287	'@@slave_type_conversions' is deprecated and will be removed in a future release. Please use replica_type_conversions instead.
 SET PERSIST source_verify_checksum = @@GLOBAL.source_verify_checksum;
+SET PERSIST sql_log_bin_super_modified = @@GLOBAL.sql_log_bin_super_modified;
 SET PERSIST sql_replica_skip_counter = @@GLOBAL.sql_replica_skip_counter;
 SET PERSIST sql_slave_skip_counter = @@GLOBAL.sql_slave_skip_counter;
 Warnings:
@@ -249,16 +255,16 @@ SET PERSIST sync_relay_log = @@GLOBAL.sync_relay_log;
 SET PERSIST sync_relay_log_info = @@GLOBAL.sync_relay_log_info;
 SET PERSIST sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 95 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 101 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 95 persisted variables in persisted_variables table.']
-include/assert.inc [Expect 95 persisted variables shown as PERSISTED in variables_info table.']
-include/assert.inc [Expect 95 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 101 persisted variables in persisted_variables table.']
+include/assert.inc [Expect 101 persisted variables shown as PERSISTED in variables_info table.']
+include/assert.inc [Expect 101 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST IF EXISTS. Verify persisted variable
@@ -287,12 +293,15 @@ Warning	3615	Variable binlog_row_event_max_size does not exist in persisted conf
 RESET PERSIST IF EXISTS binlog_row_image;
 RESET PERSIST IF EXISTS binlog_row_metadata;
 RESET PERSIST IF EXISTS binlog_row_value_options;
+RESET PERSIST IF EXISTS binlog_rows_query_key_content;
 RESET PERSIST IF EXISTS binlog_rows_query_log_events;
 RESET PERSIST IF EXISTS binlog_stmt_cache_size;
 RESET PERSIST IF EXISTS binlog_transaction_compression;
 RESET PERSIST IF EXISTS binlog_transaction_compression_level_zstd;
 RESET PERSIST IF EXISTS binlog_transaction_dependency_history_size;
 RESET PERSIST IF EXISTS binlog_transaction_dependency_tracking;
+RESET PERSIST IF EXISTS consensus_enable_reset_master;
+RESET PERSIST IF EXISTS consensus_flush_delay_after_replicate;
 RESET PERSIST IF EXISTS consensus_replicate_with_cache_log;
 RESET PERSIST IF EXISTS consensus_safe_for_reset_master;
 RESET PERSIST IF EXISTS disable_binlog_savepoint;
@@ -344,6 +353,8 @@ RESET PERSIST IF EXISTS max_binlog_cache_size;
 RESET PERSIST IF EXISTS max_binlog_size;
 RESET PERSIST IF EXISTS max_binlog_stmt_cache_size;
 RESET PERSIST IF EXISTS max_relay_log_size;
+RESET PERSIST IF EXISTS polarx_binlog_bitmap_mode;
+RESET PERSIST IF EXISTS polarx_binlog_writeset_mode;
 RESET PERSIST IF EXISTS relay_log;
 Warnings:
 Warning	3615	Variable relay_log does not exist in persisted config file
@@ -459,6 +470,7 @@ Warning	3615	Variable slave_type_conversions does not exist in persisted config 
 RESET PERSIST IF EXISTS source_verify_checksum;
 Warnings:
 Warning	3615	Variable source_verify_checksum does not exist in persisted config file
+RESET PERSIST IF EXISTS sql_log_bin_super_modified;
 RESET PERSIST IF EXISTS sql_replica_skip_counter;
 RESET PERSIST IF EXISTS sql_slave_skip_counter;
 Warnings:

@@ -1,0 +1,14 @@
+flush local logs;
+CREATE TABLE t_fifo_no_cache_deadlock (
+id INT PRIMARY KEY,
+payload LONGBLOB
+) ENGINE=InnoDB;
+SET GLOBAL debug="+d,force_large_trx";
+INSERT INTO t_fifo_no_cache_deadlock
+VALUES (1, REPEAT('a', 4 * 1024 * 1024));
+SET GLOBAL debug="";
+SELECT id, OCTET_LENGTH(payload)
+FROM t_fifo_no_cache_deadlock;
+id	OCTET_LENGTH(payload)
+1	4194304
+DROP TABLE t_fifo_no_cache_deadlock;

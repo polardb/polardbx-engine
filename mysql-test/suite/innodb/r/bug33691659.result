@@ -1,0 +1,69 @@
+#
+# Setup: parent table and child table with indexed virtual generated column
+#
+CREATE TABLE parent (
+id INT PRIMARY KEY
+) ENGINE=InnoDB;
+CREATE TABLE child (
+id INT PRIMARY KEY,
+parent_id INT NOT NULL,
+val INT NOT NULL,
+vcol INT AS (val * 2) VIRTUAL,
+KEY idx_vcol (vcol),
+CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES parent(id)
+ON DELETE CASCADE
+) ENGINE=InnoDB;
+INSERT INTO parent VALUES (1), (2), (3);
+INSERT INTO child (id, parent_id, val) VALUES (10, 1, 100), (20, 2, 200), (30, 3, 300);
+SELECT * FROM parent ORDER BY id;
+id
+1
+2
+3
+SELECT id, parent_id, val, vcol FROM child ORDER BY id;
+id	parent_id	val	vcol
+10	1	100	200
+20	2	200	400
+30	3	300	600
+#
+# Trigger cascade delete - this must not crash
+#
+DELETE FROM parent WHERE id = 1;
+SELECT * FROM parent ORDER BY id;
+id
+2
+3
+SELECT id, parent_id, val, vcol FROM child ORDER BY id;
+id	parent_id	val	vcol
+20	2	200	400
+30	3	300	600
+#
+# Verify the virtual column index is still usable
+#
+SELECT vcol FROM child FORCE INDEX (idx_vcol) WHERE vcol >= 0;
+vcol
+400
+600
+#
+# Multiple cascade delete
+#
+DELETE FROM parent WHERE id IN (2, 3);
+SELECT * FROM parent ORDER BY id;
+id
+SELECT * FROM child ORDER BY id;
+id	parent_id	val	vcol
+#
+# Cold path: restart so that vc_templ is nullptr again
+#
+INSERT INTO parent VALUES (10), (20);
+INSERT INTO child (id, parent_id, val) VALUES (100, 10, 500), (200, 20, 600);
+# restart
+DELETE FROM parent WHERE id = 10;
+SELECT * FROM parent ORDER BY id;
+id
+20
+SELECT id, parent_id, val, vcol FROM child ORDER BY id;
+id	parent_id	val	vcol
+200	20	600	1200
+DROP TABLE child;
+DROP TABLE parent;

@@ -1,0 +1,22 @@
+/* Copyright Abandoned 1996,1999 TCX DataKonsult AB & Monty Program KB
+   & Detron HB, 1996, 1999-2004, 2007 MySQL AB.
+   This file is public domain and comes with NO WARRANTY of any kind
+*/
+
+/* Build provenance of the mysqld binary.
+
+   The values below change on every new commit, so they are kept out of
+   mysql_version.h on purpose: only the few files that really print build
+   info have to be recompiled after a branch switch.
+*/
+
+#ifndef _mysql_build_info_h
+#define _mysql_build_info_h
+
+#define BUILD_BRANCH                "@BUILD_BRANCH@"
+#define BUILD_COMMIT                "@BUILD_COMMIT@"
+#define BUILD_TYPE                  "@BUILD_TYPE@"
+#define BUILD_DATE                  __DATE__
+#define BUILD_TIME                  __TIME__
+
+#endif /* _mysql_build_info_h */

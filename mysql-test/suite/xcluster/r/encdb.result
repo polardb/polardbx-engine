@@ -1,0 +1,222 @@
+#
+# Test case for column encryption in xcluster
+#
+#
+# Test there is no binlog for udf creation during startup.
+#
+include/mysqlbinlog.inc
+include/assert_grep.inc [CREATE FUNCTION encdb_rule_op RETURNS STRING SONAME]
+create user aurora@`%` identified by '123456';
+grant all privileges on *.* to aurora@`%` with grant option;
+create user noAccess@`%` identified by '123456';
+grant all privileges on test.* to aurora@`%` with grant option;
+grant all privileges on mysql.cipher_text to noAccess@`%` with grant option;
+flush privileges;
+# Connect 3 server. must have test database
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_reload_rules returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+use test;
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+#Turn off ONLY_FULL_GROUP_BY mode in order to test aggregation functions.
+set sql_mode = "";
+create table t1 (c_int_null int,
+c_tinyint tinyint, c_smallint smallint,
+c_mediumint mediumint, c_int int, c_bigint bigint,
+c_float float(10), c_double double, c_decimal decimal(10,3),
+c_bit bit(64),
+c_year year(4), c_date date, c_time time(3),
+c_datetime datetime(6), c_timestamp timestamp,
+c_char char(10) charset latin1,
+c_varchar varchar(100) charset utf8mb4,
+c_binary binary(10), c_varbinary varbinary(100),
+c_text text, c_blob blob,
+c_enum enum('one', 'two', 'three'),
+c_set set('red', 'blue', 'yellow'), c_json json);
+Warnings:
+Warning	1287	'YEAR(4)' is deprecated and will be removed in a future release. Please use YEAR instead
+insert into t1 set
+c_tinyint = -1, c_smallint = 10000, c_mediumint = 50000, c_int = 1000000,
+c_bigint = 100000000000,
+c_float = 1.1111, c_double = 1000.00001, c_decimal = 1.234,
+c_bit = b'1000001',
+c_year = 2023, c_date = "2023-10-1", c_time = "15:24:25.123",
+c_datetime = "2023-10-1 15:24:25.123456",
+c_timestamp = "2023-10-1 15:24:25.123456",
+c_char = "0123456789", c_varchar = repeat("a", 100),
+c_binary = "0123456789", c_varbinary = repeat("A", 20),
+c_text = repeat("A", 300), c_blob = repeat("A", 1000),
+c_enum = 'two', c_set = 'red,blue',
+c_json = '{"key1": "value1", "key2": "value2"}';
+create table mysql.cipher_text(
+c0 text, c1 text, c2 text, c3 text,
+c4 text, c5 text, c6 text, c7 text,
+c8 text, c9 text, c10 text, c11 text,
+c12 text, c13 text, c14 text, c15 text,
+c16 text, c17 text, c18 text, c19 text,
+c20 text, c21 text, c22 text, c23 text);
+select encdb_rule_op('add', '{"name": "rule1","enabled": true,"meta": {"databases": ["test"],"tables": ["test"],"columns": ["a","b"]}}');
+encdb_rule_op('add', '{"name": "rule1","enabled": true,"meta": {"databases": ["test"],"tables": ["test"],"columns": ["a","b"]}}')
+OK
+select encdb_rule_op('grant', '{"restrictedAccess":["root","aurora"]}');
+encdb_rule_op('grant', '{"restrictedAccess":["root","aurora"]}')
+OK
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test invalid param for rule deletion.;
+#
+select encdb_rule_op('delete', 'rule1');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "JSON parse error"
+select encdb_rule_export();
+encdb_rule_export()
+[{
+    "algo" : [],
+    "defaultAlgo" : "",
+    "enabled" : true,
+    "endpoints" : [],
+    "meta" : {
+      "columns" : ["a", "b"],
+      "databases" : ["test"],
+      "tables" : ["test"]
+    },
+    "name" : "rule1"
+  }]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test correct rule deletion.;
+#
+select encdb_rule_op('delete', '"rule1"');
+encdb_rule_op('delete', '"rule1"')
+OK
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test invalid param for user auth grant.;
+#
+select encdb_rule_op('grant', '[{"user":"root", "access":"noneAccess"}, {"user":"aurora", "access":"noneAccess"}]');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "json object '{
+  "access" : "noneAccess",
+  "user" : "root"
+}' does not have username field"
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "root"
+  }]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test successful user auth grant.;
+#
+select encdb_rule_op('grant', '[{"username":"root", "access":"noneAccess"}, {"username":"aurora", "access":"noneAccess"}]');
+encdb_rule_op('grant', '[{"username":"root", "access":"noneAccess"}, {"username":"aurora", "access":"noneAccess"}]')
+OK
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+'00112233445566778899aabbccddeeff')))
+{
+  "body" : "",
+  "status" : 0
+}
+select encdb_rule_export();
+encdb_rule_export()
+[]
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "noneAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "noneAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "root"
+  }]
+select encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}');
+encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}')
+OK
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}')
+OK
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "fullAccess",
+    "expired" : "2038-01-18 03:14:07",
+    "username" : "root"
+  }]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test user without privileges to tables will fail to execute encdb_rule_op UDF;
+#
+select encdb_rule_op('grant','{"restrictedAccess": ["noAccess"]}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "failed to execute "INSERT INTO mysql.encdb_auth_users VALUES ('noAccess', '', 1, '9999-12-31 23:59:59') ON DUPLICATE KEY UPDATE accs_type = 1, expire_time = '9999-12-31 23:59:59'" with error code 1142"
+select encdb_rule_op('add','{"name":"newrule1","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+ERROR HY000: EncDB function 'encdb_rule_op' failed with message "failed to execute "<rule SQL>" with error code 1142"
+select encdb_rule_export();
+encdb_rule_export()
+[]
+select encdb_userauth_export();
+encdb_userauth_export()
+[{
+    "access" : "restrictedAccess",
+    "expired" : "9999-12-31 23:59:59",
+    "username" : "aurora"
+  }, {
+    "access" : "fullAccess",
+    "expired" : "2038-01-18 03:14:07",
+    "username" : "root"
+  }]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+include/assert.inc [userauth_prev == userauth_after]
+include/assert.inc [rule_prev == rule_after]
+#
+# Test effectiveness of plugin encryption rules.
+#
+set force_revise = ON;
+set sql_log_bin = 0;
+load data local infile "MYSQL_TMP_DIR/encrypt_data.txt" into table mysql.cipher_text;
+delete from mysql.cipher_text;
+set sql_log_bin = 1;
+set force_revise = OFF;
+#
+# Clean up
+#
+drop database test;
+drop table mysql.cipher_text;
+create database test;
+drop function encdb_decrypt;
+drop function encdb_reload_rules;
+drop function encdb_generate_mek_request;
+drop user aurora@`%`;
+drop user noAccess@`%`;

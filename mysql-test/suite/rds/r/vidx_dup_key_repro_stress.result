@@ -1,0 +1,33 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE PROCEDURE p1(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;  -- ER_LOCK_DEADLOCK
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;  -- ER_DUP_KEY (counted separately below)
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;  -- ER_DUP_ENTRY
+WHILE j < 2000 DO
+UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, ",", (j+p_offset)%200, "]")) WHERE id = (j % 50) + 1;
+SET j = j + 1;
+END WHILE;
+END$$
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(1);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(2);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(3);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(4);
+== After 4-way concurrent UPDATE:
+save_retry_dup_key_within_threshold=1
+indep_dml_commit_error_eq_0=1
+DROP PROCEDURE p1;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

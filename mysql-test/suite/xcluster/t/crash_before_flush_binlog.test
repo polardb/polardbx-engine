@@ -35,10 +35,10 @@ while ($iter <= 2)
 	xa recover;
 
 
-	--echo # 0$iter. normal commit + crash_before_flush_binlog
+	--echo # 0$iter. normal commit + crash_after_append_log_in_flush
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,crash_before_flush_binlog";
+	SET SESSION debug="+d,crash_after_append_log_in_flush";
 	begin;
 	--eval $sql
 	--error 2013
@@ -54,10 +54,10 @@ while ($iter <= 2)
 	connection default;
 	select * from db_crash_1.t order by id;
 
-	--echo # 1$iter. xa prepare + crash_before_flush_binlog
+	--echo # 1$iter. xa prepare + crash_after_append_log_in_flush
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,crash_before_flush_binlog";
+	SET SESSION debug="+d,crash_after_append_log_in_flush";
 	xa start 'xx';
 	--eval $sql
 	xa end 'xx';
@@ -76,13 +76,12 @@ while ($iter <= 2)
 	xa recover;
 	--error ER_XAER_RMFAIL
 	xa prepare 'xx';
+  xa commit 'xx';
 
-
-
-	--echo # 2$iter. xa commit one phase + crash_before_flush_binlog
+	--echo # 2$iter. xa commit one phase + crash_after_append_log_in_flush
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,crash_before_flush_binlog";
+	SET SESSION debug="+d,crash_after_append_log_in_flush";
 	xa start 'xx';
 	--eval $sql
 	xa end 'xx';
@@ -101,8 +100,7 @@ while ($iter <= 2)
 	xa recover;
 
 
-
-	--echo # 3$iter. xa commit + crash_before_flush_binlog
+	--echo # 3$iter. xa commit + crash_after_append_log_in_flush
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 	xa start 'xx';
@@ -110,7 +108,7 @@ while ($iter <= 2)
 	xa end 'xx';
 	xa prepare 'xx';
 
-	SET SESSION debug="+d,crash_before_flush_binlog";
+	SET SESSION debug="+d,crash_after_append_log_in_flush";
 	--error 2013
 	xa commit 'xx';
 
@@ -123,11 +121,10 @@ while ($iter <= 2)
 	connection default;
 	select * from db_crash_1.t order by id;
 	xa recover;
-	xa commit 'xx';
 	--source include/wait_leader_apply_catchup.inc
 
 
-	--echo # 4$iter. xa rollback + crash_before_flush_binlog
+	--echo # 4$iter. xa rollback + crash_after_append_log_in_flush
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 	xa start 'xx';
@@ -135,7 +132,7 @@ while ($iter <= 2)
 	xa end 'xx';
 	xa prepare 'xx';
 
-	SET SESSION debug="+d,crash_before_flush_binlog";
+	SET SESSION debug="+d,crash_after_append_log_in_flush";
 	--error 2013
 	xa rollback 'xx';
 
@@ -148,8 +145,6 @@ while ($iter <= 2)
 	connection default;
 	select * from db_crash_1.t order by id;
 	xa recover;
-	xa rollback 'xx';
-
 
 	delete from db_crash_1.t;
 	insert into db_crash_1.t values(0);

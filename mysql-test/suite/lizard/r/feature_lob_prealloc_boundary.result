@@ -1,0 +1,112 @@
+DROP TABLE IF EXISTS l_tasks;
+DROP TABLE IF EXISTS t_lob_prealloc_b_0;
+DROP TABLE IF EXISTS t_lob_prealloc_b_1;
+DROP TABLE IF EXISTS t_lob_prealloc_b_2;
+DROP TABLE IF EXISTS t_lob_prealloc_b_3;
+DROP PROCEDURE IF EXISTS lob_boundary_proc;
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+CREATE TABLE t_lob_prealloc_b_0 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_1 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_2 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_3 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE l_tasks (idx INT PRIMARY KEY, l_value BIGINT NOT NULL) ENGINE=InnoDB;
+INSERT INTO l_tasks VALUES
+( 0,        0),
+( 1,        1),
+( 2,      100),
+( 3,      768),
+( 4,     1024),
+( 5,     4096),
+( 6,     8000),
+( 7,     8192),
+( 8,    16000),
+( 9,    16383),
+(10,    16384),
+(11,    16385),
+(12,    32768),
+(13,    65536),
+(14,   131072),
+(15,   262144),
+(16,   524288),
+(17,  1048576),
+(18,  2097151),
+(19,  2097152),
+(20,  4194304),
+(21,  8388608),
+(22, 12582912),
+(23, 16777215),
+(24, 16777216);
+CREATE PROCEDURE lob_boundary_proc(IN tid INT, IN n_workers INT)
+BEGIN
+DECLARE done INT DEFAULT 0;
+DECLARE cur_l BIGINT;
+DECLARE cur CURSOR FOR
+SELECT l_value FROM l_tasks
+WHERE MOD(idx, n_workers) = tid
+ORDER BY idx;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+OPEN cur;
+START TRANSACTION;
+read_loop: LOOP
+FETCH cur INTO cur_l;
+IF done THEN LEAVE read_loop; END IF;
+SET @sql = CONCAT(
+'INSERT INTO t_lob_prealloc_b_', tid,
+' VALUES (', cur_l, ', ',
+IF(cur_l = 0, 'NULL', CONCAT('REPEAT(''x'', ', cur_l, ')')),
+')'
+    );
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+END LOOP;
+COMMIT;
+CLOSE cur;
+END$$
+CALL lob_boundary_proc(0, 4);
+CALL lob_boundary_proc(1, 4);
+CALL lob_boundary_proc(2, 4);
+CALL lob_boundary_proc(3, 4);
+SELECT
+(SELECT COUNT(*) FROM t_lob_prealloc_b_0) AS rows_t0,
+(SELECT COUNT(*) FROM t_lob_prealloc_b_1) AS rows_t1,
+(SELECT COUNT(*) FROM t_lob_prealloc_b_2) AS rows_t2,
+(SELECT COUNT(*) FROM t_lob_prealloc_b_3) AS rows_t3;
+rows_t0	rows_t1	rows_t2	rows_t3
+7	6	6	6
+SELECT
+SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+(id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+AS bad_t0
+FROM t_lob_prealloc_b_0;
+bad_t0
+0
+SELECT
+SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+(id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+AS bad_t1
+FROM t_lob_prealloc_b_1;
+bad_t1
+0
+SELECT
+SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+(id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+AS bad_t2
+FROM t_lob_prealloc_b_2;
+bad_t2
+0
+SELECT
+SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+(id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+AS bad_t3
+FROM t_lob_prealloc_b_3;
+bad_t3
+0
+DROP PROCEDURE lob_boundary_proc;
+DROP TABLE t_lob_prealloc_b_0;
+DROP TABLE t_lob_prealloc_b_1;
+DROP TABLE t_lob_prealloc_b_2;
+DROP TABLE t_lob_prealloc_b_3;
+DROP TABLE l_tasks;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

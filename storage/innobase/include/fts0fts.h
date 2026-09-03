@@ -50,7 +50,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0vec.h"
 #include "ut0wqueue.h"
 
-#include "dd/lizard_policy_types.h"
+#include "dd/komodo0dd0policy0types.h"
+#include "lizard0rem0types.h"
 
 /** "NULL" value of a document id. */
 #define FTS_NULL_DOC_ID 0
@@ -520,7 +521,7 @@ CREATE TABLE $FTS_PREFIX_CONFIG
 @return DB_SUCCESS if succeed */
 [[nodiscard]] dberr_t fts_create_common_tables(
     trx_t *trx, const dict_table_t *table, const char *name,
-    bool skip_doc_id_index, const lizard::Ha_table_hint *table_hint);
+    bool skip_doc_id_index, const komodo::Dict_table_hint *table_hint);
 
 /** Creates the column specific ancillary tables needed for supporting an
 FTS index on the given table. row_mysql_lock_data_dictionary must have
@@ -539,7 +540,7 @@ CREATE TABLE $FTS_PREFIX_INDEX_[1-6](
 @param[in]      table_hint      ddl table hint from handler
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t fts_create_index_tables(
-    trx_t *trx, dict_index_t *index, const lizard::Ha_table_hint *table_hint);
+    trx_t *trx, dict_index_t *index, const komodo::Dict_table_hint *table_hint);
 
 /** Create auxiliary index tables for an FTS index.
 @param[in,out]  trx             transaction
@@ -550,7 +551,7 @@ CREATE TABLE $FTS_PREFIX_INDEX_[1-6](
 @return DB_SUCCESS or error code */
 [[nodiscard]] dberr_t fts_create_index_tables_low(
     trx_t *trx, dict_index_t *index, const char *table_name,
-    table_id_t table_id, const lizard::Ha_table_hint *table_hint);
+    table_id_t table_id, const komodo::Dict_table_hint *table_hint);
 
 /** Add the FTS document id hidden column.
 @param[in,out] table Table with FTS index
@@ -628,7 +629,7 @@ doc_id_t fts_get_doc_id_from_row(dict_table_t *table, /*!< in: table */
 @param[in]      index   index of rec
 @param[in]      heap    heap memory
 @return doc id that was extracted from rec */
-doc_id_t fts_get_doc_id_from_rec(dict_table_t *table, const rec_t *rec,
+doc_id_t fts_get_doc_id_from_rec(dict_table_t *table, creg_t reg,
                                  const dict_index_t *index, mem_heap_t *heap);
 
 /** Add new fts doc id to the update vector.

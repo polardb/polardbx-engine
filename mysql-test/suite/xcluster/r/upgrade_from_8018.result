@@ -24,6 +24,7 @@ formatID	gtrid_length	bqual_length	data
 # Test upgrade from 8018 to 8032 
 # Copy and unzip the datadir.
 # restart 1
+force-change-meta completed
 # restart 2
 # check
 xa recover;

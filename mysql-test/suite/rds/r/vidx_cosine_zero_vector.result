@@ -1,0 +1,45 @@
+SET GLOBAL vidx_disabled = OFF;
+# Zero vs unit: similarity 0 => distance 1, not NaN
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[1,0,0]')) AS d;
+d
+1
+# Symmetry: operand order must not matter
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[0,0,0]')) AS d;
+d
+1
+# Zero vs zero
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[0,0,0]')) AS d;
+d
+1
+# Zero vs arbitrary non-unit vector
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[0,0,0]'), VEC_FROMTEXT('[3,4,0]')) AS d;
+d
+1
+# Non-zero sanity is unchanged: identical => 0, opposite => 2
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[1,0,0]')) AS d;
+d
+0
+SELECT VEC_DISTANCE_COSINE(VEC_FROMTEXT('[1,0,0]'), VEC_FROMTEXT('[-1,0,0]')) AS d;
+d
+2
+# Filesort over a plain (unindexed) table: the zero-vector row
+# sorts deterministically at distance 1.0 instead of floating at
+# an undefined NaN position
+CREATE TABLE t_cos_zero (
+id INT PRIMARY KEY,
+v VECTOR(3)
+) ENGINE=InnoDB;
+INSERT INTO t_cos_zero(id, v) VALUES
+(1, VEC_FROMTEXT('[1,0,0]')),
+(2, VEC_FROMTEXT('[0.5,0.8660254,0]')),
+(3, VEC_FROMTEXT('[0,0,0]')),
+(4, VEC_FROMTEXT('[-1,0,0]'));
+SELECT id, ROUND(VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[1,0,0]')), 6) AS d
+FROM t_cos_zero ORDER BY d, id;
+id	d
+1	0
+2	0.5
+3	1
+4	2
+DROP TABLE t_cos_zero;
+SET GLOBAL vidx_disabled = ON;

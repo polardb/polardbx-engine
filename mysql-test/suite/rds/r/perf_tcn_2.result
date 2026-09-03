@@ -10,17 +10,21 @@ count(*)
 100
 count(*)
 100
-show global status like '%tcn_cache%';
+show global status like '%tcn_cache_hit%';
 Variable_name	Value
 Lizard_tcn_cache_hit	0
+show global status like '%tcn_cache_miss%';
+Variable_name	Value
 Lizard_tcn_cache_miss	0
 count(*)
 100
 count(*)
 100
-show global status like '%tcn_cache%';
+show global status like '%tcn_cache_hit%';
 Variable_name	Value
 Lizard_tcn_cache_hit	0
+show global status like '%tcn_cache_miss%';
+Variable_name	Value
 Lizard_tcn_cache_miss	0
 drop table db_1.t1;
 drop database db_1;

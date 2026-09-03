@@ -113,7 +113,7 @@ bool Query_result_send::send_returning_data(THD *thd,
   DBUG_TRACE;
 
   protocol->start_row();
-  
+
   /* 0 - before, 1 - after  */
   if (is_before) {
     thd->get_protocol()->store(longlong{0});
@@ -356,6 +356,8 @@ bool Query_result_export::prepare(THD *thd, const mem_root_deque<Item *> &list,
   } else
     is_ambiguous_field_term = false;
 
+  if (reject_encryption_transfer(thd, list)) return true;
+
   return false;
 }
 
@@ -369,6 +371,24 @@ bool Query_result_export::start_execution(THD *thd) {
    (enclosed ? (int)(uchar)(x) == field_sep_char      \
              : (int)(uchar)(x) == field_term_char) || \
    (int)(uchar)(x) == line_sep_char || !(x))
+
+bool Query_result_interceptor::reject_encryption_transfer(
+    THD *thd, const mem_root_deque<Item *> &values) {
+  DBUG_TRACE;
+
+  if (!thd->enable_column_encryption && !thd->enable_mask_internal_user &&
+      !thd->enable_mask_ai_model_config_api_key)
+    return false;
+
+  for (Item *value : VisibleFields(values)) {
+    if (komodo::has_encryption_type(value->encryption_type())) {
+      my_error(ER_COLUMNS_ENCRYPTION_TRANSFER, MYF(0));
+      return true;
+    }
+  }
+
+  return false;
+}
 
 bool Query_result_export::send_data(THD *thd,
                                     const mem_root_deque<Item *> &items) {
@@ -669,9 +689,11 @@ void Query_result_export::cleanup() {
 ** Dump of query to a binary file
 ***************************************************************************/
 
-bool Query_result_dump::prepare(THD *, const mem_root_deque<Item *> &,
+bool Query_result_dump::prepare(THD *thd, const mem_root_deque<Item *> &list,
                                 Query_expression *u) {
   unit = u;
+
+  if (reject_encryption_transfer(thd, list)) return true;
   return false;
 }
 
@@ -711,7 +733,7 @@ err:
   Dump of select to variables
 ***************************************************************************/
 
-bool Query_dumpvar::prepare(THD *, const mem_root_deque<Item *> &list,
+bool Query_dumpvar::prepare(THD *thd, const mem_root_deque<Item *> &list,
                             Query_expression *u) {
   unit = u;
 
@@ -719,6 +741,8 @@ bool Query_dumpvar::prepare(THD *, const mem_root_deque<Item *> &list,
     my_error(ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT, MYF(0));
     return true;
   }
+
+  if (reject_encryption_transfer(thd, list)) return true;
 
   return false;
 }
@@ -769,6 +793,6 @@ bool Query_dumpvar::send_eof(THD *thd) {
   */
   if (thd->is_error()) return true;
 
-  if(::set_my_ok(thd, row_count)) return true;
+  if (::set_my_ok(thd, row_count)) return true;
   return false;
 }

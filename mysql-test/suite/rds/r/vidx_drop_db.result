@@ -1,0 +1,329 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# Cleanup before test
+#
+DROP DATABASE IF EXISTS db_vidx_test;
+#
+# 9.1 Create database with multiple VECTOR INDEX tables
+#
+CREATE DATABASE db_vidx_test;
+# Create t1 with dimension=3, M=6
+CREATE TABLE db_vidx_test.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=euclidean
+) ENGINE=InnoDB;
+# Create t2 with dimension=5, M=10
+CREATE TABLE db_vidx_test.t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=10 distance=cosine
+) ENGINE=InnoDB;
+# Create t3 with dimension=8, M=16
+CREATE TABLE db_vidx_test.t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+# Verify all tables created
+SHOW CREATE TABLE db_vidx_test.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE db_vidx_test.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE db_vidx_test.t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(8) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# 9.2 Verify auxiliary tables exist
+#
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%' ORDER BY NAME;
+NAME
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+# Count auxiliary tables
+SELECT COUNT(*) AS vidx_table_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%';
+vidx_table_count
+3
+#
+# 9.3 DROP DATABASE
+#
+DROP DATABASE db_vidx_test;
+#
+# 9.4 Verify auxiliary tables are cleaned up
+#
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%' ORDER BY NAME;
+NAME
+SELECT COUNT(*) AS remaining_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%';
+remaining_vidx_count
+0
+#
+# 9.5 Recreate same database and tables - verify no conflicts
+#
+CREATE DATABASE db_vidx_test;
+CREATE TABLE db_vidx_test.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=euclidean
+) ENGINE=InnoDB;
+CREATE TABLE db_vidx_test.t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=10 distance=cosine
+) ENGINE=InnoDB;
+CREATE TABLE db_vidx_test.t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+# Verify tables recreated successfully
+SHOW CREATE TABLE db_vidx_test.t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE db_vidx_test.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE db_vidx_test.t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(8) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify new auxiliary tables created
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%' ORDER BY NAME;
+NAME
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+#
+# Additional: Test DROP DATABASE with mixed table types
+#
+# Add a table without VECTOR INDEX
+CREATE TABLE db_vidx_test.t_normal (
+id INT PRIMARY KEY,
+data VARCHAR(100),
+INDEX idx_data(data)
+) ENGINE=InnoDB;
+# Add a table with both regular and VECTOR INDEX
+CREATE TABLE db_vidx_test.t_mixed (
+id INT PRIMARY KEY,
+v VECTOR(4),
+extra INT,
+INDEX idx_extra(extra),
+VECTOR INDEX vi(v) m=8 distance=cosine
+) ENGINE=InnoDB;
+# Verify all auxiliary tables
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%' ORDER BY NAME;
+NAME
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+db_vidx_test/vidx_XXXXX_0
+# DROP DATABASE with mixed tables
+DROP DATABASE db_vidx_test;
+# Verify complete cleanup
+SELECT COUNT(*) AS final_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/%';
+final_count
+0
+#
+# Test: Rapid create/drop cycle
+#
+CREATE DATABASE db_vidx_test;
+CREATE TABLE db_vidx_test.t1 (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+DROP DATABASE db_vidx_test;
+CREATE DATABASE db_vidx_test;
+CREATE TABLE db_vidx_test.t1 (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+DROP DATABASE db_vidx_test;
+CREATE DATABASE db_vidx_test;
+CREATE TABLE db_vidx_test.t1 (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+# Verify no leftover from previous cycles
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'db_vidx_test/vidx_%' ORDER BY NAME;
+NAME
+db_vidx_test/vidx_XXXXX_0
+#
+# Final cleanup
+#
+DROP DATABASE db_vidx_test;
+# Verify final cleanup
+SELECT COUNT(*) AS absolute_final_count FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'db_vidx_test/%';
+absolute_final_count
+0
+#
+# 9.6 DROP DATABASE while show_vidx_hlindex_tables=ON
+#     (regression: previously failed with ER_NO_SUCH_TABLE because
+#      find_db_tables() leaked hlindex aux tables into the drop
+#      worklist and drop_base_table() rejected HT_HIDDEN_SE.)
+#
+SET @save_show_vidx = @@global.show_vidx_hlindex_tables;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+CREATE DATABASE db_vidx_show;
+CREATE TABLE db_vidx_show.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO db_vidx_show.t1(v) VALUES (VEC_FROMTEXT('[1,0,0]'));
+# Aux table is exposed under SHOW TABLES while flag is ON
+SHOW TABLES IN db_vidx_show;
+Tables_in_db_vidx_show
+t1
+vidx_XXXXX_X
+# DROP DATABASE must succeed even with the flag ON
+DROP DATABASE db_vidx_show;
+# No leftover at SE level
+SELECT COUNT(*) AS db_vidx_show_leftover FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'db_vidx_show/%';
+db_vidx_show_leftover
+0
+# Also exercise multi-vidx-table schemas under the flag
+CREATE DATABASE db_vidx_show;
+CREATE TABLE db_vidx_show.t1 (id INT PRIMARY KEY, v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=euclidean)
+ENGINE=InnoDB;
+CREATE TABLE db_vidx_show.t2 (id INT PRIMARY KEY, v VECTOR(5),
+VECTOR INDEX vi(v) m=10 distance=cosine)
+ENGINE=InnoDB;
+INSERT INTO db_vidx_show.t1 VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+INSERT INTO db_vidx_show.t2 VALUES (1, VEC_FROMTEXT('[1,2,3,4,5]'));
+DROP DATABASE db_vidx_show;
+SELECT COUNT(*) AS db_vidx_show_leftover2 FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'db_vidx_show/%';
+db_vidx_show_leftover2
+0
+#
+# 9.7 User-visible surfaces remain functional under show_vidx_hlindex_tables=ON
+#     (no regression: hlindex aux tables must still be enumerable / queryable
+#      via SHOW TABLES, I_S.{TABLES,COLUMNS,STATISTICS,INNODB_TABLES},
+#      SHOW CREATE TABLE, DESC, SHOW INDEX, and direct SELECT; and OFF must
+#      still hide them from SHOW TABLES / I_S and reject direct SELECT.)
+#
+SET GLOBAL show_vidx_hlindex_tables = ON;
+CREATE DATABASE db_vidx_vis;
+CREATE TABLE db_vidx_vis.t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v) m=6 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO db_vidx_vis.t1(v) VALUES
+(VEC_FROMTEXT('[1,0,0]')),
+(VEC_FROMTEXT('[0,1,0]')),
+(VEC_FROMTEXT('[0,0,1]'));
+# --- flag=ON: SHOW TABLES lists the aux ---
+SHOW TABLES IN db_vidx_vis;
+Tables_in_db_vidx_vis
+t1
+vidx_XXXXX_X
+# --- flag=ON: SHOW TABLES LIKE matches the aux ---
+SHOW TABLES IN db_vidx_vis LIKE 'vidx_%';
+Tables_in_db_vidx_vis (vidx_%)
+vidx_XXXXX_X
+# --- flag=ON: I_S.TABLES lists the aux ---
+SELECT table_name FROM information_schema.tables
+WHERE table_schema='db_vidx_vis' ORDER BY table_name;
+TABLE_NAME
+t1
+vidx_XXXXX_X
+# --- flag=ON: I_S.COLUMNS exposes aux schema (4 cols: layer/tref/vec/neighbors) ---
+SELECT COUNT(*) AS aux_cols FROM information_schema.columns
+WHERE table_schema='db_vidx_vis' AND table_name='vidx_XXXXX_X';
+aux_cols
+4
+# --- flag=ON: I_S.STATISTICS exposes aux indexes (2 keys: tref, layer) ---
+SELECT COUNT(*) AS aux_stats FROM information_schema.statistics
+WHERE table_schema='db_vidx_vis' AND table_name='vidx_XXXXX_X';
+aux_stats
+2
+# --- flag=ON: I_S.INNODB_TABLES lists the aux (engine-side view, flag-independent) ---
+SELECT name FROM information_schema.innodb_tables
+WHERE name LIKE 'db_vidx_vis/%' ORDER BY name;
+name
+db_vidx_vis/t1
+db_vidx_vis/vidx_XXXXX_X
+# --- flag=ON: SHOW CREATE TABLE works on the aux ---
+SHOW CREATE TABLE db_vidx_vis.`vidx_XXXXX_X`;
+Table	Create Table
+vidx_XXXXX_X	CREATE TABLE `vidx_XXXXX_X` (
+  `layer` tinyint NOT NULL,
+  `tref` varbinary(4) DEFAULT NULL,
+  `vec` blob NOT NULL,
+  `neighbors` blob NOT NULL,
+  UNIQUE KEY `tref` (`tref`),
+  KEY `layer` (`layer`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# --- flag=ON: DESC works on the aux ---
+DESC db_vidx_vis.`vidx_XXXXX_X`;
+Field	Type	Null	Key	Default	Extra
+layer	tinyint	NO	MUL	NULL	
+tref	varbinary(4)	YES	UNI	NULL	
+vec	blob	NO		NULL	
+neighbors	blob	NO		NULL	
+# --- flag=ON: SHOW INDEX FROM works on the aux ---
+SHOW INDEX FROM db_vidx_vis.`vidx_XXXXX_X`;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+vidx_XXXXX_X	0	tref	1	tref	A	NULL	NULL	NULL	YES	BTREE			YES	NULL
+vidx_XXXXX_X	1	layer	1	layer	A	NULL	NULL	NULL		BTREE			YES	NULL
+# --- flag=ON: direct SELECT counts aux rows (one per inserted vector) ---
+SELECT COUNT(*) AS aux_rows FROM db_vidx_vis.`vidx_XXXXX_X`;
+aux_rows
+3
+# --- Flip flag OFF and verify the aux disappears from row-filter surfaces.
+#     (open-path guard is verified in a fresh session below to avoid the
+#      pre-existing table-share cache that already held an open handle on
+#      the aux from the flag=ON SELECT above.)
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+# --- flag=OFF: SHOW TABLES hides the aux ---
+SHOW TABLES IN db_vidx_vis;
+Tables_in_db_vidx_vis
+t1
+# --- flag=OFF: I_S.TABLES hides the aux ---
+SELECT table_name FROM information_schema.tables
+WHERE table_schema='db_vidx_vis' ORDER BY table_name;
+TABLE_NAME
+t1
+# --- flag=OFF in a fresh session: open-path guard rejects direct SELECT ---
+SELECT COUNT(*) FROM db_vidx_vis.`vidx_XXXXX_X`;
+ERROR 42S02: Table 'db_vidx_vis.vidx_XXXXX_X' doesn't exist
+# --- flag=OFF: DROP DATABASE works (pre-fix already worked, sanity) ---
+DROP DATABASE db_vidx_vis;
+SET GLOBAL show_vidx_hlindex_tables = @save_show_vidx;
+SET GLOBAL vidx_disabled = ON;

@@ -1,0 +1,48 @@
+SET GLOBAL vidx_disabled = OFF;
+SHOW GLOBAL VARIABLES LIKE 'vidx_force_non_indep';
+Variable_name	Value
+vidx_force_non_indep	OFF
+SET GLOBAL vidx_force_non_indep = ON;
+ERROR HY000: Variable 'vidx_force_non_indep' is a read only variable
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+##############################################
+# OFF: DML must use the indep path           #
+##############################################
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT('[5,5,5]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[5,5,6]') WHERE id = 10;
+DELETE FROM t1 WHERE id = 1;
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT @ic1 > @ic0 AS dml_indep_when_off;
+dml_indep_when_off
+1
+
+##############################################
+# OFF: ANN search and base table consistent  #
+##############################################
+SELECT COUNT(*) AS rows_visible FROM t1;
+rows_visible
+3
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[6,6,6]')) LIMIT 3;
+id
+2
+3
+4
+
+##############################################
+# Cleanup                                    #
+##############################################
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

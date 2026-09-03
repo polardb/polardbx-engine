@@ -48,6 +48,12 @@ class Serializer {
   virtual uint serialize_query_event_v4(
       const struct mysql_event_rds_query *event, char *buf, uint buf_len) = 0;
 
+  virtual uint serialize_connection_event_v5(
+      const struct mysql_event_rds_connection *event, char *buf,
+      uint buf_len) = 0;
+  virtual uint serialize_query_event_v5(
+      const struct mysql_event_rds_query *event, char *buf, uint buf_len) = 0;
+
   virtual ~Serializer() {}
 };
 #endif /* SERIALIZER_H */

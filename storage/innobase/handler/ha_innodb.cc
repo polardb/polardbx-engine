@@ -217,36 +217,49 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0cleanout.h"
 #include "lizard0cleanout0safe.h"
-#include "lizard0dict.h"
+#include "lizard0cmmt0cache.h"
+#include "lizard0dict0dd.h"
+#include "lizard0dict0dict.h"
+#include "lizard0dict0mem.h"
 #include "lizard0fsp.h"
+#include "lizard0gcs0cache.h"
 #include "lizard0gcs.h"
-#include "lizard0gcs0hist.h"
+#include "lizard0gcs0history.h"
+#include "lizard0gcs0read.h"
+#include "lizard0gcs0scn.h"
 #include "lizard0gp.h"
+#include "lizard0ha_innodb.h"
 #include "lizard0mon.h"
 #include "lizard0mysql.h"
-#include "lizard0read0read.h"
+#include "lizard0rem0types.h"
 #include "lizard0row.h"
-#include "lizard0scn.h"
-#include "lizard0trx0rec.h"
-#include "lizard0txn0space.h"
-#include "lizard0undo.h"
-
-#include "lizard0dict0mem.h"
-#include "lizard0ha_innodb.h"
 #include "lizard0row0bamboo.h"
 #include "lizard0row0gpp.h"
-#include "lizard0tcn.h"
+#include "lizard0btr0pcur.h"
+#include "lizard0row0lotus.h"
+#include "lizard0row0vers.h"
+#include "lizard0srv0cycle.h"
+#include "lizard0trx0cycle.h"
+#include "lizard0trx0history.h"
+#include "lizard0trx0rec.h"
+#include "lizard0txn0slot0undo.h"
+#include "lizard0txn0space.h"
+#include "lizard0undo.h"
 #include "lizard0undo0retent.h"
 #include "lizard0xa.h"  // srv_stop_purge_no_heartbeat_timeout, ...
 
-#include "sql/xa_specification.h"
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/xa/komodo0xa0specification.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 
 #include "sys_vars_ext.h"
 #include "polarx_proc/changeset_manager.h"
 
 #include "pli/pli.h"
-#include "sql/xa/lizard_cmmt_policy.h"
+#include "sql/xa/komodo0cmmt0policy.h"
+#include "log0chkp.h"
+#include "sql/komodo0handler0types.h"
+#include "lizard0dict0stats.h"
+#include "lizard0lob0lob.h"
 
 static char *innodb_version_str = (char *)innodb_version;
 
@@ -837,14 +850,19 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(ahi_enabled_mutex, 0, 0,
                   "Mutex used for AHI disabling and enabling."),
     PSI_MUTEX_KEY(file_purge_list_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(tid_list_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(tid_persist_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(scn_list_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(scn_persist_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gcn_order_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gcn_persist_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(undo_hdr_hash_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(lizard_vision_list_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(mvcc_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(gp_sys_wait_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME)};
+    PSI_MUTEX_KEY(undo_retention_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(history_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
+    PSI_MUTEX_KEY(cycle_pq_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -874,6 +892,7 @@ static PSI_rwlock_info all_innodb_rwlocks[] = {
     PSI_RWLOCK_KEY(dict_table_stats, 0, PSI_DOCUMENT_ME),
     PSI_RWLOCK_KEY(hash_table_locks, 0, PSI_DOCUMENT_ME),
     PSI_RWLOCK_KEY(commit_snapshot_rw_lock, 0, PSI_DOCUMENT_ME),
+    PSI_RWLOCK_KEY(cycle_rw_latch, 0, PSI_DOCUMENT_ME),
 };
 #endif /* UNIV_PFS_RWLOCK */
 
@@ -926,6 +945,8 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_THREAD_KEY(srv_master_thread, "ib_src_main", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_monitor_thread, "ib_srv_mon", PSI_FLAG_SINGLETON, 0,
+                   PSI_DOCUMENT_ME),
+    PSI_THREAD_KEY(srv_cycle_thread, "ib_srv_cycle", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_purge_thread, "ib_srv_purge", PSI_FLAG_SINGLETON, 0,
                    PSI_DOCUMENT_ME),
@@ -1228,6 +1249,9 @@ static SHOW_VAR innodb_status_variables[] = {
     {"buffer_pool_bytes_dirty",
      (char *)&export_vars.innodb_buffer_pool_bytes_dirty, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+    {"buffer_pool_dirty_ratio",
+     (char *)&export_vars.innodb_buffer_pool_dirty_ratio, SHOW_DOUBLE,
+     SHOW_SCOPE_GLOBAL},
     {"buffer_pool_pages_flushed",
      (char *)&export_vars.innodb_buffer_pool_pages_flushed, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
@@ -1403,6 +1427,90 @@ static SHOW_VAR innodb_status_variables[] = {
     {"polarx_rec_mode_sample_records",
      (char *)&export_vars.innodb_polarx_rec_mode_sample_records, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+
+    /* ===== Page Tracking Statistics - Cumulative Counters ===== */
+    {"page_track_total_page_ids",
+     (char *)&export_vars.innodb_page_track_total_page_ids, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_block_flush_count",
+     (char *)&export_vars.innodb_page_track_block_flush_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_buffer_full_wait_flushes",
+     (char *)&export_vars.innodb_page_track_buffer_full_wait_flushes, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_wait_flush_succ_count",
+     (char *)&export_vars.innodb_page_track_wait_flush_succ_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_wait_flush_timeout_count",
+     (char *)&export_vars.innodb_page_track_wait_flush_timeout_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_wait_flush_failed_count",
+     (char *)&export_vars.innodb_page_track_wait_flush_failed_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_backup_count",
+     (char *)&export_vars.innodb_page_track_backup_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_purge_count",
+     (char *)&export_vars.innodb_page_track_purge_count, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+
+    /* ===== Page Tracking Statistics - State Indicators ===== */
+    {"page_track_is_active",
+     (char *)&export_vars.innodb_page_track_is_active, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_flush_last_time",
+     (char *)&export_vars.innodb_page_track_flush_last_time, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_last_write_space",
+     (char *)&export_vars.innodb_page_track_last_write_space, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_last_write_page",
+     (char *)&export_vars.innodb_page_track_last_write_page, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_last_write_block",
+     (char *)&export_vars.innodb_page_track_last_write_block, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_last_flush_block",
+     (char *)&export_vars.innodb_page_track_last_flush_block, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_backup_last_time",
+     (char *)&export_vars.innodb_page_track_backup_last_time, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_backup_last_pages",
+     (char *)&export_vars.innodb_page_track_backup_last_pages, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_purge_last_lsn",
+     (char *)&export_vars.innodb_page_track_purge_last_lsn, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_current_start_lsn",
+     (char *)&export_vars.innodb_page_track_current_start_lsn, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+
+    /* ===== Page Tracking Statistics - Computed Metrics ===== */
+    {"page_track_memory_usage_pct",
+     (char *)&export_vars.innodb_page_track_memory_usage_pct, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_buffer_available_blocks",
+     (char *)&export_vars.innodb_page_track_buffer_available_blocks, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_flush_lag_seconds",
+     (char *)&export_vars.innodb_page_track_flush_lag_seconds, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_pending_flush_blocks",
+     (char *)&export_vars.innodb_page_track_pending_flush_blocks, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_pending_flush_bytes",
+     (char *)&export_vars.innodb_page_track_pending_flush_bytes, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+
+    /* ===== Page Tracking Statistics - Error Counters ===== */
+    {"page_track_checksum_errors",
+     (char *)&export_vars.innodb_page_track_checksum_errors, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"page_track_io_errors",
+     (char *)&export_vars.innodb_page_track_io_errors, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /** Handling the shared INNOBASE_SHARE structure that is needed to provide table
@@ -1609,10 +1717,10 @@ static int innobase_xa_recover_prepared_in_tc(handlerton *hton,
  which is in the prepared state
  @return 0 or error number */
 static xa_status_code innobase_commit_by_xid(
-    handlerton *hton,           /*!< in: InnoDB handlerton */
-    XID *xid,                   /*!< in: X/Open XA transaction
-                                 identification */
-    XA_specification *xa_spec); /*!< in: XA specification */
+    handlerton *hton,                   /*!< in: InnoDB handlerton */
+    XID *xid,                           /*!< in: X/Open XA transaction
+                                         identification */
+    komodo::XA_specification *xa_spec); /*!< in: XA specification */
 /** This function is used to rollback one X/Open XA distributed transaction
  which is in the prepared state
  @return 0 or error number */
@@ -1620,7 +1728,7 @@ static xa_status_code innobase_rollback_by_xid(
     handlerton *hton,           /*!< in: InnoDB handlerton */
     XID *xid,                   /*!< in: X/Open XA transaction
                                  identification */
-    XA_specification *xa_spec); /*!< in: XA specification */
+    komodo::XA_specification *xa_spec); /*!< in: XA specification */
 /** This function is used to write mark an X/Open XA distributed transaction
 as been prepared in the server transaction coordinator
 @param[in]     hton InnoDB handlerton
@@ -1637,7 +1745,7 @@ as been prepared in the server transaction coordinator
 static xa_status_code innobase_set_prepared_in_tc_by_xid(
     handlerton *hton,           /*!< in: InnoDB handlerton */
     XID *xid,                   /*!< in: X/Open XA transaction identification */
-    XA_specification *xa_spec); /*!< in: XA specification */
+    komodo::XA_specification *xa_spec); /*!< in: XA specification */
 /** Checks if the file name is reserved in InnoDB. Currently
 redo log file names from the old redo format (ib_logfile*)
 are reserved. There is no need to reserve file names from the
@@ -1722,11 +1830,6 @@ static int innodb_shutdown(handlerton *, ha_panic_function) {
   }
 
   innobase::component_services::deinitialize_service_handles();
-
-  if (lizard::global_tcn_cache != nullptr) {
-    ut::delete_(lizard::global_tcn_cache);
-    lizard::global_tcn_cache = nullptr;
-  }
 
   return 0;
 }
@@ -5088,7 +5191,7 @@ static int innodb_init_params() {
   }
 
   /** Here, we check the license  */
-  xlicense::POLARX_LICENSE_CALL(
+  komodo::POLARX_LICENSE_CALL(
       verify_license_BP_constrains(srv_buf_pool_curr_size));
 
   srv_buf_pool_size = srv_buf_pool_curr_size;
@@ -5272,6 +5375,13 @@ static int innodb_init_params() {
 
   srv_lock_table_size = 5 * (srv_buf_pool_size / UNIV_PAGE_SIZE);
 
+  /** Lizard: derive the capacity of the global tcn cache from the buffer
+  pool size, and reflect the real size back to innodb_tcn_cache_size. */
+  lizard::srv_tcn_cache_entries = lizard::gcs_cache_calc_entries(
+      srv_buf_pool_size, lizard::srv_tcn_cache_size);
+  lizard::srv_tcn_cache_size =
+      lizard::srv_tcn_cache_entries * sizeof(lizard::tcn_t);
+
   return 0;
 }
 
@@ -5306,10 +5416,6 @@ static int innodb_init(void *p) {
   DBUG_TRACE;
 
   acquire_plugin_services();
-
-  /* Lizard: disable AHI temporary */
-  srv_btr_search_enabled = false;
-  btr_search_enabled.store(false);
 
   handlerton *innobase_hton = (handlerton *)p;
   innodb_hton_ptr = innobase_hton;
@@ -5584,13 +5690,6 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
-  lizard::global_tcn_cache = nullptr;
-  
-  if (lizard::srv_tcn_cache_level != NONE_LEVEL) {
-    lizard::global_tcn_cache = ut::new_withkey<lizard::Global_tcn>(
-        ut::make_psi_memory_key(mem_key_tcn), lizard::tcn_cache_size_align(),
-        mem_key_tcn);
-  }
   my_key_is_keyring_rds(&is_keyring_rds);
 
   return 0;
@@ -5738,7 +5837,7 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
     srv_start_purge_threads();
 
     uint64_t rseg_history_len;
-    while ((rseg_history_len = trx_sys->rseg_history_len.load()) != 0) {
+    while ((rseg_history_len = lizard::trx_rseg_history_len()) != 0) {
       ib::info(ER_IB_MSG_547)
           << "Waiting for purge to become empty:"
           << " current purge history len is " << rseg_history_len;
@@ -6094,9 +6193,9 @@ static int innobase_commit(handlerton *hton, /*!< in: InnoDB handlerton */
       trx_start_if_not_started(trx, true, UT_LOCATION_HERE);
     }
 
-    assert_trx_commit_mark_initial(trx);
-    if (trx_is_started(trx)) {
-      lizard::commit_policy_copy(thd, trx);
+    ut_ad(trx->txn_desc.is_cmmt_initial());
+    if (trx_is_started(trx) && !read_only) {
+      komodo::commit_policy_copy(thd, trx);
     }
 
     innobase_commit_low(trx);
@@ -6196,9 +6295,10 @@ static int innobase_rollback(handlerton *hton, /*!< in: InnoDB handlerton */
 
   if (rollback_trx ||
       !thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)) {
-    assert_trx_commit_mark_initial(trx);
-    if (trx_is_started(trx)) {
-      lizard::commit_policy_copy(thd, trx);
+    ut_ad(trx->txn_desc.is_cmmt_initial());
+    bool read_only = trx->read_only || trx->id == 0;
+    if (trx_is_started(trx) && !read_only) {
+      komodo::commit_policy_copy(thd, trx);
     }
 
     error = trx_rollback_for_mysql(trx);
@@ -6287,10 +6387,6 @@ static int innobase_rollback_to_savepoint(
 
   if (error == DB_SUCCESS && trx->fts_trx != nullptr) {
     fts_savepoint_rollback(trx, name);
-  }
-  /* For changeset rollback. */
-  if (error == DB_SUCCESS) {
-    im::gChangesetManager.rollback_to_save_point(thd, mysql_binlog_cache_pos);
   }
   return convert_error_code_to_mysql(error, 0, nullptr);
 }
@@ -6384,9 +6480,6 @@ static int innobase_savepoint(
 
   if (error == DB_SUCCESS && trx->fts_trx != nullptr) {
     fts_savepoint_take(trx->fts_trx, name);
-  }
-  if (error == DB_SUCCESS) {
-    im::gChangesetManager.set_save_point(thd, *(my_off_t *)savepoint);
   }
   return convert_error_code_to_mysql(error, 0, nullptr);
 }
@@ -7437,6 +7530,7 @@ int ha_innobase::open(const char *name, int, uint open_flags,
 
   DBUG_TRACE;
   assert(table_share == table->s);
+  ut_ad(gpp_length == DATA_GPP_NO_LEN);
 
   thd = ha_thd();
 
@@ -8504,8 +8598,8 @@ static mysql_row_templ_t *build_template_field(
   const dict_col_t *col;
 
   ut_ad(clust_index->table == index->table);
-  assert_lizard_dict_index_check(clust_index);
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(clust_index));
+  ut_ad(lizard::dict_index_check_valid(index));
 
   templ = prebuilt->mysql_template + prebuilt->n_template++;
   UNIV_MEM_INVALID(templ, sizeof *templ);
@@ -9267,7 +9361,7 @@ int ha_innobase::write_row(uchar *record) /*!< in: a row in MySQL format */
   /* Increase the write count of handler */
   ha_statistic_increment(&System_status_var::ha_write_count);
 
-  assert_lizard_dict_table_check(m_prebuilt->table);
+  ut_ad(lizard::dict_table_check_valid(m_prebuilt->table));
   if (m_prebuilt->table->is_intrinsic()) {
     return intrinsic_table_write_row(record);
   }
@@ -10066,7 +10160,7 @@ int ha_innobase::update_row(const uchar *old_row, uchar *new_row) {
   uvect->table = m_prebuilt->table;
   uvect->mysql_table = table;
 
-  assert_lizard_dict_table_check(m_prebuilt->table);
+  ut_ad(lizard::dict_table_check_valid(m_prebuilt->table));
 
   /* Build an update vector from the modified fields in the rows
   (uses m_upd_buf of the handle) */
@@ -10475,7 +10569,7 @@ int ha_innobase::index_read(
     return HA_ERR_CRASHED;
   }
 
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   if (!m_prebuilt->index_usable) {
     return index->is_corrupted() ? HA_ERR_INDEX_CORRUPT
@@ -10705,7 +10799,7 @@ int ha_innobase::change_active_index(
                 InnoDB */
 {
   DBUG_TRACE;
-  const lizard::Snapshot_vision *snapshot_vision = nullptr;
+  const komodo::Snapshot_vision *snapshot_vision = nullptr;
 
   ut_ad(m_user_thd == ha_thd());
   ut_a(m_prebuilt->trx == thd_to_trx(m_user_thd));
@@ -10719,6 +10813,9 @@ int ha_innobase::change_active_index(
   }
 
   active_index = keynr;
+
+  ut_ad(active_index == MAX_KEY || table_share->keys == 0 ||
+        active_index < table_share->keys);
 
   m_prebuilt->index = innobase_get_index(keynr);
 
@@ -10825,7 +10922,7 @@ int ha_innobase::general_fetch(
     return convert_error_code_to_mysql(DB_FORCED_ABORT, 0, m_user_thd);
   }
 
-  assert_lizard_dict_table_check(m_prebuilt->table);
+  ut_ad(lizard::dict_table_check_valid(m_prebuilt->table));
 
   auto ret = innobase_srv_conc_enter_innodb(m_prebuilt);
 
@@ -11168,6 +11265,40 @@ int ha_innobase::rnd_pos(
   for the table, and it is == ref_length */
 
   int error = index_read(buf, pos, ref_length, HA_READ_KEY_EXACT);
+
+  if (error != 0) {
+    DBUG_PRINT("error", ("Got error: %d", error));
+  } else {
+    m_start_of_scan = false;
+  }
+
+  return error;
+}
+
+/** Fetches a row from the table based on a row reference.
+ @return 0, HA_ERR_KEY_NOT_FOUND, or error code */
+
+int ha_innobase::guess_pos(uchar *buf, /*!< in/out: buffer for the row */
+                           uchar *pos, /*!< in: primary key value of the row in
+                           the MySQL format, or the row id if the clustered
+                           index was internally generated by InnoDB; the
+                           length of data in pos has to be ref_length */
+                           komodo::guess_mode_t gmode) {
+  DBUG_TRACE;
+  DBUG_DUMP("key", pos, ref_length);
+
+  ha_statistic_increment(&System_status_var::ha_read_rnd_count);
+
+  ut_a(m_prebuilt->trx == thd_to_trx(ha_thd()));
+  
+  ut_ad(gmode != komodo::GM_NONE);
+  /* Note that we assume the length of the row reference is fixed
+  for the table, and it is == ref_length */
+  m_prebuilt->guess_ctx.init(gmode, (const uchar *)pos, ref_length);
+
+  int error = index_read(buf, pos, ref_length, HA_READ_KEY_EXACT);
+
+  m_prebuilt->guess_ctx.reset();
 
   if (error != 0) {
     DBUG_PRINT("error", ("Got error: %d", error));
@@ -11567,6 +11698,7 @@ void ha_innobase::position(const uchar *record) {
     log_errlog(ERROR_LEVEL, ER_INNODB_DIFF_IN_REF_LEN, (ulong)len,
                (ulong)ref_length);
   }
+  komodo::gpp_write_to_ref(ref + len, m_prebuilt->gpp_no);
 }
 
 /** Set up base columns for virtual column
@@ -11641,7 +11773,7 @@ void innodb_base_col_setup_for_stored(const dict_table_t *table,
 @return HA_* level error */
 [[nodiscard]] inline int create_table_info_t::create_table_def(
     const dd::Table *dd_table, const dd::Table *old_part_table,
-    const lizard::Ha_table_hint *table_hint) {
+    const komodo::Dict_table_hint *table_hint) {
   dict_table_t *table;
   ulint n_cols;
   dberr_t err;
@@ -12230,7 +12362,7 @@ inline int create_index(
     const char *table_name,    /*!< in: table name */
     uint key_num,              /*!< in: index number */
     const dd::Table *dd_table, /*!< in: dd::Table for the table*/
-    const lizard::Ha_var_hint *var_hint /*!< in: ddl variables policy */) {
+    const komodo::dd_var_options_t *var_options /*!< in: ddl variables policy */) {
   dict_index_t *index;
   int error;
   const KEY *key;
@@ -12301,8 +12433,8 @@ inline int create_index(
       index->rtr_srs.reset(fetch_srs(index->srid));
     }
 
-    lizard::Ha_index_hint index_hint{&key->se_attr_hint, var_hint};
-    lizard::Ha_table_hint table_hint{var_hint};
+    komodo::Dict_index_hint index_hint{&key->se_attrs, var_options};
+    komodo::Dict_table_hint table_hint{var_options};
     return convert_error_code_to_mysql(
         row_create_index_for_mysql(index, trx, nullptr, &index_hint,
                                    &table_hint, nullptr),
@@ -12428,8 +12560,8 @@ inline int create_index(
   still do our own checking using field_lengths to be absolutely
   sure we don't create too long indexes. */
 
-  lizard::Ha_index_hint index_hint{&key->se_attr_hint, var_hint};
-  lizard::Ha_table_hint table_hint{var_hint};
+  komodo::Dict_index_hint index_hint{&key->se_attrs, var_options};
+  komodo::Dict_table_hint table_hint{var_options};
   error = convert_error_code_to_mysql(
       row_create_index_for_mysql(index, trx, field_lengths, &index_hint,
                                  &table_hint, handler),
@@ -14077,9 +14209,9 @@ static dberr_t innobase_check_fk_base_col(const dd::Table *dd_table,
 @param[in]      old_part_table  dd::Table from an old partition for partitioned
                                 table, NULL otherwise.
 @return 0 or error number */
-int create_table_info_t::create_table(const dd::Table *dd_table,
-                                      const dd::Table *old_part_table,
-                                      const lizard::Ha_var_hint *var_hint) {
+int create_table_info_t::create_table(
+    const dd::Table *dd_table, const dd::Table *old_part_table,
+    const komodo::dd_var_options_t *var_options) {
   int error;
   uint primary_key_no;
   uint i;
@@ -14117,7 +14249,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
   the primary key is always number 0, if it exists */
   ut_a(primary_key_no == MAX_KEY || primary_key_no == 0);
 
-  lizard::Ha_table_hint table_hint{var_hint};
+  komodo::Dict_table_hint table_hint{var_options};
   error = create_table_def(dd_table, old_part_table, &table_hint);
   if (error) {
     return error;
@@ -14125,7 +14257,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
 
   ut_ad(m_table != nullptr);
 
-  assert_lizard_dict_table_check(m_table);
+  ut_ad(lizard::dict_table_check_valid(m_table));
 
   /* Create the keys */
 
@@ -14145,7 +14277,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
     /* In InnoDB the clustered index must always be created
     first */
     error = create_index(m_trx, m_form, m_flags, m_table_name, primary_key_no,
-                         dd_table, var_hint);
+                         dd_table, var_options);
     if (error) {
       return error;
     }
@@ -14186,7 +14318,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
         break;
     }
 
-    lizard::Ha_table_hint table_hint{var_hint};
+    komodo::Dict_table_hint table_hint{var_options};
     dberr_t err =
         fts_create_common_tables(m_trx, m_table, m_table_name,
                                  (ret == FTS_EXIST_DOC_ID_INDEX), &table_hint);
@@ -14203,7 +14335,7 @@ int create_table_info_t::create_table(const dd::Table *dd_table,
   for (i = 0; i < m_form->s->keys; i++) {
     if (i != primary_key_no) {
       error = create_index(m_trx, m_form, m_flags, m_table_name, i, dd_table,
-                           var_hint);
+                           var_options);
       if (error) {
         return error;
       }
@@ -14438,7 +14570,7 @@ int innobase_basic_ddl::create_impl(THD *thd, const char *name, TABLE *form,
                                     bool skip_strict, uint32_t old_flags,
                                     uint32_t old_flags2,
                                     const dd::Table *old_part_table,
-                                    const lizard::Ha_var_hint *var_hint) {
+                                    const komodo::dd_var_options_t *var_options) {
   char norm_name[FN_REFLEN] = {'\0'};   /* {database}/{tablename} */
   char remote_path[FN_REFLEN] = {'\0'}; /* Absolute path of table */
   char tablespace[NAME_LEN] = {'\0'};   /* Tablespace name identifier */
@@ -14476,7 +14608,7 @@ int innobase_basic_ddl::create_impl(THD *thd, const char *name, TABLE *form,
   }
 
   error = info.create_table(dd_tab != nullptr ? &dd_tab->table() : nullptr,
-                            old_part_table, var_hint);
+                            old_part_table, var_options);
   if (error) {
     goto cleanup;
   }
@@ -14505,7 +14637,8 @@ cleanup:
            index = index->next()) {
         ut_ad(index->space == table->space);
         page_no_t root = index->page_no();
-        index->root = PAGE_MARK_NULL;
+        index->set_root(PAGE_MARK_NULL);
+        index->set_pd_capacity(0);
         dict_drop_temporary_table_index(index, root);
       }
       dict_table_remove_from_cache(table);
@@ -14541,11 +14674,13 @@ cleanup:
 
 template int innobase_basic_ddl::create_impl<dd::Table>(
     THD *, const char *, TABLE *, HA_CREATE_INFO *, dd::Table *, bool, bool,
-    bool, uint32_t, uint32_t, const dd::Table *, const lizard::Ha_var_hint *);
+    bool, uint32_t, uint32_t, const dd::Table *,
+    const komodo::dd_var_options_t *);
 
 template int innobase_basic_ddl::create_impl<dd::Partition>(
     THD *, const char *, TABLE *, HA_CREATE_INFO *, dd::Partition *, bool, bool,
-    bool, uint32_t, uint32_t, const dd::Table *, const lizard::Ha_var_hint *);
+    bool, uint32_t, uint32_t, const dd::Table *,
+    const komodo::dd_var_options_t *);
 
 template <typename Table>
 int innobase_basic_ddl::delete_impl(THD *thd, const char *name,
@@ -14943,11 +15078,11 @@ int innobase_truncate<Table>::truncate() {
     inherit_metadata = true;
   }
 
-  lizard::Ha_var_hint var_hint(m_thd, inherit_metadata);
+  komodo::dd_var_options_t var_options(m_thd, inherit_metadata);
   error = innobase_basic_ddl::create_impl(
       m_thd, m_name, m_form, &m_create_info, m_dd_table, m_file_per_table,
       false, true, m_flags, m_flags2,
-      inherit_metadata ? &m_dd_table->table() : nullptr, &var_hint);
+      inherit_metadata ? &m_dd_table->table() : nullptr, &var_options);
   m_trx->in_truncate = false;
 
   if (reset) {
@@ -15310,7 +15445,7 @@ int ha_innobase::get_extra_columns_and_keys(const HA_CREATE_INFO *,
   dd_add_hidden_element(primary, db_roll_ptr);
 
   /* lizard columns */
-  lizard::dd_add_lizard_columns(dd_table, primary);
+  lizard::dd_table_add_txn_columns(dd_table, primary);
 
   /* Add all non-virtual columns to the clustered index,
   unless they already part of the PRIMARY KEY. */
@@ -15417,17 +15552,17 @@ bool ha_innobase::get_se_private_data(dd::Table *dd_table, bool reset) {
     /** For data dict tables, it's always visible, and
     dict_index_t::is_usable return true if it found DD_INDEX_TRX_ID == 0.
     Here we give it a fake number. */
-    dd_index_set_se_private_for_system_cols(
-        i, 0,
-        txn_info_t{txn_desc->cmmt.scn, txn_desc->undo_ptr, txn_desc->cmmt.gcn});
+    dd_index_set_se_private_for_system_cols(i, 0, txn_info_t(*txn_desc));
+    dd_index_set_se_private_for_creator_cols(i, 0, txn_info_t(*txn_desc));
 
     p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], FIL_PAGE_INDEX);
+    p.set(dd_index_key_strings[DD_INDEX_PAGE_DICT_CAPACITY], 0);
 
 #ifdef UNIV_DEBUG
     /* dd_properties shouldn't have IFT option. */
     ulonglong IFT_option = 0;
-    if (i->options().exists(lizard::OPTION_IFT)) {
-      i->options().get(lizard::OPTION_IFT, &IFT_option);
+    if (i->options().exists(komodo::OPTION_IFT)) {
+      i->options().get(komodo::OPTION_IFT, &IFT_option);
     }
     ut_ad(IFT_option == 0);
 #endif
@@ -15461,16 +15596,24 @@ int ha_innobase::create(const char *name, TABLE *form,
     innobase_register_trx(ht, thd, trx);
   }
 
-  lizard::Ha_var_hint var_hint(thd, false);
+  komodo::dd_var_options_t var_options(thd, false);
 
   /* Determine if this CREATE TABLE will be making a file-per-table
   tablespace.  Note that "srv_file_per_table" is not under
   dict_sys mutex protection, and could be changed while creating the
   table. So we read the current value here and make all further
   decisions based on this. */
-  return (innobase_basic_ddl::create_impl(ha_thd(), name, form, create_info,
-                                          table_def, srv_file_per_table, true,
-                                          false, 0, 0, nullptr, &var_hint));
+  int error = innobase_basic_ddl::create_impl(
+      ha_thd(), name, form, create_info, table_def, srv_file_per_table, true,
+      false, 0, 0, nullptr, &var_options);
+
+  if (!error && thd_sql_recycle_command(thd)) {
+    if (dd_clear_instant_table(*table_def, true, true) != DB_SUCCESS) {
+      error = HA_ERR_GENERIC;
+    }
+  }
+
+  return error;
 }
 
 /** Discards or imports an InnoDB tablespace.
@@ -15679,7 +15822,7 @@ int ha_innobase::truncate_impl(const char *name, TABLE *form,
     }
 
     if (is_instant) {
-      if (dd_clear_instant_table(*table_def, true) != DB_SUCCESS) {
+      if (dd_clear_instant_table(*table_def, true, false) != DB_SUCCESS) {
         error = HA_ERR_GENERIC;
       }
     }
@@ -16993,7 +17136,7 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
 
   dberr_t ret;
   ulint n_rows = 0; /* Record count in this view */
-  const lizard::Snapshot_vision *snapshot_vision;
+  const komodo::Snapshot_vision *snapshot_vision;
 
   update_thd();
 
@@ -17106,7 +17249,7 @@ ha_rows ha_innobase::records_in_range(
   page_cur_mode_t mode1;
   page_cur_mode_t mode2;
   mem_heap_t *heap;
-  const lizard::Snapshot_vision *snapshot_vision = nullptr;
+  const komodo::Snapshot_vision *snapshot_vision = nullptr;
 
   DBUG_TRACE;
 
@@ -17723,7 +17866,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     }
 
     stats.check_time = 0;
-    stats.mrr_length_per_rec = ref_length + sizeof(void *);
+    stats.mrr_length_per_rec = ref_length + gpp_length + sizeof(void *);
   }
 
   /* Verify the number of indexes in InnoDB and MySQL
@@ -18552,10 +18695,116 @@ int ha_innobase::optimize(THD *,          /*!< in: connection thread handle */
   }
 }
 
+/**
+  Temporarily switch to consistent (non-locking) reads or restore the
+  original lock mode.
+
+  CONTRACT (callers MUST respect):
+   1. enable=true / enable=false must be strictly paired on the same
+      handler instance (RAII recommended).  Asymmetric calls leak the
+      LOCK_NONE detour and break subsequent locking reads.
+   2. Reads between the bracketed pair are MVCC snapshot reads with
+      NO row locks; the caller is responsible for any higher-level
+      consistency contract (e.g. re-reading under LOCK_X before write,
+      or accepting the staleness window).
+   3. Safe on both primary and replica; primary callers must accept
+      that other connections can change visited rows concurrently
+      without blocking this scan.  Motivation on the primary:
+      concurrent Attachable_trx_rw writers (e.g. another INSERT on
+      the same graph neighborhood) briefly hold LOCK_X on graph
+      rows; a non-locking traversal here avoids unnecessary waits
+      that would otherwise serialise ANN search against ongoing
+      graph maintenance.
+
+  Implementation note: enable=true snapshots the current
+  select_lock_type into m_stored_select_lock_type so that the matching
+  enable=false restores the exact state the caller had — independent
+  of whether store_lock has been invoked yet on this handler instance.
+
+  @param  enable  true to switch to consistent read, false to restore
+*/
+void ha_innobase::set_consistent_read(bool enable) {
+  if (enable) {
+    /* Snapshot the current select_lock_type before overwriting so the
+       paired set_consistent_read(false) restores exactly what the
+       caller had, even when store_lock has not yet populated
+       m_stored_select_lock_type on this handler instance. */
+    m_stored_select_lock_type = m_prebuilt->select_lock_type;
+    m_prebuilt->select_lock_type = LOCK_NONE;
+    /* Force sql_stat_start so that the next row_search_mvcc() enters
+       the LOCK_NONE branch (row0sel.cc:4908) which assigns a read view.
+       Without this, sql_stat_start may already be false (consumed by a
+       prior locking read on this handler), causing row_search_mvcc() to
+       enter the !sql_stat_start path where it asserts that a read view
+       must already be active (row0sel.cc:4906). */
+    m_prebuilt->sql_stat_start = true;
+  } else {
+    m_prebuilt->select_lock_type = m_stored_select_lock_type;
+    /* Restore sql_stat_start so the next locking read/write re-acquires
+       the table-level intention lock (IS/IX).  The consistent-read
+       detour consumed sql_stat_start without acquiring any intention
+       lock; without this restore, subsequent LOCK_S/LOCK_X ops would
+       hit the lock_table_has() assertion (lock0lock.cc). */
+    m_prebuilt->sql_stat_start = true;
+  }
+}
+
+/**
+  Temporarily override innodb_lock_wait_timeout for the current session.
+
+  When @p seconds is non-zero, the current value is saved in
+  m_stored_lock_wait_timeout and replaced.  When @p seconds is zero,
+  the saved value is restored.  The timeout is read from THDVAR at
+  each lock-wait entry (lock_wait_suspend_thread), so this takes
+  effect immediately for subsequent operations.
+
+  @param  seconds  new timeout in seconds; 0 means restore original
+*/
+void ha_innobase::set_lock_wait_timeout(ulong seconds) {
+  THD *thd = ha_thd();
+  if (seconds > 0) {
+    m_stored_lock_wait_timeout = THDVAR(thd, lock_wait_timeout);
+    THDVAR(thd, lock_wait_timeout) = seconds;
+  } else {
+    THDVAR(thd, lock_wait_timeout) = m_stored_lock_wait_timeout;
+  }
+}
+
 /** Tries to check that an InnoDB table is not corrupted. If corruption is
  noticed, prints to stderr information about it. In case of corruption
  may also assert a failure and crash the server.
  @return HA_ADMIN_CORRUPT or HA_ADMIN_OK */
+
+/**
+ * Analyze SPC statistics and return formatted string.
+ * @param str_out  Output string for formatted SPC statistics
+ * @retval HA_ADMIN_OK      Success
+ * @retval HA_ADMIN_FAILED  Analysis failed
+ */
+int ha_innobase::analyze_spc(std::string *str_out) {
+  DBUG_TRACE;
+
+  /* Check if table is discarded or missing */
+  if (dict_table_is_discarded(m_prebuilt->table)) {
+    return HA_ADMIN_FAILED;
+  }
+
+  if (m_prebuilt->table->ibd_file_missing) {
+    return HA_ADMIN_FAILED;
+  }
+
+  /* Check if table is corrupted */
+  if (m_prebuilt->table->is_corrupted()) {
+    return HA_ADMIN_FAILED;
+  }
+
+  /* Call the SPC analyze function with string output.
+   * dict_stats_analyze_table_spc acquires its own locks on the table
+   * and index structures internally. */
+  dberr_t err =
+      lizard::dict_stats_analyze_table_spc(m_prebuilt->table, str_out);
+  return (err == DB_SUCCESS) ? HA_ADMIN_OK : HA_ADMIN_FAILED;
+}
 
 int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
                        HA_CHECK_OPT *check_opt) /*!< in: check options */
@@ -18567,7 +18816,7 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
   bool is_ok = true;
   ulint old_isolation_level;
   dberr_t ret;
-  const lizard::Snapshot_vision *snapshot_vision = nullptr;
+  const komodo::Snapshot_vision *snapshot_vision = nullptr;
 
   DBUG_TRACE;
   assert(thd == ha_thd());
@@ -19285,6 +19534,15 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
 
   innobase_srv_conc_force_exit_innodb(trx);
 
+  /** Unbind before releasing shadow vision. */
+  dberr_t error = lizard::row_prebuilt_unbind_flashback_query(m_prebuilt);
+  if (error != DB_SUCCESS) {
+    /** Lizard: Just call **my_error** here because only lock errors will
+    be expected, see unlock_external, handler::ha_external_lock. */
+    ut_ad(error == DB_SNAPSHOT_TOO_OLD);
+    my_error(ER_SNAPSHOT_TOO_OLD, 0);
+  }
+
   /* If the MySQL lock count drops to zero we know that the current SQL
   statement has ended */
 
@@ -19307,7 +19565,12 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
       //   mutex_enter(&trx_sys->mutex);
       //   trx_sys->mvcc->view_close(trx->read_view, true);
       //   mutex_exit(&trx_sys->mutex);
-      lizard::trx_vision_release(&trx->vision);
+      lizard::gcs_vision_release(&trx->vision);
+    }
+
+    if (trx->shadow_view.is_active()) {
+      /** Shadown vision always release after sql end. */
+      lizard::gcs_shadow_view_release(&trx->shadow_view);
     }
   }
 
@@ -19315,14 +19578,6 @@ int ha_innobase::external_lock(THD *thd, /*!< in: handle to the user thread */
       (m_prebuilt->select_lock_type != LOCK_NONE ||
        m_stored_select_lock_type != LOCK_NONE)) {
     ++trx->will_lock;
-  }
-
-  dberr_t error = lizard::row_prebuilt_unbind_flashback_query(m_prebuilt);
-  if (error != DB_SUCCESS) {
-    /** Lizard: Just call **my_error** here because only lock errors will
-    be expected, see unlock_external, handler::ha_external_lock. */
-    ut_ad(error == DB_SNAPSHOT_TOO_OLD);
-    my_error(ER_SNAPSHOT_TOO_OLD, 0);
   }
 
   return 0;
@@ -19911,7 +20166,11 @@ THR_LOCK_DATA **ha_innobase::store_lock(
       //      trx_sys->mvcc->view_close(trx->read_view, true);
       //      mutex_exit(&trx_sys->mutex);
 
-      lizard::trx_vision_release(&trx->vision);
+      lizard::gcs_vision_release(&trx->vision);
+    }
+
+    if (trx->shadow_view.is_active()) {
+      lizard::gcs_shadow_view_release(&trx->shadow_view);
     }
   }
 
@@ -20344,7 +20603,10 @@ int ha_innobase::cmp_ref(
     }
 
     if (result) {
-      return (result);
+      if (key_part->key_part_flag & HA_REVERSE_SORT) {
+        result = -result;
+      }
+      return result;
     }
 
     ref1 += key_part->store_length;
@@ -20533,7 +20795,7 @@ static int innobase_xa_recover_prepared_in_tc(handlerton *hton,
 static xa_status_code innobase_commit_by_xid(
     handlerton *hton,          /*!< in: handlerton*/
     XID *xid,                  /*!< in: X/Open XA transaction identification */
-    XA_specification *xa_spec) /*!< in: XA specification */
+    komodo::XA_specification *xa_spec) /*!< in: XA specification */
 {
   assert(hton == innodb_hton_ptr);
 
@@ -20566,7 +20828,7 @@ static xa_status_code innobase_commit_by_xid(
 static xa_status_code innobase_rollback_by_xid(
     handlerton *hton,          /*!< in: InnoDB handlerton */
     XID *xid,                  /*!< in: X/Open XA transaction identification */
-    XA_specification *xa_spec) /*!< in: XA specification */
+    komodo::XA_specification *xa_spec) /*!< in: XA specification */
 {
   assert(hton == innodb_hton_ptr);
 
@@ -20605,7 +20867,7 @@ static int innobase_set_prepared_in_tc(handlerton *hton, THD *thd) {
 
   ut_ad(trx_is_registered_for_2pc(trx) || thd == nullptr);
 
-  lizard::commit_policy_copy(thd, trx);
+  komodo::commit_policy_copy(thd, trx);
 
   dberr_t err = trx_set_prepared_in_tc_for_mysql(trx);
   ut_ad(err != DB_FORCED_ABORT);
@@ -20616,7 +20878,7 @@ static int innobase_set_prepared_in_tc(handlerton *hton, THD *thd) {
 static xa_status_code innobase_set_prepared_in_tc_by_xid(
     handlerton *hton,          /*!< in: InnoDB handlerton */
     XID *xid,                  /*!< in: X/Open XA transaction identification */
-    XA_specification *xa_spec) /*!< in: XA specification */
+    komodo::XA_specification *xa_spec) /*!< in: XA specification */
 {
   assert(hton == innodb_hton_ptr);
   assert(xid != nullptr);
@@ -20991,7 +21253,7 @@ in status code only if no other resize is in progress */
   if (buf_pool_resize_status_code.load() == BUF_POOL_RESIZE_COMPLETE ||
       buf_pool_resize_status_code.load() == BUF_POOL_RESIZE_FAILED) {
     /** Before do real resize, check if the liense allow to resize */
-    if (!(xlicense::POLARX_LICENSE_CALL(
+    if (!(komodo::POLARX_LICENSE_CALL(
             verify_license_BP_constrains(requested_buffer_pool_size)))) {
       return;
     }
@@ -21104,15 +21366,27 @@ static void innodb_adaptive_hash_index_update(
     const void *save) /*!< in: immediate result
                       from check function */
 {
-  /* Disable AHI */
-  btr_search_disable();
-  /*
   if (*(bool *)save) {
-    btr_search_enable();
+    btr_search_enable_by_sysvar(&srv_btr_search_enabled);
   } else {
-    btr_search_disable(true);
+    btr_search_disable_by_sysvar(&srv_btr_search_enabled);
   }
-  */
+}
+
+static void innodb_polarx_btree_search_mode_update(
+    THD *,            /*!< in: thread handle */
+    SYS_VAR *,        /*!< in: pointer to
+                                      system variable */
+    void *,           /*!< out: where the
+                      formal string goes */
+    const void *save) /*!< in: immediate result
+                      from check function */
+{
+  if (*(bool *)save) {
+    btr_search_enable_by_sysvar(&srv_polarx_btree_search_mode);
+  } else {
+    btr_search_disable_by_sysvar(&srv_polarx_btree_search_mode);
+  }
 }
 
 /** Update the system variable innodb_cmp_per_index using the "saved"
@@ -22040,6 +22314,13 @@ static float innobase_fts_find_ranking(FT_INFO *fts_hdl, uchar *, uint) {
   return (fts_retrieve_ranking(result, ft_prebuilt->fts_doc_id));
 }
 
+/** Force InnoDB to do sharp checkpoint. This forces a flush of all
+dirty pages.
+@param[in]  save      immediate result from check function */
+void advance_checkpoint_now() {
+  log_make_latest_advanced_checkpoint(*log_sys);
+}
+
 #ifdef UNIV_DEBUG
 static bool innodb_background_drop_list_empty = true;
 static bool innodb_purge_run_now = true;
@@ -22064,6 +22345,8 @@ is a no-op. This function is registered as a callback with MySQL.
 static void purge_run_now_set(THD *, SYS_VAR *, void *, const void *save) {
   if (*(bool *)save && trx_purge_state() != PURGE_STATE_DISABLED) {
     trx_purge_run();
+    lizard::srv_cycle_run_debug = true;
+    lizard::srv_cycle_wakeup();
   }
 }
 
@@ -22072,6 +22355,7 @@ is a no-op. This function is registered as a callback with MySQL.
 @param[in]  save      immediate result from check function */
 static void purge_stop_now_set(THD *, SYS_VAR *, void *, const void *save) {
   if (*(bool *)save && trx_purge_state() != PURGE_STATE_DISABLED) {
+    lizard::srv_cycle_run_debug = false;
     trx_purge_stop();
   }
 }
@@ -22652,9 +22936,9 @@ static MYSQL_SYSVAR_ULONGLONG(
 
 static MYSQL_SYSVAR_BOOL(
     adaptive_hash_index, srv_btr_search_enabled, PLUGIN_VAR_OPCMDARG,
-    "Enable InnoDB adaptive hash index (enabled by default). "
+    "Enable InnoDB adaptive hash index (disabled by default). "
     " Disable with --skip-innodb-adaptive-hash-index.",
-    nullptr, innodb_adaptive_hash_index_update, true);
+    nullptr, innodb_adaptive_hash_index_update, false);
 
 /** Number of distinct partitions of AHI.
 Each partition is protected by its own latch and so we have parts number
@@ -22904,6 +23188,17 @@ static MYSQL_SYSVAR_BOOL(
 static MYSQL_SYSVAR_LONG(fill_factor, ddl::fill_factor, PLUGIN_VAR_RQCMDARG,
                          "Percentage of B-tree page filled during bulk insert",
                          nullptr, nullptr, 100, 10, 100, 0);
+
+static MYSQL_SYSVAR_ULONG(
+    spc_ddl_encode_threshold, ddl::spc_encode_threshold, PLUGIN_VAR_RQCMDARG,
+    "Minimum non-encoded data save ratio for prefix compression.", nullptr,
+    nullptr, 30, 10, 100, 0);
+
+static MYSQL_SYSVAR_ULONG(spc_ddl_encode_attempts, ddl::spc_encode_attempts,
+                          PLUGIN_VAR_RQCMDARG,
+                          "Maximum number of times the page can be encoded by "
+                          "using prefix compression",
+                          nullptr, nullptr, 2, 1, 100, 0);
 
 static MYSQL_SYSVAR_BOOL(
     ft_enable_diag_print, fts_enable_diag_print, PLUGIN_VAR_OPCMDARG,
@@ -23696,17 +23991,29 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to disable ddl cleanout when  (off by default)", NULL, NULL,
     false);
 
+static MYSQL_SYSVAR_BOOL(
+    commit_cleanout_disable, lizard::opt_commit_cleanout_disable,
+    PLUGIN_VAR_OPCMDARG,
+    "Whether to disable ddl cleanout when  (off by default)", NULL, NULL,
+    false);
+
+static MYSQL_SYSVAR_BOOL(
+    count_star_cleanout_disable, lizard::opt_count_star_cleanout_disable,
+    PLUGIN_VAR_OPCMDARG,
+    "Whether to disable parallel cleanout when count star (true by default)",
+    NULL, NULL, true);
+
 static MYSQL_SYSVAR_ULONG(commit_cleanout_max_rows,
                           lizard::srv_commit_cleanout_max_rows,
                           PLUGIN_VAR_OPCMDARG, "max cleanout rows at commit",
                           NULL, NULL, lizard::Commit_cleanout::STATIC_CURSORS,
                           0, lizard::Commit_cleanout::MAX_CURSORS, 0);
 
-static MYSQL_SYSVAR_ULONG(txn_undo_page_reuse_max_percent,
-                          lizard::txn_undo_page_reuse_max_percent,
+static MYSQL_SYSVAR_ULONG(txn_slot_page_reuse_max_percent,
+                          lizard::txn_slot_page_reuse_max_percent,
                           PLUGIN_VAR_OPCMDARG,
                           "The max percent of txn undo page that can be reused",
-                          NULL, NULL, TXN_UNDO_PAGE_REUSE_MAX_PCT_DEF, 0, 100,
+                          NULL, NULL, TXN_SLOT_PAGE_REUSE_MAX_PCT_DEF, 0, 100,
                           0);
 
 static MYSQL_SYSVAR_BOOL(scn_history_task_enabled,
@@ -23721,12 +24028,6 @@ static MYSQL_SYSVAR_ULONG(scn_history_interval,
                           NULL, NULL, 3, 1,
                           lizard::SRV_SCN_HISTORY_INTERVAL_MAX, 0);
 
-static MYSQL_SYSVAR_BOOL(rds_flashback_enabled,
-                         lizard::srv_flashback_query_enable,
-                         PLUGIN_VAR_OPCMDARG,
-                         "Whether to enable use as of query (true by default)",
-                         NULL, NULL, true);
-
 static MYSQL_SYSVAR_ULONG(
     scn_history_keep_days, lizard::srv_scn_history_keep_days,
     PLUGIN_VAR_OPCMDARG,
@@ -23734,27 +24035,27 @@ static MYSQL_SYSVAR_ULONG(
     30, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_retention,
-                          lizard::Undo_retention::retention_time,
+                          lizard::srv_undo_retention_time_in_seconds,
                           PLUGIN_VAR_OPCMDARG,
                           "Retention time of undo data in seconds", NULL,
-                          lizard::Undo_retention::on_update_and_start, 0, 0,
+                          lizard::undo_retention_parameter_on_update, 0, 0,
                           UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_space_supremum_size,
-                          lizard::Undo_retention::space_limit,
+                          lizard::srv_undo_retention_space_limit_in_mb,
                           PLUGIN_VAR_OPCMDARG,
                           "Upper limitation size of undo file space in MiB",
-                          lizard::Undo_retention::check_limit,
-                          lizard::Undo_retention::on_update, 100 * 1024, 0,
-                          UINT_MAX32, 0);
+                          lizard::undo_retention_check_space_limit,
+                          lizard::undo_retention_parameter_on_update,
+                          100 * 1024, 0, UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(undo_space_reserved_size,
-                          lizard::Undo_retention::space_reserve,
+                          lizard::srv_undo_retention_space_reserve_in_mb,
                           PLUGIN_VAR_OPCMDARG,
                           "Reserved (infimum) size of undo file space in MiB",
-                          lizard::Undo_retention::check_reserve,
-                          lizard::Undo_retention::on_update, 0, 0, UINT_MAX32,
-                          0);
+                          lizard::undo_retention_check_space_reserve,
+                          lizard::undo_retention_parameter_on_update, 0, 0,
+                          UINT_MAX32, 0);
 
 static MYSQL_SYSVAR_ULONG(txn_retention, lizard::txn_retention_time,
                           PLUGIN_VAR_OPCMDARG,
@@ -23803,6 +24104,14 @@ static MYSQL_SYSVAR_BOOL(tcn_cache_replace_after_commit,
                          "whether to replace global tcn cache after commit",
                          NULL, NULL, true);
 
+static MYSQL_SYSVAR_ULONG(tcn_cache_guess_ratio,
+                          lizard::srv_tcn_cache_guess_ratio,
+                          PLUGIN_VAR_OPCMDARG,
+                          "Percentage of tcn cache entries used as the tid "
+                          "window when guessing whether a record's trx is "
+                          "cached (default 95)",
+                          nullptr, nullptr, 95, 10, 100, 0);
+
 static MYSQL_SYSVAR_BOOL(lizard_stat_enabled, lizard::stat_enabled,
                          PLUGIN_VAR_OPCMDARG,
                          "whether to enable lizard statistics", NULL, NULL,
@@ -23845,6 +24154,12 @@ static MYSQL_SYSVAR_ULONG(
     "batch in performance_schema.data_locks.",
     NULL, NULL, 1024 * 1024, 1, 1024 * 1024 * 1024, 0);
 
+static MYSQL_SYSVAR_ULONG(
+    redo_log_file_cache_pct, redo_log_file_cache_pct,
+    PLUGIN_VAR_OPCMDARG,
+    "Percentage of redo log file cache used for redo log governor. ", NULL,
+    NULL, 50, 0, 100, 0);
+
 static MYSQL_SYSVAR_BOOL(
     index_scan_guess_clust_enabled, lizard::index_scan_guess_clust_enabled,
     PLUGIN_VAR_OPCMDARG,
@@ -23863,18 +24178,48 @@ static MYSQL_SYSVAR_BOOL(
     "Whether to enable guess primary pageno during the lock. ", NULL, NULL,
     true);
 
+static MYSQL_SYSVAR_BOOL(
+    index_pcur_guess_restore_enabled, lizard::index_pcur_guess_restore_enabled,
+    PLUGIN_VAR_OPCMDARG,
+    "Enable btr_pcur_t guess mode for restore_position: "
+    "attempt page-level re-search before falling back to full B-tree search.",
+    NULL, NULL, true);
+
 static MYSQL_SYSVAR_ULONG(cleanout_dirty_threshold,
                           lizard::srv_cleanout_dirty_threshold,
                           PLUGIN_VAR_OPCMDARG,
                           "Make page dirty if cleaned records are more than "
                           "threshold and page was still clean",
-                          NULL, NULL, 5, 0, 1024 * 1024, 0);
+                          NULL, NULL, 1, 0, 1024 * 1024, 0);
 
 static MYSQL_SYSVAR_BOOL(inject_stress_test_for_panda,
                          lizard::inject_stress_test_for_panda,
                          PLUGIN_VAR_OPCMDARG,
                          "Whether to enable inject stress test for panda.",
                          NULL, NULL, false);
+
+static MYSQL_SYSVAR_BOOL(inject_stress_test_for_guess,
+                         lizard::inject_stress_test_for_guess,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether to skip optimistic restore and go directly "
+                         "to guess+search path in restore_position.",
+                         NULL, NULL, false);
+
+static MYSQL_SYSVAR_BOOL(gcs_print_process_debug,
+                         lizard::srv_gcs_print_process_debug,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether to print process of Global Change System. ",
+                         NULL, NULL, false);
+
+static MYSQL_SYSVAR_UINT(gcs_scn_list_shards, lizard::srv_gcs_scn_list_shards,
+                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                         "The number of shards for GCS scn lists.", NULL, NULL,
+                         2, 1, 1024, 0);
+
+static MYSQL_SYSVAR_UINT(gcs_tid_list_shards, lizard::srv_gcs_tid_list_shards,
+                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                         "The number of shards for GCS tid lists.", NULL, NULL,
+                         2, 1, FSP_IMPLICIT_TXN_TABLESPACES, 0);
 #ifdef UNIV_DEBUG
 static MYSQL_SYSVAR_UINT(dbug_gpp_no, lizard::dbug_gpp_no, PLUGIN_VAR_OPCMDARG,
                          "Set gpp_no for debug use.", NULL, NULL, PAGE_NO_MAX,
@@ -23884,7 +24229,116 @@ static MYSQL_SYSVAR_ULONG(dbug_panda_index_id, lizard::dbug_panda_index_id,
                           PLUGIN_VAR_OPCMDARG,
                           "Set index_id of a panda index for debug use.", NULL,
                           NULL, 0, 0, ULONG_MAX, 0);
+
+static MYSQL_SYSVAR_ULONG(dbug_pd_capacity, lizard::dbug_pd_capacity,
+                          PLUGIN_VAR_OPCMDARG, "Set pd_capacity for debug use.",
+                          NULL, NULL, ULINT_MAX, 0, ULINT_MAX, 0);
+
+static MYSQL_SYSVAR_UINT(
+    limit_insert_spc_encode_debug,
+    lizard::btr_cur_limit_insert_spc_encode_debug, PLUGIN_VAR_RQCMDARG,
+    "Artificially limit inserts before forcing SPC encode path (0=disabled, "
+    ">1 force encode when n_recs >= value).",
+    nullptr, nullptr, 0, 0, UINT_MAX32, 0);
+
+static MYSQL_SYSVAR_BOOL(
+    dbug_gcs_enable_traverse_scn_list, lizard::dbug_gcs_enable_traverse_scn_list,
+    PLUGIN_VAR_OPCMDARG,
+    "Whether to enable traverse scn list, only for purge waiting.", NULL, NULL,
+    false);
 #endif /* UNIV_DEBUG */
+
+static MYSQL_SYSVAR_BOOL(
+    quick_purge_build_prev_version,
+    lizard::srv_quick_purge_build_prev_version, PLUGIN_VAR_OPCMDARG,
+    "Whether to optimize building prev version for purge system", NULL, NULL,
+    true);
+
+static MYSQL_SYSVAR_UINT(query_cleanout_level, lizard::srv_query_cleanout_level,
+                         PLUGIN_VAR_OPCMDARG, "Cleanout level for query", NULL,
+                         NULL, 1, 0, 2, 0);
+
+static MYSQL_SYSVAR_ULONG(checkpoint_wait_time, srv_checkpoint_wait_time,
+                         PLUGIN_VAR_OPCMDARG,
+                         "The maximum time to wait for checkpoint to complete in seconds.", 
+                         NULL, NULL, 2, 0, 20, 0);
+
+static MYSQL_SYSVAR_BOOL(polarx_btree_search_mode, srv_polarx_btree_search_mode,
+                         PLUGIN_VAR_OPCMDARG, "Polardbx btree search mode",
+                         nullptr, innodb_polarx_btree_search_mode_update,
+                         false);
+
+static MYSQL_SYSVAR_BOOL(cycle_print_process_debug,
+                         lizard::srv_cycle_print_process_debug,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Whether to print process of cycle system. ", NULL,
+                         NULL, false);
+
+static MYSQL_SYSVAR_ULONG(
+    cycle_rseg_batch_size, lizard::srv_cycle_rseg_batch_size,
+    PLUGIN_VAR_OPCMDARG,
+    "Number of txn slots to cycle per rseg in one batch from the history list.",
+    nullptr, nullptr, 64, /* Default setting */
+    1,                    /* Minimum value */
+    1024, 0);             /* Maximum value */
+
+static MYSQL_SYSVAR_BOOL(
+    index_pos_guess_clust_enabled, lizard::index_pos_guess_clust_enabled,
+    PLUGIN_VAR_OPCMDARG,
+    "Whether to enable guess primary page no during the index merge. ", NULL,
+    NULL, true);
+
+static MYSQL_SYSVAR_BOOL(
+    change_buffering_hippo_purge_enabled, ibuf_hippo_purge_enabled,
+    PLUGIN_VAR_OPCMDARG,
+    "Enable change buffering purge operations on hippo index", nullptr, nullptr,
+    false);
+
+static MYSQL_SYSVAR_BOOL(hippo_mvcc_enabled, lizard::hippo_mvcc_enabled,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Enable MVCC fast path for hippo index", nullptr,
+                         nullptr, true);
+
+static MYSQL_SYSVAR_BOOL(hippo_lock_enabled, lizard::hippo_lock_enabled,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Enable implicit lock fast path for hippo index",
+                         nullptr, nullptr, true);
+
+static MYSQL_SYSVAR_BOOL(hippo_purge_enabled, lizard::hippo_purge_enabled,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Enable purge fast path for hippo index", nullptr,
+                         nullptr, true);
+
+static MYSQL_SYSVAR_ULONG(
+    spc_analyze_sample_percentage,
+    srv_spc_analyze_sample_percentage, PLUGIN_VAR_OPCMDARG,
+    "The percentage of leaf index pages to sample when analyzing spc table"
+    " statistics (default 100)",
+    nullptr, nullptr, 100, 0, 100, 0);
+
+static MYSQL_SYSVAR_ULONG(mark_corrupt_spc_by_space_id,
+                          lizard::srv_mark_corrupt_spc_by_space_id,
+                          PLUGIN_VAR_RQCMDARG,
+                          "Mark SPC index as corrupt for the given space_id. "
+                          "Set to SPACE_UNKNOWN (4294967295) to disable.",
+                          nullptr, nullptr, SPACE_UNKNOWN, 0, SPACE_UNKNOWN, 0);
+
+static MYSQL_SYSVAR_BOOL(lob_prealloc, lizard::srv_lob_prealloc,
+                         PLUGIN_VAR_RQCMDARG,
+                         "Whether to enable LOB page preallocation "
+                         "to reduce latch contention on LOB inserts.",
+                         nullptr, nullptr, true);
+
+static MYSQL_SYSVAR_BOOL(verify_enc_checksum, srv_verify_enc_checksum,
+                         PLUGIN_VAR_OPCMDARG,
+                         "Enable encrypted-page checksum verification "
+                         "before decrypt.",
+                         nullptr, NULL, false);
+
+static MYSQL_SYSVAR_BOOL(acquire_next_key_on_next_rec,
+                         srv_acquire_next_key_on_next_rec, PLUGIN_VAR_OPCMDARG,
+                         "Acquire next key on next rec in rc uk gap scenario",
+                         nullptr, NULL, false);
 
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
@@ -23940,6 +24394,8 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(force_recovery_crash),
 #endif /* UNIV_DEBUG */
     MYSQL_SYSVAR(fill_factor),
+    MYSQL_SYSVAR(spc_ddl_encode_attempts),
+    MYSQL_SYSVAR(spc_ddl_encode_threshold),
     MYSQL_SYSVAR(ft_cache_size),
     MYSQL_SYSVAR(ft_total_cache_size),
     MYSQL_SYSVAR(ft_result_cache_limit),
@@ -24054,6 +24510,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(monitor_reset_all),
     MYSQL_SYSVAR(purge_threads),
     MYSQL_SYSVAR(purge_batch_size),
+    MYSQL_SYSVAR(checkpoint_wait_time),
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(background_drop_list_empty),
     MYSQL_SYSVAR(purge_run_now),
@@ -24115,13 +24572,14 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(data_file_purge_max_size),
     MYSQL_SYSVAR(data_file_purge_dir),
     MYSQL_SYSVAR(print_data_file_purge_process),
-    MYSQL_SYSVAR(rds_flashback_enabled),
     MYSQL_SYSVAR(cleanout_safe_mode),
     MYSQL_SYSVAR(txn_cleanout_disable),
     MYSQL_SYSVAR(gpp_cleanout_disable),
     MYSQL_SYSVAR(ddl_cleanout_disable),
+    MYSQL_SYSVAR(commit_cleanout_disable),
+    MYSQL_SYSVAR(count_star_cleanout_disable),
     MYSQL_SYSVAR(commit_cleanout_max_rows),
-    MYSQL_SYSVAR(txn_undo_page_reuse_max_percent),
+    MYSQL_SYSVAR(txn_slot_page_reuse_max_percent),
     MYSQL_SYSVAR(scn_history_interval),
     MYSQL_SYSVAR(scn_history_task_enabled),
     MYSQL_SYSVAR(scn_history_keep_days),
@@ -24134,6 +24592,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(tcn_cache_size),
     MYSQL_SYSVAR(tcn_block_cache_type),
     MYSQL_SYSVAR(tcn_cache_replace_after_commit),
+    MYSQL_SYSVAR(tcn_cache_guess_ratio),
     MYSQL_SYSVAR(lizard_stat_enabled),
     MYSQL_SYSVAR(cleanout_write_redo),
     MYSQL_SYSVAR(txn_cached_list_keep_size),
@@ -24141,16 +24600,40 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(vision_use_commit_snapshot_debug),
     MYSQL_SYSVAR(btree_sampling),
     MYSQL_SYSVAR(pfs_data_locks_max_locks_per_batch),
+    MYSQL_SYSVAR(redo_log_file_cache_pct),
     MYSQL_SYSVAR(index_scan_guess_clust_enabled),
     MYSQL_SYSVAR(index_purge_guess_clust_enabled),
     MYSQL_SYSVAR(index_lock_guess_clust_enabled),
+    MYSQL_SYSVAR(index_pcur_guess_restore_enabled),
     MYSQL_SYSVAR(inject_stress_test_for_panda),
+    MYSQL_SYSVAR(inject_stress_test_for_guess),
     MYSQL_SYSVAR(cleanout_dirty_threshold),
+    MYSQL_SYSVAR(gcs_print_process_debug),
+    MYSQL_SYSVAR(gcs_tid_list_shards),
+    MYSQL_SYSVAR(gcs_scn_list_shards),
 #ifdef UNIV_DEBUG
     MYSQL_SYSVAR(dbug_gpp_no),
     MYSQL_SYSVAR(dbug_panda_index_id),
+    MYSQL_SYSVAR(dbug_pd_capacity),
+    MYSQL_SYSVAR(limit_insert_spc_encode_debug),
+    MYSQL_SYSVAR(dbug_gcs_enable_traverse_scn_list),
 #endif /* UNIV_DEBUG */
     MYSQL_SYSVAR(encrypt_algorithm),
+    MYSQL_SYSVAR(quick_purge_build_prev_version),
+    MYSQL_SYSVAR(query_cleanout_level),
+    MYSQL_SYSVAR(polarx_btree_search_mode),
+    MYSQL_SYSVAR(cycle_print_process_debug),
+    MYSQL_SYSVAR(cycle_rseg_batch_size),
+    MYSQL_SYSVAR(index_pos_guess_clust_enabled),
+    MYSQL_SYSVAR(change_buffering_hippo_purge_enabled),
+    MYSQL_SYSVAR(hippo_mvcc_enabled),
+    MYSQL_SYSVAR(hippo_lock_enabled),
+    MYSQL_SYSVAR(hippo_purge_enabled),
+    MYSQL_SYSVAR(spc_analyze_sample_percentage),
+    MYSQL_SYSVAR(mark_corrupt_spc_by_space_id),
+    MYSQL_SYSVAR(lob_prealloc),
+    MYSQL_SYSVAR(verify_enc_checksum),
+    MYSQL_SYSVAR(acquire_next_key_on_next_rec),
     nullptr};
 
 mysql_declare_plugin(innobase){

@@ -33,7 +33,7 @@ call polarx.changeset_fetch('c2');
 
 connection conn1;
 rollback to point1;
-update c2 set str = "hijk" where id = 2;
+insert into c2 values (3, "mng", "c");
 commit;
 
 connection conn2;

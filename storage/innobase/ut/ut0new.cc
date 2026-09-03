@@ -35,7 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_compiler.h"
 #include "ut0new.h"
 
-#include "lizard0gcs0hist.h"
+#include "lizard0gcs0snapshot.h"
 
 /** System-default huge (large) page setting. */
 const size_t large_page_default_size = ut::detail::large_page_size();
@@ -55,6 +55,7 @@ PSI_memory_key mem_key_dict_stats_bg_recalc_pool_t;
 PSI_memory_key mem_key_dict_stats_index_map_t;
 PSI_memory_key mem_key_dict_stats_n_diff_on_level;
 PSI_memory_key mem_key_fil_space_t;
+PSI_memory_key mem_key_lock_sys;
 PSI_memory_key mem_key_other;
 PSI_memory_key mem_key_partitioning;
 PSI_memory_key mem_key_row_cleanout;
@@ -64,7 +65,7 @@ PSI_memory_key mem_key_std;
 PSI_memory_key mem_key_trx_sys_t_rw_trx_ids;
 PSI_memory_key mem_key_undo_spaces;
 PSI_memory_key mem_key_ut_lock_free_hash_t;
-PSI_memory_key mem_key_tcn;
+PSI_memory_key tcn_mem_key;
 /* Please obey alphabetical order in the definitions above. */
 
 #ifdef UNIV_PFS_MEMORY
@@ -98,6 +99,7 @@ static PSI_memory_info pfs_info[] = {
     {&mem_key_dict_stats_n_diff_on_level, "dict_stats_n_diff_on_level", 0, 0,
      PSI_DOCUMENT_ME},
     {&mem_key_fil_space_t, "fil_space_t", 0, 0, PSI_DOCUMENT_ME},
+    {&mem_key_lock_sys, "lock_sys", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_other, "other", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_partitioning, "partitioning", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_row_cleanout, "row_cleanout", 0, 0, PSI_DOCUMENT_ME},
@@ -110,7 +112,7 @@ static PSI_memory_info pfs_info[] = {
     {&mem_key_ut_lock_free_hash_t, "ut_lock_free_hash_t", 0, 0,
      PSI_DOCUMENT_ME},
     {&commit_snapshot_mem_key, "commit_snapshot_buffer", 0, 0, PSI_DOCUMENT_ME},
-    {&mem_key_tcn, "gloabl_tcn_cache", 0, 0, PSI_DOCUMENT_ME},
+    {&tcn_mem_key, "gloabl_tcn_cache", 0, 0, PSI_DOCUMENT_ME},
     /* Please obey alphabetical order in the definitions above. */
 };
 

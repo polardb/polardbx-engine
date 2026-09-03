@@ -14,7 +14,7 @@
    51 Franklin Street, Suite 500, Boston, MA 02110-1335 USA */
 
 #include "sql/rpl_rli_ext.h"
-#include "bl_consensus_log.h"
+#include "komodo0consensus0xlog.h"
 #include "sql/log_event.h"
 #include "sql/rpl_rli.h"
 #include "storage/innobase/include/ut0dbg.h"
@@ -38,8 +38,8 @@ void update_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
     if (!ev || ev->future_event_relay_log_pos != ev->consensus_index_end_pos)
       return;
 
-    if (ev->consensus_real_index > consensus_ptr->getAppliedIndex()) {
-      consensus_ptr->updateAppliedIndex(ev->consensus_real_index);
+    if (ev->consensus_real_index > komodo::xlog_get_paxos_applied_index()) {
+      komodo::xlog_update_paxos_applied_index(ev->consensus_real_index);
       replica_read_manager.update_lsn(ev->consensus_real_index);
     }
   }
@@ -73,8 +73,8 @@ void mts_advance_consensus_apply_index(Relay_log_info *rli, Log_event *ev) {
   uint64 consensus_index = rli->m_consensus_index_buf->add_index_advance_tail(
       ev->consensus_real_index);
 
-  if (consensus_index > consensus_ptr->getAppliedIndex()) {
-    consensus_ptr->updateAppliedIndex(consensus_index);
+  if (consensus_index > komodo::xlog_get_paxos_applied_index()) {
+    komodo::xlog_update_paxos_applied_index(consensus_index);
     replica_read_manager.update_lsn(consensus_index);
   }
 }
@@ -88,8 +88,8 @@ void mts_force_consensus_apply_index(Relay_log_info *rli,
   assert(rli->info_thd->xpaxos_replication_channel);
   rli->m_consensus_index_buf->force_advance_tail(consensus_index);
 
-  if (consensus_index > consensus_ptr->getAppliedIndex()) {
-    consensus_ptr->updateAppliedIndex(consensus_index);
+  if (consensus_index > komodo::xlog_get_paxos_applied_index()) {
+    komodo::xlog_update_paxos_applied_index(consensus_index);
     replica_read_manager.update_lsn(consensus_index);
   }
 }

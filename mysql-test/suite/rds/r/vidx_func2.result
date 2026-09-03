@@ -1,0 +1,558 @@
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+########################################################################
+# 1. Whitespace tolerance
+########################################################################
+SELECT VECTOR_DIM(VEC_FROMTEXT("  [1,2,3]"));
+VECTOR_DIM(VEC_FROMTEXT("  [1,2,3]"))
+3
+SELECT VECTOR_DIM(VEC_FROMTEXT("\t[1,2,3]"));
+VECTOR_DIM(VEC_FROMTEXT("\t[1,2,3]"))
+3
+SELECT VECTOR_DIM(VEC_FROMTEXT("\n[1,2,3]"));
+VECTOR_DIM(VEC_FROMTEXT("\n[1,2,3]"))
+3
+SELECT VECTOR_DIM(VEC_FROMTEXT("\r\n[1,2,3]"));
+VECTOR_DIM(VEC_FROMTEXT("\r\n[1,2,3]"))
+3
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[  1,2,3]"));
+VEC_TOTEXT(VEC_FROMTEXT("[  1,2,3]"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,  2,  3]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1,  2,  3]"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3  ]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1,2,3  ]"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]  "));
+VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]  "))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\n"));
+VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\n"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\r\n"));
+VEC_TOTEXT(VEC_FROMTEXT("[1,2,3]\r\n"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("  [  1,  2.5,  3  ]  "));
+VEC_TOTEXT(VEC_FROMTEXT("  [  1,  2.5,  3  ]  "))
+[1,2.5,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[  0.1 ,\t0.2 ,\n0.3  ]"));
+VEC_TOTEXT(VEC_FROMTEXT("[  0.1 ,\t0.2 ,\n0.3  ]"))
+[0.1,0.2,0.3]
+# Whitespace BEFORE comma (after number) — should succeed
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1 ,2 ,3]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1 ,2 ,3]"))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1\t,2\t,3]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1\t,2\t,3]"))
+[1,2,3]
+# Whitespace-only input → error
+SELECT VEC_FROMTEXT("   ");
+ERROR HY000: Data cannot be converted to a valid vector: '   '
+
+########################################################################
+# 2. Valid number formats & boundaries
+########################################################################
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[0,1,2,3,4,5,6,7,8,9]"));
+VEC_TOTEXT(VEC_FROMTEXT("[0,1,2,3,4,5,6,7,8,9]"))
+[0,1,2,3,4,5,6,7,8,9]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[-1,-2,-3]"));
+VEC_TOTEXT(VEC_FROMTEXT("[-1,-2,-3]"))
+[-1,-2,-3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1.5, 2.5, 3.5e0]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1.5, 2.5, 3.5e0]"))
+[1.5,2.5,3.5]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1e0, 2.5e-1, -3.14e+2]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1e0, 2.5e-1, -3.14e+2]"))
+[1,0.25,-314]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1E0, 2E+1, 3E-1, -4e2]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1E0, 2E+1, 3E-1, -4e2]"))
+[1,20,0.3,-400]
+# Decimal without integer part
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.5, .25, .125]'));
+VEC_TOTEXT(VEC_FROMTEXT('[.5, .25, .125]'))
+[0.5,0.25,0.125]
+# Integer without decimal part
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]'));
+VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]'))
+[1,2,3]
+# Negative zero
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-0.0, 0.0, -0]'));
+VEC_TOTEXT(VEC_FROMTEXT('[-0.0, 0.0, -0]'))
+[-0,0,-0]
+# Zero in various forms
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[0, 0.0, -0.0, 0e0, 0.0e+0]'));
+VEC_TOTEXT(VEC_FROMTEXT('[0, 0.0, -0.0, 0e0, 0.0e+0]'))
+[0,0,-0,0,0]
+# Float boundary values
+SELECT VECTOR_DIM(VEC_FROMTEXT('[3.4028235e+38, -3.4028235e+38]'));
+VECTOR_DIM(VEC_FROMTEXT('[3.4028235e+38, -3.4028235e+38]'))
+2
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.17549435e-38, 1.0]'));
+VECTOR_DIM(VEC_FROMTEXT('[1.17549435e-38, 1.0]'))
+2
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]'));
+VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]'))
+2
+# Below smallest float subnormal -> underflows to a finite 0.0f and is
+# accepted (NOT rejected as conversion error). pgvector / strtof do the same.
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0]'));
+VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0]'))
+[0,0,0]
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0]'));
+VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0]'))
+3
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.23456789012345, 9.87654321098765]'));
+VEC_TOTEXT(VEC_FROMTEXT('[1.23456789012345, 9.87654321098765]'))
+[1.23457,9.87654]
+SELECT VEC_TOTEXT(VEC_FROMTEXT("[1.123456789, 2.987654321, 3.141592653]"));
+VEC_TOTEXT(VEC_FROMTEXT("[1.123456789, 2.987654321, 3.141592653]"))
+[1.12346,2.98765,3.14159]
+# Single element
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[42.0]'));
+VEC_TOTEXT(VEC_FROMTEXT('[42.0]'))
+[42]
+SELECT VECTOR_DIM(VEC_FROMTEXT('[42.0]'));
+VECTOR_DIM(VEC_FROMTEXT('[42.0]'))
+1
+# NULL handling
+SELECT VEC_FROMTEXT(NULL);
+VEC_FROMTEXT(NULL)
+NULL
+SELECT VEC_TOTEXT(NULL);
+VEC_TOTEXT(NULL)
+NULL
+SELECT VECTOR_DIM(NULL);
+VECTOR_DIM(NULL)
+NULL
+SELECT VEC_TOTEXT(x'');
+VEC_TOTEXT(x'')
+
+
+########################################################################
+# 3. Invalid inputs & error paths
+########################################################################
+# Leading '+' sign — now accepted in both paths
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5, +3.5]'));
+VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5, +3.5]'))
+[1.5,2.5,3.5]
+# ERANGE overflow
+SELECT VEC_FROMTEXT("[1e400,2,3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[1e400,2,3]'
+SELECT VEC_FROMTEXT("[-1e400,2,3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[-1e400,2,3]'
+# Float-specific overflow: valid double but > FLT_MAX rounds to inf -> rejected
+SELECT VEC_FROMTEXT("[4e38,2,3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[4e38,2,3]'
+# Inf/NaN
+SELECT VEC_FROMTEXT("[inf, 2, 3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[inf, 2, 3]'
+SELECT VEC_FROMTEXT("[1, nan, 3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[1, nan, 3]'
+SELECT VEC_FROMTEXT("[1, 2, -inf]");
+ERROR HY000: Data cannot be converted to a valid vector: '[1, 2, -inf]'
+# Empty / missing brackets
+SELECT VEC_FROMTEXT("");
+ERROR HY000: Data cannot be converted to a valid vector: ''
+SELECT VEC_FROMTEXT("1,2,3");
+ERROR HY000: Data cannot be converted to a valid vector: '1,2,3'
+SELECT VEC_FROMTEXT("[1,2,3");
+ERROR HY000: Data cannot be converted to a valid vector: '[1,2,3'
+SELECT VEC_FROMTEXT("[]");
+ERROR HY000: Data cannot be converted to a valid vector: '[]'
+# Non-numeric / garbage
+SELECT VEC_FROMTEXT("[1, abc, 3]");
+ERROR HY000: Data cannot be converted to a valid vector: '[1, abc, 3]'
+SELECT VEC_FROMTEXT("[1,2,3] extra");
+ERROR HY000: Data cannot be converted to a valid vector: '[1,2,3] extra'
+SELECT VEC_FROMTEXT("[1,2,3]abc");
+ERROR HY000: Data cannot be converted to a valid vector: '[1,2,3]abc'
+# Very long number (100 digits) — overflow
+SELECT VEC_FROMTEXT(CONCAT('[', REPEAT('1', 100), ',2,3]'));
+ERROR HY000: Data cannot be converted to a valid vector: '[1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,2,3]'
+
+########################################################################
+# 4. Structural delimiter edge cases
+########################################################################
+SELECT VEC_FROMTEXT('[1,2,3,]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1,2,3,]'
+SELECT VEC_FROMTEXT('[1,,2,3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1,,2,3]'
+SELECT VEC_FROMTEXT('[,1,2,3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[,1,2,3]'
+SELECT VEC_FROMTEXT('[,,,]');
+ERROR HY000: Data cannot be converted to a valid vector: '[,,,]'
+SELECT VEC_FROMTEXT('[[1,2,3]]');
+ERROR HY000: Data cannot be converted to a valid vector: '[[1,2,3]]'
+SELECT VEC_FROMTEXT('[1;2;3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1;2;3]'
+SELECT VEC_FROMTEXT('[1 2 3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1 2 3]'
+SELECT VEC_FROMTEXT(CONCAT('[', CHAR(0xEF,0xBC,0x91 USING utf8mb4), ',2,3]'));
+ERROR HY000: Data cannot be converted to a valid vector: '[１,2,3]'
+SELECT VEC_FROMTEXT(CONCAT('[1,', CHAR(0), ',3]'));
+ERROR HY000: Data cannot be converted to a valid vector: '[1,'
+
+########################################################################
+# 5. Charset dispatch (ASCII fast path vs generic path)
+########################################################################
+# ASCII-based → fast path
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_latin1'[1.5, 2.5, 3.5]'));
+VEC_TOTEXT(VEC_FROMTEXT(_latin1'[1.5, 2.5, 3.5]'))
+[1.5,2.5,3.5]
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_utf8mb4'  [1, 2, 3]  '));
+VEC_TOTEXT(VEC_FROMTEXT(_utf8mb4'  [1, 2, 3]  '))
+[1,2,3]
+SELECT VEC_TOTEXT(VEC_FROMTEXT(_binary'[10,20,30]'));
+VEC_TOTEXT(VEC_FROMTEXT(_binary'[10,20,30]'))
+[10,20,30]
+# NOT ASCII-based → generic path
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1.1, 2.2, 3.3]' USING ucs2)));
+VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1.1, 2.2, 3.3]' USING ucs2)))
+[1.1,2.2,3.3]
+Warnings:
+Warning	1287	'ucs2' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('  [4, 5, 6]  ' USING utf16)));
+VEC_TOTEXT(VEC_FROMTEXT(CONVERT('  [4, 5, 6]  ' USING utf16)))
+[4,5,6]
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[7,8,9]' USING utf32)));
+VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[7,8,9]' USING utf32)))
+[7,8,9]
+# Generic path — extreme underflow to 0.0f accepted (exercises the
+# generic-path fast_float fix; the ASCII cases above only cover the fast path)
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)));
+VEC_TOTEXT(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)))
+[0,0,0,0]
+SELECT VECTOR_DIM(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)));
+VECTOR_DIM(VEC_FROMTEXT(CONVERT('[1e-300, 1e-200, 0, 0]' USING utf16)))
+4
+# Generic path — error cases (trailing garbage in non-ASCII charset)
+SELECT VEC_FROMTEXT(CONVERT('[1,2,3]xyz' USING utf16));
+ERROR HY000: Data cannot be converted to a valid vector: ''
+SELECT VEC_FROMTEXT(CONVERT('not_vec' USING ucs2));
+ERROR HY000: Data cannot be converted to a valid vector: ''
+# Generic path — overflow (inf) rejected on the non-ASCII path too
+SELECT VEC_FROMTEXT(CONVERT('[1e400, 2, 3]' USING utf16));
+ERROR HY000: Data cannot be converted to a valid vector: ''
+
+########################################################################
+# 6. use_fast_float toggle — two-path equivalence
+########################################################################
+SET @saved_ff = @@GLOBAL.vidx_use_fast_float;
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.5, -2.5e1, 3.14159, 0.0001]')) AS ff_on;
+ff_on
+[1.5,-25,3.14159,0.0001]
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1.5, -2.5e1, 3.14159, 0.0001]')) AS ff_off;
+ff_off
+[1.5,-25,3.14159,0.0001]
+# Integer without fraction
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]')) AS ff_on_intdot;
+ff_on_intdot
+[1,2,3]
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1., 2., 3.]')) AS ff_off_intdot;
+ff_off_intdot
+[1,2,3]
+# Fraction without integer
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.1, .2, .3]')) AS ff_on_dotfrac;
+ff_on_dotfrac
+[0.1,0.2,0.3]
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[.1, .2, .3]')) AS ff_off_dotfrac;
+ff_off_dotfrac
+[0.1,0.2,0.3]
+# Leading '+' — now accepted by both paths (manual skip before fast_float)
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5]')) AS ff_on_plus;
+ff_on_plus
+[1.5,2.5]
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[+1.5, +2.5]')) AS ff_off_plus;
+ff_off_plus
+[1.5,2.5]
+# Subnormal — accepted by both paths (ERANGE only rejects overflow→inf)
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]')) AS ff_on_subnormal;
+ff_on_subnormal
+2
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1.4e-45, 1.0]')) AS ff_off_subnormal;
+ff_off_subnormal
+2
+# Extreme underflow to zero -- accepted by both paths (value rounds to a
+# finite 0.0f, not overflow). Regression: VEC_FROMTEXT('[1e-300,...]') was
+# wrongly rejected with ER_TO_VECTOR_CONVERSION on the fast_float path.
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_on_underflow;
+ff_on_underflow
+[0,0,0,0]
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_on_underflow_dim;
+ff_on_underflow_dim
+4
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_off_underflow;
+ff_off_underflow
+[0,0,0,0]
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1e-300, 1e-200, 0.0, 0.0]')) AS ff_off_underflow_dim;
+ff_off_underflow_dim
+4
+# Negative extreme underflow rounds to -0.0f; double-subnormal 2e-320
+# also underflows to float 0.0f -- both accepted on either path.
+SET GLOBAL vidx_use_fast_float = ON;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-1e-300, 2e-320, 1.0]')) AS ff_on_neg_underflow;
+ff_on_neg_underflow
+[-0,0,1]
+SET GLOBAL vidx_use_fast_float = OFF;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[-1e-300, 2e-320, 1.0]')) AS ff_off_neg_underflow;
+ff_off_neg_underflow
+[-0,0,1]
+# strtof ERANGE path (overflow on fallback path)
+SELECT VEC_FROMTEXT('[1e400, 2, 3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1e400, 2, 3]'
+# Invalid input on strtof path
+SELECT VEC_FROMTEXT('[1,abc,3]');
+ERROR HY000: Data cannot be converted to a valid vector: '[1,abc,3]'
+SET GLOBAL vidx_use_fast_float = @saved_ff;
+
+########################################################################
+# 7. Result caching — SP / prepared stmt / const literal
+########################################################################
+# 7.1 Same literal in multiple columns
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1,2,3]')) AS v1,
+VEC_TOTEXT(VEC_FROMTEXT('[1,2,3]')) AS v2,
+VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT('[1,2,3]'), VEC_FROMTEXT('[4,5,6]')) AS d;
+v1	v2	d
+[1,2,3]	[1,2,3]	5.196152422706632
+# 7.2 Stored procedure — cleanup() resets cache between calls
+CREATE PROCEDURE sp_vec_parse(IN txt VARCHAR(255))
+BEGIN
+DECLARE v BLOB;
+SET v = VEC_FROMTEXT(txt);
+SELECT VEC_TOTEXT(v) AS result;
+END|
+CALL sp_vec_parse('[1,2,3]');
+result
+[1,2,3]
+CALL sp_vec_parse('[4,5,6]');
+result
+[4,5,6]
+CALL sp_vec_parse('  [7, 8, 9]  ');
+result
+[7,8,9]
+# 7.3 SP with invalid then valid input (cache not poisoned by errors)
+CREATE PROCEDURE sp_vec_err_ok()
+BEGIN
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION BEGIN END;
+SELECT VEC_FROMTEXT('invalid') INTO @dummy;
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[100,200,300]')) AS after_error;
+END|
+CALL sp_vec_err_ok();
+after_error
+[100,200,300]
+DROP PROCEDURE sp_vec_err_ok;
+DROP PROCEDURE sp_vec_parse;
+# 7.4 Prepared stmt with constant literal (cached)
+PREPARE p_const FROM "SELECT VEC_TOTEXT(VEC_FROMTEXT('[10,20,30]'))";
+EXECUTE p_const;
+VEC_TOTEXT(VEC_FROMTEXT('[10,20,30]'))
+[10,20,30]
+EXECUTE p_const;
+VEC_TOTEXT(VEC_FROMTEXT('[10,20,30]'))
+[10,20,30]
+DEALLOCATE PREPARE p_const;
+# 7.5 Prepared stmt with parameter (re-evaluated each time)
+PREPARE p_param FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(?))';
+SET @a = '[1,1,1]';
+EXECUTE p_param USING @a;
+VEC_TOTEXT(VEC_FROMTEXT(?))
+[1,1,1]
+SET @a = '[2,2,2]';
+EXECUTE p_param USING @a;
+VEC_TOTEXT(VEC_FROMTEXT(?))
+[2,2,2]
+SET @a = '[3,3,3]';
+EXECUTE p_param USING @a;
+VEC_TOTEXT(VEC_FROMTEXT(?))
+[3,3,3]
+DEALLOCATE PREPARE p_param;
+
+########################################################################
+# 8. CAST(... AS VECTOR)
+########################################################################
+SELECT VEC_TOTEXT(CAST('  [1, 2, 3]  ' AS VECTOR));
+VEC_TOTEXT(CAST('  [1, 2, 3]  ' AS VECTOR))
+[1,2,3]
+CREATE TABLE t_cast_src (id INT PRIMARY KEY, txt VARCHAR(100));
+INSERT INTO t_cast_src VALUES (1, '[10,20,30]'), (2, '  [4, 5, 6]  ');
+SELECT id, VEC_TOTEXT(CAST(txt AS VECTOR)) FROM t_cast_src ORDER BY id;
+id	VEC_TOTEXT(CAST(txt AS VECTOR))
+1	[10,20,30]
+2	[4,5,6]
+DROP TABLE t_cast_src;
+SELECT CAST('not a vector' AS VECTOR);
+ERROR HY000: Data cannot be converted to a valid vector: 'not a vector'
+SELECT CAST('[]' AS VECTOR);
+ERROR HY000: Data cannot be converted to a valid vector: '[]'
+
+########################################################################
+# 9. Dimension mismatch — get_key() & mhnsw_read_first validation
+########################################################################
+CREATE TABLE t_dim5 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t_dim5(v) VALUES
+(VEC_FROMTEXT('[1,1,1,1,1]')),
+(VEC_FROMTEXT('[2,2,2,2,2]')),
+(VEC_FROMTEXT('[3,3,3,3,3]'));
+# dim=3 vs index dim=5 → error
+SELECT id FROM t_dim5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3]')) LIMIT 2;
+ERROR HY000: Incorrect arguments to VEC_DISTANCE_EUCLIDEAN
+# dim=6 vs index dim=5 → error
+SELECT id FROM t_dim5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5,6]')) LIMIT 2;
+ERROR HY000: Incorrect arguments to VEC_DISTANCE_EUCLIDEAN
+# dim=5 → success
+SELECT id FROM t_dim5
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+id
+3
+2
+DROP TABLE t_dim5;
+
+########################################################################
+# 10. DML + ANN index roundtrip
+########################################################################
+CREATE TABLE t_roundtrip (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(4),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t_roundtrip(v) VALUES
+(VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]')),
+(VEC_FROMTEXT('[ -1.5 , 2.5 , -3.5 , 4.5 ]')),
+(VEC_FROMTEXT('[1e-5, 1e5, -1e-5, -1e5]'));
+SELECT id, VEC_TOTEXT(v) FROM t_roundtrip ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[0.1,0.2,0.3,0.4]
+2	[-1.5,2.5,-3.5,4.5]
+3	[0.00001,100000,-0.00001,-100000]
+SELECT id FROM t_roundtrip
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0, 0, 0, 0]')) LIMIT 2;
+id
+1
+2
+# Exact distance: sqrt(2)
+SELECT VEC_DISTANCE_EUCLIDEAN(
+VEC_FROMTEXT('[1,0,0,0]'),
+VEC_FROMTEXT('[0,1,0,0]')) AS d_expect_sqrt2;
+d_expect_sqrt2
+1.4142135623730951
+# Whitespace equivalence
+SELECT VEC_DISTANCE_EUCLIDEAN(
+VEC_FROMTEXT("[  1.5 ,  -2.5 ,  3.5 , 0 ]"),
+VEC_FROMTEXT("[1.5, -2.5, 3.5, 0]")) AS should_be_zero;
+should_be_zero
+0
+DROP TABLE t_roundtrip;
+# Underflow-to-zero INSERT into a VECTOR column
+# (Aone 84330967 exact repro: INSERT VEC_FROMTEXT('[1e-300,1e-200,0,0]')
+# was rejected with TDDL-4614 / 7596; must now succeed, stored as 0).
+CREATE TABLE t_underflow (id INT PRIMARY KEY, v VECTOR(4));
+INSERT INTO t_underflow VALUES (1, VEC_FROMTEXT('[1e-300, 1e-200, 0, 0]'));
+INSERT INTO t_underflow VALUES (2, VEC_FROMTEXT('[-1e-300, 3e-320, 0, 0]'));
+SELECT id, VEC_TOTEXT(v) FROM t_underflow ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[0,0,0,0]
+2	[-0,0,0,0]
+DROP TABLE t_underflow;
+
+########################################################################
+# 11. VIEW & compatibility aliases
+########################################################################
+CREATE TABLE t_view_src (id INT PRIMARY KEY, v VECTOR(3));
+INSERT INTO t_view_src VALUES (1, VEC_FROMTEXT('[1,2,3]')),
+(2, VEC_FROMTEXT('[4,5,6]'));
+CREATE VIEW v_dist AS
+SELECT id, VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3]')) AS dist
+FROM t_view_src;
+SELECT * FROM v_dist ORDER BY dist;
+id	dist
+1	0
+2	5.196152422706632
+SHOW CREATE VIEW v_dist;
+View	Create View	character_set_client	collation_connection
+v_dist	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_dist` AS select `t_view_src`.`id` AS `id`,VEC_DISTANCE_EUCLIDEAN(`t_view_src`.`v`,VEC_FromText('[1,2,3]')) AS `dist` from `t_view_src`	utf8mb4	utf8mb4_0900_ai_ci
+DROP VIEW v_dist;
+DROP TABLE t_view_src;
+SELECT VEC_TOTEXT(TO_VECTOR("[  1,  2,  3  ]"));
+VEC_TOTEXT(TO_VECTOR("[  1,  2,  3  ]"))
+[1,2,3]
+SELECT VEC_TOTEXT(STRING_TO_VECTOR("[  1,  2,  3  ]"));
+VEC_TOTEXT(STRING_TO_VECTOR("[  1,  2,  3  ]"))
+[1,2,3]
+SELECT FROM_VECTOR(VEC_FROMTEXT("[  1,  2,  3  ]"));
+FROM_VECTOR(VEC_FROMTEXT("[  1,  2,  3  ]"))
+[1,2,3]
+SELECT VECTOR_TO_STRING(VEC_FROMTEXT("[  1,  2,  3  ]"));
+VECTOR_TO_STRING(VEC_FROMTEXT("[  1,  2,  3  ]"))
+[1,2,3]
+
+########################################################################
+# 12. MAX_DIMENSIONS boundary (16383)
+########################################################################
+# 16384 > MAX_DIMENSIONS → error
+SELECT VECTOR_DIM(VEC_FROMTEXT(@big));
+ERROR 22003: [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1...  value is out of range in 'VEC_FromText'
+# 16383 = MAX_DIMENSIONS → success
+SELECT VECTOR_DIM(VEC_FROMTEXT(@ok));
+VECTOR_DIM(VEC_FROMTEXT(@ok))
+16383
+SET @big = NULL;
+SET @ok = NULL;
+
+########################################################################
+# 13. VECTOR(N) column-definition dimension bound (Aone 84323011)
+#     N must be in [1, MAX_DIMENSIONS]. Oversized / zero / overflowing N
+#     must be rejected cleanly -- not silently accepted as vector(0),
+#     not converted to BLOB, and (non-strict) must not crash the server.
+########################################################################
+# N > MAX_DIMENSIONS rejected (was 1074 in strict, crash in non-strict)
+CREATE TABLE dim_over (id INT PRIMARY KEY, v VECTOR(16384));
+ERROR HY000: Incorrect arguments to VECTOR
+# N = 0 rejected
+CREATE TABLE dim_zero (id INT PRIMARY KEY, v VECTOR(0));
+ERROR HY000: Incorrect arguments to VECTOR
+# Oversized N whose byte length overflows uint32 rejected (was vector(0))
+CREATE TABLE dim_ovf (id INT PRIMARY KEY, v VECTOR(1073741824));
+ERROR 42000: Display width out of range for column 'v' (max = 4294967295)
+# Non-strict sql_mode must reject the same way and NOT crash (regression)
+SET @saved_sql_mode = @@SESSION.sql_mode;
+SET SESSION sql_mode = '';
+CREATE TABLE dim_over_ns (id INT PRIMARY KEY, v VECTOR(16384));
+ERROR HY000: Incorrect arguments to VECTOR
+CREATE TABLE dim_ovf_ns (id INT PRIMARY KEY, v VECTOR(1073741824));
+ERROR 42000: Display width out of range for column 'v' (max = 4294967295)
+SET SESSION sql_mode = @saved_sql_mode;
+# Server is still responsive (fails here if a DDL above had crashed it)
+SELECT 1 + 1 AS alive;
+alive
+2
+# A valid dimension still works end-to-end
+CREATE TABLE dim_ok (id INT PRIMARY KEY, v VECTOR(128));
+INSERT INTO dim_ok VALUES (1, VEC_FROMTEXT(CONCAT('[', REPEAT('0.5,', 127), '0.5]')));
+SELECT id, VECTOR_DIM(v) FROM dim_ok;
+id	VECTOR_DIM(v)
+1	128
+DROP TABLE dim_ok;
+
+########################################################################
+# Cleanup
+########################################################################
+SET GLOBAL vidx_disabled = ON;

@@ -141,7 +141,9 @@ void flst_insert_after(flst_base_node_t *base, flst_node_t *node1,
 void flst_insert_before(flst_base_node_t *base, flst_node_t *node2,
                         flst_node_t *node3, mtr_t *mtr);
 
+#ifndef INNODB_FUT0LST_IC_STANDALONE
 #include "fut0lst.ic"
+#endif /* !INNODB_FUT0LST_IC_STANDALONE */
 
 /** In-memory representation of flst_base_node_t */
 struct flst_bnode_t {

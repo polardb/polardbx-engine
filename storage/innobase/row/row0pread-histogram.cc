@@ -250,7 +250,7 @@ dberr_t Histogram_sampler::run() {
 }
 
 dberr_t Histogram_sampler::sample_rec(const Parallel_reader::Ctx *reader_ctx,
-                                      const rec_t *rec, ulint *offsets,
+                                      const Slice *slc,
                                       const dict_index_t *index,
                                       row_prebuilt_t *prebuilt) {
   dberr_t err{DB_SUCCESS};
@@ -265,9 +265,8 @@ dberr_t Histogram_sampler::sample_rec(const Parallel_reader::Ctx *reader_ctx,
     return (m_err);
   }
 
-  if (row_sel_store_mysql_rec(m_buf, prebuilt, rec, nullptr, true, index, index,
-                              offsets, false, nullptr,
-                              reader_thread_ctx->m_blob_heap)) {
+  if (row_sel_store_mysql_rec(m_buf, prebuilt, slc, nullptr, true, index, index,
+                              false, nullptr, reader_thread_ctx->m_blob_heap)) {
     m_n_sampled.fetch_add(1, std::memory_order_relaxed);
   } else {
     err = DB_ERROR;
@@ -307,9 +306,9 @@ dberr_t Histogram_sampler::process_non_leaf_rec(
   mtr.start();
   mtr.set_log_mode(MTR_LOG_NO_REDO);
 
-  buf_block_t *leaf_block =
-      btr_node_ptr_get_child(ctx->m_rec, const_cast<dict_index_t *>(index),
-                             ctx->m_offsets, &mtr, RW_S_LATCH);
+  ut_ad(ctx->m_slc->is_positioned(ctx->m_slc->rec(), index));
+  buf_block_t *leaf_block = btr_node_ptr_get_child(
+      ctx->m_slc, const_cast<dict_index_t *>(index), &mtr, RW_S_LATCH);
 
   ut_ad(page_is_leaf(leaf_block->frame));
 
@@ -327,16 +326,13 @@ dberr_t Histogram_sampler::process_non_leaf_rec(
       break;
     }
 
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
-    rec_offs_init(offsets_);
+    creg_t reg = page_cur_get_reg(&cur);
 
-    const rec_t *rec = page_cur_get_rec(&cur);
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    Slice_ctx sctx;
+    Slice *slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    if (ctx->is_rec_visible(rec, offsets, heap, &mtr)) {
-      err = sample_rec(ctx, rec, offsets, index, prebuilt);
+    if (ctx->is_rec_visible(&reg, heap, &slc, &sctx, &mtr)) {
+      err = sample_rec(ctx, slc, index, prebuilt);
 
       if (err != DB_SUCCESS) {
         set_error_state(err);
@@ -365,5 +361,5 @@ dberr_t Histogram_sampler::process_leaf_rec(const Parallel_reader::Ctx *ctx,
     srv_stats.n_sampled_pages_read.inc();
   }
 
-  return sample_rec(ctx, ctx->m_rec, ctx->m_offsets, ctx->index(), prebuilt);
+  return sample_rec(ctx, ctx->m_slc, ctx->index(), prebuilt);
 }

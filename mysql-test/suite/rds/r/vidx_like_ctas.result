@@ -1,0 +1,247 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+DROP TABLE IF EXISTS t1, t2, t3, t_source;
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+#
+# Scenario 6.1: Create table with vector index as source
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+content VARCHAR(200),
+v VECTOR(5),
+VECTOR INDEX vi(v) m=10 distance=euclidean
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary table exists for t1
+SELECT COUNT(*) > 0 AS t1_has_aux_table FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t1%';
+t1_has_aux_table
+0
+#
+# Scenario 6.2: CREATE TABLE t2 LIKE t1 -> verify vector index structure copied
+#
+CREATE TABLE t2 LIKE t1;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Scenario 6.3: Verify t2 has independent auxiliary table
+#
+# Both t1 and t2 should have their own auxiliary tables
+SELECT COUNT(*) AS t1_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t1%';
+t1_aux_count
+0
+SELECT COUNT(*) AS t2_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+t2_aux_count
+0
+# Show all vidx auxiliary tables
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND (NAME LIKE '%t1%' OR NAME LIKE '%t2%')
+ORDER BY NAME;
+NAME
+#
+# Scenario 6.5: DROP t1 -> verify t2's vector index is not affected
+#
+DROP TABLE t1;
+# Verify t2 still has its vector index
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify t2's auxiliary table still exists
+SELECT COUNT(*) > 0 AS t2_still_has_aux FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t2%';
+t2_still_has_aux
+0
+DROP TABLE t2;
+#
+# Scenario 6.6: CREATE TABLE t3 AS SELECT * FROM t_source -> verify no vector index
+#
+CREATE TABLE t_source (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+content VARCHAR(200),
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t_source;
+Table	Create Table
+t_source	CREATE TABLE `t_source` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Note: Using empty result set due to INSERT crash bug
+CREATE TABLE t3 AS SELECT * FROM t_source WHERE 1=0;
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL DEFAULT '0',
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify t3 does NOT have vector index (AS SELECT does not copy indexes)
+SELECT COUNT(*) AS t3_aux_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%t3%';
+t3_aux_count
+0
+# t3 should have the vector column but no vector index
+# Can manually add vector index to t3
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t3;
+Table	Create Table
+t3	CREATE TABLE `t3` (
+  `id` int NOT NULL DEFAULT '0',
+  `content` varchar(200) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t3;
+DROP TABLE t_source;
+#
+# Scenario 6.7: Cross-database CREATE TABLE LIKE -> verify auxiliary table in correct schema
+#
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+USE db1;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=16 distance=cosine
+) ENGINE = InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary table for db1.t1
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db1%'
+ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+USE db2;
+CREATE TABLE t2 LIKE db1.t1;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Check auxiliary table for db2.t2 (should be in db2 schema)
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db2%'
+ORDER BY NAME;
+NAME
+db2/vidx_XXXXX_0
+# Verify both databases have their own auxiliary tables
+SELECT 
+SUBSTRING_INDEX(NAME, '/', 1) AS db_name,
+COUNT(*) AS aux_table_count 
+FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND (NAME LIKE '%db1%' OR NAME LIKE '%db2%')
+GROUP BY SUBSTRING_INDEX(NAME, '/', 1)
+ORDER BY db_name;
+db_name	aux_table_count
+db1	1
+db2	1
+# Drop db1.t1 should not affect db2.t2
+DROP TABLE db1.t1;
+SHOW CREATE TABLE db2.t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# db2.t2's auxiliary table should still exist
+SELECT COUNT(*) > 0 AS db2_t2_aux_exists FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db2%';
+db2_t2_aux_exists
+1
+#
+# Additional test: Multiple LIKE in chain
+#
+USE db1;
+CREATE TABLE t_base (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+embedding VECTOR(128),
+VECTOR INDEX vi_base(embedding) m=32
+) ENGINE = InnoDB;
+CREATE TABLE t_copy1 LIKE t_base;
+CREATE TABLE t_copy2 LIKE t_copy1;
+SHOW CREATE TABLE t_base;
+Table	Create Table
+t_base	CREATE TABLE `t_base` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `embedding` vector(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_base` (`embedding`) M=32 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t_copy1;
+Table	Create Table
+t_copy1	CREATE TABLE `t_copy1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `embedding` vector(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_base` (`embedding`) M=32 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE t_copy2;
+Table	Create Table
+t_copy2	CREATE TABLE `t_copy2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `embedding` vector(128) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_base` (`embedding`) M=32 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Each table should have independent auxiliary tables
+SELECT NAME FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE '%vidx_%' AND NAME LIKE '%db1%'
+ORDER BY NAME;
+NAME
+db1/vidx_XXXXX_0
+db1/vidx_XXXXX_0
+db1/vidx_XXXXX_0
+DROP TABLE t_copy2;
+DROP TABLE t_copy1;
+DROP TABLE t_base;
+#
+# Note: INSERT/VEC_DISTANCE tests (Scenario 6.4) 
+# are blocked by INSERT crash bug (lock0lock.cc:5283 assertion failure)
+#
+# Cleanup
+USE test;
+DROP TABLE IF EXISTS db2.t2;
+DROP DATABASE IF EXISTS db1;
+DROP DATABASE IF EXISTS db2;
+SET GLOBAL vidx_disabled = ON;

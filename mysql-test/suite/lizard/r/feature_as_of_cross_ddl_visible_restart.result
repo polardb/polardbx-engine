@@ -1,0 +1,72 @@
+# Verify AS OF index-visible metadata survives DD write-back and restart.
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 36000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+DROP TABLE IF EXISTS asof_visible_restart;
+CREATE TABLE asof_visible_restart (
+id INT PRIMARY KEY,
+name VARCHAR(64),
+age INT
+) ENGINE=InnoDB;
+INSERT INTO asof_visible_restart VALUES (1, "Alice", 30), (2, "Bob", 25);
+ALTER TABLE asof_visible_restart ADD INDEX idx_name(name);
+SELECT scn INTO @scn_after_idx FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+# First AS OF through idx_name resolves the index-visible txn metadata.
+SELECT id, name FROM asof_visible_restart AS OF SCN @scn_after_idx
+FORCE INDEX(idx_name) WHERE name = "Alice";
+id	name
+1	Alice
+# A later ADD INDEX writes the resolved idx_name metadata back to DD.
+ALTER TABLE asof_visible_restart ADD INDEX idx_age(age);
+# Verify rebuild overwrites creator metadata and survives restart.
+CREATE TABLE asof_creator_snapshots (
+name VARCHAR(64) PRIMARY KEY,
+scn BIGINT NOT NULL
+) ENGINE=InnoDB;
+CREATE TABLE asof_rebuild_creator_restart (
+id INT PRIMARY KEY,
+name VARCHAR(64),
+age INT,
+INDEX idx_name(name)
+) ENGINE=InnoDB;
+INSERT INTO asof_rebuild_creator_restart VALUES (1, "Alice", 30), (2, "Carol", 25);
+INSERT INTO asof_creator_snapshots
+SELECT "before_rebuild", scn FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+SELECT scn INTO @scn_before_rebuild FROM asof_creator_snapshots
+WHERE name = "before_rebuild";
+# Before rebuild, the old secondary key is visible through creator metadata.
+UPDATE asof_rebuild_creator_restart SET name = "Bob" WHERE id = 1;
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+id	name
+1	Alice
+# Rebuild creates a new physical secondary; old snapshots must reject it.
+ALTER TABLE asof_rebuild_creator_restart FORCE;
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# restart
+SET GLOBAL innodb_undo_retention = 9000;
+SET GLOBAL innodb_txn_retention = 36000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+SELECT scn INTO @scn_after_restart FROM mysql.innodb_flashback_snapshot
+ORDER BY utc DESC LIMIT 1;
+# After restart, idx_name must still be visible for an AS OF point after ADD INDEX.
+SELECT id, name FROM asof_visible_restart AS OF SCN @scn_after_restart
+FORCE INDEX(idx_name) WHERE name = "Alice";
+id	name
+1	Alice
+SELECT scn INTO @scn_before_rebuild FROM asof_creator_snapshots
+WHERE name = "before_rebuild";
+# After restart, rebuild creator overwrite must still reject the old snapshot.
+SELECT id, name FROM asof_rebuild_creator_restart AS OF SCN @scn_before_rebuild
+FORCE INDEX(idx_name) WHERE name = "Alice";
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+DROP TABLE asof_visible_restart;
+DROP TABLE asof_rebuild_creator_restart;
+DROP TABLE asof_creator_snapshots;
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET GLOBAL innodb_txn_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

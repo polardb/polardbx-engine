@@ -77,12 +77,13 @@ dtuple_t *rtr_index_build_node_ptr(const dict_index_t *index,
  free disk space (2 pages) must be guaranteed to be available before
  this function is called.
  @return inserted record */
-rec_t *rtr_page_split_and_insert(
+reg_t rtr_page_split_and_insert(
     uint32_t flags,        /*!< in: undo logging and locking flags */
     btr_cur_t *cursor,     /*!< in/out: cursor at which to insert; when the
                            function returns, the cursor is positioned
                            on the predecessor of the inserted record */
-    ulint **offsets,       /*!< out: offsets on inserted record */
+    Slice **slc,           /*!< in: offsets on inserted record */
+    Slice_ctx *sctx,       /*!< in: slice context. */
     mem_heap_t **heap,     /*!< in/out: pointer to memory heap, or NULL */
     const dtuple_t *tuple, /*!< in: tuple to insert */
     mtr_t *mtr);           /*!< in: mtr */
@@ -131,11 +132,7 @@ bool rtr_cur_search_with_match(const buf_block_t *block, dict_index_t *index,
 double rtr_rec_cal_increase(
     const dtuple_t *dtuple, /*!< in: data tuple to insert, which
                             cause area increase */
-    const rec_t *rec,       /*!< in: physical record which differs from
-                            dtuple in some of the common fields, or which
-                            has an equal number or more fields than
-                            dtuple */
-    const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
+    const Slice *slc,       /*!< in: array returned by rec_get_offsets() */
     double *area,           /*!< out: increased area */
     const dd::Spatial_reference_system *srs); /*!< in: SRS of R-tree */
 
@@ -225,8 +222,7 @@ void rtr_clean_rtr_info(rtr_info_t *rtr_info, /*!< in: RTree search info */
 @param[in] rec Data tuple
 @param[in] offsets Offsets array
 @param[out] mbr Mbr */
-void rtr_get_mbr_from_rec(const rec_t *rec, const ulint *offsets,
-                          rtr_mbr_t *mbr);
+void rtr_get_mbr_from_rec(const Slice *slc, rtr_mbr_t *mbr);
 
 /** Get the bounding box content from a MBR data record
 @param[in] dtuple Data tuple
@@ -248,16 +244,17 @@ void rtr_page_get_father(dict_index_t *index, buf_block_t *block, mtr_t *mtr,
 /** Returns the father block to a page. It is assumed that mtr holds
  an X or SX latch on the tree.
  @return rec_get_offsets() of the node pointer record */
-ulint *rtr_page_get_father_block(
-    ulint *offsets,      /*!< in: work area for the return value */
-    mem_heap_t *heap,    /*!< in: memory heap to use */
-    dict_index_t *index, /*!< in: b-tree index */
-    buf_block_t *block,  /*!< in: child page in the index */
-    mtr_t *mtr,          /*!< in: mtr */
-    btr_cur_t *sea_cur,  /*!< in: search cursor, contains information
-                         about parent nodes in search */
-    btr_cur_t *cursor);  /*!< out: cursor on node pointer record,
-                         its page x-latched */
+Slice *rtr_page_get_father_block(
+    // ulint *offsets,      /*!< in: work area for the return value */
+    Slice_ctx *sctx,
+    /* mem_heap_t *heap, */ /*!< in: memory heap to use */
+    dict_index_t *index,                  /*!< in: b-tree index */
+    buf_block_t *block,                   /*!< in: child page in the index */
+    mtr_t *mtr,                           /*!< in: mtr */
+    btr_cur_t *sea_cur, /*!< in: search cursor, contains information
+                        about parent nodes in search */
+    btr_cur_t *cursor); /*!< out: cursor on node pointer record,
+                        its page x-latched */
 /** Store the parent path cursor
  @return number of cursor stored */
 ulint rtr_store_parent_path(
@@ -327,7 +324,7 @@ or by invoking ibuf_reset_free_bits() before mtr_commit().
 @param[out] num_moved Num of rec to move
 @param[in] mtr Mini-transaction */
 void rtr_page_copy_rec_list_end_no_locks(buf_block_t *new_block,
-                                         buf_block_t *block, rec_t *rec,
+                                         buf_block_t *block, reg_t reg,
                                          dict_index_t *index, mem_heap_t *heap,
                                          rtr_rec_move_t *rec_move,
                                          ulint max_move, ulint *num_moved,
@@ -356,7 +353,7 @@ void rtr_page_copy_rec_list_start_no_locks(
 @param[in] child_page The child page.
 @param[in] mtr Mini-transaction */
 dberr_t rtr_merge_and_update_mbr(btr_cur_t *cursor, btr_cur_t *cursor2,
-                                 ulint *offsets, ulint *offsets2,
+                                 Slice **slc, Slice_ctx *sctx, Slice *slc2,
                                  page_t *child_page, mtr_t *mtr);
 
 /** Deletes on the upper level the node pointer to a page.
@@ -372,14 +369,15 @@ void rtr_node_ptr_delete(btr_cur_t *sea_cur, mtr_t *mtr);
 @param[in] offsets Rec offsets
 @param[in] offsets2 Rec offsets
 @param[out] new_mbr Mbr to update */
-bool rtr_merge_mbr_changed(btr_cur_t *cursor, btr_cur_t *cursor2,
-                           ulint *offsets, ulint *offsets2, rtr_mbr_t *new_mbr);
+bool rtr_merge_mbr_changed(btr_cur_t *cursor, btr_cur_t *cursor2, Slice *slc,
+                           Slice *slc2, rtr_mbr_t *new_mbr);
 
 /** Update the mbr field of a spatial index row.
  @return true if successful */
 bool rtr_update_mbr_field(
     btr_cur_t *cursor,  /*!< in: cursor pointed to rec.*/
-    ulint *offsets,     /*!< in: offsets on rec. */
+    Slice **slc,        /*!< in: offsets on rec. */
+    Slice_ctx *sctx,    /*!< in: slice context. */
     btr_cur_t *cursor2, /*!< in/out: cursor pointed to rec
                         that should be deleted.
                         this cursor is for btr_compress to
@@ -432,5 +430,7 @@ static inline void rtr_info_reinit_in_cursor(btr_cur_t *cursor,
 int64_t rtr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple,
                                      page_cur_mode_t mode);
 
+#ifndef INNODB_GIS0RTREE_IC_STANDALONE
 #include "gis0rtree.ic"
+#endif /* !INNODB_GIS0RTREE_IC_STANDALONE */
 #endif

@@ -9558,7 +9558,7 @@ ER_WARN_ASYNC_CONN_FAILOVER_NETWORK_NAMESPACE
   eng "The parameter network_namespace is reserved for future use. Please use the CHANGE REPLICATION SOURCE command to set channel network_namespace parameter."
 
 ER_CLIENT_INTERACTION_TIMEOUT
-    eng "The client was disconnected by the server because of inactivity. See wait_timeout and interactive_timeout for configuring this behavior."
+  eng "The client was disconnected by the server because of inactivity. See wait_timeout, interactive_timeout and kill_idle_transaction_timeout for configuring this behavior."
 
 ER_INVALID_CAST_TO_GEOMETRY 22S01
   eng "Invalid cast from %s to %s."
@@ -9993,7 +9993,7 @@ ER_FLASHBACK_INTERNAL_ERROR
   eng "Flashback query encountered an internal error"
 
 ER_AS_OF_TABLE_DEF_CHANGED
-  eng "The definition of the table required by the flashback query has changed"
+  eng "The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated"
 
 ER_SNAPSHOT_TOO_OLD
   eng "Snapshot too old"
@@ -10204,7 +10204,7 @@ ER_VARIABLE_CHANGE_FAIL
   eng "Variable '%-.64s' cannot be enabled because '%-.64s' is enabled/disabled"
 
 ER_CONN_CONTROL_CONN_REFUSE_CONNECTION
-  eng "The authentication of user is denied for entering the wrong password multiple times with the period."
+  eng "The user %s from IP: %s has been locked for multiple wrong passwords."
 
 ER_LICENSE_FILE_NOT_FOUND
   eng "License file not found. Please check the file path in the configuration file."
@@ -10222,13 +10222,58 @@ ER_LICENSE_PROC_DISABLE
   eng "DBMS_LICENSE is disabled for current version."
 
 ER_TRANSACTION_TOO_BIG
-  eng "Transaction is too big, please split it into smaller transactions."
+  eng "Transaction is too big, please split it into smaller transactions or change variable max_trx_affected_rows."
 
 ER_SLOW_QUERY_EXCEED_TIME
   eng "Slow query blocker, query killed bacause exceeding time limit, change variable polarx_slow_query_block_exec_timeout."
 
 ER_SLOW_QUERY_TIME_FOR_CPU_EXECEED
   eng "Slow query blocker, query killed bacause cpu usage high and exceeding time limit, change variable polarx_slow_query_block_cpu_percent_threshold and polarx_slow_query_block_exec_timeout_for_cpu_exceed."
+
+ER_INNODB_PARTICIPATE_FAILED
+  eng "Failed to register InnoDB and allocate update undo log for transaction when inserting into blackhole table"
+
+ER_RECYCLE_TABLE_NAME_EXISTS
+  eng "Table '%-.192s' already exists in recycle_bin"
+
+ER_SPC_ENCODE_FAILED
+  eng " Failed to compress the page for secondary index using prefix compression. "
+
+ER_ENCDB_UDF_ERROR
+  eng "EncDB function \'%s\' failed with message \"%s\""
+
+ER_ENCDB_HOOK_ERROR
+  eng "EncDB function \'%s\' failed with message \"%s\""
+
+ER_COLUMNS_ENCRYPTION_TRANSFER
+  eng "Transfer of encrypted or masked columns is not allowed in this statement."
+
+ER_VECTOR_DISABLED
+  eng "Creating vector columns or indexes is disabled."
+
+ER_DATA_INCOMPATIBLE_WITH_VECTOR
+  eng "Value of type '%.16s, size: %zu' cannot be converted to 'vector(%zu)' type."
+
+ER_TO_VECTOR_CONVERSION
+  eng "Data cannot be converted to a valid vector: '%.*s'"
+
+ER_VEC_DISTANCE_TYPE
+  eng "Cannot determine distance type for VEC_DISTANCE: no vector index found on the column. Use VEC_DISTANCE_EUCLIDEAN, VEC_DISTANCE_COSINE or VEC_DISTANCE_INNER_PRODUCT to specify the distance type explicitly."
+
+ER_VECTOR_BINARY_FORMAT_INVALID
+  eng "Invalid binary vector format. Must use IEEE standard float representation in little-endian format. Use VEC_FromText() to generate it."
+
+ER_VECTOR_INDEX_USAGE
+  eng "Incorrect usage of vector index: %s"
+
+ER_VECTOR_INDEX_FAILED
+  eng "%s vector index `%s` in `%s`.`%s` (aux_tab: %s) failed: %s"
+
+ER_VECTOR_DIMENSION_MISMATCH
+  eng "CAST to vector(%u) failed: input has %u dimensions"
+
+ER_HIGH_RISK_SQL_BLOCKED
+  eng "High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when 'forbid_execute_dml_all' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override."
 
 #
 #  End of RDS error message.
@@ -10301,6 +10346,15 @@ ER_MYISAM_NOT_SUPPORT_ROLLBACK
 
 ER_NO_COLLATION_FOR_UTF8MB4_CHARSET 42000
   eng "Need explicitly specified utf8mb4 COLLATE for '%s' from @@disable_default_collation_for_utf8mb4"
+
+ER_HASH_VALUE_OUT_OF_RANGE
+  eng "Hash value %lld computed from partitioning key [%s] is out of the expected source partition range [%lld, %lld]. This indicates a data consistency issue during partition migration."
+
+ER_INVALID_HASH_RANGE
+  eng "Invalid hash range in polardbx_hasher function: min_range (%lld) must be not greater than max_range (%lld)"
+
+ER_TABLE_READONLY_ERROR
+  eng "Table is in readonly status : operation %s is not allowed"
 
 #
 # End of PolarDB-X special error messages intended to be return to CN.

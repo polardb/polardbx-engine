@@ -35,7 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0mysql.h"
 
 #include "lizard0row0upd.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0btr0cur.h"
 
 namespace lizard {
@@ -67,7 +67,7 @@ bool row_upd_panda_only_pk_changed(const upd_node_t *node,
 
 dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
   mtr_t mtr;
-  const rec_t *rec;
+  creg_t reg;
   btr_pcur_t pcur;
   dtuple_t *entry;
   dtuple_t *new_entry;
@@ -82,9 +82,8 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
   enum row_search_result search_result;
   big_rec_t *dummy_big_rec = nullptr;
   trx_id_t trx_id = thr_get_trx(thr)->id;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   upd_t *update;
   ulint mode;
 
@@ -172,7 +171,7 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
 
   btr_cur = pcur.get_btr_cur();
 
-  rec = btr_cur_get_rec(btr_cur);
+  reg = btr_cur_get_reg(btr_cur);
 
   switch (search_result) {
     case ROW_NOT_DELETED_REF:
@@ -201,7 +200,7 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
       ib::error(ER_IB_MSG_1044)
           << "Record in index " << index->name << " of table "
           << index->table->name << " was not found on update: " << *entry
-          << " at: " << rec_index_print(rec, index);
+          << " at: " << rec_index_print(reg, index);
 #ifdef UNIV_DEBUG
       mtr_commit(&mtr);
       mtr_start(&mtr);
@@ -211,22 +210,21 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
       ut_o(break);
     case ROW_FOUND:
       ut_ad(err == DB_SUCCESS);
-      ut_a(!rec_get_deleted_flag(rec, dict_table_is_comp(index->table)));
+      ut_a(!rec_get_deleted_flag(reg.rec, dict_table_is_comp(index->table)));
 
       break;
   }
 
-  rec = pcur.get_rec();
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &offsets_heap);
+  reg = pcur.get_reg();
+  slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
   new_entry = row_build_index_entry(node->upd_row, node->upd_ext, index, heap);
 
-  update = row_upd_build_sec_rec_difference_binary(rec, index, offsets,
+  update = row_upd_build_sec_rec_difference_binary((const Slice *)slc, index,
                                                    new_entry, heap);
 
   ut_ad(!(node->cmpl_info & UPD_NODE_NO_SIZE_CHANGE));
-  err = btr_cur_optimistic_update(flags, layout, btr_cur, &offsets,
+  err = btr_cur_optimistic_update(flags, layout, btr_cur, &slc, &sctx,
                                   &offsets_heap, update, 0, thr, trx_id, &mtr);
   switch (err) {
     case DB_OVERFLOW:
@@ -262,7 +260,7 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
   ut_ad(
       !rec_get_deleted_flag(pcur.get_rec(), dict_table_is_comp(index->table)));
 
-  err = btr_cur_pessimistic_update(flags, layout, btr_cur, &offsets,
+  err = btr_cur_pessimistic_update(flags, layout, btr_cur, &slc, &sctx,
                                    &offsets_heap, heap, &dummy_big_rec, update,
                                    0, thr, trx_id, trx->undo_no, &mtr);
   ut_a(!dummy_big_rec);
@@ -275,7 +273,6 @@ dberr_t row_upd_panda_only_pk(upd_node_t *node, que_thr_t *thr) {
     }
   }
 
-  pcur.close();
   mtr.commit();
 
 func_exit:
@@ -288,6 +285,7 @@ func_exit:
     mem_heap_free(offsets_heap);
   }
 
+  pcur.close();
   return err;
 }
 }

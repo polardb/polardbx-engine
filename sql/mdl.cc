@@ -129,7 +129,8 @@ PSI_stage_info MDL_key::m_namespace_to_wait_state_name[NAMESPACE_END] = {
     {0, "Waiting for column statistics lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for resource groups metadata lock", 0, PSI_DOCUMENT_ME},
     {0, "Waiting for foreign key metadata lock", 0, PSI_DOCUMENT_ME},
-    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME}};
+    {0, "Waiting for check constraint metadata lock", 0, PSI_DOCUMENT_ME},
+    {0, "Waiting for ftrunc lock", 0, PSI_DOCUMENT_ME}};
 
 #ifdef HAVE_PSI_INTERFACE
 void MDL_key::init_psi_keys() {
@@ -236,7 +237,8 @@ class MDL_map {
     return (mdl_key->mdl_namespace() == MDL_key::GLOBAL ||
             mdl_key->mdl_namespace() == MDL_key::COMMIT ||
             mdl_key->mdl_namespace() == MDL_key::ACL_CACHE ||
-            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK);
+            mdl_key->mdl_namespace() == MDL_key::BACKUP_LOCK ||
+            mdl_key->mdl_namespace() == MDL_key::FTRUNC_LOCK);
   }
 
  private:
@@ -253,6 +255,8 @@ class MDL_map {
   MDL_lock *m_acl_cache_lock;
   /** Pre-allocated MDL_lock object for BACKUP_LOCK namespace. */
   MDL_lock *m_backup_lock;
+  /** Pre-allocated MDL_lock object for FTRUNC_LOCK namespace. */
+  MDL_lock *m_ftrunc_lock;
 
   /**
     Number of unused MDL_lock objects in the server.
@@ -825,6 +829,7 @@ class MDL_lock {
       case MDL_key::RESOURCE_GROUPS:
       case MDL_key::FOREIGN_KEY:
       case MDL_key::CHECK_CONSTRAINT:
+      case MDL_key::FTRUNC_LOCK:
         return &m_scoped_lock_strategy;
       default:
         return &m_object_lock_strategy;
@@ -1135,11 +1140,13 @@ void MDL_map::init() {
   MDL_key commit_lock_key(MDL_key::COMMIT, "", "");
   MDL_key acl_cache_lock_key(MDL_key::ACL_CACHE, "", "");
   MDL_key backup_lock_key(MDL_key::BACKUP_LOCK, "", "");
+  MDL_key ftrunc_lock_key(MDL_key::FTRUNC_LOCK, "", "");
 
   m_global_lock = MDL_lock::create(&global_lock_key);
   m_commit_lock = MDL_lock::create(&commit_lock_key);
   m_acl_cache_lock = MDL_lock::create(&acl_cache_lock_key);
   m_backup_lock = MDL_lock::create(&backup_lock_key);
+  m_ftrunc_lock = MDL_lock::create(&ftrunc_lock_key);
 
   m_unused_lock_objects = 0;
 
@@ -1158,6 +1165,7 @@ void MDL_map::destroy() {
   MDL_lock::destroy(m_commit_lock);
   MDL_lock::destroy(m_acl_cache_lock);
   MDL_lock::destroy(m_backup_lock);
+  MDL_lock::destroy(m_ftrunc_lock);
 
   lf_hash_destroy(&m_locks);
 }
@@ -1205,6 +1213,9 @@ MDL_lock *MDL_map::find(LF_PINS *pins, const MDL_key *mdl_key, bool *pinned) {
         break;
       case MDL_key::BACKUP_LOCK:
         lock = m_backup_lock;
+        break;
+      case MDL_key::FTRUNC_LOCK:
+        lock = m_ftrunc_lock;
         break;
       default:
         assert(false);

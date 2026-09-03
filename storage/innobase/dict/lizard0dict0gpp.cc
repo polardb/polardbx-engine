@@ -35,32 +35,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "lizard0dict0gpp.h"
 
-/** Returns position of gpp column in an index.
-@return position, ULINT_UNDEFINED if not contained */
-ulint dict_index_t::get_gpp_col_pos() const {
-  dict_col_t *col = nullptr;
-  ulint col_no = ULINT_UNDEFINED;
-
-  col = lizard::dict_table_get_v_gcol(table);
-  ut_ad(col != nullptr);
-
-  col_no = col->ind;
-  ut_ad(col_no == DATA_GPP_NO);
-
-  return get_col_pos(col_no);
-}
-
 namespace lizard {
-
-/**
- * Return prefined dict_table_t GPP_NO column.
- *
- * @return	always valid column.
- * */
-dict_col_t *dict_table_get_v_gcol(const dict_table_t *table) {
-  ut_ad(table->v_gcol != nullptr);
-  return table->v_gcol;
-}
 
 /**
  * Return prefined dict_index_t GPP_NO field.
@@ -85,7 +60,8 @@ void dict_table_copy_g_types(dtuple_t *tuple, const dict_table_t *table) {
   dtype_t *dtype = nullptr;
   ut_ad(table && tuple);
 
-  col = dict_table_get_v_gcol(table);
+  col = table->v_gcol;
+  ut_ad(col);
   dfield = dtuple_get_v_gfield(tuple);
   dtype = dfield_get_type(dfield);
 
@@ -113,7 +89,8 @@ dict_col_t *dict_mem_table_add_v_gcol(dict_table_t *table, mem_heap_t *heap) {
   const uint8_t v_added = 0;
   const uint8_t v_dropped = 0;
 
-  col = dict_table_get_v_gcol(table);
+  col = table->v_gcol;
+  ut_ad(col);
 
   dict_mem_fill_column_struct(col, DATA_GPP_NO, DATA_SYS_GPP, DATA_NOT_NULL,
                               DATA_GPP_NO_LEN, false, phy_pos, v_added,
@@ -135,7 +112,7 @@ void dict_index_add_virtual_gcol(dict_index_t *index,
   ut_ad(index);
 
   /** GPP NO column */
-  col = dict_table_get_v_gcol(table);
+  col = table->v_gcol;
   ut_ad(col);
   col_name = table->get_col_name(dict_col_get_no(col));
   field = index->v_gfield;
@@ -177,7 +154,7 @@ void dict_index_add_stored_gcol(dict_index_t *new_index,
   ut_ad(!table->is_compressed());
 
   /** GPP NO column */
-  col = dict_table_get_v_gcol(table);
+  col = table->v_gcol;
   ut_ad(col);
   col_name = table->get_col_name(dict_col_get_no(col));
 

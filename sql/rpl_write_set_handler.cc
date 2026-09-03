@@ -1114,6 +1114,17 @@ bool add_pke(TABLE *table, THD *thd, const uchar *record) {
     if (table->s->foreign_key_parents > 0)
       ws_ctx->set_has_related_foreign_keys();
 
+    /*
+      If the table has a HNSW vector index (hlindex), the auxiliary table
+      rows modified during DML are NOT captured in the write set.  The
+      HNSW graph traversal is non-deterministic: the replica may visit
+      and lock different auxiliary-table rows than master did for the same
+      DML.  Mark the transaction so that writeset-based parallelism is
+      disabled and a dedicated counter is incremented for monitoring.
+    */
+    if (table->s->hlindexes() > 0)
+      ws_ctx->set_has_hlindex();
+
 #ifndef NDEBUG
     debug_check_for_write_sets(write_sets, hash_list);
 #endif

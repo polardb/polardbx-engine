@@ -57,14 +57,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/handler.h"  // Xa_state_list
 #include "srv0srv.h"
 
+#include "lizard0cmmt0cache.h"
+#include "lizard0gcs0read.h"
 #include "lizard0gp0types.h"
-#include "lizard0read0read.h"
-#include "lizard0tcn.h"
-#include "lizard0trx.h"
-#include "lizard0undo0types.h"
 #include "lizard0read0xa.h"
+#include "lizard0trx0types.h"
+#include "lizard0txn0slot0undo.h"
 
+namespace komodo {
 class XA_specification;
+}
 
 // Forward declaration
 struct mtr_t;
@@ -218,6 +220,9 @@ void trx_mark_sql_stat_end(trx_t *trx); /*!< in: trx handle */
  within the same transaction will get the same read view, which is created
  when this function is first called for a new started transaction. */
 lizard::Vision *trx_assign_read_view(trx_t *trx); /*!< in: active transaction */
+
+lizard::Shadow_view *trx_assign_shadow_read_view(
+    trx_t *trx); /*!< in: active transaction */
 
 /** @return the transaction's read view or NULL if one not assigned. */
 static inline lizard::Vision *trx_get_vision(trx_t *trx);
@@ -381,15 +386,6 @@ If this is a high priority transaction,
 kill all transactions that are blocking this transaction from acquiring locks.
 @param[in,out] trx      High priority transaction */
 void trx_kill_blocking(trx_t *trx);
-
-/** Provides an id of the transaction which does not change over time.
-Contrast this with trx->id and trx_get_id_for_print(trx) which change value once
-a transaction can no longer be treated as read-only and becomes read-write.
-@param[in]  trx   The transaction for which you want an immutable id
-@return the transaction's immutable id */
-static inline uint64_t trx_immutable_id(const trx_t *trx) {
-  return (uint64_t{reinterpret_cast<uintptr_t>(trx)});
-}
 
 /**
 Check if redo/noredo rseg is modified for insert/update.
@@ -691,7 +687,7 @@ struct trx_rsegs_t {
   trx_undo_ptr_t m_noredo;
 
   /** Lizard: txn undo */
-  txn_undo_ptr_t m_txn;
+  txn_slot_ptr_t m_txn;
 };
 
 enum trx_rseg_type_t {
@@ -843,6 +839,8 @@ struct trx_t {
   //                       transaction, or NULL if not yet set */
 
   lizard::Vision vision;
+
+  lizard::Shadow_view shadow_view;
 
   UT_LIST_NODE_T(trx_t)
   trx_list; /*!< list of transactions;
@@ -1195,7 +1193,7 @@ struct trx_t {
   xa_desc_t xa_desc;
 
   /** XA specification interpreted from TC log when recovery. */
-  XA_specification *xa_spec;
+  komodo::XA_specification *xa_spec;
 
   /** Commit cleanout cursors */
   lizard::Commit_cleanout *cleanout;
@@ -1205,6 +1203,12 @@ struct trx_t {
 
   /** Cache a min active trx id locally. */
   std::atomic<trx_id_t> min_active_tid{0};
+
+  int tid_shard_no;
+
+  lizard::Plain_ccache *ccache;
+
+  lizard::commit_rsegs_t commit_rsegs;
 };
 
 #ifndef UNIV_HOTBACKUP
@@ -1680,7 +1684,9 @@ bool trx_is_prepared_in_tc(trx_t const *trx);
 @return DB_SUCCESS or error number */
 dberr_t trx_set_prepared_in_tc_for_mysql(trx_t *trx);
 
+#ifndef INNODB_TRX0TRX_IC_STANDALONE
 #include "trx0trx.ic"
+#endif /* !INNODB_TRX0TRX_IC_STANDALONE */
 #endif /* !UNIV_HOTBACKUP */
 
 #endif

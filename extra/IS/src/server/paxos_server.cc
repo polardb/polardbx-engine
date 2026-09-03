@@ -68,7 +68,7 @@ void LocalServer::fillInfo(void *ptr) {
   ci.appliedIndex = getAppliedIndex();
   ci.applyDelaySeconds = paxos->getApplyDelaySeconds();
   ci.applyThreadRunning = paxos->getApplyThreadRunning();
-  ci.disableElection = paxos->debugDisableElection;
+  ci.disableElection = paxos->getDisableElection();
   ci.logInstance = paxos->getLogInstance();
   ci.pipelining = false;
   ci.useApplied = false;
@@ -121,7 +121,7 @@ void LocalServer::writeCacheLogDone() {
   if (paxos->getReplicateWithCacheLog()) paxos->appendLog(false);
 }
 
-uint64_t AliSQLServer::writeLogDone(uint64_t logIndex) {
+uint64_t LocalServer::syncLogDone(uint64_t logIndex) {
   bool ret = false;
   for (;;) {
     uint64_t old = lastSyncedIndex.load();
@@ -138,7 +138,8 @@ uint64_t AliSQLServer::writeLogDone(uint64_t logIndex) {
    */
   int tmp = paxos->tryUpdateCommitIndex();
   easy_info_log(
-      "Server %d : writeLogDone logIndex:%ld, tryUpdateCommitIndex return:%d, lastSyncedIndex:%llu\n",
+      "Server %d : writeLogDone logIndex:%ld, tryUpdateCommitIndex return:%d, "
+      "lastSyncedIndex:%llu\n",
       serverId, logIndex, tmp, lastSyncedIndex.load());
 
   if (!paxos->getReplicateWithCacheLog()) paxos->appendLog(false);
@@ -146,7 +147,7 @@ uint64_t AliSQLServer::writeLogDone(uint64_t logIndex) {
   return logIndex;
 }
 
-void AliSQLServer::setLastNonCommitDepIndex(uint64_t logIndex) {
+void LocalServer::setLastNonCommitDepIndex(uint64_t logIndex) {
   /* AliSQLServer do not append log by replicateLog */
   paxos->cdrMgr_.setLastNonCommitDepIndex(logIndex);
 }
@@ -224,6 +225,7 @@ void RemoteServer::stepDown(void *) {
 void RemoteServer::stop(void *) {
   bool rStop = false;
   if (isStop.compare_exchange_strong(rStop, true)) {
+    easy_warn_log("RemoteServer::stop server %d", serverId);
     stepDown(nullptr);
     if (sendMsgQueue && sendMsgQueue->stop(false)) {
       sendMsgQueue.reset();
@@ -269,19 +271,20 @@ void RemoteServer::sendMsgFunc(bool lockless, bool force, void *ptr) {
   auto *msg = (PaxosMsg *)ptr;
   // assert(!msg->has_msgid());
   msg->set_msgid(msgId.fetch_add(1));
-  if (lockless || msg->msgtype() != Paxos::AppendLog)
+  if (lockless || msg->msgtype() != Paxos::AppendLog) {
     sendMsgFuncInternal(lockless, force, ptr, false);
-  else {
-    auto *arg = new PaxosMsg(*msg);
+  } else if (sendMsgQueue) {
     assert(msg->msgtype() == Paxos::AppendLog);
-    if (sendMsgQueue &&
-        sendMsgQueue->push(new SendMsgTask(arg, getSharedThis(), force))) {
+    auto task = new SendMsgTask(*msg, getSharedThis(), force);
+    if (sendMsgQueue->push(task)) {
       auto wqueue =
           std::weak_ptr<SingleProcessQueue<SendMsgTask>>(sendMsgQueue);
       srv->sendAsyncEvent(
           &SingleProcessQueue<SendMsgTask>::mergeableProcessWeak, wqueue,
           RemoteServer::sendMsgFuncAsync);
     }
+    if (task != nullptr)
+      delete task;
   }
 
   /*
@@ -330,7 +333,7 @@ void RemoteServer::sendMsgFuncInternal(bool lockless, bool force, void *ptr,
   }
 
   if (msg->msgtype() == Paxos::AppendLog) {
-    bool islargeEntry = lastEntrySize >= paxos->getMaxPipeliningEntrySize();
+    bool islargeEntry = (lastEntrySize >= paxos->getMaxPipelineEntrySize());
     auto localNextIndex = nextIndex.load();
     auto lastLogIndex = paxos->getReplicateWithCacheLog()
                             ? paxos->getLastCachedLogIndex()
@@ -647,6 +650,14 @@ void RemoteServer::fillFollowerMeta(void *ptr) {
 void RemoteServer::setMsgCompressOption(void *ptr) {
   if (ptr == nullptr) return;
   msgCompressOption = *(MsgCompressOption *)ptr;
+}
+
+SendMsgTask::SendMsgTask(PaxosMsg &m, std::shared_ptr<RemoteServer> s, bool f)
+    : msg(new PaxosMsg(m)), server(std::move(s)), force(f) {}
+
+SendMsgTask::~SendMsgTask() {
+  delete msg;
+  msg = nullptr;
 }
 
 }  // namespace alisql

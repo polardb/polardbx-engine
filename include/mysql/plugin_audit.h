@@ -40,6 +40,8 @@
 LEX_STRING *thd_get_rds_audit_event_buf(MYSQL_THD thd);
 void thd_set_rds_audit_event_buf(MYSQL_THD thd, LEX_STRING *event_buf);
 
+extern void rds_audit_log_enabled_sync(bool value);
+
 #define MYSQL_AUDIT_INTERFACE_VERSION 0x0401
 
 /**
@@ -63,6 +65,8 @@ typedef enum {
   MYSQL_AUDIT_MESSAGE_CLASS = 12,
   MYSQL_AUDIT_RDS_CONNECTION_CLASS = 13, /* Used for RDS Audit Log */
   MYSQL_AUDIT_RDS_QUERY_CLASS = 14,      /* Used for RDS Audit Log */
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS =
+      15, /** Used for PolarX Connetion control refuse */
   /* This item must be last in the list. */
   MYSQL_AUDIT_CLASS_MASK_SIZE
 } mysql_event_class_t;
@@ -772,6 +776,42 @@ struct mysql_event_rds_query {
   MYSQL_LEX_CSTRING endpoint_ip;
   /** InnoDB trx id*/
   unsigned long long trx_id;
+  /** GH audit log for slow query block */
+  unsigned long long cpu_time_sec;
+  double cpu_time_percent;
+  unsigned long long trx_affected_rows;
+  unsigned long long binlog_cache_used;
+};
+
+/**
+ * @enum mysql_event_polarx_connection_control_subclass_t
+ *
+ * Events for MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS event class.
+ */
+typedef enum {
+  /** occurs after Alter user .. acount unlock. */
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK = 1 << 0,
+  /** occurs in check_connection_control */
+  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CHECK = 1 << 1,
+} mysql_event_polarx_connection_control_subclass_t;
+
+/**
+ * @struct mysql_event_polarx_connection_control
+ *
+ * Structure for MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS event class.
+ */
+struct mysql_event_polarx_connection_control {
+  /** Event subclass. */
+  mysql_event_polarx_connection_control_subclass_t event_subclass;
+
+  /** Connection status */
+  bool successful_login;
+  /** User name */
+  MYSQL_LEX_CSTRING user;
+  /** Host name */
+  MYSQL_LEX_CSTRING host;
+  /** Ip Address */
+  MYSQL_LEX_CSTRING ip;
 };
 
 #endif

@@ -1,0 +1,469 @@
+# 1. Startup has no AI model rows or function default models
+# 1.1 list_models should be empty before control-plane registration
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+# 1.2 show_ai_function should list supported functions without default models
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT			AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+# 1.3 default AI_PROMPT should fail before a default model is configured
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+ERROR HY000: ai_prompt: no default model configured for AI_PROMPT.
+# 1.4 update_function rejects a missing model
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_FUTURE_LLM');
+ERROR HY000: Model not found.
+# 2. Control-plane registers default model rows
+# 2.1 register LLM models with default model names
+# 2.2 register embedding models with default model names
+# 2.3 register model rows for the remaining AI function defaults
+# 2.4 list_models shows only rows registered through the interface
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+__POLARDBX_QWEN35_PLUS	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen3.5-plus	ACTIVE
+__POLARDBX_QWEN_PLUS	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+user_default_llm	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+__POLARDBX_TEXT_EMBEDDING_V4	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v4	ACTIVE
+__POLARDBX_TEXT_EMBEDDING_V3	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v3	ACTIVE
+__POLARDBX_QWEN3_VL_RERANK	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/rerank/text-rerank/text-rerank	qwen3-vl-rerank	ACTIVE
+__POLARDBX_QWEN_DOC_TURBO	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen-doc-turbo	ACTIVE
+__POLARDBX_QWEN3_VL_EMBEDDING	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding	qwen3-vl-embedding	ACTIVE
+# 3. update_function sets defaults used by AI functions
+# 3.1 configure AI_PROMPT default and call through it
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN35_PLUS');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN35_PLUS	qwen3.5-plus	AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+AI_PROMPT('Say exactly one word: ok') IS NOT NULL
+1
+# 3.2 switch AI_PROMPT to another available default and call through it
+CALL dbms_ai.update_function('AI_PROMPT', 'user_default_llm');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	user_default_llm	qwen-plus	AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+AI_PROMPT('Say exactly one word: ok') IS NOT NULL
+1
+# 3.3 dropping the configured default model leaves ACTUAL_MODEL empty
+CALL dbms_ai.drop_model('user_default_llm');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	user_default_llm		AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+ERROR HY000: ai_prompt: default model 'user_default_llm' for AI_PROMPT not found in ai_model_config.
+# 3.4 restore AI_PROMPT to another available model and call through it
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING			AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY			AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+AI_PROMPT('Say exactly one word: ok') IS NOT NULL
+1
+# 3.5 configure AI_EMBEDDING and AI_SIMILARITY defaults
+CALL dbms_ai.update_function('AI_EMBEDDING', '__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.update_function('AI_SIMILARITY', '__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE			AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_EMBEDDING('hello') IS NOT NULL;
+AI_EMBEDDING('hello') IS NOT NULL
+1
+SELECT AI_SIMILARITY('hello', 'world') IS NOT NULL;
+AI_SIMILARITY('hello', 'world') IS NOT NULL
+1
+# 3.6 update_function accepts lowercase function_name
+CALL dbms_ai.update_function('ai_summarize', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-plus	AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+# 3.7 inactive default model is treated as missing at lookup time
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"status":"INACTIVE"}');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS		AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS		AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+ERROR HY000: ai_prompt: default model '__POLARDBX_QWEN_PLUS' for AI_PROMPT not found in ai_model_config.
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+ERROR HY000: Model not found.
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"status":"ACTIVE"}');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-plus	AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+SELECT AI_PROMPT('Say exactly one word: ok') IS NOT NULL;
+AI_PROMPT('Say exactly one word: ok') IS NOT NULL
+1
+# 3.8 update_model underlying model changes show_ai_function ACTUAL_MODEL
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"model":"qwen-max"}');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-max	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-max	AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+CALL dbms_ai.update_model('__POLARDBX_QWEN_PLUS', '{"model":"qwen-plus"}');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY			AI classify function
+AI_RANK			AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT			AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-plus	AI summarize function
+AI_PARSE_DOCUMENT			AI parse document function
+AI_VL_EMBEDDING			AI vl embedding function
+AI_TEXT2SQL			AI text2sql function
+# 3.9 configure every supported AI function default
+CALL dbms_ai.update_function('AI_CLASSIFY', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.update_function('AI_RANK', '__POLARDBX_QWEN3_VL_RERANK');
+CALL dbms_ai.update_function('AI_EXTRACT', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.update_function('AI_PARSE_DOCUMENT', '__POLARDBX_QWEN_DOC_TURBO');
+CALL dbms_ai.update_function('AI_VL_EMBEDDING', '__POLARDBX_QWEN3_VL_EMBEDDING');
+CALL dbms_ai.update_function('AI_TEXT2SQL', '__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY	__POLARDBX_QWEN_PLUS	qwen-plus	AI classify function
+AI_RANK	__POLARDBX_QWEN3_VL_RERANK	qwen3-vl-rerank	AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT	__POLARDBX_QWEN_PLUS	qwen-plus	AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-plus	AI summarize function
+AI_PARSE_DOCUMENT	__POLARDBX_QWEN_DOC_TURBO	qwen-doc-turbo	AI parse document function
+AI_VL_EMBEDDING	__POLARDBX_QWEN3_VL_EMBEDDING	qwen3-vl-embedding	AI vl embedding function
+AI_TEXT2SQL	__POLARDBX_QWEN_PLUS	qwen-plus	AI text2sql function
+# 3.10 AI_TEXT2SQL generates SQL from current database tables
+CREATE DATABASE ai_t2s_db;
+USE ai_t2s_db;
+CREATE TABLE users (
+id INT PRIMARY KEY AUTO_INCREMENT,
+name VARCHAR(64) NOT NULL,
+age INT COMMENT 'age in years',
+KEY idx_age (age)
+) COMMENT='user info';
+CREATE TABLE orders (
+id INT PRIMARY KEY,
+user_id INT,
+amount DECIMAL(10,2),
+UNIQUE KEY uk_user (user_id, id)
+);
+SELECT AI_TEXT2SQL('Find all users older than 30');
+AI_TEXT2SQL('Find all users older than 30')
+ok
+SELECT AI_TEXT2SQL('Find all users older than 30', '__POLARDBX_QWEN_PLUS');
+AI_TEXT2SQL('Find all users older than 30', '__POLARDBX_QWEN_PLUS')
+ok
+SELECT AI_TEXT2SQL('Find all users older than 30', NULL,
+'{"temperature":0.2,"max_tokens":100}');
+AI_TEXT2SQL('Find all users older than 30', NULL,
+'{"temperature":0.2,"max_tokens":100}')
+ok
+# 3.11 AI_TEXT2SQL NULL prompt returns NULL
+SELECT AI_TEXT2SQL(NULL);
+AI_TEXT2SQL(NULL)
+NULL
+# 3.12 AI_TEXT2SQL empty prompt should fail
+SELECT AI_TEXT2SQL('');
+ERROR HY000: AI_TEXT2SQL: prompt cannot be empty
+# 3.13 AI_TEXT2SQL invalid options JSON should fail
+SELECT AI_TEXT2SQL('Find all users older than 30', NULL, 'not-json');
+ERROR HY000: AI_TEXT2SQL: invalid options JSON
+# 3.14 AI_TEXT2SQL unknown model should fail
+SELECT AI_TEXT2SQL('Find all users older than 30', '__POLARDBX_MISSING_LLM');
+ERROR HY000: AI_TEXT2SQL: model '__POLARDBX_MISSING_LLM' not found in ai_model_config.
+# 3.15 AI_TEXT2SQL strips the markdown code fence around the SQL
+SELECT AI_TEXT2SQL('Find all users older than 30', 't2s_fence_llm');
+AI_TEXT2SQL('Find all users older than 30', 't2s_fence_llm')
+SELECT 1;
+CALL dbms_ai.drop_model('t2s_fence_llm');
+# 3.16 special identifiers and comments are escaped in the rendered DDL
+CREATE TABLE `weird``tbl` (
+`col``x` INT COMMENT 'a\'b\\c',
+  PRIMARY KEY (`col``x`)
+) COMMENT='it''s a \\ test';
+SELECT AI_TEXT2SQL('IDENT_CHECK query the weird table');
+AI_TEXT2SQL('IDENT_CHECK query the weird table')
+escaped-ok
+DROP TABLE `weird``tbl`;
+# 3.17 pre-filter falls back to the first tables when the LLM reply
+#      matches no table name (mock answers 'ok' without a token)
+SELECT AI_TEXT2SQL('Find all users older than 30');
+AI_TEXT2SQL('Find all users older than 30')
+ok
+# 3.18 pre-filter narrows the schema context via LLM table selection
+SELECT AI_TEXT2SQL('PICK_USERS_TABLE find all users');
+AI_TEXT2SQL('PICK_USERS_TABLE find all users')
+filtered-ok
+# restore the small-table environment for the following cases:
+# with the fillers present the pre-filter round would run and
+# the fallback could drop tables the case expects in context
+# 3.19 optional arguments are re-evaluated per row (no stale NULL)
+SELECT AI_TEXT2SQL('find users', m)
+FROM (SELECT 1 AS id, NULL AS m
+UNION ALL SELECT 2 AS id, 'no_such_model_x' AS m) t
+ORDER BY id;
+ERROR HY000: AI_TEXT2SQL: model 'no_such_model_x' not found in ai_model_config.
+# 3.20 AI_TEXT2SQL requires a current database
+SELECT AI_TEXT2SQL('Find all users older than 30');
+ERROR 3D000: No database selected
+# 3.21 tables without SELECT privilege are excluded from the context
+CREATE TABLE t_secret (secret_col INT);
+CREATE USER 'ai_t2s_limited'@'localhost';
+GRANT INSERT ON ai_t2s_db.t_secret TO 'ai_t2s_limited'@'localhost';
+GRANT SELECT ON ai_t2s_db.users TO 'ai_t2s_limited'@'localhost';
+GRANT SELECT(id) ON ai_t2s_db.orders TO 'ai_t2s_limited'@'localhost';
+SELECT AI_TEXT2SQL('PRIV_CHECK find all users');
+AI_TEXT2SQL('PRIV_CHECK find all users')
+col-safe
+DROP USER 'ai_t2s_limited'@'localhost';
+# 3.22 table names with spaces render as legal quoted identifiers
+CREATE TABLE `sales data` (id INT PRIMARY KEY, total DECIMAL(10,2));
+SELECT AI_TEXT2SQL('SP_REND query the sales data');
+AI_TEXT2SQL('SP_REND query the sales data')
+space-ok
+DROP TABLE `sales data`;
+# 3.23 table names with commas render as legal quoted identifiers
+CREATE TABLE `a,b` (id INT PRIMARY KEY);
+SELECT AI_TEXT2SQL('COMMA_REND query table a comma b');
+AI_TEXT2SQL('COMMA_REND query table a comma b')
+comma-ok
+DROP TABLE `a,b`;
+# 3.24 pre-filter matches table names containing spaces
+CREATE TABLE `sales data` (id INT PRIMARY KEY, total DECIMAL(10,2));
+SELECT AI_TEXT2SQL('SP_FILTER total sales');
+AI_TEXT2SQL('SP_FILTER total sales')
+spfilter-ok
+DROP TABLE `sales data`;
+# 3.25 cleanup text2sql database
+DROP DATABASE ai_t2s_db;
+USE test;
+# 3.26 AI function results join and compare with default collation
+SELECT AI_PROMPT('Say exactly one word: ok') = 'ok' AS eq_ok;
+eq_ok
+1
+SELECT AI_PROMPT('Say exactly one word: ok') LIKE '%ok%' AS like_ok;
+like_ok
+1
+SELECT CONCAT(AI_PROMPT('Say exactly one word: ok'), '-suffix') LIKE '%ok-suffix%' AS concat_ok;
+concat_ok
+1
+CREATE TABLE ai_coll_t (v VARCHAR(16) COLLATE utf8mb4_0900_ai_ci);
+INSERT INTO ai_coll_t VALUES ('ok');
+SELECT AI_PROMPT('Say exactly one word: ok') = v AS col_eq_ok FROM ai_coll_t;
+col_eq_ok
+1
+DROP TABLE ai_coll_t;
+# 3.27 utf8mb4_bin comparison is case-sensitive (documented contract)
+SELECT AI_PROMPT('Say exactly one word: ok') = 'OK' AS case_sensitive;
+case_sensitive
+0
+SELECT UPPER(AI_PROMPT('Say exactly one word: ok')) = 'OK' AS upper_eq;
+upper_eq
+1
+# 4. update_function validation
+# 4.1 invalid function name should fail
+CALL dbms_ai.update_function('AI_NOT_EXISTS', '__POLARDBX_QWEN35_PLUS');
+ERROR HY000: Unknown AI function.
+# 4.2 empty function name should fail
+CALL dbms_ai.update_function('', '__POLARDBX_QWEN35_PLUS');
+ERROR HY000: Unknown AI function.
+# 4.3 empty model name should fail
+CALL dbms_ai.update_function('AI_PROMPT', '');
+ERROR HY000: Model not found.
+# 4.4 model_name length is validated by native procedure signature
+CALL dbms_ai.update_function('AI_PROMPT', REPEAT('x', 129));
+ERROR HY000: The 2th parameter didn't match for native procedure dbms_ai.update_function
+# 4.5 valid function with missing model should fail
+CALL dbms_ai.update_function('AI_EMBEDDING', '__POLARDBX_FUTURE_EMBED');
+ERROR HY000: Model not found.
+# 4.6 update_function wrong argument count should fail
+CALL dbms_ai.update_function('AI_PROMPT');
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ai.update_function; expected 2, got 1
+# 4.7 show_ai_function wrong argument count should fail
+CALL dbms_ai.show_ai_function('unexpected');
+ERROR 42000: Incorrect number of arguments for PROCEDURE dbms_ai.show_ai_function; expected 0, got 1
+# 5. endpoint scheme is not enforced at DN
+# 5.1 register_model with HTTP endpoint should succeed
+CALL dbms_ai.register_model(
+'http_test',
+'dashscope',
+'http://internal.example.com/v1/chat/completions',
+'qwen-plus',
+'{}'
+);
+CALL dbms_ai.drop_model('http_test');
+# 5.2 register_model with HTTPS endpoint should succeed
+CALL dbms_ai.register_model(
+'https_test',
+'dashscope',
+'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+'qwen-plus',
+'{}'
+);
+# 5.3 update_model endpoint to HTTP should succeed
+CALL dbms_ai.update_model('https_test', '{"endpoint":"http://10.0.0.1:8080/"}');
+# 5.4 update_model endpoint to HTTPS should succeed
+CALL dbms_ai.update_model('https_test', '{"endpoint":"https://dashscope.aliyuncs.com/v1/new-path"}');
+# 5.5 cleanup
+CALL dbms_ai.drop_model('https_test');
+# 6. Admin privilege required for writes, read-only open to all
+# 6.1 create a non-admin user
+CREATE USER 'ai_nopriv'@'localhost';
+GRANT SELECT ON *.* TO 'ai_nopriv'@'localhost';
+# 6.2 connect as non-admin user
+# 6.3 AI inference functions stay usable for non-admin users
+SELECT AI_TEXT2SQL('Find all users older than 30');
+AI_TEXT2SQL('Find all users older than 30')
+ok
+# 6.4 register_model should fail
+CALL dbms_ai.register_model('priv_test', 'x', 'https://x.com/v1', 'x', '{}');
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+# 6.5 list_models is read-only and allowed for non-admin users
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+__POLARDBX_QWEN35_PLUS	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen3.5-plus	ACTIVE
+__POLARDBX_QWEN_PLUS	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen-plus	ACTIVE
+__POLARDBX_TEXT_EMBEDDING_V4	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v4	ACTIVE
+__POLARDBX_TEXT_EMBEDDING_V3	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/text-embedding/text-embedding	text-embedding-v3	ACTIVE
+__POLARDBX_QWEN3_VL_RERANK	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/rerank/text-rerank/text-rerank	qwen3-vl-rerank	ACTIVE
+__POLARDBX_QWEN_DOC_TURBO	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen-doc-turbo	ACTIVE
+__POLARDBX_QWEN3_VL_EMBEDDING	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding	qwen3-vl-embedding	ACTIVE
+# 6.6 describe_model is read-only and allowed for non-admin users
+CALL dbms_ai.describe_model('__POLARDBX_QWEN35_PLUS');
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	API_KEY	MODEL_PARAMS	STATUS	DESCRIPTION
+__POLARDBX_QWEN35_PLUS	dashscope	http://127.0.0.1:AI_MOCK_PORT/api/v1/services/aigc/text-generation/generation	qwen3.5-plus	****		ACTIVE	
+# 6.7 update_model should fail
+CALL dbms_ai.update_model('__POLARDBX_QWEN35_PLUS', '{"description":"hacked"}');
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+# 6.8 show_ai_function is read-only and allowed for non-admin users
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS	qwen-plus	AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI embedding function
+AI_CLASSIFY	__POLARDBX_QWEN_PLUS	qwen-plus	AI classify function
+AI_RANK	__POLARDBX_QWEN3_VL_RERANK	qwen3-vl-rerank	AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3	text-embedding-v3	AI similarity function
+AI_EXTRACT	__POLARDBX_QWEN_PLUS	qwen-plus	AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS	qwen-plus	AI summarize function
+AI_PARSE_DOCUMENT	__POLARDBX_QWEN_DOC_TURBO	qwen-doc-turbo	AI parse document function
+AI_VL_EMBEDDING	__POLARDBX_QWEN3_VL_EMBEDDING	qwen3-vl-embedding	AI vl embedding function
+AI_TEXT2SQL	__POLARDBX_QWEN_PLUS	qwen-plus	AI text2sql function
+# 6.9 update_function should fail
+CALL dbms_ai.update_function('AI_PROMPT', '__POLARDBX_QWEN_PLUS');
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+# 6.10 drop_model should fail
+CALL dbms_ai.drop_model('__POLARDBX_QWEN35_PLUS');
+ERROR 42000: Access denied; you need (at least one of) the SUPER privilege(s) for this operation
+# 6.11 cleanup: back to default connection
+DROP USER 'ai_nopriv'@'localhost';
+# 7. Cleanup
+CALL dbms_ai.drop_model('__POLARDBX_QWEN35_PLUS');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN_PLUS');
+CALL dbms_ai.drop_model('__POLARDBX_TEXT_EMBEDDING_V4');
+CALL dbms_ai.drop_model('__POLARDBX_TEXT_EMBEDDING_V3');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN3_VL_RERANK');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN_DOC_TURBO');
+CALL dbms_ai.drop_model('__POLARDBX_QWEN3_VL_EMBEDDING');
+# 7.1 list_models should be empty after cleanup
+CALL dbms_ai.list_models();
+MODEL_NAME	PROVIDER	ENDPOINT	MODEL	STATUS
+# 7.2 configured function rows are allowed to reference missing models
+CALL dbms_ai.show_ai_function();
+FUNCTION	DEFAULT_MODEL	ACTUAL_MODEL	DESCRIPTION
+AI_PROMPT	__POLARDBX_QWEN_PLUS		AI prompt function
+AI_EMBEDDING	__POLARDBX_TEXT_EMBEDDING_V3		AI embedding function
+AI_CLASSIFY	__POLARDBX_QWEN_PLUS		AI classify function
+AI_RANK	__POLARDBX_QWEN3_VL_RERANK		AI rank function
+AI_SIMILARITY	__POLARDBX_TEXT_EMBEDDING_V3		AI similarity function
+AI_EXTRACT	__POLARDBX_QWEN_PLUS		AI extract function
+AI_SUMMARIZE	__POLARDBX_QWEN_PLUS		AI summarize function
+AI_PARSE_DOCUMENT	__POLARDBX_QWEN_DOC_TURBO		AI parse document function
+AI_VL_EMBEDDING	__POLARDBX_QWEN3_VL_EMBEDDING		AI vl embedding function
+AI_TEXT2SQL	__POLARDBX_QWEN_PLUS		AI text2sql function

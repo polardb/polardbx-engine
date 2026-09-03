@@ -1,0 +1,43 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE PROCEDURE p1(p_offset INT) BEGIN
+DECLARE j INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+WHILE j < 2500 DO
+UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, ",", (j+p_offset)%250, "]")) WHERE id = (j % 80) + 1;
+SET j = j + 1;
+END WHILE;
+END$$
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(1);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(7);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(13);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(19);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(29);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(37);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(43);
+SET transaction_isolation = 'READ-COMMITTED';
+CALL p1(53);
+== save_neighbors_only high-concurrency deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+indep_dml_deadlock_eq_0=1
+indep_dml_commit_error_eq_0=1
+DROP PROCEDURE p1;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

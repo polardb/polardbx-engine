@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2011/11/12 Sunny Bains
  ***********************************************************************/
 
+#ifndef INNOBASE_FTS0PRIV_H
+#define INNODB_FTS0PRIV_IC_STANDALONE
+#include "fts0priv.h"
+#undef INNODB_FTS0PRIV_IC_STANDALONE
+#endif /* !INNOBASE_FTS0PRIV_H */
 /** Write the table id to the given buffer (including final NUL). Buffer must be
  at least FTS_AUX_MIN_TABLE_ID_LENGTH bytes long.
  @param[in]     id      a table/index id

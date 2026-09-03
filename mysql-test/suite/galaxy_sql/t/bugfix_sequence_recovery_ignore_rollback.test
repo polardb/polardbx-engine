@@ -1,0 +1,29 @@
+#
+# This test case verifies a bug related to sequence recovery. During restart recovery,
+# InnoDB skips the undo log for the sequence table if it cannot find the sequence table's
+# data dictionary information, resulting in rollback failure.
+#
+
+# Prepare
+CREATE SEQUENCE mysql.gts_base cache 1 TIMESTAMP;
+select currval from mysql.gts_base;
+
+# Start a transaction of sequence table.
+BEGIN;
+UPDATE mysql.gts_base SET currval=1 WHERE currval=0;
+
+# Commit an irrelevant transaction to make sure the undo log of sequence table has been persisted.
+connect(con1, localhost, root,,);
+CREATE TABLE t1(a int);
+BEGIN;
+INSERT INTO t1 VALUES(1);
+COMMIT;
+
+--source include/kill_and_restart_mysqld.inc
+SELECT currval FROM mysql.gts_base;
+
+
+# Cleanup
+Drop TABLE mysql.gts_base;
+DROP TABLE t1;
+

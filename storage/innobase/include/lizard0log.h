@@ -53,5 +53,6 @@ struct log_system {
 #define lizard_info(ERR) ib::info(LIZARD_LOG_SYS, ERR)
 #define lizard_warn(ERR) ib::warn(LIZARD_LOG_SYS, ERR)
 #define lizard_error(ERR) ib::error(LIZARD_LOG_SYS, ERR)
+#define lizard_system(ERR) ib::system(LIZARD_LOG_SYS, ERR)
 
 #endif

@@ -503,6 +503,7 @@ void LEX::reset() {
   is_update_stmt = false;
   table_snap_expr_count_to_evaluate = 0;
   sequence_info = nullptr;
+  m_has_mod_onupd = false;
   reset_query_blocks_list();
 }
 
@@ -2882,6 +2883,10 @@ void Table_ref::print(const THD *thd, String *str,
       if (lower_case_table_names == 1) {
         if (alias && alias[0])  // Print alias in lowercase
         {
+          if (strlen(alias) + 1 >= MAX_ALIAS_NAME) {
+            my_error(ER_TOO_LONG_IDENT, MYF(0), alias);
+            return ;
+          }
           my_stpcpy(t_alias_buff, alias);
           my_casedn_str(files_charset_info, t_alias_buff);
           t_alias = t_alias_buff;
@@ -4810,7 +4815,7 @@ void Query_block::restore_cmd_properties() {
   for (Table_ref *tbl = leaf_tables; tbl; tbl = tbl->next_leaf) {
     if (!tbl->is_base_table()) continue;
     tbl->restore_properties();
-    tbl->table->m_record_buffer = Record_buffer{0, 0, nullptr};
+    tbl->table->m_record_buffer = Record_buffer{0, 0, 0, nullptr};
   }
   assert(join == nullptr);
 

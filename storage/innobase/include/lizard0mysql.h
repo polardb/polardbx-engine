@@ -2,22 +2,17 @@
 #ifndef lizard0mysql_h
 #define lizard0mysql_h
 
-#include "lizard0read0types.h"
-#include "lizard0scn.h"
-#include "sql/lizard/lizard_snapshot.h"
+#include "lizard0gcs0read0types.h"
+#include "sql/transaction/komodo0snapshot.h"
 
 struct row_prebuilt_t;
 
 namespace lizard {
 
-/** Whether to enable use as of query (true by default) */
-extern bool srv_flashback_query_enable;
-
 /** The max tolerable lease time of a snapshot */
 extern ulint srv_scn_valid_volumn;
 
 class Vision;
-class Snapshot_vision;
 
 /**
   as of query context in row_prebuilt_t
@@ -27,7 +22,7 @@ struct asof_query_context_t {
   bool m_is_assigned;
 
   /** Snapshot vision that is used by asof query. */
-  const Snapshot_vision *m_snapshot_vision;
+  komodo::Snapshot_vision *m_snapshot_vision;
 
   /** TODO: ban constructor <16-10-20, zanye.zjy> */
   explicit asof_query_context_t()
@@ -39,19 +34,23 @@ struct asof_query_context_t {
 
   bool is_asof_query() const { return m_snapshot_vision != nullptr; }
 
-  const Snapshot_vision *snapshot_vision() const { return m_snapshot_vision; }
+  komodo::Snapshot_vision *snapshot_vision() {
+    return m_snapshot_vision;
+  }
 
   bool is_asof_scn() const {
     return m_snapshot_vision &&
-           m_snapshot_vision->type() == Snapshot_type::AS_OF_SCN;
+           m_snapshot_vision->type() == komodo::Snapshot_type::AS_OF_SCN;
   }
   bool is_asof_gcn() const {
     return m_snapshot_vision &&
-           (m_snapshot_vision->type() == Snapshot_type::AS_OF_AUTOMATIC_GCN ||
-            m_snapshot_vision->type() == Snapshot_type::AS_OF_ASSIGNED_GCN);
+           (m_snapshot_vision->type() ==
+                komodo::Snapshot_type::AS_OF_AUTOMATIC_GCN ||
+            m_snapshot_vision->type() ==
+                komodo::Snapshot_type::AS_OF_ASSIGNED_GCN);
   }
 
-  void assign_vision(const Snapshot_vision *v) {
+  void assign_vision(komodo::Snapshot_vision *v) {
     ut_ad(v && v->is_vision());
     m_snapshot_vision = v;
     /** Only set once */
@@ -69,6 +68,23 @@ struct asof_query_context_t {
     m_is_assigned = false;
     m_snapshot_vision = nullptr;
   }
+};
+
+/**
+  A helper class: backup trx->vision.m_snapshot_scn and restores it.
+*/
+class AsofVisonWrapper {
+ public:
+  AsofVisonWrapper() : m_vision(nullptr) {}
+
+  ~AsofVisonWrapper() { release_snapshot_vision(); }
+
+  void trx_store_snapshot_vision(row_prebuilt_t *prebuilt);
+
+  void release_snapshot_vision();
+
+ private:
+  Vision *m_vision;
 };
 
 /**
@@ -100,8 +116,8 @@ dberr_t row_prebuilt_unbind_flashback_query(row_prebuilt_t *prebuilt);
   @return           snapshot_vision if has,
                     nullptr if hasn't
 */
-extern const lizard::Snapshot_vision *row_prebuilt_get_snapshot_vision(
-    const row_prebuilt_t *prebuilt);
+extern komodo::Snapshot_vision *row_prebuilt_get_snapshot_vision(
+    row_prebuilt_t *prebuilt);
 
 extern int convert_timestamp_to_scn(THD *thd, utc_t utc, scn_t *scn);
 }  // namespace lizard

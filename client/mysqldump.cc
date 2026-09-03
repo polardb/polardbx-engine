@@ -55,6 +55,7 @@
 #include "mysql/service_mysql_alloc.h"
 #include "mysql_version.h"
 #include "mysqld_error.h"
+#include "mysys_err.h"
 #include "prealloced_array.h"
 #include "print_version.h"
 #include "scope_guard.h"
@@ -130,7 +131,15 @@ static bool insert_pat_inited = false, debug_info_flag = false,
 static ulong opt_max_allowed_packet, opt_net_buffer_length;
 static MYSQL mysql_connection, *mysql = nullptr;
 static DYNAMIC_STRING insert_pat;
-static char *current_user = nullptr, *current_host = nullptr, *path = nullptr,
+
+static char *hosts_str = nullptr; /** To record the original host string */
+static char *ports_str = nullptr; /** To record the original port string */
+static std::vector<std::string> host_list; /** To record the parsed host list */
+static std::vector<uint> port_list;        /** To record the parsed port list */
+static char *current_host = nullptr;       /** Current host of the connection */
+static uint current_port = 0;              /** Current port of the connection */
+
+static char *current_user = nullptr, *path = nullptr,
             *fields_terminated = nullptr, *lines_terminated = nullptr,
             *enclosed = nullptr, *opt_enclosed = nullptr, *escaped = nullptr,
             *where = nullptr, *opt_compatible_mode_str = nullptr,
@@ -147,6 +156,7 @@ static bool ansi_quotes_mode = false;
 
 static uint opt_zstd_compress_level = default_zstd_compression_level;
 static char *opt_compress_algorithm = nullptr;
+static ulong opt_connect_timeout = 0;
 
 #define MYSQL_OPT_SOURCE_DATA_EFFECTIVE_SQL 1
 #define MYSQL_OPT_SOURCE_DATA_COMMENTED_SQL 2
@@ -154,7 +164,7 @@ static char *opt_compress_algorithm = nullptr;
 #define MYSQL_OPT_SLAVE_DATA_COMMENTED_SQL 2
 static uint opt_enable_cleartext_plugin = 0;
 static bool using_opt_enable_cleartext_plugin = false;
-static uint opt_mysql_port = 0, opt_master_data;
+static uint opt_master_data;
 static uint opt_slave_data;
 static ulong opt_long_query_time = 0;
 static bool long_query_time_opt_provided = false;
@@ -406,7 +416,7 @@ static struct my_option my_long_options[] = {
      "VARBINARY, BLOB) in hexadecimal format.",
      &opt_hex_blob, &opt_hex_blob, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr,
      0, nullptr},
-    {"host", 'h', "Connect to host.", &current_host, &current_host, nullptr,
+    {"host", 'h', "Connect to host.", &hosts_str, &hosts_str, nullptr,
      GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"ignore-error", OPT_MYSQLDUMP_IGNORE_ERROR,
      "A comma-separated list of "
@@ -517,9 +527,8 @@ static struct my_option my_long_options[] = {
     {"pipe", 'W', "Use named pipes to connect to server.", 0, 0, 0, GET_NO_ARG,
      NO_ARG, 0, 0, 0, 0, 0, 0},
 #endif
-    {"port", 'P', "Port number to use for connection.", &opt_mysql_port,
-     &opt_mysql_port, nullptr, GET_UINT, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
-     nullptr},
+    {"port", 'P', "Port number to use for connection.", &ports_str, &ports_str,
+     nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"protocol", OPT_MYSQL_PROTOCOL,
      "The protocol to use for connection (tcp, socket, pipe, memory).", nullptr,
      nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
@@ -659,6 +668,10 @@ static struct my_option my_long_options[] = {
      "Controls whether generated invisible primary key and key column should "
      "be dumped or not.",
      &opt_skip_gipk, &opt_skip_gipk, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
+     nullptr, 0, nullptr},
+    {"connect_timeout", OPT_CONNECT_TIMEOUT,
+     "Number of seconds before connection timeout.", &opt_connect_timeout,
+     &opt_connect_timeout, nullptr, GET_ULONG, REQUIRED_ARG, 0, 0, 3600 * 12,
      nullptr, 0, nullptr},
 #include "authentication_kerberos_clientopt-longopts.h"
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
@@ -1485,6 +1498,10 @@ static void free_resources() {
   }
   if (insert_pat_inited) dynstr_free(&insert_pat);
   if (opt_ignore_error) my_free(opt_ignore_error);
+  if (hosts_str) my_free(hosts_str);
+  if (ports_str) my_free(ports_str);
+  if (current_host) my_free(current_host);
+
   my_end(my_end_arg);
 }
 
@@ -1558,15 +1575,10 @@ static void maybe_exit(int error) {
   exit(error);
 }
 
-/*
-  db_connect -- connects to the host and selects DB.
-*/
-
-static int connect_to_db(char *host, char *user) {
-  char buff[20 + FN_REFLEN];
-  DBUG_TRACE;
-
+static int sql_connect(char *host, uint port, char *user,
+                       std::vector<std::string> &messages) {
   verbose_msg("-- Connecting to %s...\n", host ? host : "localhost");
+
   mysql_init(&mysql_connection);
   if (opt_compress) mysql_options(&mysql_connection, MYSQL_OPT_COMPRESS, NullS);
   if (SSL_SET_OPTIONS(&mysql_connection)) {
@@ -1627,16 +1639,175 @@ static int connect_to_db(char *host, char *user) {
                   (char *)&max_packet_allowed);
   }
 
-  if (!(mysql =
-            mysql_real_connect(&mysql_connection, host, user, nullptr, nullptr,
-                               opt_mysql_port, opt_mysql_unix_port, 0))) {
-    DB_error(&mysql_connection, "when trying to connect");
+  if (opt_connect_timeout) {
+    uint timeout = opt_connect_timeout;
+    mysql_options(&mysql_connection, MYSQL_OPT_CONNECT_TIMEOUT,
+                  (char *)&timeout);
+  }
+
+  if (!(mysql = mysql_real_connect(&mysql_connection, host, user, nullptr,
+                                   nullptr, port, opt_mysql_unix_port, 0))) {
+    char buffer[1000];
+    snprintf(buffer, sizeof(buffer), "%s: Got error: %d: %s %s\n", my_progname,
+             mysql_errno(&mysql_connection), mysql_error(&mysql_connection),
+             "when trying to connect");
+    messages.emplace_back(buffer);
     return 1;
   }
 
-  if (ssl_client_check_post_connect_ssl_setup(
-          mysql, [](const char *err) { fprintf(stderr, "%s\n", err); }))
+  if (ssl_client_check_post_connect_ssl_setup(mysql,
+                                              [&messages](const char *err) {
+                                                messages.emplace_back(err);
+                                                messages.back().push_back('\n');
+                                              }))
     return 1;
+
+  return 0;
+}
+
+static int sql_connect_with_hosts_and_ports(std::vector<std::string> &hosts,
+                                            std::vector<uint> &ports,
+                                            char *user) {
+  std::vector<std::string> messages;
+
+  /** Try to connect until success */
+  for (size_t i = 0; i < hosts.size(); ++i) {
+    my_free(current_host);
+    current_host = hosts[i].empty() ? nullptr
+                                    : my_strdup(PSI_NOT_INSTRUMENTED,
+                                                hosts[i].c_str(), MYF(MY_WME));
+    current_port = ports[i];
+
+    if (sql_connect(current_host, current_port, user, messages) == 0) {
+      return 0;
+    }
+  }
+
+  /** Print all error messages */
+  for (size_t i = 0; i < messages.size(); ++i) {
+    fprintf(stderr, "%s", messages[i].c_str());
+  }
+  fflush(stderr);
+  maybe_exit(EX_MYSQLERR);
+  return 1;
+}
+
+static inline bool is_negative_num(const char *num) {
+  while (my_isspace(&my_charset_latin1, *num)) num++;
+
+  return (*num == '-');
+}
+static int parse_host_and_port(const char *host_str, const char *port_str,
+                               std::vector<std::string> &hosts,
+                               std::vector<unsigned int> &ports) {
+  /** 0. Compatibility with old mysql client cause we have change port from
+   * GET_INT to GET_STR_ALLOC. For GET_INT, empty value is not allowed. */
+  int error = 0;
+  if (port_str && strlen(port_str) == 0) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_OPTION_WITH_EMPTY_VALUE,
+                             my_progname, "port");
+    return EXIT_ARGUMENT_REQUIRED;
+  }
+  /** 1. Parse port */
+  std::string_view port_view =
+      (port_str != nullptr ? std::string_view(port_str) : std::string_view());
+  while (port_view.length() != 0) {
+    size_t token_end = port_view.find_first_of(",");
+    size_t remove_prefix = token_end + 1;
+    if (token_end == std::string_view::npos) {
+      token_end = port_view.length();
+      remove_prefix = port_view.length();
+    }
+    std::string token(port_view.substr(0, token_end));
+    uint port = 0;
+    if (token.size() > 0) {
+      char buf[255];
+      ulonglong value = 0;
+      if (is_negative_num(token.c_str())) {
+        my_getopt_error_reporter(WARNING_LEVEL,
+                                 EE_ADJUSTED_ULONGLONG_VALUE_FOR_OPTION, "Port",
+                                 token.c_str(), ullstr(value, buf));
+      } else {
+        int err = 0;
+        value = eval_num_suffix<ulonglong>(token.c_str(), &err, "Port");
+        if (err) {
+          error = EXIT_UNKNOWN_SUFFIX;
+          break;
+        } else {
+          if (value > UINT_MAX) {
+            port = UINT_MAX;
+            my_getopt_error_reporter(WARNING_LEVEL,
+                                     EE_ADJUSTED_UNSIGNED_VALUE_FOR_OPTION,
+                                     "port", token.c_str(), ullstr(port, buf));
+          } else {
+            port = (uint)value;
+          }
+        }
+      }
+    }
+    ports.emplace_back(port);
+    port_view.remove_prefix(remove_prefix);
+  }
+  if (error) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+                             "Failed to parse Ports", port_str, "port");
+    return error;
+  }
+  /** 2. Parse host */
+  std::string_view host_view =
+      (host_str != nullptr ? std::string_view(host_str) : std::string_view());
+  while (host_view.length() != 0) {
+    size_t token_end = host_view.find_first_of(",");
+    size_t remove_prefix = token_end + 1;
+    if (token_end == std::string_view::npos) {
+      token_end = host_view.length();
+      remove_prefix = host_view.length();
+    }
+    std::string_view token = host_view.substr(0, token_end);
+    host_view.remove_prefix(remove_prefix);
+    hosts.emplace_back(token);
+  }
+  if (error) {
+    my_getopt_error_reporter(ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+                             "Failed to parse Hosts", host_str, "host");
+    return error;
+  }
+  /** 3. Adjust the hosts and ports */
+  if (hosts.size() == 0) {
+    hosts.emplace_back("");
+  }
+  if (ports.size() == 0) {
+    ports.emplace_back(0);
+  }
+  if (hosts.size() != ports.size()) {
+    if (hosts.size() > 1 && ports.size() > 1) {
+      my_getopt_error_reporter(
+          ERROR_LEVEL, EE_FAILED_TO_SET_OPTION_VALUE,
+          "The number of ports doesn't match the number of hosts", port_str,
+          "port");
+      return EXIT_ARGUMENT_INVALID;
+    }
+    if (hosts.size() < ports.size()) {
+      hosts.resize(ports.size(), hosts[0]);
+    } else {
+      ports.resize(hosts.size(), ports[0]);
+    }
+  }
+  return 0;
+}
+
+/*
+  db_connect -- connects to the host and selects DB.
+*/
+
+static int connect_to_db(std::vector<std::string> &hosts,
+                         std::vector<uint> &ports, char *user) {
+  char buff[20 + FN_REFLEN];
+  DBUG_TRACE;
+
+  if (sql_connect_with_hosts_and_ports(hosts, ports, user)) {
+    return 1;
+  }
   if (mysql_get_server_version(&mysql_connection) < 40100) {
     /* Don't dump SET NAMES with a pre-4.1 server (bug#7997).  */
     opt_set_charset = false;
@@ -5897,7 +6068,12 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (connect_to_db(current_host, current_user)) {
+  /** Here, we parse the host and the port */
+  int parse_error =
+      parse_host_and_port(hosts_str, ports_str, host_list, port_list);
+  if (parse_error) exit(parse_error);
+
+  if (connect_to_db(host_list, port_list, current_user)) {
     free_resources();
     exit(EX_MYSQLERR);
   }

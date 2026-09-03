@@ -151,7 +151,7 @@ int split_rtree_node(
     int size2,                               /*!< in: initial group sizes */
     double **d_buffer,                       /*!< in/out: buffer. */
     int n_dim,                               /*!< in: dimensions. */
-    uchar *first_rec,                        /*!< in: the first rec. */
+    reg_t first_reg,                         /*!< in: the first rec. */
     const dd::Spatial_reference_system *srs) /*!< in: SRS of R-tree */
 {
   rtr_split_node_t *cur;
@@ -210,7 +210,7 @@ int split_rtree_node(
 
     /* Find out where the first rec (of the page) will be at,
     and inform the caller */
-    if (first_rec && first_rec == next->key) {
+    if (first_reg.is_not_null() && first_reg == next->key) {
       first_rec_group = next_node;
     }
   }
@@ -247,7 +247,7 @@ bool rtree_key_cmp(page_cur_mode_t mode, const uchar *a, int a_len,
     case PAGE_CUR_WITHIN:
       return (mbr_within_cmp(srs, &x, &y));
     case PAGE_CUR_MBR_EQUAL:
-      return (mbr_equal_cmp(srs, &x, &y));
+      return (mbr_equal_logically(srs, &x, &y));
     case PAGE_CUR_DISJOINT:
       return (mbr_disjoint_cmp(srs, &x, &y));
     default:

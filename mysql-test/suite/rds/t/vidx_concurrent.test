@@ -1,0 +1,307 @@
+##########################################
+# Concurrent operations for VECTOR INDEX #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/have_debug_sync.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare - Create table with vector index
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+  ) ENGINE = InnoDB;
+--disable_warnings
+
+--echo # Insert initial data
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[2,2,2,2,2]"));
+
+--echo
+--echo # ========================================
+--echo # 2. Sequential INSERT from multiple connections
+--echo # ========================================
+--echo # Test: conn1 and conn2 INSERT sequentially, verify data integrity
+
+--connect (conn1, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connect (conn2, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--connection conn1
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[10,10,10,10,10]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[11,11,11,11,11]"));
+COMMIT;
+
+--connection conn2
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[20,20,20,20,20]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[21,21,21,21,21]"));
+COMMIT;
+
+--connection default
+--echo # Verify all data is present
+SELECT COUNT(*) FROM t1;
+
+--echo # Verify data integrity - all inserted vectors should be queryable
+--sorted_result
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # ========================================
+--echo # 3. Concurrent INSERT + SELECT (read while writing)
+--echo # ========================================
+--echo # Test: One connection inserts, another executes ANN query
+
+--connection conn1
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[30,30,30,30,30]"));
+
+--connection conn2
+--echo # ANN query while conn1 has uncommitted INSERT
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[30,30,30,30,30]")) LIMIT 3;
+--enable_result_log
+
+--connection conn1
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[31,31,31,31,31]"));
+COMMIT;
+
+--connection conn2
+--echo # ANN query after conn1 committed
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[30,30,30,30,30]")) LIMIT 3;
+--enable_result_log
+
+--connection default
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo # ========================================
+--echo # 4. Concurrent UPDATE + SELECT
+--echo # ========================================
+--connection conn1
+BEGIN;
+UPDATE t1 SET v = VEC_FROMTEXT("[100,100,100,100,100]") WHERE id = 1;
+
+--connection conn2
+--echo # Query while UPDATE is in progress
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[100,100,100,100,100]")) LIMIT 1;
+--enable_result_log
+
+--connection conn1
+COMMIT;
+
+--connection conn2
+--echo # Query after UPDATE committed
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[100,100,100,100,100]")) LIMIT 1;
+
+--echo
+--echo # ========================================
+--echo # 5. Concurrent DELETE + SELECT
+--echo # ========================================
+--connection default
+--echo # Current count before delete test
+SELECT COUNT(*) FROM t1;
+
+--connection conn1
+BEGIN;
+DELETE FROM t1 WHERE id = 2;
+
+--connection conn2
+--echo # Count while DELETE is uncommitted (should still see old count due to MVCC)
+SELECT COUNT(*) FROM t1;
+
+--connection conn1
+COMMIT;
+
+--connection conn2
+--echo # Count after DELETE committed
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo # ========================================
+--echo # 6. Concurrent DML + DDL (DROP VECTOR INDEX)
+--echo # ========================================
+--echo # Test: One connection inserts while another drops the vector index
+--echo # This should not cause deadlock
+
+--connection default
+--echo # Create a new table for this test
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi2(v)
+  ) ENGINE = InnoDB;
+
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT("[5,4,3,2,1]"));
+
+--connection conn1
+BEGIN;
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT("[10,20,30,40,50]"));
+COMMIT;
+
+--connection default
+--echo # Now drop the vector index
+ALTER TABLE t2 DROP INDEX vi2;
+SHOW CREATE TABLE t2;
+
+--echo # Insert should still work after index dropped
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT("[50,40,30,20,10]"));
+SELECT COUNT(*) FROM t2;
+
+DROP TABLE t2;
+
+--echo
+--echo # ========================================
+--echo # 7. Concurrent TRUNCATE + SELECT
+--echo # ========================================
+--connection default
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi3(v)
+  ) ENGINE = InnoDB;
+
+--echo # Insert test data
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT("[2,2,2,2,2]"));
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT("[3,3,3,3,3]"));
+
+--connection conn1
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t3 FORCE INDEX(`vi3`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,2,2,2]")) LIMIT 2;
+--enable_result_log
+
+--connection default
+TRUNCATE TABLE t3;
+
+--echo # After truncate, table should be empty
+SELECT COUNT(*) FROM t3;
+
+--echo # Insert new data after truncate
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT("[9,9,9,9,9]"));
+
+--connection conn2
+--echo # Query after truncate and new insert
+SELECT id, VEC_TOTEXT(v) FROM t3;
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t3 FORCE INDEX(`vi3`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[9,9,9,9,9]")) LIMIT 1;
+--enable_result_log
+
+--connection default
+DROP TABLE t3;
+
+--echo
+--echo # ========================================
+--echo # 8. Sequential INSERT with ROLLBACK
+--echo # ========================================
+--connection conn1
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[200,200,200,200,200]"));
+--echo # conn1 rollback
+ROLLBACK;
+
+--connection conn2
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[201,201,201,201,201]"));
+--echo # conn2 commit
+COMMIT;
+
+--connection default
+--echo # Only conn2's insert should be visible
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[200,200,200,200,200]")) LIMIT 1;
+--enable_result_log
+
+--echo
+--echo # ========================================
+--echo # 9. Rapid concurrent INSERT stress test
+--echo # ========================================
+--connection default
+CREATE TABLE t4 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi4(v)
+  ) ENGINE = InnoDB;
+
+--connection conn1
+--disable_query_log
+--disable_result_log
+let $i=50;
+while ($i)
+{
+  eval INSERT INTO t4(v) VALUES (VEC_FROMTEXT(CONCAT('[', $i, ',', $i, ',', $i, ',', $i, ',', $i, ']')));
+  dec $i;
+}
+--enable_result_log
+--enable_query_log
+
+--connection conn2
+--disable_query_log
+--disable_result_log
+let $i=50;
+while ($i)
+{
+  eval INSERT INTO t4(v) VALUES (VEC_FROMTEXT(CONCAT('[', $i + 100, ',', $i + 100, ',', $i + 100, ',', $i + 100, ',', $i + 100, ']')));
+  dec $i;
+}
+--enable_result_log
+--enable_query_log
+
+--connection default
+--echo # Verify all 100 rows inserted
+SELECT COUNT(*) FROM t4;
+
+--echo # Verify ANN query works correctly
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t4 FORCE INDEX(`vi4`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[25,25,25,25,25]")) LIMIT 5;
+--enable_result_log
+
+DROP TABLE t4;
+
+--echo
+--echo # ========================================
+--echo # 10. Concurrent transaction isolation test
+--echo # ========================================
+--connection conn1
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[300,300,300,300,300]"));
+
+--connection conn2
+BEGIN;
+--echo # conn2 should not see conn1's uncommitted data (READ-COMMITTED)
+--disable_result_log
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[300,300,300,300,300]")) LIMIT 1;
+--enable_result_log
+COMMIT;
+
+--connection conn1
+COMMIT;
+
+--connection conn2
+BEGIN;
+--echo # Now conn2 should see the committed data
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[300,300,300,300,300]")) LIMIT 1;
+COMMIT;
+
+--echo
+--echo # ========================================
+--echo # 11. Cleanup
+--echo # ========================================
+--disconnect conn1
+--disconnect conn2
+--connection default
+
+--enable_warnings
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

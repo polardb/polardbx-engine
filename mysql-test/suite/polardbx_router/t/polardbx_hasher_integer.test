@@ -1,0 +1,269 @@
+--echo
+--echo  Test for polardbx_hasher function with integer types
+--echo
+
+--echo
+--echo  Test with TINYINT type
+--echo
+CREATE TABLE t_tinyint (
+  id TINYINT,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_tinyint (id, name, age, salary, create_time, is_active) VALUES
+  (-128, 'min tinyint', 25, 50000.00, '2023-01-01 00:00:00', true),
+  (0, 'zero tinyint', 30, 60000.50, '2023-01-01 00:00:01', false),
+  (127, 'max tinyint', 35, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'null tinyint', 40, 80000.00, '2023-01-01 00:00:03', false),
+  (-1, 'negative one', 45, 90000.25, '2023-01-01 00:00:04', true),
+  (1, 'positive one', 50, 95000.00, '2023-01-01 00:00:05', false),
+  (42, 'meaning of life', 55, 100000.00, '2023-01-01 00:00:06', true),
+  (-42, 'negative meaning', 60, 105000.00, '2023-01-01 00:00:07', false),
+  (100, 'round number', 65, 110000.00, '2023-01-01 00:00:08', true),
+  (-100, 'negative round', 70, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_tinyint ORDER BY age, hash_value;
+
+--echo
+--echo  Test with TINYINT UNSIGNED type
+--echo
+CREATE TABLE t_tinyint_unsigned (
+  id TINYINT UNSIGNED,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_tinyint_unsigned (id, name, age, salary, create_time, is_active) VALUES
+  (0, 'min tinyint unsigned', 125, 50000.00, '2023-01-01 00:00:00', true),
+  (255, 'max tinyint unsigned', 130, 60000.50, '2023-01-01 00:00:01', false),
+  (NULL, 'null tinyint unsigned', 135, 70000.75, '2023-01-01 00:00:02', true),
+  (1, 'one unsigned', 140, 80000.00, '2023-01-01 00:00:03', false),
+  (42, 'meaning of life unsigned', 145, 90000.25, '2023-01-01 00:00:04', true),
+  (100, 'round number unsigned', 150, 95000.00, '2023-01-01 00:00:05', false),
+  (200, 'double century', 155, 100000.00, '2023-01-01 00:00:06', true),
+  (128, 'midpoint', 160, 105000.00, '2023-01-01 00:00:07', false),
+  (64, 'power of two', 165, 110000.00, '2023-01-01 00:00:08', true),
+  (32, 'small power of two', 170, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_tinyint_unsigned ORDER BY age, hash_value;
+
+--echo
+--echo  Test with SMALLINT type
+--echo
+CREATE TABLE t_smallint (
+  id SMALLINT,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_smallint (id, name, age, salary, create_time, is_active) VALUES
+  (-32768, 'min smallint', 225, 50000.00, '2023-01-01 00:00:00', true),
+  (0, 'zero smallint', 230, 60000.50, '2023-01-01 00:00:01', false),
+  (32767, 'max smallint', 235, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'null smallint', 240, 80000.00, '2023-01-01 00:00:03', false),
+  (-1, 'negative one smallint', 245, 90000.25, '2023-01-01 00:00:04', true),
+  (1, 'positive one smallint', 250, 95000.00, '2023-01-01 00:00:05', false),
+  (42, 'meaning of life smallint', 255, 100000.00, '2023-01-01 00:00:06', true),
+  (-42, 'negative meaning smallint', 260, 105000.00, '2023-01-01 00:00:07', false),
+  (1000, 'thousand', 265, 110000.00, '2023-01-01 00:00:08', true),
+  (-1000, 'negative thousand', 270, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_smallint ORDER BY age, hash_value;
+
+--echo
+--echo  Test with SMALLINT UNSIGNED type
+--echo
+CREATE TABLE t_smallint_unsigned (
+  id SMALLINT UNSIGNED,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_smallint_unsigned (id, name, age, salary, create_time, is_active) VALUES
+  (0, 'min smallint unsigned', 325, 50000.00, '2023-01-01 00:00:00', true),
+  (65535, 'max smallint unsigned', 330, 60000.50, '2023-01-01 00:00:01', false),
+  (NULL, 'null smallint unsigned', 335, 70000.75, '2023-01-01 00:00:02', true),
+  (1, 'one unsigned smallint', 340, 80000.00, '2023-01-01 00:00:03', false),
+  (42, 'meaning of life unsigned smallint', 345, 90000.25, '2023-01-01 00:00:04', true),
+  (1000, 'thousand unsigned', 350, 95000.00, '2023-01-01 00:00:05', false),
+  (10000, 'ten thousand', 355, 100000.00, '2023-01-01 00:00:06', true),
+  (32768, 'midpoint unsigned', 360, 105000.00, '2023-01-01 00:00:07', false),
+  (16384, 'power of two smallint', 365, 110000.00, '2023-01-01 00:00:08', true),
+  (8192, 'small power of two smallint', 370, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_smallint_unsigned ORDER BY age, hash_value;
+
+--echo
+--echo  Test with MEDIUMINT type
+--echo
+CREATE TABLE t_mediumint (
+  id MEDIUMINT,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_mediumint (id, name, age, salary, create_time, is_active) VALUES
+  (-8388608, 'min mediumint', 425, 50000.00, '2023-01-01 00:00:00', true),
+  (0, 'zero mediumint', 430, 60000.50, '2023-01-01 00:00:01', false),
+  (8388607, 'max mediumint', 435, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'null mediumint', 440, 80000.00, '2023-01-01 00:00:03', false),
+  (-1, 'negative one mediumint', 445, 90000.25, '2023-01-01 00:00:04', true),
+  (1, 'positive one mediumint', 450, 95000.00, '2023-01-01 00:00:05', false),
+  (42, 'meaning of life mediumint', 455, 100000.00, '2023-01-01 00:00:06', true),
+  (-42, 'negative meaning mediumint', 460, 105000.00, '2023-01-01 00:00:07', false),
+  (100000, 'hundred thousand', 465, 110000.00, '2023-01-01 00:00:08', true),
+  (-100000, 'negative hundred thousand', 470, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_mediumint ORDER BY age, hash_value;
+
+--echo
+--echo  Test with MEDIUMINT UNSIGNED type
+--echo
+CREATE TABLE t_mediumint_unsigned (
+  id MEDIUMINT UNSIGNED,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_mediumint_unsigned (id, name, age, salary, create_time, is_active) VALUES
+  (0, 'min mediumint unsigned', 525, 50000.00, '2023-01-01 00:00:00', true),
+  (16777215, 'max mediumint unsigned', 530, 60000.50, '2023-01-01 00:00:01', false),
+  (NULL, 'null mediumint unsigned', 535, 70000.75, '2023-01-01 00:00:02', true),
+  (1, 'one unsigned mediumint', 540, 80000.00, '2023-01-01 00:00:03', false),
+  (42, 'meaning of life unsigned mediumint', 545, 90000.25, '2023-01-01 00:00:04', true),
+  (100000, 'hundred thousand unsigned', 550, 95000.00, '2023-01-01 00:00:05', false),
+  (1000000, 'million', 555, 100000.00, '2023-01-01 00:00:06', true),
+  (8388608, 'midpoint unsigned', 560, 105000.00, '2023-01-01 00:00:07', false),
+  (4194304, 'power of two mediumint', 565, 110000.00, '2023-01-01 00:00:08', true),
+  (2097152, 'small power of two mediumint', 570, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_mediumint_unsigned ORDER BY age, hash_value;
+
+--echo
+--echo  Test with INT type
+--echo
+CREATE TABLE t_int (
+  id INT,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_int (id, name, age, salary, create_time, is_active) VALUES
+  (-2147483648, 'min int', 625, 50000.00, '2023-01-01 00:00:00', true),
+  (0, 'zero int', 630, 60000.50, '2023-01-01 00:00:01', false),
+  (2147483647, 'max int', 635, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'null int', 640, 80000.00, '2023-01-01 00:00:03', false),
+  (-1, 'negative one int', 645, 90000.25, '2023-01-01 00:00:04', true),
+  (1, 'positive one int', 650, 95000.00, '2023-01-01 00:00:05', false),
+  (42, 'meaning of life int', 655, 100000.00, '2023-01-01 00:00:06', true),
+  (-42, 'negative meaning int', 660, 105000.00, '2023-01-01 00:00:07', false),
+  (1000000, 'million int', 665, 110000.00, '2023-01-01 00:00:08', true),
+  (-1000000, 'negative million int', 670, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_int ORDER BY age, hash_value;
+
+--echo
+--echo  Test with INT UNSIGNED type
+--echo
+CREATE TABLE t_int_unsigned (
+  id INT UNSIGNED,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_int_unsigned (id, name, age, salary, create_time, is_active) VALUES
+  (0, 'min int unsigned', 725, 50000.00, '2023-01-01 00:00:00', true),
+  (4294967295, 'max int unsigned', 730, 60000.50, '2023-01-01 00:00:01', false),
+  (NULL, 'null int unsigned', 735, 70000.75, '2023-01-01 00:00:02', true),
+  (1, 'one unsigned int', 740, 80000.00, '2023-01-01 00:00:03', false),
+  (42, 'meaning of life unsigned int', 745, 90000.25, '2023-01-01 00:00:04', true),
+  (1000000, 'million unsigned int', 750, 95000.00, '2023-01-01 00:00:05', false),
+  (10000000, 'ten million', 755, 100000.00, '2023-01-01 00:00:06', true),
+  (2147483648, 'midpoint unsigned int', 760, 105000.00, '2023-01-01 00:00:07', false),
+  (1073741824, 'power of two int', 765, 110000.00, '2023-01-01 00:00:08', true),
+  (536870912, 'small power of two int', 770, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_int_unsigned ORDER BY age, hash_value;
+
+--echo
+--echo  Test with BIGINT type
+--echo
+CREATE TABLE t_bigint (
+  id BIGINT,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_bigint (id, name, age, salary, create_time, is_active) VALUES
+  (-9223372036854775808, 'min bigint', 825, 50000.00, '2023-01-01 00:00:00', true),
+  (0, 'zero bigint', 830, 60000.50, '2023-01-01 00:00:01', false),
+  (9223372036854775807, 'max bigint', 835, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'null bigint', 840, 80000.00, '2023-01-01 00:00:03', false),
+  (-1, 'negative one bigint', 845, 90000.25, '2023-01-01 00:00:04', true),
+  (1, 'positive one bigint', 850, 95000.00, '2023-01-01 00:00:05', false),
+  (42, 'meaning of life bigint', 855, 100000.00, '2023-01-01 00:00:06', true),
+  (-42, 'negative meaning bigint', 860, 105000.00, '2023-01-01 00:00:07', false),
+  (1000000000, 'billion bigint', 865, 110000.00, '2023-01-01 00:00:08', true),
+  (-1000000000, 'negative billion bigint', 870, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_bigint ORDER BY age, hash_value;
+
+--echo
+--echo  Test with BIGINT UNSIGNED type
+--echo
+CREATE TABLE t_bigint_unsigned (
+  id BIGINT UNSIGNED,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_bigint_unsigned (id, name, age, salary, create_time, is_active) VALUES
+  (0, 'min bigint unsigned', 925, 50000.00, '2023-01-01 00:00:00', true),
+  (18446744073709551615, 'max bigint unsigned', 930, 60000.50, '2023-01-01 00:00:01', false),
+  (NULL, 'null bigint unsigned', 935, 70000.75, '2023-01-01 00:00:02', true),
+  (1, 'one unsigned bigint', 940, 80000.00, '2023-01-01 00:00:03', false),
+  (42, 'meaning of life unsigned bigint', 945, 90000.25, '2023-01-01 00:00:04', true),
+  (1000000000, 'billion unsigned bigint', 950, 95000.00, '2023-01-01 00:00:05', false),
+  (10000000000, 'ten billion', 955, 100000.00, '2023-01-01 00:00:06', true),
+  (9223372036854775808, 'midpoint unsigned bigint', 960, 105000.00, '2023-01-01 00:00:07', false),
+  (4611686018427387904, 'power of two bigint', 965, 110000.00, '2023-01-01 00:00:08', true),
+  (2305843009213693952, 'small power of two bigint', 970, 115000.00, '2023-01-01 00:00:09', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_bigint_unsigned ORDER BY age, hash_value;
+
+--echo #
+--echo # Clean up
+--echo #
+
+DROP TABLE t_tinyint, t_tinyint_unsigned, t_smallint, t_smallint_unsigned, t_mediumint, t_mediumint_unsigned, t_int, t_int_unsigned, t_bigint, t_bigint_unsigned;

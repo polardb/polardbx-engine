@@ -415,6 +415,7 @@ struct MDL_key {
     RESOURCE_GROUPS,
     FOREIGN_KEY,
     CHECK_CONSTRAINT,
+    FTRUNC_LOCK,
     /* This should be the last ! */
     NAMESPACE_END
   };

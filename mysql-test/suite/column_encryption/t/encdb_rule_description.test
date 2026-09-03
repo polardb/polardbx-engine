@@ -1,0 +1,82 @@
+--echo #
+--echo # EncDB rule descriptions are persisted and exported.
+--echo #
+
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+select column_type as column_type, is_nullable as is_nullable,
+       column_default is not null as has_default
+  from information_schema.columns
+  where table_schema = 'mysql' and table_name = 'encdb_sensitive_rules'
+    and column_name = 'description';
+
+--echo # Upgrade the original table schema and preserve existing rows.
+alter table mysql.encdb_sensitive_rules drop column description;
+insert into mysql.encdb_sensitive_rules
+  (sensitive_databases, sensitive_tables, sensitive_columns, algos,
+   default_algo, endpoints, rule_name, enabled, rule_type)
+  values ('["test"]', '["t"]', '["c"]', '[]', '', '[]',
+          'pre_upgrade_rule', true, 0);
+--disable_query_log
+--disable_result_log
+--exec $MYSQL --force mysql < $MYSQL_FIX_PRIVILEGE_TABLES > $MYSQLTEST_VARDIR/tmp/encdb_rule_description_upgrade_first.log 2>&1
+--exec $MYSQL --force mysql < $MYSQL_FIX_PRIVILEGE_TABLES > $MYSQLTEST_VARDIR/tmp/encdb_rule_description_upgrade_second.log 2>&1
+--enable_result_log
+--enable_query_log
+--let $assert_text = Reapplying the system table fix must not add description again
+--let $assert_file = $MYSQLTEST_VARDIR/tmp/encdb_rule_description_upgrade_second.log
+--let $assert_select = Duplicate column name 'description'
+--let $assert_count = 0
+--source include/assert_grep.inc
+select column_type as column_type, is_nullable as is_nullable,
+       column_default is not null as has_default
+  from information_schema.columns
+  where table_schema = 'mysql' and table_name = 'encdb_sensitive_rules'
+    and column_name = 'description';
+select ordinal_position =
+       (select ordinal_position + 1 from information_schema.columns
+          where table_schema = 'mysql' and
+                table_name = 'encdb_sensitive_rules' and
+                column_name = 'rule_type') as description_after_rule_type
+  from information_schema.columns
+  where table_schema = 'mysql' and table_name = 'encdb_sensitive_rules' and
+        column_name = 'description';
+select description = '' as description_is_empty
+  from mysql.encdb_sensitive_rules where rule_name = 'pre_upgrade_rule';
+flush privileges;
+select encdb_rule_export();
+select encdb_rule_op('delete', '"pre_upgrade_rule"');
+--remove_file $MYSQLTEST_VARDIR/tmp/encdb_rule_description_upgrade_first.log
+--remove_file $MYSQLTEST_VARDIR/tmp/encdb_rule_description_upgrade_second.log
+
+--echo # Simulate the original standard binary writing only the original columns.
+insert into mysql.encdb_sensitive_rules
+  (sensitive_databases, sensitive_tables, sensitive_columns, algos,
+   default_algo, endpoints, rule_name, enabled, rule_type)
+  values ('["test"]', '["t"]', '["c"]', '[]', '', '[]',
+          'standard_rule', true, 0);
+select description = '' as description_is_empty
+  from mysql.encdb_sensitive_rules where rule_name = 'standard_rule';
+delete from mysql.encdb_sensitive_rules where rule_name = 'standard_rule';
+
+select encdb_rule_op('add', '{"name":"description_rule","description":"initial description","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+select description from mysql.encdb_sensitive_rules
+  where rule_name = 'description_rule';
+select encdb_rule_export();
+
+flush privileges;
+select encdb_rule_export();
+
+select encdb_rule_op('update', '{"name":"description_rule","description":"updated description","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+select description from mysql.encdb_sensitive_rules
+  where rule_name = 'description_rule';
+select encdb_rule_export();
+select encdb_rule_op('delete', '"description_rule"');
+
+--echo # Requests without description remain compatible.
+select encdb_rule_op('add', '{"name":"legacy_rule","enabled":true,"meta":{"databases":["test"],"tables":["t"],"columns":["c"]}}');
+select description from mysql.encdb_sensitive_rules
+  where rule_name = 'legacy_rule';
+select encdb_rule_export();
+select encdb_rule_op('delete', '"legacy_rule"');

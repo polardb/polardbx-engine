@@ -1,0 +1,171 @@
+##########################################
+# VECTOR INDEX and Partition Table Test  #
+# (Mutual Exclusion Verification)        #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2, t3, t_partition, t_vector;
+--enable_warnings
+
+--echo #
+--echo # Scenario 3.1: CREATE TABLE with PARTITION BY HASH + VECTOR INDEX -> error expected
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1),
+  VECTOR INDEX vi(v)
+) PARTITION BY HASH(c1) PARTITIONS 3;
+
+--echo #
+--echo # Scenario 3.2: CREATE TABLE with PARTITION BY RANGE + VECTOR INDEX -> error expected
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1),
+  VECTOR INDEX vi(v)
+) PARTITION BY RANGE(c1) (
+  PARTITION p0 VALUES LESS THAN (100),
+  PARTITION p1 VALUES LESS THAN (200),
+  PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+
+--echo #
+--echo # Scenario 3.3: CREATE TABLE with PARTITION BY LIST + VECTOR INDEX -> error expected
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1),
+  VECTOR INDEX vi(v)
+) PARTITION BY LIST(c1) (
+  PARTITION p0 VALUES IN (1, 2, 3),
+  PARTITION p1 VALUES IN (4, 5, 6),
+  PARTITION p2 VALUES IN (7, 8, 9)
+);
+
+--echo #
+--echo # Scenario 3.4: CREATE TABLE with PARTITION BY KEY + VECTOR INDEX -> error expected
+--echo #
+
+--error ER_NOT_SUPPORTED_YET
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1),
+  VECTOR INDEX vi(v)
+) PARTITION BY KEY(c1) PARTITIONS 4;
+
+--echo #
+--echo # Scenario 3.5: Create table with vector index first -> ALTER TABLE ADD PARTITION -> error
+--echo #
+
+CREATE TABLE t_vector (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t_vector;
+
+--echo # Attempt to add partition to vector-indexed table
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t_vector PARTITION BY HASH(c1) PARTITIONS 2;
+
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t_vector PARTITION BY RANGE(c1) (
+  PARTITION p0 VALUES LESS THAN (100),
+  PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+
+DROP TABLE t_vector;
+
+--echo #
+--echo # Scenario 3.6: Create partition table first -> ALTER TABLE ADD VECTOR INDEX -> error expected
+--echo #
+
+CREATE TABLE t_partition (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+
+SHOW CREATE TABLE t_partition;
+
+--echo # Attempt to add vector index to partitioned table
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t_partition ADD VECTOR INDEX vi(v);
+
+--error ER_NOT_SUPPORTED_YET
+CREATE VECTOR INDEX vi ON t_partition(v);
+
+DROP TABLE t_partition;
+
+--echo #
+--echo # Scenario 3.7: CREATE TABLE t2 LIKE t1 (t1 is partition table) -> t2 add vector index -> error
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  v VECTOR(5),
+  PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+
+CREATE TABLE t2 LIKE t1;
+
+SHOW CREATE TABLE t2;
+
+--echo # t2 is also partitioned (copied from t1), so adding vector index should fail
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+
+DROP TABLE t2;
+DROP TABLE t1;
+
+--echo #
+--echo # Additional test: Verify partition table without vector type column
+--echo #
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT,
+  c1 INT,
+  data VARCHAR(100),
+  PRIMARY KEY (id, c1)
+) PARTITION BY HASH(c1) PARTITIONS 2;
+
+SHOW CREATE TABLE t3;
+
+--echo # Adding a vector column is allowed
+ALTER TABLE t3 ADD COLUMN v VECTOR(5);
+
+SHOW CREATE TABLE t3;
+
+--echo # But adding vector index on partitioned table should still fail
+--error ER_NOT_SUPPORTED_YET
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+
+DROP TABLE t3;
+
+--echo # Cleanup
+SET GLOBAL vidx_disabled = ON;

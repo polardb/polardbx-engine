@@ -1,0 +1,273 @@
+##########################################
+# Replication test for independent       #
+# transaction (Attachable_trx_rw)        #
+##########################################
+#
+# TEST: vidx_indep_trx_repl
+#
+# Verifies that the per-row independent commit behavior works correctly
+# on slave replay. Key checks:
+#   - Slave aux table matches master after various DML
+#   - Large transaction replays correctly
+#   - ROLLBACK on master produces no binlog event (slave clean)
+#   - MTS parallel workers don't conflict on aux tables
+#   - GTID integrity (independent trx doesn't consume extra GTID)
+#   - Mixed DML sequence replays correctly
+
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/master-slave.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo ##############################################
+--echo # Setup                                      #
+--echo ##############################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--source include/rpl_sync.inc
+
+# Get TABLE_IDs on both master and slave
+--source include/rpl_connection_master.inc
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--source include/rpl_connection_slave.inc
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo
+--echo ##############################################
+--echo # 1. Large transaction: 20 rows INSERT      #
+--echo #    Verify slave aux = master aux           #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+--let $i = 1
+--disable_query_log
+while ($i <= 20)
+{
+  --eval INSERT INTO t1(a, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[$i,$i,$i]')))
+  --inc $i
+}
+--enable_query_log
+COMMIT;
+
+--echo # Master: verify row count
+SELECT COUNT(*) AS master_main_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_sync.inc
+
+--echo # Slave: verify matches master
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_main_rows FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Slave: ANN search works
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,10,10]')) LIMIT 5;
+
+--echo
+# §2 (ROLLBACK on master, nothing on slave) removed — covered by
+# vidx_indep_trx.test §3 (BEGIN+ROLLBACK with master+slave verify).
+--echo
+--echo ##############################################
+--echo # 3. INSERT → UPDATE → DELETE sequence      #
+--echo #    Verify slave tracks each step           #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+--echo # Step 1: INSERT
+INSERT INTO t1(a, v) VALUES (50, VEC_FROMTEXT('[50,50,50]'));
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS master_50 FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_50 FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Step 2: UPDATE vector
+--source include/rpl_connection_master.inc
+UPDATE t1 SET v = VEC_FROMTEXT('[55,55,55]') WHERE a = 50;
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+SELECT VEC_TOTEXT(v) AS master_vec FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_after_upd FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_connection_slave.inc
+SELECT VEC_TOTEXT(v) AS slave_vec FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_after_upd FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Step 3: DELETE
+--source include/rpl_connection_master.inc
+DELETE FROM t1 WHERE a = 50;
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS master_50_gone FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux_after_del FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_50_gone FROM t1 WHERE a = 50;
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux_after_del FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo
+--echo ##############################################
+--echo # 4. GTID integrity: single GTID for        #
+--echo #    multi-row INSERT                        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+# vidx aux DML runs inside an inner Attachable_trx_rw and MUST NOT
+# consume an extra outer GTID.  Only assert this when GTID is enabled
+# — otherwise the test environment cannot observe GTID assignment at
+# all and the assertion would be ill-defined.
+--let $gtid_mode = `SELECT @@global.gtid_mode`
+--let $gtid_before = `SELECT @@global.gtid_executed`
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT('[60,60,60]'));
+INSERT INTO t1(a, v) VALUES (61, VEC_FROMTEXT('[61,61,61]'));
+INSERT INTO t1(a, v) VALUES (62, VEC_FROMTEXT('[62,62,62]'));
+COMMIT;
+
+if (`SELECT '$gtid_mode' = 'ON'`)
+{
+  # GTID set form is "uuid:N" for a single GTID, "uuid:N-M" for a
+  # range.  UUID itself contains 4 dashes, so split off the part
+  # after the LAST ':' and check that piece for a dash — only the
+  # seqno range carries one for a multi-GTID leak.
+  --let $gtid_delta  = `SELECT GTID_SUBTRACT(@@global.gtid_executed, '$gtid_before')`
+  --let $gtid_seqno  = `SELECT SUBSTRING_INDEX('$gtid_delta', ':', -1)`
+  if (`SELECT '$gtid_delta' = ''`)
+  {
+    --die GTID delta is empty — outer multi-row INSERT did not generate any GTID
+  }
+  if (`SELECT '$gtid_seqno' LIKE '%-%'`)
+  {
+    --echo gtid_before=$gtid_before
+    --echo gtid_delta=$gtid_delta
+    --die vidx independent trx leaked an extra GTID — seqno is a range
+  }
+}
+
+--source include/rpl_sync.inc
+
+--echo # Slave: all 3 rows present
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_rows_60_62 FROM t1 WHERE a BETWEEN 60 AND 62;
+
+--echo # Slave: ANN works
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[61,61,61]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 5. Mixed DML in single transaction        #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+BEGIN;
+INSERT INTO t1(a, v) VALUES (70, VEC_FROMTEXT('[70,70,70]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[11,11,11]') WHERE a = 1;
+DELETE FROM t1 WHERE a = 2;
+INSERT INTO t1(a, v) VALUES (71, VEC_FROMTEXT('[71,71,71]'));
+COMMIT;
+
+--source include/rpl_sync.inc
+
+--echo # Master state
+--source include/rpl_connection_master.inc
+SELECT COUNT(*) AS master_total FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS master_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Slave state should match
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_total FROM t1;
+SET @s = CONCAT('SELECT COUNT(*) AS slave_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Slave ANN works
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[70,70,70]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # 6. Different database parallel replay     #
+--echo #    (MTS safe: different schemas)           #
+--echo ##############################################
+--source include/rpl_connection_master.inc
+
+CREATE DATABASE db2;
+CREATE TABLE db2.t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(a, v) VALUES (80, VEC_FROMTEXT('[80,80,80]'));
+INSERT INTO db2.t2(v) VALUES (VEC_FROMTEXT('[80,80,80]'));
+
+--source include/rpl_sync.inc
+
+--echo # Slave: both tables have data
+--source include/rpl_connection_slave.inc
+SELECT COUNT(*) AS slave_t1_80 FROM t1 WHERE a = 80;
+SELECT COUNT(*) AS slave_t2 FROM db2.t2;
+
+--echo # Slave: ANN on both tables works
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[80,80,80]')) LIMIT 3;
+--sorted_result
+SELECT id FROM db2.t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[80,80,80]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+--source include/rpl_connection_slave.inc
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+DROP TABLE t1;
+DROP DATABASE db2;
+
+--source include/rpl_sync.inc
+
+--source include/rpl_connection_slave.inc
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_connection_master.inc
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;
+
+--source include/rpl_sync.inc
+--source include/rpl_end.inc

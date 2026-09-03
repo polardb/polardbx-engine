@@ -24,7 +24,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-
 //
 // Created by zzy on 2022/8/31.
 //
@@ -44,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/service_ssl_wrapper.h"
 #include "sql/mysqld.h"
 #include "sql/mysqld_thd_manager.h"
+#include "sql/auth/sql_internal_account.h"
 #include "sql/sql_class.h"
 #include "sql/sql_db.h"
 #include "sql/sql_lex.h"
@@ -77,7 +77,7 @@ CsessionBase::~CsessionBase() {
 
     srv_session_close(mysql_session_);
     mysql_session_ = nullptr;
-    
+
 #ifdef HAVE_PSI_THREAD_INTERFACE
     if (psi != nullptr) {
       /// detach and delete it
@@ -143,7 +143,9 @@ err_t CsessionBase::switch_to_user(const char *username, const char *hostname,
                                    const char *address, const char *db) {
   MYSQL_SECURITY_CONTEXT scontext;
 
-  if (thd_get_security_context(get_thd(), &scontext) != 0)
+  MYSQL_THD mysql_thd = get_thd();
+  mysql_thd->is_polarx_sys_user = false;
+  if (thd_get_security_context(mysql_thd, &scontext) != 0)
     return err_t(ER_ACCESS_DENIED_ERROR,
                  "Error getting security context for session");
 
@@ -269,7 +271,9 @@ void CsessionBase::switch_to_sys_user() {
   hostname_ = "127.0.0.1";
 
   MYSQL_SECURITY_CONTEXT scontext;
-  thd_get_security_context(get_thd(), &scontext);
+  MYSQL_THD mysql_thd = get_thd();
+  mysql_thd->is_polarx_sys_user = true;
+  thd_get_security_context(mysql_thd, &scontext);
 
   scontext->set_user_ptr(username_.data(),
                          static_cast<int>(username_.length()));
@@ -339,6 +343,7 @@ err_t CsessionBase::authenticate(const char *user, const char *host,
     MYSQL_SECURITY_CONTEXT scontext;
     thd_get_security_context(get_thd(), &scontext);
     thd_set_security_context(get_thd(), scontext);
+    im::apply_polarx_specific_user_default(get_thd());
 
 #ifdef HAVE_PSI_THREAD_INTERFACE
     PSI_THREAD_CALL(set_thread_account)
@@ -616,7 +621,7 @@ void CsessionBase::cleanup_and_mark_sleep(THD *thd) {
 
   /// end stmt
   thd->end_statement();
-                                                                                     
+
   /// free mem_root
 #ifdef MYSQL8
   /**

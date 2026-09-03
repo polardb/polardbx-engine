@@ -1,18 +1,15 @@
+call dbms_consensus.force_purge_cache(4611686018427387904);
 set global consensus_log_cache_size = 20 * 1024 * 1024;
 use test;
 create table t1 (data longblob);
 set global consensus_log_cache_size = 1;
-show global status like "consensus_fifo_cache%";
+show global status like "Consensus_fifo_cache_log_count";
 Variable_name	Value
-consensus_fifo_cache_first_index	32
-consensus_fifo_cache_log_count	1
-consensus_fifo_cache_used_size	1330
+Consensus_fifo_cache_log_count	18
 set global consensus_log_cache_size = 1024*1024*1024;
-show global status like "consensus_fifo_cache%";
+show global status like "Consensus_fifo_cache_log_count";
 Variable_name	Value
-consensus_fifo_cache_first_index	32
-consensus_fifo_cache_log_count	1026
-consensus_fifo_cache_used_size	316005
+Consensus_fifo_cache_log_count	1043
 select count(distinct(match_index)) from information_schema.alisql_cluster_global;
 count(distinct(match_index))
 1

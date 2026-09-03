@@ -1,0 +1,12 @@
+# Step 1: Record consensus_info baseline
+include/assert.inc [baseline: cluster_info must be non-empty]
+# Step 2: Restart with innodb_force_recovery=4 (consensus disabled, DML prevented)
+include/assert.inc [cluster_info unchanged after force_recovery restart]
+include/assert.inc [current_term unchanged after force_recovery restart]
+include/assert.inc [cluster_id unchanged after force_recovery restart]
+# consensus_info correctly preserved under force_recovery mode
+# Step 3: Recover consensus (rm binlog, force-change-meta, restart)
+# Verify consensus recovered successfully
+SELECT 1 AS server_restored;
+server_restored
+1

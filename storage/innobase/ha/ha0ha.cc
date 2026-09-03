@@ -112,12 +112,11 @@ static void ha_btr_search_latch_x_locked(const hash_table_t *table) {
 #endif /* UNIV_DEBUG */
 
 bool ha_insert_for_hash_func(hash_table_t *table, uint64_t hash_value,
-                             IF_AHI_DEBUG(buf_block_t *block, )
-                                 const rec_t *data) {
+                             IF_AHI_DEBUG(buf_block_t *block, ) creg_t data) {
   ha_node_t *node;
   ha_node_t *prev_node;
 
-  ut_ad(data);
+  ut_ad(data.rec);
   ut_ad(table);
   ut_ad(table->magic_n == hash_table_t::HASH_TABLE_MAGIC_N);
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
@@ -221,9 +220,9 @@ void ha_delete_hash_node(hash_table_t *table, /*!< in: hash table */
 }
 
 bool ha_search_and_update_if_found_func(hash_table_t *table,
-                                        uint64_t hash_value, const rec_t *data,
+                                        uint64_t hash_value, creg_t data,
                                         IF_AHI_DEBUG(buf_block_t *new_block, )
-                                            const rec_t *new_data) {
+                                            creg_t new_data) {
   ha_node_t *node;
 
   ut_ad(table);

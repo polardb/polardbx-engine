@@ -42,7 +42,7 @@
 #define CCL_LONG_WAIT ((ulong)3600L * 24L)
 
 /* The default max wait thread */
-#define CCL_DEFAULT_WAITING_COUNT ((ulonglong)0L)
+#define CCL_DEFAULT_WAITING_COUNT ((ulonglong)INT_MAX64)
 
 class Table_ref;
 class THD;
@@ -59,6 +59,9 @@ extern ulong ccl_wait_timeout;
 /* The max waiting count when concurrency control */
 extern ulonglong ccl_max_waiting_count;
 
+/* Whether to enable dynamic allocate slot */
+extern bool ccl_dynamic_allocate;
+
 /* Result structure for show_ccl_rule */
 typedef struct Ccl_show_result {
   ulonglong id;
@@ -71,6 +74,8 @@ typedef struct Ccl_show_result {
   ulonglong matched;
   ulonglong running;
   ulonglong waiting;
+  ulonglong concurrency_peek;
+  ulonglong killed_num;
   LEX_STRING keywords;
 
  public:
@@ -80,9 +85,13 @@ typedef struct Ccl_show_result {
     schema = {nullptr, 0};
     table = {nullptr, 0};
     concurrency_count = 0;
+    state = {nullptr, 0};
+    ordered = {nullptr, 0};
     matched = 0;
     running = 0;
     waiting = 0;
+    concurrency_peek = 0;
+    killed_num = 0;
     keywords = {nullptr, 0};
   }
 } Ccl_show_result;
@@ -119,13 +128,6 @@ class Ccl_comply {
   */
   bool comply_queue(THD *thd, LEX *lex, Ccl_queue_hint *hint);
 
-  /**
-    Comply the where cond when execute the statement.
-
-    @param[in]    thd           Thread context
-    @param[in]    cond          Where cond
-  */
-  bool comply_cond(THD *thd, Item *cond);
   /**
     End the statement if comply some rule.
   */
@@ -243,7 +245,7 @@ class Ccl_rule : public PSI_memory_base, public Disable_copy_base {
   Ccl_rule_state get_state() const { return m_state; }
   Ccl_rule_type get_type() const { return m_type; }
   Ccl_rule_ordered get_ordered() const { return m_order; }
-  ulonglong get_matched() const { return m_matched; }
+  ulonglong get_matched() const { return m_matched.load(); }
 
   bool keyword_is_null() const { return m_ccl_keywords.size() == 0; }
 
@@ -265,7 +267,8 @@ class Ccl_rule : public PSI_memory_base, public Disable_copy_base {
   Ccl_slot *m_slot;
 
   String_ccl m_original_keywords;
-  ulonglong m_matched;
+  /* Matched statement count, increased concurrently under shared lock */
+  std::atomic_ullong m_matched;
 };
 
 /**
@@ -655,9 +658,7 @@ class System_ccl : public PSI_memory_base, public Disable_copy_base {
   dynamic running state.
 */
 class Ccl_slot {
- public:
-  Ccl_slot();
-  virtual ~Ccl_slot();
+public:
   /**
     Acquire this slot;
 
@@ -667,48 +668,82 @@ class Ccl_slot {
     @retval     true          Success
     @retval     false         Failure
   */
-  bool acquire(ulonglong version, ulonglong cc_count);
+   bool acquire(ulonglong version, ulonglong cc_count);
+   /**
+    Constructor of Ccl_slot.
 
-  /**
-    Release this slot;
-    Should call it if return the slot back to ring_buffer.
-  */
-  void release();
-  /**
-    Enter the condition.
+    @param[in]  is_dynamic    Whether it's dynamic allocate
+   */
+   Ccl_slot(bool is_dynamic);
+   virtual ~Ccl_slot();
 
-    @param[in]    thd         thread context.
-    @param[in]    version     the thread local version.
-  */
-  void enter_cond(THD *thd, ulonglong version);
+   /**
+     Release this slot;
+     Should call it if return the slot back to ring_buffer.
+   */
+   void release();
+   /**
+     Enter the condition.
 
-  /**
-    Exit the condition.
-  */
-  void exit_cond();
+     @param[in]    thd         thread context.
+     @param[in]    version     the thread local version.
+   */
+   void enter_cond(THD *thd, ulonglong version);
 
-  void set_concurrency(ulonglong value) { m_concurrency_count = value; }
-  void reset_concurrency() { m_concurrency_count = 0; }
-  ulonglong get_version() const { return m_version; }
-  ulonglong get_running() const { return m_running; }
-  ulonglong get_waiting() const { return m_waiting; }
+   /**
+     Exit the condition.
+   */
+   void exit_cond();
 
-  void lock();
-  void unlock();
+   void set_concurrency(ulonglong value) { m_concurrency_count = value; }
+   void reset_concurrency() { m_concurrency_count = 0; }
+   ulonglong get_version() const { return m_version; }
+   ulonglong get_running() const { return m_running; }
+   ulonglong get_waiting() const { return m_waiting; }
+   ulonglong get_peek() const { return m_peek_count; }
+   ulonglong get_exceeded() const { return m_killed; }
+   bool is_dynamic() const { return m_is_dynamic; }
 
- private:
-  mysql_mutex_t m_mutex;
-  mysql_cond_t m_cond;
-  /* Concurrency count from ccl rule */
-  ulonglong m_concurrency_count;
-  /* Running count */
-  ulonglong m_running;
-  /* Waiting count */
-  ulonglong m_waiting;
-  /* Every rule should has unique version when assign a slot */
-  ulonglong m_version;
-  /* if available or not */
-  std::atomic<bool> m_state;
+   /**
+     Increase the slot reference.
+     It's held by the binding rule and every running statement that
+     retrieved this slot.
+   */
+   void inc_reference() { m_reference.fetch_add(1); }
+
+   /**
+     Decrease the slot reference.
+
+     @retval    true      Reference dropped to zero, the last holder
+                          should destroy the dynamic slot.
+     @retval    false     Still referenced by others
+   */
+   bool dec_reference() { return m_reference.fetch_sub(1) == 1; }
+
+   void lock();
+   void unlock();
+
+  private:
+   mysql_mutex_t m_mutex;
+   mysql_cond_t m_cond;
+   /* Concurrency count from ccl rule */
+   ulonglong m_concurrency_count;
+   /* Running count */
+   ulonglong m_running;
+   /* Waiting count */
+   ulonglong m_waiting;
+   /* The peek concurrency count */
+   ulonglong m_peek_count;
+   /* The exceeded queue and killed count */
+   ulonglong m_killed;
+   /* Every rule should has unique version when assign a slot */
+   ulonglong m_version;
+   /* if available or not */
+   std::atomic<bool> m_state;
+   /* Whether it's dynamic allocate */
+   bool m_is_dynamic;
+   /* Reference count: binding rule + running statements */
+   std::atomic_llong m_reference;
 };
 
 /**
@@ -748,25 +783,11 @@ class Ring_buffer : public PSI_memory_base, public Disable_copy_base {
     @retval     nullptr         Unavailable slot
   */
   Element_type *acquire_slot(ulonglong cc_count) {
-    ulonglong begin_pos;
-    ulonglong version;
-    size_t loop = 0;
-    DBUG_ENTER("Ring_buffer::acquire_slot");
-    begin_pos = m_pos.load();
-    version = m_global_version.fetch_add(1);
-    while (!(m_buffer[begin_pos % m_size]->acquire(version, cc_count)) &&
-           (loop <= m_size)) {
-      begin_pos++;
-      loop++;
+    Element_type *ret_slot = acquire_static_slot(cc_count);
+    if (!ret_slot && ccl_dynamic_allocate) {
+      ret_slot = acquire_dynamic_slot(cc_count);
     }
-    /* Still unavailable slot retry loop times */
-    if (loop > m_size) {
-      DBUG_RETURN(nullptr);
-    } else {
-      /* Set next begin position to improve efficiency */
-      m_pos.store(begin_pos + 1);
-      DBUG_RETURN(m_buffer[begin_pos % m_size]);
-    }
+    return ret_slot;
   }
 
   /* Singleton instance */
@@ -774,6 +795,58 @@ class Ring_buffer : public PSI_memory_base, public Disable_copy_base {
   static Ring_buffer *m_ring_buffer;
 
  private:
+  /**
+   Acquire an available slot, return null if still unavailable
+   after Prealloc times.
+
+   @param[in]  cc_count        Concurrency count
+
+   @retval     Element_type    Available slot
+   @retval     nullptr         Unavailable slot
+ */
+  Element_type *acquire_static_slot(ulonglong cc_count) {
+    ulonglong begin_pos;
+    ulonglong version;
+    size_t loop = 0;
+    bool acquired = false;
+    DBUG_ENTER("Ring_buffer::acquire_slot");
+    begin_pos = m_pos.load();
+    version = m_global_version.fetch_add(1);
+    /**
+      Check the retry bound before every acquire attempt, so a successful
+      acquisition is never discarded (which would leak the slot forever).
+    */
+    while (loop <= m_size &&
+           !(acquired =
+                 m_buffer[begin_pos % m_size]->acquire(version, cc_count))) {
+      begin_pos++;
+      loop++;
+    }
+    /* Still unavailable slot retry loop times, dynamic allocate one. */
+    if (!acquired) {
+      DBUG_RETURN(nullptr);
+    } else {
+      /* Set next begin position to improve efficiency */
+      m_pos.store(begin_pos + 1);
+      DBUG_RETURN(m_buffer[begin_pos % m_size]);
+    }
+  }
+  /**
+    Dynamiclly cquire slot, return null if unavailable.
+
+    @param[in]  cc_count        Concurrency count
+
+    @retval     Element_type    Available slot
+    @retval     nullptr         Allocate error
+  */
+  Element_type *acquire_dynamic_slot(ulonglong cc_count) {
+    Element_type *ret_slot = allocate_ccl_object<Element_type>(true);
+    if (!ret_slot) return nullptr;
+    ulonglong version = m_global_version.fetch_add(1);
+    ret_slot->acquire(version, cc_count);
+    return ret_slot;
+  }
+
   /* Slot array */
   Buffer m_buffer;
   /* Last available position + 1 */
@@ -793,11 +866,10 @@ class Ring_buffer : public PSI_memory_base, public Disable_copy_base {
   2) CCL_QUEUE_BUCKET_COUNT_MAX
       The max queue bucket count
 */
-#define CCL_SLOT_SIZE (64 + CCL_QUEUE_BUCKET_COUNT_MAX)
+#define STATIC_CCL_SLOT_SIZE (64 + CCL_QUEUE_BUCKET_COUNT_MAX)
 
 /* Instantiation of slots */
-using Ccl_ring_slots =
-    Ring_buffer<Ccl_slot, CCL_SLOT_SIZE>;
+using Ccl_ring_slots = Ring_buffer<Ccl_slot, STATIC_CCL_SLOT_SIZE>;
 
 } /*namespace im */
 

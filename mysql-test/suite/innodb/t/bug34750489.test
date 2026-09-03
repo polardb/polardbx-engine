@@ -1,0 +1,104 @@
+# Bug#34750489: row_log_table_apply_op() misparses virtual-column info when an
+# online-log block boundary falls at the start of the old-vcol segment.
+# Community fix: 5c1ade85083f (not in this branch).
+#
+# The community MTR (innodb_bug34750489) only exercises the code path; whether
+# the boundary actually lands in the vulnerable window depends on the exact
+# record size, which differs on this branch (Lizard txn columns). This version
+# forces the hit by construction instead of by luck.
+#
+# --- Why this reproduces deterministically ---
+# The writer serializes the row log as one contiguous byte stream, cut into
+# fixed srv_sort_buf_size blocks, splitting records byte-wise across block
+# boundaries (row_log_table_close_func). There is no per-block header, so
+# block k begins at logical stream offset k*B, B = srv_sort_buf_size.
+#
+# If every log record has the same size R, the offset at which block boundary k
+# cuts into a record is exactly (k*B) mod R. With B = 65537 (prime, and larger
+# than any R here) gcd(B,R) = 1, so for k = 1..R the value (k*B) mod R runs
+# through all R residues. By the pigeonhole principle some boundary must land
+# exactly on S, the offset of the old-vcol segment start within the record.
+#
+# At that boundary row_log_table_apply_op() has next_mrec == mrec_end, so
+#   if (n_v_size > 2 && mrec_end > next_mrec)
+# is false: the old-vcol segment is never parsed and o_v_size stays 0. The
+# record is then accepted as complete (next_mrec == mrec_end passes the
+# next_mrec > mrec_end check), so the reader advances to the next block with
+# head.bytes = 0 and starts parsing at the old-vcol payload as if it were a
+# record header. Its first byte is the high byte of a 2-byte length field (0),
+# which matches no ROW_T_* type, so the switch hits
+#   default: *error = DB_CORRUPTION; ut_d(ut_error);
+# => assertion crash in a debug build (DB_CORRUPTION in release).
+#
+# --- Sizing ---
+# The vulnerable window is the whole old-vcol payload, not a single byte: any
+# cut strictly inside it makes end_ptr overshoot mrec_end. So W ~= o_v_size
+# residues out of R trigger, and a hit is guaranteed once the number of block
+# boundaries K reaches R - W.
+#
+# With N records of size R the stream is N*R bytes, so K = floor(N*R/B). Taking
+# N = B - 1 = 65536 gives K = R - 1 for any R < B, i.e. all but one of the R
+# residues are covered - which cannot hide a window of W >= 2. Hence 32768 rows
+# x 2 UPDATEs = 65536 records is a guarantee independent of the actual R.
+#
+# Row layout is chosen so every log record is byte-identical in size: all
+# columns are NOT NULL fixed-length INT, so the clustered record has a constant
+# header and no variable-length fields, and the virtual column is indexed so
+# both the new and the old vcol segments are logged.
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+# Must be the prime 65537 from -master.opt for the coprimality argument to hold.
+SELECT @@innodb_sort_buffer_size;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  c INT NOT NULL,
+  v INT GENERATED ALWAYS AS (c + 1) VIRTUAL,
+  KEY idx_v (v)
+) ENGINE=InnoDB;
+
+# 32768 rows via doubling INSERT ... SELECT (fast; an MTR row loop is not)
+INSERT INTO t1 (id, c) VALUES (1, 1);
+--disable_query_log
+let $n = 1;
+while ($n < 32768)
+{
+  eval INSERT INTO t1 (id, c) SELECT id + $n, c FROM t1;
+  let $n = `SELECT $n * 2`;
+}
+--enable_query_log
+SELECT COUNT(*) FROM t1;
+
+connect (ddl,localhost,root,,);
+connect (dml,localhost,root,,);
+
+# Park the rebuild after the scan phase, with the online log open for writers.
+connection ddl;
+SET debug_sync = 'alter_table_update_log SIGNAL scan_done WAIT_FOR log_filled';
+--send OPTIMIZE TABLE t1
+
+# Fill the online log with uniformly sized ROW_T_UPDATE records. Updating c
+# changes the indexed virtual column v, so the update is an ord-change and both
+# new_v_row and old_v_row are logged (row0upd.cc: UPD_NODE_NO_ORD_CHANGE).
+connection dml;
+SET debug_sync = 'now WAIT_FOR scan_done';
+--disable_query_log
+UPDATE t1 SET c = c + 1;
+UPDATE t1 SET c = c + 1;
+--enable_query_log
+SET debug_sync = 'now SIGNAL log_filled';
+
+# The apply phase now walks 65536 records across R-1 block boundaries.
+connection ddl;
+reap;
+disconnect ddl;
+
+connection default;
+disconnect dml;
+SET debug_sync = 'RESET';
+SELECT COUNT(*) FROM t1;
+DROP TABLE t1;
+--source include/wait_until_count_sessions.inc

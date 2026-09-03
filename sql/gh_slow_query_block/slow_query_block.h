@@ -17,11 +17,13 @@
 
 namespace polarx {
 
-extern PSI_mutex_key key_LOCK_slow_query_user_pattern;
-extern mysql_mutex_t LOCK_slow_query_user_pattern;
+extern PSI_mutex_key key_LOCK_slow_query_user_config;
+extern mysql_mutex_t LOCK_slow_query_user_config;
 
 /** Check if the user name matches the slow query block pattern. */
 void check_sqb_user_pattern(THD *thd); 
+/** Check if the user name matches the pushdown username pattern. */
+bool check_pushdown_username(THD *thd);
 
 class Sqb_config {
  public:
@@ -52,7 +54,7 @@ class Search_process_list : public Do_THD_Impl {
   void operator()(THD *inspect_thd) override;
 
  private:
-  double calculate_cpu_usage(pthread_t thread_id, ulong total_time,
+  std::pair<double, ulong> calculate_cpu_usage(pthread_t thread_id, ulong total_time,
                           THD *thd_to_kill) const;
   bool should_kill_query(THD *thd_to_kill, ulong total_time,
                          double cpu_usage) const;

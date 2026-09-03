@@ -1,0 +1,78 @@
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+src INT NOT NULL,
+v VECTOR(3),
+VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+CREATE TRIGGER tr_t1_after_insert AFTER INSERT ON t1
+FOR EACH ROW
+BEGIN
+/* Trigger body runs *inside* the outer t1 INSERT statement.
+The INSERT INTO t2 below routes through vidx, opening a
+fresh Indep_dml_scope while the trigger frame is on the
+SQL stack.  This is the closest realistic scenario to
+Indep_dml_scope nesting that can be set up declaratively. */
+INSERT INTO t2(src, v) VALUES (NEW.id, NEW.v);
+END//
+SELECT VARIABLE_VALUE INTO @ic_b FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT VARIABLE_VALUE INTO @insert_b FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_insert_count';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,0,1]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,1,0]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[0,1,1]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,1,1]'));
+SELECT VARIABLE_VALUE INTO @ic_a FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+SELECT VARIABLE_VALUE INTO @insert_a FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_insert_count';
+# Indep_dml_scope entered at least 12 times (6 t1 + 6 t2):
+SELECT (@ic_a - @ic_b) >= 12 AS indep_commit_at_least_12;
+indep_commit_at_least_12
+1
+# Insert counter advanced by exactly 12 (6 + 6):
+SELECT (@insert_a - @insert_b) = 12 AS insert_count_eq_12;
+insert_count_eq_12
+1
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+6
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+6
+SELECT COUNT(*) AS t1_ann_rows FROM (
+SELECT id FROM t1 FORCE INDEX(vi)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5]'))
+LIMIT 3) x;
+t1_ann_rows
+3
+SELECT COUNT(*) AS t2_ann_rows FROM (
+SELECT id FROM t2 FORCE INDEX(vi2)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5]'))
+LIMIT 3) x;
+t2_ann_rows
+3
+CREATE TRIGGER tr_t1_after_update AFTER UPDATE ON t1
+FOR EACH ROW
+BEGIN
+UPDATE t2 SET v = NEW.v WHERE src = NEW.id;
+END//
+UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]') WHERE id = 1;
+UPDATE t1 SET v = VEC_FROMTEXT('[8,8,8]') WHERE id = 2;
+SELECT t1.v = t2.v AS t1_t2_v_match
+FROM t1 JOIN t2 ON t2.src = t1.id
+WHERE t1.id IN (1, 2)
+ORDER BY t1.id;
+t1_t2_v_match
+1
+1
+DROP TABLE t1, t2;
+SET GLOBAL vidx_disabled = ON;

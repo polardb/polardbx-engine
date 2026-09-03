@@ -1,4 +1,5 @@
-/* Copyright (c) 2013, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/* Copyright (c) 2013, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -84,7 +85,7 @@
 #include "thr_mutex.h"
 
 #include "sql/consensus/consensus_err.h"
-#include "sql/lizard0handler.h"
+#include "sql/komodo0handler.h"
 
 const char *XID_STATE::xa_state_names[] = {"NON-EXISTING", "ACTIVE", "IDLE",
                                            "PREPARED", "ROLLBACK ONLY"};
@@ -138,6 +139,9 @@ bool xid_t::operator!=(struct xid_t const &rhs) const {
 
 bool xid_t::operator<(const xid_t &rhs) const {
   if (this->get_format_id() < rhs.get_format_id()) return true;
+
+  if (this->get_format_id() > rhs.get_format_id()) return false;
+
   if (this->get_gtrid_length() < rhs.get_gtrid_length()) {
     return true;
   }
@@ -269,7 +273,8 @@ bool Recovered_xa_transactions::recover_prepared_xa_transactions() {
 }
 
 int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list,
-               XA_spec_list *spec_list) {
+               komodo::XA_spec_list *spec_list,
+               binlog::Binlog_recovery *recovery) {
   xarecover_st info;
   DBUG_TRACE;
   info.found_foreign_xids = info.found_my_xids = 0;
@@ -277,6 +282,7 @@ int ha_recover(Xid_commit_list *commit_list, Xa_state_list *xa_list,
   info.dry_run = (info.commit_list == nullptr &&
                   tc_heuristic_recover == TC_HEURISTIC_NOT_USED);
   info.spec_list = spec_list;
+  info.recovery = recovery;
   info.list = nullptr;
 
   std::unique_ptr<MEM_ROOT> mem_root{nullptr};
@@ -616,6 +622,8 @@ bool applier_reset_xa_trans(THD *thd) {
     XA transaction prepared.
   */
   trans_reset_one_shot_chistics(thd);
+
+  thd->reset_trans_policy();
 
   return thd->is_error();
 }

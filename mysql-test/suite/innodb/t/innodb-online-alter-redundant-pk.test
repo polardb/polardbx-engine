@@ -1,0 +1,37 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+--source include/count_sessions.inc
+
+--echo #
+--echo # Online rebuild of a REDUNDANT table changing PK and row format:
+--echo # concurrent DML logs ROW_T_UPDATE with old_pk serialized against the
+--echo # new (COMPACT/DYNAMIC) clustered index. old_pk serialization must not
+--echo # pass an invalid row version.
+--echo #
+
+CREATE TABLE t1 (a INT NOT NULL, b INT NOT NULL, c INT,
+                 PRIMARY KEY(a)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT;
+INSERT INTO t1 VALUES (1, 10, 100), (2, 20, 200);
+
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL logging WAIT_FOR dml_done';
+--send ALTER TABLE t1 DROP PRIMARY KEY, ADD PRIMARY KEY(b), ROW_FORMAT=DYNAMIC, ALGORITHM=INPLACE, LOCK=NONE
+
+--echo /* connection con1 */
+connect (con1,localhost,root,,);
+SET DEBUG_SYNC = 'now WAIT_FOR logging';
+UPDATE t1 SET c = c + 1 WHERE a = 1;
+SET DEBUG_SYNC = 'now SIGNAL dml_done';
+disconnect con1;
+
+--echo /* connection default */
+connection default;
+--reap
+SET DEBUG_SYNC = 'RESET';
+
+CHECK TABLE t1;
+SELECT * FROM t1;
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--source include/wait_until_count_sessions.inc

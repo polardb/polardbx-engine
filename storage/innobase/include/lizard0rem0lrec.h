@@ -31,7 +31,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
  Created 2025-01-21 by Jiyang.zhang
  *******************************************************/
-#include "rem0rec.h"
+#ifndef lizard0rem0lrec_h
+#define lizard0rem0lrec_h
+
 #include "rem0lrec.h"
 
 namespace lizard {
@@ -187,5 +189,6 @@ static inline bool rec_panda_contains_null_in_unique(const dict_index_t *index,
     return rec_panda_contains_null_in_unique_old(index, rec);
   }
 }
-}
+}  // namespace lizard
 
+#endif  // lizard0rem0lrec_h define

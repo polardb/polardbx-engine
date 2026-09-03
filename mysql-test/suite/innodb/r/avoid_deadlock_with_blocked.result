@@ -20,6 +20,7 @@ END //
 CALL register_connection("con1");
 CALL register_connection("con2");
 CALL register_connection("con3");
+SET GLOBAL innodb_purge_stop_now=ON;
 CREATE TABLE t1 (id INT PRIMARY KEY);
 INSERT INTO t1 (id) VALUES (1);
 BEGIN;
@@ -230,6 +231,7 @@ COMMIT;
 id
 1
 COMMIT;
+SET GLOBAL innodb_purge_run_now=ON;
 DROP TABLE t1;
 DROP PROCEDURE show_locks;
 DROP PROCEDURE register_connection;

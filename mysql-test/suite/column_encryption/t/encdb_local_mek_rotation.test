@@ -1,0 +1,84 @@
+--echo #
+--echo # Test: local MEK rotation (rotate_local_mek) keeps a valid session CC.
+--echo #
+--echo # Regression for the bug where rotate_local_mek() built the new CC without
+--echo # setting username. After a local MEK_UPDATE the rotating connection got an
+--echo # empty-username CC, so the next getCC(real_user) hit CC_MISS. With
+--echo # encdb_cc_miss_error = OFF (default) this silently fell back to a dummy
+--echo # key and returned data the client could not decrypt.
+--echo #
+--echo # To make the bug observable we set encdb_cc_miss_error = ON, so a broken
+--echo # CC surfaces as a hard error instead of a silent dummy-key fallback, and
+--echo # we assert end-to-end that the rotated connection can still decrypt back
+--echo # the original plaintext (not merely "no error").
+--echo #
+--echo # Created 2026-07-17 by kaiwu.zfy
+--echo #
+
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+set global column_encryption = ON;
+
+# test-only UDFs (encdb_process_message / encdb_rule_op are auto-registered by
+# the plugin at startup, so they must NOT be created again here).
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_update_request returns string soname 'encdb_udf.so';
+
+# A restricted-access user: selecting a rule column returns server-side
+# ciphertext (full-access users would see plaintext and skip encryption).
+create user enc_rot@'%' identified by '123456';
+grant all privileges on *.* to enc_rot@'%' with grant option;
+flush privileges;
+
+# Encrypt test.t_rot.secret; enc_rot is restricted, root keeps full access.
+create table test.t_rot (id int primary key, secret varchar(100));
+insert into test.t_rot values (1, 'hello_rotation');
+select encdb_rule_op('add', '{"name":"rot_rule","enabled":true,"meta":{"databases":["test"],"tables":["t_rot"],"columns":["secret"]}}');
+select encdb_rule_op('grant', '{"fullAccess":["root"]}');
+select encdb_rule_op('grant', '{"restrictedAccess":["enc_rot"]}');
+
+# Make CC_MISS a hard error so a dropped-username CC after rotation cannot hide
+# behind the default dummy-key fallback.
+set global encdb_cc_miss_error = ON;
+
+connect(conn_rot, localhost, enc_rot, 123456, test);
+connection conn_rot;
+
+--echo # Step 1: MEK_PROVISION with the OLD MEK on this connection.
+--echo #         This also persists the salt_mac, which the later rotation reads.
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(
+    encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+    '00112233445566778899aabbccddeeff'))) IS NOT NULL AS provision_ok;
+
+--echo # Step 2: local MEK rotation OLD -> NEW on the SAME connection.
+--echo #         salt_mac now exists, so encdbUpdateMek takes the rotate_local_mek
+--echo #         branch (the code path under test), not import_mek.
+SELECT from_base64(encdb_process_message(encdb_generate_mek_update_request(
+    encdb_process_message('{"request_type":0, "version":"1.2.15"}'),
+    '00112233445566778899aabbccddeeff',
+    'ffeeddccbbaa99887766554433221100'))) IS NOT NULL AS rotate_ok;
+
+--echo # Step 3: end-to-end check that the rotated CC is still valid.
+--echo #         enc_rot is restricted, so this SELECT returns ciphertext produced
+--echo #         by the rotated CC; decrypting it back must yield the original
+--echo #         plaintext. If username were lost (the bug), encryption here would
+--echo #         raise CC_MISS (hard error) under encdb_cc_miss_error = ON.
+--let $cipher = `SELECT secret FROM test.t_rot WHERE id = 1`
+--disable_query_log
+eval SET @plain = encdb_decrypt('$cipher', 'enc_rot');
+--enable_query_log
+SELECT @plain = 'hello_rotation' AS decrypt_ok;
+
+--echo # Clean up
+connection default;
+disconnect conn_rot;
+set global encdb_cc_miss_error = OFF;
+select encdb_rule_op('delete', '"rot_rule"');
+drop table test.t_rot;
+drop user enc_rot@'%';
+drop function encdb_decrypt;
+drop function encdb_generate_mek_request;
+drop function encdb_generate_mek_update_request;
+set global column_encryption = OFF;

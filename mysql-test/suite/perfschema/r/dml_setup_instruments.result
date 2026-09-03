@@ -10,10 +10,10 @@ wait/synch/mutex/sql/consensus_info::info_thd_lock	YES	YES		NULL	0	NULL
 wait/synch/mutex/sql/consensus_info::lock	YES	YES		NULL	0	NULL
 wait/synch/mutex/sql/consensus_info::run_lock	YES	YES		NULL	0	NULL
 wait/synch/mutex/sql/consensus_info::sleep_lock	YES	YES		NULL	0	NULL
-wait/synch/mutex/sql/Consensus_recovery_manager::LOCK_consensuslog_recover_hash	YES	YES		NULL	0	NULL
-wait/synch/mutex/sql/ConsensusLogIndex::LOCK_consensuslog_index	YES	YES		NULL	0	NULL
-wait/synch/mutex/sql/ConsensusLogManager::LOCK_consensus_commit_pos	YES	YES		NULL	0	NULL
-wait/synch/mutex/sql/ConsensusLogManager::LOCK_consensus_log_term	YES	YES		NULL	0	NULL
+wait/synch/mutex/sql/Consensus_log_manager::LOCK_consensus_commit_pos	YES	YES		NULL	0	NULL
+wait/synch/mutex/sql/Consensus_log_manager::LOCK_consensus_log_term	YES	YES		NULL	0	NULL
+wait/synch/mutex/sql/Consensus_log_manager::LOCK_consensuslog_apply	YES	YES		NULL	0	NULL
+wait/synch/mutex/sql/Consensus_log_manager::LOCK_consnesus_state_change	YES	YES		NULL	0	NULL
 select * from performance_schema.setup_instruments
 where name like 'Wait/Synch/Rwlock/sql/%'
   and name not in (
@@ -27,9 +27,9 @@ wait/synch/rwlock/sql/Binlog_transmit_delegate::lock	YES	YES	singleton	NULL	0	NU
 wait/synch/rwlock/sql/channel_lock	YES	YES		NULL	0	NULL
 wait/synch/rwlock/sql/channel_map_lock	YES	YES		NULL	0	NULL
 wait/synch/rwlock/sql/channel_to_filter_lock	YES	YES		NULL	0	NULL
-wait/synch/rwlock/sql/ConsensusLogManager::LOCK_consensuslog_cache	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/sql/ConsensusLogManager::LOCK_consensuslog_status	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/sql/ConsensusPreFetchManager::LOCK_prefetch_channels_hash	YES	YES	singleton	NULL	0	NULL
+wait/synch/rwlock/sql/Consensus_log_manager::LOCK_consensuslog_status	YES	YES	singleton	NULL	0	NULL
+wait/synch/rwlock/sql/Consensus_prefetch_manager::LOCK_prefetch_channels_hash	YES	YES	singleton	NULL	0	NULL
+wait/synch/rwlock/sql/Encdb_delegate::lock	YES	YES	singleton	NULL	0	NULL
 wait/synch/rwlock/sql/GroupUpdateMgr::hash_lock_	YES	YES		NULL	0	NULL
 select * from performance_schema.setup_instruments
 where name like 'Wait/Synch/Cond/sql/%'

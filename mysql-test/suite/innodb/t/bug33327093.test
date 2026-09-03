@@ -1,0 +1,82 @@
+# Bug#33327093 FK: assertion failure in row_mysql_pad_col
+#
+# ON UPDATE CASCADE builds the child update vector from the parent
+# update vector. Virtual generated column entries use a separate
+# field_no numbering space; without an is_virtual() guard a numeric
+# collision let the parent's virtual column value be copied into the
+# child cascade vector, crashing in the undo/pad path.
+#
+# Correct behavior: cascades propagate only the FK stored columns and
+# a virtual-only parent update causes no child change.
+
+CREATE TABLE t_parent (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  name_upper VARCHAR(50) AS (UPPER(name)) VIRTUAL
+) ENGINE=InnoDB;
+
+CREATE TABLE t_child (
+  child_id INT PRIMARY KEY,
+  parent_id INT,
+  data VARCHAR(100),
+  CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES t_parent(id)
+    ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+INSERT INTO t_parent (id, name) VALUES (1, 'alice'), (2, 'bob'), (3, 'charlie');
+INSERT INTO t_child VALUES (10, 1, 'child of alice');
+INSERT INTO t_child VALUES (20, 2, 'child of bob');
+INSERT INTO t_child VALUES (30, 3, 'child of charlie');
+
+--echo # Update parent PK - triggers cascade to child
+UPDATE t_parent SET id = 100 WHERE id = 1;
+
+SELECT * FROM t_child ORDER BY child_id;
+SELECT * FROM t_parent ORDER BY id;
+
+--echo # Update parent PK together with the virtual column base column
+UPDATE t_parent SET id = 200, name = 'BOB_NEW' WHERE id = 2;
+
+SELECT * FROM t_child ORDER BY child_id;
+SELECT * FROM t_parent ORDER BY id;
+
+--echo # Multiple children per parent
+INSERT INTO t_child VALUES (31, 3, 'another child');
+INSERT INTO t_child VALUES (32, 3, 'third child');
+UPDATE t_parent SET id = 300 WHERE id = 3;
+
+SELECT * FROM t_child ORDER BY child_id;
+
+--echo # Indexed virtual column: field_no collision with parent PK position
+CREATE TABLE t_parent2 (
+  pk INT PRIMARY KEY,
+  val VARCHAR(100),
+  val_hash INT AS (LENGTH(val)) VIRTUAL,
+  INDEX idx_vhash (val_hash)
+) ENGINE=InnoDB;
+
+CREATE TABLE t_child2 (
+  id INT PRIMARY KEY,
+  ref_pk INT,
+  info VARCHAR(50),
+  CONSTRAINT fk2 FOREIGN KEY (ref_pk) REFERENCES t_parent2(pk)
+    ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+INSERT INTO t_parent2 (pk, val) VALUES (1, 'short'), (2, 'medium length'), (3, 'x');
+INSERT INTO t_child2 VALUES (1, 1, 'ref1'), (2, 2, 'ref2'), (3, 3, 'ref3');
+
+--echo # Update PK together with the virtual column base column
+UPDATE t_parent2 SET pk = 10, val = 'changed_value' WHERE pk = 1;
+SELECT * FROM t_child2 ORDER BY id;
+
+--echo # Virtual-only change: pk untouched, child must stay unchanged
+UPDATE t_parent2 SET val = 'another_value' WHERE pk = 10;
+SELECT * FROM t_child2 ORDER BY id;
+
+--echo # Delete parent - ON DELETE SET NULL
+DELETE FROM t_parent2 WHERE pk = 2;
+SELECT * FROM t_child2 ORDER BY id;
+
+DROP TABLE t_child2, t_parent2;
+DROP TABLE t_child, t_parent;

@@ -35,7 +35,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/psi/psi_data_lock.h"
 
 /** The following variables are used to limit the output of the
- * performance_schema.data_locks*/
+ * performance_schema.data_locks */
+/** Maximum number of data locks that can be displayed for a single batch. */
 extern ulong pfs_data_locks_max_locks_per_batch;
 
 /** Inspect data locks in innodb.

@@ -47,6 +47,9 @@ ulong ccl_wait_timeout = CCL_LONG_WAIT;
 /* The max waiting count when concurrency control */
 ulonglong ccl_max_waiting_count = CCL_DEFAULT_WAITING_COUNT;
 
+/* Whether dynamic allocate slot */
+bool ccl_dynamic_allocate = true;
+
 /**
   Comply the rule when execute the statement.
 
@@ -130,6 +133,12 @@ bool Ccl_comply::comply_queue(THD *thd, LEX *lex, Ccl_queue_hint *hint) {
 void Ccl_comply::comply_end() {
   if (m_slot) {
     m_slot->exit_cond();
+    /**
+      The rule may have been dropped during statement execution,
+      the last reference holder should destroy the dynamic slot.
+    */
+    if (m_slot->dec_reference() && m_slot->is_dynamic())
+      destroy_object<Ccl_slot>(m_slot);
     m_slot = nullptr;
     m_version = 0;
   }
@@ -159,7 +168,8 @@ bool Ccl_keywords::match(const LEX_CSTRING &query, bool ordered) const {
   for (Keyword_array::const_iterator it = m_keyword_array.cbegin();
        it != m_keyword_array.cend(); it++) {
     if ((sub_pos = target.find(it->c_str(), pos)) != std::string::npos) {
-      if (ordered) pos = sub_pos;
+      /* Ordered match requires next keyword appears after current one */
+      if (ordered) pos = sub_pos + it->size();
     } else
       return false;
   }
@@ -229,8 +239,14 @@ void Ccl_rule::unbind_slot() {
   DBUG_ENTER("Ccl_rule::unbind_slot");
   if (m_slot) {
     m_slot->release();
-    m_slot = nullptr;
+    /**
+      The slot may still be referenced by running statements,
+      only the last reference holder destroys the dynamic slot.
+    */
+    if (m_slot->dec_reference() && m_slot->is_dynamic())
+      destroy_object<Ccl_slot>(m_slot);
   }
+  m_slot = nullptr;
   DBUG_VOID_RETURN;
 }
 
@@ -299,7 +315,7 @@ size_t Ccl_rule_set::delete_keyword_rule(ulonglong rule_id) {
     const Ccl_rule *rule = *it;
     if (rule->get_rule_id() == rule_id) {
       destroy_object<Ccl_rule>(const_cast<Ccl_rule *>(rule));
-      m_keyword_rules.erase(it);
+      it = m_keyword_rules.erase(it);
       num += 1;
     } else
       it++;
@@ -331,7 +347,6 @@ size_t Ccl_rule_set::delete_command_rule(ulonglong rule_id) {
 void Ccl_rule_set::clear_command_rule() {
   m_command_size.store(0);
   if (m_command_rule) destroy_object<Ccl_rule>(m_command_rule);
-  ;
   m_command_rule = nullptr;
 }
 
@@ -390,6 +405,7 @@ size_t Ccl_rule_set::init_queue_buckets(ulonglong bucket_count,
 
   for (ulonglong i = 0; i < bucket_count; i++) {
     Ccl_rule *rule = allocate_ccl_object<Ccl_rule>(bucket_size, key_memory_ccl);
+    if (rule == nullptr) break;
     if (rule->bind_slot(level)) {
       destroy_object<Ccl_rule>(rule);
       continue;
@@ -514,6 +530,7 @@ size_t Ccl_rule_set::insert_intact_rules(std::vector<Ccl_record *> &rules,
   for (auto it = rules.cbegin(); it != rules.cend(); ++it) {
     Ccl_record *record = *it;
     rule = allocate_ccl_object<Ccl_rule>(record, key_memory_ccl);
+    if (rule == nullptr) break;
 
     /* Bind the slot, break off if critical */
     if (rule->bind_slot(level)) {
@@ -563,6 +580,7 @@ size_t Ccl_rule_set::insert_keyword_rules(std::vector<Ccl_record *> &rules,
   for (auto it = rules.cbegin(); it != rules.cend(); ++it) {
     Ccl_record *record = *it;
     rule = allocate_ccl_object<Ccl_rule>(record, key_memory_ccl);
+    if (rule == nullptr) break;
     if (!rule->bind_slot(level)) {
       m_keyword_rules.push_back(rule);
       num += 1;
@@ -605,6 +623,7 @@ size_t Ccl_rule_set::insert_command_rules(std::vector<Ccl_record *> &rules,
       }
     }
     rule = allocate_ccl_object<Ccl_rule>(record, key_memory_ccl);
+    if (rule == nullptr) break;
     if ((!rule->bind_slot(level))) {
       m_command_rule = rule;
       num += 1;
@@ -619,13 +638,19 @@ size_t Ccl_rule_set::insert_command_rules(std::vector<Ccl_record *> &rules,
 
 Ccl_slot *Ccl_rule::retrieve_slot(ulonglong *version) {
   *version = m_slot->get_version();
-  m_matched++;
+  m_matched.fetch_add(1);
+  /**
+    Hold the slot reference until comply_end(), so the dynamic slot
+    won't be destroyed while the statement is still using it.
+  */
+  m_slot->inc_reference();
   return m_slot;
 }
 
 static Ccl_show_result *get_ccl_result(MEM_ROOT *mem_root,
                                        const Ccl_rule *rule) {
   Ccl_show_result *result = new (mem_root) Ccl_show_result();
+  if (result == nullptr) return nullptr;
   result->id = rule->get_rule_id();
   const char *type = ccl_rule_type_str[static_cast<size_t>(rule->get_type())];
   result->type.str = type;
@@ -649,8 +674,11 @@ static Ccl_show_result *get_ccl_result(MEM_ROOT *mem_root,
 
   result->concurrency_count = rule->get_concurrency_count();
   result->matched = rule->get_matched();
-  result->running = rule->get_slot()->get_running();
-  result->waiting = rule->get_slot()->get_waiting();
+  auto rule_slot = rule->get_slot();
+  result->running = rule_slot->get_running();
+  result->waiting = rule_slot->get_waiting();
+  result->concurrency_peek = rule_slot->get_peek();
+  result->killed_num = rule_slot->get_exceeded();
 
   result->keywords.str = strmake_root(mem_root, rule->get_keywords().c_str(),
                                       rule->get_keywords().length());
@@ -725,8 +753,15 @@ Ccl_slot *Ccl_rule_set::comply_queue(ulonglong hash, ulonglong *version) {
     Rule_lock_helper queue_lock(&m_queue_lock, false);
     assert(queue_lock.effect());
     assert(m_queue_size.load() == m_queue_buckets.size());
-    Ccl_rule *rule = m_queue_buckets[hash % m_queue_size.load()];
-    if (rule) DBUG_RETURN(rule->retrieve_slot(version));
+    /**
+      Re-check the bucket count under lock protection, the buckets may
+      have been cleared concurrently, and modulo zero will crash.
+    */
+    size_t bucket_count = m_queue_buckets.size();
+    if (bucket_count > 0) {
+      Ccl_rule *rule = m_queue_buckets[hash % bucket_count];
+      if (rule) DBUG_RETURN(rule->retrieve_slot(version));
+    }
   }
   DBUG_RETURN(nullptr);
 }
@@ -856,15 +891,19 @@ size_t System_ccl::delete_rule(ulonglong rule_id) {
 /**
   Constructor of Ccl_slot.
 */
-Ccl_slot::Ccl_slot() {
+Ccl_slot::Ccl_slot(bool is_dynamic) {
   mysql_mutex_init(key_LOCK_ccl_slot, &m_mutex, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_ccl_slot, &m_cond);
 
   m_concurrency_count = 0;
   m_running = 0;
   m_waiting = 0;
+  m_peek_count = 0;
+  m_killed = 0;
   m_version = 0;
   m_state.store(false);
+  m_is_dynamic = is_dynamic;
+  m_reference.store(0);
 }
 
 /**
@@ -874,6 +913,7 @@ Ccl_slot::~Ccl_slot() {
   DBUG_ENTER("Ccl_slot::~Ccl_slot");
   assert(m_running == 0 && m_waiting == 0);
   assert(m_state.load() == false);
+  assert(m_reference.load() == 0);
   mysql_mutex_destroy(&m_mutex);
   mysql_cond_destroy(&m_cond);
   DBUG_VOID_RETURN;
@@ -896,6 +936,8 @@ bool Ccl_slot::acquire(ulonglong version, ulonglong cc_count) {
   DBUG_ENTER("Ccl_slot::acquire");
   if ((success =
            atomic_compare_exchange_strong(&m_state, &old_value, new_value))) {
+    /* Reference held by the binding rule, paired with unbind_slot() */
+    inc_reference();
     lock();
     m_version = version;
     set_concurrency(cc_count);
@@ -919,7 +961,8 @@ void Ccl_slot::enter_cond(THD *thd, ulonglong version) {
   struct timespec abs_timeout;
   ulonglong timeout_cnt = 0;
   DBUG_ENTER("Ccl_slot::enter_cond");
-  ulonglong max_times = ccl_wait_timeout / CCL_RETRY_INTERVAL;
+  ulonglong max_times =
+      (ccl_wait_timeout + CCL_RETRY_INTERVAL - 1) / CCL_RETRY_INTERVAL;
   const char *save_proc_info = thd->proc_info();
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
 
@@ -928,20 +971,25 @@ void Ccl_slot::enter_cond(THD *thd, ulonglong version) {
   lock();
 
   m_running++;
+  m_peek_count = m_running > m_concurrency_count
+                     ? m_concurrency_count
+                     : std::max(m_peek_count, m_running);
   /* Listen to the wakeup by other thread */
   thd_enter_cond(thd, &m_cond, &m_mutex, NULL, NULL, __func__, __FILE__,
                  __LINE__);
   thd_wait_begin(thd, THD_WAIT_SLEEP);
 
   if (m_concurrency_count == 0) {
+    /**
+      The rule may have been dropped or the slot rebound to another rule
+      after retrieve_slot(), skip silently instead of refusing the query.
+    */
+    if (m_state.load() == false || version != m_version) goto end;
+
     my_error(ER_CCL_REFUSE_QUERY, MYF(0));
     goto end;
   }
 
-  if (ccl_max_waiting_count != 0 && m_waiting >= ccl_max_waiting_count) {
-    my_error(ER_CCL_MAX_WAITING_COUNT, MYF(0));
-    goto end;
-  }
   /**
     Wait requirement:
     1) retry times is not more than ccl_wait_timeout.
@@ -954,9 +1002,19 @@ void Ccl_slot::enter_cond(THD *thd, ulonglong version) {
          version == m_version && m_running > m_concurrency_count &&
          !thd->is_killed()) {
     /* Decrease the running and increase the waiting */
+
+    /**
+     * Try to add thd into waiting queue.
+     * If waiting num is more than ccl_max_waiting_count, report error.
+     */
+    if (m_waiting >= ccl_max_waiting_count) {
+      my_error(ER_CCL_MAX_WAITING_COUNT, MYF(0));
+      m_killed++;
+      goto end;
+    }
     m_running--;
     m_waiting++;
-    set_timespec(&abs_timeout, 5);
+    set_timespec(&abs_timeout, CCL_RETRY_INTERVAL);
     wait_result = mysql_cond_timedwait(&m_cond, &m_mutex, &abs_timeout);
     /* Increase the timeout times */
     if (is_timeout(wait_result)) timeout_cnt++;

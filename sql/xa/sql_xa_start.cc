@@ -27,7 +27,7 @@
 #include "sql/sql_class.h"                // THD
 #include "sql/transaction.h"              // trans_begin, trans_rollback
 #include "sql/transaction_info.h"         // Transaction_ctx
-#include "sql/xa/lizard_xa_trx.h"
+#include "sql/xa/komodo0xa0trx.h"
 #include "sql/xa/transaction_cache.h"  // xa::Transaction_cache
 
 Sql_cmd_xa_start::Sql_cmd_xa_start(xid_t *xid_arg,
@@ -80,7 +80,7 @@ bool Sql_cmd_xa_start::trans_xa_start(THD *thd) {
                               (const void *)xid_state->get_xid(),
                               (int)xid_state->get_state());
 
-    if (lizard::xa::prepare_xa_group_and_check(thd, m_xid) ||
+    if (komodo::prepare_xa_group_and_check(thd, m_xid) ||
         xa::Transaction_cache::insert(m_xid, thd->get_transaction())) {
       xid_state->reset();
       trans_rollback(thd);

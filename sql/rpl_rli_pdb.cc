@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_rli_pdb.h"
 
 #include "my_config.h"
@@ -1731,7 +1733,7 @@ int Slave_worker::slave_worker_exec_event(Log_event *ev) {
 
   // Address partitioning only in database mode
   if (!is_gtid_event(ev) && is_mts_db_partitioned(rli) &&
-      !lizard::is_b_events_before_gtid(ev)) {
+      !komodo::is_b_events_before_gtid(ev)) {
     if (ev->contains_partition_info(end_group_sets_max_dbs)) {
       uint num_dbs = ev->mts_number_dbs();
 
@@ -2507,14 +2509,14 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
       with the final disjunct.
     */
     assert(seen_begin || is_gtid_event(ev) ||
-           lizard::is_b_events_before_gtid(ev) ||
+           komodo::is_b_events_before_gtid(ev) ||
            ev->get_type_code() == binary_log::QUERY_EVENT ||
            is_mts_db_partitioned(rli) || worker->id == 0 || seen_gtid);
 
     mts_advance_consensus_apply_index(rli, ev);
 
     if (ev->ends_group() || (!seen_begin && !is_gtid_event(ev) &&
-                             !lizard::is_b_events_before_gtid(ev) &&
+                             !komodo::is_b_events_before_gtid(ev) &&
                              (ev->get_type_code() == binary_log::QUERY_EVENT ||
                               /* break through by LC only in GTID off */
                               (!seen_gtid && !is_mts_db_partitioned(rli)))))

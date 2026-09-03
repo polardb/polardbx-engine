@@ -1,0 +1,66 @@
+--disable_warnings
+DROP TABLE IF EXISTS c2;
+--enable_warnings
+ 
+CREATE TABLE c2 (
+id INT NOT NULL,
+str VARCHAR(20) NOT NULL,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, str)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+ 
+connect (conn1,localhost,root,,);
+connect (conn2,localhost,root,,);
+ 
+connection conn1;
+xa begin 'tx1';
+savepoint point1;
+insert into c2 values (1, "abc", "a");
+ 
+connection conn2;
+call polarx.changeset_start('c2');
+call polarx.changeset_fetch('c2');
+ 
+connection conn1;
+savepoint point2;
+insert into c2 values (2, "bcd", "b");
+savepoint point3;
+update c2 set str = "efg" where id = 1;
+ 
+savepoint point4;
+--error ER_DATA_TOO_LONG
+insert into c2 values (2, "abcdefg123456789987654321", "b");
+rollback to savepoint point4;
+ 
+insert into c2 values (3, "bcd", "b");
+ 
+savepoint point5;
+--error ER_DUP_ENTRY
+insert into c2 values (1, "efg", "b");
+rollback to savepoint point5;
+ 
+insert ignore into c2 values (4, "bcd", "b");
+ 
+savepoint point6;
+--error ER_DUP_ENTRY
+update c2 set id = 3 where id = 4;
+rollback to savepoint point6;
+ 
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+ 
+connection conn1;
+savepoint point10;
+update c2 set str = "hijk" where id = 2;
+xa end 'tx1';
+xa prepare 'tx1';
+xa commit 'tx1';
+ 
+connection conn2;
+call polarx.changeset_stats('c2');
+call polarx.changeset_fetch('c2');
+call polarx.changeset_stats('c2');
+call polarx.changeset_finish('c2');
+ 
+DROP TABLE c2;

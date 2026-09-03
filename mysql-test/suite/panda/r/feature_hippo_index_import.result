@@ -1,0 +1,442 @@
+SET opt_index_format_hippo_enabled=on;
+SET opt_index_format_panda_enabled=off;
+CREATE TABLE dummy_table (id int primary key);
+INSERT INTO dummy_table VALUES (1);
+#####################################
+# Test 1: Basic HIPPO Index Export/Import
+#####################################
+CREATE TABLE t1 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+c2 varchar(100),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 100, 'hello');
+INSERT INTO t1 VALUES (2, 200, 'world');
+INSERT INTO t1 VALUES (3, 300, 'test');
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+idx_c2	HIPPO_INDEX
+PRIMARY	INDEX
+CHECKSUM TABLE t1;
+Table	Checksum
+test.t1	3024668647
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM dummy_table;
+id
+1
+FLUSH TABLE t1 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t1;
+CREATE TABLE t1 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+c2 varchar(100),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+idx_c2	HIPPO_INDEX
+PRIMARY	INDEX
+ALTER TABLE t1 DISCARD TABLESPACE;
+ALTER TABLE t1 IMPORT TABLESPACE;
+CHECKSUM TABLE t1;
+Table	Checksum
+test.t1	3024668647
+SELECT * FROM t1 ORDER BY id;
+id	c1	c2
+1	100	hello
+2	200	world
+3	300	test
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+idx_c2	HIPPO_INDEX
+PRIMARY	INDEX
+# Verify MVCC read via HIPPO index after import
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 = 100;
+c1
+100
+SELECT c2 FROM t1 FORCE INDEX(idx_c2) WHERE c2 = 'hello';
+c2
+hello
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 = 100;
+ERROR HY000: Table definition has changed, please retry transaction
+COMMIT;
+DROP TABLE t1;
+#####################################
+# Test 2: HIPPO -> non-HIPPO Mismatch (should fail)
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t2 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, 100), (2, 200);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+FLUSH TABLE t2 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t2;
+SET opt_index_format_hippo_enabled=off;
+CREATE TABLE t2 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	INDEX
+ALTER TABLE t2 DISCARD TABLESPACE;
+ALTER TABLE t2 IMPORT TABLESPACE;
+ERROR HY000: Schema mismatch (Index field count 3 doesn't match tablespace metadata file value 4)
+DROP TABLE t2;
+#####################################
+# Test 3: non-HIPPO -> HIPPO Mismatch (should fail)
+#####################################
+SET opt_index_format_hippo_enabled=off;
+CREATE TABLE t3 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t3 VALUES (1, 100), (2, 200);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	INDEX
+FLUSH TABLE t3 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t3;
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t3 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+ALTER TABLE t3 DISCARD TABLESPACE;
+ALTER TABLE t3 IMPORT TABLESPACE;
+ERROR HY000: Schema mismatch (Index field count 4 doesn't match tablespace metadata file value 3)
+DROP TABLE t3;
+#####################################
+# Test 4: DML after Import (TRX_ID verification via assertions)
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t4 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+c2 varchar(100),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+INSERT INTO t4 VALUES (1, 100, 'aaa'), (2, 200, 'bbb');
+FLUSH TABLE t4 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t4;
+CREATE TABLE t4 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+c2 varchar(100),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+ALTER TABLE t4 DISCARD TABLESPACE;
+ALTER TABLE t4 IMPORT TABLESPACE;
+# DML operations after import (triggers TRX_ID assertions)
+INSERT INTO t4 VALUES (3, 300, 'ccc');
+UPDATE t4 SET c1 = 101 WHERE id = 1;
+UPDATE t4 SET c2 = 'AAA' WHERE id = 1;
+DELETE FROM t4 WHERE id = 2;
+SELECT c1 FROM t4 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+101
+300
+SELECT c2 FROM t4 FORCE INDEX(idx_c2) ORDER BY c2;
+c2
+AAA
+ccc
+SELECT * FROM t4 ORDER BY id;
+id	c1	c2
+1	101	AAA
+3	300	ccc
+DROP TABLE t4;
+#####################################
+# Test 5: Rollback after Import (TRX_ID=0 verification)
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t5 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t5 VALUES (1, 100), (2, 200);
+FLUSH TABLE t5 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t5;
+CREATE TABLE t5 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t5 DISCARD TABLESPACE;
+ALTER TABLE t5 IMPORT TABLESPACE;
+# Rollback INSERT after import
+BEGIN;
+INSERT INTO t5 VALUES (3, 300);
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+# Rollback DELETE after import
+BEGIN;
+DELETE FROM t5 WHERE id = 1;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+200
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+# Rollback UPDATE after import
+BEGIN;
+UPDATE t5 SET c1 = 999 WHERE id = 2;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+999
+ROLLBACK;
+SELECT c1 FROM t5 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+DROP TABLE t5;
+#####################################
+# Test 6: MVCC after Import (concurrent read/write)
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t6 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t6 VALUES (1, 100), (2, 200), (3, 300);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t6' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+FLUSH TABLE t6 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t6;
+CREATE TABLE t6 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t6 DISCARD TABLESPACE;
+ALTER TABLE t6 IMPORT TABLESPACE;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+INSERT INTO t6 VALUES (4, 400);
+UPDATE t6 SET c1 = 101 WHERE id = 1;
+DELETE FROM t6 WHERE id = 3;
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+101
+200
+400
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+COMMIT;
+SELECT c1 FROM t6 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+101
+200
+400
+DROP TABLE t6;
+#####################################
+# Test 7: Partition Table Import with HIPPO Index
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t7 (
+id int NOT NULL,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN (200),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t7 VALUES (10, 100), (50, 500);
+INSERT INTO t7 VALUES (110, 1100), (150, 1500);
+INSERT INTO t7 VALUES (210, 2100), (250, 2500);
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 't7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1' ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t7#p#p0	idx_c1	HIPPO_INDEX
+t7#p#p1	idx_c1	HIPPO_INDEX
+t7#p#p2	idx_c1	HIPPO_INDEX
+SELECT SUM(c1) FROM t7;
+SUM(c1)
+7800
+FLUSH TABLE t7 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t7;
+CREATE TABLE t7 (
+id int NOT NULL,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t7' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	HIPPO_INDEX
+ALTER TABLE t7 DISCARD TABLESPACE;
+ALTER TABLE t7 IMPORT TABLESPACE;
+SELECT * FROM t7 ORDER BY id;
+id	c1
+10	100
+50	500
+SELECT c1 FROM t7 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+500
+INSERT INTO t7 VALUES (60, 600);
+UPDATE t7 SET c1 = 501 WHERE id = 50;
+DELETE FROM t7 WHERE id = 10;
+SELECT c1 FROM t7 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+501
+600
+DROP TABLE t7;
+#####################################
+# Test 8: Verify TRX_ID Update During Import
+# This test verifies that row_upd_rec_lotus_fields_low() correctly
+# updates each HIPPO record's trx_id to the import transaction ID.
+# (row0import.cc:2470-2476)
+#
+# Test logic:
+# 1. First import: trx_id = T1_import (committed)
+# 2. RR transaction establishes read view (max_trx_id = M)
+# 3. Modify data: trx_id = T_modify, RR sees old data (MVCC works)
+# 4. Second import: if trx_id updated to T2_import (> M),
+#    RR should NOT see data (trx_id > max_trx_id means invisible)
+# 5. If RR still sees data after second import, it means import
+#    correctly updated trx_id (the data is from newly committed
+#    import transaction, visible because import already committed)
+#####################################
+SET opt_index_format_hippo_enabled=on;
+CREATE TABLE t8 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t8 VALUES (1, 100), (2, 200), (3, 300);
+FLUSH TABLE t8 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t8;
+CREATE TABLE t8 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t8 DISCARD TABLESPACE;
+ALTER TABLE t8 IMPORT TABLESPACE;
+# After first import, data should be visible via HIPPO index
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# RR transaction sees imported data
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+UPDATE t8 SET c1 = 999 WHERE id = 1;
+# RR transaction should NOT see modification (MVCC works)
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+UPDATE t8 SET c1 = 100 WHERE id = 1;
+COMMIT;
+FLUSH TABLE t8 FOR EXPORT;
+UNLOCK TABLES;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# Establish read view BEFORE second import
+SELECT * FROM dummy_table;
+id
+1
+DROP TABLE t8;
+CREATE TABLE t8 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t8 DISCARD TABLESPACE;
+ALTER TABLE t8 IMPORT TABLESPACE;
+# After second import with new trx_id
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+# RR transaction (read view before second import) accesses t8
+# Since table was dropped and recreated, we expect ER_TABLE_DEF_CHANGED
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+ERROR HY000: Table definition has changed, please retry transaction
+COMMIT;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# New RR transaction should see all data (import committed)
+SELECT c1 FROM t8 FORCE INDEX(idx_c1) ORDER BY c1;
+c1
+100
+200
+300
+COMMIT;
+DROP TABLE t8;
+#####################################
+# Cleanup
+#####################################
+DROP TABLE dummy_table;
+SET opt_index_format_hippo_enabled=default;
+SET opt_index_format_panda_enabled=default;
+# Test completed successfully

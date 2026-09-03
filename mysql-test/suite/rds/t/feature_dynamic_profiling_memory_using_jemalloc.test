@@ -15,6 +15,12 @@ if (`SELECT @is_asan = 1`)
 
 --exec export MALLOC_CONF="prof:true,prof_active:true"
 
+## skip if jemalloc is not compiled in (variable absent)
+if (!`SELECT COUNT(*) FROM performance_schema.global_variables WHERE VARIABLE_NAME = 'rds_active_memory_profiling'`)
+{
+   --skip jemalloc is not compiled in, rds_active_memory_profiling not available
+}
+
 ## above release version check will ensure we have
 ## rds_active_memory_profiling variable.
 ## check if environment variable MALLOC_CONF is properly set

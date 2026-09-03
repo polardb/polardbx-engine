@@ -134,6 +134,7 @@
 #include "sql/rpl_reporting.h"
 #include "sql/rpl_rli.h"      // Relay_log_info
 #include "sql/rpl_rli_pdb.h"  // Slave_job_group
+#include "sql/recycle_bin/recycle.h"
 #include "sql/sp_head.h"      // sp_name
 #include "sql/sql_base.h"     // close_thread_tables
 #include "sql/sql_bitmap.h"
@@ -180,7 +181,7 @@ Error_log_throttle slave_ignored_err_throttle(
 #include "ppi/ppi_statement.h"
 
 #include "sql/gcn_log_event.h"
-#include "sql/xa/lizard_xa_trx.h"
+#include "sql/xa/komodo0xa0trx.h"
 #include "sql/raii/sentry.h"
 
 struct mysql_mutex_t;
@@ -334,6 +335,8 @@ static const char *HA_ERR(int i) {
       return "HA_ERR_NO_WAIT_LOCK";
     case HA_ERR_FTS_TOO_MANY_NESTED_EXP:
       return "HA_ERR_FTS_TOO_MANY_NESTED_EXP";
+    case HA_ERR_INNODB_PARTICIPATE_FAILED:
+      return "HA_ERR_INNODB_PARTICIPATE_FAILED";
   }
   return "No Error!";
 }
@@ -528,6 +531,22 @@ static inline void pretty_print_str(IO_CACHE *cache, const char *str,
 static inline void pretty_print_identifier(IO_CACHE *cache, const char *str,
                                            size_t len) {
   pretty_print_str(cache, str, len, true);
+}
+
+/** Print bytes as a SQL hex literal without exposing comment delimiters. */
+static void print_hex_literal(IO_CACHE *cache, const char *str, size_t len) {
+  static constexpr char hex_digits[] = "0123456789abcdef";
+  char buffer[2 + NAME_LEN * 2];
+  char *pos = buffer;
+
+  *pos++ = '0';
+  *pos++ = 'x';
+  for (size_t i = 0; i < len; ++i) {
+    const unsigned char value = static_cast<unsigned char>(str[i]);
+    *pos++ = hex_digits[value >> 4];
+    *pos++ = hex_digits[value & 0x0f];
+  }
+  my_b_write(cache, pointer_cast<const uchar *>(buffer), pos - buffer);
 }
 
 #endif /* !MYSQL_SERVER */
@@ -1372,6 +1391,7 @@ bool Log_event::write_header(Basic_ostream *ostream, size_t event_data_length) {
 
   return ret;
 }
+
 #endif /* MYSQL_SERVER */
 
 bool Log_event::is_valid() {
@@ -2659,14 +2679,14 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
   Slave_worker *ret_worker = nullptr;
   char llbuff[22];
   Slave_committed_queue *gaq = rli->gaq;
-  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
+  komodo::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
       rli->get_b_events_before_gtid_mgr();
 #ifndef NDEBUG
   size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
 #endif
   DBUG_TRACE;
 
-  if (lizard::is_b_events_before_gtid(this)) {
+  if (komodo::is_b_events_before_gtid(this)) {
     b_events_before_gtid_mgr.mark_as_curr_group(this);
     return nullptr;
   }
@@ -3068,7 +3088,7 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
 
 int Log_event::apply_gtid_event(Relay_log_info *rli) {
   DBUG_TRACE;
-  lizard::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
+  komodo::Begin_events_before_gtid_manager &b_events_before_gtid_mgr =
       rli->get_b_events_before_gtid_mgr();
   size_t b_ev_before_gtid_size = b_events_before_gtid_mgr.get_size();
 
@@ -3692,9 +3712,35 @@ bool Query_log_event::write(Basic_ostream *ostream) {
     *start++ = thd->variables.opt_index_format_gpp_enabled;
   }
 
+  /* Private status vars (code 255..252) are allocated from 255 downward
+     to avoid conflict with community additions. They must be written in
+     DESCENDING order of code so that older readers (which know higher codes
+     but not lower ones) can read all variables they recognize before hitting
+     an unknown code and breaking out of the loop.
+     Deployment timeline: PANDA=255 → RECYCLE_BIN=254 → HIPPO=253 → SPC=252. */
   if (thd && need_opt_index_format_panda_enabled) {
     *start++ = Q_OPT_INDEX_FORMAT_PANDA_ENABLED;
     *start++ = thd->variables.opt_index_format_panda_enabled;
+  }
+
+  if (thd) {
+    const LEX_CSTRING recycle_name = thd->recycle_state->name();
+    if (recycle_name.str != nullptr) {
+      assert(recycle_name.length <= NAME_LEN);
+      write_str_with_code_and_len(&start, recycle_name.str,
+                                  recycle_name.length,
+                                  Q_OPT_RECYCLE_BIN_TABLE_NAME);
+    }
+  }
+
+  if (thd && need_opt_index_format_hippo_enabled) {
+    *start++ = Q_OPT_INDEX_FORMAT_HIPPO_ENABLED;
+    *start++ = thd->variables.opt_index_format_hippo_enabled;
+  }
+
+  if (thd && need_opt_index_format_spc_enabled) {
+    *start++ = Q_OPT_INDEX_FORMAT_SPC_ENABLED;
+    *start++ = thd->variables.opt_index_format_spc_enabled;
   }
 
   /*
@@ -4213,6 +4259,10 @@ Query_log_event::Query_log_event(THD *thd_arg, const char *query_arg,
 
   need_opt_index_format_panda_enabled = is_fba_or_ift_needed(lex);
 
+  need_opt_index_format_hippo_enabled = is_fba_or_ift_needed(lex);
+
+  need_opt_index_format_spc_enabled = is_fba_or_ift_needed(lex);
+
   assert(event_cache_type != Log_event::EVENT_INVALID_CACHE);
   assert(event_logging_type != Log_event::EVENT_INVALID_LOGGING);
   DBUG_PRINT("info", ("Query_log_event has flags2: %lu  sql_mode: %llu",
@@ -4237,7 +4287,7 @@ Query_log_event::Query_log_event(
   exec_time = query_exec_time;
 
   ulong buf_len = catalog_len + 1 + time_zone_len + 1 + user_len + 1 +
-                  host_len + 1 + data_len + 1;
+                  host_len + 1 + data_len + 1 + recycle_bin_table_name_len + 1;
 
   if (!(data_buf = (Log_event_header::Byte *)my_malloc(key_memory_log_event,
                                                        buf_len, MYF(MY_WME)))) {
@@ -4494,6 +4544,25 @@ void Query_log_event::print_query_header(
         file, "/*!80032 SET @@session.opt_index_format_panda_enabled=%d*/%s\n",
         opt_index_format_panda_enabled, print_event_info->delimiter);
   }
+  if (recycle_bin_table_name_len > 0) {
+    /* Hex is SQL-mode independent and cannot terminate this comment. */
+    my_b_printf(file, "/*!80032 SET @@session.recycle_bin_table_name=");
+    print_hex_literal(file, recycle_bin_table_name,
+                      recycle_bin_table_name_len);
+    my_b_printf(file, "*/%s\n", print_event_info->delimiter);
+  }
+  if (opt_index_format_hippo_enabled !=
+      print_event_info->opt_index_format_hippo_enabled) {
+    my_b_printf(file,
+                "/*!80032 SET @@session.opt_index_format_hippo_enabled=%d*/%s\n",
+                opt_index_format_hippo_enabled, print_event_info->delimiter);
+  }
+  if (opt_index_format_spc_enabled !=
+      print_event_info->opt_index_format_spc_enabled) {
+    my_b_printf(file,
+                "/*!80032 SET @@session.opt_index_format_spc_enabled=%d*/%s\n",
+                opt_index_format_spc_enabled, print_event_info->delimiter);
+  }
 }
 
 void Query_log_event::print(FILE *, PRINT_EVENT_INFO *print_event_info) const {
@@ -4595,6 +4664,10 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
   int expected_error, actual_error = 0;
   auto post_filters_actions_guard = create_scope_guard(
       [&]() { thd->rpl_thd_ctx.post_filters_actions().clear(); });
+  auto recycle_name_guard = create_scope_guard([&] {
+    /* Never carry a recycle name across Query_events. */
+    thd->set_recycle_name(nullptr, 0);
+  });
 
   DBUG_PRINT("info", ("query=%s, q_len_arg=%lu", query,
                       static_cast<unsigned long>(q_len_arg)));
@@ -4918,6 +4991,25 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
                opt_index_format_panda_enabled == 1);
         thd->variables.opt_index_format_panda_enabled =
             opt_index_format_panda_enabled;
+      }
+
+      if (recycle_bin_table_name_len > 0 &&
+          unlikely(thd->set_recycle_name(recycle_bin_table_name,
+                                         recycle_bin_table_name_len)))
+        my_abort();
+
+      if (opt_index_format_hippo_enabled != 0xff) {
+        assert(opt_index_format_hippo_enabled == 0 ||
+               opt_index_format_hippo_enabled == 1);
+        thd->variables.opt_index_format_hippo_enabled =
+            opt_index_format_hippo_enabled;
+      }
+
+      if (opt_index_format_spc_enabled != 0xff) {
+        assert(opt_index_format_spc_enabled == 0 ||
+               opt_index_format_spc_enabled == 1);
+        thd->variables.opt_index_format_spc_enabled =
+            opt_index_format_spc_enabled;
       }
 
       thd->table_map_for_update = (table_map)table_map_for_update;
@@ -5282,10 +5374,6 @@ end:
   thd->first_successful_insert_id_in_prev_stmt = 0;
   thd->stmt_depends_on_first_successful_insert_id_in_prev_stmt = false;
   thd->mem_root->ClearForReuse();
-
-  if (ends_group()) {
-    thd->cpolicy_ctx.reset();
-  }
 
   return thd->is_slave_error;
 }
@@ -6346,7 +6434,6 @@ int Xid_apply_log_event::do_apply_event_worker(Slave_worker *w) {
       error = w->commit_positions(this, ptr_group, w->is_transactional());
   }
 err:
-  thd->cpolicy_ctx.reset();
   return error;
 }
 
@@ -6526,7 +6613,6 @@ err:
   mysql_cond_broadcast(&rli_ptr->data_cond);
   mysql_mutex_unlock(&rli_ptr->data_lock);
 
-  thd->cpolicy_ctx.reset();
   return error;
 }
 
@@ -6640,7 +6726,7 @@ bool XA_prepare_log_event::do_commit(THD *thd_arg) {
   if (!one_phase) {
     /** Before applying XA end on the slave, trx slot should be also allocated
     if not. */
-    if ((error = lizard::xa::apply_trx_for_xa(thd, &xid, nullptr, nullptr))) {
+    if ((error = komodo::apply_trx_for_xa(thd, &xid, nullptr, nullptr))) {
       return error;
     }
 
@@ -12387,7 +12473,8 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
         goto error;
       }
 
-      error = table->file->ha_rnd_pos(table->record[1], table->file->dup_ref);
+      error = table->file->ha_rnd_pos(table->record[1], table->file->dup_ref,
+                                      komodo::GM_NONE);
 
       table->file->ha_rnd_end();
       if (error) {
@@ -12832,8 +12919,6 @@ void Incident_log_event::print(FILE *,
 #if defined(MYSQL_SERVER)
 int Incident_log_event::do_apply_event(Relay_log_info const *rli) {
   DBUG_TRACE;
-
-  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
 
   /*
     It is not necessary to do GTID related check if the error
@@ -13548,6 +13633,8 @@ void Gtid_log_event::set_trx_length_by_cache_size(ulonglong cache_size,
   transaction_length += get_server_version_length();
   transaction_length += is_checksum_enabled ? BINLOG_CHECKSUM_LEN : 0;
 
+  DBUG_EXECUTE_IF("do_not_write_rpl_timestamps", return;);
+
   /*
     Notice that it is not possible to determine the transaction_length field
     size using pack.cc:net_length_size() since the length of the field itself
@@ -14208,7 +14295,6 @@ int Transaction_payload_log_event::do_apply_event(Relay_log_info const *rli) {
   THD_STAGE_INFO(thd, old_stage);
 
   assert(ends_group());
-  thd->cpolicy_ctx.reset();
 
   return res;
 }
@@ -14391,6 +14477,8 @@ PRINT_EVENT_INFO::PRINT_EVENT_INFO()
       opt_flashback_area(0xff),
       opt_index_format_gpp_enabled(0xff),
       opt_index_format_panda_enabled(0xff),
+      opt_index_format_hippo_enabled(0xff),
+      opt_index_format_spc_enabled(0xff),
       base64_output_mode(BASE64_OUTPUT_UNSPEC),
       printed_fd_event(false),
       have_unflushed_events(false),

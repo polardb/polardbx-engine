@@ -24,6 +24,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-09-23 by Ting Yuan
  *******************************************************/
 
+#include "lizard0row0lotus.h"
 #include "row0row.h"
 #define LOCK_MODULE_IMPLEMENTATION
 
@@ -32,8 +33,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0txn0rec.h"
 #include "lizard0btr0pcur.h"
 
-#include "lock0priv.h"
 
+/** check if some transaction has an implicit x-lock on a record in a secondary
+ * index through traditional way, first optimistically judge by page max tid,
+ * and then position cluster index record to find.*/
+txn_rw_t lock_sec_rec_some_has_impl_slow(const Slice *slc, dict_index_t *index,
+                                         const trx_t *optional_trx);
 namespace lizard {
 
 /** Read txn rec info from index record.
@@ -43,15 +48,15 @@ namespace lizard {
  * @param[in]		offsets
  * @param[out]		txn rec.
  * */
-static void lock_clust_rec_some_has_impl(const rec_t *rec,
-                                         const dict_index_t *index,
-                                         const ulint *offsets,
-                                         txn_rec_t *txn_rec) {
+static inline void lock_clust_rec_some_has_impl(const Slice *slc,
+                                                const dict_index_t *index,
+                                                txn_rec_t *txn_rec) {
   ut_ad(index->is_clustered());
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
   ut_ad(!index->table->is_intrinsic());
+  ut_ad(slc->contiguous());
 
-  row_get_txn_rec(rec, index, offsets, txn_layout_t::TL_CLOVER, txn_rec);
+  row_get_txn_rec(slc, index, txn_layout_t::TL_CLOVER, txn_rec);
 }
 
 /** Checks if some transaction has an implicit x-lock on a record in a panda
@@ -62,64 +67,96 @@ index.
 @return transaction which has the x-lock, or nullptr if there is none;
 The caller must confirm all positive results by checking if the trx
 is still active. */
-static void lock_panda_rec_some_has_impl(const rec_t *rec,
-                                             const dict_index_t *index,
-                                             const ulint *offsets,
-                                             txn_rec_t *txn_rec) {
+static inline void lock_panda_rec_some_has_impl(const Slice *slc,
+                                            const dict_index_t *index,
+                                               txn_rec_t *txn_rec) {
   ut_ad(!index->is_clustered());
   ut_ad(index->is_panda());
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->contiguous());
 
-  row_get_txn_rec(rec, index, offsets, txn_layout_t::TL_BAMBOO, txn_rec);
+  row_get_txn_rec(slc, index, txn_layout_t::TL_BAMBOO, txn_rec);
 }
 
-static trx_id_t lock_panda_rec_some_has_impl(const rec_t *rec,
-                                             const dict_index_t *index,
-                                             const ulint *offsets) {
+/** Checks if some transaction has an implicit x-lock on a record on a secondary
+ through trx id if exist.
+
+ @param[in]   rec       user record
+ @param[in]   index     index w/ transaction info
+ @param[in]   offsets   rec_get_offsets(rec, index)
+ @param[in]   trx       myself
+
+ @retval      transaction if found trx id.*/
+static std::pair<trx_id_t, txn_rw_t> lock_sec_rec_some_has_impl_fast(
+    const Slice *slc,          /*!< in: rec on page */
+    const dict_index_t *index, /*!<in: index */
+    const trx_t *optional_trx) /*!<in: optional myself trx context. */
+{
+  txn_rw_t txn_rw;
+  trx_id_t rec_tid = 0;
+
+  ut_ad(!index->table->is_temporary());
   ut_ad(!index->is_clustered());
-  ut_ad(index->is_panda());
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->is_positioned(index));
 
-  return row_get_rec_trx_id(rec, index, offsets);
+  if (index->is_hippo() && hippo_lock_enabled) {
+    rec_tid = row_get_rec_trx_id(slc, index);
+
+    /** Maybe invalid that happen when rollback. */
+    if (rec_tid > 0) {
+      txn_rw = lizard::txn_rw_is_active(rec_tid, true, optional_trx);
+    }
+  }
+
+  return {rec_tid, txn_rw};
 }
 
+/** Checks if some transaction has an implicit x-lock on a record on a secondary
+ @param[in]   rec       user record
+ @param[in]   index     index w/ transaction info
+ @param[in]   offsets   rec_get_offsets(rec, index)
+ @param[in]   trx       myself
+
+ @retval      transaction if found.*/
+txn_rw_t lock_sec_rec_some_has_impl(const Slice *slc, dict_index_t *index,
+                                    const trx_t *optional_trx) {
+  trx_id_t rec_tid = 0;
+  txn_rw_t txn_rw;
+
+  /** Try to check fast by rec tid if exist on secondary index record. */
+  std::tie(rec_tid, txn_rw) =
+      lock_sec_rec_some_has_impl_fast(slc, index, optional_trx);
+
+  if (rec_tid > 0) {
+    return txn_rw;
+  }
+
+  /** Switch to slow way by page max tid and cluster index record trx id. */
+  return lock_sec_rec_some_has_impl_slow(slc, index, optional_trx);
+}
 /** Checks if some transaction has an implicit x-lock on a record.
  @param[in]   rec       user record
  @param[in]   index     index w/ transaction info
  @param[in]   offsets   rec_get_offsets(rec, index)
+ @param[in/out] clover/bamboo txn rec
+
  @return transaction which has the x-lock, or nullptr if there is none;
  The caller must confirm all positive results by checking if the trx
  is still active. */
-void lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
+void lock_clust_or_panda_rec_some_has_impl(const Slice *slc,
                                            const dict_index_t *index,
-                                           const ulint *offsets,
                                            txn_rec_t *txn_rec) {
   ut_ad(!index->table->is_temporary());
   ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(page_rec_is_user_rec(rec));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
 
   if (index->is_clustered()) {
-    lock_clust_rec_some_has_impl(rec, index, offsets, txn_rec);
+    lock_clust_rec_some_has_impl(slc, index, txn_rec);
   } else {
     ut_ad(index->is_panda());
-    lock_panda_rec_some_has_impl(rec, index, offsets, txn_rec);
+    lock_panda_rec_some_has_impl(slc, index, txn_rec);
   }
-}
-
-trx_id_t lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
-                                               const dict_index_t *index,
-                                               const ulint *offsets) {
-  ut_ad(!index->table->is_temporary());
-  ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(page_rec_is_user_rec(rec));
-  trx_id_t trx_id;
-  if (index->is_clustered()) {
-    trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
-  } else {
-    ut_ad(index->is_panda());
-    trx_id = lock_panda_rec_some_has_impl(rec, index, offsets);
-  }
-  return trx_id;
 }
 
 /**
@@ -128,28 +165,40 @@ trx_id_t lock_clust_or_panda_rec_some_has_impl(const rec_t *rec,
  @param[in]   index     panda index
  @param[in]   offsets   rec_get_offsets(rec, index)
  @param[in]   vision    consistent read view
+ @param[in]   trx       current transaction context
+
  @return true if sees, or false if an earlier version of the index record needed
  */
-static bool lock_panda_rec_cons_read_sees(const rec_t *rec,
+static bool lock_panda_rec_cons_read_sees(const Slice *slc,
                                           const dict_index_t *index,
-                                          const ulint *offsets,
                                           btr_pcur_t *pcur,
-                                          const lizard::Vision *vision) {
+                                          const lizard::Vision *vision,
+                                          trx_t *trx) /*!< in: optional trx */
+{
+  const txn_layout_t layout = TL_BAMBOO;
+  bool sees = false;
   ut_ad(!index->table->is_temporary());
   ut_ad(dict_index_is_panda(index));
-  ut_ad(page_rec_is_user_rec(rec));
-  ut_ad(rec_offs_validate(rec, index, offsets));
-  ut_ad(lizard::pcur_position_validate(pcur, rec, index));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->is_positioned(index));
+
+  ut_ad(lizard::pcur_position_validate(pcur, slc->rec(), index));
+
+  if (lizard::dict_index_inject_stress_test_for_panda(index)) {
+    ut_a(lizard::row_panda_rec_neighbor_unique_check(slc->reg(), index));
+  }
 
   if (recv_recovery_is_on()) {
     return (false);
   }
 
-  const txn_layout_t layout = TL_BAMBOO;
-  bool sees = false;
+  if (lizard::dict_index_inject_stress_test_for_panda(index)) {
+    ut_a(lizard::row_panda_rec_neighbor_unique_check(slc->reg(), index));
+  }
 
-  txn_rec_t txn_rec(rec, index, offsets, layout);
-  cleanout_ctx_t cctx(pcur);
+  txn_rec_t txn_rec(slc, index, layout);
+  cleanout_ctx_t cctx(trx, pcur);
+
   /** Try to see optimistically. */
   if (txn_rec_try_see(&txn_rec, layout, vision, cctx(MTR_LOG_NONE))) {
     return true;
@@ -161,7 +210,7 @@ static bool lock_panda_rec_cons_read_sees(const rec_t *rec,
   sees = vision->modifications_visible(&txn_rec, index->table->name);
 
 #ifdef UNIV_DEBUG
-  trx_id_t max_trx_id = page_get_max_trx_id(page_align(rec));
+  trx_id_t max_trx_id = page_get_max_trx_id(page_align(slc->reg()));
   ut_ad(max_trx_id > 0);
   ut_ad(max_trx_id >= txn_rec.trx_id);
   if (vision->sees(max_trx_id)) {
@@ -183,18 +232,69 @@ static bool lock_panda_rec_cons_read_sees(const rec_t *rec,
  @return true if sees, or false if an earlier version of the index record needed
  */
 
-bool lock_clust_or_panda_rec_cons_read_sees(const rec_t *rec,
+bool lock_clust_or_panda_rec_cons_read_sees(const Slice *slc,
                                             dict_index_t *index,
-                                            const ulint *offsets,
                                             btr_pcur_t *pcur,
-                                            lizard::Vision *vision) {
+                                            lizard::Vision *vision,
+                                            trx_t *trx) /*!< in: optional trx */
+{
   ut_ad(!index->table->is_temporary());
 
   if (index->is_clustered()) {
-    return lock_clust_rec_cons_read_sees(rec, index, offsets, pcur, vision);
+    return lock_clust_rec_cons_read_sees(slc, index, pcur, vision, trx);
   } else {
     ut_ad(index->is_panda());
-    return lock_panda_rec_cons_read_sees(rec, index, offsets, pcur, vision);
+    return lock_panda_rec_cons_read_sees(slc, index, pcur, vision, trx);
   }
 }
+
+/** Checks that a non-clustered index record is seen in a consistent read
+through tid on secondary index if exist.
+
+ @param[in]   rec       user record with transactional information
+ @param[in]   index     index with transactional information
+ @param[in]   offsets   rec_get_offsets(rec, index)
+ @param[in]   vision    consistent read view
+
+ @retval      see or not sure if rec tid exist. */
+static std::pair<trx_id_t, bool> lock_sec_rec_cons_read_sees_fast(
+    const Slice *slc, const dict_index_t *index, const lizard::Vision *vision) {
+  trx_id_t rec_tid = 0;
+  bool see = false;
+
+  ut_ad(!index->table->is_temporary());
+  ut_ad(!lizard::dict_index_is_panda(index));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->is_positioned(index));
+
+  if (index->is_hippo() && hippo_mvcc_enabled) {
+    rec_tid = row_get_rec_trx_id(slc, index);
+
+    /** Maybe invalid that happen when rollback. */
+    if (rec_tid > 0) {
+      see = vision->sees(rec_tid);
+    }
+  }
+  return {rec_tid, see};
+}
+
+/** Checks that a non-clustered index record is seen in a consistent read.*/
+bool lock_sec_rec_cons_read_sees(const Slice *slc, const dict_index_t *index,
+                                 const lizard::Vision *vision) {
+  trx_id_t rec_tid = 0;
+  bool see = false;
+
+  ut_ad(!index->table->is_temporary());
+  ut_ad(!lizard::dict_index_is_panda(index));
+  ut_ad(page_rec_is_user_rec(slc->rec()));
+  ut_ad(slc->is_positioned(index));
+
+  std::tie(rec_tid, see) =
+      lock_sec_rec_cons_read_sees_fast(slc, index, vision);
+
+  if (rec_tid > 0) return see;
+
+  return lock_sec_rec_cons_read_sees_slow(slc->rec(), index, vision);
+}
+
 }  // namespace lizard

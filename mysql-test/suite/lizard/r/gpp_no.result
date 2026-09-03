@@ -36,7 +36,7 @@ INSERT INTO t1 (id, k, c, pad) VALUES (8, 8, 8, LEFT(REPEAT('A', 4000), CHAR_LEN
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	56
-5	INDEX	`test`.`t1`	k	8	136
+5	INDEX	`test`.`t1`	k	8	184
 6	INDEX	`test`.`t1`	PRIMARY	1	4057
 7	INDEX	`test`.`t1`	PRIMARY	3	12171
 8	INDEX	`test`.`t1`	PRIMARY	3	12171
@@ -180,7 +180,7 @@ The page (where page_no == 7), which originally contained the record with id = 4
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	2	28
-5	INDEX	`test`.`t1`	k	5	85
+5	INDEX	`test`.`t1`	k	5	115
 8	INDEX	`test`.`t1`	PRIMARY	4	16228
 9	INDEX	`test`.`t1`	PRIMARY	1	4057
 
@@ -361,8 +361,10 @@ where table_id = (select table_id from information_schema.innodb_tables where na
 and (page_type = 'index' or page_number=6) order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	56
-5	INDEX	`test`.`t1`	k	8	136
+5	INDEX	`test`.`t1`	k	8	184
 6	INDEX	`test`.`t1`	PRIMARY	1	4057
+7	INDEX	`test`.`t1`	PRIMARY	2	8114
+8	INDEX	`test`.`t1`	PRIMARY	2	8114
 9	INDEX	`test`.`t1`	PRIMARY	3	12171
 CALL iterate_pages_in_space();
 Space size of test/t1:	space_size
@@ -792,7 +794,9 @@ and (page_type = 'index' or page_number=6) order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	3	42
 5	INDEX	`test`.`t1`	k	8	104
+6	INDEX	`test`.`t1`	PRIMARY	2	8114
 7	INDEX	`test`.`t1`	PRIMARY	4	16228
+8	INDEX	`test`.`t1`	PRIMARY	2	8114
 CALL iterate_pages_in_space();
 Space size of test/t1:	space_size
 Space size of test/t1:	5
@@ -894,7 +898,7 @@ INSERT INTO t1 (id, k, c, pad) VALUES (8, 8, 8, LEFT(REPEAT('A', 4000), CHAR_LEN
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	64
-5	INDEX	`test`.`t1`	k	8	168
+5	INDEX	`test`.`t1`	k	8	224
 6	INDEX	`test`.`t1`	PRIMARY	1	4073
 7	INDEX	`test`.`t1`	PRIMARY	3	12219
 8	INDEX	`test`.`t1`	PRIMARY	3	12219
@@ -1038,7 +1042,7 @@ The page (where page_no == 7), which originally contained the record with id = 4
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	3	48
-5	INDEX	`test`.`t1`	k	5	105
+5	INDEX	`test`.`t1`	k	5	140
 7	INDEX	`test`.`t1`	PRIMARY	1	4073
 8	INDEX	`test`.`t1`	PRIMARY	3	12219
 9	INDEX	`test`.`t1`	PRIMARY	1	4073
@@ -1220,8 +1224,10 @@ where table_id = (select table_id from information_schema.innodb_tables where na
 and (page_type = 'index' or page_number=6) order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	64
-5	INDEX	`test`.`t1`	k	8	168
+5	INDEX	`test`.`t1`	k	8	224
 6	INDEX	`test`.`t1`	PRIMARY	1	4073
+7	INDEX	`test`.`t1`	PRIMARY	2	8146
+8	INDEX	`test`.`t1`	PRIMARY	2	8146
 9	INDEX	`test`.`t1`	PRIMARY	3	12219
 CALL iterate_pages_in_space();
 Space size of test/t1:	space_size
@@ -1410,7 +1416,7 @@ INSERT INTO t1 (id, k, c, pad) VALUES (8, 8, 8, LEFT(REPEAT('A', 4000), CHAR_LEN
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	56
-5	INDEX	`test`.`t1`	k	8	136
+5	INDEX	`test`.`t1`	k	8	184
 6	INDEX	`test`.`t1`	PRIMARY	1	4057
 7	INDEX	`test`.`t1`	PRIMARY	3	12171
 8	INDEX	`test`.`t1`	PRIMARY	3	12171
@@ -1554,7 +1560,7 @@ The page (where page_no == 7), which originally contained the record with id = 4
 select PAGE_NUMBER, PAGE_TYPE, TABLE_NAME, INDEX_NAME, NUMBER_RECORDS, DATA_SIZE from INFORMATION_SCHEMA.INNODB_BUFFER_PAGE WHERE TABLE_NAME like "%t1%" order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	2	28
-5	INDEX	`test`.`t1`	k	5	85
+5	INDEX	`test`.`t1`	k	5	115
 8	INDEX	`test`.`t1`	PRIMARY	4	16228
 9	INDEX	`test`.`t1`	PRIMARY	1	4057
 
@@ -1735,8 +1741,10 @@ where table_id = (select table_id from information_schema.innodb_tables where na
 and (page_type = 'index' or page_number=6) order by PAGE_NUMBER;
 PAGE_NUMBER	PAGE_TYPE	TABLE_NAME	INDEX_NAME	NUMBER_RECORDS	DATA_SIZE
 4	INDEX	`test`.`t1`	PRIMARY	4	56
-5	INDEX	`test`.`t1`	k	8	136
+5	INDEX	`test`.`t1`	k	8	184
 6	INDEX	`test`.`t1`	PRIMARY	1	4057
+7	INDEX	`test`.`t1`	PRIMARY	2	8114
+8	INDEX	`test`.`t1`	PRIMARY	2	8114
 9	INDEX	`test`.`t1`	PRIMARY	3	12171
 CALL iterate_pages_in_space();
 Space size of test/t1:	space_size

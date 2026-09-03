@@ -1,0 +1,241 @@
+SET opt_index_format_spc_enabled=on;
+SET opt_index_format_hippo_enabled=off;
+##################################################################
+# Setup: Create partitioned table with SPC and non-SPC indexes
+##################################################################
+CREATE TABLE t1 (
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+pad VARCHAR(8192),
+PRIMARY KEY (a),
+KEY idx_b (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}'
+) ENGINE=InnoDB
+PARTITION BY RANGE(a) (
+PARTITION p0 VALUES LESS THAN (3),
+PARTITION p1 VALUES LESS THAN (5),
+PARTITION p2 VALUES LESS THAN (20)
+);
+INSERT INTO t1 VALUES (1,1,1,'11111');
+INSERT INTO t1 VALUES (2,2,2,'22222');
+INSERT INTO t1 VALUES (3,3,3,'33333');
+INSERT INTO t1 VALUES (4,4,4,'44444');
+INSERT INTO t1 VALUES (5,5,5,'55555');
+INSERT INTO t1 VALUES (6,6,6,'66666');
+INSERT INTO t1 VALUES (7,7,7,'77777');
+INSERT INTO t1 VALUES (8,8,8,'88888');
+INSERT INTO t1 VALUES (9,9,9,'99999');
+# Verify idx_b is SPC index on p0
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	PRIMARY	INDEX
+# Create non-SPC index idx_c
+SET opt_index_format_spc_enabled=false;
+CREATE INDEX idx_c ON t1(c);
+# Verify idx_c is non-SPC, idx_b is still SPC
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 1: ADD PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=on;
+ALTER TABLE t1 ADD PARTITION (PARTITION p3 VALUES LESS THAN (30));
+# New partition p3: SPC attribute depends on config
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p3	idx_b	SPC_PAGE
+t1#p#p3	idx_c	SPC_PAGE
+t1#p#p3	PRIMARY	INDEX
+INSERT INTO t1 VALUES (25,25,25,'25252525');
+##################################################################
+# Test 2: DROP PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 DROP PARTITION p3;
+# Remaining partitions unchanged
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 't1#p#p%' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+t1#p#p1	idx_b	SPC_PAGE
+t1#p#p1	idx_c	INDEX
+t1#p#p1	PRIMARY	INDEX
+t1#p#p2	idx_b	SPC_PAGE
+t1#p#p2	idx_c	INDEX
+t1#p#p2	PRIMARY	INDEX
+##################################################################
+# Test 3: TRUNCATE PARTITION
+##################################################################
+ALTER TABLE t1 TRUNCATE PARTITION p2;
+# Truncated partition p2 still has SPC idx_b
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p2' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p2	idx_b	SPC_PAGE
+t1#p#p2	idx_c	INDEX
+t1#p#p2	PRIMARY	INDEX
+##################################################################
+# Test 4: REORGANIZE PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 REORGANIZE PARTITION p1 INTO (PARTITION p1 VALUES LESS THAN (4), PARTITION p1a VALUES LESS THAN (5));
+# Reorganized partitions: SPC attribute depends on config
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME IN ('t1#p#p1', 't1#p#p1a') AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p1	idx_b	INDEX
+t1#p#p1	idx_c	INDEX
+t1#p#p1	PRIMARY	INDEX
+t1#p#p1a	idx_b	INDEX
+t1#p#p1a	idx_c	INDEX
+t1#p#p1a	PRIMARY	INDEX
+##################################################################
+# Test 5: EXCHANGE PARTITION
+##################################################################
+# Before exchange, p2's idx_b is SPC
+INSERT INTO t1 VALUES (9,9,9,'99999');
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p2' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p2	idx_b	SPC_PAGE
+t1#p#p2	idx_c	INDEX
+t1#p#p2	PRIMARY	INDEX
+# Create exchange table without SPC indexes
+SET opt_index_format_spc_enabled=false;
+CREATE TABLE exchange_table (
+a INT,
+b INT NOT NULL,
+c INT NOT NULL,
+pad VARCHAR(8192),
+PRIMARY KEY (a),
+KEY idx_b (b),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+INSERT INTO exchange_table VALUES (8,8,8,'88888');
+# Exchange table has SPC indexes
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 'exchange_table' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+exchange_table	idx_b	INDEX
+exchange_table	idx_c	INDEX
+exchange_table	PRIMARY	INDEX
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 EXCHANGE PARTITION p2 WITH TABLE exchange_table WITHOUT VALIDATION;
+# After exchange: exchange_table gets SPC indexes from p2
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 'exchange_table' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+exchange_table	idx_b	SPC_PAGE
+exchange_table	idx_c	INDEX
+exchange_table	PRIMARY	INDEX
+# p2 now has non-SPC indexes from exchange_table (created with spc_enabled=false)
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p2' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p2	idx_b	INDEX
+t1#p#p2	idx_c	INDEX
+t1#p#p2	PRIMARY	INDEX
+# p0 unchanged
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+DROP TABLE exchange_table;
+##################################################################
+# Test 6: ANALYZE PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 ANALYZE PARTITION p0;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+# ANALYZE does not change SPC attribute
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 7: CHECK PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 CHECK PARTITION p0;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+# CHECK does not change SPC attribute
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 8: OPTIMIZE PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 OPTIMIZE PARTITION p0;
+Table	Op	Msg_type	Msg_text
+test.t1	optimize	note	Table does not support optimize on partitions. All partitions will be rebuilt and analyzed.
+test.t1	optimize	status	OK
+# OPTIMIZE rebuilds partition: SPC attribute depends on config
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	INDEX
+t1#p#p0	idx_c	INDEX
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 9: REBUILD PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=on;
+ALTER TABLE t1 REBUILD PARTITION p0;
+# REBUILD partition: SPC attribute depends on config
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	SPC_PAGE
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 10: REPAIR PARTITION
+##################################################################
+SET opt_index_format_spc_enabled=false;
+ALTER TABLE t1 REPAIR PARTITION p0;
+Table	Op	Msg_type	Msg_text
+test.t1	repair	status	OK
+# REPAIR does not rebuild index structure, SPC attribute remains unchanged
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1#p#p0' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1#p#p0	idx_b	SPC_PAGE
+t1#p#p0	idx_c	SPC_PAGE
+t1#p#p0	PRIMARY	INDEX
+##################################################################
+# Test 11: REMOVE PARTITIONING
+##################################################################
+SET opt_index_format_spc_enabled=on;
+ALTER TABLE t1 REMOVE PARTITIONING;
+# After REMOVE PARTITIONING: SPC attribute depends on config
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME = 't1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t1	idx_b	SPC_PAGE
+t1	idx_c	SPC_PAGE
+t1	PRIMARY	INDEX
+##################################################################
+# Cleanup
+##################################################################
+DROP TABLE t1;
+SET opt_index_format_spc_enabled=default;
+SET opt_index_format_hippo_enabled=default;

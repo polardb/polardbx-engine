@@ -1,0 +1,3 @@
+--skip-replica-start=0
+--relay-log-purge=0
+--consensus_safe_for_reset_master=1

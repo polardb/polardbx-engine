@@ -393,8 +393,49 @@ class Throttler {
   one. */
   static constexpr uint64_t THROTTLE_DELAY_SEC = 10;
 };
+
+/**
+  Helper class for exponential backoff counting.
+  Tracks counter and indicates when threshold is reached,
+  doubling the threshold after each indication.
+*/
+class ExponentialBackoffCounter {
+ public:
+  /**
+    Constructor.
+  */
+  ExponentialBackoffCounter() : m_cnt(0), m_thresh(1) {}
+
+  /**
+    Increment the counter and check if threshold is reached.
+    
+    @return true if threshold is reached (action should be taken), false otherwise.
+            When true is returned, the counter is reset and threshold is doubled.
+  */
+  bool inc_and_check() {
+    if (++m_cnt < m_thresh) {
+      return false;
+    }
+    m_cnt = 0;
+    m_thresh *= 2;
+    return true;
+  }
+
+  /** Reset counter and threshold to initial state. */
+  void reset() {
+    m_cnt = 0;
+    m_thresh = 1;
+  }
+
+ private:
+  int m_cnt;
+  int m_thresh;
+};
+
 }  // namespace ib
 
+#ifndef INNODB_UT0UT_IC_STANDALONE
 #include "ut0ut.ic"
+#endif /* !INNODB_UT0UT_IC_STANDALONE */
 
 #endif /* !ut0ut_h */

@@ -1,0 +1,56 @@
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(3) NOT NULL,
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+
+# 1. First ANN query creates generation-1 MHNSW_Share: it inherits
+#    the cold-start defaults (0.6 / 0) from the fresh hlindex share.
+SELECT VARIABLE_VALUE INTO @qc0 FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_query_count';
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 1;
+id
+1
+SELECT VARIABLE_VALUE - @qc0 AS ann_query_ran
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_query_count';
+ann_query_ran
+1
+SHOW GLOBAL STATUS LIKE 'Vidx_last_ef_power_init';
+Variable_name	Value
+Vidx_last_ef_power_init	0.600000
+SHOW GLOBAL STATUS LIKE 'Vidx_last_diameter_init';
+Variable_name	Value
+Vidx_last_diameter_init	0.000000
+
+# 2. Pretend generation-1 has fully learned its params (0.95 / 0.5)
+#    and force a reset when the query releases the share: the learned
+#    values must be written back to the hlindex TABLE_SHARE.
+SET SESSION debug = '+d,vidx_force_learned_params,vidx_force_reset_on_release';
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,0,0]')) LIMIT 1;
+id
+2
+SET SESSION debug = '-d,vidx_force_learned_params,vidx_force_reset_on_release';
+
+# 3. Next ANN query creates generation-2 MHNSW_Share: it must restore
+#    the learned values instead of cold-starting at 0.6 / 0.
+SELECT id FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,0,0]')) LIMIT 1;
+id
+3
+SHOW GLOBAL STATUS LIKE 'Vidx_last_ef_power_init';
+Variable_name	Value
+Vidx_last_ef_power_init	0.950000
+SELECT VARIABLE_VALUE + 0 >= 0.5 AS diameter_inherited
+FROM performance_schema.global_status
+WHERE VARIABLE_NAME = 'Vidx_last_diameter_init';
+diameter_inherited
+1
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

@@ -79,7 +79,9 @@ static const char *traditional_extra_tags[ET_total] = {
     "Table function:",                  // ET_TABLE_FUNCTION
     "Index dive skipped due to FORCE",  // ET_SKIP_RECORDS_IN_RANGE
     "Using secondary engine",           // ET_USING_SECONDARY_ENGINE
-    "Rematerialize"                     // ET_REMATERIALIZE
+    "Rematerialize",                    // ET_REMATERIALIZE
+    "Directly search via Primary Index", // ET_USING_FAST_LOOKUP
+    "Using vector index"                 // ET_USING_VECTOR_INDEX
 };
 
 static const char *mod_type_name[] = {"NONE", "INSERT", "UPDATE", "DELETE",
@@ -251,6 +253,7 @@ bool Explain_format_traditional::flush_entry() {
           case ET_USING_JOIN_BUFFER:
           case ET_FIRST_MATCH:
           case ET_REMATERIALIZE:
+          case ET_USING_VECTOR_INDEX:
             brackets = true;  // for backward compatibility
             break;
           default:

@@ -32,11 +32,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0upd.h"
 #include "trx0rec.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
+#include "lizard0trx.h"
 #include "lizard0trx0rec.h"
 #include "lizard0trx0rec0bamboo.h"
 #include "lizard0trx0rec0clover.h"
-#include "lizard0undo.h"
 
 namespace lizard {
 #ifdef UNIV_DEBUG
@@ -44,26 +44,26 @@ space_index_t dbug_panda_index_id = 0;
 #endif /* UNIV_DEBUG */
 
 /** Write txn columns into undo record.
- * @param[in/out]  ptr             pointer to undo record
- * @param[in]      index           index handler
- * @param[in]      rec             record
- * @param[in]      offsets         offsets
- * @return         pointer to current position
- */
-byte *trx_undo_update_rec_write_txn_cols(byte *ptr, const dict_index_t *index,
-                                         const rec_t *rec, const ulint *offsets,
+ * @param[in/out]	ptr             pointer to undo record
+ * @param[in]		index           index handler
+ * @param[in]		slc             record
+ *
+ * @retval		pointer to current position */
+byte *trx_undo_update_rec_write_txn_cols(byte *ptr, const Slice *slc,
+                                         const dict_index_t *index,
                                          const txn_layout_t &layout) {
   ut_ad(txn_layout_is_arranged(layout));
   ut_ad(!index->table->is_intrinsic());
 
   switch (layout) {
     case TL_NONE:
+    case TL_LOTUS:
       ut_error;
       return nullptr;
     case TL_CLOVER:
-      return trx_undo_update_rec_write_clover_cols(ptr, index, rec, offsets);
+      return trx_undo_update_rec_write_clover_cols(ptr, slc, index);
     case TL_BAMBOO:
-      return trx_undo_update_rec_write_bamboo_cols(ptr, index, rec, offsets);
+      return trx_undo_update_rec_write_bamboo_cols(ptr, slc, index);
   }
 
   return nullptr;
@@ -108,6 +108,7 @@ byte *trx_undo_update_rec_get_txn_cols(const byte *ptr, txn_info_t *txn_info,
                                        const txn_layout_t &layout) {
   switch (layout) {
     case TL_NONE:
+    case TL_LOTUS:
       ut_error;
       return nullptr;
     case TL_CLOVER:
@@ -136,6 +137,7 @@ void trx_undo_update_rec_by_txn_fields(const dict_index_t *index, upd_t *update,
 
   switch (layout) {
     case TL_NONE:
+    case TL_LOTUS:
       ut_error;
       break;
     case TL_CLOVER:
@@ -263,7 +265,7 @@ byte *trx_undo_rec_get_row_ref_derived_from_row_log(byte *ptr,
 
   ut_ad(index && ptr && ref && heap);
   ut_a(dict_index_is_panda(index));
-  assert_lizard_dict_index_check(index);
+  ut_ad(lizard::dict_index_check_valid(index));
 
   ref_len = dict_index_get_n_fields(index);
 

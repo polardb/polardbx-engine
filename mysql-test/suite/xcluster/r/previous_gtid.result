@@ -1,0 +1,51 @@
+flush local logs;
+flush local logs;
+create table t1(c1 int auto_increment primary key, c2 blob) DEFAULT CHARSET=utf8mb4;
+insert into t1 (c2) values(repeat('#', 10));
+insert into t1 (c2) values(repeat('#', 10));
+insert into t1 (c2) values(repeat('#', 10));
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-4
+set global consensus_flow_control="127.0.0.1:MYPORT_CONSENSUS_2 -2;127.0.0.1:MYPORT_CONSENSUS_3 -2";;
+insert into t1 (c2) values(repeat('#', 10));;
+set global consensus_force_promote=1;
+insert into t1 (c2) values(repeat('#', 10));
+insert into t1 (c2) values(repeat('#', 10));
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-5,
+uuid_2:1-2
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-5,
+uuid_2:1-2
+set global consensus_force_promote=1;
+insert into t1 (c2) values(repeat('#', 10));
+insert into t1 (c2) values(repeat('#', 10));
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-7,
+uuid_2:1-2
+set global consensus_force_promote=1;
+insert into t1 (c2) values(repeat('#', 10));
+insert into t1 (c2) values(repeat('#', 10));
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-7,
+uuid_2:1-4
+flush logs;
+# uuid_1:1-7,
+# uuid_2:1-4
+flush logs;
+# uuid_1:1-7,
+# uuid_2:1-4
+select @@gtid_executed;
+@@gtid_executed
+uuid_1:1-7,
+uuid_2:1-4
+select @@gtid_purged;
+@@gtid_purged
+
+set global consensus_force_promote=1;
+drop table t1;

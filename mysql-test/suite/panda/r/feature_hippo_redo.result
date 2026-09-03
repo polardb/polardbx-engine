@@ -1,0 +1,414 @@
+########################################################################
+# Test 1: MLOG_PAGE_CREATE_HIPPO / MLOG_COMP_PAGE_CREATE_HIPPO
+# Trigger: Creating new HIPPO index pages via bulk INSERT
+########################################################################
+# Test 1.1: INSERT to trigger page creation (DYNAMIC format)
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_page (id INT PRIMARY KEY, val INT, data VARCHAR(200), INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB;;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+INSERT INTO t_hippo_page SELECT seq, seq, REPEAT('x', 100) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a, information_schema.columns b LIMIT 500) t;;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT COUNT(*) FROM t_hippo_page; SELECT COUNT(*) FROM t_hippo_page USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_page;;
+COUNT(*)
+500
+COUNT(*)
+500
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_page (id INT PRIMARY KEY, val INT, data VARCHAR(200), INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB;;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+INSERT INTO t_hippo_page SELECT seq, seq, REPEAT('x', 100) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a, information_schema.columns b LIMIT 500) t;;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT COUNT(*) FROM t_hippo_page; SELECT COUNT(*) FROM t_hippo_page USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_page;;
+COUNT(*)
+500
+COUNT(*)
+500
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_page (id INT PRIMARY KEY, val INT, data VARCHAR(200), INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB;;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+INSERT INTO t_hippo_page SELECT seq, seq, REPEAT('x', 100) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a, information_schema.columns b LIMIT 500) t;;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT COUNT(*) FROM t_hippo_page; SELECT COUNT(*) FROM t_hippo_page USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_page;;
+COUNT(*)
+500
+COUNT(*)
+500
+########################################################################
+# Test 2: MLOG_REC_SEC_TID_DELETE_MARK
+# Trigger: DELETE operation on HIPPO secondary index
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_del (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_del VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+DELETE FROM t_hippo_del WHERE id IN (2, 4);;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_del ORDER BY id; SELECT * FROM t_hippo_del USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_del;;
+id	val
+1	100
+3	300
+5	500
+id	val
+1	100
+3	300
+5	500
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_del (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_del VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+DELETE FROM t_hippo_del WHERE id IN (2, 4);;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_del ORDER BY id; SELECT * FROM t_hippo_del USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_del;;
+id	val
+1	100
+3	300
+5	500
+id	val
+1	100
+3	300
+5	500
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_del (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_del VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+DELETE FROM t_hippo_del WHERE id IN (2, 4);;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_del ORDER BY id; SELECT * FROM t_hippo_del USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_del;;
+id	val
+1	100
+3	300
+5	500
+id	val
+1	100
+3	300
+5	500
+########################################################################
+# Test 3: MLOG_REC_SEC_TID_DELETE_MARK with UPDATE
+# Trigger: UPDATE on indexed column (delete-mark old + insert new)
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_upd (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_upd VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+UPDATE t_hippo_upd SET val = val + 1000 WHERE id = 2;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_upd ORDER BY id; SELECT * FROM t_hippo_upd USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_upd;;
+id	val
+1	100
+2	1200
+3	300
+id	val
+1	100
+3	300
+2	1200
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_upd (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_upd VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+UPDATE t_hippo_upd SET val = val + 1000 WHERE id = 2;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_upd ORDER BY id; SELECT * FROM t_hippo_upd USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_upd;;
+id	val
+1	100
+2	1200
+3	300
+id	val
+1	100
+3	300
+2	1200
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_upd (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_upd VALUES (1, 100), (2, 200), (3, 300);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+UPDATE t_hippo_upd SET val = val + 1000 WHERE id = 2;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_upd ORDER BY id; SELECT * FROM t_hippo_upd USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_upd;;
+id	val
+1	100
+2	1200
+3	300
+id	val
+1	100
+3	300
+2	1200
+########################################################################
+# Test 4: Mixed operations (INSERT + UPDATE + DELETE)
+# Trigger: All HIPPO MLOG types in one transaction
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_mix (id INT PRIMARY KEY, val INT, data VARCHAR(100), INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_mix VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_mix VALUES (4, 400, 'd'), (5, 500, 'e'); UPDATE t_hippo_mix SET val = 999 WHERE id = 2; DELETE FROM t_hippo_mix WHERE id = 3; COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_mix ORDER BY id; SELECT * FROM t_hippo_mix USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_mix;;
+id	val	data
+1	100	a
+2	999	b
+4	400	d
+5	500	e
+id	val	data
+1	100	a
+4	400	d
+5	500	e
+2	999	b
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_mix (id INT PRIMARY KEY, val INT, data VARCHAR(100), INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_mix VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_mix VALUES (4, 400, 'd'), (5, 500, 'e'); UPDATE t_hippo_mix SET val = 999 WHERE id = 2; DELETE FROM t_hippo_mix WHERE id = 3; COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_mix ORDER BY id; SELECT * FROM t_hippo_mix USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_mix;;
+id	val	data
+1	100	a
+2	999	b
+4	400	d
+5	500	e
+id	val	data
+1	100	a
+4	400	d
+5	500	e
+2	999	b
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_mix (id INT PRIMARY KEY, val INT, data VARCHAR(100), INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_mix VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_mix VALUES (4, 400, 'd'), (5, 500, 'e'); UPDATE t_hippo_mix SET val = 999 WHERE id = 2; DELETE FROM t_hippo_mix WHERE id = 3; COMMIT;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_mix ORDER BY id; SELECT * FROM t_hippo_mix USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_mix;;
+id	val	data
+1	100	a
+2	999	b
+4	400	d
+5	500	e
+id	val	data
+1	100	a
+4	400	d
+5	500	e
+2	999	b
+########################################################################
+# Test 5: ROLLBACK scenario
+# Verify REDO correctly handles rolled-back HIPPO operations
+########################################################################
+## Row format: DYNAMIC
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_rb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=DYNAMIC ENGINE=InnoDB; INSERT INTO t_hippo_rb VALUES (1, 100), (2, 200);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_rb VALUES (3, 300); COMMIT; BEGIN; INSERT INTO t_hippo_rb VALUES (4, 400); DELETE FROM t_hippo_rb WHERE id = 1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_rb ORDER BY id; SELECT * FROM t_hippo_rb USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_rb;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+## Row format: REDUNDANT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_rb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=REDUNDANT ENGINE=InnoDB; INSERT INTO t_hippo_rb VALUES (1, 100), (2, 200);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_rb VALUES (3, 300); COMMIT; BEGIN; INSERT INTO t_hippo_rb VALUES (4, 400); DELETE FROM t_hippo_rb WHERE id = 1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_rb ORDER BY id; SELECT * FROM t_hippo_rb USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_rb;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+## Row format: COMPACT
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_rb (id INT PRIMARY KEY, val INT, INDEX idx_val(val)) ROW_FORMAT=COMPACT ENGINE=InnoDB; INSERT INTO t_hippo_rb VALUES (1, 100), (2, 200);;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+BEGIN; INSERT INTO t_hippo_rb VALUES (3, 300); COMMIT; BEGIN; INSERT INTO t_hippo_rb VALUES (4, 400); DELETE FROM t_hippo_rb WHERE id = 1;;
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT * FROM t_hippo_rb ORDER BY id; SELECT * FROM t_hippo_rb USE INDEX(idx_val) ORDER BY val; DROP TABLE IF EXISTS t_hippo_rb;;
+id	val
+1	100
+2	200
+3	300
+id	val
+1	100
+2	200
+3	300
+########################################################################
+# Test 6: Page split scenario
+# Trigger: MLOG_PAGE_CREATE_HIPPO via page split
+########################################################################
+## Testing page split with sequential inserts
+SET opt_index_format_hippo_enabled=on;
+# 1. Prepare: create table with HIPPO index
+CREATE TABLE t_hippo_split (id INT PRIMARY KEY, val INT, padding VARCHAR(500), INDEX idx_val(val)) ENGINE=InnoDB;;
+SET GLOBAL innodb_log_checkpoint_now=1;
+# 2. Disable checkpoint and produce redo log
+SET GLOBAL innodb_checkpoint_disabled=1;
+INSERT INTO t_hippo_split SELECT seq, seq, REPEAT('p', 400) FROM (SELECT @rownum := @rownum + 1 AS seq FROM (SELECT @rownum := 0) r, information_schema.columns a LIMIT 200) t;;
+Warnings:
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+Warning	1287	Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.
+# Kill the server
+# 3.1 Apply redo log when restarting and crash (test redo apply idempotency)
+# 3.2 Apply redo log when restarting and no crash
+# restart: 
+# 4. Clean up
+SET DEBUG = '-d,crash_if_hippo_in_redo';
+SET GLOBAL innodb_checkpoint_disabled=0;
+SELECT COUNT(*) FROM t_hippo_split; SELECT COUNT(*) FROM t_hippo_split USE INDEX(idx_val) WHERE val > 0; DROP TABLE IF EXISTS t_hippo_split;;
+COUNT(*)
+200
+COUNT(*)
+200
+########################################################################
+# Test completed successfully
+########################################################################

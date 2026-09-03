@@ -1,0 +1,155 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+show global status like "single_shard_read_gcn_too_old";
+
+
+#######################
+# Case: Single shard read + xa read
+#######################
+create table t1 (c1 int primary key, c2 int);
+insert into t1 values (1, 10);
+
+create table t2 (c1 int primary key, c2 int);
+insert into t2 values (1, 10);
+
+begin;
+set innodb_current_snapshot_seq = 1;
+--let $snapshot_gcn= `select @base_seq + 10`
+--echo select * from t1 union all select * from t2 as of gcn #snapshot_gcn
+--disable_query_log
+--eval select * from t1 union all select * from t2 as of gcn $snapshot_gcn
+--enable_query_log
+rollback;
+
+drop table t1, t2;
+
+
+connect(con1, localhost, root,,);
+
+connection default;
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    dept_id INT,
+    version INT
+);
+
+CREATE TABLE departments (
+    id INT PRIMARY KEY,
+    dept_name VARCHAR(50),
+    version INT
+);
+
+INSERT INTO users VALUES
+(1, 'Alice', 10, 0),
+(2, 'Bob', 20, 0),
+(3, 'Charlie', NULL, 0);
+
+INSERT INTO departments VALUES
+(10, 'HR', 0),
+(20, 'Engineering', 0),
+(30, 'Finance', 0);
+
+#######################
+# Case: JOIN
+#######################
+connection default;
+begin;
+set innodb_current_snapshot_seq = 1;
+SELECT
+    u.id, u.name, u.dept_id, u.version AS user_version,
+    d.dept_name, d.version AS dept_version
+FROM users u
+INNER JOIN departments d ON u.dept_id = d.id;
+
+
+connection con1;
+update users set version = version + 1;
+update departments set version = version + 1;
+
+connection default;
+SELECT
+    u.id, u.name, u.dept_id, u.version AS user_version,
+    d.dept_name, d.version AS dept_version
+FROM users u
+INNER JOIN departments d ON u.dept_id = d.id;
+commit;
+
+#######################
+# Case: EXISTS
+#######################
+connection default;
+begin;
+set innodb_current_snapshot_seq = 1;
+SELECT
+    u.id, u.name, u.dept_id, u.version
+FROM users u
+WHERE EXISTS (
+    SELECT 1 FROM departments d WHERE d.id = u.dept_id
+);
+
+connection con1;
+update users set version = version + 1;
+update departments set version = version + 1;
+
+connection default;
+SELECT
+    u.id, u.name, u.dept_id, u.version
+FROM users u
+WHERE EXISTS (
+    SELECT 1 FROM departments d WHERE d.id = u.dept_id
+);
+commit;
+
+#######################
+# Case: IN
+#######################
+connection default;
+begin;
+set innodb_current_snapshot_seq = 1;
+SELECT
+    u.id, u.name, u.dept_id, u.version
+FROM users u
+WHERE u.dept_id IN (SELECT d.id FROM departments d);
+
+connection con1;
+update users set version = version + 1;
+update departments set version = version + 1;
+
+connection default;
+SELECT
+    u.id, u.name, u.dept_id, u.version
+FROM users u
+WHERE u.dept_id IN (SELECT d.id FROM departments d);
+commit;
+
+#######################
+# Case: UNION
+#######################
+connection default;
+begin;
+set innodb_current_snapshot_seq = 1;
+SELECT
+    id, name AS item, version
+FROM users
+UNION ALL
+SELECT
+    id, dept_name AS item, version
+FROM departments;
+
+connection con1;
+update users set version = version + 1;
+update departments set version = version + 1;
+
+connection default;
+SELECT
+    id, name AS item, version
+FROM users
+UNION ALL
+SELECT
+    id, dept_name AS item, version
+FROM departments;
+commit;
+
+drop table users, departments;
+

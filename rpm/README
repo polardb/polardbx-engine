@@ -1,13 +1,13 @@
 
 # 当前文件说明
  * t-polardbx-engine-80.spec
-    * 供线上公有云使用
+    * 供线上公有云使用, ali7/ali8
  * t-polardbx-engine-804.spec
-    * 供线下大客户使用
+    * 供线下大客户使用, ali7/el7
  * t-polardbx-engine-pt-80.spec
-    * 供嵌入式场景用户使用
+    * 供嵌入式场景用户使用, el7
  * t-polardbx-engine.spec
-    * 供开源用户使用
+    * 供开源用户使用, el7
  * t-polardbx-engine-pt-80-build.sh
     * t-polardbx-engine-pt-80的专用打包脚本,软链接到build.sh
  * t-polardbx-engine-80-build.sh

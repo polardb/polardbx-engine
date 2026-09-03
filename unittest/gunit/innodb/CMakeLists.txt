@@ -38,12 +38,14 @@ SET(TESTS
   #example
   fil_path
   ha_innodb
+  lizard_uba
   log0log
   mem0mem
   os0file
   os0thread-create
   srv0conc
   sync0rw
+  ut0bitset
   ut0crc32
   ut0lock_free_hash
   ut0math

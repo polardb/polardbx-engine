@@ -1204,6 +1204,15 @@ class Arch_Group {
   @return error code. */
   dberr_t open_file(Arch_Page_Pos write_pos, bool create_new);
 
+  /** Get the directory name for this archive group.
+  It is used for cleaning up the archive directory.
+  @param[out]   name_buf        directory name and path. Caller must
+                                  allocate the buffer.
+  @param[in]    buf_len         buffer length */
+  void get_dir_name(char *name_buf, uint buf_len) {
+    m_file_ctx.build_dir_name(m_begin_lsn, name_buf, buf_len);
+  }
+
   /** Disable copy construction */
   Arch_Group(Arch_Group const &) = delete;
 
@@ -1220,14 +1229,6 @@ class Arch_Group {
   @return error code */
   int read_from_file(Arch_Page_Pos *read_pos, uint read_len, byte *read_buff);
 
-  /** Get the directory name for this archive group.
-  It is used for cleaning up the archive directory.
-  @param[out]   name_buf        directory name and path. Caller must
-                                  allocate the buffer.
-  @param[in]    buf_len         buffer length */
-  void get_dir_name(char *name_buf, uint buf_len) {
-    m_file_ctx.build_dir_name(m_begin_lsn, name_buf, buf_len);
-  }
 
   /** Create a new file and write the header.
   @param[in]  start_offset  start offste
@@ -1763,6 +1764,15 @@ class Arch_Page_Sys {
   /** @return the latest stop LSN */
   lsn_t get_latest_stop_lsn() const { return (m_latest_stop_lsn); }
 
+  /** @return current write position */
+  Arch_Page_Pos get_write_pos() const { return (m_write_pos); }
+
+  /** @return current flush position */
+  Arch_Page_Pos get_flush_pos() const { return (m_flush_pos); }
+
+  /** @return current group */
+  Arch_Group *get_current_group() const { return (m_current_group); }
+
   /** Disable copy construction */
   Arch_Page_Sys(Arch_Page_Sys const &) = delete;
 
@@ -1884,5 +1894,124 @@ extern Arch_Log_Sys *arch_log_sys;
 
 /** Dirty page ID archiver system global */
 extern Arch_Page_Sys *arch_page_sys;
+
+/** Page Archiver Global Statistics.
+
+This namespace contains global statistics for the InnoDB page tracking and
+archiving system. All variables are simple uint64_t types (non-atomic) for
+performance reasons, as they are updated in hot paths.
+
+Statistics Categories:
+1. Cumulative Counters: Total counts since server start
+2. Last Operation Info: Details of most recent operations
+3. Current Session State: Active tracking session parameters
+4. Error Counters: Failure and error statistics
+
+Thread Safety:
+These statistics are NOT thread-safe. Updates occur at specific synchronization
+points in the archiver. Reading for status reporting may see slightly stale or
+inconsistent values, which is acceptable for monitoring purposes. */
+namespace arch_page_stats {
+
+/** Total page IDs tracked (cumulative) */
+extern uint64_t g_total_page_ids;
+/** Last tracked page: space ID */
+extern uint64_t g_last_write_space;
+/** Last tracked page: page number */
+extern uint64_t g_last_write_page;
+/** Last write: block number in archive buffer */
+extern uint64_t g_last_write_block;
+/** Last flush: block number completed */
+extern uint64_t g_last_flush_block;
+/** Last flush operation timestamp (seconds since epoch) */
+extern uint64_t g_flush_last_time;
+/** Total blocks flushed to disk (cumulative) */
+extern uint64_t g_block_flush_count;
+/** Buffer full events: count of wait-for-flush occurrences */
+extern uint64_t g_buffer_full_wait_flushes;
+/** Wait-flush operations: successful completions */
+extern uint64_t g_wait_flush_succ_count;
+/** Wait-flush operations: timeout events */
+extern uint64_t g_wait_flush_timeout_count;
+/** Wait-flush operations: failures */
+extern uint64_t g_wait_flush_failed_count;
+/** Backup operations: total count */
+extern uint64_t g_backup_count;
+/** Backup operations: timestamp of last operation */
+extern uint64_t g_backup_last_time;
+/** Backup operations: pages read in last operation */
+extern uint64_t g_backup_last_pages;
+/** Purge operations: total count */
+extern uint64_t g_purge_count;
+/** Purge operations: LSN of last purge */
+extern uint64_t g_purge_last_lsn;
+/** Error counters: checksum validation failures */
+extern uint64_t g_checksum_errors;
+/** Error counters: I/O operation failures */
+extern uint64_t g_io_errors;
+/** Current active session: start LSN of tracking range. Updated in
+Arch_Page_Sys::start() when a new group is created. */
+extern uint64_t g_current_start_lsn;
+
+/** Increment total page IDs counter */
+void increment_total_page_ids();
+
+/** Get last flush timestamp
+@return	flush timestamp in seconds since epoch, or 0 if never flushed */
+uint64_t get_flush_last_time();
+
+/** Update last flush timestamp */
+void update_flush_last_time();
+
+/** Increment buffer full waits counter */
+void increment_buffer_full_wait_flushes();
+
+/** Update last written page information
+@param[in]	space_id	tablespace ID
+@param[in]	page_id		page number */
+void update_last_write_page(const uint64_t space_id, const uint64_t page_id);
+
+/** Update last write block number
+@param[in]	block_num	block number in archive buffer */
+void update_last_write_block(const uint64_t block_num);
+
+/** Update last flush block number
+@param[in]	block_num	block number flushed to disk */
+void update_last_flush_block(const uint64_t block_num);
+
+/** Increment blocks flushed counter */
+void increment_block_flush_count();
+
+/** Increment successful wait-flush counter */
+void increment_wait_flush_succ_count();
+
+/** Increment wait-flush timeout counter */
+void increment_wait_flush_timeout_count();
+
+/** Increment failed wait-flush counter */
+void increment_wait_flush_failed_count();
+
+/** Record backup read event
+@param[in]	pages_read	number of pages read */
+void record_backup_read(const uint64_t pages_read);
+
+/** Record purge event
+@param[in]	purge_lsn	purged LSN */
+void record_purge(const lsn_t purge_lsn);
+
+/** Increment checksum error counter */
+void increment_checksum_errors();
+
+/** Increment I/O error counter */
+void increment_io_errors();
+
+/** Update current tracking start LSN
+@param[in]	start_lsn	LSN from which page tracking begins */
+void update_current_start_lsn(const lsn_t start_lsn);
+
+/** Reset all statistics */
+void reset_stats();
+
+}  // namespace arch_page_stats
 
 #endif /* ARCH_ARCH_INCLUDE */

@@ -137,7 +137,7 @@ insert into t values(0);
 --replace_column 2 # 5 #
 show master status;
 set global debug="+d, skip_consensus_fifo_cache";
-set global debug="+d, crash_before_large_trx_commit_early";
+set global debug="+d, crash_after_append_log_in_sync";
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 --error 2013
 #this will be truncated

@@ -1,0 +1,50 @@
+--source include/have_debug.inc
+--disable_query_log
+--disable_result_log
+
+# Bug#38935534: a swapped clustered-key column produces a bad child-pointer
+# tuple when the persisted table is reopened.
+CREATE TABLE t1 (
+  id INT NOT NULL,
+  b VARCHAR(4) CHARACTER SET ascii NOT NULL,
+  c INT NOT NULL,
+  pad VARBINARY(1024) NOT NULL,
+  PRIMARY KEY (id, b)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, '05b5', 1, REPEAT('x', 1024));
+
+ALTER TABLE t1 ADD COLUMN instant_marker INT NULL, ALGORITHM=INSTANT;
+ALTER TABLE t1 DROP COLUMN instant_marker, ALGORITHM=INSTANT;
+
+ALTER TABLE t1
+  CHANGE COLUMN b c VARCHAR(4) CHARACTER SET ascii NOT NULL,
+  CHANGE COLUMN c b INT NOT NULL,
+  ADD KEY k_force (id),
+  ALGORITHM=INPLACE;
+
+--source include/restart_mysqld.inc
+--disable_query_log
+--disable_result_log
+
+CREATE TABLE digits (n INT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO digits VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+
+INSERT INTO t1 (id, c, b, pad)
+SELECT seq.n + 2, '05b5', seq.n + 2, REPEAT('x', 1024)
+  FROM (
+    SELECT d0.n + 10*d1.n + 100*d2.n + 1000*d3.n + 10000*d4.n AS n
+      FROM digits AS d0
+      CROSS JOIN digits AS d1
+      CROSS JOIN digits AS d2
+      CROSS JOIN digits AS d3
+      CROSS JOIN digits AS d4
+  ) AS seq
+ WHERE seq.n < 20000;
+
+--enable_result_log
+SELECT COUNT(*) FROM t1 FORCE INDEX(PRIMARY) WHERE id BETWEEN 1 AND 20001;
+--disable_result_log
+
+DROP TABLE digits;
+DROP TABLE t1;

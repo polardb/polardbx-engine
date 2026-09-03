@@ -35,12 +35,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0btr0cur_h
 
 #include "btr0cur.h"
+#include "btr0types.h"
 #include "data0data.h"
 
 #include "lizard0data0types.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
+#include "page0types.h"
 
 namespace lizard {
+
 static inline gpp_no_t btr_cur_get_page_no(const btr_cur_t *cursor) {
   return btr_cur_get_block(cursor)->get_page_no();
 }
@@ -55,33 +58,97 @@ static inline gpp_no_t btr_cur_get_page_no(const btr_cur_t *cursor) {
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
+ * @param[in]     mode            search mode
  * @param[in]     latch_mode      latching mode
  * @param[in]     mtr             Mini-transaction handle
  *
  * @return        True and gpp offset if successful positioning, False otherwise
  */
-std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(
-    dict_index_t *clust_idx, const dict_index_t *sec_idx,
-    const dtuple_t *clust_ref, const rec_t *sec_rec, btr_pcur_t *clust_pcur,
-    const ulint *sec_offsets, ulint latch_mode, mtr_t *mtr);
+std::pair<bool, ulint> btr_cur_guess_clust_by_gpp(dict_index_t *clust_idx,
+                                                  const dict_index_t *sec_idx,
+                                                  const dtuple_t *clust_ref,
+                                                  const Slice *sec_slc,
+                                                  btr_pcur_t *clust_pcur,
+                                                  page_cur_mode_t mode, ulint latch_mode,
+    mtr_t *mtr);
 
-/** Writes the redo log record for a delete mark setting of
-  secondary index record.
-  @param[in,out]  rec        record
-  @param[in]      val        value to set
-  @param[in]      index      index of the record
-  @param[in]      trx_id     transaction id
-  @param[in]      roll_ptr   roll ptr to the undo log record
-  @param[in]      txn_rec    txn record info
-  @param[in]      offsets    offsets of the record
+/**
+ * Attempts to position a persistent cursor on a index record
+ * based on the gpp_no.
+ *
+ * @param[in]     idx             Index
+ * @param[in]     ref             Reference tuple for the index
+ * @param[in,out] btr_cur         Cursor for the index
+ * @param[in]     mode            search mode
+ * @param[in]     latch_mode      latching mode
+ * @param[in]     mtr             Mini-transaction handle
+ *
+ * @return        True if successful positioning, False otherwise
+ */
+bool btr_cur_guess_by_gpp_low(gpp_no_t gpp_no, dict_index_t *idx,
+                              const dtuple_t *ref, btr_cur_t *btr_cur,
+                              page_cur_mode_t mode, ulint latch_mode,
+                              mtr_t *mtr);
+
+/** Sets a secondary panda index record delete mark to true or false.
   @param[in]      layout     txn layout
-  @param[in]      page_zip   compressed page
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
   @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_panda_sec_rec_low(const txn_layout_t &layout,
+                                               btr_cur_t *cursor,
+                                               que_thr_t *thr, ulint flags,
+                                               bool val, mtr_t *mtr);
+
+/** Sets a secondary hippo index record delete mark to true or false.
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
+  @param[in]      sec_tid    secondary transaction id
+  @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_hippo_sec_rec_low(btr_cur_t *cursor,
+                                               que_thr_t *thr, ulint flags,
+                                               bool val, trx_id_t sec_tid,
+                                               mtr_t *mtr);
+
+/** Sets a secondary ancient index record delete mark to true or false.
+  @param[in]      cursor     cursor
+  @param[in]      thr        query thread
+  @param[in]      flags      flags
+  @param[in]      val        value to set
+  @param[in]      mtr        mtr
+ @return DB_SUCCESS, DB_LOCK_WAIT, or error number */
+dberr_t btr_cur_del_mark_set_ancient_sec_rec_low(btr_cur_t *cursor,
+                                                 que_thr_t *thr, ulint flags,
+                                                 bool val, mtr_t *mtr);
+
+/** Writes the redo log record for delete marking of a
+secondary index rec with tid column.
+@param[in]      rec        record
+@param[in]      index      index of the record
+@param[in]      trx_id     transaction id
+@param[in]      trx_id_pos position of the trx_id in the record
+@param[in]      mtr        mtr
 */
-extern void btr_cur_del_mark_set_sec_rec_log(
-    rec_t *rec, bool val, dict_index_t *index, trx_id_t trx_id,
-    roll_ptr_t roll_ptr, const txn_rec_t *txn_rec, ulint *offsets,
-    const txn_layout_t &layout, page_zip_des_t *page_zip, mtr_t *mtr);
+void btr_cur_del_mark_set_hippo_sec_rec_log(rec_t *rec,
+                                            const dict_index_t *index, bool val,
+                                            trx_id_t trx_id, ulint trx_id_pos,
+                                            mtr_t *mtr);
+
+/** Writes the redo log record for a delete mark setting of a normal secondary
+index record.
+@param[in]      rec        record
+@param[in]      val        value to set
+@param[in]      mtr        mtr
+*/
+void btr_cur_del_mark_set_ancient_sec_rec_log(rec_t *rec, /*!< in: record */
+                                              bool val, /*!< in: value to set */
+                                              mtr_t *mtr); /*!< in: mtr */
 
 /** Parses the redo log record for delete marking or unmarking of a panda
  index record.
@@ -92,9 +159,22 @@ extern void btr_cur_del_mark_set_sec_rec_log(
   @param[in]      index       index corresponding to page
  @return end of log record or NULL */
 extern byte *btr_cur_parse_del_mark_set_panda_sec_rec(byte *ptr, byte *end_ptr,
-                                                  page_t *page,
-                                                  page_zip_des_t *page_zip,
-                                                  dict_index_t *index);
+                                                      page_t *page,
+                                                      page_zip_des_t *page_zip,
+                                                      dict_index_t *index);
+
+/** Parses the redo log record for delete marking or unmarking of a
+  secondary index rec with tid column.
+  @param[in]      ptr         buffer
+  @param[in]      end_ptr     buffer end
+  @param[in,out]  page        page or NULL
+  @param[in,out]  page_zip    compressed page, or NULL
+  @param[in]      index       index corresponding to page
+ @return end of log record or NULL */
+extern byte *btr_cur_parse_del_mark_set_hippo_sec_rec(byte *ptr, byte *end_ptr,
+                                                      page_t *page,
+                                                      page_zip_des_t *page_zip,
+                                                      dict_index_t *index);
 
 extern void btr_cur_print_duplicate_error_in_uk_online(
     btr_cur_t *btr_cur, const dict_index_t *index, const dtuple_t *entry,
@@ -112,7 +192,7 @@ extern void btr_cur_print_duplicate_error_in_uk_online(
   @param[in]      trx     transaction
   @param[in/out]  entry   The entry to be inserted
   @param[in]      flags   care flags: BTR_NO_UNDO_LOG_FLAG, BTR_KEEP_SYS_FLAG
-  @param[in]      layout  TL_BAMBOO or TL_NONE
+  @param[in]      layout  TL_BAMBOO or TL_NONE or TL_LOTUS
 */
 extern void btr_cur_rlog_insert(dict_index_t *index, trx_t *trx,
                                 dtuple_t *entry, ulint flags,
@@ -130,7 +210,7 @@ extern void btr_cur_rlog_insert(dict_index_t *index, trx_t *trx,
   @param[in]      trx     transaction
   @param[in/out]  entry   The entry to be deleted
   @param[in]      flags   care flags: BTR_NO_UNDO_LOG_FLAG, BTR_KEEP_SYS_FLAG
-  @param[in]      layout  TL_BAMBOO or TL_NONE
+  @param[in]      layout  TL_BAMBOO or TL_NONE or TL_LOTUS
 */
 extern void btr_cur_rlog_delete(dict_index_t *index, trx_t *trx,
                                 dtuple_t *entry, ulint flags,
@@ -157,6 +237,45 @@ extern bool btr_cur_rlog_insert_try(dict_index_t *index, trx_t *trx,
 extern bool btr_cur_rlog_delete_try(dict_index_t *index, trx_t *trx,
                                     dtuple_t *entry, ulint flags,
                                     const txn_layout_t &layout);
+
+inline void btr_cur_sea_hit() {
+  if (srv_polarx_btree_search_mode) {
+    polarx_btree_search_mode_stat(true);
+  }
+  if (UNIV_UNLIKELY(srv_btr_search_enabled)) {
+    btr_cur_n_sea++;
+  }
+}
+inline void btr_cur_sea_miss() {
+  if (srv_polarx_btree_search_mode) {
+    polarx_btree_search_mode_stat(false);
+  }
+  if (UNIV_UNLIKELY(srv_btr_search_enabled)) {
+    btr_cur_n_non_sea++;
+  }
+}
+
+extern dberr_t btr_cur_optimistic_insert_spc(
+    ulint flags,                /*!< in: undo logging and locking flags: if not
+                                zero, the parameters index and thr should be
+                                specified */
+    const txn_layout_t &layout, /*!< in: txn layout */
+    btr_cur_t *cursor,          /*!< in: cursor on page after which to insert;
+                                cursor stays valid */
+    Slice **slc, Slice_ctx *sctx,
+    mem_heap_t **heap,   /*!< in/out: pointer to memory heap, or NULL */
+    dtuple_t *entry,     /*!< in/out: entry to insert */
+    big_rec_t **big_rec, /*!< out: big rec vector whose fields have to
+                         be stored externally by the caller, or
+                         NULL */
+    que_thr_t *thr,      /*!< in: query thread or NULL */
+    mtr_t *mtr);         /*!< in/out: mini-transaction;
+                         if this function returns DB_SUCCESS on
+                         a leaf page of a secondary index in a
+                         compressed tablespace, the caller must
+                         mtr_commit(mtr) before latching
+                         any further pages */
+
 }  // namespace lizard
 
 #endif

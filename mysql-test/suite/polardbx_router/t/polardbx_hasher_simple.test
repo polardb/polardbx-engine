@@ -1,0 +1,446 @@
+--echo #
+--echo # Test for PolarDB-X hasher function compatibility
+--echo #
+
+--echo #
+--echo # Test 1: Basic polardbx_hasher function usage
+--echo #
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  name VARCHAR(50),
+  value BIGINT
+);
+
+INSERT INTO t1 VALUES
+(1, 'test1', 100),
+(2, 'test2', 200),
+(3, 'test3', 300),
+(4, 'test4', 400),
+(5, 'test5', 500);
+
+--echo Test basic hasher function
+SELECT id, polardbx_hasher(id) FROM t1 ORDER BY id;
+SELECT name, polardbx_hasher(name) FROM t1 ORDER BY id;
+SELECT value, polardbx_hasher(value) FROM t1 ORDER BY id;
+
+--echo Test with multiple columns
+SELECT id, name, polardbx_hasher(id, name) FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 2: polardbx_hasher with range validation
+--echo #
+--echo Test valid range parameters
+SELECT id, polardbx_hasher(id, -9223372036854775807, 9223372036854775807) FROM t1 ORDER BY id;
+
+--echo Test specific range
+SELECT id, polardbx_hasher(id, -8757930400787925687, 9172397366371939626) FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 3: Edge cases for range validation
+--echo #
+SELECT id, polardbx_hasher(id, 6161172798010463909, 6161172798010463909) FROM t1 WHERE id = 1;
+
+--echo #
+--echo # Test 4: Error cases for range validation
+--echo #
+--echo Test invalid range (min > max) - should produce error
+--error ER_INVALID_HASH_RANGE
+SELECT id, polardbx_hasher(id, 100, 50) FROM t1 LIMIT 1;
+
+--echo Test out of range values - should produce error
+--echo Since we don't know the exact hash values, we'll use a narrow range that should fail
+--echo We'll first check what values we get to determine a proper test range
+--error ER_HASH_VALUE_OUT_OF_RANGE
+SELECT id, polardbx_hasher(id, 1, 2) as hash_val FROM t1 ORDER BY id;
+
+--echo #
+--echo # Test 5: Test with different data types
+--echo #
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  str_val VARCHAR(50),
+  int_val INT,
+  bigint_val BIGINT,
+  decimal_val DECIMAL(10,2),
+  float_val FLOAT,
+  double_val DOUBLE
+);
+
+INSERT INTO t2 VALUES
+(1, 'string_value', 123, 123456789012345, 999.99, 3.14, 2.718281828459045);
+
+--echo Test hasher with different data types
+SELECT id, polardbx_hasher(str_val) FROM t2;
+SELECT id, polardbx_hasher(int_val) FROM t2;
+SELECT id, polardbx_hasher(bigint_val) FROM t2;
+SELECT id, polardbx_hasher(decimal_val) FROM t2;
+SELECT id, polardbx_hasher(float_val) FROM t2;
+SELECT id, polardbx_hasher(double_val) FROM t2;
+
+--echo Test hasher with mixed data types
+SELECT id, polardbx_hasher(str_val, int_val, bigint_val) FROM t2;
+
+--echo #
+--echo # Test 6: Test with NULL values
+--echo #
+CREATE TABLE t3 (
+  id INT PRIMARY KEY,
+  nullable_col VARCHAR(50)
+);
+
+INSERT INTO t3 VALUES
+(1, 'non-null value'),
+(2, NULL);
+
+--echo Test hasher with NULL values
+SELECT id, nullable_col, polardbx_hasher(nullable_col) FROM t3;
+
+--echo Test hasher with mix of NULL and non-NULL values
+SELECT id, polardbx_hasher(id, nullable_col) FROM t3;
+
+--echo #
+--echo # Test 7: Performance test with larger dataset
+--echo #
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  data VARCHAR(100)
+);
+
+--echo Insert more data for performance testing
+let $i = 1;
+while ($i <= 100) {
+  eval INSERT INTO t4 VALUES ($i, CONCAT('data_', $i));
+  inc $i;
+}
+
+--echo Test hasher performance
+SELECT COUNT(*) as count,
+       MIN(polardbx_hasher(id)) as min_hash,
+       MAX(polardbx_hasher(id)) as max_hash,
+       AVG(polardbx_hasher(id)) as avg_hash
+FROM t4;
+
+--echo #
+--echo # Test 8: Test consistency of hash values
+--echo #
+--echo Hash values should be consistent across multiple calls
+CREATE TABLE t5 (
+  id INT PRIMARY KEY,
+  data VARCHAR(50)
+);
+
+INSERT INTO t5 VALUES (1, 'consistent_data');
+
+SELECT id, polardbx_hasher(data) as hash1 FROM t5;
+SELECT id, polardbx_hasher(data) as hash2 FROM t5;
+SELECT id, polardbx_hasher(data) as hash3 FROM t5;
+
+--echo Verify consistency - all hash values should be the same
+SELECT id,
+       polardbx_hasher(data) as hash1,
+       polardbx_hasher(data) as hash2,
+       polardbx_hasher(data) as hash3,
+       CASE
+         WHEN polardbx_hasher(data) = polardbx_hasher(data) AND
+              polardbx_hasher(data) = polardbx_hasher(data)
+         THEN 'CONSISTENT'
+         ELSE 'INCONSISTENT'
+       END as consistency_check
+FROM t5;
+
+--echo #
+--echo # Test 9: Test with special characters and unicode
+--echo #
+--echo Test hasher with special characters and unicode
+CREATE TABLE t6 (
+  id INT PRIMARY KEY,
+  special_chars VARCHAR(100)
+);
+
+INSERT INTO t6 VALUES
+(1, 'normal_text'),
+(2, 'special!@#$%^&*()chars'),
+(3, 'unicode_测试_数据'),
+(4, 'emoji_😀_🌟_🎉'),
+(5, 'mixed_混合_🔤_123');
+
+SELECT id, special_chars, polardbx_hasher(special_chars) FROM t6 ORDER BY id;
+
+--echo #
+--echo # Test 10: Test boundary values
+--echo #
+--echo Test hasher with boundary values
+CREATE TABLE t7 (
+  id INT PRIMARY KEY,
+  tiny_int_col TINYINT,
+  small_int_col SMALLINT,
+  medium_int_col MEDIUMINT,
+  int_col INT,
+  big_int_col BIGINT
+);
+
+INSERT INTO t7 VALUES
+(1, -128, -32768, -8388608, -2147483648, -9223372036854775808),
+(2, 127, 32767, 8388607, 2147483647, 9223372036854775807);
+
+SELECT id,
+       polardbx_hasher(tiny_int_col),
+       polardbx_hasher(small_int_col),
+       polardbx_hasher(medium_int_col),
+       polardbx_hasher(int_col),
+       polardbx_hasher(big_int_col)
+FROM t7 ORDER BY id;
+
+--echo #
+--echo # Test 11: Test with 12 parameters (maximum allowed)
+--echo #
+--echo Test hasher with maximum number of parameters
+CREATE TABLE t8 (
+  id1 INT, id2 INT, id3 INT, id4 INT, id5 INT,
+  id6 INT, id7 INT, id8 INT, id9 INT, id10 INT,
+  id11 INT, id12 INT
+);
+
+INSERT INTO t8 VALUES (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+
+--echo Test with maximum number of parameters
+SELECT polardbx_hasher(id1, id2, id3, id4, id5, id6, id7, id8, id9, id10, id11, id12) FROM t8;
+
+--echo #
+--echo # Test 12: Test error case with out of range hash value
+--echo #
+--echo Create a test case where we can verify the out of range error
+--echo We'll use a very narrow range that should fail for most values
+CREATE TABLE t9 (
+  id INT PRIMARY KEY,
+  data VARCHAR(50)
+);
+
+INSERT INTO t9 VALUES (1, 'test_data');
+
+--echo This should fail if the hash value is outside the narrow range
+--echo Using a range that's unlikely to contain the hash value
+--error ER_HASH_VALUE_OUT_OF_RANGE
+SELECT polardbx_hasher(id, 100, 200) FROM t9 WHERE id = 1;
+
+--echo #
+--echo # Test 13: Test with decimal values that require conversion
+--echo #
+--echo Test hasher with decimal values
+CREATE TABLE t10 (
+  id INT PRIMARY KEY,
+  dec_val DECIMAL(15,5)
+);
+
+INSERT INTO t10 VALUES (1, 12345.67890);
+
+SELECT id, polardbx_hasher(dec_val) FROM t10;
+
+--echo #
+--echo # Test 14: Test with string values that require conversion
+--echo #
+--echo Test hasher with string values
+CREATE TABLE t11 (
+  id INT PRIMARY KEY,
+  str_num VARCHAR(20)
+);
+
+INSERT INTO t11 VALUES (1, '12345'), (2, '67890');
+
+SELECT id, polardbx_hasher(str_num) FROM t11 ORDER BY id;
+
+--echo #
+--echo # Test 15: Test with all supported numeric types from PolarDB-X
+--echo #
+--echo Test hasher with all supported numeric types
+CREATE TABLE t12 (
+  id INT PRIMARY KEY,
+  -- Signed integer types
+  tiny_int_col TINYINT,
+  small_int_col SMALLINT,
+  medium_int_col MEDIUMINT,
+  int_col INT,
+  big_int_col BIGINT,
+  -- Unsigned integer types
+  tiny_int_unsigned_col TINYINT UNSIGNED,
+  small_int_unsigned_col SMALLINT UNSIGNED,
+  medium_int_unsigned_col MEDIUMINT UNSIGNED,
+  int_unsigned_col INT UNSIGNED,
+  big_int_unsigned_col BIGINT UNSIGNED
+);
+
+INSERT INTO t12 VALUES (
+  1,
+  -- Signed values
+  -128,      -- TINYINT min
+  -32768,    -- SMALLINT min
+  -8388608,  -- MEDIUMINT min
+  -2147483648, -- INT min
+  -9223372036854775808, -- BIGINT min
+  -- Unsigned values
+  255,       -- TINYINT UNSIGNED max
+  65535,     -- SMALLINT UNSIGNED max
+  16777215,  -- MEDIUMINT UNSIGNED max
+  4294967295, -- INT UNSIGNED max
+  18446744073709551615 -- BIGINT UNSIGNED max
+);
+
+--echo Test hasher with all numeric types
+SELECT id,
+       polardbx_hasher(tiny_int_col),
+       polardbx_hasher(small_int_col),
+       polardbx_hasher(medium_int_col),
+       polardbx_hasher(int_col),
+       polardbx_hasher(big_int_col),
+       polardbx_hasher(tiny_int_unsigned_col),
+       polardbx_hasher(small_int_unsigned_col),
+       polardbx_hasher(medium_int_unsigned_col),
+       polardbx_hasher(int_unsigned_col),
+       polardbx_hasher(big_int_unsigned_col)
+FROM t12;
+
+--echo Test hasher with mixed signed and unsigned types
+SELECT id, polardbx_hasher(
+  tiny_int_col,
+  small_int_col,
+  medium_int_col,
+  int_col,
+  big_int_col,
+  tiny_int_unsigned_col,
+  small_int_unsigned_col,
+  medium_int_unsigned_col,
+  int_unsigned_col,
+  big_int_unsigned_col
+) FROM t12;
+
+--echo #
+--echo # Test 16: Test with all supported date/time types from PolarDB-X
+--echo #
+--echo Test hasher with all supported date/time types
+CREATE TABLE t13 (
+  id INT PRIMARY KEY,
+  -- Date/time types
+  date_col DATE,
+  datetime_col DATETIME,
+  timestamp_col TIMESTAMP
+);
+
+INSERT INTO t13 VALUES (
+  1,
+  '2023-01-01',
+  '2023-01-01 12:30:45',
+  '2023-01-01 12:30:45'
+);
+
+--echo Test hasher with date/time types
+SELECT id,
+       polardbx_hasher(date_col),
+       polardbx_hasher(datetime_col),
+       polardbx_hasher(timestamp_col)
+FROM t13;
+
+--echo Test hasher with mixed date/time types
+SELECT id, polardbx_hasher(
+  date_col,
+  datetime_col,
+  timestamp_col
+) FROM t13;
+
+--echo #
+--echo # Test 17: Test with all supported binary types from PolarDB-X
+--echo #
+--echo Test hasher with all supported binary types
+CREATE TABLE t14 (
+  id INT PRIMARY KEY,
+  -- Binary types
+  varbinary_col VARBINARY(255),
+  binary_col BINARY(10)
+);
+
+INSERT INTO t14 VALUES (
+  1,
+  UNHEX('48656C6C6F20576F726C64'), -- "Hello World" in hex
+  UNHEX('4D7953514C')             -- "MySQL" in hex
+);
+
+--echo Test hasher with binary types
+SELECT id,
+       polardbx_hasher(varbinary_col),
+       polardbx_hasher(binary_col)
+FROM t14;
+
+--echo Test hasher with mixed binary types
+SELECT id, polardbx_hasher(
+  varbinary_col,
+  binary_col
+) FROM t14;
+
+--echo #
+--echo # Test 18: Test with all supported charsets and collations from PolarDB-X
+--echo #
+--echo Test hasher with all supported charsets and collations
+--echo Test ASCII charset
+CREATE TABLE t15_ascii (
+  id INT PRIMARY KEY,
+  ascii_col CHAR(50) CHARACTER SET ascii COLLATE ascii_bin
+);
+
+INSERT INTO t15_ascii VALUES (1, 'ASCII text');
+
+--echo Test LATIN1 charset with various collations
+CREATE TABLE t16_latin1 (
+  id INT PRIMARY KEY,
+  latin1_bin_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_bin,
+  latin1_general_ci_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_general_ci,
+  latin1_general_cs_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_general_cs
+);
+
+INSERT INTO t16_latin1 VALUES (
+  1,
+  'LATIN1 binary text',
+  'LATIN1 general ci text',
+  'LATIN1 general cs text'
+);
+
+--echo Test UTF8MB4 charset with various collations
+CREATE TABLE t17_utf8mb4 (
+  id INT PRIMARY KEY,
+  utf8mb4_bin_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+  utf8mb4_general_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+  utf8mb4_unicode_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  utf8mb4_0900_ai_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+);
+
+INSERT INTO t17_utf8mb4 VALUES (
+  1,
+  'UTF8MB4 binary text',
+  'UTF8MB4 general ci text',
+  'UTF8MB4 unicode ci text',
+  'UTF8MB4 0900 ai ci text'
+);
+
+--echo Test hasher with ASCII charset
+SELECT id, polardbx_hasher(ascii_col) FROM t15_ascii;
+
+--echo Test hasher with LATIN1 charset and various collations
+SELECT id,
+       polardbx_hasher(latin1_bin_col),
+       polardbx_hasher(latin1_general_ci_col),
+       polardbx_hasher(latin1_general_cs_col)
+FROM t16_latin1;
+
+--echo Test hasher with UTF8MB4 charset and various collations
+SELECT id,
+       polardbx_hasher(utf8mb4_bin_col),
+       polardbx_hasher(utf8mb4_general_ci_col),
+       polardbx_hasher(utf8mb4_unicode_ci_col),
+       polardbx_hasher(utf8mb4_0900_ai_ci_col)
+FROM t17_utf8mb4;
+
+--echo Test hasher with mixed charsets
+SELECT a.id,
+       polardbx_hasher(a.ascii_col, l.latin1_bin_col, u.utf8mb4_bin_col)
+FROM t15_ascii a, t16_latin1 l, t17_utf8mb4 u
+WHERE a.id = l.id AND l.id = u.id;
+
+DROP TABLE t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15_ascii, t16_latin1, t17_utf8mb4;

@@ -54,7 +54,7 @@ get_key_value()
 usage()
 {
 cat <<EOF
-Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-i none|master|xpaxos] [-r]
+Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|ubsan|valg] [-o <ssl_path>] [-i none|master|xpaxos] [-r]
        Or
        $0 [-h | --help]
   -t                      Select the build type.
@@ -63,6 +63,7 @@ Usage: $0 [-t debug|release] [-d <dest_dir>] [-s <server_suffix>] [-g asan|tsan|
   -s                      Set the server suffix.
   -g                      Enable the sanitizer of compiler, asan for AddressSanitizer, tsan for ThreadSanitizer, ubsan for UndefinedBehaviorSanitizer, valg for valgrind
   -c                      Enable GCC coverage compiler option
+  -o                      Set custom OpenSSL installation path for WITH_SSL (e.g. /home/user/openssl-1.1.1s-install)
   -i                      initialize mysql server
   -r                      rebuild without make chean
   -h, --help              Show this help message.
@@ -108,6 +109,11 @@ parse_options()
     -i)
       shift
       initialize_type=`get_key_value "$1"`;;
+    -o=*)
+      ssl_path=`get_key_value "$1"`;;
+    -o)
+      shift
+      ssl_path=`get_key_value "$1"`;;
     -r)
       with_rebuild=1;;
     -h | --help)
@@ -232,6 +238,7 @@ enable_lizard_dbg=0
 initialize_type="none"
 with_rebuild=0
 with_ssl=system
+ssl_path=""
 
 parse_options "$@"
 
@@ -247,6 +254,7 @@ if [[ x"$build_type" = x"debug" ]]; then
   else
     gcov=0
   fi
+  with_ssl=openssl
 elif [[ x"$build_type" = x"release" ]]; then
   build_type="Release"
   with_ssl=openssl
@@ -262,6 +270,16 @@ else
   exit 1
 fi
 
+# Override with_ssl if custom ssl_path is provided
+if [ -n "$ssl_path" ]; then
+  if [ -f "$ssl_path/include/openssl/ssl.h" ]; then
+    with_ssl="$ssl_path"
+  else
+    echo "Error: $ssl_path/include/openssl/ssl.h not found. Invalid OpenSSL installation path."
+    exit 1
+  fi
+fi
+
 server_suffix="-""$server_suffix"
 
 if [[ x"$build_type" = x"RelWithDebInfo" ]]; then
@@ -272,7 +290,7 @@ elif [[ x"$build_type" = x"Debug" ]]; then
   COMMON_FLAGS="-O0 -g3 -fstack-protector-strong"
 fi
 
-COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer"
+COMMON_FLAGS="$COMMON_FLAGS -fdiagnostics-color=always -fexceptions -fno-omit-frame-pointer -fno-strict-aliasing"
 
 if [ x"$mach_type" = x"x86_64" ]; then # X86
   COMMON_FLAGS="$COMMON_FLAGS"
@@ -337,6 +355,23 @@ else
   rm -rf CMakeCache.txt
   make clean
   cat extra/boost/boost_1_77_0.tar.bz2.*  > extra/boost/boost_1_77_0.tar.bz2
+
+  # === Compilation acceleration options ===
+  FAST_BUILD_OPTS=""
+  # 1. Use ccache to accelerate compilation
+  if command -v ccache &>/dev/null; then
+    FAST_BUILD_OPTS="$FAST_BUILD_OPTS -DCMAKE_C_COMPILER_LAUNCHER=ccache"
+    FAST_BUILD_OPTS="$FAST_BUILD_OPTS -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+    echo ">>> ccache enabled for faster compilation"
+  fi
+  # 2. Use gold linker for faster linking
+  if [ -x "/opt/rh/devtoolset-11/root/usr/bin/ld.gold" ] || command -v ld.gold &>/dev/null; then
+    FAST_BUILD_OPTS="$FAST_BUILD_OPTS -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=gold"
+    FAST_BUILD_OPTS="$FAST_BUILD_OPTS -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=gold"
+    FAST_BUILD_OPTS="$FAST_BUILD_OPTS -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=gold"
+    echo ">>> gold linker enabled for faster linking"
+  fi
+
   cmake .                               \
       -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
       -DFORCE_INSOURCE_BUILD=1           \
@@ -350,7 +385,7 @@ else
       -DENABLE_GCOV=$gcov                \
       -DENABLE_EXPERIMENT_SYSVARS=1      \
       -DINSTALL_LAYOUT=STANDALONE        \
-      -DMYSQL_MAINTAINER_MODE=0          \
+      -DMYSQL_MAINTAINER_MODE=1          \
       -DWITH_SSL=$with_ssl               \
       -DWITH_ZLIB=bundled                \
       -DWITH_ZSTD=bundled                \
@@ -373,15 +408,28 @@ else
       -DWITH_BOOST="./extra/boost/boost_1_77_0.tar.bz2" \
       -DDOWNLOAD_BOOST=0                \
       -DPOLARDBX_VERSION_EXTRA="X-Cluster" \
-      -DPOLARDBX_PRODUCT_VERSION="2.5.0" \
-      -DPOLARDBX_ENGINE_VERSION="8.4.20" \
+      -DPOLARDBX_PRODUCT_VERSION="2.6.0" \
+      -DPOLARDBX_ENGINE_VERSION="8.4.21" \
       -DPOLARDBX_RELEASE_DATE="20241014" \
+      -DWITH_JEMALLOC=no                 \
       -DWITH_UNIT_TESTS=$debug           \
-      -DWITH_TESTS=$debug
-      #-DWITH_JEMALLOC=no                 \
+      -DWITH_TESTS=$debug                \
+      -DWITH_ENCDB=1                     \
+      -DWITH_NDB=OFF                     \
+      -DWITH_POLARDBX_LICENSE=0          \
+      -DWITH_POLARDBX_ENC_CHECKSUM=0     \
+      -DWITH_NDBCLUSTER_STORAGE_ENGINE=OFF \
+      -DWITH_ROUTER=OFF   $FAST_BUILD_OPTS
+
+  # Workaround: in-source build timestamp loop (community MySQL uses out-of-source build).
+  # cmake writes cmake.check_cache/progress.marks AFTER generating Makefile, so their
+  # timestamps are always newer. make's --check-build-system then triggers cmake re-run
+  # on every invocation, which regenerates opensslconf.h and causes ~900 files to recompile.
+  # NOTE: if you run cmake manually, you also need to run 'touch Makefile' afterwards.
+  touch Makefile
 fi
 
-make -j $(nproc) install
+make -j $(nproc) 
 
 if [[ x"$build_type" = x"Release" ]]; then
   rm -rf $dest_dir/mysql-test

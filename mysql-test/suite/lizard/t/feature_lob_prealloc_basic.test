@@ -1,0 +1,92 @@
+# Basic test for LOB prealloc
+
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+--echo ####################################################################################
+--echo # 1. prepare
+--echo ####################################################################################
+
+CREATE TABLE `t`(
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  json_col JSON,
+  name VARCHAR(100) AS (json_col->>'$.name'),
+  age INT AS (json_col->'$.age')
+);
+
+CREATE TABLE `t_compressed`(
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `data` mediumblob NOT NULL,
+  PRIMARY KEY (`id`)
+) ROW_FORMAT=COMPRESSED
+  KEY_BLOCK_SIZE=8;
+
+--echo ####################################################################################
+--echo # 2. lob prealloc is not supported for compressed table
+--echo ####################################################################################
+
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+SET @fails_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_fail_no_space');
+SET @under_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_underestimate_pages');
+
+insert into t_compressed values(1, repeat('1', 16384));
+
+update t_compressed set data = repeat('2', 16384) where id = 1;
+
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+
+# not supported for compressed table, so Lizard_lob_prealloc_pages should not be increased.
+if (`SELECT CONVERT(@alloc_pages_after, SIGNED) > CONVERT(@alloc_pages_bofore, SIGNED)`)
+{
+    select @alloc_pages_after, @alloc_pages_bofore;
+  --echo "Unexpected: Lizard_lob_prealloc_pages should not be increased."
+  --die
+}
+
+--echo ####################################################################################
+--echo # 3. lob prealloc is not supported for partially update
+--echo ####################################################################################
+
+INSERT INTO t(json_col) VALUES
+(JSON_OBJECT('name', 'Joe', 'age', 24,
+             'data', REPEAT('x', 10 * 1000 * 1000)));
+
+SET @alloc_pages_bofore = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+
+update t set json_col = json_set(json_col, '$.age', age + 1);
+
+SET @alloc_pages_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_pages');
+
+# not supported for partially update, so Lizard_lob_prealloc_pages should not be increased.
+if (`SELECT CONVERT(@alloc_pages_after, SIGNED) > CONVERT(@alloc_pages_bofore, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_pages should not be increased."
+  --die
+}
+
+--echo ####################################################################################
+--echo # 4. check Lizard_lob_prealloc_fail_no_space and Lizard_lob_prealloc_underestimate_pages
+--echo ####################################################################################
+
+SET @fails_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_fail_no_space');
+SET @under_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME ='Lizard_lob_prealloc_underestimate_pages');
+
+# Neither counter should have grown during this test run
+if (`SELECT CONVERT(@fails_after, SIGNED) != CONVERT(@fails_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_fail_no_space increased during this test."
+  --die
+}
+
+if (`SELECT CONVERT(@under_after, SIGNED) != CONVERT(@under_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_underestimate_pages increased during this test."
+  --die
+}
+
+--echo ####################################################################################
+--echo # 5. cleanup
+--echo ####################################################################################
+
+drop table t;
+drop table t_compressed;

@@ -93,6 +93,15 @@ typedef struct PSI_data_lock_bootstrap PSI_data_lock_bootstrap;
 
 #ifdef HAVE_PSI_DATA_LOCK_1
 
+enum PSI_identifier {
+  PSI_IDENTIFIER_NONE = 0,
+  PSI_IDENTIFIER_SCHEMA = 1,
+  PSI_IDENTIFIER_TABLE = 2,
+  PSI_IDENTIFIER_INDEX = 3,
+  PSI_IDENTIFIER_PARTITION = 4,
+  PSI_IDENTIFIER_SUBPARTITION = 5
+};
+
 /**
   Server interface, row lock container.
   This is the interface exposed
@@ -124,6 +133,23 @@ class PSI_server_data_lock_container {
     @sa cache_string
   */
   virtual const char *cache_data(const char *ptr, size_t length) = 0;
+
+  /**
+    Add an identifier in the container cache.
+    Depending on the identifier kind, the string given may be
+    normalized, to comply with lower_case_table_names,
+    before adding the string into the cache.
+    Beware that the normalized string length may differ
+    from the input string length.
+    @param[in] kind Identifier kind, used for string normalization
+    @param[in] str Identifier input string
+    @param[in] length Identifier input string length
+    @param[out] cached_ptr Cached, possibly normalized, identifier string
+    @param[out] cached_length Cached identifier string length
+  */
+  virtual void cache_identifier(PSI_identifier kind, const char *str,
+                                size_t length, const char **cached_ptr,
+                                size_t *cached_length) = 0;
 
   /**
     Check if the container accepts data for a particular engine.
@@ -177,7 +203,7 @@ class PSI_server_data_lock_container {
                              size_t sub_partition_name_length) = 0;
 
   /** Add a row to table performance_schema.data_locks. */
-  virtual size_t add_lock_row(
+  virtual void add_lock_row(
       const char *engine, size_t engine_length, const char *engine_lock_id,
       size_t engine_lock_id_length, ulonglong transaction_id,
       ulonglong thread_id, ulonglong event_id, const char *table_schema,
@@ -307,9 +333,8 @@ class PSI_engine_data_lock_iterator {
     @param engine_lock_id The lock id to search
     @param engine_lock_id_length Lock id length
     @param with_lock_data True if column LOCK_DATA is required.
-    @return true if the iterator is done
   */
-  virtual bool fetch(PSI_server_data_lock_container *container,
+  virtual void fetch(PSI_server_data_lock_container *container,
                      const char *engine_lock_id, size_t engine_lock_id_length,
                      bool with_lock_data) = 0;
 };
@@ -333,9 +358,8 @@ class PSI_engine_data_lock_wait_iterator {
     @param requesting_engine_lock_id_length The requesting lock id length
     @param blocking_engine_lock_id The blocking lock id to search
     @param blocking_engine_lock_id_length The blocking lock id length
-    @return true if the iterator is done
   */
-  virtual bool fetch(PSI_server_data_lock_wait_container *container,
+  virtual void fetch(PSI_server_data_lock_wait_container *container,
                      const char *requesting_engine_lock_id,
                      size_t requesting_engine_lock_id_length,
                      const char *blocking_engine_lock_id,

@@ -1,0 +1,150 @@
+##############################################
+# Coverage gaps identified in code review:    #
+#   1. lazy-cleanup orphan-row reclamation    #
+#      (Vidx_invalidate_skip_* counter delta) #
+#   2. trigger / sub-query DML path           #
+#   3. DDL failure rollback (failed_before_vidx_ddl) #
+#                                             #
+# Note: FTWRL-vs-vidx interaction is not      #
+#   testable from SQL layer — base-table DML  #
+#   is blocked by SQL-layer GRL before        #
+#   reaching hlindex_indep_dml.  The          #
+#   ignore_global_read_lock=true flag in      #
+#   trans_commit_stmt mirrors dd              #
+#   store_statistics_record and prevents a    #
+#   double GRL check on the inner attachable. #
+##############################################
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+--echo
+--echo ##############################################
+--echo # 1. Lazy-cleanup orphan-row reclamation     #
+--echo #    Vidx_invalidate_skip_* counter is       #
+--echo #    monotonic; indep_dml_commit grows.      #
+--echo ##############################################
+
+# Capture baseline counters
+SELECT VARIABLE_VALUE INTO @sk_nf_before FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_invalidate_skip_not_found';
+SELECT VARIABLE_VALUE INTO @ic_before FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+UPDATE t1 SET v = VEC_FROMTEXT('[2,2,2]') WHERE id = 1;
+UPDATE t1 SET v = VEC_FROMTEXT('[3,3,3]') WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+
+SELECT VARIABLE_VALUE INTO @sk_nf_after FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_invalidate_skip_not_found';
+SELECT VARIABLE_VALUE INTO @ic_after FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @sk_nf_after >= @sk_nf_before AS lazy_clean_monotonic;
+SELECT @ic_after > @ic_before AS indep_commits_grew;
+
+--echo
+--echo ##############################################
+--echo # 2. trigger / stored function DML path      #
+--echo #    Verifies in_sub_stmt save/clear in      #
+--echo #    hlindex_indep_dml                       #
+--echo ##############################################
+
+# To exercise the in_sub_stmt > 0 branch we need vidx DML to occur
+# *inside* a trigger / SP body, not at the top level.  Concretely:
+# the source table (t_src) has NO vidx; the trigger fires on t_src
+# and writes INTO t1 (WHICH HAS vidx).  When the trigger body's
+# INSERT INTO t1 reaches mhnsw_insert, thd->in_sub_stmt > 0 — this
+# is the Indep_dml_scope save/clear path that the previous version
+# of this case failed to cover.
+CREATE TABLE t_src (id INT PRIMARY KEY, payload INT) ENGINE=InnoDB;
+
+DELIMITER //;
+CREATE TRIGGER tr_src_ai AFTER INSERT ON t_src
+FOR EACH ROW
+BEGIN
+  INSERT INTO t1(a, v) VALUES (200 + NEW.id,
+                               VEC_FROMTEXT(CONCAT('[', NEW.payload, ',',
+                                                   NEW.payload, ',',
+                                                   NEW.payload, ']')));
+END//
+DELIMITER ;//
+
+SELECT VARIABLE_VALUE INTO @ic_trig_before FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+# This top-level INSERT triggers the vidx-target INSERT INSIDE the
+# trigger body — that is the in_sub_stmt > 0 vidx DML we're after.
+INSERT INTO t_src VALUES (1, 33);
+
+SELECT VARIABLE_VALUE INTO @ic_trig_after FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+# The trigger-body INSERT must have produced an indep-DML commit;
+# without the in_sub_stmt save/clear in Indep_dml_scope::Impl::ctor
+# this would either crash on trans_commit_stmt's `assert(!in_sub_stmt)`
+# or silently skip the inner commit.
+SELECT @ic_trig_after > @ic_trig_before AS trigger_body_indep_commit;
+SELECT COUNT(*) AS t1_has_trigger_row FROM t1 WHERE a = 201;
+
+# Sub-query write path: INSERT … SELECT with vector subquery
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t2(a, v) SELECT a + 100, v FROM t1
+  WHERE id IN (SELECT id FROM t1 WHERE a > 0);
+SELECT COUNT(*) > 0 AS t2_has_rows FROM t2;
+
+DROP TRIGGER tr_src_ai;
+DROP TABLE t_src;
+DROP TABLE t2;
+
+--echo
+--echo ##############################################
+--echo # 3. DDL failure rollback                    #
+--echo #    failed_before_vidx_ddl injects a        #
+--echo #    hlindex creation failure                #
+--echo ##############################################
+
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3)
+) ENGINE = InnoDB;
+
+SET SESSION debug = '+d,failed_before_vidx_ddl';
+--replace_regex /#sql-[0-9a-f_]+/#sql-XXXX_XX/ /vidx_[0-9]+_/vidx_NNN_/
+--error ER_VECTOR_INDEX_FAILED
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+SET SESSION debug = '-d,failed_before_vidx_ddl';
+
+# Verify table has no vector index after failed ALTER
+SHOW CREATE TABLE t3;
+
+DROP TABLE t3;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

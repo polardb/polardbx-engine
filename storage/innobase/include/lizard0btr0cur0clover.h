@@ -27,7 +27,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /** @file include/lizard0btr0cur0clover.h
    Lizard index tree clover operation.
 
-
  Created 2024-04-12 by Yichang.Song
  *******************************************************/
 
@@ -35,7 +34,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0btr0cur0clover_h
 
 #include "btr0cur.h"
-#include "data0data.h"
 
 namespace lizard {
 /**

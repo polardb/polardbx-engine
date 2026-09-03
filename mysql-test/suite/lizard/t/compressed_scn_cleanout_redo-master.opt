@@ -1,0 +1,1 @@
+--innodb_undo_retention=9000 --innodb_txn_retention=9000 --innodb_scn_history_interval=1

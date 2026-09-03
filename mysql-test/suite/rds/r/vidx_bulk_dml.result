@@ -1,0 +1,303 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# ========================================
+# 1. Prepare - Create table with vector index
+# ========================================
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# ========================================
+# 2. Single transaction with 2000 row INSERT
+# ========================================
+# Insert 2000 rows in a single transaction
+# Verify row count
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2000
+# Verify ANN query works
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 10;
+
+# ========================================
+# 3. Verify all data is queryable
+# ========================================
+# Compare COUNT with ANN query accessible rows
+# Full table scan count:
+SELECT COUNT(*) AS full_scan_count FROM t1;
+full_scan_count
+2000
+# Verify vector index scan can access data (no crash)
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.1,0.2,0.3,0.4,0.5]")) LIMIT 20;
+
+# ========================================
+# 4. Bulk DELETE operation
+# ========================================
+# Delete rows where id > 1500
+# Before delete:
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+2000
+DELETE FROM t1 WHERE id > 1500;
+# After delete:
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1500
+# Verify ANN query after bulk delete
+SELECT id FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 10;
+
+# ========================================
+# 5. Bulk UPDATE operation
+# ========================================
+# Update vectors for rows with id between 100 and 200
+# Verify update
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id BETWEEN 100 AND 105 ORDER BY id;
+id	VEC_TOTEXT(v)
+100	[100,100,100,100,100]
+101	[101,101,101,101,101]
+102	[102,102,102,102,102]
+103	[103,103,103,103,103]
+104	[104,104,104,104,104]
+105	[105,105,105,105,105]
+# ANN query for updated data
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[150,150,150,150,150]")) LIMIT 5;
+id	VEC_TOTEXT(v)
+150	[150,150,150,150,150]
+151	[151,151,151,151,151]
+149	[149,149,149,149,149]
+152	[152,152,152,152,152]
+148	[148,148,148,148,148]
+
+# ========================================
+# 6. Small cache size stress test
+# ========================================
+# Save original cache size
+SET @original_cache_size = @@GLOBAL.vidx_hnsw_cache_size;
+# Set small cache size (1MB)
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+# Create new table for cache test
+CREATE TABLE t_cache (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert data with small cache
+# Verify data with small cache
+SELECT COUNT(*) FROM t_cache;
+COUNT(*)
+500
+# Execute multiple ANN queries to test cache behavior
+SELECT id FROM t_cache FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.1,0.1,0.1,0.1,0.1]")) LIMIT 5;
+SELECT id FROM t_cache FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+SELECT id FROM t_cache FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.9,0.9,0.9,0.9,0.9]")) LIMIT 5;
+# Insert more data to trigger cache pressure
+SELECT COUNT(*) FROM t_cache;
+COUNT(*)
+1000
+# Query after more inserts with small cache
+SELECT id FROM t_cache FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1.5,1.5,1.5,1.5,1.5]")) LIMIT 5;
+# Restore original cache size
+SET GLOBAL vidx_hnsw_cache_size = @original_cache_size;
+DROP TABLE t_cache;
+
+# ========================================
+# 7. Large transaction COMMIT consistency
+# ========================================
+# Insert data and verify ANN query matches full scan results
+CREATE TABLE t_consistency (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert deterministic data for consistency check
+# Query vector: [50, 100, 150, 200, 250]
+# Full table scan (ground truth):
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[50,100,150,200,250]")) AS dist 
+FROM t_consistency FORCE INDEX(PRIMARY) 
+ORDER BY dist, id LIMIT 5;
+id	VEC_TOTEXT(v)	dist
+51	[50,100,150,200,250]	0
+50	[51,102,153,204,255]	7.416198487095663
+52	[49,98,147,196,245]	7.416198487095663
+49	[52,104,156,208,260]	14.832396974191326
+53	[48,96,144,192,240]	14.832396974191326
+# Vector index scan:
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[50,100,150,200,250]")) AS dist 
+FROM t_consistency FORCE INDEX(`vi`) 
+ORDER BY dist, id LIMIT 5;
+id	VEC_TOTEXT(v)	dist
+51	[50,100,150,200,250]	0
+50	[51,102,153,204,255]	7.416198487095663
+52	[49,98,147,196,245]	7.416198487095663
+49	[52,104,156,208,260]	14.832396974191326
+53	[48,96,144,192,240]	14.832396974191326
+DROP TABLE t_consistency;
+
+# ========================================
+# 8. Mixed DML operations in single transaction
+# ========================================
+CREATE TABLE t_mixed (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Initial data
+INSERT INTO t_mixed(v) VALUES 
+(VEC_FROMTEXT("[1,1,1,1,1]")),
+(VEC_FROMTEXT("[2,2,2,2,2]")),
+(VEC_FROMTEXT("[3,3,3,3,3]")),
+(VEC_FROMTEXT("[4,4,4,4,4]")),
+(VEC_FROMTEXT("[5,5,5,5,5]"));
+# Mixed DML in single transaction
+BEGIN;
+INSERT INTO t_mixed(v) VALUES (VEC_FROMTEXT("[6,6,6,6,6]"));
+UPDATE t_mixed SET v = VEC_FROMTEXT("[10,10,10,10,10]") WHERE id = 1;
+DELETE FROM t_mixed WHERE id = 2;
+INSERT INTO t_mixed(v) VALUES (VEC_FROMTEXT("[7,7,7,7,7]"));
+COMMIT;
+# Verify final state
+SELECT id, VEC_TOTEXT(v) FROM t_mixed ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[10,10,10,10,10]
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+5	[5,5,5,5,5]
+6	[6,6,6,6,6]
+7	[7,7,7,7,7]
+# Verify ANN query
+SELECT id, VEC_TOTEXT(v) FROM t_mixed FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5,5,5]")), id LIMIT 5;
+id	VEC_TOTEXT(v)
+5	[5,5,5,5,5]
+4	[4,4,4,4,4]
+6	[6,6,6,6,6]
+3	[3,3,3,3,3]
+7	[7,7,7,7,7]
+DROP TABLE t_mixed;
+
+# ========================================
+# 9. Bulk INSERT with REPLACE behavior
+# ========================================
+CREATE TABLE t_replace (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Initial insert
+INSERT INTO t_replace(id, v) VALUES 
+(1, VEC_FROMTEXT("[1,1,1,1,1]")),
+(2, VEC_FROMTEXT("[2,2,2,2,2]")),
+(3, VEC_FROMTEXT("[3,3,3,3,3]"));
+# REPLACE to update existing rows
+REPLACE INTO t_replace(id, v) VALUES 
+(1, VEC_FROMTEXT("[10,10,10,10,10]")),
+(2, VEC_FROMTEXT("[20,20,20,20,20]")),
+(4, VEC_FROMTEXT("[4,4,4,4,4]"));
+# Verify data
+SELECT id, VEC_TOTEXT(v) FROM t_replace ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[10,10,10,10,10]
+2	[20,20,20,20,20]
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+# Verify ANN query reflects changes
+SELECT id, VEC_TOTEXT(v) FROM t_replace FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10,10,10]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[10,10,10,10,10]
+4	[4,4,4,4,4]
+3	[3,3,3,3,3]
+DROP TABLE t_replace;
+
+# ========================================
+# 10. Bulk INSERT ON DUPLICATE KEY UPDATE
+# ========================================
+CREATE TABLE t_upsert (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Initial data
+INSERT INTO t_upsert(id, v) VALUES 
+(1, VEC_FROMTEXT("[1,1,1,1,1]")),
+(2, VEC_FROMTEXT("[2,2,2,2,2]"));
+# Upsert operation
+INSERT INTO t_upsert(id, v) VALUES 
+(1, VEC_FROMTEXT("[100,100,100,100,100]")),
+(2, VEC_FROMTEXT("[200,200,200,200,200]")),
+(3, VEC_FROMTEXT("[3,3,3,3,3]"))
+ON DUPLICATE KEY UPDATE v = VALUES(v);
+# Verify data
+SELECT id, VEC_TOTEXT(v) FROM t_upsert ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[100,100,100,100,100]
+2	[200,200,200,200,200]
+3	[3,3,3,3,3]
+# Verify ANN query
+SELECT id, VEC_TOTEXT(v) FROM t_upsert FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[100,100,100,100,100]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[100,100,100,100,100]
+3	[3,3,3,3,3]
+2	[200,200,200,200,200]
+DROP TABLE t_upsert;
+
+# ========================================
+# 11. Batch DELETE with subquery
+# ========================================
+CREATE TABLE t_batch_del (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+category INT,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert test data
+# Before delete
+SELECT COUNT(*) FROM t_batch_del;
+COUNT(*)
+100
+SELECT category, COUNT(*) FROM t_batch_del GROUP BY category ORDER BY category;
+category	COUNT(*)
+0	20
+1	20
+2	20
+3	20
+4	20
+# Delete all rows in category 0
+DELETE FROM t_batch_del WHERE category = 0;
+# After delete
+SELECT COUNT(*) FROM t_batch_del;
+COUNT(*)
+80
+SELECT category, COUNT(*) FROM t_batch_del GROUP BY category ORDER BY category;
+category	COUNT(*)
+1	20
+2	20
+3	20
+4	20
+# Verify ANN query still works
+SELECT id FROM t_batch_del FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+DROP TABLE t_batch_del;
+
+# ========================================
+# 12. Performance stress - many transactions
+# ========================================
+CREATE TABLE t_stress (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Many small transactions
+# Verify data
+SELECT COUNT(*) FROM t_stress;
+COUNT(*)
+200
+# Multiple ANN queries
+SELECT id FROM t_stress FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.1,0.2,0.3,0.4,0.5]")) LIMIT 5;
+SELECT id FROM t_stress FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.9,0.8,0.7,0.6,0.5]")) LIMIT 5;
+DROP TABLE t_stress;
+
+# ========================================
+# 13. Cleanup
+# ========================================
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

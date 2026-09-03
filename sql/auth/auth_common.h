@@ -861,6 +861,7 @@ bool has_partial_view_routine_access(THD *thd, const char *db,
 bool check_access(THD *thd, ulong want_access, const char *db, ulong *save_priv,
                   GRANT_INTERNAL_INFO *grant_internal_info,
                   bool dont_check_global_grants, bool no_errors);
+bool check_drop_db_priv(THD *thd);
 bool check_table_access(THD *thd, ulong requirements, Table_ref *tables,
                         bool any_combination_of_privileges_will_do, uint number,
                         bool no_errors);

@@ -29,6 +29,7 @@
 class Item;
 class PT_derived_table;
 class PT_order_list;
+class PT_query_expression_body;
 class PT_select_item_list;
 class PT_table_reference;
 class Query_block;
@@ -223,6 +224,29 @@ class Select_lex_builder {
   */
 
   PT_derived_table *prepare_derived_table(const LEX_CSTRING &table_alias);
+
+  /**
+    Build the PT_query_specification body for this builder, without ORDER BY.
+    Used as an operand of a UNION when composing a multi-branch query.
+
+    @return pointer to PT_query_expression_body on success.
+            nullptr on failure.
+  */
+
+  PT_query_expression_body *prepare_query_specification_body();
+
+  /**
+    Combine two Select_lex_builder as "(lhs) UNION ALL (rhs)" and wrap it as a
+    derived table, so the caller can build
+    "SELECT ... FROM (lhs UNION ALL rhs) AS <alias> ORDER BY ...".
+
+    @return pointer to PT_derived_table on success.
+            nullptr on failure.
+  */
+
+  static PT_derived_table *prepare_union_all_derived_table(
+      THD *thd, const POS &pos, Select_lex_builder &lhs,
+      Select_lex_builder &rhs, const LEX_CSTRING &table_alias);
 
   /**
     Prepare a Query_block using all the information information

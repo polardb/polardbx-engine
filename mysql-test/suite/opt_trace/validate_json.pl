@@ -142,7 +142,7 @@ sub check {
 
   my $before = $string =~ tr/'"'//;
   my $re_json;
-  $re_json= to_json($parsed);
+  $re_json= encode_json($parsed);
   my $after = $re_json =~ tr/'"'//;
   if ( $before != $after )
   {

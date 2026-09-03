@@ -23,6 +23,7 @@
 
 #include "sys_vars_ext.h"
 #include "my_config.h"
+#include "mysql_build_info.h"
 #include "mysql/psi/mysql_file.h"
 #include "mysqld.h"
 #include "plugin/x/src/module_mysqlx.h"
@@ -40,6 +41,7 @@
 #include "sql/sys_vars.h"
 #include "sql_statistics_common.h"
 #include "sys_vars.h"
+#include "sql/changestreams/misc/replicated_columns_view.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -57,15 +59,20 @@
 #include "sql/ha_sequence.h"
 
 #include "sql/replica_read_manager.h"
-#include "sql/xa/lizard_xa_trx.h"
+#include "sql/xa/komodo0xa0trx.h"
 #include "sql/sql_implicit_element.h"
 
 #ifdef RDS_HAVE_JEMALLOC
 #include "sql/sql_jemalloc.h"
 #endif
 
+#include "sql/column_encryption/column_encryption.h"
 #include "sql/group_update.h"
-#include "sql/lizard/lizard_hb_freezer.h"
+#include "sql/komodo0binlog.h"
+#include "sql/transaction/komodo0hb0freezer.h"
+#include "sql/komodo0sql0optimizer.h"
+
+#include "vidx/vidx_index.h"
 
 /* Global scope variables */
 char innodb_version[SERVER_VERSION_LENGTH];
@@ -79,16 +86,18 @@ static char *polardbx_product_version_ptr = NULL;
 int32 opt_rpc_port = DEFAULT_RPC_PORT;
 bool opt_enable_polarx_rpc = true;
 ulonglong opt_changeset_threads;
+bool opt_sql_log_bin_super_modified;
 bool opt_enable_binlog_wait_if_full = false;
 
 ulonglong opt_import_tablespace_iterator_interval_ms =
     DEFAULT_IMPORT_TABLESPACE_ITERATOR_INTERVAL;
 
-namespace lizard {
+namespace komodo {
 SHOW_COMP_OPTION have_xa_prepare_with_trx_slot;
 SHOW_COMP_OPTION have_xa_async_commit;
 SHOW_COMP_OPTION have_xa_find_by_xid_with_hint;
-}  // namespace lizard
+SHOW_COMP_OPTION have_xa_advance_retention_gcn;
+}  // namespace komodo
 
 /**
   Output the latest build info for the MYSQLD binary.
@@ -221,6 +230,14 @@ static Sys_var_charptr Sys_rds_maintain_user_list(
     &Plock_internal_account_string, NOT_IN_BINLOG, ON_CHECK(NULL),
     ON_UPDATE(update_maintain_user));
 
+static Sys_var_charptr Sys_polarx_specific_user_list(
+    "polarx_specific_user_list",
+    "Accounts whose sessions default forbid_execute_dml_all to OFF, "
+    "string split by ','",
+    READ_ONLY GLOBAL_VAR(im::polarx_specific_user_list),
+    CMD_LINE(REQUIRED_ARG), IN_FS_CHARSET, DEFAULT(0), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(NULL), ON_UPDATE(NULL));
+
 static Sys_var_ulong Sys_rds_maintain_max_connections(
     "maintain_max_connections", "The max connection count for maintain user",
     GLOBAL_VAR(im::ia_config.connections[im::IA_type::MAINTENACE_USER]),
@@ -344,21 +361,21 @@ static Sys_var_bool Sys_innodb_current_snapshot_gcn(
 */
 bool freeze_db_if_no_cn_heartbeat_enable_on_update(sys_var *, THD *,
                                                    enum_var_type) {
-  const bool is_enable = lizard::no_heartbeat_freeze;
+  const bool is_enable = komodo::no_heartbeat_freeze;
 
   /** 1. Pretend to send heartbeat. */
   if (is_enable) {
-    lizard::hb_freezer_heartbeat();
+    komodo::hb_freezer_heartbeat();
   }
 
-  lizard::opt_no_heartbeat_freeze = lizard::no_heartbeat_freeze;
+  komodo::opt_no_heartbeat_freeze = komodo::no_heartbeat_freeze;
   return false;
 }
 static Sys_var_bool Sys_freeze_db_if_no_cn_heartbeat_enable(
     "innodb_freeze_db_if_no_cn_heartbeat_enable",
     "If set to true, will freeze purge sys and updating "
     "if there is no heartbeat.",
-    GLOBAL_VAR(lizard::no_heartbeat_freeze), CMD_LINE(OPT_ARG),
+    GLOBAL_VAR(komodo::no_heartbeat_freeze), CMD_LINE(OPT_ARG),
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(freeze_db_if_no_cn_heartbeat_enable_on_update));
 
@@ -366,15 +383,14 @@ static Sys_var_ulonglong Sys_freeze_db_if_no_cn_heartbeat_timeout_sec(
     "innodb_freeze_db_if_no_cn_heartbeat_timeout_sec",
     "If the heartbeat has not been received after the "
     "timeout, freezing the purge sys and updating.",
-    GLOBAL_VAR(lizard::opt_no_heartbeat_freeze_timeout),
+    GLOBAL_VAR(komodo::opt_no_heartbeat_freeze_timeout),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, 24 * 60 * 60), DEFAULT(10),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
-extern bool opt_gcn_write_event;
 static Sys_var_bool Sys_gcn_write_event(
     "gcn_write_event",
     "Writting a gcn event which content is gcn number for every transaction.",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(opt_gcn_write_event), CMD_LINE(OPT_ARG),
+    READ_ONLY NON_PERSIST GLOBAL_VAR(komodo::opt_gcn_write_event), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_ulong Sys_ccl_wait_timeout(
@@ -388,6 +404,11 @@ static Sys_var_ulong Sys_ccl_max_waiting(
     VALID_RANGE(0, INT_MAX64), DEFAULT(CCL_DEFAULT_WAITING_COUNT),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_ccl_dynamic_allocate(
+    "ccl_dynamic_allocate", "Whether to allocate memory dynamically",
+    READ_ONLY GLOBAL_VAR(im::ccl_dynamic_allocate), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+    
 static bool update_ccl_queue(sys_var *, THD *, enum_var_type) {
   im::System_ccl::instance()->get_queue_buckets()->init_queue_buckets(
       im::ccl_queue_bucket_count, im::ccl_queue_bucket_size,
@@ -414,6 +435,33 @@ static Sys_var_bool Sys_recycle_bin(
     SESSION_VAR(recycle_bin), CMD_LINE(OPT_ARG), DEFAULT(false), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static bool check_recycle_bin_table_name(sys_var *, THD *, set_var *var) {
+  if (var->save_result.string_value.str == nullptr) {
+    return false;  // nullptr is allowed
+  }
+  
+  const char *table_name = var->save_result.string_value.str;
+  size_t length = var->save_result.string_value.length;
+
+  Ident_name_check result = check_table_name(table_name, length);
+  if (result == Ident_name_check::WRONG) {
+    my_error(ER_WRONG_TABLE_NAME, MYF(0), table_name);
+    return true;
+  } else if (result == Ident_name_check::TOO_LONG) {
+    my_error(ER_TOO_LONG_IDENT, MYF(0), table_name);
+    return true;
+  }
+
+  return false;
+}
+
+static Sys_var_charptr Sys_recycle_bin_table_name(
+    "recycle_bin_table_name", 
+    "Custom table name for recycle bin (auto-reset after use)",
+    SESSION_VAR(recycle_bin_table_name), CMD_LINE(OPT_ARG), IN_FS_CHARSET,
+    DEFAULT(nullptr), NO_MUTEX_GUARD, IN_BINLOG, 
+    ON_CHECK(check_recycle_bin_table_name), ON_UPDATE(0));
+
 static Sys_var_ulong Sys_recycle_scheduler_interval(
     "recycle_scheduler_interval", "Interval in seconds for recycle scheduler.",
     GLOBAL_VAR(im::recycle_bin::recycle_scheduler_interval),
@@ -432,6 +480,26 @@ static Sys_var_ulong Sys_recycle_bin_retention(
     VALID_RANGE(1, 365 * 24 * 60 * 60), DEFAULT(7 * 24 * 60 * 60),
     BLOCK_SIZE(1), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
     ON_UPDATE(recycle_scheduler_retention_update));
+
+static Sys_var_ulonglong Sys_recycle_scheduler_max_skip_rounds(
+    "recycle_scheduler_max_skip_rounds", "Maximum number of consecutive skip rounds before forced execution",
+    GLOBAL_VAR(im::recycle_bin::recycle_scheduler_max_skip_rounds),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(1, ULONG_MAX), DEFAULT(20), BLOCK_SIZE(1));
+
+
+static bool recycle_scheduler_capacity_update(sys_var *, THD *,
+                                               enum_var_type) {
+  im::recycle_bin::Recycle_scheduler::instance()->wakeup();
+  return false;
+}
+
+static Sys_var_ulonglong Sys_recycle_bin_capacity_limit(
+    "recycle_bin_capacity_limit",
+    "Maximum storage capacity for recycle bin. "
+    "You can specify values using K, M, G, T suffixes (e.g., 1G = 1GB). 0 means no limit.",
+    GLOBAL_VAR(im::recycle_bin::recycle_bin_capacity_limit), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(recycle_scheduler_capacity_update));
 
 static bool recycle_scheduler_update(sys_var *, THD *, enum_var_type) {
   bool res = false;
@@ -472,7 +540,7 @@ static Sys_var_bool Sys_opt_outline_enabled(
     "opt_outline_enabled",
     "When this option is enabled,"
     "it will invoke statement outline when execute sql",
-    GLOBAL_VAR(im::opt_outline_enabled), CMD_LINE(OPT_ARG), DEFAULT(true),
+    GLOBAL_VAR(im::opt_outline_enabled), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
 static Sys_var_bool Sys_outline_allowed_sql_digest_truncate(
@@ -573,6 +641,16 @@ static Sys_var_bool Sys_mask_internal_user(
     GLOBAL_VAR(im::opt_mask_internal_user), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_column_encryption(
+    "column_encryption", "Enable the column encryption",
+    GLOBAL_VAR(komodo::opt_enable_column_encryption), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_mask_ai_model_config_api_key(
+    "mask_ai_model_config_api_key", "Mask mysql.ai_model_config.api_key",
+    GLOBAL_VAR(komodo::opt_mask_ai_model_config_api_key), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
 #ifdef RDS_HAVE_JEMALLOC
 
 static Sys_var_bool Sys_rds_active_memory_profiling(
@@ -661,6 +739,18 @@ static Sys_var_bool Sys_query_via_flashback_area(
     SESSION_VAR(opt_query_via_flashback_area), CMD_LINE(OPT_ARG), DEFAULT(0),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
 
+static Sys_var_bool Sys_innodb_rds_flashback_enabled(
+    "innodb_rds_flashback_enabled",
+    "Whether AS OF queries are enabled for this session.",
+    SESSION_VAR(opt_flashback_query_enable), CMD_LINE(OPT_ARG), DEFAULT(1),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
+static Sys_var_bool Sys_as_of_cross_ddl_enabled(
+    "as_of_cross_ddl_enabled",
+    "Whether AS OF queries can cross DDL boundaries in this session.",
+    SESSION_VAR(opt_asof_cross_ddl_enabled), CMD_LINE(OPT_ARG), DEFAULT(0),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
 static Sys_var_bool Sys_opt_flashback_area(
     "opt_flashback_area", "Enable flashback area when a new table is created. ",
     SESSION_VAR(opt_flashback_area), CMD_LINE(OPT_ARG), DEFAULT(0),
@@ -682,19 +772,25 @@ static Sys_var_bool Sys_enable_writeset_tracking_for_ipk(
 
 static Sys_var_have Sys_have_xa_prepare_with_trx_slot(
     "have_xa_prepare_with_trx_slot", "have_xa_prepare_with_trx_slot",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_prepare_with_trx_slot),
+    READ_ONLY NON_PERSIST GLOBAL_VAR(komodo::have_xa_prepare_with_trx_slot),
     NO_CMD_LINE, NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
     ON_UPDATE(nullptr), DEPRECATED_VAR(""));
 
 static Sys_var_have Sys_have_xa_async_commit(
     "have_xa_async_commit", "have_xa_async_commit",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_async_commit), NO_CMD_LINE,
+    READ_ONLY NON_PERSIST GLOBAL_VAR(komodo::have_xa_async_commit), NO_CMD_LINE,
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr),
     DEPRECATED_VAR(""));
 
 static Sys_var_have Sys_have_xa_find_by_xid_with_hint(
     "have_xa_find_by_xid_with_hint", "have_xa_find_by_xid_with_hint",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(lizard::have_xa_find_by_xid_with_hint),
+    READ_ONLY NON_PERSIST GLOBAL_VAR(komodo::have_xa_find_by_xid_with_hint),
+    NO_CMD_LINE, NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr), DEPRECATED_VAR(""));
+
+static Sys_var_have Sys_have_xa_advance_retention_gcn(
+    "have_xa_advance_retention_gcn", "have_xa_advance_retention_gcn",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(komodo::have_xa_advance_retention_gcn),
     NO_CMD_LINE, NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
     ON_UPDATE(nullptr), DEPRECATED_VAR(""));
 
@@ -808,12 +904,18 @@ static Sys_var_bool Sys_hotspot_for_autocommit(
     GLOBAL_VAR(hotspot_for_autocommit), CMD_LINE(OPT_ARG), DEFAULT(false),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(nullptr));
 
+static Sys_var_bool Sys_opt_index_format_hippo_enabled(
+    "opt_index_format_hippo_enabled",
+    "try to use panda format v2.0 on non-unique secondary index",
+    SESSION_VAR(opt_index_format_hippo_enabled), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, IN_BINLOG, ON_CHECK(0), ON_UPDATE(0));
+
 /*----------------------------------------------------------------*/
 /* Variables used for GongHang slow query block.  */
 /*----------------------------------------------------------------*/
 
-static PolyLock_mutex plock_sys_slow_query_user_pattern(
-    &polarx::LOCK_slow_query_user_pattern);
+static PolyLock_mutex plock_sys_slow_query_user_config(
+    &polarx::LOCK_slow_query_user_config);
 
 static bool check_sqb_user_pattern(sys_var *, THD *, set_var *var) {
   if (var->save_result.string_value.str == nullptr) {
@@ -832,10 +934,9 @@ static bool check_sqb_user_pattern(sys_var *, THD *, set_var *var) {
 }
 
 static Sys_var_charptr Sys_slow_query_user_pattern(
-    "slow_query_user_pattern", 
-    "match user pattern for slow query block.",
+    "slow_query_user_pattern", "match user pattern for slow query block.",
     GLOBAL_VAR(sqb_user_pattern), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
-    DEFAULT(""), &plock_sys_slow_query_user_pattern, NOT_IN_BINLOG,
+    DEFAULT(""), &plock_sys_slow_query_user_config, NOT_IN_BINLOG,
     ON_CHECK(check_sqb_user_pattern), ON_UPDATE(0));
 
 static Sys_var_deprecated_alias Sys_polarx_slow_query_block_user_pattern(
@@ -878,9 +979,9 @@ static Sys_var_ulong Sys_polarx_slow_query_block_check_interval(
 static Sys_var_bool Sys_polarx_long_trans_external_check(
     "polarx_long_trans_external_check",
     "Inspection switch to obtain long transaction information.",
-    GLOBAL_VAR(polarx_long_trans_external_check),  CMD_LINE(OPT_ARG), 
-    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(nullptr), ON_UPDATE(nullptr));
+    GLOBAL_VAR(polarx_long_trans_external_check), CMD_LINE(OPT_ARG),
+    DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr));
 
 static Sys_var_ulong Sys_polarx_long_trans_external_threshold(
     "polarx_long_trans_external_threshold",
@@ -889,6 +990,92 @@ static Sys_var_ulong Sys_polarx_long_trans_external_threshold(
     GLOBAL_VAR(polarx_long_trans_external_threshold), CMD_LINE(REQUIRED_ARG),
     VALID_RANGE(0, ULLONG_MAX), DEFAULT(3000), BLOCK_SIZE(1));
 
+static Sys_var_charptr Sys_polarx_slow_query_pushdown_username(
+    "polarx_slow_query_pushdown_username",
+    "pushdown username for slow query block.",
+    SESSION_VAR(polarx_slow_query_pushdown_username), CMD_LINE(OPT_ARG),
+    IN_SYSTEM_CHARSET, DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
 /*----------------------------------------------------------------*/
 /* Variables used for GongHang slow query block.  */
 /*----------------------------------------------------------------*/
+
+static Sys_var_bool Sys_polarx_binlog_bitmap_mode(
+    "polarx_binlog_bitmap_mode", "Cache ReplicatedColumnsView for LOAD DATA",
+    GLOBAL_VAR(opt_polarx_binlog_bitmap_mode), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_polarx_optimizer_rbo_mode(
+    "polarx_optimizer_rbo_mode",
+    "Directly accesss primary index if using pk to lookup records",
+    GLOBAL_VAR(opt_polarx_optimizer_rbo_mode), CMD_LINE(OPT_ARG),
+    DEFAULT(true));
+
+
+
+static Sys_var_bool Sys_sql_log_bin_super_modified(
+    "sql_log_bin_super_modified",
+    "control @@sql_log_bin only modified by super user, default false",
+    GLOBAL_VAR(opt_sql_log_bin_super_modified), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
+
+bool opt_enable_disk_sentinel = false;
+static Sys_var_bool Sys_disk_sentinel(
+       "enable_disk_sentinel", "enable disk sentinel for data/log disk or not",
+       GLOBAL_VAR(opt_enable_disk_sentinel), CMD_LINE(OPT_ARG),
+       DEFAULT(false));
+
+ulonglong opt_disk_sentinel_check_interval = 0;
+static Sys_var_ulonglong Sys_disk_sentinel_check_interval(
+       "disk_sentinel_check_interval", "disk sentinel check interval (second)",
+       GLOBAL_VAR(opt_disk_sentinel_check_interval), CMD_LINE(OPT_ARG),
+       VALID_RANGE(1, UINT_MAX), DEFAULT(5), BLOCK_SIZE(1));
+
+ulonglong opt_disk_sentinel_max_retries = 0;
+static Sys_var_ulonglong Sys_disk_sentinel_max_retries(
+       "disk_sentinel_max_retries", "disk sentinel max retry times",
+       GLOBAL_VAR(opt_disk_sentinel_max_retries), CMD_LINE(OPT_ARG),
+       VALID_RANGE(1, 1000), DEFAULT(6), BLOCK_SIZE(1));
+
+ulonglong opt_disk_sentinel_delay_threshold = 0;
+static Sys_var_ulonglong Sys_disk_sentinel_delay_threshold(
+       "disk_sentinel_delay_threshold", 
+       "disk_sentinel write delay threshold (millisecond), "
+       "0 means don't care, default 1000ms",
+       GLOBAL_VAR(opt_disk_sentinel_delay_threshold), CMD_LINE(OPT_ARG),
+       VALID_RANGE(0, ULLONG_MAX), DEFAULT(1000), BLOCK_SIZE(1));
+
+static Sys_var_charptr Sys_ai_gateway_endpoint(
+    "ai_gateway_endpoint",
+    "This variable is deprecated and ignored. Configure full model endpoint "
+    "URLs through dbms_ai.register_model or dbms_ai.update_model instead.",
+    GLOBAL_VAR(ai_gateway_endpoint), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT("https://dashscope.aliyuncs.com"), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(nullptr), ON_UPDATE(nullptr), DEPRECATED_VAR(""));
+
+static Sys_var_charptr Sys_ai_gateway_key(
+    "ai_gateway_key",
+    "This variable is deprecated and ignored. Configure api_key on the model "
+    "or use the DASHSCOPE_API_KEY environment variable instead.",
+    GLOBAL_VAR(ai_gateway_key), CMD_LINE(OPT_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr), DEPRECATED_VAR(""));
+
+static Sys_var_bool Sys_ai_gateway_enabled(
+    "ai_gateway_enabled",
+    "This variable is deprecated and ignored. AI functions now use model "
+    "configuration and per-function defaults managed by dbms_ai.",
+    GLOBAL_VAR(ai_gateway_enabled), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr),
+    DEPRECATED_VAR(""));
+
+bool opt_load_data_var_inherit_charset = false;
+static Sys_var_bool Sys_load_data_var_inherit_charset(
+    "load_data_var_inherit_charset",
+    "Whether user variables in LOAD DATA inherit the character set of the "
+    "source column.",
+    GLOBAL_VAR(opt_load_data_var_inherit_charset), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr));

@@ -121,9 +121,8 @@ class Histogram_sampler {
   @param[in]  index     index of the record
   @param[in]  prebuilt  Row meta-data cache.
   @return DB_SUCCESS or error code. */
-  dberr_t sample_rec(const Parallel_reader::Ctx *ctx, const rec_t *rec,
-                     ulint *offsets, const dict_index_t *index,
-                     row_prebuilt_t *prebuilt);
+  dberr_t sample_rec(const Parallel_reader::Ctx *ctx, const Slice *slc,
+                     const dict_index_t *index, row_prebuilt_t *prebuilt);
 
   /** For each record in a non-leaf block at level 1 (if leaf level is 0)
   check if the child page needs to be sampled and if so sample all the rows in

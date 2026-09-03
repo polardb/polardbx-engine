@@ -1,0 +1,1063 @@
+SET opt_index_format_spc_enabled = 0;
+SET opt_index_format_hippo_enabled = 0;
+#
+# === Setup ===
+#
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+c INT NOT NULL,
+d VARCHAR(20)
+) ENGINE=InnoDB;
+CREATE INDEX idx_a ON t1(a);
+ALTER TABLE t1 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+ALTER TABLE t1 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	SPC_PAGE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+INSERT INTO t1 VALUES (1, 'a', 'x', 1, 'hello'), (2, 'aa', 'xx', 2, 'world');
+#
+# === Case 1: ADD Column -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+ALTER TABLE t1 ALGORITHM=INSTANT, ADD COLUMN e VARCHAR(10) ;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	SPC_PAGE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+#
+# === Case 2: RENAME Column (column in SPC INDEX) -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+ALTER TABLE t1 ALGORITHM=INSTANT, RENAME COLUMN b TO b_renamed;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	SPC_PAGE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+ALTER TABLE t1 ALGORITHM=INSTANT, RENAME COLUMN b_renamed TO b;
+#
+# === Case 3: Setting a column default value (column in SPC INDEX) -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+ALTER TABLE t1 ALGORITHM=INPLACE, ALTER COLUMN b SET DEFAULT 'def_val';
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	SPC_PAGE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+#
+# === Case 4: Extending varchar (column in SPC INDEX) -> INPLACE succeed, But REBUILD ===
+# SPC-specific: expansion changes pd_capacity, requires INPLACE rebuild
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+ALTER TABLE t1 ALGORITHM=INPLACE, CHANGE COLUMN b b VARCHAR(20);
+Warnings:
+Warning	1088	Extending column 'b' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	INDEX
+idx_c_spc	INDEX
+PRIMARY	INDEX
+#
+# === Case 4P: Extending a prefixed varchar still rebuilds ===
+#
+CREATE TABLE t_prefix (
+id INT PRIMARY KEY,
+c VARCHAR(300) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+CREATE INDEX idx_c_prefix_spc ON t_prefix(c(10))
+SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+include/assert.inc [INDEX_PAGE_TYPE for test.t_prefix.idx_c_prefix_spc should match IS_SPC=1 (got SPC_PAGE)]
+# The prefix width stays 10 before the ALTER.
+SELECT INDEX_NAME, SUB_PART
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't_prefix'
+  AND INDEX_NAME = 'idx_c_prefix_spc';
+INDEX_NAME	SUB_PART
+idx_c_prefix_spc	10
+INSERT INTO t_prefix VALUES
+(1, CONCAT(REPEAT('a', 10), 'before-1')),
+(2, CONCAT(REPEAT('a', 10), 'before-2'));
+SELECT table_id INTO @old_tid
+FROM information_schema.innodb_tables WHERE name = 'test/t_prefix';
+ALTER TABLE t_prefix ALGORITHM=INPLACE, CHANGE COLUMN c c VARCHAR(400) NOT NULL;
+Warnings:
+Warning	1088	Extending column 'c' requires table rebuild because it is part of an SPC index
+# The prefix width is still 10 after the ALTER.
+SELECT INDEX_NAME, SUB_PART
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't_prefix'
+  AND INDEX_NAME = 'idx_c_prefix_spc';
+INDEX_NAME	SUB_PART
+idx_c_prefix_spc	10
+SELECT table_id INTO @new_tid
+FROM information_schema.innodb_tables WHERE name = 'test/t_prefix';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_prefix' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c_prefix_spc	INDEX
+PRIMARY	INDEX
+CHECK TABLE t_prefix;
+Table	Op	Msg_type	Msg_text
+test.t_prefix	check	status	OK
+DROP TABLE t_prefix;
+#
+# === Case 5: Dropping column default value (column in SPC INDEX) -> INPLACE succeeds ===
+#
+DROP INDEX idx_b_spc ON t1;
+CREATE INDEX idx_b_spc ON t1(b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+ALTER TABLE t1 ALGORITHM=INPLACE, ALTER COLUMN b DROP DEFAULT;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t1';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b_spc	SPC_PAGE
+idx_c_spc	INDEX
+PRIMARY	INDEX
+#
+# === Case 6: ENUM append when pack len unchanged (column in SPC INDEX) -> INPLACE succeeds ===
+# IS_EQUAL_YES: adding values at end without changing pack length does not affect pd_capacity
+#
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+status ENUM('active','inactive')
+) ENGINE=InnoDB;
+ALTER TABLE t2 ADD INDEX idx_status_spc (status) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t2 VALUES (1, 'active'), (2, 'inactive');
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t2';
+ALTER TABLE t2 ALGORITHM=INPLACE, CHANGE COLUMN status status ENUM('active','inactive','pending');
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t2';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_status_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t2;
+#
+# === Case 7: Dropping a column in SPC INDEX -> INPLACE, index dropped ===
+# DROP COLUMN triggers table rebuild, and index on dropped column is removed
+#
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+c INT NOT NULL
+) ENGINE=InnoDB;
+ALTER TABLE t3 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_b_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+ALTER TABLE t3 ALGORITHM=INPLACE, DROP COLUMN b;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+PRIMARY	INDEX
+#
+# === Case 8: Reordering a column in SPC INDEX -> INPLACE succeeds, SPC depends on config ===
+# MODIFY COLUMN ORDER triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_STORED_COLUMN_ORDER)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE t3 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+ALTER TABLE t3 ALGORITHM=INPLACE, MODIFY COLUMN a VARCHAR(10) AFTER c;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	INDEX
+PRIMARY	INDEX
+DROP INDEX idx_a_spc ON t3;
+ALTER TABLE t3 ALGORITHM=INPLACE, MODIFY COLUMN a VARCHAR(10) AFTER id;
+#
+# === Case 9: Making a column NULL (column in SPC INDEX) -> INPLACE, SPC depends on config ===
+# This triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_COLUMN_NULLABLE)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE t3 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+ALTER TABLE t3 ALGORITHM=INPLACE, CHANGE COLUMN c c INT NULL;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c_spc	INDEX
+PRIMARY	INDEX
+DROP INDEX idx_c_spc ON t3;
+#
+# === Case 10: Making a column NOT NULL (column in SPC INDEX) -> INPLACE, SPC depends on config ===
+# This triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_COLUMN_NOT_NULLABLE)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE t3 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t3 VALUES (1, 'a', 1), (2, 'aa', 2);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+ALTER TABLE t3 ALGORITHM=INPLACE, CHANGE COLUMN c c INT NOT NULL;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t3';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c_spc	INDEX
+PRIMARY	INDEX
+DROP TABLE t3;
+#
+# === Case 11: ADD columns and SPC INDEX IT -> INPLACE succeed, But REBUILD ===
+# Note: ADD COLUMN + ADD INDEX in same statement triggers table rebuild
+# Existing SPC indexes lose SPC attribute after rebuild (opt_index_format_spc_enabled=0)
+#
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB;
+ALTER TABLE t4 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t4 VALUES (1, 'a', 'x'), (2, 'aa', 'xx');
+# Show SPC index created
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t4' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_b_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t4';
+ALTER TABLE t4 ADD COLUMN f VARCHAR(15),
+ADD INDEX idx_f_spc (f) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t4';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: existing idx_b_spc loses SPC after rebuild, new idx_f_spc is created as SPC
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t4' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_b_spc	INDEX
+idx_f_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t4;
+#
+# === Case 12: Extending varchar (column in PRIMARY KEY), SPC INDEX exists -> INPLACE succeed, But REBUILD ===
+# PK column is implicitly appended to SPC index records
+# Extending PK varchar changes rec_max_size and pd_capacity, triggers INPLACE rebuild
+#
+CREATE TABLE t5 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB;
+ALTER TABLE t5 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t5 VALUES ('1', 'a', 'x'), ('2', 'aa', 'xx');
+# Show SPC index created
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t5' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t5';
+ALTER TABLE t5 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20);
+Warnings:
+Warning	1088	Extending column 'id' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t5';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t5' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	INDEX
+PRIMARY	INDEX
+DROP TABLE t5;
+#
+# === Case 13: Extending varchar (column in PRIMARY KEY), NO SPC INDEX -> INPLACE succeeds ===
+# Without SPC index, normal INPLACE VARCHAR extension applies
+#
+CREATE TABLE t6 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB;
+ALTER TABLE t6 ADD INDEX idx_a (a);
+INSERT INTO t6 VALUES ('1', 'a', 'x'), ('2', 'aa', 'xx');
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t6' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t6';
+ALTER TABLE t6 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20);
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t6';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t6' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+PRIMARY	INDEX
+DROP TABLE t6;
+#
+# === Case 14: ALTER INDEX VISIBILITY -> INPLACE succeeds, NO REBUILD ===
+#
+CREATE TABLE t_vis (
+id INT PRIMARY KEY,
+a VARCHAR(10)
+) ENGINE=InnoDB;
+ALTER TABLE t_vis ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t_vis VALUES (1, 'x'), (2, 'y');
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t_vis' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t_vis';
+ALTER TABLE t_vis ALGORITHM=INPLACE, ALTER INDEX idx_a_spc INVISIBLE;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t_vis';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t_vis' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t_vis';
+ALTER TABLE t_vis ALGORITHM=INPLACE, ALTER INDEX idx_a_spc VISIBLE;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t_vis';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t_vis' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t_vis;
+#
+# === Case 15: RENAME TABLE -> INPLACE succeeds, NO REBUILD ===
+#
+CREATE TABLE t_rename (
+id INT PRIMARY KEY,
+a VARCHAR(10)
+) ENGINE=InnoDB;
+ALTER TABLE t_rename ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t_rename VALUES (1, 'x'), (2, 'y');
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t_rename' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t_rename';
+ALTER TABLE t_rename ALGORITHM=INPLACE, RENAME TO t_renamed;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t_renamed';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t_renamed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t_renamed;
+#
+# === Case 16: Extending varchar (column not in SPC INDEX), add new SPC index on it -> INPLACE succeed, But REBUILD ===
+# Column d is NOT in any SPC INDEX. Extending d + adding SPC index on d in same ALTER triggers REBUILD.
+# Existing SPC indexes lose SPC attribute after rebuild (opt_index_format_spc_enabled=0)
+#
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+d VARCHAR(20)
+) ENGINE=InnoDB;
+ALTER TABLE t7 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO t7 VALUES (1, 'a', 'x', 'hello'), (2, 'aa', 'xx', 'world');
+# Show SPC index created
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t7' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t7';
+ALTER TABLE t7 ALGORITHM=INPLACE, CHANGE COLUMN d d VARCHAR(30),
+ADD INDEX idx_d_spc (d) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+Warnings:
+Warning	1088	Extending column 'd' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t7';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: existing idx_a_spc loses SPC after rebuild, new idx_d_spc is created as SPC
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t7' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	INDEX
+idx_d_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t7;
+#
+# === Case 17: Extending varchar (column in PRIMARY KEY), add new SPC index on it -> INPLACE succeed, But REBUILD ===
+# id is VARCHAR PK, no existing SPC index.
+# Extending PK + adding SPC index on column a in same ALTER triggers REBUILD.
+#
+CREATE TABLE t8 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB;
+INSERT INTO t8 VALUES ('1', 'a', 'x'), ('2', 'aa', 'xx');
+# Verify no SPC index exists
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t8' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name = 'test/t8';
+ALTER TABLE t8 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20),
+ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+Warnings:
+Warning	1088	Extending column 'id' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name = 'test/t8';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: idx_a_spc is created as SPC
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t8' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a_spc	SPC_PAGE
+PRIMARY	INDEX
+DROP TABLE t8;
+#
+# === Cleanup ===
+#
+DROP TABLE t1;
+#
+# === Summary: All inplace DDL tests for non-partitioned tables completed ===
+#
+#
+# ======================================== Partitioned tables ===============================================
+#
+# NOTE: Partitioned tables DO support SPC indexes.
+#       SPC indexes on partitioned tables work the same way as on non-partitioned tables.
+#       Each partition has its own SPC index with the same behavior.
+#
+#
+# === Setup for partitioned tables ===
+#
+CREATE TABLE tp1 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+c INT NOT NULL,
+d VARCHAR(20)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN (200),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+CREATE INDEX idx_a ON tp1(a);
+ALTER TABLE tp1 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+ALTER TABLE tp1 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	SPC_PAGE
+tp1#p#p0	idx_c_spc	SPC_PAGE
+tp1#p#p0	PRIMARY	INDEX
+INSERT INTO tp1 VALUES (1, 'a', 'x', 1, 'hello'), (50, 'aa', 'xx', 2, 'world');
+INSERT INTO tp1 VALUES (150, 'b', 'y', 3, 'world'), (250, 'bb', 'yy', 4, 'world');
+#
+# === Case P1: ADD Column -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+ALTER TABLE tp1 ALGORITHM=INSTANT, ADD COLUMN e VARCHAR(10);
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	SPC_PAGE
+tp1#p#p0	idx_c_spc	SPC_PAGE
+tp1#p#p0	PRIMARY	INDEX
+#
+# === Case P2: RENAME Column (column in SPC INDEX) -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+ALTER TABLE tp1 ALGORITHM=INSTANT, RENAME COLUMN b TO b_renamed;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	SPC_PAGE
+tp1#p#p0	idx_c_spc	SPC_PAGE
+tp1#p#p0	PRIMARY	INDEX
+ALTER TABLE tp1 ALGORITHM=INSTANT, RENAME COLUMN b_renamed TO b;
+#
+# === Case P3: Setting a column default value (column in SPC INDEX) -> INPLACE succeeds ===
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+ALTER TABLE tp1 ALGORITHM=INPLACE, ALTER COLUMN b SET DEFAULT 'def_val';
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	SPC_PAGE
+tp1#p#p0	idx_c_spc	SPC_PAGE
+tp1#p#p0	PRIMARY	INDEX
+#
+# === Case P4: Extending varchar (column in SPC INDEX) -> INPLACE succeed, But REBUILD ===
+# SPC-specific: expansion changes pd_capacity, requires INPLACE rebuild
+#
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+ALTER TABLE tp1 ALGORITHM=INPLACE, CHANGE COLUMN b b VARCHAR(20);
+Warnings:
+Warning	1088	Extending column 'b' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	INDEX
+tp1#p#p0	idx_c_spc	INDEX
+tp1#p#p0	PRIMARY	INDEX
+#
+# === Case P5: Dropping column default value (column in SPC INDEX) -> INPLACE succeeds ===
+#
+DROP INDEX idx_b_spc ON tp1;
+CREATE INDEX idx_b_spc ON tp1(b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+ALTER TABLE tp1 ALGORITHM=INPLACE, ALTER COLUMN b DROP DEFAULT;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp1#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp1#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp1#p#p0	idx_a	INDEX
+tp1#p#p0	idx_b_spc	SPC_PAGE
+tp1#p#p0	idx_c_spc	INDEX
+tp1#p#p0	PRIMARY	INDEX
+#
+# === Case P6: ENUM append when pack len unchanged (column in SPC INDEX) -> INPLACE succeeds ===
+# IS_EQUAL_YES: adding values at end without changing pack length does not affect pd_capacity
+#
+CREATE TABLE tp2 (
+id INT PRIMARY KEY,
+status ENUM('active','inactive')
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp2 ADD INDEX idx_status_spc (status) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp2 VALUES (1, 'active'), (2, 'inactive');
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp2#%#p0';
+ALTER TABLE tp2 ALGORITHM=INPLACE, CHANGE COLUMN status status ENUM('active','inactive','pending');
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp2#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp2#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp2#p#p0	idx_status_spc	SPC_PAGE
+tp2#p#p0	PRIMARY	INDEX
+DROP TABLE tp2;
+#
+# === Case P7: Dropping a column in SPC INDEX -> INPLACE, index dropped ===
+# DROP COLUMN triggers table rebuild, and index on dropped column is removed
+#
+CREATE TABLE tp3 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+c INT NOT NULL
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp3 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_b_spc	SPC_PAGE
+tp3#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+ALTER TABLE tp3 ALGORITHM=INPLACE, DROP COLUMN b;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	PRIMARY	INDEX
+#
+# === Case P8: Reordering a column in SPC INDEX -> INPLACE succeeds, SPC depends on config ===
+# MODIFY COLUMN ORDER triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_STORED_COLUMN_ORDER)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE tp3 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_a_spc	SPC_PAGE
+tp3#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+ALTER TABLE tp3 ALGORITHM=INPLACE, MODIFY COLUMN a VARCHAR(10) AFTER c;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_a_spc	INDEX
+tp3#p#p0	PRIMARY	INDEX
+DROP INDEX idx_a_spc ON tp3;
+ALTER TABLE tp3 ALGORITHM=INPLACE, MODIFY COLUMN a VARCHAR(10) AFTER id;
+#
+# === Case P9: Making a column NULL (column in SPC INDEX) -> INPLACE, SPC depends on config ===
+# This triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_COLUMN_NULLABLE)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE tp3 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_c_spc	SPC_PAGE
+tp3#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+ALTER TABLE tp3 ALGORITHM=INPLACE, CHANGE COLUMN c c INT NULL;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_c_spc	INDEX
+tp3#p#p0	PRIMARY	INDEX
+DROP INDEX idx_c_spc ON tp3;
+#
+# === Case P10: Making a column NOT NULL (column in SPC INDEX) -> INPLACE, SPC depends on config ===
+# This triggers table rebuild (INNOBASE_ALTER_REBUILD includes ALTER_COLUMN_NOT_NULLABLE)
+# Note: SPC attribute after rebuild depends on opt_index_format_spc_enabled
+#
+ALTER TABLE tp3 ADD INDEX idx_c_spc (c) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp3 VALUES (1, 'a', 1), (50, 'aa', 2);
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_c_spc	SPC_PAGE
+tp3#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+ALTER TABLE tp3 ALGORITHM=INPLACE, CHANGE COLUMN c c INT NOT NULL;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp3#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp3#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp3#p#p0	idx_c_spc	INDEX
+tp3#p#p0	PRIMARY	INDEX
+DROP TABLE tp3;
+#
+# === Case P11: ADD columns and SPC INDEX IT -> INPLACE succeed, But REBUILD ===
+# Note: ADD COLUMN + ADD INDEX in same statement triggers table rebuild
+# Existing SPC indexes lose SPC attribute after rebuild (opt_index_format_spc_enabled=0)
+#
+CREATE TABLE tp4 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp4 ADD INDEX idx_b_spc (b) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp4 VALUES (1, 'a', 'x'), (50, 'aa', 'xx');
+# Show SPC index created
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp4#p#%' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp4#p#p0	idx_b_spc	SPC_PAGE
+tp4#p#p0	PRIMARY	INDEX
+tp4#p#p1	idx_b_spc	SPC_PAGE
+tp4#p#p1	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp4#%#p0';
+ALTER TABLE tp4 ADD COLUMN f VARCHAR(15),
+ADD INDEX idx_f_spc (f) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp4#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: existing idx_b_spc loses SPC after rebuild, new idx_f_spc is created as SPC
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp4#p#%' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp4#p#p0	idx_b_spc	INDEX
+tp4#p#p0	idx_f_spc	SPC_PAGE
+tp4#p#p0	PRIMARY	INDEX
+tp4#p#p1	idx_b_spc	INDEX
+tp4#p#p1	idx_f_spc	SPC_PAGE
+tp4#p#p1	PRIMARY	INDEX
+DROP TABLE tp4;
+#
+# === Case P12: Extending varchar (column in PRIMARY KEY), SPC INDEX exists -> INPLACE succeed, But REBUILD ===
+# PK column is implicitly appended to SPC index records
+# Extending PK varchar changes rec_max_size and pd_capacity, triggers INPLACE rebuild
+#
+CREATE TABLE tp5 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE COLUMNS(id) (
+PARTITION p0 VALUES LESS THAN ('100'),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp5 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp5 VALUES ('1', 'a', 'x'), ('50', 'aa', 'xx');
+# Show SPC index created
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp5#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp5#p#p0	idx_a_spc	SPC_PAGE
+tp5#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp5#%#p0';
+ALTER TABLE tp5 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20);
+Warnings:
+Warning	1088	Extending column 'id' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp5#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp5#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp5#p#p0	idx_a_spc	INDEX
+tp5#p#p0	PRIMARY	INDEX
+DROP TABLE tp5;
+#
+# === Case P13: Extending varchar (column in PRIMARY KEY), NO SPC INDEX -> INPLACE succeeds ===
+# Without SPC index, normal INPLACE VARCHAR extension applies
+#
+CREATE TABLE tp6 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE COLUMNS(id) (
+PARTITION p0 VALUES LESS THAN ('100'),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp6 ADD INDEX idx_a (a);
+INSERT INTO tp6 VALUES ('1', 'a', 'x'), ('50', 'aa', 'xx');
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp6#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp6#p#p0	idx_a	INDEX
+tp6#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp6#%#p0';
+ALTER TABLE tp6 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20);
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp6#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp6#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp6#p#p0	idx_a	INDEX
+tp6#p#p0	PRIMARY	INDEX
+DROP TABLE tp6;
+#
+# === Case P14: Extending varchar (column in SPC INDEX), mixed SPC status across partitions -> INPLACE succeed, But REBUILD ===
+# Scenario: Some partitions have SPC index, some don't (by adding partition with opt_index_format_spc_enabled=0)
+# Extending VARCHAR column in SPC index triggers rebuild for all partitions
+#
+SET opt_index_format_spc_enabled = 1;
+CREATE TABLE tp7 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN (200)
+);
+ALTER TABLE tp7 ADD INDEX idx_b_spc (b);
+INSERT INTO tp7 VALUES (1, 'a', 'x'), (50, 'aa', 'xx'), (150, 'b', 'y');
+# Verify p0 and p1 have SPC index initially
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_b_spc' ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp7#p#p0	idx_b_spc	SPC_PAGE
+tp7#p#p1	idx_b_spc	SPC_PAGE
+SET opt_index_format_spc_enabled = 0;
+ALTER TABLE tp7 ADD PARTITION (PARTITION p2 VALUES LESS THAN MAXVALUE);
+INSERT INTO tp7 VALUES (250, 'bb', 'yy');
+# Verify: p0 and p1 still have SPC, p2 has non-SPC index
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_b_spc' ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp7#p#p0	idx_b_spc	SPC_PAGE
+tp7#p#p1	idx_b_spc	SPC_PAGE
+tp7#p#p2	idx_b_spc	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp7#%#p0';
+ALTER TABLE tp7 ALGORITHM=INPLACE, CHANGE COLUMN b b VARCHAR(20);
+Warnings:
+Warning	1088	Extending column 'b' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp7#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: all partitions have non-SPC index after rebuild
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_b_spc' ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp7#p#p0	idx_b_spc	INDEX
+tp7#p#p1	idx_b_spc	INDEX
+tp7#p#p2	idx_b_spc	INDEX
+DROP TABLE tp7;
+#
+# === Case P15: ALTER INDEX VISIBILITY -> INPLACE succeeds, NO REBUILD ===
+#
+CREATE TABLE tp_vis (
+id INT PRIMARY KEY,
+a VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp_vis ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp_vis VALUES (1, 'x'), (50, 'y');
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp_vis#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp_vis#p#p0	idx_a_spc	SPC_PAGE
+tp_vis#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_vis#%#p0';
+ALTER TABLE tp_vis ALGORITHM=INPLACE, ALTER INDEX idx_a_spc INVISIBLE;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_vis#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp_vis#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp_vis#p#p0	idx_a_spc	SPC_PAGE
+tp_vis#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_vis#%#p0';
+ALTER TABLE tp_vis ALGORITHM=INPLACE, ALTER INDEX idx_a_spc VISIBLE;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_vis#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+DROP TABLE tp_vis;
+#
+# === Case P16: RENAME TABLE -> INPLACE succeeds, NO REBUILD ===
+# NOTE: ADD/DROP FOREIGN KEY not tested on partitioned tables - FK not supported with partitions
+#
+CREATE TABLE tp_rename (
+id INT PRIMARY KEY,
+a VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp_rename ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp_rename VALUES (1, 'x'), (50, 'y');
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp_rename#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp_rename#p#p0	idx_a_spc	SPC_PAGE
+tp_rename#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_rename#%#p0';
+ALTER TABLE tp_rename ALGORITHM=INPLACE, RENAME TO tp_renamed;
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp_renamed#%#p0';
+SELECT @old_tid = @new_tid AS expect_no_rebuild;
+expect_no_rebuild
+1
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME LIKE 'tp_renamed#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp_renamed#p#p0	idx_a_spc	SPC_PAGE
+tp_renamed#p#p0	PRIMARY	INDEX
+DROP TABLE tp_renamed;
+#
+# === Case P17: Extending varchar (column not in SPC INDEX), add new SPC index on it -> INPLACE succeed, But REBUILD ===
+# Column d is NOT in any SPC INDEX. Extending d + adding SPC index on d in same ALTER triggers REBUILD.
+# Existing SPC indexes lose SPC attribute after rebuild (opt_index_format_spc_enabled=0)
+#
+CREATE TABLE tp8 (
+id INT PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10),
+d VARCHAR(20)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (100),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+ALTER TABLE tp8 ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+INSERT INTO tp8 VALUES (1, 'a', 'x', 'hello'), (50, 'aa', 'xx', 'world');
+# Show SPC index created
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 'tp8#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp8#p#p0	idx_a_spc	SPC_PAGE
+tp8#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp8#%#p0';
+ALTER TABLE tp8 ALGORITHM=INPLACE, CHANGE COLUMN d d VARCHAR(30),
+ADD INDEX idx_d_spc (d) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+Warnings:
+Warning	1088	Extending column 'd' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp8#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: existing idx_a_spc loses SPC after rebuild, new idx_d_spc is created as SPC
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 'tp8#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp8#p#p0	idx_a_spc	INDEX
+tp8#p#p0	idx_d_spc	SPC_PAGE
+tp8#p#p0	PRIMARY	INDEX
+DROP TABLE tp8;
+#
+# === Case P18: Extending varchar (column in PRIMARY KEY), add new SPC index on it -> INPLACE succeed, But REBUILD ===
+# id is VARCHAR PK, no existing SPC index.
+# Extending PK + adding SPC index on column a in same ALTER triggers REBUILD.
+#
+CREATE TABLE tp9 (
+id VARCHAR(10) PRIMARY KEY,
+a VARCHAR(10),
+b VARCHAR(10)
+) ENGINE=InnoDB
+PARTITION BY RANGE COLUMNS(id) (
+PARTITION p0 VALUES LESS THAN ('100'),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO tp9 VALUES ('1', 'a', 'x'), ('50', 'aa', 'xx');
+# Verify no SPC index exists
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 'tp9#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp9#p#p0	PRIMARY	INDEX
+SELECT table_id INTO @old_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp9#%#p0';
+ALTER TABLE tp9 ALGORITHM=INPLACE, CHANGE COLUMN id id VARCHAR(20),
+ADD INDEX idx_a_spc (a) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}';
+Warnings:
+Warning	1088	Extending column 'id' requires table rebuild because it is part of an SPC index
+SELECT table_id INTO @new_tid FROM information_schema.innodb_tables WHERE name LIKE 'test/tp9#%#p0';
+SELECT @old_tid != @new_tid AS expect_rebuild;
+expect_rebuild
+1
+# Verify: idx_a_spc is created as SPC
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 'tp9#p#p0' AND SCHEMA_NAME='test' ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+tp9#p#p0	idx_a_spc	SPC_PAGE
+tp9#p#p0	PRIMARY	INDEX
+DROP TABLE tp9;
+#
+# === Cleanup ===
+#
+DROP TABLE tp1;
+#
+# === Summary: All inplace DDL tests for partitioned tables completed ===
+#

@@ -176,6 +176,9 @@ class QUICK_RANGE {
 using Quick_ranges = Mem_root_array<QUICK_RANGE *>;
 using Quick_ranges_array = Mem_root_array<Quick_ranges *>;
 
+bool range_is_equality(const uchar *min_key, const uchar *max_key,
+                              unsigned store_length, bool is_nullable);
+
 bool setup_range_optimizer_param(THD *thd, MEM_ROOT *return_mem_root,
                                  MEM_ROOT *temp_mem_root, Key_map keys_to_use,
                                  TABLE *table, Query_block *query_block,
@@ -193,6 +196,8 @@ int test_quick_select(THD *thd, MEM_ROOT *return_mem_root,
 void store_key_image_to_rec(Field *field, uchar *ptr, uint len);
 
 extern String null_string;
+
+extern bool opt_unique_key_range_shortcut;
 
 /// Global initialization of the null_element. Call on server start.
 void range_optimizer_init();

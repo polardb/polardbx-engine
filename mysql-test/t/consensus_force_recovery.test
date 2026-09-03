@@ -1,0 +1,109 @@
+#
+# Test: consensus_info is NOT modified when innodb_force_recovery is enabled.
+#
+# Background:
+#   When innodb_force_recovery >= 1, consensus mode is disabled. However, consensus info
+#   is stilled read and flushed during startup, which violate the rule of disabling writing
+#   in force_recovery mode. We have to fix it by disabling modify any consensus_info if 
+#   consensus mode is disabled.
+#
+#   We use innodb_force_recovery=4, which is the threshold where InnoDB explicitly
+#   prevents all DML (INSERT/UPDATE/DELETE). This verifies the fix works under the
+#   most restrictive write-prevention mode while still replaying redo logs for data
+#   consistency.
+#
+# Test strategy:
+#   Use the MTR default instance (which has consensus enabled). Record
+#   consensus_info baseline, restart with innodb_force_recovery=1, verify
+#   consensus_info is unchanged. Then recover consensus via the standard
+#   cluster-force-change-meta flow (rm binlog, force-change-meta, restart).
+#
+
+--source include/not_valgrind.inc
+--source include/not_windows.inc
+--source include/make_consensus_args.inc
+
+--disable_query_log
+call mtr.add_suppression("\\[Warning\\].*");
+call mtr.add_suppression("\\[System\\].*XPaxos.*");
+call mtr.add_suppression("\\[ERROR\\].*");
+--enable_query_log
+
+# -----------------------------------------------------------------------
+# Step 1: Record consensus_info baseline from the running MTR instance
+# -----------------------------------------------------------------------
+--echo # Step 1: Record consensus_info baseline
+
+--let $before_cluster_info = `SELECT cluster_info  FROM mysql.consensus_info LIMIT 1`
+--let $before_current_term = `SELECT current_term  FROM mysql.consensus_info LIMIT 1`
+--let $before_cluster_id   = `SELECT cluster_id    FROM mysql.consensus_info LIMIT 1`
+--let $datadir             = `SELECT @@datadir`
+--let $commit_index        = `SELECT COMMIT_INDEX FROM information_schema.alisql_cluster_local LIMIT 1`
+
+--let $assert_text = baseline: cluster_info must be non-empty
+--let $assert_cond = "$before_cluster_info" != ""
+--source include/assert.inc
+
+# -----------------------------------------------------------------------
+# Step 2: Restart with innodb_force_recovery=1
+#         consensus module is completely disabled in this mode.
+# -----------------------------------------------------------------------
+--echo # Step 2: Restart with innodb_force_recovery=4 (consensus disabled, DML prevented)
+
+--source include/shutdown_mysqld.inc
+
+--exec echo "restart: --innodb_force_recovery=4 --skip-log-bin" > $_expect_file_name
+
+# Poll for connection without consensus leader wait
+--enable_reconnect
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+--let $after_cluster_info = `SELECT cluster_info  FROM mysql.consensus_info LIMIT 1`
+--let $after_current_term = `SELECT current_term  FROM mysql.consensus_info LIMIT 1`
+--let $after_cluster_id   = `SELECT cluster_id    FROM mysql.consensus_info LIMIT 1`
+
+--let $assert_text = cluster_info unchanged after force_recovery restart
+--let $assert_cond = "$before_cluster_info" = "$after_cluster_info"
+--source include/assert.inc
+
+--let $assert_text = current_term unchanged after force_recovery restart
+--let $assert_cond = "$before_current_term" = "$after_current_term"
+--source include/assert.inc
+
+--let $assert_text = cluster_id unchanged after force_recovery restart
+--let $assert_cond = "$before_cluster_id" = "$after_cluster_id"
+--source include/assert.inc
+
+--echo # consensus_info correctly preserved under force_recovery mode
+
+# -----------------------------------------------------------------------
+# Step 3: Recover consensus via cluster-force-change-meta
+#   Following the standard recovery procedure (see upgrade_from_8018.test):
+#   a) Shutdown
+#   b) Delete binlog files
+#   c) Start with --cluster-force-change-meta=ON (mysqld updates meta, exits)
+#   d) Overwrite expect file with normal restart params
+#   e) Wait for normal startup
+# -----------------------------------------------------------------------
+--echo # Step 3: Recover consensus (rm binlog, force-change-meta, restart)
+
+--source include/shutdown_mysqld.inc
+
+# Delete binlog files to avoid paxos binlog integrity check errors
+--exec rm -f $datadir/master-bin.*
+
+# Run force-change-meta directly via $MYSQLD_CMD (bypasses safe_process).
+# mysqld updates meta and exits with code 0; this is a normal --exec return.
+--exec $MYSQLD_CMD --cluster-force-change-meta=ON --cluster-force-single-mode=ON --cluster-start-index=$commit_index --cluster-force-recover-index=$commit_index --cluster-id=1 --cluster-info='127.0.0.1:$consensus_port@1' --loose-consensus-reset-mts-info=ON
+
+# Normal restart: write restart params to expect file and wait for connection.
+--exec echo "restart:" > $_expect_file_name
+--enable_reconnect
+--sleep 5
+--source include/wait_until_connected_again_old.inc
+--disable_reconnect
+
+# Verify consensus recovered
+--echo # Verify consensus recovered successfully
+SELECT 1 AS server_restored;

@@ -24,6 +24,8 @@
 #include "sql/recycle_bin/recycle.h"
 #include "sql/recycle_bin/recycle_parse.h"
 
+#include "vidx/vidx_index.h"
+
 #include <set>
 #include "m_string.h"
 #include "mysql/components/services/log_builtins.h"
@@ -71,6 +73,14 @@ LEX_CSTRING ORIGIN_TABLE = {C_STRING_WITH_LEN("__origin_table__")};
 /* Seconds before really purging the recycled table. */
 ulonglong recycle_bin_retention = 7 * 24 * 60 * 60;
 
+static char * generate_recycle_table_name(THD *thd, const dd::Table *table_def);
+
+/* Maximum storage capacity for recycle bin (in bytes). 0 means no limit. */
+ulonglong recycle_bin_capacity_limit = 0;
+
+/* Global atomic version number for recycle bin changes */
+std::atomic<ulonglong> recycle_bin_version(0);
+
 /**
   Log warning message when recycle table
 
@@ -94,11 +104,19 @@ Recycle_error_handler::Recycle_error_handler(THD *thd, Table_ref *table_list)
 
 /* Ignore those error when recycle */
 bool Recycle_error_handler::handle_condition(
-    THD *, uint, const char *, Sql_condition::enum_severity_level *level,
+    THD *thd, uint code, const char *, Sql_condition::enum_severity_level *level,
     const char *message) {
-  /* Log warning */
   log_recycle_warning(m_table_list->db, m_table_list->table_name, message);
   if (*level == Sql_condition::SL_ERROR) m_error = true;
+
+  /* Report warning when the name consumed by this DDL already exists in
+     recycle_bin; auto-generated name conflicts stay internal. */
+  if (code == ER_RECYCLE_TABLE_NAME_EXISTS &&
+      thd->recycle_state->has_name()) {
+    *level = Sql_condition::SL_WARNING;
+    return false;
+  }
+
   return true;
 }
 
@@ -356,6 +374,21 @@ static bool check_state(THD *thd, Table_ref *table) {
     }
   }
 
+  /*
+    Deny to recycle if table has vector index (hlindex) or is a vector
+    index auxiliary table.  The recycle-bin rename path bypasses the
+    vidx::rename_table() hook, which would leave the auxiliary table
+    orphaned in the original schema after the base table is moved to
+    __recycle_bin__.
+  */
+  if (vidx::dd_table_has_hlindexes(table_def) ||
+      vidx::dd_table_is_hlindex(table_def)) {
+    log_recycle_warning(
+        table->db, table->table_name,
+        "Vector index table doesn't support to be recycled.");
+    DBUG_RETURN(true);
+  }
+
   /* Support general tablespace and encrypted table */
   DBUG_RETURN(false);
 }
@@ -390,7 +423,6 @@ static ulonglong string_to_number(const char *str) {
 */
 static bool prepare_recycle_table(THD *thd, Table_ref *table_list,
                                   const char **new_table) {
-  char buff[128];
   DBUG_ENTER("prepare_recycle_table");
   /**
     1) Save the MDL savepoint.
@@ -431,26 +463,7 @@ static bool prepare_recycle_table(THD *thd, Table_ref *table_list,
              "Table engine didn't support recycle bin.");
     DBUG_RETURN(true);
   }
-/* Generate unique table name [ Engine_name + SE_private_id ] */
-#ifndef NDEBUG
-  dd::Object_id unique_id = string_to_number(table_list->table_name);
-#else
-  dd::Object_id unique_id;
-  if (table_def->partitions().size() > 0) {
-    const dd::Partition *partition_def = table_def->partitions().front();
-    if (partition_def->subpartitions().size() > 0)
-      unique_id = partition_def->subpartitions().front()->se_private_id();
-    else
-      unique_id = partition_def->se_private_id();
-  } else {
-    unique_id = table_def->se_private_id();
-  }
-#endif
-  const char *engine_name = table_def->engine().c_str();
-  char *prefix = thd->strmake(engine_name, strlen(engine_name));
-  my_casedn_str(system_charset_info, prefix);
-  snprintf(buff, sizeof(buff), "__%s_%llu", prefix, unique_id);
-  *new_table = thd->strmake(buff, strlen(buff));
+  *new_table = generate_recycle_table_name(thd, table_def);
 
   /* Hold the new table mdl lock */
   {
@@ -469,8 +482,8 @@ static bool prepare_recycle_table(THD *thd, Table_ref *table_list,
     DBUG_RETURN(true);
 
   if (new_table_def != nullptr) {
-    my_error(ER_PREPARE_RECYCLE_TABLE_ERROR, MYF(0),
-             "table already exists in recycle_bin");
+    my_error(ER_RECYCLE_TABLE_NAME_EXISTS, MYF(0),
+             *new_table);
     DBUG_RETURN(true);
   }
 
@@ -750,6 +763,7 @@ Recycle_result recycle_base_table(
 
   /* Remove all the table/table_definition cache */
   tdc_remove_table(thd, TDC_RT_REMOVE_ALL, new_db, new_table, false);
+
   DBUG_RETURN(Recycle_result::OK);
 
 err_after_post_ddl:
@@ -881,7 +895,6 @@ Recycle_result recycle_truncate_table(THD *thd, const char *path,
                                       bool update_create_info,
                                       bool is_temp_table,
                                       dd::Table *table_def) {
-  int error = 0;
   std::set<handlerton *> dummy_ddl_htons;
   Foreign_key_parents_invalidator fk_invalidator;
   Recycle_result res;
@@ -944,17 +957,53 @@ Recycle_result recycle_truncate_table(THD *thd, const char *path,
     Sql_command_backup backup(thd, SQLCOM_CREATE_TABLE);
 
     /* 3. create new table */
-    if ((error =
-             ha_create_table(thd, path, table_list->db, table_list->table_name,
-                             create_info, update_create_info, is_temp_table,
-                             table_def, true, &original_create_info)))
+    if (ha_create_table(thd, path, table_list->db, table_list->table_name,
+                        create_info, update_create_info, is_temp_table,
+                        table_def, true, &original_create_info))
       res = Recycle_result::ERROR;
+  }
+  DBUG_RETURN(res);
+}
+
+static char * generate_recycle_table_name(THD *thd, const dd::Table *table_def) {
+  char *new_table = nullptr;
+  char buff[NAME_LEN];
+  const char *const configured_name =
+      thd->variables.recycle_bin_table_name;
+  if (configured_name != nullptr && configured_name[0] != '\0' &&
+      thd->lex->sql_command != SQLCOM_DROP_DB) {
+    /* recycle_bin_table_name is used only for TRUNCATE TABLE and DROP TABLE */
+    const size_t configured_name_len = strlen(configured_name);
+    thd->recycle_state->set_name(configured_name, configured_name_len);
+    new_table = thd->strmake(configured_name, configured_name_len);
   } else {
-    goto end;
+    /* Generate unique table name [ Engine_name + SE_private_id ] */
+# ifndef NDEBUG
+    dd::Object_id unique_id = string_to_number(table_def->name().c_str());
+# else
+    dd::Object_id unique_id;
+    if (table_def->partitions().size() > 0) {
+      const dd::Partition *partition_def = table_def->partitions().front();
+      if (partition_def->subpartitions().size() > 0)
+        unique_id = partition_def->subpartitions().front()->se_private_id();
+      else
+        unique_id = partition_def->se_private_id();
+    } else {
+      unique_id = table_def->se_private_id();
+    }
+# endif
+    const char *engine_name = table_def->engine().c_str();
+    char *prefix = thd->strmake(engine_name, strlen(engine_name));
+    my_casedn_str(system_charset_info, prefix);
+    snprintf(buff, sizeof(buff), "__%s_%llu", prefix, unique_id);
+    new_table = thd->strmake(buff, strlen(buff));
   }
 
-end:
-  DBUG_RETURN(res);
+  /* Apply lower_case_table_names conversion when lower_case_table_names is not 0 */
+  if (lower_case_table_names) {
+    my_casedn_str(files_charset_info, new_table);
+  }
+  return new_table;
 }
 
 } /* namespace recycle_bin */

@@ -27,6 +27,8 @@
 #include "sql/rpl_utility.h"            // table_def
 #include "sql/table_column_iterator.h"  // Table_columns_view::iterator
 
+extern bool opt_polarx_binlog_bitmap_mode;
+
 namespace cs {
 namespace util {
 /**
@@ -67,6 +69,11 @@ class ReplicatedColumnsView : public Table_columns_view<> {
                to be enabled. It may be `nullptr`.
    */
   ReplicatedColumnsView(TABLE const *table, THD const *thd = nullptr);
+
+  ReplicatedColumnsView(
+      TABLE const *table,
+      cs::util::ColumnFilterFactory::ColumnFilterType filter_typ,
+      THD const *thd = nullptr);
   /**
     Destructor for the class.
    */

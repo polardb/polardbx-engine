@@ -31,4 +31,3 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "lizard0read0xa.h"
-#include "lizard0xa.h"

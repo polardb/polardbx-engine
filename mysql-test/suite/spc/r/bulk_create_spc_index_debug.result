@@ -1,0 +1,74 @@
+CREATE PROCEDURE populate_spc_table()
+BEGIN
+DECLARE i int DEFAULT 1;
+START TRANSACTION;
+WHILE (i <= 10000) DO
+INSERT INTO spc_table VALUES (i, CONCAT('name', i), CONCAT('address', i));
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+CREATE TABLE spc_table(
+id      INT,
+name    VARCHAR(100),
+address VARCHAR(100),
+PRIMARY KEY (id)
+) ENGINE=InnoDB ROW_FORMAT=COMPACT;
+SELECT COUNT(*) FROM spc_table;
+COUNT(*)
+10000
+CREATE INDEX idx_name ON spc_table(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+# restart
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+SELECT * FROM spc_table WHERE name = 'name10';
+id	name	address
+10	name10	address10
+SELECT * FROM spc_table WHERE name = 'name5000';
+id	name	address
+5000	name5000	address5000
+SELECT * FROM spc_table WHERE name = 'name10000';
+id	name	address
+10000	name10000	address10000
+SELECT * FROM spc_table WHERE name = 'name10010';
+id	name	address
+DROP TABLE spc_table;
+DROP PROCEDURE populate_spc_table;
+CREATE PROCEDURE populate_spc_table()
+BEGIN
+DECLARE i int DEFAULT 1;
+START TRANSACTION;
+WHILE (i <= 10000) DO
+INSERT INTO spc_table VALUES (i, CONCAT('name', i), CONCAT('address', i));
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+CREATE TABLE spc_table(
+id      INT,
+name    VARCHAR(100),
+address VARCHAR(100),
+PRIMARY KEY (id)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+SELECT COUNT(*) FROM spc_table;
+COUNT(*)
+10000
+CREATE INDEX idx_name ON spc_table(name) SECONDARY_ENGINE_ATTRIBUTE='{"spc": "true"}';
+# restart
+CHECK TABLE spc_table;
+Table	Op	Msg_type	Msg_text
+test.spc_table	check	status	OK
+SELECT * FROM spc_table WHERE name = 'name10';
+id	name	address
+10	name10	address10
+SELECT * FROM spc_table WHERE name = 'name5000';
+id	name	address
+5000	name5000	address5000
+SELECT * FROM spc_table WHERE name = 'name10000';
+id	name	address
+10000	name10000	address10000
+SELECT * FROM spc_table WHERE name = 'name10010';
+id	name	address
+DROP TABLE spc_table;
+DROP PROCEDURE populate_spc_table;

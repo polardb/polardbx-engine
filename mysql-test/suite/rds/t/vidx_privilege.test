@@ -1,0 +1,130 @@
+##########################################
+# Privilege control for VECTOR INDEX      #
+# Simplified test - connection switching  #
+# tests removed due to MTR issues         #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Prepare - Create table with vector index
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[4,5,6,7,8]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[5,6,7,8,9]'));
+
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo
+--echo # 2. Create test users with various privileges
+CREATE USER 'vidx_select_user'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT ON test.t1 TO 'vidx_select_user'@'localhost';
+
+CREATE USER 'vidx_insert_user'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT, INSERT ON test.t1 TO 'vidx_insert_user'@'localhost';
+
+CREATE USER 'vidx_update_user'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT, UPDATE ON test.t1 TO 'vidx_update_user'@'localhost';
+
+CREATE USER 'vidx_delete_user'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT, DELETE ON test.t1 TO 'vidx_delete_user'@'localhost';
+
+CREATE USER 'vidx_index_user'@'localhost' IDENTIFIED BY 'password';
+GRANT SELECT, INDEX ON test.t1 TO 'vidx_index_user'@'localhost';
+
+CREATE USER 'vidx_all_user'@'localhost' IDENTIFIED BY 'password';
+GRANT ALL ON test.t1 TO 'vidx_all_user'@'localhost';
+
+CREATE USER 'vidx_no_priv_user'@'localhost' IDENTIFIED BY 'password';
+
+CREATE USER 'vidx_create_user'@'localhost' IDENTIFIED BY 'password';
+GRANT CREATE, DROP ON test.* TO 'vidx_create_user'@'localhost';
+
+FLUSH PRIVILEGES;
+
+--echo
+--echo # 3. Verify users created successfully
+SELECT User FROM mysql.user WHERE User LIKE 'vidx_%' ORDER BY User;
+
+--echo
+--echo # 4. Test vector index basic operations (as root)
+--echo # Basic SELECT
+SELECT id, VEC_TOTEXT(v) FROM t1;
+
+--echo # ANN query with vector index
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo # Vector functions work
+SELECT VEC_TOTEXT(VEC_FROMTEXT('[1,2,3,4,5]'));
+SELECT VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[2,3,4,5,6]'));
+SELECT VECTOR_DIM(VEC_FROMTEXT('[1,2,3,4,5]'));
+
+--echo
+--echo # 5. Test DML operations
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[6,7,8,9,10]'));
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id = 6;
+
+UPDATE t1 SET v = VEC_FROMTEXT('[100,100,100,100,100]') WHERE id = 1;
+SELECT id, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+--echo # ANN query finds updated row
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[100,100,100,100,100]')) LIMIT 1;
+
+DELETE FROM t1 WHERE id = 6;
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo # 6. Test DDL operations on vector index
+--echo # Drop and recreate vector index
+DROP INDEX vi ON t1;
+SHOW CREATE TABLE t1;
+
+CREATE VECTOR INDEX vi ON t1(v);
+SHOW CREATE TABLE t1;
+
+--echo # Verify index works after recreation
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+
+--echo
+--echo # 7. Test CREATE TABLE with vector index privilege
+CREATE TABLE t_new (
+  id INT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t_new;
+DROP TABLE t_new;
+
+--echo
+--echo # 8. Test access to auxiliary tables info
+--replace_regex /vidx_[0-9]+_/vidx_XXXX_/
+SELECT NAME FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE 'test/vidx_%';
+
+--echo
+--echo # 9. Cleanup users
+DROP USER 'vidx_select_user'@'localhost';
+DROP USER 'vidx_insert_user'@'localhost';
+DROP USER 'vidx_update_user'@'localhost';
+DROP USER 'vidx_delete_user'@'localhost';
+DROP USER 'vidx_index_user'@'localhost';
+DROP USER 'vidx_all_user'@'localhost';
+DROP USER 'vidx_no_priv_user'@'localhost';
+DROP USER 'vidx_create_user'@'localhost';
+
+--echo
+--echo # 10. Cleanup table
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;

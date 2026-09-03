@@ -56,10 +56,10 @@ struct data_page_t : public basic_page_t {
   data_page_t(buf_block_t *block) : basic_page_t(block, nullptr, nullptr) {}
 
   /** Allocate a LOB data page.
+  @param[in] ctx        insert context providing index/is_bulk.
   @param[in] alloc_mtr  Mini-transaction to be used for allocation of LOB page.
-  @param[in] is_bulk    true if bulk operation.
   @return allocated buffer block or nullptr */
-  buf_block_t *alloc(mtr_t *alloc_mtr, bool is_bulk);
+  buf_block_t *alloc(InsertContext *ctx, mtr_t *alloc_mtr);
 
   buf_block_t *load_x(page_no_t page_no);
 
@@ -105,10 +105,12 @@ struct data_page_t : public basic_page_t {
   @param[in]      offset  Offset where replace begins.
   @param[in,out]  ptr     Pointer to new data.
   @param[in]      want    Amount of data the caller wants to replace.
+  @param[in]      ctx     insert context providing index/is_bulk for new page
+                          allocation.
   @param[in]      mtr     Mini-transaction context.
   @return the buffer block of the new data page. */
   buf_block_t *replace(trx_t *trx, ulint offset, const byte *&ptr, ulint &want,
-                       mtr_t *mtr);
+                       InsertContext *ctx, mtr_t *mtr);
 
   /** Replace some or all parts of the data inline.
   @param[in]      offset  Offset where replace begins.

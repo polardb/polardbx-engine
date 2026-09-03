@@ -1946,6 +1946,7 @@ class PaxosMsg final :
     kMyServerIdFieldNumber = 31,
     kApplyDelaySecondsFieldNumber = 32,
     kServerPortFieldNumber = 37,
+    kDurationBeforeVoteFieldNumber = 38,
     kApplyThreadRunningFieldNumber = 33,
     kDisableElectionFieldNumber = 34,
     kLogInstanceFieldNumber = 35,
@@ -2409,6 +2410,19 @@ class PaxosMsg final :
   void _internal_set_serverport(uint64_t value);
   public:
 
+  // optional uint64 durationBeforeVote = 38;
+  bool has_durationbeforevote() const;
+  private:
+  bool _internal_has_durationbeforevote() const;
+  public:
+  void clear_durationbeforevote();
+  uint64_t durationbeforevote() const;
+  void set_durationbeforevote(uint64_t value);
+  private:
+  uint64_t _internal_durationbeforevote() const;
+  void _internal_set_durationbeforevote(uint64_t value);
+  public:
+
   // optional bool applyThreadRunning = 33;
   bool has_applythreadrunning() const;
   private:
@@ -2493,6 +2507,7 @@ class PaxosMsg final :
   uint64_t myserverid_;
   uint64_t applydelayseconds_;
   uint64_t serverport_;
+  uint64_t durationbeforevote_;
   bool applythreadrunning_;
   bool disableelection_;
   bool loginstance_;
@@ -5601,7 +5616,7 @@ inline void PaxosMsg::set_applydelayseconds(uint64_t value) {
 
 // optional bool applyThreadRunning = 33;
 inline bool PaxosMsg::_internal_has_applythreadrunning() const {
-  bool value = (_has_bits_[0] & 0x80000000u) != 0;
+  bool value = (_has_bits_[1] & 0x00000001u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_applythreadrunning() const {
@@ -5609,7 +5624,7 @@ inline bool PaxosMsg::has_applythreadrunning() const {
 }
 inline void PaxosMsg::clear_applythreadrunning() {
   applythreadrunning_ = false;
-  _has_bits_[0] &= ~0x80000000u;
+  _has_bits_[1] &= ~0x00000001u;
 }
 inline bool PaxosMsg::_internal_applythreadrunning() const {
   return applythreadrunning_;
@@ -5619,7 +5634,7 @@ inline bool PaxosMsg::applythreadrunning() const {
   return _internal_applythreadrunning();
 }
 inline void PaxosMsg::_internal_set_applythreadrunning(bool value) {
-  _has_bits_[0] |= 0x80000000u;
+  _has_bits_[1] |= 0x00000001u;
   applythreadrunning_ = value;
 }
 inline void PaxosMsg::set_applythreadrunning(bool value) {
@@ -5629,7 +5644,7 @@ inline void PaxosMsg::set_applythreadrunning(bool value) {
 
 // optional bool disableElection = 34;
 inline bool PaxosMsg::_internal_has_disableelection() const {
-  bool value = (_has_bits_[1] & 0x00000001u) != 0;
+  bool value = (_has_bits_[1] & 0x00000002u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_disableelection() const {
@@ -5637,7 +5652,7 @@ inline bool PaxosMsg::has_disableelection() const {
 }
 inline void PaxosMsg::clear_disableelection() {
   disableelection_ = false;
-  _has_bits_[1] &= ~0x00000001u;
+  _has_bits_[1] &= ~0x00000002u;
 }
 inline bool PaxosMsg::_internal_disableelection() const {
   return disableelection_;
@@ -5647,7 +5662,7 @@ inline bool PaxosMsg::disableelection() const {
   return _internal_disableelection();
 }
 inline void PaxosMsg::_internal_set_disableelection(bool value) {
-  _has_bits_[1] |= 0x00000001u;
+  _has_bits_[1] |= 0x00000002u;
   disableelection_ = value;
 }
 inline void PaxosMsg::set_disableelection(bool value) {
@@ -5657,7 +5672,7 @@ inline void PaxosMsg::set_disableelection(bool value) {
 
 // optional bool logInstance = 35;
 inline bool PaxosMsg::_internal_has_loginstance() const {
-  bool value = (_has_bits_[1] & 0x00000002u) != 0;
+  bool value = (_has_bits_[1] & 0x00000004u) != 0;
   return value;
 }
 inline bool PaxosMsg::has_loginstance() const {
@@ -5665,7 +5680,7 @@ inline bool PaxosMsg::has_loginstance() const {
 }
 inline void PaxosMsg::clear_loginstance() {
   loginstance_ = false;
-  _has_bits_[1] &= ~0x00000002u;
+  _has_bits_[1] &= ~0x00000004u;
 }
 inline bool PaxosMsg::_internal_loginstance() const {
   return loginstance_;
@@ -5675,7 +5690,7 @@ inline bool PaxosMsg::loginstance() const {
   return _internal_loginstance();
 }
 inline void PaxosMsg::_internal_set_loginstance(bool value) {
-  _has_bits_[1] |= 0x00000002u;
+  _has_bits_[1] |= 0x00000004u;
   loginstance_ = value;
 }
 inline void PaxosMsg::set_loginstance(bool value) {
@@ -5778,6 +5793,34 @@ inline void PaxosMsg::_internal_set_serverport(uint64_t value) {
 inline void PaxosMsg::set_serverport(uint64_t value) {
   _internal_set_serverport(value);
   // @@protoc_insertion_point(field_set:alisql.PaxosMsg.serverPort)
+}
+
+// optional uint64 durationBeforeVote = 38;
+inline bool PaxosMsg::_internal_has_durationbeforevote() const {
+  bool value = (_has_bits_[0] & 0x80000000u) != 0;
+  return value;
+}
+inline bool PaxosMsg::has_durationbeforevote() const {
+  return _internal_has_durationbeforevote();
+}
+inline void PaxosMsg::clear_durationbeforevote() {
+  durationbeforevote_ = uint64_t{0u};
+  _has_bits_[0] &= ~0x80000000u;
+}
+inline uint64_t PaxosMsg::_internal_durationbeforevote() const {
+  return durationbeforevote_;
+}
+inline uint64_t PaxosMsg::durationbeforevote() const {
+  // @@protoc_insertion_point(field_get:alisql.PaxosMsg.durationBeforeVote)
+  return _internal_durationbeforevote();
+}
+inline void PaxosMsg::_internal_set_durationbeforevote(uint64_t value) {
+  _has_bits_[0] |= 0x80000000u;
+  durationbeforevote_ = value;
+}
+inline void PaxosMsg::set_durationbeforevote(uint64_t value) {
+  _internal_set_durationbeforevote(value);
+  // @@protoc_insertion_point(field_set:alisql.PaxosMsg.durationBeforeVote)
 }
 
 // -------------------------------------------------------------------

@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 11/5/1995 Heikki Tuuri
  *******************************************************/
 
+#ifndef buf0flu_h
+#define INNODB_BUF0FLU_IC_STANDALONE
+#include "buf0flu.h"
+#undef INNODB_BUF0FLU_IC_STANDALONE
+#endif /* !buf0flu_h */
+
 #include "buf0buf.h"
 #include "fsp0types.h"
 #include "mtr0mtr.h"

@@ -26,12 +26,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** @file trx/lizard0service.cc
 
- Partial implemation of sql/lizard/lizard_sevice.h.
+ Partial implemation of include/komodo0sevice.h.
 
  Created 2021-08-10 by Jianwei.zhao
  *******************************************************/
 
-#include "sql/lizard/lizard_service.h"
+#include "komodo0service.h"
+#include "lizard0txn0slot.h"
 
 #include "trx0undo.h"
 
@@ -72,7 +73,7 @@ void MyXAInfo::init_by_txn_slot(const txn_slot_t *txn_slot) {
   ut_ad(txn_slot);
 
   status = txn_slot->is_rollback() ? XA_status::ROLLBACK : XA_status::COMMIT;
-  /** if TXN_UNDO_LOG_COMMITED or TXN_UNDO_LOG_PURGED, must be
+  /** if txn_slot_t::COMMITED or txn_slot_t::PURGED, must be
   non proposal. */
   txn_slot->image.copy_to_gcn(gcn);
   is_proposal = false;

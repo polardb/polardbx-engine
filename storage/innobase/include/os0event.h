@@ -121,7 +121,9 @@ static inline ulint os_event_wait_time(os_event_t e,
   return os_event_wait_time_low(e, t, 0);
 }
 
+#ifndef INNODB_OS0EVENT_IC_STANDALONE
 #include "os0event.ic"
+#endif /* !INNODB_OS0EVENT_IC_STANDALONE */
 
 /** Initializes support for os_event objects. Must be called once,
  and before any os_event object is created. */

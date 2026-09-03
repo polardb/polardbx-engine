@@ -1,0 +1,86 @@
+##############################################
+# HNSW learned params survive cache reset    #
+##############################################
+#
+# TEST: vidx_hnsw_cache_reset_learning
+#
+# ef_power / diameter are learned online and directly control search
+# quality (visited Bloom filter sizing / beam generosity window).
+# They used to live only on MHNSW_Share, so a cache reset (triggered
+# when root.allocated_size() > vidx_hnsw_cache_size) cold-started them
+# at 0.6 / 0 and silently degraded recall -- cache size must only
+# affect speed, never search quality.
+#
+# The fix persists both values on the hlindex TABLE_SHARE:
+#   - written back in MHNSW_Share::reset()  (set_if_bigger semantics)
+#   - restored in MHNSW_Share::get_from_share() for the next generation
+#
+# Observability: Vidx_last_ef_power_init / Vidx_last_diameter_init report
+# the values inherited by the most recently created MHNSW_Share.
+#
+# Requires: debug build (DBUG hooks vidx_force_learned_params /
+# vidx_force_reset_on_release make the reset cycle deterministic on a
+# small table, bypassing the 1MB lower bound of vidx_hnsw_cache_size).
+
+--source include/have_debug.inc
+
+SET GLOBAL vidx_disabled = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(3) NOT NULL,
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# 100 deterministic rows: the optimizer bypasses the vector index on tiny
+# tables (LIMIT covers the whole table), and the assertions below require
+# the ANN path to actually run.  Row i holds [i,0,0], so the nearest
+# neighbour of [i,0,0] is row i itself — fully deterministic results.
+--disable_query_log
+let $i=1;
+while ($i <= 100) {
+  eval INSERT INTO t1 VALUES ($i, VEC_FROMTEXT('[$i,0,0]'));
+  inc $i;
+}
+--enable_query_log
+ANALYZE TABLE t1;
+
+--echo
+--echo # 1. First ANN query creates generation-1 MHNSW_Share: it inherits
+--echo #    the cold-start defaults (0.6 / 0) from the fresh hlindex share.
+SELECT VARIABLE_VALUE INTO @qc0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_query_count';
+SELECT id FROM t1
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0]')) LIMIT 1;
+# Guard against a silent fall-back to filesort: the assertions below are
+# only meaningful if the ANN path (mhnsw_read_first) actually ran.
+SELECT VARIABLE_VALUE - @qc0 AS ann_query_ran
+  FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_query_count';
+SHOW GLOBAL STATUS LIKE 'Vidx_last_ef_power_init';
+SHOW GLOBAL STATUS LIKE 'Vidx_last_diameter_init';
+
+--echo
+--echo # 2. Pretend generation-1 has fully learned its params (0.95 / 0.5)
+--echo #    and force a reset when the query releases the share: the learned
+--echo #    values must be written back to the hlindex TABLE_SHARE.
+SET SESSION debug = '+d,vidx_force_learned_params,vidx_force_reset_on_release';
+SELECT id FROM t1
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,0,0]')) LIMIT 1;
+SET SESSION debug = '-d,vidx_force_learned_params,vidx_force_reset_on_release';
+
+--echo
+--echo # 3. Next ANN query creates generation-2 MHNSW_Share: it must restore
+--echo #    the learned values instead of cold-starting at 0.6 / 0.
+SELECT id FROM t1
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,0,0]')) LIMIT 1;
+SHOW GLOBAL STATUS LIKE 'Vidx_last_ef_power_init';
+# diameter keeps growing with real query distances after the forced 0.5
+# (set_if_bigger in search_layer), so assert the inherited value kept at
+# least the forced floor instead of an exact match.
+SELECT VARIABLE_VALUE + 0 >= 0.5 AS diameter_inherited
+  FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_last_diameter_init';
+
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

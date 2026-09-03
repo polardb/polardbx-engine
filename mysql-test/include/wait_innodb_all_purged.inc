@@ -15,6 +15,8 @@ if ($is_debug)
 {
 --disable_query_log
 
+set global innodb_dbug_gcs_enable_traverse_scn_list=true;
+
 let $wait_counter_init= 300;
 if ($wait_timeout)
 {
@@ -68,5 +70,6 @@ if (!$success)
   die Timeout in wait_innodb_all_purged.inc;
 }
 
+set global innodb_dbug_gcs_enable_traverse_scn_list=false;
 --enable_query_log
 }

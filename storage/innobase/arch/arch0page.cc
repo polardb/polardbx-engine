@@ -49,6 +49,132 @@ uint ARCH_PAGE_FILE_DATA_CAPACITY =
 /** Event to signal the page archiver thread. */
 os_event_t page_archiver_thread_event;
 
+/** Page archiver global statistics namespace. All statistics are maintained
+as simple non-atomic variables for performance. These variables are updated
+at key points in the archiver lifecycle and exported to MySQL status variables
+for monitoring purposes. */
+namespace arch_page_stats {
+
+/** Total number of page IDs tracked since archiver started */
+uint64_t g_total_page_ids = 0;
+/** Space ID of the last tracked page */
+uint64_t g_last_write_space = 0;
+/** Page number of the last tracked page */
+uint64_t g_last_write_page = 0;
+/** Block number where last write occurred */
+uint64_t g_last_write_block = 0;
+/** Block number of last completed flush */
+uint64_t g_last_flush_block = 0;
+/** Timestamp of last flush operation (seconds since epoch) */
+uint64_t g_flush_last_time = 0;
+/** Total number of blocks flushed to disk */
+uint64_t g_block_flush_count = 0;
+/** Number of times buffer became full and waited for flush */
+uint64_t g_buffer_full_wait_flushes = 0;
+/** Number of successful wait-for-flush operations */
+uint64_t g_wait_flush_succ_count = 0;
+/** Number of wait-for-flush timeouts */
+uint64_t g_wait_flush_timeout_count = 0;
+/** Number of failed wait-for-flush operations */
+uint64_t g_wait_flush_failed_count = 0;
+/** Total number of backup read operations */
+uint64_t g_backup_count = 0;
+/** Timestamp of last backup operation (seconds since epoch) */
+uint64_t g_backup_last_time = 0;
+/** Number of pages read in last backup operation */
+uint64_t g_backup_last_pages = 0;
+/** Total number of purge operations */
+uint64_t g_purge_count = 0;
+/** LSN of last purge operation */
+uint64_t g_purge_last_lsn = 0;
+/** Number of checksum validation errors */
+uint64_t g_checksum_errors = 0;
+/** Number of I/O errors encountered */
+uint64_t g_io_errors = 0;
+/** Start LSN of current active tracking session. Updated when a new archive
+group is created in Arch_Page_Sys::start(). */
+uint64_t g_current_start_lsn = 0;
+
+/** Increment the total count of tracked page IDs. Called when a new page ID
+is added to the tracking buffer. */
+void increment_total_page_ids() { g_total_page_ids++; }
+
+/** Get the timestamp of the last flush operation.
+@return flush timestamp in seconds since epoch, or 0 if never flushed */
+uint64_t get_flush_last_time() { return g_flush_last_time; }
+
+/** Update the flush timestamp to current time. Called after completing a
+flush operation. */
+void update_flush_last_time() {
+  g_flush_last_time = static_cast<uint64_t>(std::time(nullptr));
+}
+
+/** Increment the counter for buffer-full wait events. Called when the
+tracking buffer is full and waits for flush. */
+void increment_buffer_full_wait_flushes() { g_buffer_full_wait_flushes++; }
+
+/** Update the last written page information.
+@param[in]	space_id	tablespace ID of the page
+@param[in]	page_id		page number within the tablespace */
+void update_last_write_page(const uint64_t space_id, const uint64_t page_id) {
+  g_last_write_space = space_id;
+  g_last_write_page = page_id;
+}
+
+/** Update the last write block number.
+@param[in]	block_num	block number in the archive buffer */
+void update_last_write_block(const uint64_t block_num) {
+  g_last_write_block = block_num;
+}
+
+/** Update the last flushed block number.
+@param[in]	block_num	block number that was flushed to disk */
+void update_last_flush_block(const uint64_t block_num) {
+  g_last_flush_block = block_num;
+}
+
+/** Increment the total count of flushed blocks. */
+void increment_block_flush_count() { g_block_flush_count++; }
+
+/** Increment successful wait-flush counter. */
+void increment_wait_flush_succ_count() { g_wait_flush_succ_count++; }
+
+/** Increment wait-flush timeout counter. */
+void increment_wait_flush_timeout_count() { g_wait_flush_timeout_count++; }
+
+/** Increment failed wait-flush counter. */
+void increment_wait_flush_failed_count() { g_wait_flush_failed_count++; }
+
+/** Record a backup read operation.
+@param[in]	pages_read	number of pages read in this backup operation */
+void record_backup_read(const uint64_t pages_read) {
+  g_backup_count++;
+  g_backup_last_time = static_cast<uint64_t>(std::time(nullptr));
+  g_backup_last_pages = pages_read;
+}
+
+/** Record a purge operation.
+@param[in]	purge_lsn	LSN up to which data was purged */
+void record_purge(const lsn_t purge_lsn) {
+  g_purge_count++;
+  g_purge_last_lsn = purge_lsn;
+}
+
+/** Increment checksum error counter. */
+void increment_checksum_errors() { g_checksum_errors++; }
+
+/** Increment I/O error counter. */
+void increment_io_errors() { g_io_errors++; }
+
+/** Update the current tracking session's start LSN. Called in
+Arch_Page_Sys::start() when creating a new archive group.
+@param[in]	start_lsn	the LSN from which page tracking begins */
+void update_current_start_lsn(const lsn_t start_lsn) {
+  g_current_start_lsn = start_lsn;
+}
+
+}  // namespace arch_page_stats
+
 /** Archiver background thread */
 void page_archiver_thread() {
   bool page_wait = false;
@@ -1117,7 +1243,10 @@ void Page_Arch_Client_Ctx::release() {
 bool wait_flush_archiver(Page_Wait_Flush_Archiver_Cbk cbk_func) {
   ut_ad(mutex_own(arch_page_sys->get_oper_mutex()));
 
+  bool did_wait = false;
+
   while (cbk_func()) {
+    did_wait = true;
     /* Need to wait for flush. We don't expect it
     to happen normally. With no duplicate page ID
     dirty page growth should be very slow. */
@@ -1150,15 +1279,21 @@ bool wait_flush_archiver(Page_Wait_Flush_Archiver_Cbk cbk_func) {
         arch_page_sys->get_oper_mutex(), is_timeout);
 
     if (err != 0) {
+      arch_page_stats::increment_wait_flush_failed_count();
       return (false);
-
     } else if (is_timeout) {
       ib::warn(ER_IB_MSG_22) << "Clone Page Tracking: wait for block flush "
                                 "timed out";
+      arch_page_stats::increment_wait_flush_timeout_count();
       ut_d(ut_error);
       ut_o(return false);
     }
   }
+
+  if (did_wait) {
+    arch_page_stats::increment_wait_flush_succ_count();
+  }
+
   return (true);
 }
 
@@ -1242,6 +1377,7 @@ bool Arch_Block::validate(byte *block) {
   auto checksum = ut_crc32(block + ARCH_PAGE_BLK_HEADER_LENGTH, data_length);
 
   if (checksum != block_checksum) {
+    arch_page_stats::increment_checksum_errors();
     ib::warn(ER_IB_ERR_PAGE_ARCH_INVALID_DOUBLE_WRITE_BUF)
         << Arch_Block::get_block_number(block);
     ut_d(ut_error);
@@ -1324,6 +1460,10 @@ bool Arch_Block::add_page(buf_page_t *page, Arch_Page_Pos *pos) {
   pos->m_offset += ARCH_BLK_PAGE_ID_SIZE;
   m_data_len += ARCH_BLK_PAGE_ID_SIZE;
 
+  /* Update statistics */
+  arch_page_stats::update_last_write_page(space_id, page_num);
+  arch_page_stats::increment_total_page_ids();
+
   /* Update oldest LSN from page. */
   if (arch_page_sys->get_latest_stop_lsn() > m_oldest_lsn ||
       m_oldest_lsn > page->get_oldest_lsn()) {
@@ -1385,6 +1525,14 @@ dberr_t Arch_Block::flush(Arch_Group *file_group, Arch_Blk_Flush_Type type) {
   switch (m_type) {
     case ARCH_RESET_BLOCK:
       err = file_group->write_file_header(m_data, m_size);
+      if (err != DB_SUCCESS) {
+        arch_page_stats::increment_io_errors();
+      } else {
+        /* Successfully flushed a block, increment block_flush counter */
+        arch_page_stats::increment_block_flush_count();
+        /* Update last flush timestamp */
+        arch_page_stats::update_flush_last_time();
+      }
       break;
 
     case ARCH_DATA_BLOCK: {
@@ -1401,6 +1549,14 @@ dberr_t Arch_Block::flush(Arch_Group *file_group, Arch_Blk_Flush_Type type) {
       useful info required during recovery. */
       err = file_group->write_to_file(nullptr, m_data, m_size, is_partial_flush,
                                       true, get_empty_file_header_cbk);
+      if (err != DB_SUCCESS) {
+        arch_page_stats::increment_io_errors();
+      } else {
+        /* Successfully flushed a block, increment block_flush counter */
+        arch_page_stats::increment_block_flush_count();
+        /* Update last flush timestamp */
+        arch_page_stats::update_flush_last_time();
+      }
       break;
     }
 
@@ -1742,6 +1898,7 @@ void Arch_Page_Sys::track_page(buf_page_t *bpage, lsn_t track_lsn,
       /* Current block is full. Move to next block. */
       cur_blk->end_write();
 
+      arch_page_stats::update_last_write_block(m_write_pos.m_block_num);
       m_write_pos.set_next();
 
       /* Writing to a new file so move to the next reset block. */
@@ -1776,6 +1933,9 @@ void Arch_Page_Sys::track_page(buf_page_t *bpage, lsn_t track_lsn,
       bool success;
 
       ut_a(cur_blk->get_state() == ARCH_BLOCK_READY_TO_FLUSH);
+
+      /* Buffer is full, need to wait for flush */
+      arch_page_stats::increment_buffer_full_wait_flushes();
 
       auto cbk = std::bind(&Arch_Block::is_flushable, *cur_blk);
 
@@ -1976,6 +2136,13 @@ int Arch_Page_Sys::get_pages(MYSQL_THD thd, Page_Track_Callback cbk_func,
   }
 
   arch_mutex_exit();
+
+  /* Record backup read statistics */
+  if (err == 0) {
+    uint64_t total_pages_read = 0;
+    get_num_pages(start_pos, cur_pos, total_pages_read);
+    arch_page_stats::record_backup_read(total_pages_read);
+  }
 
   return (0);
 }
@@ -2468,6 +2635,12 @@ int Arch_Page_Sys::start(Arch_Group **group, lsn_t *start_lsn,
         ut::make_psi_memory_key(mem_key_archive), log_sys_lsn,
         ARCH_PAGE_FILE_HDR_SIZE, &m_mutex);
 
+    /* Update global statistics: record the start LSN of this new tracking session.
+     * This LSN represents the beginning of the page tracking range for the newly
+     * created archive group. It will be exposed via the MySQL status variable
+     * innodb_page_track_current_start_lsn for monitoring purposes. */
+    arch_page_stats::update_current_start_lsn(log_sys_lsn);
+
     if (m_current_group == nullptr) {
       acquired_oper_mutex = false;
       arch_oper_mutex_exit();
@@ -2608,6 +2781,7 @@ int Arch_Page_Sys::stop(Arch_Group *group, lsn_t *stop_lsn,
   auto count = group->detach(*stop_lsn, &m_write_pos);
   arch_oper_mutex_exit();
 
+
   int err = 0;
   bool wait_for_block_flush = false;
 
@@ -2622,6 +2796,7 @@ int Arch_Page_Sys::stop(Arch_Group *group, lsn_t *stop_lsn,
 
     cur_blk->end_write();
     m_request_flush_pos = m_write_pos;
+    arch_page_stats::update_last_write_block(m_write_pos.m_block_num);
     m_write_pos.set_next();
 
     os_event_set(page_archiver_thread_event);
@@ -2707,12 +2882,14 @@ dberr_t Arch_Page_Sys::flush_inactive_blocks(Arch_Page_Pos &cur_pos,
     err = cur_blk->flush(m_current_group, ARCH_FLUSH_NORMAL);
 
     if (err != DB_SUCCESS) {
+      arch_page_stats::increment_io_errors();
       break;
     }
 
     MONITOR_INC(MONITOR_PAGE_TRACK_FULL_BLOCK_WRITES);
 
     arch_oper_mutex_enter();
+
 
     m_flush_blk_num_with_lsn = cur_pos.m_block_num;
     cur_pos.set_next();
@@ -2721,6 +2898,8 @@ dberr_t Arch_Page_Sys::flush_inactive_blocks(Arch_Page_Pos &cur_pos,
 
     arch_oper_mutex_exit();
   }
+
+  arch_page_stats::update_last_flush_block(m_flush_blk_num_with_lsn);
 
   return (err);
 }
@@ -2746,6 +2925,7 @@ dberr_t Arch_Page_Sys::flush_active_block(Arch_Page_Pos cur_pos,
   dberr_t err = flush_blk->flush(m_current_group, ARCH_FLUSH_PARTIAL);
 
   if (err != DB_SUCCESS) {
+    arch_page_stats::increment_io_errors();
     return (err);
   }
 
@@ -2771,6 +2951,8 @@ dberr_t Arch_Page_Sys::flush_active_block(Arch_Page_Pos cur_pos,
       flush_blk->get_data_len() + ARCH_PAGE_BLK_HEADER_LENGTH;
 
   arch_oper_mutex_exit();
+
+  arch_page_stats::update_last_flush_block(cur_pos.m_block_num);
 
   return (err);
 }
@@ -3164,6 +3346,9 @@ uint Arch_Page_Sys::purge(lsn_t *purge_lsn) {
   m_latest_purged_lsn = purged_lsn;
 
   arch_mutex_exit();
+
+  /* Record purge statistics */
+  arch_page_stats::record_purge(purged_lsn);
 
   return (err);
 }

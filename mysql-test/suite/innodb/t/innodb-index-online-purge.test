@@ -57,7 +57,9 @@ connection default;
 SET DEBUG_SYNC='now WAIT_FOR created_t';
 UPDATE t SET c='ab';
 
---source include/wait_innodb_all_purged.inc
+# We cannot use wait_innodb_all_purged because ddl_log is an insert-only operation.
+#--source include/wait_innodb_all_purged.inc
+--sleep 10
 
 SET DEBUG_SYNC='now SIGNAL dml_done_u';
 connection con2;

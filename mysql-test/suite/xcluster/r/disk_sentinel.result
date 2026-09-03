@@ -1,0 +1,55 @@
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+SET SQL_LOG_BIN=0;
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+SET SQL_LOG_BIN=1;
+SET SQL_LOG_BIN=0;
+call mtr.add_suppression("Error writing file.*No space left on device");
+call mtr.add_suppression("A message intended for a client cannot be sent there");
+call mtr.add_suppression("Disk sentinel");
+SET SQL_LOG_BIN=1;
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+# Phase 1: Leader OFF state should not trigger fatal
+set global enable_disk_sentinel=OFF;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+include/assert_grep.inc [No disk sentinel fatal when disabled]
+# Phase 2: Leader ON + disk write error should trigger fatal
+set global enable_disk_sentinel=ON;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+set global enable_disk_sentinel=OFF;
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+# Phase 3: Leader ON + IO hang should trigger fatal
+set global enable_disk_sentinel=ON;
+set global debug="+d,disk_sentinel_io_hang,simulate_skip_exit";
+set global enable_disk_sentinel=OFF;
+set global debug="-d,disk_sentinel_io_hang,simulate_skip_exit";
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;
+# Phase 4: Follower should not trigger fatal
+set global enable_disk_sentinel=ON;
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+set global enable_disk_sentinel=OFF;
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+include/assert_grep.inc [No disk sentinel fatal on follower]
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;
+# Phase 5: Logger should not trigger fatal
+set global enable_disk_sentinel=ON;
+set global disk_sentinel_check_interval=1;
+set global disk_sentinel_max_retries=2;
+set global debug="+d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+set global enable_disk_sentinel=OFF;
+set global debug="-d,simulate_disk_error_on_disk_sentinel,simulate_skip_exit";
+include/assert_grep.inc [No disk sentinel fatal on logger]
+set global enable_disk_sentinel=DEFAULT;
+set global disk_sentinel_check_interval=DEFAULT;
+set global disk_sentinel_max_retries=DEFAULT;

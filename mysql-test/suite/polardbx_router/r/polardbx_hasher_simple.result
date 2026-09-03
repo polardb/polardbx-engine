@@ -1,0 +1,598 @@
+#
+# Test for PolarDB-X hasher function compatibility
+#
+#
+# Test 1: Basic polardbx_hasher function usage
+#
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+name VARCHAR(50),
+value BIGINT
+);
+INSERT INTO t1 VALUES
+(1, 'test1', 100),
+(2, 'test2', 200),
+(3, 'test3', 300),
+(4, 'test4', 400),
+(5, 'test5', 500);
+Test basic hasher function
+SELECT id, polardbx_hasher(id) FROM t1 ORDER BY id;
+id	polardbx_hasher(id)
+1	6161172798010463909
+2	-8757930400787925687
+3	-7000469012213606124
+4	9172397366371939626
+5	-4269195568055077416
+SELECT name, polardbx_hasher(name) FROM t1 ORDER BY id;
+name	polardbx_hasher(name)
+test1	-2864529164705671005
+test2	9044262613283300252
+test3	-3467060756958554187
+test4	3564119877896740020
+test5	-1990518718783157724
+SELECT value, polardbx_hasher(value) FROM t1 ORDER BY id;
+value	polardbx_hasher(value)
+100	8273138365905483981
+200	-6627188659413746981
+300	-5816586087938738740
+400	-8347077748959235974
+500	5517404819946206893
+Test with multiple columns
+SELECT id, name, polardbx_hasher(id, name) FROM t1 ORDER BY id;
+id	name	polardbx_hasher(id, name)
+1	test1	3216227858031304336
+2	test2	-8567005430787718437
+3	test3	5205272871264451179
+4	test4	3879586236949059943
+5	test5	-2949577889977931041
+#
+# Test 2: polardbx_hasher with range validation
+#
+Test valid range parameters
+SELECT id, polardbx_hasher(id, -9223372036854775807, 9223372036854775807) FROM t1 ORDER BY id;
+id	polardbx_hasher(id, -9223372036854775807, 9223372036854775807)
+1	6161172798010463909
+2	-8757930400787925687
+3	-7000469012213606124
+4	9172397366371939626
+5	-4269195568055077416
+Test specific range
+SELECT id, polardbx_hasher(id, -8757930400787925687, 9172397366371939626) FROM t1 ORDER BY id;
+id	polardbx_hasher(id, -8757930400787925687, 9172397366371939626)
+1	6161172798010463909
+2	-8757930400787925687
+3	-7000469012213606124
+4	9172397366371939626
+5	-4269195568055077416
+#
+# Test 3: Edge cases for range validation
+#
+SELECT id, polardbx_hasher(id, 6161172798010463909, 6161172798010463909) FROM t1 WHERE id = 1;
+id	polardbx_hasher(id, 6161172798010463909, 6161172798010463909)
+1	6161172798010463909
+#
+# Test 4: Error cases for range validation
+#
+Test invalid range (min > max) - should produce error
+SELECT id, polardbx_hasher(id, 100, 50) FROM t1 LIMIT 1;
+ERROR HY000: Invalid hash range in polardbx_hasher function: min_range (100) must be not greater than max_range (50)
+Test out of range values - should produce error
+Since we don't know the exact hash values, we'll use a narrow range that should fail
+We'll first check what values we get to determine a proper test range
+SELECT id, polardbx_hasher(id, 1, 2) as hash_val FROM t1 ORDER BY id;
+ERROR HY000: Hash value 6161172798010463909 computed from partitioning key [id=1] is out of the expected source partition range [1, 2]. This indicates a data consistency issue during partition migration.
+#
+# Test 5: Test with different data types
+#
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+str_val VARCHAR(50),
+int_val INT,
+bigint_val BIGINT,
+decimal_val DECIMAL(10,2),
+float_val FLOAT,
+double_val DOUBLE
+);
+INSERT INTO t2 VALUES
+(1, 'string_value', 123, 123456789012345, 999.99, 3.14, 2.718281828459045);
+Test hasher with different data types
+SELECT id, polardbx_hasher(str_val) FROM t2;
+id	polardbx_hasher(str_val)
+1	-2171065234399000591
+SELECT id, polardbx_hasher(int_val) FROM t2;
+id	polardbx_hasher(int_val)
+1	-8537719995137208844
+SELECT id, polardbx_hasher(bigint_val) FROM t2;
+id	polardbx_hasher(bigint_val)
+1	2852661729848918113
+SELECT id, polardbx_hasher(decimal_val) FROM t2;
+id	polardbx_hasher(decimal_val)
+1	-9205501361145232638
+SELECT id, polardbx_hasher(float_val) FROM t2;
+id	polardbx_hasher(float_val)
+1	-5496013630912323755
+SELECT id, polardbx_hasher(double_val) FROM t2;
+id	polardbx_hasher(double_val)
+1	-2633296057684279665
+Test hasher with mixed data types
+SELECT id, polardbx_hasher(str_val, int_val, bigint_val) FROM t2;
+id	polardbx_hasher(str_val, int_val, bigint_val)
+1	-7937082275022275117
+#
+# Test 6: Test with NULL values
+#
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+nullable_col VARCHAR(50)
+);
+INSERT INTO t3 VALUES
+(1, 'non-null value'),
+(2, NULL);
+Test hasher with NULL values
+SELECT id, nullable_col, polardbx_hasher(nullable_col) FROM t3;
+id	nullable_col	polardbx_hasher(nullable_col)
+1	non-null value	5835219639111273568
+2	NULL	-2447670524089286488
+Test hasher with mix of NULL and non-NULL values
+SELECT id, polardbx_hasher(id, nullable_col) FROM t3;
+id	polardbx_hasher(id, nullable_col)
+1	-3801149021274954358
+2	-8313158268418437284
+#
+# Test 7: Performance test with larger dataset
+#
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+data VARCHAR(100)
+);
+Insert more data for performance testing
+INSERT INTO t4 VALUES (1, CONCAT('data_', 1));
+INSERT INTO t4 VALUES (2, CONCAT('data_', 2));
+INSERT INTO t4 VALUES (3, CONCAT('data_', 3));
+INSERT INTO t4 VALUES (4, CONCAT('data_', 4));
+INSERT INTO t4 VALUES (5, CONCAT('data_', 5));
+INSERT INTO t4 VALUES (6, CONCAT('data_', 6));
+INSERT INTO t4 VALUES (7, CONCAT('data_', 7));
+INSERT INTO t4 VALUES (8, CONCAT('data_', 8));
+INSERT INTO t4 VALUES (9, CONCAT('data_', 9));
+INSERT INTO t4 VALUES (10, CONCAT('data_', 10));
+INSERT INTO t4 VALUES (11, CONCAT('data_', 11));
+INSERT INTO t4 VALUES (12, CONCAT('data_', 12));
+INSERT INTO t4 VALUES (13, CONCAT('data_', 13));
+INSERT INTO t4 VALUES (14, CONCAT('data_', 14));
+INSERT INTO t4 VALUES (15, CONCAT('data_', 15));
+INSERT INTO t4 VALUES (16, CONCAT('data_', 16));
+INSERT INTO t4 VALUES (17, CONCAT('data_', 17));
+INSERT INTO t4 VALUES (18, CONCAT('data_', 18));
+INSERT INTO t4 VALUES (19, CONCAT('data_', 19));
+INSERT INTO t4 VALUES (20, CONCAT('data_', 20));
+INSERT INTO t4 VALUES (21, CONCAT('data_', 21));
+INSERT INTO t4 VALUES (22, CONCAT('data_', 22));
+INSERT INTO t4 VALUES (23, CONCAT('data_', 23));
+INSERT INTO t4 VALUES (24, CONCAT('data_', 24));
+INSERT INTO t4 VALUES (25, CONCAT('data_', 25));
+INSERT INTO t4 VALUES (26, CONCAT('data_', 26));
+INSERT INTO t4 VALUES (27, CONCAT('data_', 27));
+INSERT INTO t4 VALUES (28, CONCAT('data_', 28));
+INSERT INTO t4 VALUES (29, CONCAT('data_', 29));
+INSERT INTO t4 VALUES (30, CONCAT('data_', 30));
+INSERT INTO t4 VALUES (31, CONCAT('data_', 31));
+INSERT INTO t4 VALUES (32, CONCAT('data_', 32));
+INSERT INTO t4 VALUES (33, CONCAT('data_', 33));
+INSERT INTO t4 VALUES (34, CONCAT('data_', 34));
+INSERT INTO t4 VALUES (35, CONCAT('data_', 35));
+INSERT INTO t4 VALUES (36, CONCAT('data_', 36));
+INSERT INTO t4 VALUES (37, CONCAT('data_', 37));
+INSERT INTO t4 VALUES (38, CONCAT('data_', 38));
+INSERT INTO t4 VALUES (39, CONCAT('data_', 39));
+INSERT INTO t4 VALUES (40, CONCAT('data_', 40));
+INSERT INTO t4 VALUES (41, CONCAT('data_', 41));
+INSERT INTO t4 VALUES (42, CONCAT('data_', 42));
+INSERT INTO t4 VALUES (43, CONCAT('data_', 43));
+INSERT INTO t4 VALUES (44, CONCAT('data_', 44));
+INSERT INTO t4 VALUES (45, CONCAT('data_', 45));
+INSERT INTO t4 VALUES (46, CONCAT('data_', 46));
+INSERT INTO t4 VALUES (47, CONCAT('data_', 47));
+INSERT INTO t4 VALUES (48, CONCAT('data_', 48));
+INSERT INTO t4 VALUES (49, CONCAT('data_', 49));
+INSERT INTO t4 VALUES (50, CONCAT('data_', 50));
+INSERT INTO t4 VALUES (51, CONCAT('data_', 51));
+INSERT INTO t4 VALUES (52, CONCAT('data_', 52));
+INSERT INTO t4 VALUES (53, CONCAT('data_', 53));
+INSERT INTO t4 VALUES (54, CONCAT('data_', 54));
+INSERT INTO t4 VALUES (55, CONCAT('data_', 55));
+INSERT INTO t4 VALUES (56, CONCAT('data_', 56));
+INSERT INTO t4 VALUES (57, CONCAT('data_', 57));
+INSERT INTO t4 VALUES (58, CONCAT('data_', 58));
+INSERT INTO t4 VALUES (59, CONCAT('data_', 59));
+INSERT INTO t4 VALUES (60, CONCAT('data_', 60));
+INSERT INTO t4 VALUES (61, CONCAT('data_', 61));
+INSERT INTO t4 VALUES (62, CONCAT('data_', 62));
+INSERT INTO t4 VALUES (63, CONCAT('data_', 63));
+INSERT INTO t4 VALUES (64, CONCAT('data_', 64));
+INSERT INTO t4 VALUES (65, CONCAT('data_', 65));
+INSERT INTO t4 VALUES (66, CONCAT('data_', 66));
+INSERT INTO t4 VALUES (67, CONCAT('data_', 67));
+INSERT INTO t4 VALUES (68, CONCAT('data_', 68));
+INSERT INTO t4 VALUES (69, CONCAT('data_', 69));
+INSERT INTO t4 VALUES (70, CONCAT('data_', 70));
+INSERT INTO t4 VALUES (71, CONCAT('data_', 71));
+INSERT INTO t4 VALUES (72, CONCAT('data_', 72));
+INSERT INTO t4 VALUES (73, CONCAT('data_', 73));
+INSERT INTO t4 VALUES (74, CONCAT('data_', 74));
+INSERT INTO t4 VALUES (75, CONCAT('data_', 75));
+INSERT INTO t4 VALUES (76, CONCAT('data_', 76));
+INSERT INTO t4 VALUES (77, CONCAT('data_', 77));
+INSERT INTO t4 VALUES (78, CONCAT('data_', 78));
+INSERT INTO t4 VALUES (79, CONCAT('data_', 79));
+INSERT INTO t4 VALUES (80, CONCAT('data_', 80));
+INSERT INTO t4 VALUES (81, CONCAT('data_', 81));
+INSERT INTO t4 VALUES (82, CONCAT('data_', 82));
+INSERT INTO t4 VALUES (83, CONCAT('data_', 83));
+INSERT INTO t4 VALUES (84, CONCAT('data_', 84));
+INSERT INTO t4 VALUES (85, CONCAT('data_', 85));
+INSERT INTO t4 VALUES (86, CONCAT('data_', 86));
+INSERT INTO t4 VALUES (87, CONCAT('data_', 87));
+INSERT INTO t4 VALUES (88, CONCAT('data_', 88));
+INSERT INTO t4 VALUES (89, CONCAT('data_', 89));
+INSERT INTO t4 VALUES (90, CONCAT('data_', 90));
+INSERT INTO t4 VALUES (91, CONCAT('data_', 91));
+INSERT INTO t4 VALUES (92, CONCAT('data_', 92));
+INSERT INTO t4 VALUES (93, CONCAT('data_', 93));
+INSERT INTO t4 VALUES (94, CONCAT('data_', 94));
+INSERT INTO t4 VALUES (95, CONCAT('data_', 95));
+INSERT INTO t4 VALUES (96, CONCAT('data_', 96));
+INSERT INTO t4 VALUES (97, CONCAT('data_', 97));
+INSERT INTO t4 VALUES (98, CONCAT('data_', 98));
+INSERT INTO t4 VALUES (99, CONCAT('data_', 99));
+INSERT INTO t4 VALUES (100, CONCAT('data_', 100));
+Test hasher performance
+SELECT COUNT(*) as count,
+MIN(polardbx_hasher(id)) as min_hash,
+MAX(polardbx_hasher(id)) as max_hash,
+AVG(polardbx_hasher(id)) as avg_hash
+FROM t4;
+count	min_hash	max_hash	avg_hash
+100	-8757930400787925687	9172397366371939626	534317052750093678.3700
+#
+# Test 8: Test consistency of hash values
+#
+Hash values should be consistent across multiple calls
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+data VARCHAR(50)
+);
+INSERT INTO t5 VALUES (1, 'consistent_data');
+SELECT id, polardbx_hasher(data) as hash1 FROM t5;
+id	hash1
+1	4099836034205488783
+SELECT id, polardbx_hasher(data) as hash2 FROM t5;
+id	hash2
+1	4099836034205488783
+SELECT id, polardbx_hasher(data) as hash3 FROM t5;
+id	hash3
+1	4099836034205488783
+Verify consistency - all hash values should be the same
+SELECT id,
+polardbx_hasher(data) as hash1,
+polardbx_hasher(data) as hash2,
+polardbx_hasher(data) as hash3,
+CASE
+WHEN polardbx_hasher(data) = polardbx_hasher(data) AND
+polardbx_hasher(data) = polardbx_hasher(data)
+THEN 'CONSISTENT'
+         ELSE 'INCONSISTENT'
+       END as consistency_check
+FROM t5;
+id	hash1	hash2	hash3	consistency_check
+1	4099836034205488783	4099836034205488783	4099836034205488783	CONSISTENT
+#
+# Test 9: Test with special characters and unicode
+#
+Test hasher with special characters and unicode
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+special_chars VARCHAR(100)
+);
+INSERT INTO t6 VALUES
+(1, 'normal_text'),
+(2, 'special!@#$%^&*()chars'),
+(3, 'unicode_测试_数据'),
+(4, 'emoji_😀_🌟_🎉'),
+(5, 'mixed_混合_🔤_123');
+SELECT id, special_chars, polardbx_hasher(special_chars) FROM t6 ORDER BY id;
+id	special_chars	polardbx_hasher(special_chars)
+1	normal_text	-6466260946010031854
+2	special!@#$%^&*()chars	-3553025196691037917
+3	unicode_测试_数据	-6688081321658774322
+4	emoji_😀_🌟_🎉	-6891548348219847572
+5	mixed_混合_🔤_123	-5890594289415140031
+#
+# Test 10: Test boundary values
+#
+Test hasher with boundary values
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+tiny_int_col TINYINT,
+small_int_col SMALLINT,
+medium_int_col MEDIUMINT,
+int_col INT,
+big_int_col BIGINT
+);
+INSERT INTO t7 VALUES
+(1, -128, -32768, -8388608, -2147483648, -9223372036854775808),
+(2, 127, 32767, 8388607, 2147483647, 9223372036854775807);
+SELECT id,
+polardbx_hasher(tiny_int_col),
+polardbx_hasher(small_int_col),
+polardbx_hasher(medium_int_col),
+polardbx_hasher(int_col),
+polardbx_hasher(big_int_col)
+FROM t7 ORDER BY id;
+id	polardbx_hasher(tiny_int_col)	polardbx_hasher(small_int_col)	polardbx_hasher(medium_int_col)	polardbx_hasher(int_col)	polardbx_hasher(big_int_col)
+1	8073780454430992172	5094105250090541396	5197778752411142661	3931617612888708934	-766309672757065757
+2	6991238246993376858	6122333606457322168	210670864504079779	-4298162058694391680	7070105468656064132
+#
+# Test 11: Test with 12 parameters (maximum allowed)
+#
+Test hasher with maximum number of parameters
+CREATE TABLE t8 (
+id1 INT, id2 INT, id3 INT, id4 INT, id5 INT,
+id6 INT, id7 INT, id8 INT, id9 INT, id10 INT,
+id11 INT, id12 INT
+);
+INSERT INTO t8 VALUES (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+Test with maximum number of parameters
+SELECT polardbx_hasher(id1, id2, id3, id4, id5, id6, id7, id8, id9, id10, id11, id12) FROM t8;
+polardbx_hasher(id1, id2, id3, id4, id5, id6, id7, id8, id9, id10, id11, id12)
+-8228158238384414951
+#
+# Test 12: Test error case with out of range hash value
+#
+Create a test case where we can verify the out of range error
+We'll use a very narrow range that should fail for most values
+CREATE TABLE t9 (
+id INT PRIMARY KEY,
+data VARCHAR(50)
+);
+INSERT INTO t9 VALUES (1, 'test_data');
+This should fail if the hash value is outside the narrow range
+Using a range that's unlikely to contain the hash value
+SELECT polardbx_hasher(id, 100, 200) FROM t9 WHERE id = 1;
+ERROR HY000: Hash value 6161172798010463909 computed from partitioning key [id=1] is out of the expected source partition range [100, 200]. This indicates a data consistency issue during partition migration.
+#
+# Test 13: Test with decimal values that require conversion
+#
+Test hasher with decimal values
+CREATE TABLE t10 (
+id INT PRIMARY KEY,
+dec_val DECIMAL(15,5)
+);
+INSERT INTO t10 VALUES (1, 12345.67890);
+SELECT id, polardbx_hasher(dec_val) FROM t10;
+id	polardbx_hasher(dec_val)
+1	8367481442927273769
+#
+# Test 14: Test with string values that require conversion
+#
+Test hasher with string values
+CREATE TABLE t11 (
+id INT PRIMARY KEY,
+str_num VARCHAR(20)
+);
+INSERT INTO t11 VALUES (1, '12345'), (2, '67890');
+SELECT id, polardbx_hasher(str_num) FROM t11 ORDER BY id;
+id	polardbx_hasher(str_num)
+1	6010024922102618405
+2	-7339528626974822302
+#
+# Test 15: Test with all supported numeric types from PolarDB-X
+#
+Test hasher with all supported numeric types
+CREATE TABLE t12 (
+id INT PRIMARY KEY,
+-- Signed integer types
+tiny_int_col TINYINT,
+small_int_col SMALLINT,
+medium_int_col MEDIUMINT,
+int_col INT,
+big_int_col BIGINT,
+-- Unsigned integer types
+tiny_int_unsigned_col TINYINT UNSIGNED,
+small_int_unsigned_col SMALLINT UNSIGNED,
+medium_int_unsigned_col MEDIUMINT UNSIGNED,
+int_unsigned_col INT UNSIGNED,
+big_int_unsigned_col BIGINT UNSIGNED
+);
+INSERT INTO t12 VALUES (
+1,
+-- Signed values
+-128,      -- TINYINT min
+-32768,    -- SMALLINT min
+-8388608,  -- MEDIUMINT min
+-2147483648, -- INT min
+-9223372036854775808, -- BIGINT min
+-- Unsigned values
+255,       -- TINYINT UNSIGNED max
+65535,     -- SMALLINT UNSIGNED max
+16777215,  -- MEDIUMINT UNSIGNED max
+4294967295, -- INT UNSIGNED max
+18446744073709551615 -- BIGINT UNSIGNED max
+);
+Test hasher with all numeric types
+SELECT id,
+polardbx_hasher(tiny_int_col),
+polardbx_hasher(small_int_col),
+polardbx_hasher(medium_int_col),
+polardbx_hasher(int_col),
+polardbx_hasher(big_int_col),
+polardbx_hasher(tiny_int_unsigned_col),
+polardbx_hasher(small_int_unsigned_col),
+polardbx_hasher(medium_int_unsigned_col),
+polardbx_hasher(int_unsigned_col),
+polardbx_hasher(big_int_unsigned_col)
+FROM t12;
+id	polardbx_hasher(tiny_int_col)	polardbx_hasher(small_int_col)	polardbx_hasher(medium_int_col)	polardbx_hasher(int_col)	polardbx_hasher(big_int_col)	polardbx_hasher(tiny_int_unsigned_col)	polardbx_hasher(small_int_unsigned_col)	polardbx_hasher(medium_int_unsigned_col)	polardbx_hasher(int_unsigned_col)	polardbx_hasher(big_int_unsigned_col)
+1	8073780454430992172	5094105250090541396	5197778752411142661	3931617612888708934	-766309672757065757	-3333253241989257128	-4514658532201934811	4580100975327957727	-7552021501070459983	-7348136593072465315
+Test hasher with mixed signed and unsigned types
+SELECT id, polardbx_hasher(
+tiny_int_col,
+small_int_col,
+medium_int_col,
+int_col,
+big_int_col,
+tiny_int_unsigned_col,
+small_int_unsigned_col,
+medium_int_unsigned_col,
+int_unsigned_col,
+big_int_unsigned_col
+) FROM t12;
+id	polardbx_hasher(
+tiny_int_col,
+small_int_col,
+medium_int_col,
+int_col,
+big_int_col,
+tiny_int_unsigned_col,
+small_int_unsigned_col,
+medium_int_unsigned_col,
+int_unsigned_col,
+big_int_unsigned_col
+)
+1	-9090232518062767640
+#
+# Test 16: Test with all supported date/time types from PolarDB-X
+#
+Test hasher with all supported date/time types
+CREATE TABLE t13 (
+id INT PRIMARY KEY,
+-- Date/time types
+date_col DATE,
+datetime_col DATETIME,
+timestamp_col TIMESTAMP
+);
+INSERT INTO t13 VALUES (
+1,
+'2023-01-01',
+'2023-01-01 12:30:45',
+'2023-01-01 12:30:45'
+);
+Test hasher with date/time types
+SELECT id,
+polardbx_hasher(date_col),
+polardbx_hasher(datetime_col),
+polardbx_hasher(timestamp_col)
+FROM t13;
+id	polardbx_hasher(date_col)	polardbx_hasher(datetime_col)	polardbx_hasher(timestamp_col)
+1	-4384303755878597117	-8383701368207239481	-5833336210708276233
+Test hasher with mixed date/time types
+SELECT id, polardbx_hasher(
+date_col,
+datetime_col,
+timestamp_col
+) FROM t13;
+id	polardbx_hasher(
+date_col,
+datetime_col,
+timestamp_col
+)
+1	3667159700088637975
+#
+# Test 17: Test with all supported binary types from PolarDB-X
+#
+Test hasher with all supported binary types
+CREATE TABLE t14 (
+id INT PRIMARY KEY,
+-- Binary types
+varbinary_col VARBINARY(255),
+binary_col BINARY(10)
+);
+INSERT INTO t14 VALUES (
+1,
+UNHEX('48656C6C6F20576F726C64'), -- "Hello World" in hex
+UNHEX('4D7953514C')             -- "MySQL" in hex
+);
+Test hasher with binary types
+SELECT id,
+polardbx_hasher(varbinary_col),
+polardbx_hasher(binary_col)
+FROM t14;
+id	polardbx_hasher(varbinary_col)	polardbx_hasher(binary_col)
+1	8436049314224243835	-907633049358041024
+Test hasher with mixed binary types
+SELECT id, polardbx_hasher(
+varbinary_col,
+binary_col
+) FROM t14;
+id	polardbx_hasher(
+varbinary_col,
+binary_col
+)
+1	888455438343540681
+#
+# Test 18: Test with all supported charsets and collations from PolarDB-X
+#
+Test hasher with all supported charsets and collations
+Test ASCII charset
+CREATE TABLE t15_ascii (
+id INT PRIMARY KEY,
+ascii_col CHAR(50) CHARACTER SET ascii COLLATE ascii_bin
+);
+INSERT INTO t15_ascii VALUES (1, 'ASCII text');
+Test LATIN1 charset with various collations
+CREATE TABLE t16_latin1 (
+id INT PRIMARY KEY,
+latin1_bin_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_bin,
+latin1_general_ci_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_general_ci,
+latin1_general_cs_col CHAR(50) CHARACTER SET latin1 COLLATE latin1_general_cs
+);
+INSERT INTO t16_latin1 VALUES (
+1,
+'LATIN1 binary text',
+'LATIN1 general ci text',
+'LATIN1 general cs text'
+);
+Test UTF8MB4 charset with various collations
+CREATE TABLE t17_utf8mb4 (
+id INT PRIMARY KEY,
+utf8mb4_bin_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+utf8mb4_general_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
+utf8mb4_unicode_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+utf8mb4_0900_ai_ci_col CHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+);
+INSERT INTO t17_utf8mb4 VALUES (
+1,
+'UTF8MB4 binary text',
+'UTF8MB4 general ci text',
+'UTF8MB4 unicode ci text',
+'UTF8MB4 0900 ai ci text'
+);
+Test hasher with ASCII charset
+SELECT id, polardbx_hasher(ascii_col) FROM t15_ascii;
+id	polardbx_hasher(ascii_col)
+1	-4719631272312395001
+Test hasher with LATIN1 charset and various collations
+SELECT id,
+polardbx_hasher(latin1_bin_col),
+polardbx_hasher(latin1_general_ci_col),
+polardbx_hasher(latin1_general_cs_col)
+FROM t16_latin1;
+id	polardbx_hasher(latin1_bin_col)	polardbx_hasher(latin1_general_ci_col)	polardbx_hasher(latin1_general_cs_col)
+1	1432541969883966699	8874059145803726544	-5903273926726724187
+Test hasher with UTF8MB4 charset and various collations
+SELECT id,
+polardbx_hasher(utf8mb4_bin_col),
+polardbx_hasher(utf8mb4_general_ci_col),
+polardbx_hasher(utf8mb4_unicode_ci_col),
+polardbx_hasher(utf8mb4_0900_ai_ci_col)
+FROM t17_utf8mb4;
+id	polardbx_hasher(utf8mb4_bin_col)	polardbx_hasher(utf8mb4_general_ci_col)	polardbx_hasher(utf8mb4_unicode_ci_col)	polardbx_hasher(utf8mb4_0900_ai_ci_col)
+1	2445337721452445897	8657401410175528627	5159245535947495451	3170291041205304931
+Test hasher with mixed charsets
+SELECT a.id,
+polardbx_hasher(a.ascii_col, l.latin1_bin_col, u.utf8mb4_bin_col)
+FROM t15_ascii a, t16_latin1 l, t17_utf8mb4 u
+WHERE a.id = l.id AND l.id = u.id;
+id	polardbx_hasher(a.ascii_col, l.latin1_bin_col, u.utf8mb4_bin_col)
+1	-6568145765723755236
+DROP TABLE t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15_ascii, t16_latin1, t17_utf8mb4;

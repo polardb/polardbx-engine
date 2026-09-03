@@ -113,6 +113,13 @@ let $script=
 ||
 --let $pre_script= my DOLLARmysqltest_vardir = DOLLARENV{'MYSQLTEST_VARDIR'};
 
+# Optionally normalize binlog filenames (master-bin.NNNNNN -> master-bin.000001)
+# in show_binlog_events output. Tests that verify binlog rotation should NOT set this.
+if ($normalize_binlog_filename)
+{
+  --let $script= $script s{master-bin\.\d{6}}{master-bin.000001}g; s{slave-relay-bin\.\d{6}}{slave-relay-bin.000001}g; s{slave-bin\.\d{6}}{slave-bin.000001}g;
+}
+
 if (!$keep_transaction_payload_events)
 {
   --let $script= $script DOLLAR_ = '' if (m{\t(?:Transaction_payload)\t});

@@ -1,0 +1,109 @@
+CREATE DATABASE vidx_ddl_direct_build_kill;
+USE vidx_ddl_direct_build_kill;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+
+############################################
+# Phase A: KILL during direct build fails  #
+# the whole ALTER (no index, no leftovers) #
+############################################
+USE vidx_ddl_direct_build_kill;
+SET DEBUG_SYNC = 'vidx_ddl_direct_build_start SIGNAL build_reached WAIT_FOR build_go';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SET DEBUG_SYNC = 'now WAIT_FOR build_reached';
+SET DEBUG_SYNC = 'now SIGNAL build_go';
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC = 'RESET';
+# Assert: t1 keeps no vector index after the failed ALTER
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Assert: no orphan vidx aux table survived the rollback
+VERDICT A no orphan auxiliary table: PASS
+
+############################################
+# Phase B: retry succeeds; direct build    #
+# publishes all live rows before returning     #
+############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT B live==base: PASS
+# ANN self-probes right after the DDL, no flush needed
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+id
+20
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[40,41,42,43,44]')) LIMIT 1;
+id
+40
+
+############################################
+# Phase C: KILL after graph fixup still   #
+# rolls back the complete intermediate    #
+# and releases the active-build gauge     #
+############################################
+CREATE TABLE t_tail (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+INSERT INTO t_tail VALUES
+(1, VEC_FROMTEXT('[1,2,3,4,5]')),
+(2, VEC_FROMTEXT('[2,3,4,5,6]')),
+(3, VEC_FROMTEXT('[3,4,5,6,7]'));
+SET DEBUG_SYNC =
+'vidx_ddl_direct_build_after_fixup SIGNAL fixup_done WAIT_FOR fixup_go';
+ALTER TABLE t_tail ADD VECTOR INDEX vi(v);
+SET DEBUG_SYNC = 'now WAIT_FOR fixup_done';
+VERDICT C active-during-build: PASS
+SET DEBUG_SYNC = 'now SIGNAL fixup_go';
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC = 'RESET';
+VERDICT C active-after-kill: PASS
+SHOW CREATE TABLE t_tail;
+Table	Create Table
+t_tail	CREATE TABLE `t_tail` (
+  `id` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+############################################
+# Phase D: KILL between micro-batches --   #
+# the in-memory graph is half-built and    #
+# nothing is persisted yet                 #
+############################################
+ALTER TABLE t1 DROP INDEX vi;
+SET DEBUG_SYNC =
+'vidx_direct_build_after_batch SIGNAL batch_done WAIT_FOR batch_go';
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SET DEBUG_SYNC = 'now WAIT_FOR batch_done';
+SET DEBUG_SYNC = 'now SIGNAL batch_go';
+ERROR 70100: Query execution was interrupted
+SET DEBUG_SYNC = 'RESET';
+# Assert: no index, no orphan aux table, gauge back to baseline
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+VERDICT D mid-batch KILL leaves no residue: PASS
+VERDICT D build stopped at the parked batch: PASS
+# Retry after the mid-batch KILL still builds the full graph.
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT D retry live==base: PASS
+DROP TABLE t_tail, t1;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_direct_build_kill;

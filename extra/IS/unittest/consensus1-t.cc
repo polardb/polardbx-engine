@@ -37,7 +37,7 @@ TEST(consensus, paxos_one_node) {
   strConfig.emplace_back("127.0.0.1:11001");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir1");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->setAlertLogLevel(Paxos::LOG_ERROR);
@@ -131,7 +131,7 @@ TEST(consensus, paxos_leaderStickiness_and_downgradeTerm) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -183,7 +183,7 @@ TEST(consensus, paxos_force_one_node) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -237,7 +237,7 @@ TEST(consensus, paxos_force_one_node_learner) {
   std::string strTmp3("127.0.0.1:11004");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -339,7 +339,7 @@ TEST(consensus, largeBatchMode) {
   std::string strTmp4("127.0.0.1:11004");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -419,7 +419,7 @@ TEST(consensus, pipelining) {
   std::string strTmp4("127.0.0.1:11004");
 
   uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog = std::make_shared<FilePaxosLog>("paxosLogTestDir61");
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
   paxos1->init(strConfig, 1, 1);
@@ -499,7 +499,7 @@ TEST(consensus, disable_pipelining_large_entry) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);

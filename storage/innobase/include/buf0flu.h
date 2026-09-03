@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define buf0flu_h
 
 #include "buf0types.h"
+#include "log0types.h"
 #include "univ.i"
 #include "ut0byte.h"
 
@@ -341,6 +342,8 @@ class Flush_observer {
 lsn_t get_flush_sync_lsn() noexcept;
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_BUF0FLU_IC_STANDALONE
 #include "buf0flu.ic"
+#endif /* !INNODB_BUF0FLU_IC_STANDALONE */
 
 #endif

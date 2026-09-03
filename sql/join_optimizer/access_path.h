@@ -874,6 +874,7 @@ struct AccessPath {
       int idx;
       bool use_order;
       bool reverse;
+      void *vec_func;
     } index_scan;
     struct {
       TABLE *table;
@@ -1263,7 +1264,8 @@ inline AccessPath *NewTableSampleAccessPath(THD *thd, TABLE *table,
 
 inline AccessPath *NewIndexScanAccessPath(THD *thd, TABLE *table, int idx,
                                           bool use_order, bool reverse,
-                                          bool count_examined_rows) {
+                                          bool count_examined_rows,
+                                          void *vec_func = nullptr) {
   AccessPath *path = new (thd->mem_root) AccessPath;
   path->type = AccessPath::INDEX_SCAN;
   path->count_examined_rows = count_examined_rows;
@@ -1271,6 +1273,7 @@ inline AccessPath *NewIndexScanAccessPath(THD *thd, TABLE *table, int idx,
   path->index_scan().idx = idx;
   path->index_scan().use_order = use_order;
   path->index_scan().reverse = reverse;
+  path->index_scan().vec_func = vec_func;
   return path;
 }
 
@@ -1811,5 +1814,11 @@ void ExpandSingleFilterAccessPath(THD *thd, AccessPath *path, const JOIN *join,
 
 /// Returns the tables that are part of a hash join.
 table_map GetHashJoinTables(AccessPath *path);
+
+/**
+  The preceding optimizer rules are not sufficient conditions for pushdown
+  range limits. Therefore, this feature should be disabled in some scenarios.
+*/
+void DisablePushdownRangeLimit(AccessPath *path);
 
 #endif  // SQL_JOIN_OPTIMIZER_ACCESS_PATH_H

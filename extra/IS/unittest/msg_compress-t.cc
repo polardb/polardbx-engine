@@ -138,7 +138,7 @@ TEST(MsgCompress, CompressOption) {
   strConfig.emplace_back("127.0.0.1:11002");
   strConfig.emplace_back("127.0.0.1:11003");
 
-  std::shared_ptr<PaxosLog> rlog= std::make_shared<FilePaxosLog>(std::string("paxosLogTestDir1"));
+  std::shared_ptr<PaxosLogHandler> rlog= std::make_shared<FilePaxosLog>(std::string("paxosLogTestDir1"));
   Paxos *paxos= new Paxos(10000, rlog);
   paxos->init(strConfig, 1, 1);
 

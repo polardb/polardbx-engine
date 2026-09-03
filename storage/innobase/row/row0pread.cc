@@ -33,6 +33,8 @@ Created 2018-01-27 by Sunny Bains */
 
 #include "btr0pcur.h"
 #include "dict0dict.h"
+#include "lizard0rem0types.h"
+#include "mem0mem.h"
 #include "os0thread-create.h"
 #include "ppi/ppi_disable.h"
 #include "row0mysql.h"
@@ -40,12 +42,15 @@ Created 2018-01-27 by Sunny Bains */
 #include "row0row.h"
 #include "row0vers.h"
 #include "sql/current_thd.h"
+#include "ut0core.h"
 #include "ut0new.h"
 
-#include "lizard0row.h"
-#include "lizard0undo.h"
-#include "lizard0txn0rec.h"
 #include "lizard0btr0pcur.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+#include "lizard0row.h"
+#include "lizard0txn0rec.h"
+#include "lizard0undo.h"
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t parallel_read_thread_key;
@@ -218,11 +223,11 @@ class PCursor {
   @param[in] mtr                Mini-transaction used by the persistent cursor.
   @param[in] read_level         Read level where the block should be present. */
   PCursor(btr_pcur_t *pcur, mtr_t *mtr, size_t read_level,
-          lizard::DDL_cleanout *ddl_cleanout)
+          lizard::Pread_cleanout *pread_cleanout)
       : m_mtr(mtr),
         m_pcur(pcur),
         m_read_level(read_level),
-        m_ddl_cleanout(ddl_cleanout) {}
+        m_pread_cleanout(pread_cleanout) {}
 
   /**
     Restore position of cursor created from Scan_ctx::Range object.
@@ -290,7 +295,7 @@ class PCursor {
   restore. */
   size_t m_read_level{};
 
-  lizard::DDL_cleanout *m_ddl_cleanout;
+  lizard::Pread_cleanout *m_pread_cleanout;
 };
 
 buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(
@@ -373,10 +378,10 @@ dberr_t PCursor::move_to_user_rec() noexcept {
 
   /** Release the previous page S lock. */
   btr_leaf_page_release(page_cur_get_block(cur), RW_S_LATCH, m_mtr);
-  
-  if (m_ddl_cleanout != nullptr) {
+
+  if (m_pread_cleanout != nullptr) {
     /** Cleanout the previous page. */
-    m_ddl_cleanout->execute();
+    m_pread_cleanout->execute();
   }
 
   /** Here block is next page, pcur moves to next page. */
@@ -448,16 +453,13 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
   return err;
 }
 
-bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
-                                                 ulint *&offsets,
-                                                 mem_heap_t *&heap,
-                                                 mtr_t *mtr, 
-                                                 lizard::Cleanout *cleanout, 
+bool Parallel_reader::Scan_ctx::check_visibility(creg_t *reg, mem_heap_t *&heap,
+                                                 Slice **slc, Slice_ctx *sctx,
+                                                 mtr_t *mtr,
+                                                 lizard::Cleanout *cleanout,
                                                  btr_pcur_t *pcur) {
   const auto table_name = m_config.m_index->table->name;
-
-  // ut_ad(!m_trx || m_trx->read_view == nullptr ||
-  //       MVCC::is_view_active(m_trx->read_view));
+  ut_ad((*slc)->is_positioned(*reg, m_config.m_index));
 
   if (!m_trx) {
     /* Do nothing */
@@ -472,10 +474,10 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
         always consistent read. */
         goto sees;
       }
-      ut_ad(lizard::pcur_position_validate(pcur, rec, m_config.m_index));
+      ut_ad(lizard::pcur_position_validate(pcur, reg->rec, m_config.m_index));
 
       const txn_layout_t layout = TL_CLOVER;
-      txn_rec_t txn_rec(rec, m_config.m_index, offsets, layout);
+      txn_rec_t txn_rec(*slc, m_config.m_index, layout);
 
       if (m_trx->isolation_level > TRX_ISO_READ_UNCOMMITTED) {
         Cleanout_ctx_t cctx(pcur, cleanout);
@@ -487,15 +489,15 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
                                            vision->visible_by(), cctx);
 
         if (!vision->modifications_visible(&txn_rec, table_name)) {
-          rec_t *old_vers;
+          reg_t old_vers;
 
-          row_vers_build_for_consistent_read(
-              rec, mtr, m_config.m_index, &offsets, vision, &heap, heap,
-              &old_vers, nullptr, nullptr, layout);
+          row_vers_build_for_consistent_read(*reg, mtr, m_config.m_index, slc,
+                                             sctx, vision, heap, &old_vers,
+                                             nullptr, nullptr, layout);
 
-          rec = old_vers;
+          *reg = old_vers;
 
-          if (rec == nullptr) {
+          if (reg->is_null()) {
             return (false);
           }
         }
@@ -507,35 +509,34 @@ bool Parallel_reader::Scan_ctx::check_visibility(const rec_t *&rec,
   }
 
 sees:
-  if (rec_get_deleted_flag(rec, m_config.m_is_compact)) {
+  if (rec_get_deleted_flag(reg->rec, m_config.m_is_compact)) {
     /* This record was deleted in the latest committed version, or it was
     deleted and then reinserted-by-update before purge kicked in. Skip it. */
     return (false);
   }
 
+  ut_ad((*slc)->is_positioned(*reg, m_config.m_index));
   ut_ad(!m_trx || m_trx->isolation_level == TRX_ISO_READ_UNCOMMITTED ||
-        !rec_offs_any_null_extern(m_config.m_index, rec, offsets));
+        !rec_offs_any_null_extern(m_config.m_index, *slc));
 
   return (true);
 }
 
-void Parallel_reader::Scan_ctx::copy_row(const rec_t *rec, Iter *iter) const {
-  iter->m_offsets =
-      rec_get_offsets(rec, m_config.m_index, nullptr, ULINT_UNDEFINED,
-                      UT_LOCATION_HERE, &iter->m_heap);
+void Parallel_reader::Scan_ctx::copy_row(creg_t reg, Iter *iter) const {
+  iter->m_slc =
+      iter->m_slc_ctx.get_offsets(reg, m_config.m_index, ULINT_UNDEFINED);
 
   /* Copy the row from the page to the scan iterator. The copy should use
   memory from the iterator heap because the scan iterator owns the copy. */
-  auto rec_len = rec_offs_size(iter->m_offsets);
 
-  auto copy_rec = static_cast<rec_t *>(mem_heap_alloc(iter->m_heap, rec_len));
+  ut_ad(iter->m_slc->contiguous());
 
-  memcpy(copy_rec, rec, rec_len);
+  boc_t copy_buf = mem_heap_alloc_boc(iter->m_heap, iter->m_slc->row_size());
 
-  iter->m_rec = copy_rec;
+  iter->m_slc = row_copy(copy_buf, iter->m_slc, &iter->m_slc_ctx);
 
-  auto tuple = row_rec_to_index_entry_low(iter->m_rec, m_config.m_index,
-                                          iter->m_offsets, iter->m_heap);
+  auto tuple =
+      row_rec_to_index_entry_low(iter->m_slc, m_config.m_index, iter->m_heap);
 
   ut_ad(dtuple_validate(tuple));
 
@@ -558,15 +559,15 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(
   iter->m_heap = mem_heap_create(sizeof(btr_pcur_t) + (srv_page_size / 16),
                                  UT_LOCATION_HERE);
 
-  auto rec = page_cursor.rec;
+  creg_t reg = page_cur_get_creg(&page_cursor);
 
-  const bool is_infimum = page_rec_is_infimum(rec);
+  const bool is_infimum = page_rec_is_infimum(reg.rec);
 
   if (is_infimum) {
-    rec = page_rec_get_next(rec);
+    reg = page_rec_get_next_creg(reg.rec);
   }
 
-  if (page_rec_is_supremum(rec)) {
+  if (page_rec_is_supremum(reg.rec)) {
     /* Empty page, only root page can be empty. */
     ut_a(!is_infimum ||
          page_cursor.block->page.id.page_no() == m_config.m_index->page_no());
@@ -582,7 +583,7 @@ Parallel_reader::Scan_ctx::create_persistent_cursor(
   iter->m_pcur->init(m_config.m_read_level);
 
   /* Make a copy of the rec. */
-  copy_row(rec, iter.get());
+  copy_row(reg, iter.get());
 
   iter->m_pcur->open_on_user_rec(page_cursor, PAGE_CUR_GE,
                                  BTR_ALREADY_S_LATCHED | BTR_SEARCH_LEAF);
@@ -625,7 +626,8 @@ dberr_t Parallel_reader::Ctx::traverse() {
 
   auto &from = m_range.first;
 
-  PCursor pcursor(from->m_pcur, &mtr, m_scan_ctx->m_config.m_read_level, m_ddl_cleanout);
+  PCursor pcursor(from->m_pcur, &mtr, m_scan_ctx->m_config.m_read_level,
+                  m_pread_cleanout);
   pcursor.restore_position_for_range();
 
   dberr_t err{DB_SUCCESS};
@@ -650,6 +652,8 @@ dberr_t Parallel_reader::Ctx::traverse() {
 dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
   const auto &end_tuple = m_range.second->m_tuple;
   auto heap = mem_heap_create(srv_page_size / 4, UT_LOCATION_HERE);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   auto index = m_scan_ctx->m_config.m_index;
 
   m_start = true;
@@ -711,17 +715,12 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
       }
     }
 
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
 
-    rec_offs_init(offsets_);
-
-    const rec_t *rec = page_cur_get_rec(cur);
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    creg_t reg = page_cur_get_reg(cur);
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
     if (end_tuple != nullptr) {
-      ut_ad(rec != nullptr);
+      ut_ad(reg.is_not_null());
 
       /* Key value of a record can change only if the record is deleted or if
       it's updated. An update is essentially a delete + insert. So in both
@@ -731,7 +730,7 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
       Since the range creation is based on the key values and the key value do
       not ever change the, latest (non-MVCC) version of the record should always
       tell us correctly whether we're within the range or outside of it. */
-      auto ret = end_tuple->compare(rec, index, offsets);
+      auto ret = end_tuple->compare(index, slc);
 
       /* Note: The range creation doesn't use MVCC. Therefore it's possible
       that the range boundary entry could have been deleted. */
@@ -742,8 +741,8 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
 
     /* increase the counter if rec is delete marked. */
     if (m_scan_ctx->m_config.m_ptr_n_rows_read_del_mark != nullptr &&
-        rec != nullptr &&
-        rec_get_deleted_flag(rec, m_scan_ctx->m_config.m_is_compact)) {
+        reg.is_not_null() &&
+        rec_get_deleted_flag(reg.rec, m_scan_ctx->m_config.m_is_compact)) {
       assert(thread_id() < Parallel_reader::MAX_THREADS);
       Counter::inc(*(m_scan_ctx->m_config.m_ptr_n_rows_read_del_mark),
                    thread_id());
@@ -752,13 +751,16 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     bool skip{};
 
     if (page_is_leaf(cur->block->frame)) {
-      skip = !m_scan_ctx->check_visibility(rec, offsets, heap, mtr,
-                                           m_ddl_cleanout, pcursor->get_pcur());
+      skip = !m_scan_ctx->check_visibility(
+          &reg, heap, &slc, &sctx, mtr, m_pread_cleanout, pcursor->get_pcur());
     }
 
     if (!skip) {
-      m_rec = rec;
-      m_offsets = offsets;
+      ut_ad(slc->is_positioned(reg, index));
+      /* TODO: Is it ok to store offsets???*/
+      // m_offsets = offsets;
+      m_slc = slc;
+
       m_block = cur->block;
 
       err = m_scan_ctx->m_f(this);
@@ -775,8 +777,8 @@ dberr_t Parallel_reader::Ctx::traverse_recs(PCursor *pcursor, mtr_t *mtr) {
     page_cur_move_to_next(cur);
   }
 
-  if (m_ddl_cleanout != nullptr) {
-    m_ddl_cleanout->execute();
+  if (m_pread_cleanout != nullptr) {
+    m_pread_cleanout->execute();
   }
 
   if (err != DB_SUCCESS) {
@@ -963,23 +965,12 @@ page_no_t Parallel_reader::Scan_ctx::search(const buf_block_t *block,
     page_cur_move_to_next(&page_cursor);
   }
 
-  const auto rec = page_cur_get_rec(&page_cursor);
+  creg_t reg = page_cur_get_reg(&page_cursor);
 
-  mem_heap_t *heap = nullptr;
+  Slice_ctx sctx;
+  Slice *slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  auto offsets = offsets_;
-
-  rec_offs_init(offsets_);
-
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-
-  auto page_no = btr_node_ptr_get_child_page_no(rec, offsets);
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
-  }
+  auto page_no = btr_node_ptr_get_child_page_no(slc);
 
   return (page_no);
 }
@@ -1069,10 +1060,8 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
 
   savepoint.second = block;
 
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  auto offsets = offsets_;
-
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   page_cur_t page_cursor;
 
@@ -1094,29 +1083,22 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
     page_cur_move_to_next(&page_cursor);
   }
 
-  mem_heap_t *heap{};
-
   const auto at_leaf = page_is_leaf(buf_block_get_frame(block));
   const auto at_level = btr_page_get_level(buf_block_get_frame(block));
 
   Savepoints savepoints{};
 
   while (!page_cur_is_after_last(&page_cursor)) {
-    const auto rec = page_cur_get_rec(&page_cursor);
+    creg_t reg = page_cur_get_reg(&page_cursor);
 
-    ut_a(at_leaf || rec_get_node_ptr_flag(rec) ||
+    ut_a(at_leaf || rec_get_node_ptr_flag(reg.rec) ||
          !dict_table_is_comp(index->table));
 
-    if (heap == nullptr) {
-      heap = mem_heap_create(srv_page_size / 4, UT_LOCATION_HERE);
-    }
-
-    offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+    slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
     const auto end = scan_range.m_end;
 
-    if (end != nullptr && end->compare(rec, index, offsets) <= 0) {
+    if (end != nullptr && end->compare(index, slc) <= 0) {
       break;
     }
 
@@ -1125,7 +1107,7 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
     /* Split the tree one level below the root if read_level requested is below
     the root level. */
     if (at_level > m_config.m_read_level) {
-      auto page_no = btr_node_ptr_get_child_page_no(rec, offsets);
+      auto page_no = btr_node_ptr_get_child_page_no(slc);
 
       if (depth < split_level) {
         /* Need to create a range starting at a lower level in the tree. */
@@ -1187,10 +1169,6 @@ dberr_t Parallel_reader::Scan_ctx::create_ranges(const Scan_range &scan_range,
 
   for (auto &savepoint : savepoints) {
     mtr->release_block_at_savepoint(savepoint.first, savepoint.second);
-  }
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
   }
 
   return (DB_SUCCESS);

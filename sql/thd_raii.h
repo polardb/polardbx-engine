@@ -491,4 +491,45 @@ class Disable_fba_guard {
   bool m_stored_fba;
   bool m_guarded;
 };
+
+/**
+  RAII class to temporarily disable hippo.
+*/
+class Disable_hippo_guard {
+ public:
+  Disable_hippo_guard(THD *thd)
+      : m_thd(thd),
+        m_stored_hippo(thd->variables.opt_index_format_hippo_enabled) {
+    thd->variables.opt_index_format_hippo_enabled = false;
+  }
+  ~Disable_hippo_guard() {
+    m_thd->variables.opt_index_format_hippo_enabled = m_stored_hippo;
+  }
+
+ private:
+  THD *m_thd;
+  bool m_stored_hippo;
+};
+
+
+/**
+  RAII class to temporarily disable spc.
+*/
+class Disable_spc_guard {
+ public:
+  Disable_spc_guard(THD *thd) : m_thd(thd) {
+    m_stored_spc = thd->variables.opt_index_format_spc_enabled;
+    thd->variables.opt_index_format_spc_enabled = false;
+    m_guarded = true;
+  }
+  ~Disable_spc_guard() {
+    if (m_guarded) m_thd->variables.opt_index_format_spc_enabled = m_stored_spc;
+  }
+
+ private:
+  THD *m_thd;
+  bool m_stored_spc;
+  bool m_guarded;
+};
+
 #endif  // THD_RAII_INCLUDED

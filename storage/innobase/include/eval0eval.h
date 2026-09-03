@@ -79,6 +79,8 @@ static inline bool eval_node_get_bool_val(
  @return the result of the comparison */
 bool eval_cmp(func_node_t *cmp_node); /*!< in: comparison node */
 
+#ifndef INNODB_EVAL0EVAL_IC_STANDALONE
 #include "eval0eval.ic"
+#endif /* !INNODB_EVAL0EVAL_IC_STANDALONE */
 
 #endif

@@ -284,6 +284,8 @@ static inline void mach_write_ulonglong(byte *dest, ulonglong src, ulint len,
 [[nodiscard]] static inline uint32_t mach_read_ulint(const byte *ptr,
                                                      mlog_id_t type);
 
+#ifndef INNODB_MACH0DATA_IC_STANDALONE
 #include "mach0data.ic"
+#endif /* !INNODB_MACH0DATA_IC_STANDALONE */
 
 #endif

@@ -1938,7 +1938,9 @@ dberr_t os_file_write_retry(IORequest &type, const char *name,
                             pfs_os_file_t file, const void *buf,
                             os_offset_t offset, ulint n);
 
+#ifndef INNODB_OS0FILE_IC_STANDALONE
 #include "os0file.ic"
+#endif /* !INNODB_OS0FILE_IC_STANDALONE */
 #endif /* UNIV_NONINL */
 
 /**

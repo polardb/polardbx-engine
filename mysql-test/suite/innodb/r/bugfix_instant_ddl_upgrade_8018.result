@@ -3,7 +3,8 @@
 #########
 # Stop the running the server
 # Copy and unzip the datadir.
-# Restart the server against the unzipped datadir
+# Restart 1: update consensus info in old datadir via --cluster-force-change-meta
+# Restart 2: start against the unzipped datadir
 # restart: --datadir=DATADIR --innodb-page-size=16k --log_bin_index=bin_log.index --log_bin=bin_log.000001
 ##############################################
 # Test dml on system tables with instant columns created earlier than 8.0.29

@@ -31,6 +31,7 @@
 #include "sql/dd/info_schema/table_stats.h"
 #include "sql/dd/string_type.h"
 #include "sql/item_cmpfunc.h"    // Item_func_case
+#include "sql/item_strfunc.h"    // Item_func_concat
 #include "sql/parse_location.h"  // POS
 #include "sql/sql_class.h"
 #include "sql/sql_lex.h"
@@ -761,7 +762,6 @@ Query_block *build_show_keys_query(const POS &pos, THD *thd,
   // Define field name literal used in query to be built.
 
   static const LEX_CSTRING field_database = {STRING_WITH_LEN("TABLE_SCHEMA")};
-  static const LEX_CSTRING alias_database = {STRING_WITH_LEN("Database")};
 
   static const LEX_CSTRING field_table = {STRING_WITH_LEN("TABLE_NAME")};
   static const LEX_CSTRING alias_table = {STRING_WITH_LEN("Table")};
@@ -818,6 +818,23 @@ Query_block *build_show_keys_query(const POS &pos, THD *thd,
   static const LEX_CSTRING field_expression = {STRING_WITH_LEN("EXPRESSION")};
   static const LEX_CSTRING alias_expression = {STRING_WITH_LEN("Expression")};
 
+  // The VECTOR_INDEXES system view name and its column identifiers, used to
+  // build the vector-index branch of the UNION ALL (vector indexes are not in
+  // mysql.indexes, so SHOW_STATISTICS cannot describe them).
+  static const LEX_CSTRING vi_view_name = {STRING_WITH_LEN("VECTOR_INDEXES")};
+  static const LEX_CSTRING vi_field_schema = {STRING_WITH_LEN("TABLE_SCHEMA")};
+  static const LEX_CSTRING vi_field_table = {STRING_WITH_LEN("TABLE_NAME")};
+  static const LEX_CSTRING vi_field_index_name = {STRING_WITH_LEN("INDEX_NAME")};
+  static const LEX_CSTRING vi_field_column_name = {
+      STRING_WITH_LEN("COLUMN_NAME")};
+  static const LEX_CSTRING vi_field_metric_type = {
+      STRING_WITH_LEN("METRIC_TYPE")};
+  static const LEX_CSTRING vi_field_m = {STRING_WITH_LEN("M")};
+  static const LEX_CSTRING vi_field_ef_construction = {
+      STRING_WITH_LEN("EF_CONSTRUCTION")};
+  static const LEX_CSTRING vi_field_dimension = {STRING_WITH_LEN("DIMENSION")};
+  static const LEX_CSTRING union_alias = {STRING_WITH_LEN("show_keys")};
+
   // Get the current logged in schema name
   LEX_CSTRING cur_db;
   if (table_ident->db.str) {
@@ -831,42 +848,151 @@ Query_block *build_show_keys_query(const POS &pos, THD *thd,
       const_cast<char *>(cur_db.str),
       const_cast<char *>(table_ident->table.str));
 
-  /*
-     Build sub query.
-     ...
-  */
-  Select_lex_builder sub_query(&pos, thd);
-  if (sub_query.add_select_item(field_database, alias_database) ||
-      sub_query.add_select_item(field_table, alias_table) ||
-      sub_query.add_select_item(field_non_unique, alias_non_unique) ||
-      sub_query.add_select_item(field_key, alias_key) ||
-      sub_query.add_select_item(field_seq_in_index, alias_seq_in_index) ||
-      sub_query.add_select_item(field_column_name, alias_column_name) ||
-      sub_query.add_select_item(field_collation, alias_collation) ||
-      sub_query.add_select_item(field_cardinality, alias_cardinality) ||
-      sub_query.add_select_item(field_sub_part, alias_sub_part) ||
-      sub_query.add_select_item(field_packed, alias_packed) ||
-      sub_query.add_select_item(field_null, alias_null) ||
-      sub_query.add_select_item(field_type, alias_type) ||
-      sub_query.add_select_item(field_comment, alias_comment) ||
-      sub_query.add_select_item(field_index_comment, alias_index_comment) ||
-      sub_query.add_select_item(field_is_visible, alias_visible) ||
-      sub_query.add_select_item(field_expression, alias_expression) ||
-      sub_query.add_select_item(alias_index_pos, alias_index_pos) ||
-      sub_query.add_select_item(alias_column_pos, alias_column_pos))
-    return nullptr;
-
-  // ... FROM information_schema.columns ...
-  if (sub_query.add_from_item(INFORMATION_SCHEMA_NAME, system_view_name))
-    return nullptr;
+  MEM_ROOT *const mem_root = thd->mem_root;
+  LEX_CSTRING tbl_name = table_ident->table;
 
   /*
-    Build the top level query
+    Branch 1: relational indexes, selected from SHOW_STATISTICS.
+    The db/table predicates are pushed INTO this branch (not the outer query)
+    so that, after derived_merge of SHOW_STATISTICS, they reach the
+    mysql.tables UNIQUE KEY(schema_id, name) for an index lookup. Selects 17
+    items: 15 displayed columns + INDEX/COLUMN ordinal positions used by the
+    outer ORDER BY.
   */
+  Select_lex_builder rel(&pos, thd);
+  if (rel.add_select_item(field_table, alias_table) ||
+      rel.add_select_item(field_non_unique, alias_non_unique) ||
+      rel.add_select_item(field_key, alias_key) ||
+      rel.add_select_item(field_seq_in_index, alias_seq_in_index) ||
+      rel.add_select_item(field_column_name, alias_column_name) ||
+      rel.add_select_item(field_collation, alias_collation) ||
+      rel.add_select_item(field_cardinality, alias_cardinality) ||
+      rel.add_select_item(field_sub_part, alias_sub_part) ||
+      rel.add_select_item(field_packed, alias_packed) ||
+      rel.add_select_item(field_null, alias_null) ||
+      rel.add_select_item(field_type, alias_type) ||
+      rel.add_select_item(field_comment, alias_comment) ||
+      rel.add_select_item(field_index_comment, alias_index_comment) ||
+      rel.add_select_item(field_is_visible, alias_visible) ||
+      rel.add_select_item(field_expression, alias_expression) ||
+      rel.add_select_item(alias_index_pos, alias_index_pos) ||
+      rel.add_select_item(alias_column_pos, alias_column_pos))
+    return nullptr;
+  if (rel.add_from_item(INFORMATION_SCHEMA_NAME, system_view_name))
+    return nullptr;
+  {
+    Item *db_cond = rel.prepare_equal_item(field_database, cur_db);
+    if (!db_cond || rel.add_condition(db_cond)) return nullptr;
+    Item *tbl_cond = rel.prepare_equal_item(field_table, tbl_name);
+    if (!tbl_cond || rel.add_condition(tbl_cond)) return nullptr;
+  }
 
+  /*
+    Branch 2: vector indexes, selected from VECTOR_INDEXES, with constant/
+    mapped columns so the column list aligns 1:1 with branch 1 (UNION ALL
+    requires identical column count/order). db/table predicates are pushed
+    into this branch as well.
+  */
+  Select_lex_builder vec(&pos, thd);
+  {
+    Item *i_table =
+        new (mem_root) Item_field(pos, NullS, NullS, vi_field_table.str);
+    Item *i_non_unique = new (mem_root) Item_int(1);  // vector indexes are always non-unique
+    Item *i_key =
+        new (mem_root) Item_field(pos, NullS, NullS, vi_field_index_name.str);
+    Item *i_seq = new (mem_root) Item_int(1);  // single-column index => seq=1
+    Item *i_column =
+        new (mem_root) Item_field(pos, NullS, NullS, vi_field_column_name.str);
+    Item *i_collation = new (mem_root) Item_null();
+    Item *i_cardinality = new (mem_root) Item_null();
+    Item *i_sub_part = new (mem_root) Item_null();
+    Item *i_packed = new (mem_root) Item_null();
+    Item *i_null = new (mem_root) Item_string(STRING_WITH_LEN(""),
+                                              system_charset_info);
+    Item *i_type =
+        new (mem_root) Item_string(STRING_WITH_LEN("VECTOR"), system_charset_info);
+    Item *i_comment =
+        new (mem_root) Item_string(STRING_WITH_LEN(""), system_charset_info);
+    // Index_comment = 'M=<m>, DISTANCE=<metric>, EF_CONSTRUCTION=<ef>, DIM=<dim>'
+    // Matches SHOW CREATE TABLE key style (uppercase, same order).
+    Item *i_idx_comment = nullptr;
+    {
+      Item *c = new (mem_root)
+          Item_func_concat(pos,
+                           new (mem_root) Item_string(STRING_WITH_LEN("M="),
+                                                      system_charset_info),
+                           new (mem_root) Item_field(pos, NullS, NullS,
+                                                     vi_field_m.str));
+      c = new (mem_root) Item_func_concat(
+          pos, c,
+          new (mem_root) Item_string(STRING_WITH_LEN(", DISTANCE="), system_charset_info));
+      c = new (mem_root) Item_func_concat(
+          pos, c, new (mem_root) Item_field(pos, NullS, NullS,
+                                             vi_field_metric_type.str));
+      c = new (mem_root) Item_func_concat(
+          pos, c,
+          new (mem_root) Item_string(STRING_WITH_LEN(", EF_CONSTRUCTION="), system_charset_info));
+      c = new (mem_root) Item_func_concat(
+          pos, c, new (mem_root) Item_field(pos, NullS, NullS,
+                                             vi_field_ef_construction.str));
+      c = new (mem_root) Item_func_concat(
+          pos, c,
+          new (mem_root) Item_string(STRING_WITH_LEN(", DIM="), system_charset_info));
+      i_idx_comment = new (mem_root) Item_func_concat(
+          pos, c,
+          new (mem_root) Item_field(pos, NullS, NullS, vi_field_dimension.str));
+    }
+    Item *i_visible =
+        new (mem_root) Item_string(STRING_WITH_LEN("YES"), system_charset_info);
+    Item *i_expression = new (mem_root) Item_null();
+    Item *i_iop = new (mem_root) Item_int(1);  // INDEX_ORDINAL_POSITION
+    Item *i_cop = new (mem_root) Item_int(1);  // COLUMN_ORDINAL_POSITION
+
+    if (!i_table || !i_non_unique || !i_key || !i_seq || !i_column ||
+        !i_collation || !i_cardinality || !i_sub_part || !i_packed || !i_null ||
+        !i_type || !i_comment || !i_idx_comment || !i_visible || !i_expression ||
+        !i_iop || !i_cop)
+      return nullptr;
+
+    if (vec.add_select_expr(i_table, alias_table) ||
+        vec.add_select_expr(i_non_unique, alias_non_unique) ||
+        vec.add_select_expr(i_key, alias_key) ||
+        vec.add_select_expr(i_seq, alias_seq_in_index) ||
+        vec.add_select_expr(i_column, alias_column_name) ||
+        vec.add_select_expr(i_collation, alias_collation) ||
+        vec.add_select_expr(i_cardinality, alias_cardinality) ||
+        vec.add_select_expr(i_sub_part, alias_sub_part) ||
+        vec.add_select_expr(i_packed, alias_packed) ||
+        vec.add_select_expr(i_null, alias_null) ||
+        vec.add_select_expr(i_type, alias_type) ||
+        vec.add_select_expr(i_comment, alias_comment) ||
+        vec.add_select_expr(i_idx_comment, alias_index_comment) ||
+        vec.add_select_expr(i_visible, alias_visible) ||
+        vec.add_select_expr(i_expression, alias_expression) ||
+        vec.add_select_expr(i_iop, alias_index_pos) ||
+        vec.add_select_expr(i_cop, alias_column_pos))
+      return nullptr;
+  }
+  if (vec.add_from_item(INFORMATION_SCHEMA_NAME, vi_view_name)) return nullptr;
+  {
+    Item *db_cond = vec.prepare_equal_item(vi_field_schema, cur_db);
+    if (!db_cond || vec.add_condition(db_cond)) return nullptr;
+    Item *tbl_cond = vec.prepare_equal_item(vi_field_table, tbl_name);
+    if (!tbl_cond || vec.add_condition(tbl_cond)) return nullptr;
+  }
+
+  // (rel) UNION ALL (vec) AS show_keys
+  PT_derived_table *unioned = Select_lex_builder::prepare_union_all_derived_table(
+      thd, pos, rel, vec, union_alias);
+  if (unioned == nullptr) return nullptr;
+
+  /*
+    Outer query: project the 15 displayed columns (dropping the ordinal
+    helper columns) and ORDER BY the ordinals. The db/table filtering already
+    happened inside each UNION branch, so the outer query only carries the
+    optional user-provided WHERE and the ORDER BY.
+  */
   Select_lex_builder top_query(&pos, thd);
-
-  // SELECT * FROM <sub_query> ...
   if (top_query.add_select_item(alias_table, alias_table) ||
       top_query.add_select_item(alias_non_unique, alias_non_unique) ||
       top_query.add_select_item(alias_key, alias_key) ||
@@ -882,20 +1008,7 @@ Query_block *build_show_keys_query(const POS &pos, THD *thd,
       top_query.add_select_item(alias_index_comment, alias_index_comment) ||
       top_query.add_select_item(alias_visible, alias_visible) ||
       top_query.add_select_item(alias_expression, alias_expression) ||
-      top_query.add_from_item(
-          sub_query.prepare_derived_table(system_view_name)))
-    return nullptr;
-
-  // ... WHERE 'Database' = <dbname> ...
-  Item *database_condition =
-      top_query.prepare_equal_item(alias_database, cur_db);
-  if (!database_condition || top_query.add_condition(database_condition))
-    return nullptr;
-
-  // ... AND Table = table_ident->table->str ...
-  Item *table_condition =
-      top_query.prepare_equal_item(alias_table, table_ident->table);
-  if (!table_condition || top_query.add_condition(table_condition))
+      top_query.add_from_item(unioned))
     return nullptr;
 
   // ... [ AND ] <user provided condition> ...
@@ -910,7 +1023,9 @@ Query_block *build_show_keys_query(const POS &pos, THD *thd,
   Query_block *sl = top_query.prepare_query_block();
   if (sl == nullptr) return nullptr;
 
-  // sql_command is set to SQL_QUERY after above call, so.
+  // sql_command is set to SQL_QUERY after above call; restore it so that
+  // is_show_cmd_using_system_view() stays true and the derived_merge guard
+  // (sql_select.cc) keeps merging the per-branch system views.
   thd->lex->sql_command = SQLCOM_SHOW_KEYS;
 
   return sl;

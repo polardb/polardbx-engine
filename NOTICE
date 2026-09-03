@@ -25,3 +25,11 @@ for more details.
 You should have received a copy of the GNU General Public License along with
 this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+Third-party components
+----------------------
+
+fast_float 8.2.5
+Copyright (c) 2021 The fast_float authors
+This distribution uses fast_float under the MIT License.
+The complete license text is available in extra/fast_float/LICENSE-MIT.

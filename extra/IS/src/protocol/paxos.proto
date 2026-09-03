@@ -84,7 +84,7 @@ message ConfigureChangeValue
   optional uint32 electionWeight = 8;
   optional uint64 learnerSource = 9;
   optional bool applyMode = 10;
-  optional repeated ConfigureChangeItem multiItems = 11;
+  repeated ConfigureChangeItem multiItems = 11;
 }
 
 
@@ -191,6 +191,7 @@ message PaxosMsg
   optional bool logInstance = 35;
   optional bytes serverIp = 36;
   optional uint64 serverPort = 37;
+  optional uint64 durationBeforeVote = 38;
 };
 
 message TestMsg1

@@ -60,10 +60,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0cleanout0safe.h"
 #include "lizard0gcs.h"
 #include "lizard0gp.h"
-#include "lizard0read0read.h"
-#include "lizard0scn.h"
+#include "lizard0gcs0read.h"
+#include "lizard0gcs0scn.h"
 #include "lizard0undo.h"
 #include "lizard0undo0retent.h"
+#include "lizard0trx0cycle.h"
+#include "lizard0trx0history.h"
 
 #include "srv0file.h"
 
@@ -1516,8 +1518,13 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(FILE_PURGE_LIST, SYNC_NO_ORDER_CHECK,
                   file_purge_list_mutex_key);
+  LATCH_ADD_MUTEX(TID_LIST, SYNC_NO_ORDER_CHECK, tid_list_mutex_key);
+
+  LATCH_ADD_MUTEX(TID_PERSIST, SYNC_NO_ORDER_CHECK, tid_persist_mutex_key);
 
   LATCH_ADD_MUTEX(SCN_LIST, SYNC_NO_ORDER_CHECK, scn_list_mutex_key);
+
+  LATCH_ADD_MUTEX(SCN_PERSIST, SYNC_NO_ORDER_CHECK, scn_persist_mutex_key);
 
   LATCH_ADD_MUTEX(GCN_ORDER, SYNC_NO_ORDER_CHECK, gcn_order_mutex_key);
 
@@ -1525,8 +1532,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(UNDO_HDR_HASH, SYNC_NO_ORDER_CHECK, undo_hdr_hash_mutex_key);
 
-  LATCH_ADD_MUTEX(LIZARD_VISION_LIST, SYNC_NO_ORDER_CHECK,
-                  lizard_vision_list_mutex_key);
+  LATCH_ADD_MUTEX(MVCC_LIST, SYNC_NO_ORDER_CHECK,
+                  mvcc_list_mutex_key);
 
   LATCH_ADD_MUTEX(GP_SYS, SYNC_NO_ORDER_CHECK, gp_sys_mutex_key);
 
@@ -1537,6 +1544,12 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_RWLOCK(COMMIT_SNAPSHOT_RW_LOCK, SYNC_NO_ORDER_CHECK,
                    commit_snapshot_rw_lock_key);
+
+  LATCH_ADD_MUTEX(HISTORY_SYS, SYNC_NO_ORDER_CHECK, history_sys_mutex_key);
+
+  LATCH_ADD_MUTEX(CYCLE_PQ, SYNC_NO_ORDER_CHECK, cycle_pq_mutex_key);
+
+  LATCH_ADD_RWLOCK(CYCLE_RW, SYNC_NO_ORDER_CHECK, cycle_rw_latch_key);
 
   latch_id_t id = LATCH_ID_NONE;
 

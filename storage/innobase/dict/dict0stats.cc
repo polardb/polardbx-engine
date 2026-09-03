@@ -806,13 +806,10 @@ static bool dict_stats_analyze_index_level(
   mem_heap_t *heap;
   btr_pcur_t pcur;
   const page_t *page;
-  const rec_t *rec;
-  const rec_t *prev_rec;
+  creg_t reg, prev_reg;
   bool prev_rec_is_copied;
-  byte *prev_rec_buf = nullptr;
+  boc_t prev_rec_boc;
   size_t prev_rec_buf_size = 0;
-  ulint *rec_offsets;
-  ulint *prev_rec_offsets;
   ulint i;
   bool success = true;
 
@@ -832,13 +829,12 @@ static bool dict_stats_analyze_index_level(
   rec_get_offsets(). */
   i = (REC_OFFS_HEADER_SIZE + 1 + 1) + index->n_fields;
 
-  heap = mem_heap_create((2 * sizeof *rec_offsets) * i, UT_LOCATION_HERE);
-  rec_offsets =
-      static_cast<ulint *>(mem_heap_alloc(heap, i * sizeof *rec_offsets));
-  prev_rec_offsets =
-      static_cast<ulint *>(mem_heap_alloc(heap, i * sizeof *prev_rec_offsets));
-  rec_offs_set_n_alloc(rec_offsets, i);
-  rec_offs_set_n_alloc(prev_rec_offsets, i);
+  heap = mem_heap_create((2 * sizeof(ulint)) * i, UT_LOCATION_HERE);
+
+  Slice_ctx slc_ctx(&heap);
+  Slice_ctx prev_slc_ctx(&heap);
+  Slice *slc = nullptr;
+  Slice *prev_slc = nullptr;
 
   /* reset the dynamic arrays n_diff_boundaries[0..n_uniq-1] */
   if (n_diff_boundaries != nullptr) {
@@ -874,7 +870,7 @@ static bool dict_stats_analyze_index_level(
        !(REC_INFO_MIN_REC_FLAG &
          rec_get_info_bits(pcur.get_rec(), page_is_comp(page))));
 
-  prev_rec = nullptr;
+  prev_reg.reset();
   prev_rec_is_copied = false;
 
   /* We can release index->lock not to block others, when level==0.
@@ -894,16 +890,20 @@ static bool dict_stats_analyze_index_level(
   for (; pcur.is_on_user_rec(); pcur.move_to_next_user_rec(mtr)) {
     bool rec_is_last_on_page;
 
-    rec = pcur.get_rec();
+    reg = pcur.get_reg();
 
     /* If rec and prev_rec are on different pages, then prev_rec
     must have been copied, because we hold latch only on the page
     where rec resides. */
-    if (prev_rec != nullptr && page_align(rec) != page_align(prev_rec)) {
-      ut_a(prev_rec_is_copied);
+    if (prev_reg.is_not_null()) {
+      if (prev_reg.in_heap())
+        ut_a(prev_rec_is_copied);
+      else
+        ut_a(!prev_rec_is_copied && page_align(reg) == page_align(prev_reg));
     }
 
-    rec_is_last_on_page = page_rec_is_supremum(page_rec_get_next_const(rec));
+    rec_is_last_on_page =
+        page_rec_is_supremum(page_rec_get_next_const(reg.rec));
 
     /* increment the pages counter at the end of each page */
     if (rec_is_last_on_page) {
@@ -927,35 +927,33 @@ static bool dict_stats_analyze_index_level(
     if (level == 0 &&
         (srv_stats_include_delete_marked
              ? 0
-             : rec_get_deleted_flag(rec, page_is_comp(pcur.get_page())))) {
-      if (rec_is_last_on_page && !prev_rec_is_copied && prev_rec != nullptr) {
+             : rec_get_deleted_flag(reg.rec, page_is_comp(pcur.get_page())))) {
+      if (rec_is_last_on_page && !prev_rec_is_copied &&
+          prev_reg.is_not_null()) {
         /* copy prev_rec */
 
-        prev_rec_offsets = rec_get_offsets(prev_rec, index, prev_rec_offsets,
-                                           n_uniq, UT_LOCATION_HERE, &heap);
+        prev_slc = prev_slc_ctx.get_offsets(prev_reg, index, n_uniq);
 
-        prev_rec = rec_copy_prefix_to_buf(prev_rec, index,
-                                          rec_offs_n_fields(prev_rec_offsets),
-                                          &prev_rec_buf, &prev_rec_buf_size);
-
+        prev_reg = row_copy_prefix(&prev_rec_boc, &prev_rec_buf_size, prev_slc,
+                                   n_uniq);
         prev_rec_is_copied = true;
       }
 
       continue;
     }
-    rec_offsets = rec_get_offsets(rec, index, rec_offsets, n_uniq,
-                                  UT_LOCATION_HERE, &heap);
+
+    slc = slc_ctx.get_offsets(reg, index, n_uniq);
 
     (*total_recs)++;
 
-    if (prev_rec != nullptr) {
+    if (prev_reg.is_not_null()) {
       ulint matched_fields;
 
-      prev_rec_offsets = rec_get_offsets(prev_rec, index, prev_rec_offsets,
-                                         n_uniq, UT_LOCATION_HERE, &heap);
+      ut_ad(prev_rec_is_copied == (prev_reg.in_heap()));
+      prev_slc = prev_slc_ctx.get_offsets(prev_reg, index, n_uniq);
 
-      cmp_rec_rec_with_match(rec, prev_rec, rec_offsets, prev_rec_offsets,
-                             index, false, false, &matched_fields);
+      cmp_rec_rec_with_match(slc, prev_slc, index, false, false,
+                             &matched_fields);
 
       for (i = matched_fields; i < n_uniq; i++) {
         if (n_diff_boundaries != nullptr) {
@@ -1000,9 +998,10 @@ static bool dict_stats_analyze_index_level(
       be on different pages and
       btr_pcur_t::move_to_next_user_rec() will release the
       latch on the page that prev_rec is on */
-      prev_rec =
-          rec_copy_prefix_to_buf(rec, index, rec_offs_n_fields(rec_offsets),
-                                 &prev_rec_buf, &prev_rec_buf_size);
+      ut_ad(slc->is_positioned(reg, index));
+      prev_reg = row_copy_prefix(&prev_rec_boc, &prev_rec_buf_size, slc,
+                                 rec_offs_n_fields(slc->offsets()));
+
       prev_rec_is_copied = true;
 
     } else {
@@ -1011,7 +1010,7 @@ static bool dict_stats_analyze_index_level(
       on the next page, we can simply assign pointers
       instead of copying the records like above */
 
-      prev_rec = rec;
+      prev_reg = reg;
       prev_rec_is_copied = false;
     }
   }
@@ -1078,7 +1077,8 @@ end:
   btr_leaf_page_release(pcur.get_block(), BTR_SEARCH_LEAF, mtr);
 
   pcur.close();
-  ut::free(prev_rec_buf);
+  ut::free(prev_rec_boc.buf);
+  prev_rec_boc.reset();
   mem_heap_free(heap);
 
   return success;
@@ -1121,27 +1121,26 @@ be big enough)
 to the number of externally stored pages which were encountered
 @return offsets1 or offsets2 (the offsets of *out_rec),
 or NULL if the page is empty and does not contain user records. */
-static inline ulint *dict_stats_scan_page(const rec_t **out_rec,
-                                          ulint *offsets1, ulint *offsets2,
+static inline Slice *dict_stats_scan_page(creg_t *out_reg, Slice_ctx *slc_ctx1,
+                                          Slice_ctx *slc_ctx2,
                                           const dict_index_t *index,
                                           const page_t *page, ulint n_prefix,
                                           page_scan_method_t scan_method,
                                           uint64_t *n_diff,
                                           uint64_t *n_external_pages) {
-  ulint *offsets_rec = offsets1;
-  ulint *offsets_next_rec = offsets2;
-  const rec_t *rec;
-  const rec_t *next_rec;
+  Slice_ctx *slc_ctx = slc_ctx1;
+  Slice_ctx *next_slc_ctx = slc_ctx2;
+
+  creg_t reg, next_reg;
   /* A dummy heap, to be passed to rec_get_offsets().
   Because offsets1,offsets2 should be big enough,
   this memory heap should never be used. */
-  mem_heap_t *heap = nullptr;
-  const rec_t *(*get_next)(const rec_t *);
+  creg_t (*get_next)(const rec_t *);
 
   if (scan_method == COUNT_ALL_NON_BORING_AND_SKIP_DEL_MARKED) {
     get_next = page_rec_get_next_non_del_marked;
   } else {
-    get_next = page_rec_get_next_const;
+    get_next = page_rec_get_next_creg;
   }
 
   const bool should_count_external_pages = n_external_pages != nullptr;
@@ -1150,37 +1149,34 @@ static inline ulint *dict_stats_scan_page(const rec_t **out_rec,
     *n_external_pages = 0;
   }
 
-  rec = get_next(page_get_infimum_rec(page));
+  reg = get_next(page_get_infimum_rec(page));
 
-  if (page_rec_is_supremum(rec)) {
+  if (page_rec_is_supremum(reg.rec)) {
     /* the page is empty or contains only delete-marked records */
     *n_diff = 0;
-    *out_rec = nullptr;
+    out_reg->reset();
     return (nullptr);
   }
 
-  offsets_rec = rec_get_offsets(rec, index, offsets_rec, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+  slc_ctx->get_offsets(reg, index, ULINT_UNDEFINED);
 
   if (should_count_external_pages) {
     *n_external_pages +=
-        lob::btr_rec_get_externally_stored_len(index, rec, offsets_rec);
+        lob::btr_rec_get_externally_stored_len(slc_ctx->slice());
   }
 
-  next_rec = get_next(rec);
+  next_reg = get_next(reg.rec);
 
   *n_diff = 1;
 
-  while (!page_rec_is_supremum(next_rec)) {
+  while (!page_rec_is_supremum(next_reg.rec)) {
     ulint matched_fields;
 
-    offsets_next_rec =
-        rec_get_offsets(next_rec, index, offsets_next_rec, ULINT_UNDEFINED,
-                        UT_LOCATION_HERE, &heap);
+    next_slc_ctx->get_offsets(next_reg, index, ULINT_UNDEFINED);
 
     /* check whether rec != next_rec when looking at
     the first n_prefix fields */
-    cmp_rec_rec_with_match(rec, next_rec, offsets_rec, offsets_next_rec, index,
+    cmp_rec_rec_with_match(slc_ctx->slice(), next_slc_ctx->slice(), index,
                            false, false, &matched_fields);
 
     if (matched_fields < n_prefix) {
@@ -1193,7 +1189,7 @@ static inline ulint *dict_stats_scan_page(const rec_t **out_rec,
       }
     }
 
-    rec = next_rec;
+    reg = next_reg;
     {
       /* Assign offsets_rec = offsets_next_rec
       so that offsets_rec matches with rec which
@@ -1206,24 +1202,22 @@ static inline ulint *dict_stats_scan_page(const rec_t **out_rec,
       are using them in circular fashion
       (offsets[_next]_rec are just pointers to
       those placeholders). */
-      ulint *offsets_tmp;
-      offsets_tmp = offsets_rec;
-      offsets_rec = offsets_next_rec;
-      offsets_next_rec = offsets_tmp;
+      std::swap(slc_ctx, next_slc_ctx);
     }
 
     if (should_count_external_pages) {
+      ut_ad(slc_ctx->slice()->is_positioned(reg, index));
       *n_external_pages +=
-          lob::btr_rec_get_externally_stored_len(index, rec, offsets_rec);
+          lob::btr_rec_get_externally_stored_len(slc_ctx->slice());
     }
 
-    next_rec = get_next(next_rec);
+    next_reg = get_next(next_reg.rec);
   }
 
   /* offsets1,offsets2 should have been big enough */
-  ut_a(heap == nullptr);
-  *out_rec = rec;
-  return (offsets_rec);
+  *out_reg = reg;
+  ut_ad(slc_ctx->slice()->is_positioned(reg, index));
+  return (slc_ctx->slice());
 }
 
 /** Dive below the current position of a cursor and calculate the number of
@@ -1243,10 +1237,7 @@ static void dict_stats_analyze_index_below_cur(const btr_cur_t *cur,
   buf_block_t *block;
   const page_t *page;
   mem_heap_t *heap;
-  const rec_t *rec;
-  ulint *offsets1;
-  ulint *offsets2;
-  ulint *offsets_rec;
+  creg_t reg;
   ulint size;
   mtr_t mtr;
 
@@ -1262,25 +1253,18 @@ static void dict_stats_analyze_index_below_cur(const btr_cur_t *cur,
   rec_get_offsets(). */
   size = (1 + REC_OFFS_HEADER_SIZE) + 1 + dict_index_get_n_fields(index);
 
-  heap = mem_heap_create(size * (sizeof *offsets1 + sizeof *offsets2),
-                         UT_LOCATION_HERE);
+  heap = mem_heap_create(2 * size * sizeof(ulint), UT_LOCATION_HERE);
 
-  offsets1 =
-      static_cast<ulint *>(mem_heap_alloc(heap, size * sizeof *offsets1));
+  Slice_ctx slc_ctx_1(&heap);
+  Slice_ctx slc_ctx_2(&heap);
+  Slice *slc = nullptr;
 
-  offsets2 =
-      static_cast<ulint *>(mem_heap_alloc(heap, size * sizeof *offsets2));
+  reg = btr_cur_get_reg(cur);
 
-  rec_offs_set_n_alloc(offsets1, size);
-  rec_offs_set_n_alloc(offsets2, size);
-
-  rec = btr_cur_get_rec(cur);
-
-  offsets_rec = rec_get_offsets(rec, index, offsets1, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+  slc = slc_ctx_1.get_offsets(reg, index, ULINT_UNDEFINED);
 
   page_id_t page_id(dict_index_get_space(index),
-                    btr_node_ptr_get_child_page_no(rec, offsets_rec));
+                    btr_node_ptr_get_child_page_no(slc));
   const page_size_t page_size(dict_table_page_size(index->table));
 
   /* assume no external pages by default - in case we quit from this
@@ -1304,12 +1288,12 @@ static void dict_stats_analyze_index_below_cur(const btr_cur_t *cur,
     /* else */
 
     /* search for the first non-boring record on the page */
-    offsets_rec =
-        dict_stats_scan_page(&rec, offsets1, offsets2, index, page, n_prefix,
-                             QUIT_ON_FIRST_NON_BORING, n_diff, nullptr);
+    slc = dict_stats_scan_page(&reg, &slc_ctx_1, &slc_ctx_2, index, page,
+                               n_prefix, QUIT_ON_FIRST_NON_BORING, n_diff,
+                               nullptr);
 
     /* pages on level > 0 are not allowed to be empty */
-    ut_a(offsets_rec != nullptr);
+    ut_a(slc != nullptr);
     /* if page is not empty (offsets_rec != NULL) then n_diff must
     be > 0, otherwise there is a bug in dict_stats_scan_page() */
     ut_a(*n_diff > 0);
@@ -1337,7 +1321,8 @@ static void dict_stats_analyze_index_below_cur(const btr_cur_t *cur,
 
     /* we have a non-boring record in rec, descend below it */
 
-    page_id.set_page_no(btr_node_ptr_get_child_page_no(rec, offsets_rec));
+    ut_ad(slc->is_positioned(reg, index));
+    page_id.set_page_no(btr_node_ptr_get_child_page_no(slc));
   }
 
   /* make sure we got a leaf page as a result from the above loop */
@@ -1348,8 +1333,8 @@ static void dict_stats_analyze_index_below_cur(const btr_cur_t *cur,
   the number of externally stored pages pointed by records on this
   page */
 
-  offsets_rec =
-      dict_stats_scan_page(&rec, offsets1, offsets2, index, page, n_prefix,
+  slc =
+      dict_stats_scan_page(&reg, &slc_ctx_1, &slc_ctx_2, index, page, n_prefix,
                            srv_stats_include_delete_marked
                                ? COUNT_ALL_NON_BORING_INCLUDE_DEL_MARKED
                                : COUNT_ALL_NON_BORING_AND_SKIP_DEL_MARKED,
@@ -2848,7 +2833,7 @@ storage */
       }
 
       /* wakes the last purge batch for exact recalculation */
-      if (trx_sys->rseg_history_len.load() > 0) {
+      if (trx_sys->update_rseg_history_len.load() > 0) {
         srv_wake_purge_thread_if_not_active();
       }
 

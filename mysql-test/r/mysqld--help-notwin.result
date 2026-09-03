@@ -41,6 +41,18 @@ The following options may be given as the first argument:
  --admin-ssl-crlpath=name 
  --admin-ssl-key=name 
  --admin-tls-ciphersuites=name 
+ --ai-gateway-enabled 
+ This variable is deprecated and ignored. AI functions now
+ use model configuration and per-function defaults managed
+ by dbms_ai.
+ --ai-gateway-endpoint[=name] 
+ This variable is deprecated and ignored. Configure full
+ model endpoint URLs through dbms_ai.register_model or
+ dbms_ai.update_model instead.
+ --ai-gateway-key[=name] 
+ This variable is deprecated and ignored. Configure
+ api_key on the model or use the DASHSCOPE_API_KEY
+ environment variable instead.
  --allow-suspicious-udfs 
  Allows use of UDFs consisting of only one symbol xxx()
  without corresponding xxx_init() or xxx_deinit(). That
@@ -50,6 +62,9 @@ The following options may be given as the first argument:
  will also set transaction isolation level 'serializable'.
  --appliedindex-force-delay[=#] 
  force set a smaller appliedindex
+ --as-of-cross-ddl-enabled 
+ Whether AS OF queries can cross DDL boundaries in this
+ session.
  --authentication-policy=name 
  Defines policies around how user account can be
  configured with Multi Factor authentication methods
@@ -218,6 +233,9 @@ The following options may be given as the first argument:
  such updates, only the modified parts of the JSON
  document are included in the binary log, so small changes
  of big documents may need significantly less space.
+ --binlog-rows-query-key-content 
+ Only write the leading comment of Rows_query_log events
+ into the binary log.
  --binlog-rows-query-log-events 
  Allow writing of Rows_query_log events into binary log.
  --binlog-stmt-cache-size=# 
@@ -253,6 +271,9 @@ The following options may be given as the first argument:
  --caching-sha2-password-public-key-path=name 
  A fully qualified path to the public RSA key used for
  authentication.
+ --ccl-dynamic-allocate 
+ Whether to allocate memory dynamically
+ (Defaults to on; use --skip-ccl-dynamic-allocate to disable.)
  --ccl-max-waiting-count=# 
  max waiting count in one ccl rule or bucket
  --ccl-queue-bucket-count=# 
@@ -284,7 +305,7 @@ The following options may be given as the first argument:
  The endpoint ip that client use to connect.
  --cluster-current-term=# 
  Cluster nodes current term  information
- --cluster-dump-meta Cluster dump meta
+ --cluster-dump-meta Cluster dump meta, discard now
  --cluster-follower-force-recover-index=# 
  Cluster restore from follower set apply index point
  --cluster-force-change-meta 
@@ -303,11 +324,12 @@ The following options may be given as the first argument:
  Cluster use idex to recover mts
  (Defaults to on; use --skip-cluster-mts-recover-use-index to disable.)
  --cluster-purged-gtid=name 
- Cluster set the purged gtid
+ discard now
  --cluster-start-index=# 
  Cluster start valid index
  --collation-server=name 
  Set the default collation.
+ --column-encryption Enable the column encryption
  --commit-pos-watcher 
  background thread checking and updating binlog commit
  position
@@ -342,7 +364,7 @@ The following options may be given as the first argument:
  check consensus large event or not
  (Defaults to on; use --skip-consensus-check-large-event to disable.)
  --consensus-checksum 
- Checksum when consensus receive log. Disabled by default.
+ Checksum when consensus receive log. discard now
  --consensus-configure-change-timeout=# 
  Consensus configure change timeout (ms). Default 1 min
  --consensus-connect-timeout=# 
@@ -359,21 +381,30 @@ The following options may be given as the first argument:
  --consensus-disable-fifo-cache 
  disable consensus fifo cache (run with weak consensus
  mode)
+ --consensus-disable-sync-for-large-trx 
+ consensus_disable_sync_for_large_trx
+ (Defaults to on; use --skip-consensus-disable-sync-for-large-trx to disable.)
  --consensus-dynamic-easyindex 
  Enable dynamic easy addr cidx. Enabled by default.
  (Defaults to on; use --skip-consensus-dynamic-easyindex to disable.)
  --consensus-election-timeout=# 
- Consensus election timeout
+ Consensus election timeout in milliseconds.
+ --consensus-enable-reset-master 
+ enable reset master cmd for test
  --consensus-flow-control[=name] 
  consensus flow control (<-1: no log send, -1: only send
  log during heartbeat, 0: no flow control, >0: [TODO] flow
  control).
+ --consensus-flush-delay-after-replicate[=#] 
+ The delay in milliseconds after each bgc replicate log
+ before flush into file when
+ consensus_replicate_with_cache_log = ON
  --consensus-force-leader-transfer 
  Try to force leader_transfer to other
  --consensus-force-promote 
  Try to force promote a follower to leader
  --consensus-force-recovery 
- for innodb_force_recovery
+ for innodb_force_recovery, discard now
  --consensus-force-sync-epoch-diff[=#] 
  consensus forceSync epoch diff
  --consensus-heartbeat-interval[=#] 
@@ -381,6 +412,8 @@ The following options may be given as the first argument:
  @@consensus_election_timeout/5
  --consensus-heartbeat-thread-cnt[=#] 
  Number of consensus heartbeat thread
+ --consensus-hide-leader-xpaxos-channel 
+ hide leader xpaxos_channel when show slave status
  --consensus-index-buf-enabled 
  Whether to enable Relay_log_info::consensus_index_buf
  (Defaults to on; use --skip-consensus-index-buf-enabled to disable.)
@@ -426,6 +459,9 @@ The following options may be given as the first argument:
  Max one log size. (default: 20M)
  --consensus-max-packet-size[=#] 
  Max package size the consensus server send at once
+ --consensus-max-pipeline-entry-size[=#] 
+ the max pipeline entry size that will not be sent in this
+ time
  --consensus-max-wait-seconds-for-next-trx-index=# 
  wait timeout for get_next_trx_index
  --consensus-min-delay-index[=#] 
@@ -460,6 +496,9 @@ The following options may be given as the first argument:
  prefetch wakeup ratio 
  --consensus-prefetch-window-size[=#] 
  prefetch window size
+ --consensus-repl-skip-polarx-event 
+ When enabled, skips sending polarx events to MySQL slaves
+ for compatibility.
  --consensus-replicate-with-cache-log 
  set server to replicate with cache log
  --consensus-reset-mts-info 
@@ -482,7 +521,7 @@ The following options may be given as the first argument:
  source
  --consensus-vote-backoff-timeout=# 
  consensus vote backoff timeout(milliseconds) for election
- timer
+ timer, zero means use @@consensus_election_timeout
  --consensus-wait-milliseconds-before-change-leader[=#] 
  the waiting time before change leader
  --consensus-wait-unfinished-bgc-timeout[=#] 
@@ -573,6 +612,13 @@ The following options may be given as the first argument:
  Option used by mysql-test for debugging and testing of
  replication.This option is deprecated and will be removed
  in a future version.
+ --disk-sentinel-check-interval[=#] 
+ disk sentinel check interval (second)
+ --disk-sentinel-delay-threshold[=#] 
+ disk_sentinel write delay threshold (millisecond), 0
+ means don't care, default 1000ms
+ --disk-sentinel-max-retries[=#] 
+ disk sentinel max retry times
  --div-precision-increment=# 
  Precision of the result of '/' operator will be increased
  on that value
@@ -588,8 +634,10 @@ The following options may be given as the first argument:
  full
  --enable-changeset  Whether open the polarx changeset proc
  (Defaults to on; use --skip-enable-changeset to disable.)
- --enable-consensus  enable consensus for xcluster node
+ --enable-consensus  whether enable consensus mode
  (Defaults to on; use --skip-enable-consensus to disable.)
+ --enable-disk-sentinel 
+ enable disk sentinel for data/log disk or not
  --enable-implicit-primary-key 
  MySQL add the primary key for every tables that haven't
  any unique indexes automaticly
@@ -599,6 +647,20 @@ The following options may be given as the first argument:
  --enable-writeset-tracking-for-ipk 
  Whether record the IPK to writeset.
  (Defaults to on; use --skip-enable-writeset-tracking-for-ipk to disable.)
+ --encdb-cc-miss-error 
+ When OFF (default), encrypt with ephemeral key if
+ CipherContext is missing (no MEK_PROVISION). When ON,
+ return an error to the client.
+ --encdb-default-encryption-algorithm[=name] 
+ Default encryption algorithm for EncDB. Valid values:
+ AES_128_GCM, AES_128_ECB, AES_128_CTR, AES_128_CBC,
+ SM4_128_CBC, SM4_128_ECB, SM4_128_CTR, SM4_128_GCM.
+ --encdb-default-user-access[=name] 
+ Default user access level for EncDB. Valid values:
+ noneAccess, restrictedAccess, fullAccess.
+ --encdb-kms-meta-max-entries[=#] 
+ Maximum number of entries to keep in the KMS meta table.
+ Oldest entries are purged on each insert.
  --end-markers-in-json 
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
@@ -650,6 +712,11 @@ The following options may be given as the first argument:
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
+ --forbid-execute-dml-all 
+ When enabled, UPDATE and DELETE statements without a
+ WHERE clause or with a tautological WHERE clause (e.g.
+ WHERE 1=1, WHERE TRUE) will be blocked. Maintain users in
+ maintain_user_list are exempt.
  --force-print-utf8mb4-implicit-collation 
  When this option is on, force print explicit charset and
  collation.
@@ -822,6 +889,9 @@ The following options may be given as the first argument:
  --lc-time-names=name 
  Set the language used for the month names and the days of
  the week.
+ --load-data-var-inherit-charset 
+ Whether user variables in LOAD DATA inherit the character
+ set of the source column.
  --local-infile      Enable LOAD DATA LOCAL INFILE
  --lock-instance-mode=name 
  Instance lock mode: LOCK_NON is nothing to
@@ -942,6 +1012,11 @@ The following options may be given as the first argument:
  still require activation unless they are made into
  default roles. The granted roles will not be visible in
  the mysql.role_edges table.
+ --mask-ai-model-config-api-key 
+ Mask mysql.ai_model_config.api_key
+ (Defaults to on; use --skip-mask-ai-model-config-api-key to disable.)
+ --mask-internal-user 
+ Mask the internal user
  --master-info-file=name 
  The path and filename where the replication receiver
  thread stores connection configuration and positions, in
@@ -1053,6 +1128,14 @@ The following options may be given as the first argument:
  users.  When set to true, the plugin will flag associated
  authenticated accounts to be mapped to proxy users when
  the server option check_proxy_users is enabled.
+ --net-buff-shrink-enabled 
+ Enable automatic shrinking of network receive buffer when
+ consecutive small packets are received
+ --net-buff-shrink-thresh=# 
+ Number of consecutive small packets required before
+ shrinking the network receive buffer. 0 means shrink
+ immediately after every command, regardless of packet
+ size.
  --net-buffer-length=# 
  Buffer length for TCP/IP and socket communication
  --net-read-timeout=# 
@@ -1098,15 +1181,19 @@ The following options may be given as the first argument:
  When this option is enabled,it will add gpp column on
  secondary index if suitable.
  (Defaults to on; use --skip-opt-index-format-gpp-enabled to disable.)
+ --opt-index-format-hippo-enabled 
+ try to use panda format v2.0 on non-unique secondary
+ index
  --opt-index-format-panda-enabled 
  try to use panda format on unique key 
+ --opt-index-format-spc-enabled 
+ try to use prefix compression format on secondary index 
  --opt-indexstat     When this option is enabled,it will accumulate the index
  statistics
  (Defaults to on; use --skip-opt-indexstat to disable.)
  --opt-outline-enabled 
  When this option is enabled,it will invoke statement
  outline when execute sql
- (Defaults to on; use --skip-opt-outline-enabled to disable.)
  --opt-tablestat     When this option is enabled,it will accumulate the table
  statistics
  (Defaults to on; use --skip-opt-tablestat to disable.)
@@ -1410,6 +1497,22 @@ The following options may be given as the first argument:
  --polardb-ic-reduce-hint-enable 
  enable the ic_reduce strategy when using hint
  (Defaults to on; use --skip-polardb-ic-reduce-hint-enable to disable.)
+ --polarx-binlog-bitmap-mode 
+ Cache ReplicatedColumnsView for LOAD DATA
+ (Defaults to on; use --skip-polarx-binlog-bitmap-mode to disable.)
+ --polarx-binlog-writeset-mode 
+ optimize binlog writeset mode.
+ (Defaults to on; use --skip-polarx-binlog-writeset-mode to disable.)
+ --polarx-long-trans-external-check 
+ Inspection switch to obtain long transaction information.
+ (Defaults to on; use --skip-polarx-long-trans-external-check to disable.)
+ --polarx-long-trans-external-threshold=# 
+ Represents the long transaction threshold. Transactions
+ exceeding this value are considered long transactions.
+ --polarx-optimizer-rbo-mode 
+ Directly accesss primary index if using pk to lookup
+ records
+ (Defaults to on; use --skip-polarx-optimizer-rbo-mode to disable.)
  --polarx-rpc[=name] Enable or disable polarx_rpc plugin. Possible values are
  ON, OFF, FORCE (don't start if the plugin fails to load).
  --polarx-rpc-auto-cpu-affinity 
@@ -1429,6 +1532,9 @@ The following options may be given as the first argument:
  --polarx-rpc-enable-thread-pool-log 
  Enable thread pool log(RW)
  (Defaults to on; use --skip-polarx-rpc-enable-thread-pool-log to disable.)
+ --polarx-rpc-enable-xrpc-sha2 
+ Enable xrpc sha2(RW)
+ (Defaults to on; use --skip-polarx-rpc-enable-xrpc-sha2 to disable.)
  --polarx-rpc-epoll-events-per-thread[=#] 
  Number of event slots per epoll_wait invoking(RW)
  --polarx-rpc-epoll-extra-groups[=#] 
@@ -1503,6 +1609,10 @@ The following options may be given as the first argument:
  TCP receive buffer size(not change if set to 0)(RW)
  --polarx-rpc-tcp-send-buf[=#] 
  TCP send buffer size(not change if set to 0)(RW)
+ --polarx-security-enhancement-mode 
+ When enabled, DROP DATABASE requires both DROP_ACL and
+ DROP_DATABASE_ADMIN. When disabled, only DROP_ACL is
+ required.
  --polarx-slow-query-block-check-interval=# 
  The interval of polling the slow query block. unit:
  seconds
@@ -1520,6 +1630,11 @@ The following options may be given as the first argument:
  --polarx-slow-query-block-user-pattern[=name] 
  This option is deprecated. Use slow_query_user_pattern
  instead.
+ --polarx-slow-query-pushdown-username[=name] 
+ pushdown username for slow query block.
+ --polarx-specific-user-list=name 
+ Accounts whose sessions default forbid_execute_dml_all to
+ OFF, string split by ','
  --polarx-udf[=name] Enable or disable polarx_udf plugin. Possible values are
  ON, OFF, FORCE (don't start if the plugin fails to load).
  -P, --port=#        Port number to use for connection or 0 to default to,
@@ -1535,7 +1650,7 @@ The following options may be given as the first argument:
  SHOW CREATE USER will print the AS clause as HEX if it
  contains non-prinable characters
  --print-malloc-stats 
- print sys mem
+ print sys mem stats
  --profiling-history-size=# 
  Limit of query profiling memory
  --protocol-compression-algorithms=name 
@@ -1610,7 +1725,7 @@ The following options may be given as the first argument:
  PERFORMANCE, SEMISYNCHRONOUS and SYNCHRONOUS.
  --rds-audit-log-version=name 
  The version of audit log, currently support MYSQL_V1,
- MYSQL_V3 and MYSQL_V4.
+ MYSQL_V3, MYSQL_V4 and MYSQL_V5.
  --rds-ic-reduce-hint-enable 
  This option is deprecated. Use
  polardb_ic_reduce_hint_enable instead.
@@ -1633,14 +1748,22 @@ The following options may be given as the first argument:
  --read-rnd-buffer-size=# 
  When reading rows in sorted order after a sort, the rows
  are read through this buffer to avoid a disk seeks
- --recover-snapshot  recover from the backup of cloud storage and output the
- committed index
+ --recover-snapshot  discard now
  --recycle-bin       Whether recycle the table which is going to be dropped
+ --recycle-bin-capacity-limit=# 
+ Maximum storage capacity for recycle bin. You can specify
+ values using K, M, G, T suffixes (e.g., 1G = 1GB). 0
+ means no limit.
  --recycle-bin-retention=# 
  Seconds before really purging the recycled table.
+ --recycle-bin-table-name[=name] 
+ Custom table name for recycle bin (auto-reset after use)
  --recycle-scheduler Enable the recycle scheduler.
  --recycle-scheduler-interval=# 
  Interval in seconds for recycle scheduler.
+ --recycle-scheduler-max-skip-rounds=# 
+ Maximum number of consecutive skip rounds before forced
+ execution
  --recycle-scheduler-purge-table-print 
  Print the recycle scheduler process.
  --regexp-stack-limit=# 
@@ -1943,6 +2066,12 @@ The following options may be given as the first argument:
  --show-slave-auth-info 
  This option is deprecated and will be removed in a future
  version. Use show-replica-auth-info instead.
+ --show-vidx-hlindex-tables 
+ When enabled, vector index auxiliary tables (hlindex) are
+ visible in INFORMATION_SCHEMA.TABLES, SHOW TABLES, and
+ can be directly SELECTed. Note: this also affects other
+ storage-engine hidden tables (e.g., InnoDB FTS auxiliary
+ tables) since they share the same hidden type.
  --skip-grant-tables Start without grant tables. This gives all users FULL
  ACCESS to all tables.
  --skip-host-cache   Don't cache host names.
@@ -2028,7 +2157,7 @@ The following options may be given as the first argument:
  hostname-slow.log. Must be enabled to activate other slow
  log options
  --slow-query-user-pattern[=name] 
- match user pattern match user pattern
+ match user pattern for slow query block.
  --socket=name       Socket file to use for connection
  --sort-buffer-size=# 
  Each thread that needs to do a sort allocates a buffer of
@@ -2044,6 +2173,9 @@ The following options may be given as the first argument:
  When set, if a table is created without a primary key
  then server generates invisible auto-increment column as
  a primary key for the table.
+ --sql-log-bin-super-modified 
+ control @@sql_log_bin only modified by super user,
+ default false
  --sql-mode=name     Syntax: sql-mode=mode[,mode[,mode...]]. See the manual
  for the complete list of valid sql modes
  --sql-require-primary-key 
@@ -2154,6 +2286,9 @@ The following options may be given as the first argument:
  This option is used to let the server know when to
  extract the write set which will be used for various
  purposes. 
+ --unique-key-range-shortcut 
+ Enable unique-key range shortcut for single-table
+ UPDATE/DELETE
  --updatable-views-with-limit=name 
  YES = Don't issue an error message (warning only) if a
  VIEW without presence of a key of the underlying table is
@@ -2174,6 +2309,53 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-validate-user-plugins to disable.)
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
+ --vidx-ddl-threads=# 
+ Number of worker threads for every in-memory window of a
+ synchronous vector-index COPY DDL build. 1 selects the
+ serial path
+ --vidx-default-distance=name 
+ Distance function to build the vector index for
+ --vidx-disabled     Whether to enable vector index feature
+ (Defaults to on; use --skip-vidx-disabled to disable.)
+ --vidx-force-non-indep 
+ Emergency escape hatch: when ON, force vector-index DML
+ onto the legacy non-independent path (aux writes commit
+ with the user trx).  Read-only — set in my.cnf and
+ restart.  See vidx::aux_dml::need_independent_trx() for
+ full routing semantics.
+ --vidx-hnsw-cache-size=# 
+ Upper limit for one HNSW vector index runtime cache;
+ synchronous COPY DDL reuses it as a soft window hint
+ checked between micro-batches
+ --vidx-hnsw-default-ef-construction=# 
+ ef_construction for HNSW graph building. Larger values
+ produce higher quality graphs but slower index creation.
+ Only affects CREATE INDEX; runtime INSERT uses the
+ persisted value.
+ --vidx-hnsw-default-m=# 
+ Larger values mean slower SELECTs and INSERTs, larger
+ index size and higher memory consumption but more
+ accurate results
+ --vidx-hnsw-ef-search=# 
+ Larger values mean slower SELECTs but more accurate
+ results. Defines the minimal number of result candidates
+ to look for in the vector index for ORDER BY ... LIMIT N
+ queries. The search will never search for less rows than
+ that, even if LIMIT is smaller
+ --vidx-hnsw-lock-timeout-ms=# 
+ Lock wait timeout in milliseconds for HNSW graph table
+ operations on replica apply threads. Caps how long a
+ write blocks on a concurrent writer (e.g. another
+ attachable inner-trx) before being skipped, so a single
+ hot graph row cannot stall apply progress. Effective
+ granularity is 1 second (values below 1000 are rounded up
+ to 1 s).
+ --vidx-use-fast-float 
+ When ON (default), use the fast_float library for
+ VEC_FROMTEXT() float parsing (~5x faster than strtof).
+ When OFF, fall back to the standard glibc strtof. Useful
+ for performance comparison benchmarks.
+ (Defaults to on; use --skip-vidx-use-fast-float to disable.)
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
  --weak-consensus-mode 
@@ -2209,8 +2391,12 @@ admin-ssl-crl (No default value)
 admin-ssl-crlpath (No default value)
 admin-ssl-key (No default value)
 admin-tls-ciphersuites (No default value)
+ai-gateway-enabled FALSE
+ai-gateway-endpoint https://dashscope.aliyuncs.com
+ai-gateway-key 
 allow-suspicious-udfs FALSE
 appliedindex-force-delay 0
+as-of-cross-ddl-enabled FALSE
 authentication-policy *,,
 auto-increment-increment 1
 auto-increment-offset 1
@@ -2238,6 +2424,7 @@ binlog-row-event-max-size 8192
 binlog-row-image FULL
 binlog-row-metadata MINIMAL
 binlog-row-value-options 
+binlog-rows-query-key-content FALSE
 binlog-rows-query-log-events FALSE
 binlog-stmt-cache-size 32768
 binlog-transaction-compression FALSE
@@ -2249,7 +2436,8 @@ bulk-insert-buffer-size 8388608
 caching-sha2-password-digest-rounds 5000
 caching-sha2-password-private-key-path private_key.pem
 caching-sha2-password-public-key-path public_key.pem
-ccl-max-waiting-count 0
+ccl-dynamic-allocate TRUE
+ccl-max-waiting-count 9223372036854775807
 ccl-queue-bucket-count 4
 ccl-queue-bucket-size 64
 ccl-wait-timeout 86400
@@ -2275,6 +2463,7 @@ cluster-mts-recover-use-index TRUE
 cluster-purged-gtid (No default value)
 cluster-start-index 1
 collation-server utf8mb4_0900_ai_ci
+column-encryption FALSE
 commit-pos-watcher FALSE
 commit-pos-watcher-interval 1000000
 completion-type NO_CHAIN
@@ -2294,15 +2483,19 @@ consensus-disable-commit-before-change-leader TRUE
 consensus-disable-election FALSE
 consensus-disable-empty-xa FALSE
 consensus-disable-fifo-cache FALSE
+consensus-disable-sync-for-large-trx TRUE
 consensus-dynamic-easyindex TRUE
 consensus-election-timeout 5000
+consensus-enable-reset-master FALSE
 consensus-flow-control (No default value)
+consensus-flush-delay-after-replicate 0
 consensus-force-leader-transfer FALSE
 consensus-force-promote FALSE
 consensus-force-recovery FALSE
 consensus-force-sync-epoch-diff 0
 consensus-heartbeat-interval 0
 consensus-heartbeat-thread-cnt 0
+consensus-hide-leader-xpaxos-channel FALSE
 consensus-index-buf-enabled TRUE
 consensus-io-thread-cnt 3
 consensus-large-batch-ratio 50
@@ -2322,6 +2515,7 @@ consensus-log-level LOG_WARN
 consensus-max-delay-index 50000
 consensus-max-log-size 20971520
 consensus-max-packet-size 131072
+consensus-max-pipeline-entry-size 18446744073709551615
 consensus-max-wait-seconds-for-next-trx-index 10
 consensus-min-delay-index 5000
 consensus-msg-compress-option (No default value)
@@ -2335,6 +2529,7 @@ consensus-prefetch-cache-size 67108864
 consensus-prefetch-fast-fetch FALSE
 consensus-prefetch-wakeup-ratio 2
 consensus-prefetch-window-size 10
+consensus-repl-skip-polarx-event FALSE
 consensus-replicate-with-cache-log FALSE
 consensus-reset-mts-info FALSE
 consensus-safe-for-reset-master FALSE
@@ -2343,7 +2538,7 @@ consensus-server-ip (No default value)
 consensus-server-port 0
 consensus-stop-apply-index 0
 consensus-sync-follower-meta-interva 1
-consensus-vote-backoff-timeout 1000
+consensus-vote-backoff-timeout 0
 consensus-wait-milliseconds-before-change-leader 120
 consensus-wait-unfinished-bgc-timeout 3000
 consensus-wait-unfinished-trx-timeout 5000
@@ -2373,15 +2568,23 @@ disable-wait-commitindex FALSE
 disabled-storage-engines 
 disconnect-on-expired-password TRUE
 disconnect-slave-event-count 0
+disk-sentinel-check-interval 5
+disk-sentinel-delay-threshold 1000
+disk-sentinel-max-retries 6
 div-precision-increment 4
 enable-appliedindex-checker FALSE
 enable-binlog-wait-if-full FALSE
 enable-changeset TRUE
-enable-consensus TRUE
+enable-consensus FALSE
+enable-disk-sentinel FALSE
 enable-implicit-primary-key FALSE
 enable-polarx-rpc FALSE
 enable-show-ipk-info FALSE
 enable-writeset-tracking-for-ipk TRUE
+encdb-cc-miss-error FALSE
+encdb-default-encryption-algorithm SM4_128_GCM
+encdb-default-user-access restrictedAccess
+encdb-kms-meta-max-entries 10
 end-markers-in-json FALSE
 enforce-gtid-consistency ON
 eq-range-index-dive-limit 200
@@ -2393,6 +2596,7 @@ explicit-defaults-for-timestamp TRUE
 external-locking FALSE
 flush FALSE
 flush-time 0
+forbid-execute-dml-all FALSE
 force-print-utf8mb4-implicit-collation FALSE
 force-revise FALSE
 ft-boolean-syntax + -><()~*:""&|
@@ -2448,6 +2652,7 @@ kill-idle-transaction-timeout 0
 large-pages FALSE
 lc-messages en_US
 lc-time-names en_US
+load-data-var-inherit-charset FALSE
 local-infile FALSE
 lock-instance-mode LOCK_NON
 lock-wait-timeout 31536000
@@ -2481,6 +2686,8 @@ lower-case-table-names 1
 maintain-max-connections 0
 maintain-user-list (No default value)
 mandatory-roles 
+mask-ai-model-config-api-key TRUE
+mask-internal-user FALSE
 master-info-file master.info
 master-info-repository TABLE
 master-retry-count 86400
@@ -2519,6 +2726,8 @@ myisam-sort-buffer-size 8388608
 myisam-stats-method nulls_unequal
 myisam-use-mmap FALSE
 mysql-native-password-proxy-users FALSE
+net-buff-shrink-enabled FALSE
+net-buff-shrink-thresh 5
 net-buffer-length 16384
 net-read-timeout 30
 net-retry-count 10
@@ -2535,9 +2744,11 @@ opt-enable-rds-priv-strategy FALSE
 opt-flashback-area FALSE
 opt-force-index-pct-cached FALSE
 opt-index-format-gpp-enabled TRUE
+opt-index-format-hippo-enabled FALSE
 opt-index-format-panda-enabled FALSE
+opt-index-format-spc-enabled FALSE
 opt-indexstat TRUE
-opt-outline-enabled TRUE
+opt-outline-enabled FALSE
 opt-tablestat TRUE
 optimizer-max-subgraph-pairs 100000
 optimizer-prune-level 1
@@ -2598,13 +2809,13 @@ performance-schema-max-file-classes 80
 performance-schema-max-file-handles 32768
 performance-schema-max-file-instances -1
 performance-schema-max-index-stat -1
-performance-schema-max-memory-classes 450
+performance-schema-max-memory-classes 460
 performance-schema-max-metadata-locks -1
 performance-schema-max-mutex-classes 350
 performance-schema-max-mutex-instances -1
 performance-schema-max-prepared-statements-instances -1
 performance-schema-max-program-instances -1
-performance-schema-max-rwlock-classes 60
+performance-schema-max-rwlock-classes 65
 performance-schema-max-rwlock-instances -1
 performance-schema-max-socket-classes 10
 performance-schema-max-socket-instances -1
@@ -2627,6 +2838,11 @@ persist-sensitive-variables-in-plaintext TRUE
 persisted-globals-load TRUE
 ping-mode 
 polardb-ic-reduce-hint-enable TRUE
+polarx-binlog-bitmap-mode TRUE
+polarx-binlog-writeset-mode TRUE
+polarx-long-trans-external-check TRUE
+polarx-long-trans-external-threshold 3000
+polarx-optimizer-rbo-mode TRUE
 polarx-rpc ON
 polarx-rpc-auto-cpu-affinity TRUE
 polarx-rpc-enable-epoll-in-tasker TRUE
@@ -2634,6 +2850,7 @@ polarx-rpc-enable-kill-log TRUE
 polarx-rpc-enable-perf-hist FALSE
 polarx-rpc-enable-tasker TRUE
 polarx-rpc-enable-thread-pool-log TRUE
+polarx-rpc-enable-xrpc-sha2 TRUE
 polarx-rpc-epoll-events-per-thread 4
 polarx-rpc-epoll-extra-groups 0
 polarx-rpc-epoll-group-ctx-refresh-time 10000
@@ -2668,12 +2885,15 @@ polarx-rpc-tcp-keep-alive 30
 polarx-rpc-tcp-listen-queue 128
 polarx-rpc-tcp-recv-buf 0
 polarx-rpc-tcp-send-buf 0
+polarx-security-enhancement-mode FALSE
 polarx-slow-query-block-check-interval 1
 polarx-slow-query-block-cpu-percent-threshold 0
 polarx-slow-query-block-enable FALSE
 polarx-slow-query-block-exec-timeout 0
 polarx-slow-query-block-exec-timeout-for-cpu-exceed 0
 polarx-slow-query-block-user-pattern 
+polarx-slow-query-pushdown-username 
+polarx-specific-user-list (No default value)
 polarx-udf ON
 port ####
 port-open-timeout 0
@@ -2705,16 +2925,19 @@ rds-audit-log-version MYSQL_V1
 rds-ic-reduce-hint-enable TRUE
 rds-kill-connections 0
 rds-kill-user-list (No default value)
-rds-version 32
+rds-version 42
 read-buffer-size 131072
 read-lsn 0
 read-only FALSE
 read-rnd-buffer-size 262144
 recover-snapshot FALSE
 recycle-bin FALSE
+recycle-bin-capacity-limit 0
 recycle-bin-retention 604800
+recycle-bin-table-name (No default value)
 recycle-scheduler FALSE
 recycle-scheduler-interval 30
+recycle-scheduler-max-skip-rounds 20
 recycle-scheduler-purge-table-print FALSE
 regexp-stack-limit 8000000
 regexp-time-limit 32
@@ -2778,6 +3001,7 @@ show-ipk-info FALSE
 show-old-temporals FALSE
 show-replica-auth-info FALSE
 show-slave-auth-info FALSE
+show-vidx-hlindex-tables FALSE
 skip-grant-tables TRUE
 skip-name-resolve FALSE
 skip-networking FALSE
@@ -2807,6 +3031,7 @@ sort-buffer-size 262144
 source-verify-checksum FALSE
 sporadic-binlog-dump-fail FALSE
 sql-generate-invisible-primary-key FALSE
+sql-log-bin-super-modified FALSE
 sql-mode ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 sql-require-primary-key FALSE
 stored-program-cache 256
@@ -2838,11 +3063,22 @@ transaction-isolation REPEATABLE-READ
 transaction-prealloc-size 4096
 transaction-read-only FALSE
 transaction-write-set-extraction XXHASH64
+unique-key-range-shortcut FALSE
 updatable-views-with-limit YES
 upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
+vidx-ddl-threads 4
+vidx-default-distance EUCLIDEAN
+vidx-disabled TRUE
+vidx-force-non-indep FALSE
+vidx-hnsw-cache-size 16777216
+vidx-hnsw-default-ef-construction 10
+vidx-hnsw-default-m 6
+vidx-hnsw-ef-search 20
+vidx-hnsw-lock-timeout-ms 1000
+vidx-use-fast-float TRUE
 wait-timeout 28800
 weak-consensus-mode FALSE
 windowing-use-high-precision TRUE

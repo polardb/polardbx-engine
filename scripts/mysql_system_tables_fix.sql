@@ -1562,6 +1562,23 @@ PREPARE stmt FROM @str;
 EXECUTE stmt;
 DROP PREPARE stmt;
 
+-- Preserve the optional description of EncDB encryption rules.
+SET @have_encdb_sensitive_rules =
+  (SELECT COUNT(table_name) FROM information_schema.tables
+     WHERE table_schema = 'mysql' AND table_name = 'encdb_sensitive_rules' AND
+           table_type = 'BASE TABLE');
+SET @have_encdb_rule_description =
+  (SELECT COUNT(column_name) FROM information_schema.columns
+     WHERE table_schema = 'mysql' AND table_name = 'encdb_sensitive_rules' AND
+           column_name = 'description');
+SET @cmd="ALTER TABLE mysql.encdb_sensitive_rules ADD COLUMN description TEXT NOT NULL DEFAULT ('') AFTER rule_type";
+SET @str = IF(@have_encdb_sensitive_rules = 1 AND
+              @have_encdb_rule_description = 0,
+              @cmd, "SET @dummy = 0");
+PREPARE stmt FROM @str;
+EXECUTE stmt;
+DROP PREPARE stmt;
+
 ALTER TABLE mysql.db DROP PRIMARY KEY,
                      ADD PRIMARY KEY (`Host`,`User`,`Db`);
 

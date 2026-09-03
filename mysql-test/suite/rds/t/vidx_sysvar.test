@@ -1,0 +1,247 @@
+##########################################
+# Test system variables dynamic changes  #
+# for VECTOR INDEX                       #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+--echo
+--echo # 1. Show all vidx related system variables
+SHOW VARIABLES LIKE 'vidx%';
+
+--echo
+--echo # 2. Test vidx_disabled variable
+--echo # Initially vidx_disabled should be ON (default)
+SELECT @@GLOBAL.vidx_disabled;
+
+--echo # Try to create vector index when disabled - should fail
+--error ER_VECTOR_DISABLED
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # Enable vidx
+SET GLOBAL vidx_disabled = OFF;
+SELECT @@GLOBAL.vidx_disabled;
+
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # Now create should succeed
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Insert some data
+--disable_warnings
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,4,3,2,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+--enable_warnings
+
+--echo
+--echo # 3. Test vidx_disabled=ON with existing table
+SET GLOBAL vidx_disabled = ON;
+
+--echo # Query should still work on existing table
+SELECT id, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo # ANN query on existing table
+--disable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 2;
+--enable_warnings
+
+--echo # INSERT on existing table should still work
+--disable_warnings
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[2,2,2,2,2]"));
+--enable_warnings
+
+--echo # But creating new vector index should fail
+--error ER_VECTOR_DISABLED
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--echo # ALTER TABLE ADD VECTOR INDEX should fail
+--echo # Note: Creating table with VECTOR column also fails when vidx_disabled=ON
+--error ER_VECTOR_DISABLED
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+--echo # Re-enable vidx to test ALTER TABLE
+SET GLOBAL vidx_disabled = OFF;
+
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+
+--echo # Disable vidx again
+SET GLOBAL vidx_disabled = ON;
+
+--error ER_VECTOR_DISABLED
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+
+DROP TABLE t2;
+
+--echo # Re-enable vidx
+SET GLOBAL vidx_disabled = OFF;
+
+--echo
+--echo # 4. Test vidx_hnsw_ef_search variable
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--echo # Change ef_search and observe query behavior
+SET SESSION vidx_hnsw_ef_search = 50;
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--disable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+--enable_warnings
+
+SET SESSION vidx_hnsw_ef_search = 100;
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--disable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+--enable_warnings
+
+--echo # Reset to default
+SET SESSION vidx_hnsw_ef_search = 20;
+
+--echo
+--echo # 5. Test vidx_hnsw_cache_size variable (GLOBAL)
+SELECT @@GLOBAL.vidx_hnsw_cache_size;
+
+--echo # Modify cache size
+SET GLOBAL vidx_hnsw_cache_size = 2097152;
+SELECT @@GLOBAL.vidx_hnsw_cache_size;
+
+--echo # Query should still work
+--disable_warnings
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 2;
+--enable_warnings
+
+--echo # Reset to default
+SET GLOBAL vidx_hnsw_cache_size = DEFAULT;
+
+--echo
+--echo # 6. Test vidx_hnsw_default_m variable (SESSION)
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+--echo # Change default M value
+SET SESSION vidx_hnsw_default_m = 32;
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+--echo # Create new table - should use new default M
+CREATE TABLE t3 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi3(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t3;
+
+--echo # Reset M and create another table
+SET SESSION vidx_hnsw_default_m = 64;
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+CREATE TABLE t4 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi4(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t4;
+
+--echo # Reset to default
+SET SESSION vidx_hnsw_default_m = DEFAULT;
+
+--echo
+--echo # 7. Test vidx_default_distance variable (SESSION)
+SELECT @@SESSION.vidx_default_distance;
+
+--echo # Change default distance
+SET SESSION vidx_default_distance = 'cosine';
+SELECT @@SESSION.vidx_default_distance;
+
+--echo # Create table with default cosine distance
+CREATE TABLE t5 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi5(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t5;
+
+--echo # Reset to euclidean
+SET SESSION vidx_default_distance = 'euclidean';
+SELECT @@SESSION.vidx_default_distance;
+
+CREATE TABLE t6 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  VECTOR INDEX vi6(v)
+) ENGINE = InnoDB;
+
+SHOW CREATE TABLE t6;
+
+--echo
+--echo # 8. Test SESSION vs GLOBAL scope
+--echo # vidx_hnsw_ef_search is SESSION scope
+
+--echo # Connection 1: Set session variable
+SET SESSION vidx_hnsw_ef_search = 75;
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--echo # Create a new connection to verify isolation
+connect (con1, localhost, root,,);
+SELECT @@SESSION.vidx_hnsw_ef_search;
+--echo # Should be default value, not 75
+disconnect con1;
+connection default;
+
+--echo # Original session should still have 75
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--echo # Reset
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+
+--echo
+--echo # 9. Test variable boundary values
+--echo # vidx_hnsw_ef_search range: 1 to max_ef
+SET SESSION vidx_hnsw_ef_search = 1;
+SELECT @@SESSION.vidx_hnsw_ef_search;
+
+--echo # vidx_hnsw_default_m range: 3 to 127
+SET SESSION vidx_hnsw_default_m = 3;
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+SET SESSION vidx_hnsw_default_m = 127;
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+SET SESSION vidx_hnsw_default_m = 128;
+SELECT @@SESSION.vidx_hnsw_default_m;
+
+--echo # Reset to defaults
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+SET SESSION vidx_hnsw_default_m = DEFAULT;
+
+--echo
+--echo # 10. Clean up
+DROP TABLE t1;
+DROP TABLE t3;
+DROP TABLE t4;
+DROP TABLE t5;
+DROP TABLE t6;
+
+SET GLOBAL vidx_disabled = ON;

@@ -1,11 +1,16 @@
 show tables where Tables_in_db != 'ndb_binlog_index';
 Tables_in_db
+ai_function_config
+ai_model_config
 columns_priv
 component
 concurrency_control
 consensus_info
 db
 default_roles
+encdb_auth_users
+encdb_kms_meta
+encdb_sensitive_rules
 engine_cost
 func
 general_log

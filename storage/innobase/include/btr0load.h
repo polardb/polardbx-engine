@@ -78,7 +78,7 @@ class Btree_load : private ut::Non_copyable {
   @param[in]    trx_id                  Transaction id.
   @param[in]    observer                Flush observer */
   Btree_load(dict_index_t *index, trx_id_t trx_id,
-             Flush_observer *observer) noexcept;
+             Flush_observer *observer IF_DEBUG(, const THD *thd)) noexcept;
 
   /** Destructor */
   ~Btree_load() noexcept;
@@ -106,6 +106,10 @@ class Btree_load : private ut::Non_copyable {
   @param[in] level                  B-tree level
   @return error code */
   [[nodiscard]] dberr_t insert(dtuple_t *dtuple, size_t level) noexcept;
+
+  /** Public getter function to return number of records inserted
+  @return Number of records inserted */
+  [[nodiscard]] inline uint64_t get_n_recs() noexcept { return m_n_recs; }
 
  private:
   /** Set the root page on completion.
@@ -188,6 +192,9 @@ class Btree_load : private ut::Non_copyable {
   bulk load operation to ensure that the online status of the
   index does not change */
   IF_DEBUG(unsigned m_index_online{};)
+
+  /** THD of the DDL Context. Used for sync points. */
+  IF_DEBUG(const THD *m_thd{};)
 };
 
 #endif /* btr0load_h */

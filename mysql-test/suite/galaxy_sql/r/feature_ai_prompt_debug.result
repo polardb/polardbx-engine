@@ -1,0 +1,14 @@
+# Register some user models first
+# Update model like feature_ai_model does
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"http://example.com/api"}');
+CALL dbms_ai.update_model('qwen_turbo', '{"endpoint":"https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"}');
+# Now try AI_PROMPT without configured default model
+SELECT AI_PROMPT('Say exactly one word: hello') IS NOT NULL AS result;
+ERROR HY000: ai_prompt: no default model configured for AI_PROMPT.
+# Also try with explicit model
+SELECT AI_PROMPT('Say exactly one word: blue', 'qwen_turbo') IS NOT NULL AS result;
+result
+1
+CALL dbms_ai.drop_model('qwen_plus');
+CALL dbms_ai.drop_model('qwen_turbo');
+# Done

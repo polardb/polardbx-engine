@@ -1,0 +1,174 @@
+# ============================================================
+# Concurrent insert/update workload that exercises the LOB
+# preallocation path (Lob_alloc_eager). Runs 4 worker
+# connections, each driving a stored procedure loop so the
+# bulk of the work is server-side and avoids per-statement
+# round trips.
+# ============================================================
+
+--disable_warnings
+DROP TABLE IF EXISTS t_lob_prealloc;
+DROP PROCEDURE IF EXISTS lob_insert_proc;
+DROP PROCEDURE IF EXISTS lob_update_proc;
+--enable_warnings
+
+# Save defaults so cleanup can restore them.
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+
+# Force the eager preallocation path on.
+SET GLOBAL innodb_lob_prealloc = ON;
+
+CREATE TABLE t_lob_prealloc (
+  id BIGINT PRIMARY KEY,
+  b LONGBLOB
+) ENGINE=InnoDB;
+
+# ----------------------------------------------------------
+# Insert worker.
+#   tid: thread id (1..N), partitions the id space so workers
+#        do not collide on the primary key.
+#   n_iters: number of inserts per worker.
+#
+# Primary keys are intentionally non-monotonic: i is mapped
+# through a co-prime multiplier (gcd(31, n_iters)=1 when
+# n_iters=1000) so each worker hits its 1000 ids in a
+# permuted order.
+#
+# Blob payload size is uniformly random in [7KB, 64KB].
+# ----------------------------------------------------------
+DELIMITER $$;
+CREATE PROCEDURE lob_insert_proc(IN tid INT, IN n_iters INT)
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  DECLARE pid BIGINT;
+  DECLARE blob_size INT;
+
+  WHILE i < n_iters DO
+    SET pid = ((i * 31 + 7) MOD n_iters) + tid * 10000000;
+    SET blob_size = 7 * 1024 + FLOOR(RAND() * (64 * 1024 - 7 * 1024 + 1));
+    INSERT INTO t_lob_prealloc VALUES (pid, REPEAT('x', blob_size));
+    SET i = i + 1;
+  END WHILE;
+END$$
+DELIMITER ;$$
+
+# ----------------------------------------------------------
+# Update worker.
+#   n_iters: number of update attempts per worker.
+#
+# Each iteration:
+#   1. picks a random offset r in [0, total);
+#   2. resolves it via 'SELECT id ... LIMIT r, 1' to a real pk;
+#   3. opens a txn, takes FOR UPDATE, replaces the blob with
+#      a fresh random payload sized [7KB, 64KB], commits.
+#
+# Deadlocks/lock-wait timeouts are swallowed and the next
+# iteration just moves on; this matches the user's "1000
+# attempts per thread" semantics.
+# ----------------------------------------------------------
+DELIMITER $$;
+CREATE PROCEDURE lob_update_proc(IN n_iters INT)
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  DECLARE r INT;
+  DECLARE pid BIGINT;
+  DECLARE blob_size INT;
+  DECLARE total INT;
+
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET pid = NULL;
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+  END;
+
+  SELECT COUNT(*) INTO total FROM t_lob_prealloc;
+
+  WHILE i < n_iters DO
+    SET r = FLOOR(RAND() * total);
+    SET pid = NULL;
+    SELECT id INTO pid FROM t_lob_prealloc LIMIT r, 1;
+    IF pid IS NOT NULL THEN
+      SET blob_size = 7 * 1024 + FLOOR(RAND() * (64 * 1024 - 7 * 1024 + 1));
+      START TRANSACTION;
+      SELECT id FROM t_lob_prealloc WHERE id = pid FOR UPDATE INTO @ignore;
+      UPDATE t_lob_prealloc SET b = REPEAT('y', blob_size) WHERE id = pid;
+      COMMIT;
+    END IF;
+    SET i = i + 1;
+  END WHILE;
+END$$
+DELIMITER ;$$
+
+# Spin up four worker connections.
+--connect (con1, localhost, root,, test)
+--connect (con2, localhost, root,, test)
+--connect (con3, localhost, root,, test)
+--connect (con4, localhost, root,, test)
+
+# ============================================================
+# Phase 1: concurrent INSERT
+# ============================================================
+--connection con1
+--send CALL lob_insert_proc(1, 1000)
+
+--connection con2
+--send CALL lob_insert_proc(2, 1000)
+
+--connection con3
+--send CALL lob_insert_proc(3, 1000)
+
+--connection con4
+--send CALL lob_insert_proc(4, 1000)
+
+--connection con1
+--reap
+--connection con2
+--reap
+--connection con3
+--reap
+--connection con4
+--reap
+
+--connection default
+SELECT COUNT(*) AS rows_after_insert FROM t_lob_prealloc;
+
+# ============================================================
+# Phase 2: concurrent UPDATE
+# ============================================================
+--connection con1
+--send CALL lob_update_proc(1000)
+
+--connection con2
+--send CALL lob_update_proc(1000)
+
+--connection con3
+--send CALL lob_update_proc(1000)
+
+--connection con4
+--send CALL lob_update_proc(1000)
+
+--connection con1
+--reap
+--connection con2
+--reap
+--connection con3
+--reap
+--connection con4
+--reap
+
+--connection default
+SELECT COUNT(*) AS rows_after_update FROM t_lob_prealloc;
+
+# ============================================================
+# Cleanup
+# ============================================================
+--disconnect con1
+--disconnect con2
+--disconnect con3
+--disconnect con4
+
+DROP PROCEDURE lob_insert_proc;
+DROP PROCEDURE lob_update_proc;
+DROP TABLE t_lob_prealloc;
+
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

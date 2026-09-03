@@ -54,6 +54,9 @@ struct dict_table_t;
 #include "rem0types.h"
 #include "ut0mpmcbq.h"
 
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+
 /** The core idea is to find the left and right paths down the B+Tree.These
 paths correspond to the scan start and scan end search. Follow the links
 at the appropriate btree level from the left to right and split the scan
@@ -177,7 +180,8 @@ class Parallel_reader {
     Config(const Scan_range &scan_range, dict_index_t *index,
            size_t read_level = 0,
            size_t partition_id = std::numeric_limits<size_t>::max(),
-           bool is_ddl_parallel_scan = false)
+           bool is_ddl_parallel_scan = false,
+           bool is_count_star_parallel_scan = false)
         : m_scan_range(scan_range),
           m_index(index),
           m_is_compact(dict_table_is_comp(index->table)),
@@ -185,7 +189,8 @@ class Parallel_reader {
           m_read_level(read_level),
           m_partition_id(partition_id),
           m_ptr_n_rows_read_del_mark(nullptr),
-          m_is_ddl_parallel_scan(is_ddl_parallel_scan) {}
+          m_is_ddl_parallel_scan(is_ddl_parallel_scan),
+          m_is_count_star_parallel_scan(is_count_star_parallel_scan) {}
 
     /** Copy constructor.
     @param[in] config           Instance to copy from. */
@@ -217,6 +222,9 @@ class Parallel_reader {
     
     /** True only if this is a DDL add secondary index. */
     bool m_is_ddl_parallel_scan {false};
+
+    /** True only if this is a count star parallel scan. */
+    bool m_is_count_star_parallel_scan{false};
   };
 
   /** Thread related context information. */
@@ -499,11 +507,15 @@ class Parallel_reader::Scan_ctx {
     /** Heap used to allocate m_rec, m_tuple and m_pcur. */
     mem_heap_t *m_heap{};
 
+    /** TODO: should we reuse m_heap ? */
+    Slice_ctx m_slc_ctx;
+
     /** m_rec column offsets. */
-    const ulint *m_offsets{};
+    // const ulint *m_offsets{};
+    Slice *m_slc{};
 
     /** Start scanning from this key. Raw data of the row. */
-    const rec_t *m_rec{};
+    // const rec_t *m_rec{};
 
     /** Tuple representation inside m_rec, for two Iter instances in a range
     m_tuple will be [first->m_tuple, second->m_tuple). */
@@ -595,7 +607,7 @@ class Parallel_reader::Scan_ctx {
   /** Build a dtuple_t from rec_t.
   @param[in]      rec           Build the dtuple from this record.
   @param[in,out]  iter          Build in this iterator. */
-  void copy_row(const rec_t *rec, Iter *iter) const;
+  void copy_row(creg_t reg, Iter *iter) const;
 
   /** Create the persistent cursor that will be used to traverse the
   partition and position on the the start row.
@@ -614,9 +626,11 @@ class Parallel_reader::Scan_ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  [[nodiscard]] bool check_visibility(
-      const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap, mtr_t *mtr,
-      lizard::Cleanout *cleanout = nullptr, btr_pcur_t *pcur = nullptr);
+  [[nodiscard]] bool check_visibility(creg_t *reg, mem_heap_t *&heap,
+                                      Slice **slc, Slice_ctx *slc_ctx,
+                                      mtr_t *mtr,
+                                      lizard::Cleanout *cleanout = nullptr,
+                                      btr_pcur_t *pcur = nullptr);
 
   /** Create an execution context for a range and add it to
   the Parallel_reader's run queue.
@@ -696,17 +710,18 @@ class Parallel_reader::Ctx {
       : m_id(id),
         m_range(range),
         m_scan_ctx(scan_ctx),
-        m_ddl_cleanout(nullptr) {
-    if (m_scan_ctx->m_config.m_is_ddl_parallel_scan) {
-      m_ddl_cleanout = ut::new_<lizard::DDL_cleanout>();
+        m_pread_cleanout(nullptr) {
+    if (m_scan_ctx->m_config.m_is_ddl_parallel_scan ||
+        m_scan_ctx->m_config.m_is_count_star_parallel_scan) {
+      m_pread_cleanout = ut::new_<lizard::Pread_cleanout>();
     }
   }
 
   /** Destructor. */
   ~Ctx() {
-    if (m_ddl_cleanout != nullptr) {
-      ut::delete_(m_ddl_cleanout);
-      m_ddl_cleanout = nullptr;
+    if (m_pread_cleanout != nullptr) {
+      ut::delete_(m_pread_cleanout);
+      m_pread_cleanout = nullptr;
     }
   }
 
@@ -747,9 +762,9 @@ class Parallel_reader::Ctx {
                                 built from the undo log.
   @param[in,out]  mtr           Mini-transaction covering the read.
   @return true if row is visible to the transaction. */
-  bool is_rec_visible(const rec_t *&rec, ulint *&offsets, mem_heap_t *&heap,
-                      mtr_t *mtr) {
-    return m_scan_ctx->check_visibility(rec, offsets, heap, mtr);
+  bool is_rec_visible(creg_t *reg, mem_heap_t *&heap, Slice **slc,
+                      Slice_ctx *slc_ctx, mtr_t *mtr) {
+    return m_scan_ctx->check_visibility(reg, heap, slc, slc_ctx, mtr);
   }
 
  private:
@@ -798,7 +813,7 @@ class Parallel_reader::Ctx {
   const buf_block_t *m_block{};
 
   /** Current row. */
-  const rec_t *m_rec{};
+  // const rec_t *m_rec{};
 
   /** Number of pages traversed by the context. */
   size_t m_n_pages{};
@@ -806,12 +821,13 @@ class Parallel_reader::Ctx {
   /** True if m_rec is the first record in the page. */
   bool m_first_rec{true};
 
-  ulint *m_offsets{};
+  // ulint *m_offsets{};
+  Slice *m_slc{};
 
   /** Start of a new range to scan. */
   bool m_start{};
 
-  lizard::DDL_cleanout* m_ddl_cleanout;
+  lizard::Pread_cleanout *m_pread_cleanout;
   friend class Parallel_reader;
 };
 

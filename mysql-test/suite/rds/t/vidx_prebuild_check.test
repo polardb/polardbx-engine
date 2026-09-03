@@ -1,0 +1,258 @@
+
+###########################################################
+# dbms_vidx.prebuild_check() — coverage                   #
+#                                                         #
+# Report semantics under test:                            #
+#  - one row per VECTOR column (indexed or not)           #
+#  - rows ordered by Suggested_cache_bytes DESC           #
+#    (top row = the single-pass bottleneck of the ALTER)  #
+#  - Rows column is the EXACT non-NULL count (scan-based, #
+#    never index statistics)                              #
+#  - indexed columns report the index's real M; unindexed #
+#    columns use the m argument / session default         #
+#  - report-only: over-budget never errors, it reports    #
+#    Build_mode=windowed(~K) plus a suggested cache value #
+#  - access is table-level SELECT, not SUPER              #
+#                                                         #
+#  Column set:                                            #
+#    Column | Index_name | Dimensions | M | Rows |        #
+#    Estimated_bytes | Cache_limit_bytes | Build_mode |   #
+#    Suggested_cache_bytes                                #
+#  Estimated/Suggested bytes are sizeof()-dependent and   #
+#  masked; Rows/M/Dimensions/order are asserted exactly.  #
+###########################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+SET GLOBAL vidx_disabled = OFF;
+
+--disable_warnings
+DROP TABLE IF EXISTS tp, tpi, tp_mix, tp_big;
+--enable_warnings
+
+--echo ###############################################################
+--echo # A. Wrong argument count / type
+--echo #    Registered signatures: (db, table) and (db, table, m).
+--echo ###############################################################
+
+--echo # 0 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.prebuild_check();
+
+--echo # 1 arg
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.prebuild_check('test');
+
+--echo # 4 args
+--error ER_SP_WRONG_NO_OF_ARGS
+CALL dbms_vidx.prebuild_check('test', 'tp', 8, 0);
+
+--echo # 3rd arg must be an integer (type check against the long form)
+--error ER_NATIVE_PROC_PARAMETER_MISMATCH
+CALL dbms_vidx.prebuild_check('test', 'tp', 'not_a_number');
+
+--echo ###############################################################
+--echo # B. Parameter value validation
+--echo ###############################################################
+
+--echo # Empty db
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.prebuild_check('', 'tp');
+
+--echo # Empty table
+--error ER_WRONG_PARAMETERS_TO_PROCEDURE
+CALL dbms_vidx.prebuild_check('test', '');
+
+--echo # m out of the CREATE INDEX range (same validation as M=)
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.prebuild_check('test', 'tp', 200);
+
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.prebuild_check('test', 'tp', 1);
+
+--echo ###############################################################
+--echo # C. Table resolution
+--echo ###############################################################
+
+--echo # Non-existent database
+--error ER_BAD_DB_ERROR
+CALL dbms_vidx.prebuild_check('no_such_db_xyz', 'tp');
+
+--echo # Non-existent table
+--error ER_NO_SUCH_TABLE
+CALL dbms_vidx.prebuild_check('test', 'no_such_table_xyz');
+
+--echo # Table without any VECTOR column
+CREATE TABLE tp (id INT PRIMARY KEY, data VARCHAR(50)) ENGINE=InnoDB;
+--error ER_VECTOR_INDEX_USAGE
+CALL dbms_vidx.prebuild_check('test', 'tp');
+DROP TABLE tp;
+
+--echo ###############################################################
+--echo # D. Unindexed VECTOR column — the "planned index" report
+--echo #    Rows is the exact non-NULL count; Index_name is NULL;
+--echo #    M comes from the session default or the m argument.
+--echo ###############################################################
+
+CREATE TABLE tp (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4)
+) ENGINE=InnoDB;
+
+--echo # Empty table: zero rows, zero estimate, still single-pass
+SET SESSION vidx_hnsw_default_m = 12;
+CALL dbms_vidx.prebuild_check('test', 'tp');
+
+--echo # 5 rows, 2 NULL vectors: Rows must be exactly 3
+INSERT INTO tp(v) VALUES (VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO tp(v) VALUES (NULL);
+INSERT INTO tp(v) VALUES (VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+INSERT INTO tp(v) VALUES (NULL);
+INSERT INTO tp(v) VALUES (VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'));
+
+--echo # 2-arg form: M resolves to the session vidx_hnsw_default_m (12)
+--replace_column 6 # 9 #
+CALL dbms_vidx.prebuild_check('test', 'tp');
+
+--echo # 3-arg form: explicit m for the planned index
+--replace_column 6 # 9 #
+CALL dbms_vidx.prebuild_check('test', 'tp', 24);
+
+SET SESSION vidx_hnsw_default_m = DEFAULT;
+DROP TABLE tp;
+
+--echo ###############################################################
+--echo # E. Indexed VECTOR column — the index's real M always wins
+--echo ###############################################################
+
+CREATE TABLE tpi (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=8 DISTANCE=euclidean
+) ENGINE=InnoDB;
+
+INSERT INTO tpi(v) VALUES (VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+INSERT INTO tpi(v) VALUES (VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'));
+
+--echo # M column must be 8 (from vi), not the argument 32
+--replace_column 6 # 9 #
+CALL dbms_vidx.prebuild_check('test', 'tpi', 32);
+
+DROP TABLE tpi;
+
+--echo ###############################################################
+--echo # F. Multiple VECTOR columns — one row each, ordered by
+--echo #    Suggested_cache_bytes DESC: the 512-dim column costs far
+--echo #    more per node than the 4-dim one, so v_big must come first
+--echo #    even though v_small has more rows.
+--echo #    Mixed indexed/unindexed: vi_small reports its real M=8.
+--echo ###############################################################
+
+CREATE TABLE tp_mix (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v_small VECTOR(4),
+  v_big VECTOR(512),
+  VECTOR INDEX vi_small(v_small) M=8 DISTANCE=euclidean
+) ENGINE=InnoDB;
+
+INSERT INTO tp_mix(v_small, v_big)
+  VALUES (VEC_FROMTEXT('[1,0,0,0]'),
+          VEC_FROMTEXT(CONCAT('[1', REPEAT(',0', 511), ']')));
+INSERT INTO tp_mix(v_small, v_big)
+  VALUES (VEC_FROMTEXT('[0,1,0,0]'),
+          VEC_FROMTEXT(CONCAT('[2', REPEAT(',0', 511), ']')));
+INSERT INTO tp_mix(v_small, v_big) VALUES (VEC_FROMTEXT('[0,0,1,0]'), NULL);
+
+--echo # v_big (512-dim, 2 rows, planned M=default) sorts above v_small
+--replace_column 6 # 9 #
+CALL dbms_vidx.prebuild_check('test', 'tp_mix');
+
+DROP TABLE tp_mix;
+
+--echo ###############################################################
+--echo # G. Build_mode verdict — report-only, never an error
+--echo #    M=100, 800 rows: estimate > 1 MB minimum cache, so the
+--echo #    shrunken cache reports windowed(~K) and a suggestion;
+--echo #    the restored cache reports single-pass for the same data.
+--echo ###############################################################
+
+CREATE TABLE tp_big (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi(v) M=100 DISTANCE=euclidean
+) ENGINE=InnoDB;
+
+--disable_query_log
+--let $i = 1
+while ($i <= 800) {
+  --eval INSERT INTO tp_big(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, '.0, 0.0, 0.0, 0.0]')))
+  --inc $i
+}
+--enable_query_log
+
+--let $saved_cache = `SELECT @@GLOBAL.vidx_hnsw_cache_size`
+
+--echo # Shrink the cache to the 1 MB minimum: windowed, NOT an error
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+--replace_column 6 # 9 #
+--replace_regex /windowed\(~[0-9]+\)/windowed(~#)/
+CALL dbms_vidx.prebuild_check('test', 'tp_big');
+
+--echo # Restore the cache: the same table reports single-pass
+--eval SET GLOBAL vidx_hnsw_cache_size = $saved_cache
+--replace_column 6 # 7 # 9 #
+CALL dbms_vidx.prebuild_check('test', 'tp_big');
+
+DROP TABLE tp_big;
+
+--echo ###############################################################
+--echo # H. Privileges — table-level SELECT, not SUPER
+--echo #    (preload keeps requiring SUPER; prebuild_check does not.)
+--echo #    MTR grants every user full access to db `test` via the
+--echo #    anonymous mysql.db rows, so the negative case needs its
+--echo #    own database.
+--echo ###############################################################
+
+CREATE DATABASE vidx_priv_db;
+CREATE TABLE vidx_priv_db.tp (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4)
+) ENGINE=InnoDB;
+INSERT INTO vidx_priv_db.tp(v) VALUES (VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'));
+
+CREATE USER u_sel@localhost;
+GRANT SELECT ON vidx_priv_db.* TO u_sel@localhost;
+CREATE USER u_none@localhost;
+GRANT USAGE ON *.* TO u_none@localhost;
+
+connect(con_sel, localhost, u_sel,, vidx_priv_db);
+--echo # SELECT-only user: prebuild_check succeeds
+--replace_column 6 # 9 #
+CALL dbms_vidx.prebuild_check('vidx_priv_db', 'tp');
+
+--echo # ... but the SUPER-gated sibling preload is still denied
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+CALL dbms_vidx.preload('vidx_priv_db', 'tp', 'v');
+
+connection default;
+disconnect con_sel;
+
+connect(con_none, localhost, u_none,,);
+--echo # User without SELECT on the table: denied
+--error ER_TABLEACCESS_DENIED_ERROR
+CALL dbms_vidx.prebuild_check('vidx_priv_db', 'tp');
+connection default;
+disconnect con_none;
+
+DROP USER u_sel@localhost;
+DROP USER u_none@localhost;
+DROP DATABASE vidx_priv_db;
+
+--echo ###############################################################
+--echo # I. Cleanup
+--echo ###############################################################
+
+--disable_warnings
+DROP TABLE IF EXISTS tp, tpi, tp_mix, tp_big;
+--enable_warnings
+
+SET GLOBAL vidx_disabled = ON;

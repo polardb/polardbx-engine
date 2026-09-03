@@ -1,0 +1,180 @@
+##########################################
+# The JSON function interaction with     #
+# VECTOR INDEX                           #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. JSON_ARRAY to VECTOR conversion
+--echo # JSON_ARRAY generates array format, cast to CHAR then convert to VECTOR
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CAST(JSON_ARRAY(1.0, 2.0, 3.0, 4.0, 5.0) AS CHAR)));
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CAST(JSON_ARRAY(0.1, 0.2, 0.3, 0.4, 0.5) AS CHAR)));
+
+--echo
+--echo # 2. Test VEC_TOTEXT output with JSON functions
+SELECT JSON_VALID(VEC_TOTEXT(VEC_FROMTEXT("[1,2,3,4,5]")));
+SELECT JSON_LENGTH(VEC_TOTEXT(VEC_FROMTEXT("[1,2,3,4,5]")));
+SELECT JSON_EXTRACT(VEC_TOTEXT(VEC_FROMTEXT("[1,2,3,4,5]")), '$[0]');
+SELECT JSON_EXTRACT(VEC_TOTEXT(VEC_FROMTEXT("[1,2,3,4,5]")), '$[4]');
+
+--echo
+--echo # 3. Create table with both JSON and VECTOR columns
+CREATE TABLE t1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  metadata JSON,
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 4. Insert data with JSON metadata and VECTOR
+INSERT INTO t1(metadata, v) VALUES 
+  ('{"label": "a", "score": 0.9}', VEC_FROMTEXT("[1,2,3,4,5]")),
+  ('{"label": "b", "score": 0.8}', VEC_FROMTEXT("[5,4,3,2,1]")),
+  ('{"label": "c", "score": 0.7}', VEC_FROMTEXT("[1,1,1,1,1]")),
+  ('{"label": "d", "score": 0.6}', VEC_FROMTEXT("[2,2,2,2,2]")),
+  ('{"label": "e", "score": 0.5}', VEC_FROMTEXT("[3,3,3,3,3]"));
+
+--echo
+--echo # 5. Query with JSON_EXTRACT and vector distance
+SELECT id, 
+       JSON_EXTRACT(metadata, '$.label') AS label,
+       JSON_EXTRACT(metadata, '$.score') AS score,
+       VEC_TOTEXT(v)
+FROM t1;
+
+--echo
+--echo # 6. ANN query combined with JSON filtering
+SELECT id, 
+       JSON_EXTRACT(metadata, '$.label') AS label,
+       VEC_TOTEXT(v)
+FROM t1 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) 
+LIMIT 5;
+
+--echo
+--echo # 7. ANN query with JSON condition in WHERE clause
+SELECT id, 
+       JSON_EXTRACT(metadata, '$.label') AS label,
+       VEC_TOTEXT(v)
+FROM t1 
+WHERE JSON_EXTRACT(metadata, '$.score') > 0.6
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) 
+LIMIT 3;
+
+--echo
+--echo # 8. Using FORCE INDEX with JSON and VECTOR
+EXPLAIN SELECT id, JSON_EXTRACT(metadata, '$.label') AS label
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+
+SELECT id, JSON_EXTRACT(metadata, '$.label') AS label
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+
+--echo
+--echo # 9. Update JSON metadata and verify ANN still works
+UPDATE t1 SET metadata = JSON_SET(metadata, '$.updated', true) WHERE id = 1;
+SELECT id, metadata, VEC_TOTEXT(v) FROM t1 WHERE id = 1;
+
+SELECT id, JSON_EXTRACT(metadata, '$.label') AS label
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+
+--echo
+--echo # 10. JSON document storing vector text representation
+CREATE TABLE t2 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  doc JSON
+) ENGINE=InnoDB;
+
+INSERT INTO t2(doc) VALUES 
+  (JSON_OBJECT('name', 'item1', 'vector_text', VEC_TOTEXT(VEC_FROMTEXT("[1,2,3,4,5]")))),
+  (JSON_OBJECT('name', 'item2', 'vector_text', VEC_TOTEXT(VEC_FROMTEXT("[5,4,3,2,1]"))));
+
+SELECT id, 
+       JSON_EXTRACT(doc, '$.name') AS name,
+       JSON_EXTRACT(doc, '$.vector_text') AS vector_text
+FROM t2;
+
+--echo # Convert back from JSON stored vector text
+SELECT id,
+       VEC_TOTEXT(VEC_FROMTEXT(JSON_UNQUOTE(JSON_EXTRACT(doc, '$.vector_text')))) AS recovered_vector
+FROM t2;
+
+--echo
+--echo # 11. JSON_ARRAYAGG with vector data
+SELECT JSON_ARRAYAGG(VEC_TOTEXT(v)) FROM t1;
+
+--echo
+--echo # 12. Test NULL handling with JSON and VECTOR
+INSERT INTO t1(metadata, v) VALUES (NULL, VEC_FROMTEXT("[9,9,9,9,9]"));
+INSERT INTO t1(metadata, v) VALUES ('{"label": "null_vec"}', NULL);
+
+SELECT id, metadata, VEC_TOTEXT(v) FROM t1 WHERE metadata IS NULL OR v IS NULL;
+
+--echo
+--echo # 13. JSON_ARRAY with computed values to VECTOR
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CAST(JSON_ARRAY(1+0, 2+0, 3+0, 4+0, 5+0) AS CHAR)));
+
+--echo
+--echo # 15. Direct JSON input to vector constructors (no CAST AS CHAR needed)
+SELECT VEC_TOTEXT(VEC_FROMTEXT(JSON_ARRAY(1,2,3,4,5)));
+SELECT VEC_TOTEXT(TO_VECTOR(JSON_ARRAY(1,2,3,4,5)));
+SELECT VEC_TOTEXT(STRING_TO_VECTOR(JSON_ARRAY(1,2,3,4,5)));
+
+--echo # 15.1 Integer and float mixed
+SELECT VEC_TOTEXT(VEC_FROMTEXT(JSON_ARRAY(1, 2.5, 3, 4.0, 5)));
+
+--echo # 15.2 Scientific notation
+SELECT VEC_TOTEXT(VEC_FROMTEXT(JSON_ARRAY(1.23e-4, 5.6e2, 3, 4, 5)));
+
+--echo # 15.3 Single dimension
+SELECT VEC_TOTEXT(VEC_FROMTEXT(JSON_ARRAY(42)));
+
+--echo # 15.4 JSON column as input
+CREATE TABLE t3 (id INT PRIMARY KEY, j JSON);
+INSERT INTO t3 VALUES (1, '[1,2,3,4,5]'), (2, JSON_ARRAY(5,4,3,2,1));
+SELECT id, VEC_TOTEXT(VEC_FROMTEXT(j)) FROM t3 ORDER BY id;
+SELECT id, VEC_TOTEXT(VEC_FROMTEXT(JSON_EXTRACT(j, '$'))) FROM t3 ORDER BY id;
+DROP TABLE t3;
+
+--echo # 15.5 NULL JSON input
+SELECT VEC_FROMTEXT(CAST(NULL AS JSON));
+
+--echo # 15.6 Invalid JSON inputs are rejected
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CAST('{"a":1}' AS JSON));
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(JSON_ARRAY(JSON_ARRAY(1,2)));
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(CAST('1' AS JSON));
+--error ER_TO_VECTOR_CONVERSION
+SELECT VEC_FROMTEXT(JSON_ARRAY('a','b'));
+
+--echo # 15.7 CAST AS VECTOR accepts JSON column / JSON expression
+CREATE TABLE t_cast (id INT PRIMARY KEY, j JSON);
+INSERT INTO t_cast VALUES (1, JSON_ARRAY(1,2,3)), (2, '[4,5,6]'), (3, NULL);
+SELECT id, VEC_TOTEXT(CAST(j AS VECTOR)) FROM t_cast ORDER BY id;
+SELECT id, VEC_TOTEXT(CAST(j AS VECTOR(3))) FROM t_cast ORDER BY id;
+SELECT id, VEC_TOTEXT(CAST(JSON_EXTRACT(j, '$') AS VECTOR(3))) FROM t_cast ORDER BY id;
+DROP TABLE t_cast;
+
+--echo # 15.8 JSON_VALUE RETURNING VECTOR is not supported
+--error ER_NOT_SUPPORTED_YET
+SELECT JSON_VALUE('{"v":[1,2,3]}', '$.v' RETURNING VECTOR);
+--error ER_NOT_SUPPORTED_YET
+SELECT JSON_VALUE('{"v":[1,2,3]}', '$.v' RETURNING VECTOR(3));
+
+--echo
+--echo # 14. Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+
+SET GLOBAL vidx_disabled = ON;

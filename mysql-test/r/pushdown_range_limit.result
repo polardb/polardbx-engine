@@ -188,6 +188,12 @@ select id1, id2 ,c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in
 id1	id2	c
 1	2	Record 2
 2	2	Record 5
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) and id1 >= 10 and id1 < 30 order by id2 limit 2,3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=1.41 rows=0)
+    -> Sort: sbtest2.id2, limit input to 5 row(s) per chunk  (cost=1.41 rows=2)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND 10 <= id1 < 30) OR (k1 = 10 AND k2 = 21 AND 10 <= id1 < 30), with index condition: ((sbtest2.k1 = 10) and (sbtest2.k2 in (11,21)) and (sbtest2.id1 >= 10) and (sbtest2.id1 < 30))  (cost=1.41 rows=2)
+
 # can push down limit with ICP
 explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 in (1, 2, 5, 7) and k3 > 0 order by k3 limit 3, 2;
 EXPLAIN
@@ -246,6 +252,49 @@ select id1, id2, c,k17 from sbtest2 force index(uk) where k1 in (10, 20) and id1
 id1	id2	c	k17
 1	2	Record 2	34
 5	2	Record 12	34
+# should not pushdown since it is not a equality range
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 > 9 order by k2 limit 3,2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=9.26 rows=2)
+    -> Sort: sbtest2.k2, limit input to 5 row(s) per chunk  (cost=9.26 rows=20)
+        -> Index range scan on sbtest2 using key1 over (9 < k1), with index condition: (sbtest2.k1 > 9)  (cost=9.26 rows=20)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 < 40 order by k2 limit 3,2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=9.26 rows=2)
+    -> Sort: sbtest2.k2, limit input to 5 row(s) per chunk  (cost=9.26 rows=20)
+        -> Index range scan on sbtest2 using key1 over (k1 < 40), with index condition: (sbtest2.k1 < 40)  (cost=9.26 rows=20)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 > 9 and k1 < 40 order by k2 limit 3,2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=9.26 rows=2)
+    -> Sort: sbtest2.k2, limit input to 5 row(s) per chunk  (cost=9.26 rows=20)
+        -> Index range scan on sbtest2 using key1 over (9 < k1 < 40), with index condition: ((sbtest2.k1 > 9) and (sbtest2.k1 < 40))  (cost=9.26 rows=20)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (9, 10) and k2 < 40 order by id1 limit 3,2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=6.36 rows=2)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=6.36 rows=13)
+        -> Index range scan on sbtest2 using key1 over (k1 = 9 AND NULL < k2 < 40) OR (k1 = 10 AND NULL < k2 < 40), with index condition: ((sbtest2.k1 in (9,10)) and (sbtest2.k2 < 40))  (cost=6.36 rows=13)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 >= 10 order by id1 limit 2,3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=2.81 rows=2)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=2.81 rows=4)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND 10 <= id1 pushed_limit 5) OR (k1 = 10 AND k2 = 21 AND 10 <= id1 pushed_limit 5) OR (2 more), with index condition: ((sbtest2.k1 in (10,20)) and (sbtest2.k2 in (11,21)) and (sbtest2.id1 >= 10))  (cost=2.81 rows=4)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 = 11 and id1 <= 30  order by id1 limit 2,3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=1.41 rows=0)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=1.41 rows=2)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND id1 <= 30 pushed_limit 5) OR (k1 = 20 AND k2 = 11 AND id1 <= 30 pushed_limit 5), with index condition: ((sbtest2.k2 = 11) and (sbtest2.k1 in (10,20)) and (sbtest2.id1 <= 30))  (cost=1.41 rows=2)
+
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) and id1 >= 10 and id1 < 30 order by id1 limit 2,3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=1.41 rows=0)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=1.41 rows=2)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND 10 <= id1 < 30 pushed_limit 5) OR (k1 = 10 AND k2 = 21 AND 10 <= id1 < 30 pushed_limit 5), with index condition: ((sbtest2.k1 = 10) and (sbtest2.k2 in (11,21)) and (sbtest2.id1 >= 10) and (sbtest2.id1 < 30))  (cost=1.41 rows=2)
+
 drop procedure if exists proc_test;
 CREATE PROCEDURE proc_test(IN arg1 INT, IN arg2 INT, IN arg3 INT, IN arg4 INT)
 BEGIN
@@ -311,5 +360,166 @@ id1	id2	c
 5	6	Record 16
 3	1	Record 7
 drop procedure proc_test;
+# Testing empty result set scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (999, 888) and k2 in (777, 666) order by id1 limit 1,1;
+EXPLAIN
+-> Limit/Offset: 1/1 row(s)  (cost=2.81 rows=1)
+    -> Sort: sbtest2.id1, limit input to 2 row(s) per chunk  (cost=2.81 rows=4)
+        -> Index range scan on sbtest2 using key1 over (k1 = 888 AND k2 = 666 pushed_limit 2) OR (k1 = 888 AND k2 = 777 pushed_limit 2) OR (2 more), with index condition: ((sbtest2.k1 in (999,888)) and (sbtest2.k2 in (777,666)))  (cost=2.81 rows=4)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (999, 888) and k2 in (777, 666) order by id1 limit 1,1;
+id1	id2	c
+# Testing single range scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) order by id1 limit 2,3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=3.66 rows=3)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=3.66 rows=7)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 pushed_limit 5) OR (k1 = 10 AND k2 = 21 pushed_limit 5), with index condition: ((sbtest2.k1 = 10) and (sbtest2.k2 in (11,21)))  (cost=3.66 rows=7)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 = 10 and k2 in (11, 21) order by id1 limit 2,3;
+id1	id2	c
+2	3	Record 6
+3	3	Record 9
+5	6	Record 16
+# Testing large offset scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 10,5;
+EXPLAIN
+-> Limit/Offset: 5/10 row(s)  (cost=5.06 rows=0)
+    -> Sort: sbtest2.id1, limit input to 15 row(s) per chunk  (cost=5.06 rows=9)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 pushed_limit 15) OR (k1 = 10 AND k2 = 21 pushed_limit 15) OR (2 more), with index condition: ((sbtest2.k1 in (10,20)) and (sbtest2.k2 in (11,21)))  (cost=5.06 rows=9)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 10,5;
+id1	id2	c
+# Testing limit equal to zero scenario
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 0;
+EXPLAIN
+-> Zero rows (Zero limit)  (cost=0.00..0.00 rows=0)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 0;
+id1	id2	c
+# Testing offset without limit scenario (should not be pushed down)
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) order by id1 limit 5, 18446744073709551615;
+EXPLAIN
+-> Offset: 5 row(s)  (cost=5.06 rows=4)
+    -> Sort: sbtest2.id1  (cost=5.06 rows=9)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11) OR (k1 = 10 AND k2 = 21) OR (2 more), with index condition: ((sbtest2.k1 in (10,20)) and (sbtest2.k2 in (11,21)))  (cost=5.06 rows=9)
+
+# Testing combination of multi-column IN conditions
+explain format=tree select id1, id2, c from sbtest2 force index(key2) where k1 in (10, 11, 20) and k2 in (20, 21) and k3 in (3, 20, 37, 54) order by k4 limit 2, 3;
+EXPLAIN
+-> Limit/Offset: 3/2 row(s)  (cost=17.26 rows=3)
+    -> Sort: sbtest2.k4, limit input to 5 row(s) per chunk  (cost=17.26 rows=25)
+        -> Index range scan on sbtest2 using key2 over (k1 = 10 AND k2 = 20 AND k3 = 3 pushed_limit 5) OR (k1 = 10 AND k2 = 20 AND k3 = 20 pushed_limit 5) OR (22 more), with index condition: ((sbtest2.k1 in (10,11,20)) and (sbtest2.k2 in (20,21)) and (sbtest2.k3 in (3,20,37,54)))  (cost=17.26 rows=25)
+
+select id1, id2, c from sbtest2 force index(key2) where k1 in (10, 11, 20) and k2 in (20, 21) and k3 in (3, 20, 37, 54) order by k4 limit 2, 3;
+id1	id2	c
+5	2	Record 12
+1	2	Record 2
+1	3	Record 3
+# Testing NULL value handling
+INSERT INTO sbtest2 (id1, id2, k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, c) VALUES (7, 1, 30, NULL, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 'Record NULL');
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (30, 20) and k2 is null order by id1 limit 0,1;
+EXPLAIN
+-> Limit: 1 row(s)  (cost=1.41 rows=1)
+    -> Sort: sbtest2.id1, limit input to 1 row(s) per chunk  (cost=1.41 rows=2)
+        -> Index range scan on sbtest2 using key1 over (k1 = 20 AND k2 = NULL pushed_limit 1) OR (k1 = 30 AND k2 = NULL pushed_limit 1), with index condition: ((sbtest2.k1 in (30,20)) and (sbtest2.k2 is null))  (cost=1.41 rows=2)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (30, 20) and k2 is null order by id1 limit 0,1;
+id1	id2	c
+7	1	Record NULL
+# Testing handling of very large numeric values
+INSERT INTO sbtest2 (id1, id2, k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, c) VALUES (9, 1, 2147483647, 2147483646, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 'Record max int');
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (2147483647, 10) and k2 in (2147483646, 21) order by id1 limit 1,4;
+EXPLAIN
+-> Limit/Offset: 4/1 row(s)  (cost=5.06 rows=4)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=5.06 rows=9)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 21 pushed_limit 5) OR (k1 = 10 AND k2 = 2147483646 pushed_limit 5) OR (2 more), with index condition: ((sbtest2.k1 in (2147483647,10)) and (sbtest2.k2 in (2147483646,21)))  (cost=5.06 rows=9)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (2147483647, 10) and k2 in (2147483646, 21) order by id1 limit 1,4;
+id1	id2	c
+2	2	Record 5
+2	3	Record 6
+3	3	Record 9
+5	6	Record 16
+# Testing tuple IN condition
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where (k1,k2) in ((10, 20), (20,20), (10, 11), (20, 21)) order by id1 limit 1,3;
+EXPLAIN
+-> Limit/Offset: 3/1 row(s)  (cost=4.61 rows=3)
+    -> Sort: sbtest2.id1, limit input to 4 row(s) per chunk  (cost=4.61 rows=8)
+        -> Filter: ((sbtest2.k1,sbtest2.k2) in ((10,20),(20,20),(10,11),(20,21)))  (cost=4.61 rows=8)
+            -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 pushed_limit 4) OR (k1 = 10 AND k2 = 20 pushed_limit 4) OR (2 more)  (cost=4.61 rows=8)
+
+select id1, id2, c from sbtest2 force index(key1) where (k1,k2) in ((10, 20), (20,20), (10, 11), (20, 21)) order by id1 limit 1,3;
+id1	id2	c
+3	1	Record 7
+5	1	Record 11
+5	2	Record 12
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where (k1,k2)=(10,20) or (k1,k2)=(20,20) or (k1,k2)=(10,11) or (k1,k2)=(20, 21) order by id1 limit 2,1;
+EXPLAIN
+-> Limit/Offset: 1/2 row(s)  (cost=4.61 rows=1)
+    -> Sort: sbtest2.id1, limit input to 3 row(s) per chunk  (cost=4.61 rows=8)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 pushed_limit 3) OR (k1 = 10 AND k2 = 20 pushed_limit 3) OR (2 more), with index condition: (((sbtest2.k2 = 20) and (sbtest2.k1 = 10)) or ((sbtest2.k2 = 20) and (sbtest2.k1 = 20)) or ((sbtest2.k2 = 11) and (sbtest2.k1 = 10)) or ((sbtest2.k2 = 21) and (sbtest2.k1 = 20)))  (cost=4.61 rows=8)
+
+select id1, id2, c from sbtest2 force index(key1) where (k1,k2)=(10,20) or (k1,k2)=(20,20) or (k1,k2)=(10,11) or (k1,k2)=(20, 21) order by id1 limit 2,1;
+id1	id2	c
+5	1	Record 11
+# Testing full-covering ICP scenario where all conditions are part of the index
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 order by id1 limit 3, 2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=5.06 rows=2)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=5.06 rows=9)
+        -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND 0 < id1 pushed_limit 5) OR (k1 = 10 AND k2 = 21 AND 0 < id1 pushed_limit 5) OR (2 more), with index condition: ((sbtest2.k1 in (10,20)) and (sbtest2.k2 in (11,21)) and (sbtest2.id1 > 0) and (sbtest2.k3 > 0))  (cost=5.06 rows=9)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 order by id1 limit 3, 2;
+id1	id2	c
+3	3	Record 9
+3	1	Record 7
+# Testing ICP scenario where some conditions are not part of the index and limit cannot be pushed down
+explain format=tree select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 and k16 > 0 order by id1 limit 3, 2;
+EXPLAIN
+-> Limit/Offset: 2/3 row(s)  (cost=5.06 rows=2)
+    -> Sort: sbtest2.id1, limit input to 5 row(s) per chunk  (cost=5.06 rows=9)
+        -> Filter: (sbtest2.k16 > 0)  (cost=5.06 rows=9)
+            -> Index range scan on sbtest2 using key1 over (k1 = 10 AND k2 = 11 AND 0 < id1) OR (k1 = 10 AND k2 = 21 AND 0 < id1) OR (2 more), with index condition: ((sbtest2.k1 in (10,20)) and (sbtest2.k2 in (11,21)) and (sbtest2.id1 > 0) and (sbtest2.k3 > 0))  (cost=5.06 rows=9)
+
+select id1, id2, c from sbtest2 force index(key1) where k1 in (10, 20) and k2 in (11, 21) and id1 > 0 and k3 > 0 and k16 > 0 order by id1 limit 3, 2;
+id1	id2	c
+3	3	Record 9
+3	1	Record 7
 drop table sbtest2;
+# Testing generated columns
+CREATE TABLE `sbtest_mixed_virtual_cols` (
+`id` int NOT NULL AUTO_INCREMENT,
+`value1` int NOT NULL DEFAULT '0',
+`value2` int NOT NULL DEFAULT '0',
+`stored_col` int GENERATED ALWAYS AS ((`value1` * 2)) STORED,
+`virtual_col` int GENERATED ALWAYS AS ((`value1` + `value2`)) VIRTUAL,
+PRIMARY KEY (`id`),
+KEY `idx_stored_col_value2` (`stored_col`,`value2`),
+KEY `idx_virtual_col_value1` (`virtual_col`,`value1`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4;
+INSERT INTO sbtest_mixed_virtual_cols (value1, value2) VALUES (10, 5), (2, 100), (15, 8), (4, 90), (12, 12), (6, 70), (18, 3), (8, 60), (20, 1), (1, 150), (10, 11), (5, 10), (7, 10);
+# Testing stored column, limit can be pushed down
+explain format = tree select id, value1, value2, stored_col from sbtest_mixed_virtual_cols force index(idx_stored_col_value2) where stored_col in (2,4,6) order by value2 limit 0, 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=2.11 rows=3)
+    -> Sort: sbtest_mixed_virtual_cols.value2, limit input to 3 row(s) per chunk  (cost=2.11 rows=3)
+        -> Index range scan on sbtest_mixed_virtual_cols using idx_stored_col_value2 over (stored_col = 2 pushed_limit 3) OR (stored_col = 4 pushed_limit 3) OR (stored_col = 6 pushed_limit 3), with index condition: (sbtest_mixed_virtual_cols.stored_col in (2,4,6))  (cost=2.11 rows=3)
+
+select id, value1, value2, stored_col from sbtest_mixed_virtual_cols force index(idx_stored_col_value2) where stored_col in (2,4,6) order by value2 limit 0, 3;
+id	value1	value2	stored_col
+15	2	100	4
+23	1	150	2
+# Testing virtual column, limit cannot be pushed down
+explain format=tree select id, value1, value2, virtual_col from sbtest_mixed_virtual_cols force index(idx_virtual_col_value1) where virtual_col in (21,15,24) order by value1 limit 2,1;
+EXPLAIN
+-> Limit/Offset: 1/2 row(s)  (cost=3.46 rows=1)
+    -> Sort: sbtest_mixed_virtual_cols.value1, limit input to 3 row(s) per chunk  (cost=3.46 rows=6)
+        -> Filter: (sbtest_mixed_virtual_cols.virtual_col in (21,15,24))  (cost=3.46 rows=6)
+            -> Index range scan on sbtest_mixed_virtual_cols using idx_virtual_col_value1 over (virtual_col = 15) OR (virtual_col = 21) OR (virtual_col = 24)  (cost=3.46 rows=6)
+
+select id, value1, value2, virtual_col from sbtest_mixed_virtual_cols force index(idx_virtual_col_value1) where virtual_col in (21,15,24) order by value1 limit 2,1;
+id	value1	value2	virtual_col
+24	10	11	21
+drop table sbtest_mixed_virtual_cols;
 set pushdown_range_limit=false;

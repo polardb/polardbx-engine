@@ -42,6 +42,8 @@
 // Used whenever a parameter should take the server default value
 #define RPL_SERVICE_SERVER_DEFAULT -1
 
+class Relay_log_info;
+
 // Channel creation settings
 
 /**
@@ -293,6 +295,17 @@ long long channel_get_last_delivered_gno(const char *channel, int sidno);
     @retval != 0   Error
 */
 int channel_add_executed_gtids_to_received_gtids(const char *channel);
+
+/**
+  Adds server executed GTID set to xpaxos received GTID set.
+
+  @param channel the channel name
+
+  @return the operation status
+    @retval 0      OK
+    @retval != 0   Error
+*/
+int channel_add_executed_gtids_to_xpaxos_received_gtids(Relay_log_info *rli);
 
 /**
   Queues a event packet into the current active channel.

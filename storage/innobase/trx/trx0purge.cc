@@ -43,6 +43,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fsp0types.h"
 #include "fut0fut.h"
 #include "ha_prototypes.h"
+#include "lizard0gcs0scn.h"
+#include "lizard0log.h"
 #include "log0buf.h"
 #include "log0chkp.h"
 #include "mach0data.h"
@@ -64,17 +66,23 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #include "trx0rseg.h"
 #include "trx0trx.h"
+#include "ut0math.h"
 
 #include "lizard0gcs.h"
-#include "lizard0purge.h"
+#include "lizard0trx0purge.h"
 #include "lizard0undo.h"
 #include "lizard0xa.h"
 #include "lizard0undo0retent.h"
+#include "lizard0trx0erase.h"
+#include "lizard0txn0slot0undo.h"
+#include "lizard0trx0history.h"
+#include "lizard0txn0space.h"
+#include "lizard0trx0cycle.h"
 
-#include "lizard0erase.h"
-#include "sql/lizard/lizard_service.h"
+#include "komodo0service.h"
 
-#include "sql/lizard/lizard_hb_freezer.h"
+/* Current number of working purge threads */
+ulint current_n_purge_threads = 0;
 
 /** Maximum allowable purge history length.  <=0 means 'infinite'. */
 ulong srv_max_purge_lag = 0;
@@ -139,7 +147,6 @@ void trx_purge_sys_mem_create() {
   new (&purge_sys->limit) purge_iter_t;
   new (&purge_sys->undo_trunc) undo::Truncate;
   new (&purge_sys->thds) ut::unordered_set<THD *>;
-  new (&purge_sys->rsegs_queue) std::vector<trx_rseg_t *>;
   new (&purge_sys->truncating_list_scn) lizard::min_safe_scn;
 #ifdef UNIV_DEBUG
   new (&purge_sys->done) purge_iter_t;
@@ -177,22 +184,18 @@ void trx_purge_sys_initialize(uint32_t n_purge_threads,
 
   purge_sys->query = trx_purge_graph_build(purge_sys->trx, n_purge_threads);
 
-  new (&purge_sys->vision) lizard::Vision();
+  new (&purge_sys->pvision) lizard::purge_vision_t();
 
-  lizard::trx_clone_oldest_vision(&purge_sys->vision);
+  lizard::gcs_clone_oldest_vision(&purge_sys->pvision);
 
   purge_sys->view_active = true;
 
-  purge_sys->rseg_iter = ut::new_withkey<lizard::TxnUndoRsegsIterator>(
+  purge_sys->rseg_iter = ut::new_withkey<lizard::purge_rsegs_iterator_t>(
       UT_NEW_THIS_FILE_PSI_KEY, purge_sys);
 
-  /* reload purged_scn from heap */
-  lizard::trx_purge_set_purged_scn(lizard::trx_purge_reload_purged_scn());
+  lizard::gcs_clean_init_purge();
 
-  new (&purge_sys->purged_gcn) lizard::Purged_gcn;
-  purge_sys->purged_gcn.init();
-
-  purge_sys->truncating_list_scn.push(purge_sys->purged_scn.load());
+  purge_sys->truncating_list_scn.push(lizard::gcs_clean_purged_scn());
 }
 
 void trx_purge_sys_close() {
@@ -227,19 +230,11 @@ void trx_purge_sys_close() {
 
   call_destructor(&purge_sys->thds);
   call_destructor(&purge_sys->undo_trunc);
-  call_destructor(&purge_sys->rsegs_queue);
-
-  call_destructor(&purge_sys->purged_gcn);
+  call_destructor(&purge_sys->pvision);
 
   ut::free(purge_sys);
 
   purge_sys = nullptr;
-}
-
-/** Get current purged GCN number */
-gcn_t gcs_get_purged_gcn() {
-  ut_a(purge_sys);
-  return purge_sys->purged_gcn.get();
 }
 
 /*================ UNDO LOG HISTORY LIST =============================*/
@@ -270,7 +265,7 @@ void trx_purge_add_update_undo_to_history(
 
   undo_header = undo_page + undo->hdr_offset;
 
-  trx_undo_hdr_slot_validation(undo_header, mtr);
+  ut_ad(lizard::trx_undo_hdr_read_slot(undo_header, mtr).is_validate());
 
   if (undo->state != TRX_UNDO_CACHED) {
     ulint hist_size;
@@ -302,15 +297,16 @@ void trx_purge_add_update_undo_to_history(
                  undo_header + TRX_UNDO_HISTORY_NODE, mtr);
 
   if (update_rseg_history_len) {
-    trx_sys->rseg_history_len.fetch_add(n_added_logs);
-    if (trx_sys->rseg_history_len.load() >
+    trx_sys->update_rseg_history_len.fetch_add(n_added_logs);
+
+    if (trx_sys->update_rseg_history_len.load() >
         srv_n_purge_threads * srv_purge_batch_size) {
       srv_wake_purge_thread_if_not_active();
     }
   }
 
   /* Update maximum transaction scn for this rollback segment. */
-  assert_trx_commit_mark_allocated(trx);
+  ut_ad(trx->txn_desc.is_cmmt_alloced());
   mlog_write_ull(rseg_header + TRX_RSEG_MAX_TRX_SCN, trx->txn_desc.cmmt.scn,
                  mtr);
 
@@ -334,20 +330,21 @@ void trx_purge_add_update_undo_to_history(
   }
 }
 
-/** Remove an rseg header from the history list.
+/** Remove undo log header from the history list.
 @param[in,out]  rseg_hdr        Rollback segment header
 @param[in]      log_hdr         Undo log segment header
 @param[in,out]  mtr             Mini-transaction. */
-void trx_purge_remove_log_hdr(trx_rsegf_t *rseg_hdr, trx_ulogf_t *log_hdr,
-                              mtr_t *mtr) {
+void trx_purge_remove_log_hdr(trx_rseg_t *rseg, trx_rsegf_t *rseg_hdr,
+                              trx_ulogf_t *log_hdr, mtr_t *mtr) {
+  ut_ad(!rseg->is_txn);
   flst_remove(rseg_hdr + TRX_RSEG_HISTORY, log_hdr + TRX_UNDO_HISTORY_NODE,
               mtr);
 
-  trx_sys->rseg_history_len.fetch_sub(1);
+  trx_sys->update_rseg_history_len.fetch_sub(1);
 }
 
-/** Frees a rollback segment which is in the history list.
-Removes the rseg hdr from the history list.
+/** Frees an undo log segment which is in the history list. Removes the
+undo log hdr from the history list.
 @param[in,out]  rseg            rollback segment
 @param[in]      hdr_addr        file address of log_hdr
 @param[in]      noredo          skip redo logging. */
@@ -415,7 +412,7 @@ static void trx_purge_free_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr,
   history list: otherwise, in case of a database crash, the segment
   could become inaccessible garbage in the file space. */
 
-  trx_purge_remove_log_hdr(rseg_hdr, log_hdr, &mtr);
+  trx_purge_remove_log_hdr(rseg, rseg_hdr, log_hdr, &mtr);
 
   do {
     /* Here we assume that a file segment with just the header
@@ -445,16 +442,13 @@ Removes the rseg hdr from the history list.
 @param[in]      is_2pp_seg         undo seg tailer has two phase purge flag. */
 static void trx_purge_finish_segment(trx_rseg_t *rseg, fil_addr_t hdr_addr,
                                      ulint type, bool noredo, bool is_2pp_seg) {
-  if (type == TRX_UNDO_UPDATE) {
-    if (is_2pp_seg) {
-      ut_ad(!noredo);
-      lizard::trx_purge_migrate_last_log(rseg, hdr_addr);
-    } else {
-      trx_purge_free_segment(rseg, hdr_addr, noredo);
-    }
-  } else if (type == TRX_UNDO_TXN) {
+  ut_ad(type == TRX_UNDO_UPDATE);
+
+  if (is_2pp_seg) {
     ut_ad(!noredo);
-    lizard::txn_recycle_segment(rseg, hdr_addr);
+    lizard::trx_purge_migrate_last_log(rseg, hdr_addr);
+  } else {
+    trx_purge_free_segment(rseg, hdr_addr, noredo);
   }
 }
 
@@ -472,23 +466,19 @@ static void trx_purge_finish_log_hdr(trx_rseg_t *rseg, trx_rsegf_t *rseg_hdr,
                                      bool is_2pp_seg, mtr_t *mtr) {
   commit_mark_t cmmt;
   bool del_mark = false;
+  ut_ad(type == TRX_UNDO_UPDATE);
 
   /* Remove the log hdr from the rseg history. */
-  trx_purge_remove_log_hdr(rseg_hdr, log_hdr, mtr);
+  trx_purge_remove_log_hdr(rseg, rseg_hdr, log_hdr, mtr);
 
-  if (type == TRX_UNDO_UPDATE) {
-    if (is_2pp_seg) {
-      del_mark =
-          mtr_read_ulint(log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
+  if (is_2pp_seg) {
+    del_mark = mtr_read_ulint(log_hdr + TRX_UNDO_DEL_MARKS, MLOG_2BYTES, mtr);
 
-      cmmt = lizard::trx_undo_hdr_read_cmmt(log_hdr, mtr);
+    cmmt = lizard::trx_undo_hdr_read_cmmt(log_hdr, mtr);
 
-      lizard::trx_purge_add_sp_list(rseg, rseg_hdr, log_hdr, type, mtr);
+    lizard::trx_purge_add_sp_list(rseg, rseg_hdr, log_hdr, type, mtr);
 
-      lizard::trx_add_rsegs_for_erase(rseg, hdr_addr, del_mark, cmmt);
-    }
-  } else {
-    ut_ad(type == TRX_UNDO_TXN);
+    lizard::trx_add_rsegs_for_erase(rseg, hdr_addr, del_mark, cmmt);
   }
 }
 
@@ -511,6 +501,7 @@ static void trx_purge_truncate_rseg_history(
   bool last_log;
   bool is_2pp_log;
   bool is_2pp_seg;
+  ut_ad(!rseg->is_txn);
 
   mtr_start(&mtr);
 
@@ -520,11 +511,28 @@ static void trx_purge_truncate_rseg_history(
 
   rseg->latch();
 
-  /** Lizard: It's possible limit->scn > rseg->last_scn */
+  /** Lizard: It's possible limit->scn > rseg->last_scn.
+
+  NOTES:
+  1. rseg->last_ommt tracks the commit mark of the last (oldest) log header
+     that purge has NOT consumed yet, i.e. it represents the position purge
+     has advanced to, NOT the position history truncation has advanced to.
+  2. Since rsegs are pushed into purge_heap without global SCN ordering
+     (commit only holds rseg::mutex when allocating SCN), the truncation
+     limit might overtake a pending rseg whose oldest unpurged log has a
+     smaller SCN. Truncating such a rseg would free undo logs that purge
+     still needs to read, so skip it and retry in a later round.
+  3. Currently, with the introduction of min safe scn, purge never advances
+     beyond the smallest SCN of committing transactions (see
+     purge_rsegs_iterator_t::set_next which refuses to pop the heap top
+     whose SCN exceeds pvision.safe_scn()), so the out-of-order SCN case
+     caused by purge_heap should no longer be possible. This condition is
+     kept only as a defensive guard. */
   if (rseg->last_page_no != FIL_NULL && limit->ommt.scn > rseg->last_ommt.scn) {
     /** TODO: Might no need the condition. <14-05-24, zanye.zjy> */
     /* ut_error; */
-    mutex_exit(&(rseg->mutex));
+    rseg->unlatch();
+    mtr_commit(&mtr);
     return;
   }
 
@@ -579,7 +587,7 @@ loop:
   page_hdr = undo_page + TRX_UNDO_PAGE_HDR;
   type = mach_read_from_2(page_hdr + TRX_UNDO_PAGE_TYPE);
 
-  ut_a(type == TRX_UNDO_UPDATE || type == TRX_UNDO_TXN);
+  ut_a(type == TRX_UNDO_UPDATE);
   last_log = mach_read_from_2(seg_hdr + TRX_UNDO_STATE) == TRX_UNDO_TO_PURGE &&
              mach_read_from_2(log_hdr + TRX_UNDO_NEXT_LOG) == 0;
   is_2pp_seg = lizard::trx_useg_is_2pp(undo_page, rseg->page_size, &mtr);
@@ -1629,7 +1637,7 @@ static void trx_purge_truncate_history(purge_iter_t *limit,
     limit->undo_rseg_space = SPACE_UNKNOWN;
   }
 
-  ut_ad(limit->ommt.scn <= purge_sys->vision.snapshot_scn());
+  ut_ad(limit->ommt.scn <= purge_sys->pvision.snapshot_scn());
 
   /* Purge rollback segments in all undo tablespaces.  This may take
   some time and we do not want an undo DDL to attempt an x_lock during
@@ -1643,6 +1651,11 @@ static void trx_purge_truncate_history(purge_iter_t *limit,
 
     if (ut.is_equal(undo_space->id()) && ut.is_marked() &&
         ut.is_marked_space_empty()) {
+      continue;
+    }
+
+    /** txn space is processed by clean system .*/
+    if (lizard::fsp_is_txn_tablespace_by_id(undo_space->id())) {
       continue;
     }
 
@@ -1674,8 +1687,12 @@ static void trx_purge_truncate_history(purge_iter_t *limit,
   }
   trx_sys->tmp_rsegs.s_unlock();
 
-  ut_ad(limit->ommt.scn != 0);
-  purge_sys->truncating_list_scn.push(limit->ommt.scn);
+  /** Revision: purge vision and cycle last has been put within
+   * purge sys->next(), so limit scn may be zero just when reboot. */
+  if (limit->ommt.scn > 0) {
+    ut_ad(limit->ommt.scn != SCN_NULL);
+    purge_sys->truncating_list_scn.push(limit->ommt.scn);
+  }
 
   MONITOR_INC_TIME(MONITOR_PURGE_TRUNCATE_HISTORY_MICROSECOND,
                    counter_time_truncate_history);
@@ -1771,7 +1788,7 @@ static void trx_purge_rseg_get_next_history_log(
     pieces, and if we here reach the head of the list, the
     list cannot be longer than 2000 000 undo logs now. */
 
-    const auto rseg_history_len = trx_sys->rseg_history_len.load();
+    const auto rseg_history_len = trx_sys->update_rseg_history_len.load();
     if (rseg_history_len > 2000000) {
       ib::warn(ER_IB_MSG_1177)
           << "Purge reached the head of the history"
@@ -1813,7 +1830,7 @@ static void trx_purge_rseg_get_next_history_log(
   rseg->last_del_marks = del_marks;
   rseg->last_ommt = cmmt;
 
-  lizard::TxnUndoRsegs elem(rseg->last_ommt.scn);
+  lizard::purge_rsegs_t elem(rseg->last_ommt.scn);
   elem.insert(rseg);
 
   /* Purge can also produce events, however these are already ordered in the
@@ -1825,7 +1842,7 @@ static void trx_purge_rseg_get_next_history_log(
 
   purge_sys->purge_heap->push(std::move(elem));
 
-  lizard_purged_scn_validation();
+  ut_ad(lizard::trx_purge_scn_validation());
 
   mutex_exit(&purge_sys->pq_mutex);
 
@@ -1881,8 +1898,6 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
   purge_sys->iter.modifier_trx_id = modifier_trx_id;
   purge_sys->iter.undo_rseg_space = undo_rseg_space;
 
-  ut_a(purge_sys->iter.ommt.scn <= purge_sys->vision.snapshot_scn());
-
   purge_sys->next_stored = true;
 }
 
@@ -1893,24 +1908,17 @@ static void trx_purge_read_undo_rec(trx_purge_t *purge_sys,
 
  @return true if the top of purge_sys::purge_heap is kept,
  because of its scn is larger than purge_sys->vision */
-static bool trx_purge_choose_next_log(void) {
-  bool keep_top = false;
+static void trx_purge_choose_next_log(void) {
   ut_ad(purge_sys->next_stored == false);
 
-  const page_size_t &page_size = purge_sys->rseg_iter->set_next(&keep_top);
+  const page_size_t &page_size = purge_sys->rseg_iter->set_next();
 
-  if (purge_sys->rseg != nullptr && !keep_top) {
-    lizard_ut_ad(lizard::txn_undo_log_has_purged(purge_sys->rseg, page_size));
-
-    purge_sys->push_purged(purge_sys->iter.ommt);
-    lizard::txn_undo_set_state_at_purge(purge_sys->rseg, page_size);
-
+  if (purge_sys->rseg != nullptr) {
     trx_purge_read_undo_rec(purge_sys, page_size);
   } else {
     /* There is nothing to do yet. */
     std::this_thread::yield();
   }
-  return keep_top;
 }
 
 /** Gets the next record to purge and updates the info in the purge system.
@@ -1931,7 +1939,7 @@ static trx_undo_rec_t *trx_purge_get_next_rec(
   mtr_t mtr;
 
   ut_ad(purge_sys->next_stored);
-  ut_ad(purge_sys->iter.ommt.scn <= purge_sys->vision.snapshot_scn());
+  ut_ad(purge_sys->iter.ommt.scn <= purge_sys->pvision.snapshot_scn());
 
   space = purge_sys->rseg->space_id;
   page_no = purge_sys->page_no;
@@ -2144,8 +2152,7 @@ std::size_t Purge_groups_t::find_smallest_group() {
 
 std::ostream &Purge_groups_t::print(std::ostream &out) const {
   const std::size_t n_purge_threads = m_groups.size();
-  const std::size_t max_n =
-      (m_total_rec + n_purge_threads - 1) / n_purge_threads;
+  const std::size_t max_n = ut::div_ceil(m_total_rec, n_purge_threads);
   const std::size_t min_n =
       (max_n > n_purge_threads) ? max_n - n_purge_threads : 0;
 
@@ -2164,8 +2171,7 @@ std::ostream &Purge_groups_t::print(std::ostream &out) const {
 #ifdef UNIV_DEBUG
 bool Purge_groups_t::is_grouping_uniform() const {
   const std::size_t n_purge_threads = m_groups.size();
-  const std::size_t max_n =
-      (m_total_rec + n_purge_threads - 1) / n_purge_threads;
+  const std::size_t max_n = ut::div_ceil(m_total_rec, n_purge_threads);
   const std::size_t min_n =
       (max_n > n_purge_threads) ? max_n - n_purge_threads : 0;
   bool result = true;
@@ -2182,8 +2188,7 @@ bool Purge_groups_t::is_grouping_uniform() const {
 
 void Purge_groups_t::distribute() {
   const std::size_t n_purge_threads = m_groups.size();
-  const std::size_t max_n =
-      (m_total_rec + n_purge_threads - 1) / n_purge_threads;
+  const std::size_t max_n = ut::div_ceil(m_total_rec, n_purge_threads);
 
   for (std::size_t i = 0; i < 2; ++i) {
     bool need_second_pass = false;
@@ -2223,8 +2228,15 @@ void Purge_groups_t::distribute() {
 }
 
 void Purge_groups_t::distribute_if_needed() {
-  const uint64_t rseg_history_len = trx_sys->rseg_history_len.load();
+  const uint64_t rseg_history_len = trx_sys->update_rseg_history_len.load();
 
+  /**
+  TODO(songyichang.syc):
+  Load balancing between different groups only happens when innodb_max_purge_lag
+  is set. If purge tasks in history list are concentrated on one or several
+  tables, even with multiple purge threads configured, the parallel processing
+  capability cannot be fully utilized.
+  **/
   /* If the history list length is greater than maximum allowed purge lag,
   then distribute the workload across all purge threads. */
   if (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag) {
@@ -2245,31 +2257,31 @@ void Purge_groups_t::distribute_if_needed() {
                             handled */
     mem_heap_t *heap)       /*!< in: memory heap where copied */
 {
-  bool keep_top = false;
   if (!purge_sys->next_stored) {
-    keep_top = trx_purge_choose_next_log();
-
+    trx_purge_choose_next_log();
     /** keep_top == true mean the top of heap is larger than purge_sys's
     vision. That is to say, there are logs left in the history list */
-    if (!purge_sys->next_stored && !keep_top) {
+    if (!purge_sys->next_stored) {
       DBUG_PRINT("ib_purge", ("no logs left in the history list"));
       return nullptr;
     }
   }
 
-  if (purge_sys->iter.ommt.scn > purge_sys->vision.snapshot_scn() || keep_top) {
+  if (purge_sys->iter.ommt.scn > purge_sys->pvision.snapshot_scn()) {
     return nullptr;
   }
 
-  ut_a(!purge_sys->iter.ommt.is_null());
-  if (lizard::Undo_retention::instance()->purge_advise(
-          purge_sys->iter.ommt.us)) {
+  if (purge_sys->iter.ommt.scn >= lizard::cycle_sys->last().scn) {
     return &trx_purge_blocked_rec;
   }
 
-  if (lizard::hb_freezer_determine_freeze()) {
-    return &trx_purge_blocked_rec;
-  }
+  ut_ad(purge_sys->iter.ommt.scn <= purge_sys->pvision.snapshot_scn());
+  ut_ad(purge_sys->iter.ommt.scn < lizard::cycle_sys->last().scn);
+  ut_ad(lizard::trx_purge_txn_slot_has_purged(
+      purge_sys->rseg, purge_sys->hdr_page_no, purge_sys->hdr_offset,
+      purge_sys->rseg->page_size));
+
+  purge_sys->push_purged(purge_sys->iter.ommt);
 
   *roll_ptr = trx_undo_build_roll_ptr(false, purge_sys->rseg->space_id,
                                       purge_sys->page_no, purge_sys->offset);
@@ -2380,11 +2392,11 @@ static ulint trx_purge_dml_delay(void) {
   Note: we do a dirty read of the trx_sys_t data structure here,
   without holding trx_sys->mutex. */
 
-  if (srv_max_purge_lag > 0 && trx_sys->rseg_history_len.load() >
+  if (srv_max_purge_lag > 0 && trx_sys->update_rseg_history_len.load() >
                                    srv_n_purge_threads * srv_purge_batch_size) {
     float ratio;
 
-    ratio = float(trx_sys->rseg_history_len.load()) / srv_max_purge_lag;
+    ratio = float(trx_sys->update_rseg_history_len.load()) / srv_max_purge_lag;
 
     if (ratio > 1.0) {
       /* If the history list length exceeds the srv_max_purge_lag, the data
@@ -2434,9 +2446,9 @@ static void trx_purge_truncate(void) {
   ut_ad(trx_purge_check_limit());
 
   if (purge_sys->limit.ommt.scn == 0) {
-    trx_purge_truncate_history(&purge_sys->iter, &purge_sys->vision);
+    trx_purge_truncate_history(&purge_sys->iter, purge_sys->pvision.vision());
   } else {
-    trx_purge_truncate_history(&purge_sys->limit, &purge_sys->vision);
+    trx_purge_truncate_history(&purge_sys->limit, purge_sys->pvision.vision());
   }
 
   /* Attempt to truncate an undo tablespace. */
@@ -2457,6 +2469,7 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
   // scn_t old_scn;
 
   ut_a(n_purge_threads > 0);
+  current_n_purge_threads = n_purge_threads;
 
   srv_dml_needed_delay = trx_purge_dml_delay();
 
@@ -2468,7 +2481,7 @@ ulint trx_purge(ulint n_purge_threads, /*!< in: number of purge tasks
   purge_sys->view_active = false;
 
   // old_scn = purge_sys->vision.snapshot_scn();
-  lizard::trx_clone_oldest_vision(&purge_sys->vision);
+  lizard::gcs_clone_oldest_vision(&purge_sys->pvision);
   /* In the following special case, the purge view will back down:
   If all transactions are with no GTIDs within a GTID persistence cycle,
   and then one transation has GTID, Clone_persist_gtid will return an older
@@ -2840,6 +2853,5 @@ ulint trx_erase_attach_undo_recs(const ulint n_purge_threads,
 
 void trx_purge_t::push_purged(const commit_order_t &ommt) {
   ut_a(!ommt.is_null());
-  purged_scn.store(ommt.scn);
-  purged_gcn.flush(ommt.gcn);
+  lizard::gcs_clean_advance_purge(ommt);
 }

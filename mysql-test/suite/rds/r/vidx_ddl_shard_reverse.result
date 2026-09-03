@@ -1,0 +1,42 @@
+CREATE DATABASE vidx_ddl_shard_reverse;
+USE vidx_ddl_shard_reverse;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+############################################
+# Phase 1: W=8, 300 rows, full self-probe #
+############################################
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 8;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT 1 batch-count ceil(299/64)==5: PASS
+SET SESSION vidx_hnsw_ef_search = 40;
+VERDICT 1 full self-probe 300/300: PASS
+VERDICT 1 live==300: PASS
+
+############################################
+# Phase 2: W=4, overflow re-prune stress  #
+############################################
+CREATE TABLE t2 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+SET SESSION vidx_hnsw_ef_search = 100;
+SELECT COUNT(*) >= 48 AS dup_hits_ok FROM (
+SELECT id FROM t2 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 64
+) q WHERE q.id <= 64;
+dup_hits_ok
+1
+DROP TABLE t1;
+DROP TABLE t2;
+SET SESSION vidx_ddl_threads = default;
+SET SESSION vidx_hnsw_ef_search = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_shard_reverse;

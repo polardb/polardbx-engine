@@ -31,7 +31,7 @@ CREATE TABLE xtest.data(val VARCHAR(256));
 
 # The data for reciving
 --disable_query_log
-let $row=512;
+let $row=2048;
 while ($row)
 {
   eval INSERT INTO xtest.data VALUES("Example data for testing compression level");

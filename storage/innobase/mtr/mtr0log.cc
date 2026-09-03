@@ -31,7 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "mtr0log.h"
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0mtr0log.h"
 
 #ifndef UNIV_HOTBACKUP
@@ -383,6 +383,9 @@ byte *mlog_parse_string(
 
   ut_a(!page || !page_zip ||
        (fil_page_get_type(page) != FIL_PAGE_INDEX &&
+        fil_page_get_type(page) != FIL_PAGE_INDEX_PANDA &&
+        fil_page_get_type(page) != FIL_PAGE_INDEX_HIPPO &&
+        fil_page_get_type(page) != FIL_PAGE_INDEX_SPC &&
         fil_page_get_type(page) != FIL_PAGE_RTREE));
 
   if (end_ptr < ptr + 4) {
@@ -826,22 +829,15 @@ bool mlog_open_and_write_index(mtr_t *mtr, const byte *rec,
   uint16_t n = is_versioned ? index->get_n_total_fields()
                             : dict_index_get_n_fields(index);
 
-  uint8_t n_sec_fields;
   uint8_t sec_extra_flag;
-  lizard::get_sec_extra_flag(index, sec_extra_flag, n_sec_fields);
-  bool is_sec_extra = false;
-  if (!is_leaf) {
-    /* Lizard-4.0: For non-leaf page, sec lizard fields should be ignored. */
-    n -= n_sec_fields;
-  } else if (n_sec_fields) {
-    is_sec_extra = true;
-  }
+  bool need_sec_extra =
+      lizard::get_sec_extra_flag(index, is_leaf, &sec_extra_flag, &n);
 
   /* For spatial index, on non-leaf page, we just keep
   2 fields, MBR and page no. */
   if (dict_index_is_spatial(index) && !is_leaf) {
     n = DICT_INDEX_SPATIAL_NODEPTR_SIZE;
-    ut_ad(n_sec_fields == 0);
+    ut_ad(!need_sec_extra);
   }
 
   /* Ordinal position of an existing field can't be changed with INSTANT
@@ -870,7 +866,7 @@ bool mlog_open_and_write_index(mtr_t *mtr, const byte *rec,
 
   size_t size_needed = 0;
   log_index_get_size_needed(index, size, n, is_comp, is_versioned, is_instant,
-                            is_sec_extra, fields_with_changed_order,
+                            need_sec_extra, fields_with_changed_order,
                             size_needed);
   size_t total = size_needed;
   size_t alloc = total;
@@ -900,7 +896,7 @@ bool mlog_open_and_write_index(mtr_t *mtr, const byte *rec,
   if (is_instant) SET_INSTANT(flag);
   if (is_versioned) SET_VERSIONED(flag);
   if (is_comp) SET_COMPACT(flag);
-  if (is_sec_extra) {
+  if (need_sec_extra) {
     ut_ad(!is_versioned && !is_instant);
     SET_SEC_EXTRA(flag);
   }
@@ -1136,27 +1132,41 @@ static byte *parse_index_fields(byte *ptr, const byte *end_ptr, uint16_t n,
     }
 
     /* ITL */
-    if (layout == TL_BAMBOO) {
-      /* Identify Panda fields in the index. */
-      ut_a(DATA_TRX_ID_LEN == ind->get_col(i)->len);
-      ind->fields[i].col = &table->cols[n + DATA_TRX_ID];
-      ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
-      i++;
+    switch (layout) {
+      case TL_BAMBOO:
+        /* Identify Panda fields in the index. */
+        ut_a(DATA_TRX_ID_LEN == ind->get_col(i)->len);
+        ind->fields[i].col = &table->cols[n + DATA_TRX_ID];
+        ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+        i++;
 
-      ut_a(DATA_ROLL_PTR_LEN == ind->get_col(i)->len);
-      ind->fields[i].col = &table->cols[n + DATA_ROLL_PTR];
-      ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
-      i++;
+        ut_a(DATA_ROLL_PTR_LEN == ind->get_col(i)->len);
+        ind->fields[i].col = &table->cols[n + DATA_ROLL_PTR];
+        ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+        i++;
 
-      ut_a(DATA_SCN_ID_LEN == ind->get_col(i)->len);
-      ind->fields[i].col = &table->cols[n + DATA_SCN_ID];
-      ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
-      i++;
+        ut_a(DATA_SCN_ID_LEN == ind->get_col(i)->len);
+        ind->fields[i].col = &table->cols[n + DATA_SCN_ID];
+        ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+        i++;
 
-      ut_a(DATA_UNDO_PTR_LEN == ind->get_col(i)->len);
-      ind->fields[i].col = &table->cols[n + DATA_UNDO_PTR];
-      ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
-      i++;
+        ut_a(DATA_UNDO_PTR_LEN == ind->get_col(i)->len);
+        ind->fields[i].col = &table->cols[n + DATA_UNDO_PTR];
+        ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+        i++;
+        break;
+      case TL_LOTUS:
+        ut_a(DATA_TRX_ID_LEN == ind->get_col(i)->len);
+        ind->fields[i].col = &table->cols[n + DATA_TRX_ID];
+        ind->fields[i].col->set_phy_pos(table->cols[i].get_phy_pos());
+        i++;
+        break;
+      case TL_CLOVER:
+        /* Inplace update could be clover for normal index, don't need to do
+         * anything */
+        break;
+      default:
+        ut_error;
     }
   }
 
@@ -1347,11 +1357,11 @@ static byte *mlog_parse_index_v1(byte *ptr, const byte *end_ptr,
   const bool is_versioned = IS_VERSIONED(flag);
   const bool is_instant = IS_INSTANT(flag);
 
-  uint8_t sec_extra_flag, n_sec_fields, n_s_gfields;
+  uint8_t sec_extra_flag, n_sec_fields, n_s_gfields, n_s_tfields;
   page_type_t page_type;
   ptr = lizard::parse_index_sec_extra_flag(flag, ptr, end_ptr, sec_extra_flag,
-                                           n_sec_fields, n_s_gfields, page_type,
-                                           layout);
+                                           n_sec_fields, n_s_gfields,
+                                           n_s_tfields, page_type, layout);
   ut_ad(txn_layout_is_arranged(*layout));
 
   if (ptr == nullptr) {
@@ -1387,7 +1397,9 @@ static byte *mlog_parse_index_v1(byte *ptr, const byte *end_ptr,
   ind->n_uniq = (unsigned int)n_uniq;
   ind->gpp_stored = n_s_gfields > 0 ? true : false;
   ind->n_s_gfields = n_s_gfields;
+  ind->n_s_tfields = n_s_tfields;
   ind->root.page_type = page_type;
+  ind->set_pd_capacity(0);
 
   /* Lizard-4.0 revision: Ignore all secondary index lizard fields. */
   if (n_uniq != n - n_sec_fields) {

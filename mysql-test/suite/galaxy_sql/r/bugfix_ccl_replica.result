@@ -27,17 +27,17 @@ Add ccl rule didn't generate binlog
 --------------------------------------------------------------
 call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
 call dbms_ccl.show_ccl_rule();
-ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
-1	SELECT			Y	N	10	0	0	0	
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+1	SELECT			Y	N	10	0	0	0	0	0	
 call dbms_ccl.show_ccl_rule();
-ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
 --------------------------------------------------------------
 Add ccl on slave
 --------------------------------------------------------------
 call dbms_ccl.add_ccl_rule('SELECT', '', '', 10, '');
 call dbms_ccl.show_ccl_rule();
-ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	KEYWORDS
-1	SELECT			Y	N	10	0	0	0	
+ID	TYPE	SCHEMA	TABLE	STATE	ORDER	CONCURRENCY_COUNT	MATCHED	RUNNING	WAITTING	CONCURRENCY_PEEK	KILLED_NUM	KEYWORDS
+1	SELECT			Y	N	10	0	0	0	0	0	
 set global read_only = @start_read_only;
 drop user normal_1@'%';
 drop database ccl_db;

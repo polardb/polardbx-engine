@@ -834,10 +834,10 @@ class Dictionary_client {
     @retval      true     Error.
   */
 
-  [[nodiscard]] bool get_table_name_by_se_private_id(const String_type &engine,
-                                                     Object_id se_private_id,
-                                                     String_type *schema_name,
-                                                     String_type *table_name);
+  [[nodiscard]] bool get_table_name_by_se_private_id(
+      const String_type &engine, Object_id se_private_id,
+      String_type *schema_name, String_type *table_name,
+      bool skip_spi_cache = false);
 
   /**
     Retrieve schema and table name by the se private id of the partition.

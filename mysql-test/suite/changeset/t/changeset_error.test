@@ -1,0 +1,85 @@
+--disable_warnings
+DROP TABLE IF EXISTS c1;
+--enable_warnings
+ 
+CREATE TABLE c1 (
+id INT NOT NULL,
+gmt_modified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+value VARCHAR(50) NOT NULL,
+PRIMARY KEY (id, gmt_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_start('C1');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_start('');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_start();
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_start('c1', -1);
+ 
+call polarx.changeset_stats();
+call polarx.changeset_stats('');
+call polarx.changeset_stats('C1');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_fetch('C1');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_fetch('');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_fetch();
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_times('C1');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_times('');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_times();
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_finish('C1');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_finish('');
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_finish();
+ 
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_finish('c1');
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure();
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1');
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 1);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 1, 2);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', -1, 2, 3);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 1, -2, 3);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 1, 2, -3);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 'ab', 2, 3);
+
+--error ER_CHANGESET_COMMAND_ERROR
+call polarx.changeset_backpressure('c1', 1, 2, 3);
+
+DROP TABLE c1;

@@ -1,0 +1,172 @@
+#
+# Test case for EncDB system variables
+#
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+#
+# Setup
+#
+# Enable local_infile on server side for load data local infile
+SET GLOBAL local_infile = 1;
+SET GLOBAL column_encryption = on;
+create user aurora@'%' identified by '123456';
+grant all privileges on *.* to aurora@'%' with grant option;
+create user aurora2@'%' identified by '123456';
+grant all privileges on *.* to aurora2@'%' with grant option;
+create user newuser@'%' identified by '123456';
+grant all privileges on test.* to newuser@'%';
+create user newuser_mek@'%' identified by '123456';
+grant all privileges on *.* to newuser_mek@'%';
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+use test;
+create table t1 (id int, val varchar(50));
+insert into t1 values (1, 'hello'), (2, 'world');
+create table mysql.cipher_text (c0 text, c1 text);
+select encdb_rule_op('add','{"name":"rule_all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+encdb_rule_op('add','{"name":"rule_all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}')
+OK
+select encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}');
+encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}')
+OK
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}')
+OK
+#
+# Scenario 1: System variable value validity
+#
+SHOW GLOBAL VARIABLES LIKE 'encdb_default_encryption_algorithm';
+Variable_name	Value
+encdb_default_encryption_algorithm	SM4_128_GCM
+SHOW GLOBAL VARIABLES LIKE 'encdb_default_user_access';
+Variable_name	Value
+encdb_default_user_access	restrictedAccess
+# Test all 8 valid encryption algorithm values
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_GCM';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_ECB';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_CTR';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_CBC';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_CBC';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_ECB';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_CTR';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+# Test invalid encryption algorithm values
+SET GLOBAL encdb_default_encryption_algorithm = 'INVALID';
+ERROR 42000: Variable 'encdb_default_encryption_algorithm' can't be set to the value of 'INVALID'
+SET GLOBAL encdb_default_encryption_algorithm = '';
+ERROR 42000: Variable 'encdb_default_encryption_algorithm' can't be set to the value of ''
+# Test all 3 valid user access values
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+# Test invalid user access values
+SET GLOBAL encdb_default_user_access = 'INVALID';
+ERROR 42000: Variable 'encdb_default_user_access' can't be set to the value of 'INVALID'
+SET GLOBAL encdb_default_user_access = '';
+ERROR 42000: Variable 'encdb_default_user_access' can't be set to the value of ''
+# Restore defaults
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+#
+# Scenario 2: Dynamic encryption algorithm change
+#
+# Step 1: Confirm default algorithm is SM4_128_GCM
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+# Step 2: aurora MEK exchange without specifying algorithm (uses default SM4_128_GCM)
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}')
+OK
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff')))
+{
+  "body" : "",
+  "status" : 0
+}
+# Step 3: Verify aurora encryption/decryption is correct (SM4_128_GCM)
+truncate table mysql.cipher_text;
+# Step 4: Switch default algorithm to AES_128_GCM
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_GCM';
+# Step 5: aurora still works correctly after algorithm switch (MEK+nonce re-derives SM4_128_GCM DEK)
+truncate table mysql.cipher_text;
+# Step 6: aurora2 MEK exchange without specifying algorithm (uses new default AES_128_GCM)
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora2"]}');
+encdb_rule_op('grant','{"restrictedAccess": ["aurora2"]}')
+OK
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'ffeeddccbbaa99887766554433221100')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'ffeeddccbbaa99887766554433221100')))
+{
+  "body" : "",
+  "status" : 0
+}
+# Step 7: Verify aurora2 encryption/decryption is correct (AES_128_GCM)
+truncate table mysql.cipher_text;
+#
+# Scenario 3: Default user access — ungrant users rely entirely on encdb_default_user_access;
+# MEK exchange only determines encryption algorithm, not permission level.
+#
+# Baseline: root plaintext for comparison
+#
+# 3a: Without MEK (newuser)
+#   NO_ACCESS / RESTRICTED both return garbled data (no key to decrypt);
+#   FULL_ACCESS returns plaintext (server skips encryption).
+#
+# NO_ACCESS: random bytes
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+# RESTRICTED_ACCESS: newuser has no MEK, CC_MISS causes query failure
+SET GLOBAL encdb_cc_miss_error = ON;
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+SET GLOBAL encdb_cc_miss_error = OFF;
+# FULL_ACCESS: plaintext — server skips encryption
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+#
+# 3b: With MEK (newuser_mek)
+#   NO_ACCESS still returns garbled data (MEK irrelevant when access denied);
+#   RESTRICTED returns encrypted ciphertext, decryptable via encdb_decrypt (key diff from 3a);
+#   FULL_ACCESS returns plaintext (same as 3a).
+#
+# Exchange MEK under RESTRICTED_ACCESS
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'aabbccddeeff00112233445566778899')));
+from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'aabbccddeeff00112233445566778899')))
+{
+  "body" : "",
+  "status" : 0
+}
+# NO_ACCESS: random bytes — MEK irrelevant when access denied
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+# RESTRICTED_ACCESS: newuser_mek has MEK; encrypted data is decryptable via encdb_decrypt
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+truncate table mysql.cipher_text;
+# FULL_ACCESS: plaintext — no encryption needed
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+# Verify: explicit grant (aurora RESTRICTED_ACCESS) unaffected by default=FULL_ACCESS
+truncate table mysql.cipher_text;
+#
+# Scenario 4: RESTRICTED_ACCESS user without MEK_PROVISION gets explicit error on SELECT
+# Verifies enc_aux.cpp getCCWithAccsType() re-throws CC_MISS rather than falling
+# back to DUMMY CC, ensuring a missing key produces an error, not silent corruption.
+#
+SET GLOBAL column_encryption = ON;
+SET GLOBAL encdb_cc_miss_error = ON;
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+SELECT * FROM t1;
+ERROR HY000: EncDB function 'encdb_encrypt_hook' failed with message "CipherContext not found for current connection. Please ensure MEK_PROVISION is performed before encryption (upgrade EncDB JDBC driver if necessary)."
+SET GLOBAL encdb_cc_miss_error = OFF;
+#
+# Cleanup
+#
+select encdb_rule_op('delete','"rule_all"');
+encdb_rule_op('delete','"rule_all"')
+OK
+delete from mysql.encdb_auth_users;
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+drop table t1;
+drop table mysql.cipher_text;
+drop function encdb_decrypt;
+drop function encdb_generate_mek_request;
+drop user aurora@'%';
+drop user aurora2@'%';
+drop user newuser@'%';
+drop user newuser_mek@'%';
+set global column_encryption = on;

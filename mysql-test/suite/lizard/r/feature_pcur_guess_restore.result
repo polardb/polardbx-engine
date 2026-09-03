@@ -1,0 +1,106 @@
+#
+# Test btr_pcur_t::guess_position in restore_position.
+# Uses innodb_inject_stress_test_for_guess to skip optimistic (modify_clock)
+# path, forcing cursor restoration through guess_position + open_no_init.
+# Counter values are validated via include/assert.inc.
+#
+# Save original values
+# Enable guess mode stress test
+SET GLOBAL innodb_lizard_stat_enabled = ON;
+SET GLOBAL innodb_inject_stress_test_for_guess = ON;
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = ON;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+# ============================================================
+# Setup: create table and insert data
+# ============================================================
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b VARCHAR(100) NOT NULL,
+c INT NOT NULL,
+KEY idx_a (a),
+KEY idx_c (c)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+CREATE PROCEDURE insert_data(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+START TRANSACTION;
+WHILE i <= num_rows DO
+INSERT INTO t1 (a, b, c) VALUES (i, CONCAT('row_', LPAD(i, 5, '0')), i * 10);
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+CALL insert_data(500);
+# ============================================================
+# Test 1: Range scan on clustered index triggers restore_position
+# guess_position should be attempted and hit.
+# ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100;
+include/assert.inc [[clustered range scan] pcur guess restore hit+miss should be > 0]
+include/assert.inc [[clustered range scan] pcur guess restore hit should be > 0]
+# ============================================================
+# Test 2: Range scan on secondary index (requires back-to-cluster)
+# ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE a BETWEEN 50 AND 150;
+include/assert.inc [[secondary range scan] pcur guess restore hit+miss should be > 0]
+# ============================================================
+# Test 3: UPDATE with range condition triggers restore_position
+# ============================================================
+call dbms_stat.flush_gpp();
+UPDATE t1 SET b = CONCAT('updated_', LPAD(id, 5, '0')) WHERE id BETWEEN 10 AND 50;
+include/assert.inc [[range UPDATE] pcur guess restore hit+miss should be > 0]
+# ============================================================
+# Test 4: DELETE with range condition triggers restore_position
+# ============================================================
+call dbms_stat.flush_gpp();
+DELETE FROM t1 WHERE id BETWEEN 450 AND 500;
+include/assert.inc [[range DELETE] pcur guess restore hit+miss should be > 0]
+# ============================================================
+# Test 5: Verify guess is disabled when parameter is OFF
+# ============================================================
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = OFF;
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 100;
+include/assert.inc [[guess disabled] pcur guess restore hit should be 0]
+include/assert.inc [[guess disabled] pcur guess restore miss should be 0]
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = ON;
+# ============================================================
+# Test 6: Cursor across page boundaries (large scan)
+# ============================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 400;
+include/assert.inc [[large scan] pcur guess restore hit should be > 0]
+# ============================================================
+# Test 7: SELECT FOR UPDATE (BTR_MODIFY_LEAF path)
+# ============================================================
+call dbms_stat.flush_gpp();
+BEGIN;
+SELECT * FROM t1 WHERE id BETWEEN 100 AND 150 FOR UPDATE;
+COMMIT;
+include/assert.inc [[SELECT FOR UPDATE] pcur guess restore hit+miss should be > 0]
+# ============================================================
+# Test 8: Verify stress test parameter bypass (optimistic path
+# is skipped; without the parameter guess would not be invoked
+# because optimistic modify_clock check would succeed)
+# ============================================================
+# Turn off stress test -> optimistic should succeed, guess not called
+SET GLOBAL innodb_inject_stress_test_for_guess = OFF;
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50;
+# Turn on stress test -> optimistic skipped, guess should be called
+SET GLOBAL innodb_inject_stress_test_for_guess = ON;
+call dbms_stat.flush_gpp();
+SELECT * FROM t1 WHERE id BETWEEN 1 AND 50;
+include/assert.inc [[stress param ON] guess calls should be more than when OFF]
+# ============================================================
+# Cleanup
+# ============================================================
+DROP TABLE t1;
+DROP PROCEDURE insert_data;
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_inject_stress_test_for_guess = 0;
+SET GLOBAL innodb_index_pcur_guess_restore_enabled = 1;
+SET GLOBAL innodb_adaptive_hash_index = 0;

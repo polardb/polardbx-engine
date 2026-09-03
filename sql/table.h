@@ -27,6 +27,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <string>
+#include <utility>
 
 #include "field_types.h"
 #include "lex_string.h"
@@ -61,8 +62,9 @@
 #include "sql/sql_sort.h"  // Sort_result
 #include "thr_lock.h"
 #include "typelib.h"
+#include "vidx/vidx_common.h"  // vidx::hnsw::EF_POWER_DEF / DIAMETER_DEF
 
-#include "sql/lizard/lizard_snapshot.h"
+#include "sql/transaction/komodo0snapshot.h"
 #include "sql/sequence_common.h"  // Sequence_property, Sequence_scan, Sequence_last_value
 #include "sql/sql_statistics_common.h"  // Stats_data
 
@@ -127,6 +129,12 @@ struct handlerton;
 struct Name_resolution_context;
 using plan_idx = int;
 class Sequence_property;
+
+namespace cs {
+namespace util {
+class ReplicatedColumnsView;
+}
+}  // namespace cs
 
 namespace dd {
 class Table;
@@ -797,6 +805,16 @@ struct TABLE_SHARE {
 
   LEX_CSTRING engine_attribute = EMPTY_CSTR;
   LEX_CSTRING secondary_engine_attribute = EMPTY_CSTR;
+  /**
+  Cached value of whether this table is marked as read-only via
+  secondary engine attribute. This avoids having to parse the JSON
+  attribute on every DML operation.
+
+  This value is updated when the table share is created or when
+  the table metadata is refreshed (e.g. during DDL operations).
+*/
+  bool cached_secondary_engine_readonly{false};
+
 
   /**
     The set of indexes that are not disabled for this table. I.e. it excludes
@@ -1066,6 +1084,61 @@ struct TABLE_SHARE {
   Schema_read_only schema_read_only{Schema_read_only::NOT_SET};
 
   Stats_data stats_data;
+
+  bool is_hlindex{false};
+  /* for hlindex tables */
+  void *hlindex_data{nullptr};
+  /*
+    For hlindex tables: HNSW learned search-quality parameters.  They
+    survive MHNSW_Share reset (cache eviction): written back in
+    MHNSW_Share::reset() and restored in get_from_share(), both under
+    the base share's LOCK_share (same protection as hlindex_data).
+    Defaults equal the MHNSW_Share cold-start values by construction
+    (shared constants), so a first-ever open restores exactly the
+    cold-start behavior.
+  */
+  double hlindex_learned_ef_power{vidx::hnsw::EF_POWER_DEF};
+  float hlindex_learned_diameter{vidx::hnsw::DIAMETER_DEF};
+  /* Array of hlindex TABLE_SHARE*, indexed by slot. Protected by LOCK_share. */
+  TABLE_SHARE **hlindex_shares{nullptr};
+  /* Number of keys including vector keys. */
+  uint total_keys{0};
+
+  mysql_mutex_t LOCK_share; /* MariaDB use it to protect TABLE_SHARE. RDS only
+                               protect hlindex and hlindex_data */
+
+  /**
+    Cached InnoDB se_private_id for this table share, populated from
+    dd::Table::se_private_id() during fill_share_from_dd(). It is used
+    exclusively by the vector index subsystem to derive the auxiliary
+    hlindex table name via vidx::build_name(), avoiding repeated DD
+    lookups at DML time. Initialized to dd::INVALID_OBJECT_ID.
+  */
+  dd::Object_id m_se_private_id{dd::INVALID_OBJECT_ID};
+
+  inline void lock_share() {
+    if (!tmp_table) mysql_mutex_lock(&LOCK_share);
+  }
+
+  inline void unlock_share() {
+    if (!tmp_table) mysql_mutex_unlock(&LOCK_share);
+  }
+
+  inline uint hlindexes() {
+    assert(total_keys >= keys);
+    /* The total_keys is not expected as less than keys. This abnormal
+    situation returns 0 for stability。 */
+    return total_keys >= keys ? total_keys - keys : 0;
+  }
+
+  inline KEY *get_vec_key() {
+    return hlindexes() ? (key_info + keys) : nullptr;
+  }
+
+  /* {begin, end} over hlindex_shares slots */
+  inline std::pair<TABLE_SHARE**, TABLE_SHARE**> hlindex_shares_range() const {
+    return {hlindex_shares, hlindex_shares + (total_keys >= keys ? total_keys - keys : 0)};
+  }
 
   /**
     Set share's table cache key and update its db and table name appropriately.
@@ -1480,7 +1553,7 @@ struct TABLE {
   uchar *insert_values{nullptr};      /* used by INSERT ... UPDATE */
 
   /// Buffer for use in multi-row reads. Initially empty.
-  Record_buffer m_record_buffer{0, 0, nullptr};
+  Record_buffer m_record_buffer{0, 0, 0, nullptr};
 
   /*
     Map of keys that can be used to retrieve all data from this table
@@ -1699,6 +1772,8 @@ struct TABLE {
     and max #key parts that range access would use.
   */
   ha_rows quick_rows[MAX_KEY]{0};
+
+  ha_rows quick_rows_canonical[MAX_KEY]{0};
 
   /* Bitmaps of key parts that =const for the entire join. */
   key_part_map const_key_parts[MAX_KEY]{0};
@@ -1967,7 +2042,7 @@ struct TABLE {
     column
   */
   inline bool index_contains_some_virtual_gcol(uint index_no) const {
-    assert(index_no < s->keys);
+    assert(index_no < s->total_keys);
     return key_info[index_no].flags & HA_VIRTUAL_GEN_KEY;
   }
   void update_const_key_parts(Item *conds);
@@ -2423,13 +2498,47 @@ struct TABLE {
   Sequence_scan sequence_scan;
 
   /** Table snapshot that come from snapshot hint on statement. */
-  lizard::Table_snapshot table_snapshot;
+  komodo::Table_snapshot table_snapshot;
 
   /** Whether the table has flashback area. */
   bool flashback_area{false};
 
   /* The Entity guard that is cloned from TABLE_SHARE */
   im::Entity_guard *entity_guard;
+
+ public:
+  cs::util::ReplicatedColumnsView *cached_rcv{nullptr};
+
+  TABLE *hlindex_active{nullptr};  /* = hlindex_tables[hlindex_active_slot] */
+  TABLE **hlindex_tables{nullptr}; /* All opened hlindex TABLEs, by slot */
+  uint hlindex_active_slot{0};     /* Current slot, set by hlindex_open() */
+
+  /* COPY DDL target whose row copy skips foreground graph maintenance;
+     finish_ddl_direct_build() constructs the complete graph before rename. */
+  bool vidx_ddl_direct_build_target{false};
+
+  /* {begin, end} over hlindex_tables slots */
+  inline std::pair<TABLE**, TABLE**> hlindex_tables_range() const {
+    return {hlindex_tables, hlindex_tables + s->hlindexes()};
+  }
+  void *context{nullptr};  /* only for hlindexes */
+
+  struct {
+    ulonglong nodes_visited{0};
+  } hlindex_search_stats;
+
+  int hlindex_open(uint nr);
+  int hlindex_lock(uint nr);
+  int reset_hlindexes();
+
+  int hlindexes_on_insert();
+  int hlindexes_on_update();
+  int hlindexes_on_delete(const uchar *buf);
+  int hlindexes_on_delete_all();
+
+  int hlindex_read_first(uint key, void *item);
+  int hlindex_read_next();
+  int hlindex_read_end();
 };
 
 static inline void empty_record(TABLE *table) {
@@ -3969,7 +4078,7 @@ class Table_ref {
   Sequence_scan sequence_scan;
 
   /** Snapshot hint upon table */
-  lizard::Snapshot_hint *snapshot_hint{nullptr};
+  komodo::Snapshot_hint *snapshot_hint{nullptr};
 
   bool process_snapshot_hint(THD *thd, TABLE *tbl);
 
@@ -3977,6 +4086,7 @@ class Table_ref {
     clustered index for as-of queries when the session variable
     'opt_query_via_flashback_area' is enabled. */
   void choose_flashback_area(THD *thd, TABLE *tbl);
+  void choose_cross_ddl(THD *thd);
 };
 
 /*

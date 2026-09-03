@@ -1,0 +1,115 @@
+--echo #
+--echo # Test for FTRUNC_LOCK MDL
+--echo # Verify ftrunc lock functionality and observability
+--echo #
+--source include/have_debug.inc
+
+--let $MYSQLD_LOG= $MYSQLTEST_VARDIR/log/ftrunc_lock_test.log
+
+--echo # Restart server with dedicated log file for this test
+--let $restart_parameters= restart: --log-error=$MYSQLD_LOG
+--replace_result $MYSQLD_LOG MYSQLD_LOG
+--source include/restart_mysqld.inc
+
+--enable_connect_log
+
+--echo #
+--echo # Test case 1: Lock blocking and observability
+--echo #
+
+--echo # Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+
+--echo # Acquire exclusive lock
+CALL dbms_lock.acquire_x_ftrunc();
+
+--connect (con2, localhost, root,,)
+
+--echo # Set short lock wait timeout for testing
+SET lock_wait_timeout = 1;
+
+--echo # Try to acquire shared lock (will be blocked and timeout)
+--error ER_LOCK_WAIT_TIMEOUT
+CALL dbms_lock.acquire_s_ftrunc();
+
+--connection default
+
+--echo # Verify locks visible in performance_schema
+--sorted_result
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK' AND lock_status = 'GRANTED';
+
+--echo # Release exclusive lock
+CALL dbms_lock.release_ftrunc();
+
+--echo #
+--echo # Test case 2: Lock released on disconnect
+--echo #
+
+--connect (con3, localhost, root,,)
+
+--echo # Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+
+CALL dbms_lock.acquire_s_ftrunc();
+
+--connection default
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK';
+
+--connection con3
+--disconnect con3
+
+--sleep 5
+
+--connection default
+SELECT object_type, lock_type, lock_duration, lock_status
+FROM performance_schema.metadata_locks
+WHERE object_type = 'FTRUNC LOCK';
+
+--echo #
+--echo # Test case 3: Background purge thread lock failure
+--echo #
+
+--connection default
+
+--let $grep_file= $MYSQLD_LOG
+
+--echo # Enable innodb_data_file_purge
+SET @old_innodb_data_file_purge = @@global.innodb_data_file_purge;
+SET @@global.innodb_data_file_purge = ON;
+FLUSH LOGS;
+
+--echo # Set long lock wait timeout for acquiring lock
+SET lock_wait_timeout = 10000;
+
+--echo # Acquire shared lock in foreground
+CALL dbms_lock.acquire_s_ftrunc();
+
+--echo # Create and drop table to trigger file purge
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1);
+DROP TABLE t1;
+
+--echo # Wait for background purge thread to attempt acquiring lock
+--sleep 36
+
+--echo # Release lock
+CALL dbms_lock.release_ftrunc();
+
+--echo # Verify error message in log file
+--let $grep_pattern= Failed to acquire FTRUNC_LOCK MDL lock for file truncate
+--let $grep_output= boolean
+--source include/grep_pattern.inc
+
+--echo # Restore setting
+eval SET @@global.innodb_data_file_purge= @old_innodb_data_file_purge;
+
+--connection con2
+--disconnect con2
+
+--connection default
+--disable_connect_log
+

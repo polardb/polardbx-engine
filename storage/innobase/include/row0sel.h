@@ -46,6 +46,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0types.h"
 #include "trx0types.h"
 
+struct rep_t;
+
+class Slice;
+class DSlice;
+
 /** Creates a select node struct.
  @return own: select node struct */
 sel_node_t *sel_node_create(
@@ -111,10 +116,10 @@ be needed in the query.
 @return true on success, false if not all columns could be retrieved */
 // clang-format on
 bool row_sel_store_mysql_rec(byte *mysql_rec, row_prebuilt_t *prebuilt,
-                             const rec_t *rec, const dtuple_t *vrow,
+                             const Slice *slc, const dtuple_t *vrow,
                              bool rec_clust, const dict_index_t *rec_index,
                              const dict_index_t *prebuilt_index,
-                             const ulint *offsets, bool clust_templ_for_sec,
+                             bool clust_templ_for_sec,
                              lob::undo_vers_t *lob_undo,
                              mem_heap_t *&blob_heap);
 
@@ -478,6 +483,8 @@ bool row_search_index_stats(const char *db_name, const char *tbl_name,
                             const char *index_name, ulint col_offset,
                             ulonglong *cardinality);
 
+#ifndef INNODB_ROW0SEL_IC_STANDALONE
 #include "row0sel.ic"
+#endif /* !INNODB_ROW0SEL_IC_STANDALONE */
 
 #endif

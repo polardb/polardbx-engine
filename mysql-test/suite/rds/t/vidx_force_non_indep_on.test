@@ -1,0 +1,64 @@
+##############################################################
+# vidx_force_non_indep = ON (escape hatch).                   #
+#                                                              #
+# The OFF default is exercised by vidx_force_non_indep_off.    #
+# Here we boot mysqld with --vidx_force_non_indep=ON via       #
+# vidx_force_non_indep_on-master.opt and verify the lever      #
+# actually demotes DML to the legacy non-indep path while      #
+# leaving base / aux table state and ANN search correct.       #
+#                                                              #
+# The variable is PLUGIN_VAR_READONLY so mid-run SET GLOBAL    #
+# would fail; the .opt file is the only way to flip it.        #
+##############################################################
+
+SET GLOBAL vidx_disabled = OFF;
+
+# Variable type + verify the .opt took effect.
+SHOW GLOBAL VARIABLES LIKE 'vidx_force_non_indep';
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL vidx_force_non_indep = OFF;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  a INT NOT NULL DEFAULT 0,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT('[0,0,1]'));
+
+--echo
+--echo ##############################################
+--echo # ON: DML must skip the indep path           #
+--echo ##############################################
+
+SELECT VARIABLE_VALUE INTO @ic0 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT('[6,6,6]'));
+UPDATE t1 SET v = VEC_FROMTEXT('[5,5,6]') WHERE id = 1;
+DELETE FROM t1 WHERE id = 2;
+
+SELECT VARIABLE_VALUE INTO @ic1 FROM performance_schema.global_status
+  WHERE VARIABLE_NAME = 'Vidx_indep_dml_commit';
+
+SELECT @ic1 = @ic0 AS dml_skips_indep_when_on;
+
+--echo
+--echo ##############################################
+--echo # ON: ANN search and base table still match  #
+--echo ##############################################
+
+SELECT COUNT(*) AS rows_visible FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[6,6,6]')) LIMIT 3;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

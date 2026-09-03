@@ -34,14 +34,15 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define PLI_PLI_BASE_H_INCLUDED
 #include "pli/pli_common.h"
 
-namespace xlicense {
+namespace komodo {
 
 /**
  * Verify license conns constrains
- * @param[in] current_conn current connections
+ * @param[in] curr_conns current connections
  * @return true if pass
  */
-typedef bool (*verify_license_conns_constrains_func)(uint current_conn);
+typedef bool (*verify_license_conns_constrains_func)(
+    Connection_count &curr_conns);
 
 /**
  * Verify license BP constrains
@@ -78,5 +79,5 @@ struct PLI_service_t {
 
 extern PLI_service_t *PLI_service;
 
-}  // namespace xlicense
+}  // namespace komodo
 #endif

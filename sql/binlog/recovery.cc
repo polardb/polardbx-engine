@@ -28,10 +28,12 @@
 
 #include "mysql/components/services/log_builtins.h"
 
-#include "sql/binlog/lizard0recovery.h"
-#include "sql/lizard_rpl_rli.h"
+#include "sql/binlog/komodo0recovery.h"
+#include "sql/consensus/consensus_err.h"
+#include "sql/komodo0rpl0rli.h"
+#include "sql/xa/recovery.h"
 
-binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader &binlog_file_reader)
+binlog::Binlog_recovery::Binlog_recovery(Binlog_file_reader *binlog_file_reader)
     : m_reader{binlog_file_reader},
       m_mem_root{key_memory_binlog_recover_exec,
                  static_cast<size_t>(my_getpagesize())},
@@ -64,11 +66,11 @@ std::string const &binlog::Binlog_recovery::get_failure_message() const {
 }
 
 binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
-  binlog::tools::Iterator it{&this->m_reader};
+  binlog::tools::Iterator it{this->m_reader};
   it.set_copy_event_buffer();
-  this->m_valid_pos = this->m_reader.position();
+  this->m_valid_pos = this->m_reader->position();
 
-  this->process_format_event(*this->m_reader.format_description_event());
+  this->process_format_event(*this->m_reader->format_description_event());
 
   for (Log_event *ev = it.begin(); ev != it.end(); ev = it.next()) {
     switch (ev->get_type_code()) {
@@ -100,9 +102,9 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
     // Whenever the current position is at a transaction boundary, save it
     // to m_valid_pos
     if (!this->m_is_malformed && !this->m_in_transaction &&
-        !lizard::is_b_events_before_gtid(ev) && !is_gtid_event(ev) &&
+        !komodo::is_b_events_before_gtid(ev) && !is_gtid_event(ev) &&
         !is_session_control_event(ev))
-      this->m_valid_pos = this->m_reader.position();
+      this->m_valid_pos = this->m_reader->position();
 
     delete ev;
     ev = nullptr;
@@ -112,17 +114,17 @@ binlog::Binlog_recovery &binlog::Binlog_recovery::recover() {
 
   if (!this->m_is_malformed && total_ha_2pc > 1) {
     Xa_state_list xa_list{this->m_external_xids};
-    XA_spec_list *spec_list = nullptr;
+    komodo::XA_spec_list *spec_list = nullptr;
 
-    if (m_server_version < XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED) {
+    if (m_server_version < komodo::XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED) {
       LogErr(WARNING_LEVEL, ER_XA_SPEC_VERSION_NOT_MATCH, m_server_version,
-             XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED);
+             komodo::XA_SPEC_RECOVERY_SERVER_VERSION_REQUIRED);
     } else {
       spec_list = m_xa_spec_recovery.xa_spec_list();
     }
 
     this->m_no_engine_recovery =
-        ha_recover(&this->m_internal_xids, &xa_list, spec_list);
+        ha_recover(&m_internal_xids, &xa_list, spec_list, this);
     if (this->m_no_engine_recovery) {
       this->m_failure_message.assign("Recovery failed in storage engines");
     }
@@ -154,7 +156,7 @@ void binlog::Binlog_recovery::process_query_event(Query_log_event const &ev) {
 }
 
 void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
@@ -170,13 +172,13 @@ void binlog::Binlog_recovery::process_xid_event(Xid_log_event const &ev) {
     return;
   }
 
-  m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
+  m_xa_spec.m_source = komodo::Binlog_xa_specification::Source::COMMIT;
   gather_internal_xa_spec(ev.xid, m_xa_spec);
 }
 
 void binlog::Binlog_recovery::process_xa_prepare_event(
     XA_prepare_log_event const &ev) {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed) {
@@ -208,8 +210,9 @@ void binlog::Binlog_recovery::process_xa_prepare_event(
                         : enum_ha_recover_xa_state::PREPARED_IN_TC;
 
   m_xa_spec.m_source =
-      ev.is_one_phase() ? Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
-                        : Binlog_xa_specification::Source::XA_PREPARE;
+      ev.is_one_phase()
+          ? komodo::Binlog_xa_specification::Source::XA_COMMIT_ONE_PHASE
+          : komodo::Binlog_xa_specification::Source::XA_PREPARE;
   gather_external_xa_spec(xid, m_xa_spec);
 }
 
@@ -223,7 +226,7 @@ void binlog::Binlog_recovery::process_start() {
 }
 
 void binlog::Binlog_recovery::process_commit() {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed)
@@ -234,7 +237,7 @@ void binlog::Binlog_recovery::process_commit() {
 }
 
 void binlog::Binlog_recovery::process_rollback() {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = !this->m_in_transaction;
   if (this->m_is_malformed)
@@ -245,7 +248,7 @@ void binlog::Binlog_recovery::process_rollback() {
 }
 
 void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = this->m_in_transaction;
   if (this->m_is_malformed) {
@@ -261,12 +264,12 @@ void binlog::Binlog_recovery::process_atomic_ddl(Query_log_event const &ev) {
     return;
   }
 
-  m_xa_spec.m_source = Binlog_xa_specification::Source::COMMIT;
+  m_xa_spec.m_source = komodo::Binlog_xa_specification::Source::COMMIT;
   gather_internal_xa_spec(ev.ddl_xid, m_xa_spec);
 }
 
 void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;
@@ -278,14 +281,14 @@ void binlog::Binlog_recovery::process_xa_commit(std::string const &query) {
     return;
   }
   this->add_external_xid(query, enum_ha_recover_xa_state::COMMITTED,
-                         Binlog_xa_specification::Source::XA_COMMIT);
+                         komodo::Binlog_xa_specification::Source::XA_COMMIT);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA COMMIT` holds an invalid XID");
 }
 
 void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
-  Commit_binlog_xa_specification guard(&m_xa_spec);
+  raii::Sentry<> spec_guard{[&]() -> void { m_xa_spec.transaction_end(); }};
 
   this->m_is_malformed = this->m_in_transaction;
   this->m_in_transaction = false;
@@ -297,7 +300,7 @@ void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
     return;
   }
   this->add_external_xid(query, enum_ha_recover_xa_state::ROLLEDBACK,
-                         Binlog_xa_specification::Source::XA_ROLLBACK);
+                         komodo::Binlog_xa_specification::Source::XA_ROLLBACK);
   if (this->m_is_malformed)
     this->m_failure_message.assign(
         "Query_log_event containing `XA ROLLBACK` holds an invalid XID");
@@ -305,7 +308,7 @@ void binlog::Binlog_recovery::process_xa_rollback(std::string const &query) {
 
 void binlog::Binlog_recovery::add_external_xid(
     std::string const &query, enum_ha_recover_xa_state state,
-    Binlog_xa_specification::Source xa_spec_source) {
+    komodo::Binlog_xa_specification::Source xa_spec_source) {
   xa::XID_extractor tokenizer{query, 1};
   if (tokenizer.size() == 0) {
     this->m_is_malformed = true;
@@ -327,3 +330,24 @@ void binlog::Binlog_recovery::add_external_xid(
   m_xa_spec.m_source = xa_spec_source;
   gather_external_xa_spec(tokenizer[0], m_xa_spec);
 }
+
+void binlog::Binlog_recovery::recover_one_internal_trx(xarecover_st const &info, handlerton &ht,
+                                XA_recover_txn const &xa_trx, my_xid xid,
+                                recovery_statistics &stats) {
+  xa::recovery::recover_one_internal_trx(info, ht, xa_trx, xid, stats);
+}
+
+void binlog::Binlog_recovery::recover_one_external_trx(xarecover_st const &info, handlerton &ht,
+                                XA_recover_txn const &xa_trx,
+                                recovery_statistics &stats) {
+  xa::recovery::recover_one_external_trx(info, ht, xa_trx, stats);
+}
+
+
+bool binlog::Binlog_recovery::recover_prepared_in_tc(handlerton *ht, xarecover_st *info) {
+  assert(info->xa_list != nullptr);
+  xp::info(ER_XP_RECOVERY) << "recover_prepared_in_tc_one_ht for xa_list";
+  if (ht->recover_prepared_in_tc(ht, *info->xa_list)) return true;
+  return false;
+}
+

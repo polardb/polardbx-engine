@@ -114,18 +114,18 @@ class XA_specification_strategy {
 
  private:
   const trx_t *m_trx;
-  XA_specification *m_xa_spec;
+  komodo::XA_specification *m_xa_spec;
 };
 
 class Guard_xa_specification {
  public:
-  Guard_xa_specification(trx_t *trx, XA_specification *xa_spec, bool prepare);
+  Guard_xa_specification(trx_t *trx, komodo::XA_specification *xa_spec, bool prepare);
 
   virtual ~Guard_xa_specification();
 
  private:
   trx_t *m_trx;
-  XA_specification *m_xa_spec;
+  komodo::XA_specification *m_xa_spec;
 };
 
 /**
@@ -184,19 +184,6 @@ extern bool trx_search_history_by_xid(const XID *xid, MyXAInfo *info,
                                       const slot_ptr_t slot_ptr_hint);
 
 }  // namespace lizard
-
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-
-#define assert_xa_desc_state_initial(trx) \
-  do {                                    \
-    ut_a(trx->xa_desc.is_null() == true); \
-  } while (0)
-
-#else
-
-#define assert_xa_desc_state_initial(trx)
-
-#endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
 
 
 #endif

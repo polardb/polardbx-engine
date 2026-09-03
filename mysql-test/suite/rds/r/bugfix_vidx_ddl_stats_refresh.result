@@ -1,0 +1,52 @@
+CREATE DATABASE bugfix_vidx_ddl_stats_refresh;
+USE bugfix_vidx_ddl_stats_refresh;
+SET GLOBAL vidx_disabled = OFF;
+# Case 1: serial build path (vidx_ddl_threads = 1)
+CREATE TABLE t_serial (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+SELECT n_rows FROM mysql.innodb_table_stats
+WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_serial';
+n_rows
+0
+SET SESSION vidx_ddl_threads = 1;
+ALTER TABLE t_serial ADD VECTOR INDEX vi(v) M=4 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10;
+SELECT n_rows > 0 AS stats_refreshed_serial FROM mysql.innodb_table_stats
+WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_serial';
+stats_refreshed_serial
+1
+EXPLAIN SELECT id FROM t_serial ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3.5,4.5,5.5,6.5,7.5]')) LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_serial	NULL	index	NULL	vi	23	NULL	#	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=10; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `bugfix_vidx_ddl_stats_refresh`.`t_serial`.`id` AS `id` from `bugfix_vidx_ddl_stats_refresh`.`t_serial` order by VEC_DISTANCE_EUCLIDEAN(`bugfix_vidx_ddl_stats_refresh`.`t_serial`.`v`,VEC_FromText('[3.5,4.5,5.5,6.5,7.5]')) limit 10
+# Case 2: parallel build path (vidx_ddl_threads = 4)
+CREATE TABLE t_parallel (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB STATS_PERSISTENT=1 STATS_AUTO_RECALC=0;
+SELECT n_rows FROM mysql.innodb_table_stats
+WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_parallel';
+n_rows
+0
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t_parallel ADD VECTOR INDEX vi(v) M=4 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10;
+SELECT n_rows > 0 AS stats_refreshed_parallel FROM mysql.innodb_table_stats
+WHERE database_name = 'bugfix_vidx_ddl_stats_refresh'
+    AND table_name = 't_parallel';
+stats_refreshed_parallel
+1
+EXPLAIN SELECT id FROM t_parallel ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3.5,4.5,5.5,6.5,7.5]')) LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_parallel	NULL	index	NULL	vi	23	NULL	#	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=10; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `bugfix_vidx_ddl_stats_refresh`.`t_parallel`.`id` AS `id` from `bugfix_vidx_ddl_stats_refresh`.`t_parallel` order by VEC_DISTANCE_EUCLIDEAN(`bugfix_vidx_ddl_stats_refresh`.`t_parallel`.`v`,VEC_FromText('[3.5,4.5,5.5,6.5,7.5]')) limit 10
+DROP TABLE t_serial;
+DROP TABLE t_parallel;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS bugfix_vidx_ddl_stats_refresh;

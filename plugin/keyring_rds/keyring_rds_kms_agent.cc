@@ -65,6 +65,37 @@ KMS_Agent *kms_agent = &global_inst;  // The global instance
 static const size_t MAX_CMD_LEN = 256;
 static const size_t MAX_OUTPUT_LEN = 512;
 
+static bool is_safe_char(unsigned char c) {
+  return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+         (c >= 'A' && c <= 'Z') || c == '-';
+}
+
+/**
+  Validate a key id before embedding it into the agent command line.
+
+  The key id becomes part of a command executed through /bin/sh, so only
+  characters that cannot alter shell parsing are accepted: letters,
+  digits and '-'. Legitimate key ids composed by InnoDB (os0enc.cc),
+  INNODBKey-<server_uuid>-<seq> and the compatibility form
+  INNODBKey-<server_id>-<seq>, fall within this set. Anything else
+  (shell metacharacters, whitespace, etc.) is rejected to prevent OS
+  command injection via crafted key ids (security ticket 2091200).
+
+  @retval false  key id is safe to use
+  @retval true   key id must be rejected
+*/
+static bool invalid_key_id(const char *id) {
+  if (id == nullptr || id[0] == '\0') return true;
+
+  size_t len = 0;
+  for (const char *p = id; *p != '\0'; p++, len++) {
+    if (len >= MAX_KEY_ID_LENGTH) return true;
+    if (!is_safe_char(static_cast<unsigned char>(*p))) return true;
+  }
+
+  return false;
+}
+
 /**
   Helper routine to execute command.
 
@@ -179,6 +210,17 @@ size_t KMS_Agent::generate(char *id_buff, size_t id_buff_len) {
 
   if (ret_len == 0) return 0;  // Err logged in execute_cmd
 
+  /*
+    The key id returned by the KMS agent must obey the same format as the
+    ones composed by InnoDB: it gets persisted and later used verbatim in
+    fetchKey commands, so a malformed id must be rejected right here.
+  */
+  if (invalid_key_id(out)) {
+    Logger::log(ERROR_LEVEL,
+                "kms agent generate rejected: invalid key id format returned");
+    return 0;
+  }
+
   if (ret_len >= id_buff_len) {
     Logger::log(ERROR_LEVEL, "key id too long [%u, %s]", (uint)ret_len, out);
     return 0;
@@ -204,6 +246,13 @@ size_t KMS_Agent::fetch(const char *id, char *key_buff,
 
   char cmd[MAX_CMD_LEN];
   char out[MAX_OUTPUT_LEN];
+
+  /* Never build a command line from an unvalidated key id */
+  if (invalid_key_id(id)) {
+    Logger::log(ERROR_LEVEL,
+                "kms agent fetch rejected: invalid characters in key id");
+    return 0;
+  }
 
   snprintf(cmd, sizeof(cmd), "%s %d fetchKey %s", kms_agent_cmd, mysqld_port,
            id);

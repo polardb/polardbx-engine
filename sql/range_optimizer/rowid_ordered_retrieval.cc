@@ -42,6 +42,11 @@
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
 #include "sql_string.h"
+#include "sql/range_optimizer/index_merge.h"
+#include "my_base.h"
+
+#include "sql/komodo0sql0guess0clust.h"
+#include "sql/komodo0handler0types.h"
 
 RowIDIntersectionIterator::RowIDIntersectionIterator(
     THD *thd, MEM_ROOT *return_mem_root, TABLE *table_arg,
@@ -53,8 +58,11 @@ RowIDIntersectionIterator::RowIDIntersectionIterator(
       m_cpk_child(std::move(cpk_child)),
       retrieve_full_rows(retrieve_full_rows),
       scans_inited(false),
-      need_rows_in_rowid_order(need_rows_in_rowid_order) {
-  m_last_rowid = return_mem_root->ArrayAlloc<uchar>(table()->file->ref_length);
+      need_rows_in_rowid_order(need_rows_in_rowid_order), 
+      m_gmode(komodo::GM_ROWID_INTERSECTION) {
+  assert(table()->file->gpp_length == komodo::SQL_GPP_LENGTH);
+  uint rg_length = table()->file->ref_length + table()->file->gpp_length;
+  m_last_rowid = return_mem_root->ArrayAlloc<uchar>(rg_length);
 }
 
 /*
@@ -196,6 +204,8 @@ bool RowIDIntersectionIterator::init_ror_merged_scan() {
 
 bool RowIDIntersectionIterator::Init() {
   DBUG_TRACE;
+  assert(m_gmode != komodo::GM_NONE);
+
   if (!inited) {
     /* Check if m_last_rowid was successfully allocated in ctor */
     if (m_last_rowid == nullptr) {
@@ -233,23 +243,27 @@ RowIDUnionIterator::RowIDUnionIterator(
       queue(Quick_ror_union_less(table->file),
             Malloc_allocator<PSI_memory_key>(PSI_INSTRUMENT_ME)),
       mem_root(return_mem_root),
-      scans_inited(false) {
+      scans_inited(false),
+      m_gmode(komodo::GM_ROWID_UNION) {
   rowid_length = table->file->ref_length;
+  gpp_length = table->file->gpp_length;
+  ut_ad(gpp_length == komodo::SQL_GPP_LENGTH);
 }
 
 bool RowIDUnionIterator::Init() {
+  assert(m_gmode != komodo::GM_NONE);
+
   if (!inited) {
     if (queue.reserve(m_children.size())) {
       table()->file->print_error(HA_ERR_OUT_OF_MEM, MYF(0));
       return true;
     }
-
-    if (!(cur_rowid =
-              mem_root->ArrayAlloc<uchar>(2 * table()->file->ref_length))) {
+    uint rg_length = table()->file->ref_length + table()->file->gpp_length;
+    if (!(cur_rowid = mem_root->ArrayAlloc<uchar>(2 * rg_length))) {
       table()->file->print_error(HA_ERR_OUT_OF_MEM, MYF(0));
       return true;
     }
-    prev_rowid = cur_rowid + table()->file->ref_length;
+    prev_rowid = cur_rowid + rg_length;
     inited = true;
   }
 
@@ -341,8 +355,9 @@ int RowIDIntersectionIterator::Read() {
 
     const uchar *child_rowid =
         down_cast<IndexRangeScanIterator *>(child->real_iterator())->file->ref;
-    memcpy(m_last_rowid, child_rowid, table()->file->ref_length);
 
+    memcpy(m_last_rowid, child_rowid,
+           table()->file->ref_length + table()->file->gpp_length);
     /* child that reads the given rowid first. This is needed in order
     to be able to unlock the row using the same handler object that locked
     it */
@@ -389,19 +404,24 @@ int RowIDIntersectionIterator::Read() {
             }
           }
         }
-        memcpy(m_last_rowid, child_rowid, table()->file->ref_length);
+        memcpy(m_last_rowid, child_rowid,
+               table()->file->ref_length + table()->file->gpp_length);
+
         child_with_last_rowid->UnlockRow();
         last_rowid_count = 1;
         child_with_last_rowid = child;
       } else {
         /* current 'candidate' row confirmed by this select */
         last_rowid_count++;
+        komodo::gpp_merge_behind_ref(m_last_rowid, child_rowid,
+                                     table()->file->ref_length);
       }
     }
 
     /* We get here if we got the same row ref in all scans. */
     if (retrieve_full_rows) {
-      int error = table()->file->ha_rnd_pos(table()->record[0], m_last_rowid);
+      int error =
+          table()->file->ha_rnd_pos(table()->record[0], m_last_rowid, m_gmode);
       if (error == HA_ERR_RECORD_DELETED) {
         // The row was deleted, so we need to loop back.
         continue;
@@ -439,10 +459,11 @@ int RowIDUnionIterator::Read() {
       /* Ok, we have a queue with >= 1 scans */
 
       RowIterator *quick = queue.top();
-      memcpy(cur_rowid,
-             down_cast<RowIDCapableRowIterator *>(quick->real_iterator())
-                 ->last_rowid(),
-             rowid_length);
+
+      uchar *last_rowid =
+          down_cast<RowIDCapableRowIterator *>(quick->real_iterator())
+              ->last_rowid();
+      memcpy(cur_rowid, last_rowid, rowid_length + gpp_length);
 
       /* put into queue rowid from the same stream as top element */
       if (int ret = quick->Read(); ret != 0) {
@@ -463,7 +484,8 @@ int RowIDUnionIterator::Read() {
     using std::swap;
     swap(cur_rowid, prev_rowid);
 
-    int error = table()->file->ha_rnd_pos(table()->record[0], prev_rowid);
+    int error =
+        table()->file->ha_rnd_pos(table()->record[0], prev_rowid, m_gmode);
     if (error == HA_ERR_RECORD_DELETED) {
       // The row was deleted, so we need to loop back.
       continue;

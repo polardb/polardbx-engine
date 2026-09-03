@@ -1,0 +1,190 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+include/assert.inc [slave_parallel_workers must be 0]
+include/assert.inc [xa_detach_on_prepare must be OFF]
+
+##############################################
+# 1. Setup: create table + seed data        #
+##############################################
+[connection master]
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+include/rpl_sync.inc
+
+##############################################
+# 2. XA PREPARE then plain DML on master    #
+#    On the slave the worker first replays  #
+#    XA PREPARE (driving applier_reset_xa_  #
+#    trans), then replays a plain UPDATE.   #
+#    Pre-fix this would self-loop and abort.#
+##############################################
+[connection master]
+XA START 'xa_off_1';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[1,1,99]") WHERE a = 1;
+XA END 'xa_off_1';
+XA PREPARE 'xa_off_1';
+XA COMMIT 'xa_off_1';
+INSERT INTO t1(a, v) VALUES (20, VEC_FROMTEXT("[20,20,20]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[2,2,98]") WHERE a = 2;
+include/rpl_sync.inc
+# master
+[connection master]
+SELECT COUNT(*) AS rows_master FROM t1;
+rows_master
+5
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 2, 10, 20) ORDER BY a;
+a	VEC_TOTEXT(v)
+1	[1,1,99]
+2	[2,2,98]
+10	[10,10,10]
+20	[20,20,20]
+# slave (must NOT have crashed)
+[connection slave]
+SELECT COUNT(*) AS rows_slave FROM t1;
+rows_slave
+5
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a IN (1, 2, 10, 20) ORDER BY a;
+a	VEC_TOTEXT(v)
+1	[1,1,99]
+2	[2,2,98]
+10	[10,10,10]
+20	[20,20,20]
+
+##############################################
+# 3. Back-to-back XA PREPAREs (case 4 twice)#
+#    The second XA PREPARE replays after    #
+#    the first applier_reset_xa_trans       #
+#    already cleaned up the memroot — make  #
+#    sure the freshly-allocated MHNSW_Trx   #
+#    is not poisoned by a stale ha_data.    #
+##############################################
+[connection master]
+XA START 'xa_off_2a';
+INSERT INTO t1(a, v) VALUES (30, VEC_FROMTEXT("[30,30,30]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[3,3,97]") WHERE a = 3;
+XA END 'xa_off_2a';
+XA PREPARE 'xa_off_2a';
+XA COMMIT 'xa_off_2a';
+XA START 'xa_off_2b';
+INSERT INTO t1(a, v) VALUES (31, VEC_FROMTEXT("[31,31,31]"));
+DELETE FROM t1 WHERE a = 10;
+XA END 'xa_off_2b';
+XA PREPARE 'xa_off_2b';
+XA COMMIT 'xa_off_2b';
+INSERT INTO t1(a, v) VALUES (40, VEC_FROMTEXT("[40,40,40]"));
+include/rpl_sync.inc
+# master
+[connection master]
+SELECT COUNT(*) AS rows_master FROM t1;
+rows_master
+7
+# slave
+[connection slave]
+SELECT COUNT(*) AS rows_slave FROM t1;
+rows_slave
+7
+
+##############################################
+# 4. XA PREPARE then XA ROLLBACK on master  #
+#    Verifies that the eager flush in       #
+#    case 4 still leaves the slave-side     #
+#    graph consistent after the rollback.   #
+##############################################
+[connection master]
+XA START 'xa_off_3';
+INSERT INTO t1(a, v) VALUES (50, VEC_FROMTEXT("[50,50,50]"));
+INSERT INTO t1(a, v) VALUES (51, VEC_FROMTEXT("[51,51,51]"));
+XA END 'xa_off_3';
+XA PREPARE 'xa_off_3';
+XA ROLLBACK 'xa_off_3';
+UPDATE t1 SET v = VEC_FROMTEXT("[2,2,77]") WHERE a = 2;
+include/rpl_sync.inc
+# master
+[connection master]
+SELECT COUNT(*) AS rows_master FROM t1;
+rows_master
+7
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+a	VEC_TOTEXT(v)
+2	[2,2,77]
+SELECT COUNT(*) AS rolled_back_master FROM t1 WHERE a IN (50, 51);
+rolled_back_master
+0
+# slave
+[connection slave]
+SELECT COUNT(*) AS rows_slave FROM t1;
+rows_slave
+7
+SELECT a, VEC_TOTEXT(v) FROM t1 WHERE a = 2;
+a	VEC_TOTEXT(v)
+2	[2,2,77]
+SELECT COUNT(*) AS rolled_back_slave FROM t1 WHERE a IN (50, 51);
+rolled_back_slave
+0
+
+##############################################
+# 5. XA COMMIT ONE PHASE (sanity)            #
+#    Goes through trans_xa_commit_one_phase #
+#    and does NOT call applier_reset_xa_    #
+#    trans, so it should still work after   #
+#    the case-4 fix.                        #
+##############################################
+[connection master]
+XA START 'xa_off_4';
+INSERT INTO t1(a, v) VALUES (60, VEC_FROMTEXT("[60,60,60]"));
+XA END 'xa_off_4';
+XA COMMIT 'xa_off_4' ONE PHASE;
+INSERT INTO t1(a, v) VALUES (61, VEC_FROMTEXT("[61,61,61]"));
+include/rpl_sync.inc
+# master
+[connection master]
+SELECT COUNT(*) AS rows_master FROM t1;
+rows_master
+9
+# slave
+[connection slave]
+SELECT COUNT(*) AS rows_slave FROM t1;
+rows_slave
+9
+
+##############################################
+# 6. ANN search parity                       #
+#    Issue an ANN query on both sides; the   #
+#    aux graph state must agree.             #
+##############################################
+[connection master]
+SELECT id, a FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,77]")) LIMIT 5;
+id	a
+2	2
+3	3
+1	1
+6	30
+7	31
+[connection slave]
+SELECT id, a FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[2,2,77]")) LIMIT 5;
+id	a
+2	2
+3	3
+1	1
+6	30
+7	31
+
+##############################################
+# 7. Cleanup                                 #
+##############################################
+[connection master]
+DROP TABLE t1;
+include/rpl_sync.inc
+include/rpl_end.inc

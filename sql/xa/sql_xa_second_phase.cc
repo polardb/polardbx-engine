@@ -185,8 +185,13 @@ void Sql_cmd_xa_second_phase::cleanup_context(THD *thd) const {
   xa::Transaction_cache::remove(this->m_detached_trx_context.get());
   gtid_state_commit_or_rollback(thd, this->m_need_clear_owned_gtid,
                                 !this->m_result);
+  thd->reset_trans_policy();
 }
 
 void Sql_cmd_xa_second_phase::dispose() {
   this->m_detached_trx_context.reset();
+}
+
+bool Sql_cmd_xa_second_phase::load_changeset_context(THD *thd) {
+  return thd_load_prepared_changeset_map(thd, (XID *) this->m_xid);
 }

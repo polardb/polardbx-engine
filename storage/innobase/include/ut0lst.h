@@ -76,7 +76,8 @@ struct ut_list_node {
  @tparam NodeGetter a class which has a static member
          ut_list_node<Type> get_node(const Type & e) which knows how to extract
          a node from an element */
-template <typename Type, typename NodeGetter>
+template <typename Type, typename NodeGetter,
+          typename Counter = std::atomic<size_t>>
 struct ut_list_base {
   using elem_type = Type;
   using node_type = ut_list_node<elem_type>;
@@ -135,7 +136,8 @@ struct ut_list_base {
  private:
   /** Number of nodes in list. It is atomic to allow unprotected reads. Writes
   must be protected by some external latch. */
-  std::atomic<size_t> count{0};
+  //std::atomic<size_t> count{0};
+  Counter count{0};
 
   template <typename E>
   class base_iterator {
@@ -246,6 +248,20 @@ struct ut_list_base_explicit_getter {
     return element.*node_ptr;
   }
 };
+
+/** Counter with non-atomic */
+struct pure_counter_t {
+ public:
+  pure_counter_t(size_t value) : count(value) {}
+
+  size_t load(std::memory_order order) const { return count; }
+  void store(size_t value, std::memory_order order) { count = value; }
+  size_t count{0};
+};
+
+#define PURE_LIST_BASE_NODE_T(t, m) \
+  ut_list_base<t, ut_list_base_explicit_getter<t, &t::m>, struct pure_counter_t>
+
 /** A type of a list storing pointers to t, chained by member m of t.
 NOTE: In cases in which definition of t is not yet in scope and thus you can't
 refer to t::m at this point yet, use UT_LIST_BASE_NODE_T_EXTERN macro instead.*/

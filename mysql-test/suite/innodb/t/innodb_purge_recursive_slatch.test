@@ -1,0 +1,140 @@
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+#
+# Bug: Recursive S-latch assertion failure during purge
+#
+# In row_purge_poss_sec_slow(), the || pattern:
+#   found_clust = row_purge_optimistic_reposition_pcur(..., &mtr)
+#              || row_purge_reposition_pcur(..., &mtr);
+#
+# When restore_position fails (clustered record physically deleted by ROLLBACK),
+# the pessimistic path acquires S-latch but returns false. The || fallback
+# calls row_purge_reposition_pcur which S-latches the SAME page
+# -> recursive S-latch assertion failure (sync0rw.ic:287).
+#
+# Reproduction strategy:
+# 1. Create table, INSERT row (1,10,100), DELETE it. Secondary entries
+#    (a=10, b=100) are now delete-marked. Push cycle_sys past DELETE's SCN.
+# 2. con2: INSERT (1, 20, 200) - update-in-place with DIFFERENT secondary
+#    index values. Creates NEW entries (a=20, b=200), leaves OLD entries
+#    (a=10, b=100) delete-marked and untouched.
+# 3. Start purge. Purge processes DELETE's undo (TRX_UNDO_DEL_MARK_REC).
+#    Pause purge BETWEEN secondary indexes (after idx_a, before idx_b)
+#    using purge_del_mark_pause_after_sec_index. At this point purge
+#    holds NO latches.
+# 4. ROLLBACK con2's INSERT. Since values differ, ROLLBACK only removes
+#    entries (a=20, b=200), does NOT touch (a=10, b=100). ROLLBACK also
+#    physically deletes the clustered record (txn slot cycled ->
+#    must_preserve=false).
+# 5. Signal purge to continue. Purge processes idx_b:
+#    - Finds the delete-marked (b=100) entry (untouched by ROLLBACK)
+#    - Enters row_purge_poss_sec_slow with found_clust=true (from idx_a)
+#    - restore_position fails (clustered record physically deleted):
+#      * Optimistic: modify_clock mismatch -> fail
+#      * Pessimistic: S-latch on clustered leaf, record not found -> false
+#      * S-latch stays in mtr
+#    - || evaluates row_purge_reposition_pcur:
+#      * Searches clustered index with same mtr
+#      * Tries S-latch on same clustered leaf page
+#      * RECURSIVE S-LATCH -> ASSERTION FAILURE!
+#
+
+SET @saved_change_buffering = @@GLOBAL.innodb_change_buffering;
+SET GLOBAL innodb_change_buffering = 'none';
+
+# Disable hippo purge fast path so purge goes through row_purge_poss_sec_slow
+SET @saved_hippo_purge = @@GLOBAL.innodb_hippo_purge_enabled;
+SET GLOBAL innodb_hippo_purge_enabled = OFF;
+
+# Stop purge
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  a INT,
+  b INT,
+  KEY idx_a(a),
+  KEY idx_b(b)
+) ENGINE=InnoDB;
+
+# INSERT and DELETE: creates delete-marked secondary entries (a=10, b=100)
+INSERT INTO t1 VALUES (1, 10, 100), (2, 20, 200), (3, 30, 300);
+DELETE FROM t1 WHERE id = 1;
+
+# Cleanout: force undo_ptr to be marked as committed
+SELECT * FROM t1 WHERE id = 1;
+
+# Insert more rows to advance cycle_sys->last() past DELETE's SCN.
+# This ensures txn_slot_is_cycled_by_precheck returns true for ROLLBACK's
+# row_undo_mod_remove_clust_low, so must_preserve=false -> physical delete.
+INSERT INTO t1 VALUES (10, 100, 1000);
+INSERT INTO t1 VALUES (11, 110, 1100);
+INSERT INTO t1 VALUES (12, 120, 1200);
+INSERT INTO t1 VALUES (13, 130, 1300);
+INSERT INTO t1 VALUES (14, 140, 1400);
+
+# con2: INSERT same primary key but DIFFERENT secondary index values.
+# This is update-in-place on the delete-marked clustered record:
+#   - Clustered: remove delete mark, change a=10->20, b=100->200
+#   - Secondary idx_a: old entry (a=10) stays delete-marked, new entry (a=20) created
+#   - Secondary idx_b: old entry (b=100) stays delete-marked, new entry (b=200) created
+# The old entries (a=10, b=100) are NOT modified by this INSERT.
+connect (con2, localhost, root,,);
+BEGIN;
+INSERT INTO t1 VALUES (1, 20, 200);
+
+# Default connection: set up purge pause BETWEEN secondary indexes.
+connection default;
+
+SET GLOBAL DEBUG = '+d,purge_del_mark_pause_after_sec_index';
+
+# Start purge
+SET GLOBAL innodb_purge_run_now = ON;
+
+# Wait for purge to finish idx_a and pause. At this point:
+# - Purge has processed idx_a (found_clust=true, cursor stored)
+# - Purge holds NO latches (mtr committed)
+SET DEBUG_SYNC = 'now WAIT_FOR purge_processed_sec_index';
+
+# Disable the debug flag to prevent second fire after idx_b
+SET GLOBAL DEBUG = '-d,purge_del_mark_pause_after_sec_index';
+
+# con2: ROLLBACK while purge holds NO latches.
+# ROLLBACK of INSERT(1,20,200) on delete-marked record:
+#   - Removes NEW entries (a=20, b=200) - does NOT touch (a=10, b=100)
+#   - Restores clustered to delete-marked (a=10, b=100)
+#   - Physically deletes clustered record (cycle_sys pushed -> must_preserve=false)
+connection con2;
+ROLLBACK;
+
+# State after ROLLBACK:
+#   - Clustered record id=1: PHYSICALLY DELETED
+#   - Secondary idx_a (a=10): delete-marked (was already deleted by purge during idx_a)
+#   - Secondary idx_b (b=100): delete-marked, STILL ON PAGE (untouched)
+
+# Signal purge to continue processing idx_b.
+# Before fix: server would crash with recursive S-latch assertion (sync0rw.ic:287).
+# After fix: purge should complete without crash.
+connection default;
+
+SET DEBUG_SYNC = 'now SIGNAL purge_continue_after_sec_index';
+
+# Wait for purge to finish all pending work
+--source include/wait_innodb_all_purged.inc
+
+# Verify server is alive and data is consistent
+SELECT * FROM t1 WHERE id = 1;
+SELECT COUNT(*) FROM t1;
+
+--echo # Server survived - no recursive S-latch assertion failure.
+
+# Cleanup
+SET DEBUG_SYNC = 'RESET';
+disconnect con2;
+
+connection default;
+DROP TABLE t1;
+
+SET GLOBAL innodb_change_buffering = @saved_change_buffering;
+SET GLOBAL innodb_hippo_purge_enabled = @saved_hippo_purge;

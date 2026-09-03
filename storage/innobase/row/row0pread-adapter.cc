@@ -35,6 +35,9 @@ Created 2018-02-28 by Darshan M N */
 #include "row0sel.h"
 #include "univ.i"
 
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+
 Parallel_reader_adapter::Parallel_reader_adapter(size_t max_threads,
                                                  ulint rowlen)
     : m_parallel_reader(max_threads) {
@@ -197,23 +200,17 @@ dberr_t Parallel_reader_adapter::process_rows(
     }
   }
 
-  mem_heap_t *heap{};
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-
-  rec_offs_init(offsets_);
-
-  offsets = rec_get_offsets(reader_ctx->m_rec, reader_ctx->index(), offsets,
-                            ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  Slice_ctx sctx;
+  Slice *slc = sctx.get_offsets(reader_ctx->m_slc->reg(), reader_ctx->index(),
+                                ULINT_UNDEFINED);
 
   const auto next_rec = ctx->m_n_read % m_batch_size;
 
   const auto buffer_loc = &ctx->m_buffer[0] + next_rec * m_mysql_row.m_max_len;
 
-  if (row_sel_store_mysql_rec(buffer_loc, m_prebuilt, reader_ctx->m_rec,
-                              nullptr, true, reader_ctx->index(),
-                              reader_ctx->index(), offsets, false, nullptr,
-                              blob_heap)) {
+  if (row_sel_store_mysql_rec(buffer_loc, m_prebuilt, slc, nullptr, true,
+                              reader_ctx->index(), reader_ctx->index(), false,
+                              nullptr, blob_heap)) {
     /* If there is any pending records, then we should not overwrite the
     partition ID with a different one. */
     if (pending(ctx) && ctx->m_partition_id != reader_ctx->partition_id()) {
@@ -232,10 +229,6 @@ dberr_t Parallel_reader_adapter::process_rows(
     }
   } else {
     err = DB_ERROR;
-  }
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
   }
 
   return (err);

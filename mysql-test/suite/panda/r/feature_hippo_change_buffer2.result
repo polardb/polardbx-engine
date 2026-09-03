@@ -1,0 +1,197 @@
+SET opt_index_format_hippo_enabled=on;
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_purge_stop_now = ON;
+########################################################################
+# Test 1: DELETE-mark buffering then re-INSERT (delete-unmark) buffering
+########################################################################
+CREATE TABLE t_cb1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_cb1]
+INSERT INTO t_cb1 VALUES(0, 'a', 1);
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+INSERT INTO t_cb1 SELECT 0, val, padding FROM t_cb1;
+# 1024 rows
+SELECT COUNT(*) FROM t_cb1;
+COUNT(*)
+1024
+# Delete-mark buffering: remove even ids.
+DELETE FROM t_cb1 WHERE id % 2 = 0;
+# Revive: re-insert the same key values (change 'a' -> 'b' rows kept).
+# These inserts land on pages with delete-marked entries and are merged
+# via the delete-unmark path.
+INSERT INTO t_cb1 SELECT 0, 'b', padding FROM t_cb1 WHERE id % 2 = 1 LIMIT 300;
+# Force merge on both index values.
+SELECT COUNT(*) FROM t_cb1 USE INDEX(idx_val) WHERE val = 'a';
+COUNT(*)
+512
+SELECT COUNT(*) FROM t_cb1 USE INDEX(idx_val) WHERE val = 'b';
+COUNT(*)
+300
+include/assert.inc [Secondary index total (812) should match primary index total (812)]
+# All surviving original rows have odd id.
+SELECT COUNT(*) FROM t_cb1 WHERE val='a' AND id % 2 = 0;
+COUNT(*)
+0
+DROP TABLE t_cb1;
+########################################################################
+# Test 2: MVCC visibility across a change-buffer merge
+########################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t_cb2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_cb2]
+INSERT INTO t_cb2 VALUES(0, 'a', 1);
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+INSERT INTO t_cb2 SELECT 0, val, padding FROM t_cb2;
+# 512 rows of val='a'
+SELECT COUNT(*) FROM t_cb2;
+COUNT(*)
+512
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+# Establish snapshot (merges + reads base rows).
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='a';
+COUNT(*)
+512
+# Insert new rows with val='k' (buffered) and commit AFTER the snapshot.
+INSERT INTO t_cb2 SELECT 0, 'k', padding FROM t_cb2 WHERE val='a' LIMIT 200;
+# Old snapshot forces the merge but must NOT see the new val='k' rows.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='k';
+COUNT(*)
+0
+# And the base rows are unchanged in the snapshot.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='a';
+COUNT(*)
+512
+COMMIT;
+# A fresh snapshot sees the new rows.
+SELECT COUNT(*) FROM t_cb2 USE INDEX(idx_val) WHERE val='k';
+COUNT(*)
+200
+include/assert.inc [Secondary index total (712) should match primary index total (712)]
+DROP TABLE t_cb2;
+########################################################################
+# Test 3: Buffered INSERT + DELETE + PURGE across MULTIPLE hippo indexes
+########################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+CREATE TABLE t_cb3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+a CHAR(1),
+b INT,
+INDEX idx_a(a),
+INDEX idx_b(b)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+include/assert.inc [Index idx_a page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_cb3]
+include/assert.inc [Index idx_b page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_cb3]
+INSERT INTO t_cb3 VALUES(0, 'a', 1);
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+INSERT INTO t_cb3 SELECT 0, a, b FROM t_cb3;
+SELECT COUNT(*) FROM t_cb3;
+COUNT(*)
+512
+# Buffered delete of half the rows.
+BEGIN;
+DELETE FROM t_cb3 WHERE id % 2 = 0;
+COMMIT;
+# Buffered inserts touching both secondary indexes.
+INSERT INTO t_cb3 SELECT 0, 'c', 2 FROM t_cb3 WHERE id % 2 = 1 LIMIT 100;
+# Purge (buffered) then merge on read.
+SET GLOBAL innodb_purge_run_now = ON;
+SELECT a, COUNT(*) FROM t_cb3 USE INDEX(idx_a) GROUP BY a ORDER BY a;
+a	COUNT(*)
+a	256
+c	100
+include/assert.inc [idx_a (356), idx_b (356) and PK (356) counts must all match]
+DROP TABLE t_cb3;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+########################################################################
+# Test 4: Buffer operations, CRASH before merge, recover, then merge
+########################################################################
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t_cb4 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_cb4]
+INSERT INTO t_cb4 VALUES(0, 'a', 1);
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+INSERT INTO t_cb4 SELECT 0, val, padding FROM t_cb4;
+# 1024 rows
+SELECT COUNT(*) FROM t_cb4;
+COUNT(*)
+1024
+# Buffer a delete and an insert, commit (durable via redo), do NOT merge.
+BEGIN;
+DELETE FROM t_cb4 WHERE id % 2 = 0;
+INSERT INTO t_cb4 SELECT 0, 'b', padding FROM t_cb4 WHERE id % 2 = 1 LIMIT 100;
+COMMIT;
+# Crash and restart: buffered entries must be recovered from redo.
+# Kill and restart
+# After recovery, reading forces the merge of recovered ibuf entries.
+SELECT COUNT(*) FROM t_cb4 USE INDEX(idx_val) WHERE val='a';
+COUNT(*)
+512
+SELECT COUNT(*) FROM t_cb4 USE INDEX(idx_val) WHERE val='b';
+COUNT(*)
+100
+include/assert.inc [After recovery, secondary total (612) should match primary total (612)]
+# No even id survived the delete.
+SELECT COUNT(*) FROM t_cb4 WHERE val='a' AND id % 2 = 0;
+COUNT(*)
+0
+DROP TABLE t_cb4;
+########################################################################
+# Cleanup
+########################################################################
+SET GLOBAL innodb_change_buffering_debug = 0;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;
+########################################################################
+# Test completed successfully
+########################################################################

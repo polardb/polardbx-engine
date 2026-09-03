@@ -1,0 +1,147 @@
+--echo #
+--echo # Test filesort with GPP disabled.
+--echo # Verify that query results are correct and no GPP hit/miss is recorded
+--echo # when opt_index_format_gpp_enabled=false and
+--echo # innodb_index_pos_guess_clust_enabled=off.
+--echo #
+
+--source include/have_debug.inc
+
+# Save original values
+--let $orig_opt_index_format_gpp_enabled = `SELECT @@global.opt_index_format_gpp_enabled`
+--let $orig_innodb_lizard_stat_enabled= `SELECT @@global.innodb_lizard_stat_enabled`
+--let $orig_innodb_index_pos_guess_clust_enabled= `SELECT @@global.innodb_index_pos_guess_clust_enabled`
+
+# Disable GPP; enable statistics so counters can be read
+set global innodb_lizard_stat_enabled=on;
+set global innodb_index_pos_guess_clust_enabled=off;
+set opt_index_format_gpp_enabled=false;
+
+--echo # -----------------------------------------------------------------------
+--echo # Create table with composite PK (INT fixed + VARCHAR variable length),
+--echo # a secondary index, and a LONGTEXT column to force filesort rowid mode.
+--echo # GPP is disabled so no gpp_no is stored in secondary index entries.
+--echo # -----------------------------------------------------------------------
+
+CREATE TABLE t1 (
+  id INT NOT NULL,
+  name VARCHAR(50) NOT NULL,
+  k INT NOT NULL,
+  c INT NOT NULL,
+  data LONGTEXT,
+  PRIMARY KEY (id, name),
+  KEY idx_k (k)
+) ENGINE=InnoDB;
+
+--echo # -----------------------------------------------------------------------
+--echo # Insert 100 rows via recursive CTE, each row > 1k bytes.
+--echo # -----------------------------------------------------------------------
+
+INSERT INTO t1 (id, name, k, c, data)
+WITH RECURSIVE seq AS (
+  SELECT 1 AS i
+  UNION ALL
+  SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT
+  i,
+  CONCAT('user_', LPAD(i, 5, '0')),
+  (i * 3) MOD 97,
+  100 - i,
+  REPEAT(CHAR(65 + (i MOD 26) USING ascii), 1500)
+FROM seq;
+
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 1: ORDER BY c ASC - filesort with GPP disabled
+--echo # Verify that filesort GPP hit = 0 and miss = 0
+--echo # -----------------------------------------------------------------------
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 ORDER BY c;
+--enable_result_log
+
+--let $fs_hit= query_get_value(show global status like "Lizard_filesort_gpp_hit", Value, 1)
+--let $fs_miss= query_get_value(show global status like "Lizard_filesort_gpp_miss", Value, 1)
+
+--let $assert_text= filesort gpp hit should be 0 when GPP disabled (ORDER BY c ASC)
+--let $assert_cond= $fs_hit = 0
+--source include/assert.inc
+
+--let $assert_text= filesort gpp miss should be 0 when GPP disabled (ORDER BY c ASC)
+--let $assert_cond= $fs_miss = 0
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 2: ORDER BY c DESC - filesort with GPP disabled
+--echo # Verify that filesort GPP hit = 0 and miss = 0
+--echo # -----------------------------------------------------------------------
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 ORDER BY c DESC;
+--enable_result_log
+
+--let $fs_hit= query_get_value(show global status like "Lizard_filesort_gpp_hit", Value, 1)
+--let $fs_miss= query_get_value(show global status like "Lizard_filesort_gpp_miss", Value, 1)
+
+--let $assert_text= filesort gpp hit should be 0 when GPP disabled (ORDER BY c DESC)
+--let $assert_cond= $fs_hit = 0
+--source include/assert.inc
+
+--let $assert_text= filesort gpp miss should be 0 when GPP disabled (ORDER BY c DESC)
+--let $assert_cond= $fs_miss = 0
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 3: Verify result correctness - ORDER BY c ASC LIMIT 5
+--echo # c = 100 - i, so smallest c values correspond to largest i values:
+--echo #   c=0 (i=100), c=1 (i=99), c=2 (i=98), c=3 (i=97), c=4 (i=96)
+--echo # -----------------------------------------------------------------------
+
+SELECT id, name, k, c, LEFT(data, 5) AS data_prefix
+FROM t1 ORDER BY c LIMIT 5;
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 4: Verify result correctness - ORDER BY c DESC LIMIT 5
+--echo # Largest c values correspond to smallest i values:
+--echo #   c=99 (i=1), c=98 (i=2), c=97 (i=3), c=96 (i=4), c=95 (i=5)
+--echo # -----------------------------------------------------------------------
+
+SELECT id, name, k, c, LEFT(data, 5) AS data_prefix
+FROM t1 ORDER BY c DESC LIMIT 5;
+
+--echo # -----------------------------------------------------------------------
+--echo # Test 5: ORDER BY k (secondary index column) - GPP disabled
+--echo # -----------------------------------------------------------------------
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT * FROM t1 ORDER BY k;
+--enable_result_log
+
+--let $fs_hit= query_get_value(show global status like "Lizard_filesort_gpp_hit", Value, 1)
+--let $fs_miss= query_get_value(show global status like "Lizard_filesort_gpp_miss", Value, 1)
+
+--let $assert_text= filesort gpp hit should be 0 when GPP disabled (ORDER BY k)
+--let $assert_cond= $fs_hit = 0
+--source include/assert.inc
+
+--let $assert_text= filesort gpp miss should be 0 when GPP disabled (ORDER BY k)
+--let $assert_cond= $fs_miss = 0
+--source include/assert.inc
+
+--echo # -----------------------------------------------------------------------
+--echo # Clean up
+--echo # -----------------------------------------------------------------------
+
+DROP TABLE t1;
+
+--eval SET opt_index_format_gpp_enabled= $orig_opt_index_format_gpp_enabled
+--eval SET GLOBAL innodb_lizard_stat_enabled= $orig_innodb_lizard_stat_enabled
+--eval SET GLOBAL innodb_index_pos_guess_clust_enabled= $orig_innodb_index_pos_guess_clust_enabled

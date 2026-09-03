@@ -98,6 +98,10 @@
 #include "sql/visible_fields.h"
 #include "sql_string.h"
 #include "template_utils.h"
+#include "sql/item_strfunc.h"    // Item_str_func (needed by vidx_func.h)
+#include "vidx/vidx_common.h"   // vidx::distance_names
+#include "vidx/vidx_func.h"     // vidx::Item_func_vec_distance
+#include "vidx/vidx_hnsw_ctx.h" // vidx::hnsw::get_ef_search
 
 class Opt_trace_context;
 
@@ -1588,6 +1592,34 @@ bool Explain_join::explain_extra() {
 
     if (explain_extra_common(range_scan_type, keyno)) return true;
 
+    {
+      uint vkeyno = keyno;
+      if (vkeyno == MAX_KEY && tab->type() == JT_INDEX_SCAN)
+        vkeyno = tab->index();
+      if (vkeyno != MAX_KEY && (table->key_info[vkeyno].flags & HA_VECTOR)) {
+        StringBuffer<128> buff(cs);
+        buff.append(STRING_WITH_LEN("algo=HNSW; "));
+        uint ef = vidx::hnsw::get_ef_search(query_thd);
+        buff.append(STRING_WITH_LEN("ef_search="));
+        buff.append_ulonglong(ef);
+        buff.append(STRING_WITH_LEN("; ef_construction="));
+        buff.append_ulonglong(table->key_info[vkeyno].vector_ef_construction);
+        auto *vfunc = static_cast<vidx::Item_func_vec_distance *>(
+            tab->vec_func());
+        const ha_rows limit = vfunc ? vfunc->get_limit() : 0;
+        if (limit > 0 && limit != HA_POS_ERROR) {
+          buff.append(STRING_WITH_LEN("; limit="));
+          buff.append_ulonglong(limit);
+        }
+        uint metric = table->key_info[vkeyno].vector_distance;
+        if (metric < vidx::METRIC_MAX) {
+          buff.append(STRING_WITH_LEN("; metric="));
+          buff.append(vidx::distance_names[metric]);
+        }
+        if (push_extra(ET_USING_VECTOR_INDEX, buff)) return true;
+      }
+    }
+
     if (((tab->type() == JT_INDEX_SCAN || tab->type() == JT_CONST) &&
          table->covering_keys.is_set(tab->index())) ||
         (range_scan_type == AccessPath::ROWID_INTERSECTION &&
@@ -1673,6 +1705,10 @@ bool Explain_join::explain_extra() {
       if (push_extra(ET_USING_JOIN_BUFFER, buff)) return true;
     }
   }
+  if (join->is_fast_path_using_primary) {
+    if (push_extra(ET_USING_FAST_LOOKUP)) return true;
+  }
+
   if (fmt->is_hierarchical() && (!bitmap_is_clear_all(table->read_set) ||
                                  !bitmap_is_clear_all(table->write_set))) {
     Field **fld;
@@ -2305,7 +2341,7 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
   explain_thd->lex->unit->offset_limit_cnt = 0;
   explain_thd->lex->unit->select_limit_cnt = 0;
 
-  const bool res =
+  bool res =
       fake_explain_for_secondary_engine
           ? Explain_secondary_engine(explain_thd, query_thd,
                                      unit->first_query_block())
@@ -2316,8 +2352,16 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
   if (!res && !other) {
     StringBuffer<1024> str;
     print_query_for_explain(query_thd, unit, &str);
-    str.append('\0');
-    push_warning(explain_thd, Sql_condition::SL_NOTE, ER_YES, str.ptr());
+
+    if (explain_thd->is_error()) {
+      Diagnostics_area *da = explain_thd->get_stmt_da();
+      push_warning(explain_thd, Sql_condition::SL_WARNING,
+                   da->mysql_errno(), da->message_text());
+      res = true;
+    } else {
+      str.append('\0');
+      push_warning(explain_thd, Sql_condition::SL_NOTE, ER_YES, str.ptr());
+    }
   }
 
   if (res)

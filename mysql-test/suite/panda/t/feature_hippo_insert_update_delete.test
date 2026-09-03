@@ -1,0 +1,767 @@
+########################################################################
+# HIPPO Index - INSERT/UPDATE/DELETE with TRX_ID Verification
+# 
+# Test Strategy:
+# 1. Rely on DEBUG assertions in code to verify TRX_ID correctness:
+#
+#    - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+#
+#    - INSERT has three different paths:
+#      - Triggers: row_sec_assert_tid_in_entry() at row0ins.cc:2867
+#
+#      Path 1: Normal INSERT (most common)
+#        - Condition: row_ins_must_modify_rec() returns false
+#          (no record with same ordering keys exists in index)
+#        - Triggers: row_sec_assert_tid_in_entry() at row0ins.cc:3109
+#
+#      Path 2: INSERT by unmark delete-marked record
+#        - Condition: row_ins_must_modify_rec() returns true
+#          (found delete-marked record with same ordering keys)
+#        - row_upd_build_sec_rec_difference_binary() returns n_fields=0
+#        - Delete unmark via row_upd_rec_in_place() setting info_bits=0
+#          which clears REC_INFO_DELETED_FLAG (row0upd.cc:503)
+#        - Triggers: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#
+#      Path 3: INSERT by in-place update (rare, charset/case related)
+#        - Condition: row_ins_must_modify_rec() returns true
+#          (found delete-marked record with same ordering keys)
+#        - row_upd_build_sec_rec_difference_binary() returns n_fields>0
+#          (due to case-insensitive search but case-sensitive memcmp)
+#        - Example: 'ABC' -> 'abc' when charset ignores case in search
+#        - Triggers: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#
+#      Path 4: INSERT by non-in-place update (field size change)
+#        - Condition: row_ins_must_modify_rec() returns true
+#          (found delete-marked record with same ordering keys)
+#        - row_upd_build_sec_rec_difference_binary() returns n_fields>0
+#          AND row_upd_changes_field_size_or_external() returns true
+#          (field length differs: old_len != new_len)
+#        - Two sub-paths:
+#          4A: Optimistic non-in-place update
+#              - btr_cur_optimistic_update() succeeds
+#              - Field size changes but page has enough space
+#              - Delete old record and insert new record within same page
+#              - Triggers: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#          4B: Pessimistic update
+#              - btr_cur_optimistic_update() fails with DB_OVERFLOW/DB_UNDERFLOW
+#                due to record size change requiring delete+insert
+#              - Falls back to btr_cur_pessimistic_update() with BTR_MODIFY_TREE
+#              - Triggers: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+#        - Example: '' -> '  ' (empty string to spaces) when collation
+#          treats them as equal but binary comparison shows length difference
+#
+#    - UPDATE = DELETE old entry + INSERT new entry
+#        (INSERT uses one of the four paths above)
+#
+# 2. Use FORCE INDEX to ensure MVCC reads from HIPPO index (not PK)
+#
+# 3. If TRX_ID is incorrect, DEBUG assertions will fail and crash
+#
+########################################################################
+
+--source include/have_debug.inc
+
+connect (con1,localhost,root,,);
+connect (con2,localhost,root,,);
+
+SET GLOBAL innodb_purge_stop_now = ON;
+SET opt_index_format_hippo_enabled=on;
+
+--echo ########################################################################
+--echo # Test 1: INSERT - Trigger row_sec_assert_tid_in_entry()
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t1;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val INT,
+  data VARCHAR(100),
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+--echo # Verify HIPPO index created
+SELECT index_name, index_page_type FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+  WHERE table_name='t1' AND index_name='idx_val';
+
+--echo # Test 1.1: Simple INSERT - triggers assert at row0ins.cc:3108
+BEGIN;
+INSERT INTO t1 VALUES (1, 100, 'data1');
+INSERT INTO t1 VALUES (2, 200, 'data2');
+INSERT INTO t1 VALUES (3, 100, 'data3');
+COMMIT;
+
+--echo # Test 1.2: Batch INSERT
+INSERT INTO t1 VALUES 
+  (4, 300, 'data4'),
+  (5, 100, 'data5'),
+  (6, 200, 'data6');
+
+--echo # Test 1.3: INSERT with duplicates (non-unique index)
+INSERT INTO t1 VALUES (7, 100, 'data7'), (8, 100, 'data8');
+
+SELECT COUNT(*) FROM t1;
+
+
+--echo ########################################################################
+--echo # Test 2: MVCC Visibility - FORCE INDEX to use HIPPO index
+--echo ########################################################################
+
+--echo # Test 2.1: Concurrent transactions with FORCE INDEX
+connection con1;
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+BEGIN;
+--echo # con1: Query using HIPPO index (not PK)
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+
+connection con2;
+BEGIN;
+--echo # con2: INSERT new row with val=100
+INSERT INTO t1 VALUES (9, 100, 'data9_con2');
+--echo # con2: UPDATE existing row
+UPDATE t1 SET data='data1_updated' WHERE id=1;
+
+--echo # con1: Should NOT see con2's uncommitted changes
+connection con1;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+
+--echo # con2: Commit
+connection con2;
+COMMIT;
+
+--echo # con1: Now should see con2's committed changes (READ COMMITTED)
+connection con1;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=100 ORDER BY id;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 3: UPDATE = DELETE old entry + INSERT new entry
+--echo # INSERT phase has three different paths (see file header)
+--echo ########################################################################
+
+connection default;
+
+--echo ########################################################################
+--echo # Test 3 INSERT Path 1: Normal INSERT (most common)
+--echo # Condition: row_ins_must_modify_rec() returns false
+--echo #            (no record with same ordering keys in index)
+--echo # Assertions triggered:
+--echo #   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+--echo #   - INSERT: row_sec_assert_tid_in_entry() at row0ins.cc:3108
+--echo ########################################################################
+
+--echo # Test 3.1.1: Update indexed column to new value (no existing record)
+BEGIN;
+UPDATE t1 SET val=150 WHERE id=2;
+--echo # Verify: old value (200) gone, new value (150) exists
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=150;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=200;
+COMMIT;
+
+--echo # Test 3.1.2: Batch update indexed column
+BEGIN;
+UPDATE t1 SET val=val+1000 WHERE val < 200;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val >= 1000 ORDER BY id;
+COMMIT;
+
+--echo # Test 3.1.3: Update that changes index key ordering
+BEGIN;
+UPDATE t1 SET val=50 WHERE id=4;
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=50;
+COMMIT;
+
+--echo ########################################################################
+--echo # Test 3 INSERT Path 2: INSERT by unmark delete-marked record
+--echo # Condition: row_ins_must_modify_rec() returns true
+--echo #            (found delete-marked record with same ordering keys)
+--echo #            AND row_upd_build_sec_rec_difference_binary() -> n_fields=0
+--echo # This happens when we delete a row and insert same index key value
+--echo # Assertions triggered:
+--echo #   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+--echo #   - INSERT(unmark): row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo ########################################################################
+
+--echo # Test 3.2a.1: Delete then insert same key value (triggers unmark path)
+--echo # Step 1: Insert and delete to create delete-marked record
+BEGIN;
+INSERT INTO t1 VALUES (100, 9999, 'temp_row');
+DELETE FROM t1 WHERE id=100;
+--echo # Now index has delete-marked record with val=9999
+--echo # Step 2: Insert same key value - triggers row_ins_must_modify_rec()
+INSERT INTO t1 VALUES (100, 9999, 'reuse_key');
+--echo # This should find the delete-marked record and unmark it
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=9999;
+COMMIT;
+
+--echo # Test 3.2a.2: Same pattern in separate transactions
+BEGIN;
+INSERT INTO t1 VALUES (102, 8888, 'will_delete');
+COMMIT;
+
+BEGIN;
+DELETE FROM t1 WHERE id=102;
+COMMIT;
+
+BEGIN;
+--echo # Insert with same key - finds delete-marked record, unmarks it
+INSERT INTO t1 VALUES (102, 8888, 'reuse_again');
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=8888;
+COMMIT;
+
+--echo ########################################################################
+--echo # Test 3 INSERT Path 3: INSERT by in-place update (rare, charset/case)
+--echo # Condition: row_ins_must_modify_rec() returns true
+--echo #            (found delete-marked record with same ordering keys)
+--echo #            BUT row_upd_build_sec_rec_difference_binary() -> n_fields>0
+--echo # This happens due to case-insensitive collation in search
+--echo # but case-sensitive memcmp in row_upd_build_sec_rec_difference_binary()
+--echo # Example: 'ABC' and 'abc' match in search but differ in memcmp
+--echo # Assertions triggered:
+--echo #   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+--echo #   - INSERT(in-place): row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo ########################################################################
+
+--echo # Create table with case-insensitive collation for this test
+DROP TABLE IF EXISTS t_case;
+CREATE TABLE t_case (
+  id INT PRIMARY KEY,
+  name VARCHAR(100) COLLATE utf8mb4_general_ci,
+  KEY idx_name (name) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+--echo # Test 3.2b.1: Case change triggers in-place update
+--echo # Step 1: Insert and delete uppercase
+BEGIN;
+INSERT INTO t_case VALUES (1, 'HELLO');
+DELETE FROM t_case WHERE id=1;
+--echo # Now index has delete-marked record with name='HELLO'
+--echo # Step 2: Insert lowercase - search finds 'HELLO' (case-insensitive match)
+--echo # but memcmp sees difference -> triggers in-place update
+INSERT INTO t_case VALUES (1, 'hello');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='hello';
+COMMIT;
+
+--echo # Test 3.2b.2: Another case change scenario
+BEGIN;
+INSERT INTO t_case VALUES (3, 'World');
+DELETE FROM t_case WHERE id=3;
+--echo # Insert with different case
+INSERT INTO t_case VALUES (3, 'WORLD');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='WORLD';
+COMMIT;
+
+--echo # Test 3.2b.3: Mixed case changes
+BEGIN;
+INSERT INTO t_case VALUES (5, 'MixedCase');
+DELETE FROM t_case WHERE id=5;
+INSERT INTO t_case VALUES (5, 'MIXEDCASE');
+SELECT * FROM t_case FORCE INDEX(idx_name) WHERE name='MIXEDCASE';
+COMMIT;
+
+--echo # Cleanup case test table
+DROP TABLE t_case;
+
+
+--echo ########################################################################
+--echo # Test 3 INSERT Path 4: INSERT by non-in-place update (field size change)
+--echo # Condition: row_ins_must_modify_rec() returns true
+--echo #            (found delete-marked record with same ordering keys)
+--echo #            AND row_upd_build_sec_rec_difference_binary() -> n_fields>0
+--echo #            AND row_upd_changes_field_size_or_external() -> true
+--echo # This happens when collation treats strings as equal but binary
+--echo # comparison shows different lengths (e.g., '' vs '  ' in utf8mb4_general_ci)
+--echo # Two sub-paths:
+--echo #   4A: Optimistic non-in-place update (btr_cur_optimistic_update succeeds)
+--echo #       - Field size changes but page has enough space
+--echo #       - Delete old record and insert new record within same page
+--echo #       - Assertion: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo #   4B: Pessimistic update (btr_cur_optimistic_update fails)
+--echo #       - btr_cur_optimistic_update() fails (DB_OVERFLOW/DB_UNDERFLOW) because
+--echo #         record size change requires delete+insert, which may cause page
+--echo #         to become too empty or not have enough space
+--echo #       - Falls back to btr_cur_pessimistic_update() with BTR_MODIFY_TREE
+--echo #       - Assertion: row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo # Assertions triggered:
+--echo #   - DELETE: row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+--echo ########################################################################
+
+--echo # Create table with case-insensitive collation for this test
+DROP TABLE IF EXISTS t_space;
+CREATE TABLE t_space (
+  id BIGINT PRIMARY KEY,
+  unit_id BIGINT NOT NULL,
+  nick_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  KEY auto_shard_key_nick_name (nick_name) COMMENT 'hippo_index'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
+
+--echo # Test 3.2c.1: Empty string to spaces - Path 4B (pessimistic update)
+--echo # Strategy: Fill page to near merge threshold, then delete+insert with size change
+--echo # Step 0: Pre-fill page with many records using empty string
+--echo # This ensures page data size is close to merge threshold (50% of page size)
+--echo # When we delete small record (empty string) and insert larger one (spaces),
+--echo # page data size may drop below threshold, triggering DB_UNDERFLOW -> pessimistic update
+BEGIN;
+--echo # Insert ~200 records with empty string to fill the page
+--echo # Each record: id (8 bytes) + unit_id (8 bytes) + nick_name (empty, ~1 byte) = ~17 bytes
+--echo # Plus index entry overhead, ~200 records should fill ~4-5KB, close to 8KB threshold
+INSERT INTO t_space VALUES 
+  (1001, 100, ''), (1002, 100, ''), (1003, 100, ''), (1004, 100, ''), (1005, 100, ''),
+  (1006, 100, ''), (1007, 100, ''), (1008, 100, ''), (1009, 100, ''), (1010, 100, ''),
+  (1011, 100, ''), (1012, 100, ''), (1013, 100, ''), (1014, 100, ''), (1015, 100, ''),
+  (1016, 100, ''), (1017, 100, ''), (1018, 100, ''), (1019, 100, ''), (1020, 100, ''),
+  (1021, 100, ''), (1022, 100, ''), (1023, 100, ''), (1024, 100, ''), (1025, 100, ''),
+  (1026, 100, ''), (1027, 100, ''), (1028, 100, ''), (1029, 100, ''), (1030, 100, ''),
+  (1031, 100, ''), (1032, 100, ''), (1033, 100, ''), (1034, 100, ''), (1035, 100, ''),
+  (1036, 100, ''), (1037, 100, ''), (1038, 100, ''), (1039, 100, ''), (1040, 100, ''),
+  (1041, 100, ''), (1042, 100, ''), (1043, 100, ''), (1044, 100, ''), (1045, 100, ''),
+  (1046, 100, ''), (1047, 100, ''), (1048, 100, ''), (1049, 100, ''), (1050, 100, ''),
+  (1051, 100, ''), (1052, 100, ''), (1053, 100, ''), (1054, 100, ''), (1055, 100, ''),
+  (1056, 100, ''), (1057, 100, ''), (1058, 100, ''), (1059, 100, ''), (1060, 100, ''),
+  (1061, 100, ''), (1062, 100, ''), (1063, 100, ''), (1064, 100, ''), (1065, 100, ''),
+  (1066, 100, ''), (1067, 100, ''), (1068, 100, ''), (1069, 100, ''), (1070, 100, ''),
+  (1071, 100, ''), (1072, 100, ''), (1073, 100, ''), (1074, 100, ''), (1075, 100, ''),
+  (1076, 100, ''), (1077, 100, ''), (1078, 100, ''), (1079, 100, ''), (1080, 100, ''),
+  (1081, 100, ''), (1082, 100, ''), (1083, 100, ''), (1084, 100, ''), (1085, 100, ''),
+  (1086, 100, ''), (1087, 100, ''), (1088, 100, ''), (1089, 100, ''), (1090, 100, ''),
+  (1091, 100, ''), (1092, 100, ''), (1093, 100, ''), (1094, 100, ''), (1095, 100, ''),
+  (1096, 100, ''), (1097, 100, ''), (1098, 100, ''), (1099, 100, ''), (1100, 100, ''),
+  (1101, 100, ''), (1102, 100, ''), (1103, 100, ''), (1104, 100, ''), (1105, 100, ''),
+  (1106, 100, ''), (1107, 100, ''), (1108, 100, ''), (1109, 100, ''), (1110, 100, ''),
+  (1111, 100, ''), (1112, 100, ''), (1113, 100, ''), (1114, 100, ''), (1115, 100, ''),
+  (1116, 100, ''), (1117, 100, ''), (1118, 100, ''), (1119, 100, ''), (1120, 100, ''),
+  (1121, 100, ''), (1122, 100, ''), (1123, 100, ''), (1124, 100, ''), (1125, 100, ''),
+  (1126, 100, ''), (1127, 100, ''), (1128, 100, ''), (1129, 100, ''), (1130, 100, ''),
+  (1131, 100, ''), (1132, 100, ''), (1133, 100, ''), (1134, 100, ''), (1135, 100, ''),
+  (1136, 100, ''), (1137, 100, ''), (1138, 100, ''), (1139, 100, ''), (1140, 100, ''),
+  (1141, 100, ''), (1142, 100, ''), (1143, 100, ''), (1144, 100, ''), (1145, 100, ''),
+  (1146, 100, ''), (1147, 100, ''), (1148, 100, ''), (1149, 100, ''), (1150, 100, ''),
+  (1151, 100, ''), (1152, 100, ''), (1153, 100, ''), (1154, 100, ''), (1155, 100, ''),
+  (1156, 100, ''), (1157, 100, ''), (1158, 100, ''), (1159, 100, ''), (1160, 100, ''),
+  (1161, 100, ''), (1162, 100, ''), (1163, 100, ''), (1164, 100, ''), (1165, 100, ''),
+  (1166, 100, ''), (1167, 100, ''), (1168, 100, ''), (1169, 100, ''), (1170, 100, ''),
+  (1171, 100, ''), (1172, 100, ''), (1173, 100, ''), (1174, 100, ''), (1175, 100, ''),
+  (1176, 100, ''), (1177, 100, ''), (1178, 100, ''), (1179, 100, ''), (1180, 100, ''),
+  (1181, 100, ''), (1182, 100, ''), (1183, 100, ''), (1184, 100, ''), (1185, 100, ''),
+  (1186, 100, ''), (1187, 100, ''), (1188, 100, ''), (1189, 100, ''), (1190, 100, ''),
+  (1191, 100, ''), (1192, 100, ''), (1193, 100, ''), (1194, 100, ''), (1195, 100, ''),
+  (1196, 100, ''), (1197, 100, ''), (1198, 100, ''), (1199, 100, ''), (1200, 100, '');
+COMMIT;
+
+--echo # Step 1: Insert target record with empty string and delete it
+--echo # This creates a delete-marked record that will be found by row_ins_must_modify_rec()
+BEGIN;
+INSERT INTO t_space VALUES (1392684638434107392, 1250056650086289408, '');
+DELETE FROM t_space WHERE id=1392684638434107392;
+COMMIT;
+
+--echo # Step 2: Insert with spaces - search finds '' (collation treats as equal)
+--echo # but binary comparison shows length difference (0 vs 2)
+--echo # With page near threshold, deleting small record and inserting larger one
+--echo # may cause page data size to drop below BTR_CUR_PAGE_COMPRESS_LIMIT (50% of page)
+--echo # This triggers DB_UNDERFLOW -> pessimistic update path
+BEGIN;
+INSERT INTO t_space VALUES (1392684638434107392, 1250056650086289408, '  ');
+COMMIT;
+
+--echo # Test 3.2c.2: Empty string to single space - Path 4B (pessimistic update)
+--echo # Pre-fill page again to ensure pessimistic update
+BEGIN;
+INSERT INTO t_space VALUES 
+  (2001, 200, ''), (2002, 200, ''), (2003, 200, ''), (2004, 200, ''), (2005, 200, ''),
+  (2006, 200, ''), (2007, 200, ''), (2008, 200, ''), (2009, 200, ''), (2010, 200, ''),
+  (2011, 200, ''), (2012, 200, ''), (2013, 200, ''), (2014, 200, ''), (2015, 200, ''),
+  (2016, 200, ''), (2017, 200, ''), (2018, 200, ''), (2019, 200, ''), (2020, 200, ''),
+  (2021, 200, ''), (2022, 200, ''), (2023, 200, ''), (2024, 200, ''), (2025, 200, ''),
+  (2026, 200, ''), (2027, 200, ''), (2028, 200, ''), (2029, 200, ''), (2030, 200, ''),
+  (2031, 200, ''), (2032, 200, ''), (2033, 200, ''), (2034, 200, ''), (2035, 200, ''),
+  (2036, 200, ''), (2037, 200, ''), (2038, 200, ''), (2039, 200, ''), (2040, 200, ''),
+  (2041, 200, ''), (2042, 200, ''), (2043, 200, ''), (2044, 200, ''), (2045, 200, ''),
+  (2046, 200, ''), (2047, 200, ''), (2048, 200, ''), (2049, 200, ''), (2050, 200, '');
+COMMIT;
+
+BEGIN;
+INSERT INTO t_space VALUES (3001, 200, '');
+DELETE FROM t_space WHERE id=3001;
+--echo # Insert with single space - triggers pessimistic update
+INSERT INTO t_space VALUES (3002, 200, ' ');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name=' ';
+COMMIT;
+
+--echo # Test 3.2c.3: Spaces to empty string - Path 4B (pessimistic update, reverse direction)
+BEGIN;
+INSERT INTO t_space VALUES 
+  (4001, 300, '   '), (4002, 300, '   '), (4003, 300, '   '), (4004, 300, '   '), (4005, 300, '   '),
+  (4006, 300, '   '), (4007, 300, '   '), (4008, 300, '   '), (4009, 300, '   '), (4010, 300, '   '),
+  (4011, 300, '   '), (4012, 300, '   '), (4013, 300, '   '), (4014, 300, '   '), (4015, 300, '   '),
+  (4016, 300, '   '), (4017, 300, '   '), (4018, 300, '   '), (4019, 300, '   '), (4020, 300, '   '),
+  (4021, 300, '   '), (4022, 300, '   '), (4023, 300, '   '), (4024, 300, '   '), (4025, 300, '   '),
+  (4026, 300, '   '), (4027, 300, '   '), (4028, 300, '   '), (4029, 300, '   '), (4030, 300, '   '),
+  (4031, 300, '   '), (4032, 300, '   '), (4033, 300, '   '), (4034, 300, '   '), (4035, 300, '   '),
+  (4036, 300, '   '), (4037, 300, '   '), (4038, 300, '   '), (4039, 300, '   '), (4040, 300, '   '),
+  (4041, 300, '   '), (4042, 300, '   '), (4043, 300, '   '), (4044, 300, '   '), (4045, 300, '   '),
+  (4046, 300, '   '), (4047, 300, '   '), (4048, 300, '   '), (4049, 300, '   '), (4050, 300, '   ');
+COMMIT;
+
+BEGIN;
+INSERT INTO t_space VALUES (5001, 300, '   ');
+DELETE FROM t_space WHERE id=5001;
+--echo # Insert with empty string - length changes from 3 to 0, triggers pessimistic update
+INSERT INTO t_space VALUES (5002, 300, '');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='';
+COMMIT;
+
+--echo # Test 3.2c.4: Two spaces to four spaces - Path 4B (pessimistic update)
+BEGIN;
+INSERT INTO t_space VALUES 
+  (6001, 400, '  '), (6002, 400, '  '), (6003, 400, '  '), (6004, 400, '  '), (6005, 400, '  '),
+  (6006, 400, '  '), (6007, 400, '  '), (6008, 400, '  '), (6009, 400, '  '), (6010, 400, '  '),
+  (6011, 400, '  '), (6012, 400, '  '), (6013, 400, '  '), (6014, 400, '  '), (6015, 400, '  '),
+  (6016, 400, '  '), (6017, 400, '  '), (6018, 400, '  '), (6019, 400, '  '), (6020, 400, '  '),
+  (6021, 400, '  '), (6022, 400, '  '), (6023, 400, '  '), (6024, 400, '  '), (6025, 400, '  '),
+  (6026, 400, '  '), (6027, 400, '  '), (6028, 400, '  '), (6029, 400, '  '), (6030, 400, '  '),
+  (6031, 400, '  '), (6032, 400, '  '), (6033, 400, '  '), (6034, 400, '  '), (6035, 400, '  '),
+  (6036, 400, '  '), (6037, 400, '  '), (6038, 400, '  '), (6039, 400, '  '), (6040, 400, '  '),
+  (6041, 400, '  '), (6042, 400, '  '), (6043, 400, '  '), (6044, 400, '  '), (6045, 400, '  '),
+  (6046, 400, '  '), (6047, 400, '  '), (6048, 400, '  '), (6049, 400, '  '), (6050, 400, '  ');
+COMMIT;
+
+BEGIN;
+INSERT INTO t_space VALUES (7001, 400, '  ');
+DELETE FROM t_space WHERE id=7001;
+--echo # Insert with different number of spaces - triggers pessimistic update
+INSERT INTO t_space VALUES (7002, 400, '    ');
+SELECT * FROM t_space FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='    ';
+COMMIT;
+
+--echo # Test 3.2c.5: Empty string to spaces - Path 4A (optimistic non-in-place update)
+--echo # Strategy: Use sparse page (not near threshold) to allow optimistic update
+--echo # Field size changes but page has enough space for delete+insert
+--echo # This triggers optimistic non-in-place update (not pessimistic)
+DROP TABLE IF EXISTS t_space_opt;
+CREATE TABLE t_space_opt (
+  id BIGINT PRIMARY KEY,
+  unit_id BIGINT NOT NULL,
+  nick_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  KEY auto_shard_key_nick_name (nick_name) COMMENT 'hippo_index'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
+
+--echo # Insert only a few records to keep page sparse
+BEGIN;
+INSERT INTO t_space_opt VALUES (1, 100, ''), (2, 100, ''), (3, 100, ''), (4, 100, ''), (5, 100, '');
+COMMIT;
+
+--echo # Step 1: Insert target record with empty string and delete it
+BEGIN;
+INSERT INTO t_space_opt VALUES (100, 100, '');
+DELETE FROM t_space_opt WHERE id=100;
+COMMIT;
+
+--echo # Step 2: Insert with spaces - page has enough space
+--echo # This triggers optimistic non-in-place update (Path 4A)
+--echo # btr_cur_optimistic_update succeeds, delete+insert within same page
+BEGIN;
+INSERT INTO t_space_opt VALUES (100, 100, '  ');
+SELECT * FROM t_space_opt FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='  ';
+COMMIT;
+
+--echo # Test 3.2c.6: Single space to multiple spaces - Path 4A (optimistic non-in-place)
+BEGIN;
+INSERT INTO t_space_opt VALUES (200, 200, ' ');
+DELETE FROM t_space_opt WHERE id=200;
+--echo # Insert with more spaces - optimistic update succeeds
+INSERT INTO t_space_opt VALUES (200, 200, '   ');
+SELECT * FROM t_space_opt FORCE INDEX(auto_shard_key_nick_name) WHERE nick_name='   ';
+COMMIT;
+
+--echo # Test 3.2c.7: Verify all records are correctly stored
+SELECT id, unit_id, LENGTH(nick_name) as nick_name_len, 
+       CASE WHEN nick_name = '' THEN '(empty)' 
+            WHEN nick_name = ' ' THEN '(1 space)' 
+            WHEN nick_name = '  ' THEN '(2 spaces)'
+            WHEN nick_name = '   ' THEN '(3 spaces)'
+            WHEN nick_name = '    ' THEN '(4 spaces)'
+            ELSE nick_name END as nick_name_display
+FROM t_space FORCE INDEX(auto_shard_key_nick_name) ORDER BY id;
+
+--echo # Cleanup space test tables
+DROP TABLE t_space;
+DROP TABLE t_space_opt;
+
+
+--echo ########################################################################
+--echo # Test 4: DELETE - Trigger row_sec_assert_tid_in_rec()
+--echo ########################################################################
+
+--echo # Test 4.1: Delete by primary key
+--echo # Triggers delete-mark on HIPPO index at lizard0btr0cur.cc:382
+BEGIN;
+DELETE FROM t1 WHERE id=9;
+--echo # Verify deleted record not visible via HIPPO index
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=1100 ORDER BY id;
+COMMIT;
+
+--echo # Test 4.2: Delete by indexed column
+BEGIN;
+DELETE FROM t1 WHERE val=1100;
+SELECT COUNT(*) FROM t1;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 5: REPEATABLE READ - Stricter MVCC test with FORCE INDEX
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t2;
+
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  val INT,
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t2 VALUES (1,10), (2,20), (3,30), (4,40), (5,50);
+
+connection con1;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+--echo # con1: Establish snapshot with FORCE INDEX
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+
+connection con2;
+BEGIN;
+INSERT INTO t2 VALUES (6, 25);
+UPDATE t2 SET val=35 WHERE id=3;
+DELETE FROM t2 WHERE id=5;
+COMMIT;
+
+connection con1;
+--echo # con1: Should still see old snapshot via HIPPO index
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=25;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=30;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=50;
+COMMIT;
+
+--echo # con1: New transaction sees new data
+BEGIN;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val >= 20 ORDER BY id;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 6: Multiple HIPPO indexes - All trigger assertions
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t3;
+
+CREATE TABLE t3 (
+  pk INT PRIMARY KEY,
+  a INT,
+  b INT,
+  c VARCHAR(50),
+  KEY idx_a (a) COMMENT 'hippo_index',
+  KEY idx_b (b) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+--echo # Test 6.1: INSERT into table with multiple HIPPO indexes
+INSERT INTO t3 VALUES 
+  (1, 10, 20, 'data1'),
+  (2, 10, 30, 'data2'),
+  (3, 20, 20, 'data3'),
+  (4, 20, 40, 'data4'),
+  (5, 30, 50, 'data5');
+
+--echo # Verify both HIPPO indexes
+SELECT index_name, index_page_type FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+  WHERE table_name='t3' AND index_page_type='HIPPO_INDEX' ORDER BY index_name;
+
+--echo # Test 6.2: Query using different HIPPO indexes
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=10 ORDER BY pk;
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=20 ORDER BY pk;
+
+--echo # Test 6.3: UPDATE affects both HIPPO indexes
+BEGIN;
+UPDATE t3 SET a=15, b=25 WHERE pk=1;
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=15;
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=25;
+COMMIT;
+
+--echo # Test 6.4: DELETE removes from both HIPPO indexes
+BEGIN;
+DELETE FROM t3 WHERE pk=5;
+SELECT * FROM t3 FORCE INDEX(idx_a) WHERE a=30;
+SELECT * FROM t3 FORCE INDEX(idx_b) WHERE b=50;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 7: Mixed DML in single transaction
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t4;
+
+CREATE TABLE t4 (
+  id INT PRIMARY KEY,
+  val INT,
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t4 VALUES (1,10), (2,20), (3,30), (4,40), (5,50);
+
+--echo # Test 7.1: Mix INSERT/UPDATE/DELETE in one transaction
+BEGIN;
+INSERT INTO t4 VALUES (6, 15);
+UPDATE t4 SET val=25 WHERE id=2;
+DELETE FROM t4 WHERE id=4;
+INSERT INTO t4 VALUES (7, 35);
+UPDATE t4 SET val=55 WHERE id=5;
+--echo # Verify changes via HIPPO index
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val >= 15 ORDER BY id;
+COMMIT;
+
+--echo # Test 7.2: Verify final state
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val < 30 ORDER BY id;
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val >= 30 ORDER BY id;
+
+
+--echo ########################################################################
+--echo # Test 8: UPDATE edge cases - additional scenarios
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t5;
+
+CREATE TABLE t5 (
+  id INT PRIMARY KEY,
+  idx_col INT,
+  non_idx_col VARCHAR(100),
+  KEY idx_col (idx_col) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t5 VALUES (1, 100, 'data1'), (2, 200, 'data2'), (3, 300, 'data3');
+
+--echo # Test 8.1: Update indexed column to new value (Path 1: DELETE+INSERT)
+BEGIN;
+UPDATE t5 SET idx_col=150 WHERE id=1;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=150;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=100;
+COMMIT;
+
+--echo # Test 8.2: Update non-indexed column only
+--echo # Note: For HIPPO index, this still goes through secondary index update
+BEGIN;
+UPDATE t5 SET non_idx_col='data2_modified' WHERE id=2;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=200;
+COMMIT;
+
+--echo # Test 8.3: Update both indexed and non-indexed columns
+BEGIN;
+UPDATE t5 SET idx_col=350, non_idx_col='data3_both_modified' WHERE id=3;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=350;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=300;
+COMMIT;
+
+--echo # Test 8.4: Update with same value (optimization may skip)
+BEGIN;
+UPDATE t5 SET idx_col=150 WHERE id=1;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=150;
+COMMIT;
+
+--echo # Test 8.5: Multiple consecutive updates on same record
+BEGIN;
+UPDATE t5 SET non_idx_col='update1' WHERE id=2;
+UPDATE t5 SET non_idx_col='update2' WHERE id=2;
+UPDATE t5 SET non_idx_col='update3' WHERE id=2;
+SELECT * FROM t5 FORCE INDEX(idx_col) WHERE idx_col=200;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 9: Concurrent UPDATE scenarios
+--echo ########################################################################
+
+connection default;
+DROP TABLE IF EXISTS t6;
+
+CREATE TABLE t6 (
+  id INT PRIMARY KEY,
+  val INT,
+  KEY idx_val (val) COMMENT 'hippo_index'
+) ENGINE=InnoDB;
+
+INSERT INTO t6 VALUES (1,10), (2,20), (3,30);
+
+connection con1;
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val >= 10 ORDER BY id;
+
+connection con2;
+BEGIN;
+UPDATE t6 SET val=15 WHERE id=1;
+INSERT INTO t6 VALUES (4, 25);
+COMMIT;
+
+connection con1;
+--echo # con1: Should see old snapshot via HIPPO index
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val >= 10 ORDER BY id;
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val=15;
+SELECT * FROM t6 FORCE INDEX(idx_val) WHERE val=25;
+COMMIT;
+
+
+--echo ########################################################################
+--echo # Test 10: Verify all assertions were triggered (summary)
+--echo ########################################################################
+
+connection default;
+
+--echo # If test reaches here without crash, all assertions passed:
+--echo #
+--echo # DELETE assertion:
+--echo #   - row_sec_assert_tid_in_rec() at lizard0btr0cur.cc:382
+--echo #
+--echo # INSERT assertions (four paths):
+--echo #
+--echo #   Path 1: Normal INSERT (most common)
+--echo #      - row_sec_assert_tid_in_entry() at row0ins.cc:3108
+--echo #
+--echo #   Path 2: INSERT by unmark delete-marked record
+--echo #      - Condition: same ordering keys, n_fields=0
+--echo #      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo #
+--echo #   Path 3: INSERT by in-place update (charset/case)
+--echo #      - Condition: same ordering keys, n_fields>0 (case diff)
+--echo #      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo #
+--echo #   Path 4: INSERT by non-in-place update (field size change)
+--echo #      - Condition: same ordering keys, n_fields>0, old_len != new_len
+--echo #      - Path 4A: btr_cur_optimistic_update() succeeds (non-in-place)
+--echo #      - Path 4B: btr_cur_optimistic_update() fails -> btr_cur_pessimistic_update()
+--echo #      - row_sec_assert_tid_in_rec() at btr0cur.cc:3559
+--echo #
+--echo # UPDATE = DELETE + INSERT (INSERT uses one of four paths above)
+--echo #
+--echo # TRX_ID is correctly written in all scenarios!
+
+SELECT 'All TRX_ID assertions passed!' as result;
+
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+DROP TABLE t1, t2, t3, t4, t5, t6;
+
+disconnect con1;
+disconnect con2;
+
+SET GLOBAL innodb_purge_run_now = ON;
+
+SET opt_index_format_hippo_enabled=default;
+

@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2/2/1994 Heikki Tuuri
  *******************************************************/
 
+#ifndef page0page_h
+#define INNODB_PAGE0PAGE_IC_STANDALONE
+#include "page0page.h"
+#undef INNODB_PAGE0PAGE_IC_STANDALONE
+#endif /* !page0page_h */
+#include "lizard0rem0types.h"
 #include "mach0data.h"
 #ifdef UNIV_DEBUG
 #include "log0recv.h"
@@ -39,6 +45,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #endif /* !UNIV_HOTBACKUP */
 #include "mtr0log.h"
 #include "page0zip.h"
+
+#include "lizard0page0dict.h"
 
 /** Gets the start of a page.
  @return start of the page */
@@ -439,6 +447,16 @@ static inline rec_t *page_rec_get_nth(page_t *page, /*!< in: page */
   return ((rec_t *)page_rec_get_nth_const(page, nth));
 }
 
+static inline creg_t page_reg_get_nth(const page_t *page, ulint nth) {
+  ut_ad(page_rec_get_nth_const(page, nth));
+  return {page_rec_get_nth_const(page, nth), MLOC_IN_PAGE};
+}
+
+static inline reg_t page_reg_get_nth(page_t *page, ulint nth) {
+  ut_ad(page_rec_get_nth(page, nth));
+  return {page_rec_get_nth(page, nth), MLOC_IN_PAGE};
+}
+
 #ifndef UNIV_HOTBACKUP
 /** Returns the middle record of the records on the page. If there is an
  even number of records in the list, returns the first record of the
@@ -449,6 +467,10 @@ static inline rec_t *page_get_middle_rec(page_t *page) /*!< in: page */
   ulint middle = (page_get_n_recs(page) + PAGE_HEAP_NO_USER_LOW) / 2;
 
   return (page_rec_get_nth(page, middle));
+}
+static inline reg_t page_get_middle_reg(page_t *page) {
+  ut_ad(page_get_middle_rec(page));
+  return {page_get_middle_rec(page), MLOC_IN_PAGE};
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -545,11 +567,17 @@ static inline bool page_rec_check(const rec_t *rec) /*!< in: record */
 }
 
 /** Gets the record pointed to by a directory slot.
- @return pointer to record */
+ @return pointer to record (always non-null: page base + slot's 2-byte offset) */
 static inline const rec_t *page_dir_slot_get_rec(
     const page_dir_slot_t *slot) /*!< in: directory slot */
 {
   return (page_align(slot) + mach_read_from_2(slot));
+}
+
+/** Gets the record pointed to by a directory slot as creg_t.
+ Slot always stores a valid offset, so the result is never null. */
+static inline creg_t page_dir_slot_get_creg(const page_dir_slot_t *slot) {
+  return {page_dir_slot_get_rec(slot), MLOC_IN_PAGE};
 }
 
 /** This is used to set the record offset in a directory slot. */
@@ -645,11 +673,27 @@ static inline const rec_t *page_rec_get_next_const(
   return (page_rec_get_next_low(rec, page_rec_is_comp(rec)));
 }
 
+static inline reg_t page_rec_get_next_reg(rec_t *rec) {
+  rec_t *next_rec = page_rec_get_next(rec);
+  if (next_rec)
+    return {next_rec, MLOC_IN_PAGE};
+  else
+    return REG_NULL;
+}
+
+static inline creg_t page_rec_get_next_creg(const rec_t *rec) {
+  const rec_t *next_rec = page_rec_get_next_const(rec);
+  if (next_rec)
+    return {next_rec, MLOC_IN_PAGE};
+  else
+    return CREG_NULL;
+}
+
 /** Gets the pointer to the next non delete-marked record on the page.
  If all subsequent records are delete-marked, then this function
  will return the supremum record.
  @return pointer to next non delete-marked record or pointer to supremum */
-static inline const rec_t *page_rec_get_next_non_del_marked(
+static inline creg_t page_rec_get_next_non_del_marked(
     const rec_t *rec) /*!< in: pointer to record */
 {
   const rec_t *r;
@@ -660,13 +704,14 @@ static inline const rec_t *page_rec_get_next_non_del_marked(
        r = page_rec_get_next_const(r)) {
     /* noop */
   }
+  ut_ad(r);
 
-  return (r);
+  return {r, MLOC_IN_PAGE};
 }
 
 /** Sets the pointer to the next record on the page. */
 static inline void page_rec_set_next(
-    rec_t *rec,        /*!< in: pointer to record,
+    rec_t *rec,        /*!< in/out: pointer to record,
                        must not be page supremum */
     const rec_t *next) /*!< in: pointer to next record,
                        must not be page infimum */
@@ -740,6 +785,16 @@ static inline rec_t *page_rec_get_prev(rec_t *rec) /*!< in: pointer to record,
   return ((rec_t *)page_rec_get_prev_const(rec));
 }
 
+static inline creg_t page_rec_get_prev_creg(const rec_t *rec) {
+  ut_ad(page_rec_get_prev_const(rec));
+  return {page_rec_get_prev_const(rec), MLOC_IN_PAGE};
+}
+
+static inline reg_t page_rec_get_prev_reg(rec_t *rec) {
+  ut_ad(page_rec_get_prev(rec));
+  return {page_rec_get_prev(rec), MLOC_IN_PAGE};
+}
+
 /** Looks for the record which owns the given record.
  @return the owner record */
 static inline rec_t *page_rec_find_owner_rec(
@@ -771,22 +826,27 @@ static inline ulint page_rec_get_base_extra_size(
   return (REC_N_NEW_EXTRA_BYTES + (ulint)!page_rec_is_comp(rec));
 }
 
-/** Returns the sum of the sizes of the records in the record list, excluding
- the infimum and supremum records.
+/** Returns the total size of the page data area (record list + SPC dict if
+ any).
  @return data in bytes */
-static inline ulint page_get_data_size(
-    const page_t *page) /*!< in: index page */
-{
+static inline ulint page_get_total_data_size(const page_t *page) {
   ulint ret;
 
-  ret = (ulint)(
-      page_header_get_field(page, PAGE_HEAP_TOP) -
-      (page_is_comp(page) ? PAGE_NEW_SUPREMUM_END : PAGE_OLD_SUPREMUM_END) -
-      page_header_get_field(page, PAGE_GARBAGE));
+  ret = (ulint)(page_header_get_field(page, PAGE_HEAP_TOP) -
+                (page_is_comp(page) ? PAGE_NEW_SUPREMUM_END
+                                    : PAGE_OLD_SUPREMUM_END) -
+                page_header_get_field(page, PAGE_GARBAGE));
 
   ut_ad(ret < UNIV_PAGE_SIZE);
 
   return (ret);
+}
+
+/** Returns the sum of the sizes of the records in the record list, excluding
+ the infimum and supremum records, and excluding SPC dict area.
+ @return data in bytes */
+static inline ulint page_get_record_data_size(const page_t *page) {
+  return page_get_total_data_size(page) - page_dict_get_size(page);
 }
 
 /** Allocates a block of memory from the free list of an index page. */
@@ -830,6 +890,18 @@ static inline ulint page_get_free_space_of_empty(
 
   return ((ulint)(UNIV_PAGE_SIZE - PAGE_OLD_SUPREMUM_END - PAGE_DIR -
                   2 * PAGE_DIR_SLOT_SIZE));
+}
+
+/** Free space of an empty page, excluding the page dict area (for SPC pages).
+ Same as page_get_free_space_of_empty(comp) minus page_dict size when applicable.
+ @return free space available for the record heap only */
+static inline ulint page_get_free_space_of_empty_excl_dict(
+    const page_t *page) /*!< in: index page (used for comp + SPC check) */
+{
+  bool comp = page_is_comp(page);
+  bool spc = fil_page_is_spc(page);
+  return page_get_free_space_of_empty(comp) -
+         (spc ? page_dict_get_size(page) : 0);
 }
 
 /** Each user record on a page, and also the deleted user records in the heap
@@ -881,7 +953,7 @@ static inline ulint page_get_max_insert_size_after_reorganize(
   ulint occupied;
   ulint free_space;
 
-  occupied = page_get_data_size(page) +
+  occupied = page_get_total_data_size(page) +
              page_dir_calc_reserved_space(n_recs + page_get_n_recs(page));
 
   free_space = page_get_free_space_of_empty(page_is_comp(page));
@@ -891,39 +963,6 @@ static inline ulint page_get_max_insert_size_after_reorganize(
   }
 
   return (free_space - occupied);
-}
-
-/** Puts a record to free list. */
-static inline void page_mem_free(
-    page_t *page,              /*!< in/out: index page */
-    page_zip_des_t *page_zip,  /*!< in/out: compressed page,
-                               or NULL */
-    rec_t *rec,                /*!< in: pointer to the
-                               (origin of) record */
-    const dict_index_t *index, /*!< in: index of rec */
-    const ulint *offsets)      /*!< in: array returned by
-                               rec_get_offsets() */
-{
-  rec_t *free;
-  ulint garbage;
-
-  ut_ad(rec_offs_validate(rec, index, offsets));
-  free = page_header_get_ptr(page, PAGE_FREE);
-
-  page_rec_set_next(rec, free);
-  page_header_set_ptr(page, page_zip, PAGE_FREE, rec);
-
-  garbage = page_header_get_field(page, PAGE_GARBAGE);
-
-  page_header_set_field(page, page_zip, PAGE_GARBAGE,
-                        garbage + rec_offs_size(offsets));
-
-  if (page_zip) {
-    page_zip_dir_delete(page_zip, rec, index, offsets, free);
-  } else {
-    page_header_set_field(page, page_zip, PAGE_N_RECS,
-                          page_get_n_recs(page) - 1);
-  }
 }
 
 /** Check that a page_size is correct for InnoDB.

@@ -40,7 +40,8 @@ Warning	1287	Setting user variables within expressions is deprecated and will be
 select @cnt;
 @cnt
 11
-delete from t1 where date_col>='2015-01-01' and date_col<='2016-01-06' limit 500;
+delete from t1 where date_col>='2015-01-01' and date_col<='2016-01-06' order by date_col ASC limit 500;
+SET GLOBAL INNODB_PURGE_RUN_NOW=ON;
 set @cnt=1;
 select * from t1 force index(date_col) where
 col1 + 10000000 > (@cnt:=@cnt+1) and date_col >= date('2014-04-06') AND date_col < date('2015-02-10' + interval 1 day)

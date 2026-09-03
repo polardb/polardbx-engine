@@ -1,0 +1,84 @@
+CREATE USER 'dml_allow_user'@'%' IDENTIFIED WITH 'mysql_native_password';
+GRANT ALL ON *.* TO 'dml_allow_user'@'%';
+CREATE USER 'normal_user'@'%' IDENTIFIED WITH 'mysql_native_password';
+GRANT ALL ON *.* TO 'normal_user'@'%';
+CREATE SCHEMA xtest;
+CREATE TABLE xtest.mytable (pk INT PRIMARY KEY AUTO_INCREMENT, data VARCHAR(100));
+INSERT INTO xtest.mytable VALUES (DEFAULT, 'initial');
+send PolarXRPC.Session.NewSession {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "update mytable set data = \'allowed\'"
+  schema_name: "xtest"
+}
+
+
+1 rows affected
+Rows matched: 1  Changed: 1  Warnings: 0
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "select data from mytable order by pk"
+  schema_name: "xtest"
+}
+
+PolarXRPC.Resultset.ColumnMetaData {
+  type: BYTES
+  original_type: MYSQL_TYPE_VARCHAR
+  name: "data"
+  original_name: "data"
+  table: "mytable"
+  original_table: "mytable"
+  schema: "xtest"
+  catalog: "def"
+  collation: 33
+  length: 300
+  original_flags: 0
+}
+
+PolarXRPC.Resultset.Row {
+  field: "allowed\000"
+}
+
+PolarXRPC.Resultset.FetchDone {
+}
+
+PolarXRPC.Notice.Frame {
+  type: 3
+  scope: LOCAL
+  payload: "PolarXRPC.Notice.SessionStateChanged { param: ROWS_AFFECTED\nvalue {\n  type: V_UINT\n  v_unsigned_int: 0\n}\n }"
+}
+
+PolarXRPC.Sql.StmtExecuteOk {
+}
+
+send PolarXRPC.Session.Close {
+}
+
+RUN recvok
+ok
+send PolarXRPC.Session.NewSession {
+}
+
+RUN recvok
+send PolarXRPC.Sql.StmtExecute {
+  stmt: "update mytable set data = \'blocked\'"
+  schema_name: "xtest"
+}
+
+Got expected error:
+PolarXRPC.Error {
+  severity: ERROR
+  code: 7602
+  msg: "High risk SQL detected: DML operation without WHERE clause or with tautological WHERE clause is forbidden when \'forbid_execute_dml_all\' is enabled. Use hint /*+ SET_VAR(forbid_execute_dml_all=OFF) */ or SET forbid_execute_dml_all=OFF to override."
+  sql_state: "HY000"
+}
+
+send PolarXRPC.Session.Close {
+}
+
+RUN recvok
+ok
+DROP SCHEMA xtest;
+DROP USER 'dml_allow_user'@'%';
+DROP USER 'normal_user'@'%';

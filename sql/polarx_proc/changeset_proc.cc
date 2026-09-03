@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 //
 #include "changeset_proc.h"
 #include "thread_pool.h"
+#include "sql/komodo0xlog.h"
 
 namespace im {
 /**
@@ -58,26 +59,42 @@ void Sql_cmd_changeset_proc_start::send_result(THD *thd, bool error) {
   }
 
   // process parameters
+  if (m_list == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset start failed, illegal table name");
+    return;
+  }
   auto it = m_list->begin();
   Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
   if (table_name_item == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
-             "call changeset start failed, table name is illegal");
+             "call changeset start failed, illegal table name");
     return;
   }
 
-  u_int64_t memory_limit = MAX_MEMORY_SIZE;
+  uint64_t memory_limit = MAX_MEMORY_SIZE;
   if (it != m_list->end()) {
     Item_int *memory_limit_item = dynamic_cast<Item_int *>(*(it++));
-    memory_limit = (u_int64_t)memory_limit_item->value;
+    if (memory_limit_item == nullptr || memory_limit_item->value < 0) {
+      my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), 
+        "call changeset start failed, illegal memory limit");
+      return;
+    }
+    memory_limit = (uint64_t) memory_limit_item->value;
+  }
+
+  bool acquire_lock = false;
+  if (it != m_list->end()) {
+    Item_int *acquire_lock_item = dynamic_cast<Item_int *>(*(it++));
+    acquire_lock = acquire_lock_item != nullptr && acquire_lock_item->value == 1;
   }
 
   std::string table_name(table_name_item->val_str(nullptr)->ptr(),
                          table_name_item->val_str(nullptr)->length());
 
-  sql_print_information("changeset.start(%s)", table_name.data());
+  sql_print_information("changeset.start(%s,%lu)", table_name.data(), memory_limit);
 
-  if (gChangesetManager.start_track(table_name, memory_limit)) {
+  if (gChangesetManager.start_track(table_name, memory_limit, acquire_lock)) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "changeset start failed");
     return;
   }
@@ -154,6 +171,11 @@ bool Changeset_proc_fetch::my_send_result_metadata(
         if (!(item = new Item_temporal(field->type(), field_name, 0,
                                        field->field_length)))
           DBUG_RETURN(0);
+
+        if (field->type() == MYSQL_TYPE_TIME || 
+          field->type() == MYSQL_TYPE_TIMESTAMP ||
+          field->type() == MYSQL_TYPE_DATETIME)
+          item->decimals= field->decimals();
         
         break;
       }
@@ -235,11 +257,16 @@ void Sql_cmd_changeset_proc_fetch::send_result(THD *thd, bool error) {
   }
 
   // process parameters
+  if (m_list == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset fetch failed, illegal table name");
+    return;
+  }
   auto it = m_list->begin();
   Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
   if (table_name_item == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
-             "call changeset fetch failed, table name is illegal");
+             "call changeset fetch failed, illegal table name");
     return;
   }
 
@@ -253,6 +280,11 @@ void Sql_cmd_changeset_proc_fetch::send_result(THD *thd, bool error) {
                          table_name_item->val_str(nullptr)->length());
 
   sql_print_information("changeset.fetch(%s)", table_name.data());
+
+  if (current_thd->db().str == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "please use database first");
+    return;
+  }
 
   // get table
   TABLE *table;
@@ -315,11 +347,16 @@ void Sql_cmd_changeset_proc_finish::send_result(THD *thd, bool error) {
 
   // process parameters
   // finish_changeset(table_name)
+  if (m_list == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset finish failed, illegal table name");
+    return;
+  }
   auto it = m_list->begin();
   Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
   if (table_name_item == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
-             "call changeset finish failed, table name is illegal");
+             "call changeset finish failed, illegal table name");
     return;
   }
 
@@ -338,37 +375,76 @@ void Sql_cmd_changeset_proc_finish::send_result(THD *thd, bool error) {
   my_eof(thd);
 }
 
-///////////////////////// polarx.changeset_stop ///////////////////////////////
-Proc *Changeset_proc_stop::instance() {
-  static Proc *proc = new Changeset_proc_stop(key_memory_package);
+/**
+ * polarx.changeset_backpressure
+ */
+Proc *Changeset_proc_backpressure::instance() {
+  static Proc *proc = new Changeset_proc_backpressure(key_memory_package);
   return proc;
 }
 
-Sql_cmd *Changeset_proc_stop::invoke_cmd(THD *thd,
+Sql_cmd *Changeset_proc_backpressure::invoke_cmd(THD *thd,
                                          mem_root_deque<Item *> *list) const {
   return new (thd->mem_root) Sql_cmd_type(thd, list, this);
 }
 
-void Sql_cmd_changeset_proc_stop::send_result(THD *thd, bool error) {
+void Sql_cmd_changeset_proc_backpressure::send_result(THD *thd, bool error) {
   if (error) {
     return;
   }
 
   // process parameters
-  auto it = m_list->begin();
-  Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
-  if (table_name_item == nullptr) {
+  if (m_list == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
-             "call changeset stop failed, table name is illegal");
+      "call changeset backpressure failed, illegal table name");
     return;
   }
 
-  std::string table_name(table_name_item->val_str(NULL)->ptr(),
+  if (m_list->size() != 4) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+             "call changeset backpressure failed, illegal parameters");
+    return;
+  }
+
+  auto it = m_list->begin();
+  Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
+  Item_int *slow_down_trigger_item = dynamic_cast<Item_int *>(*(it++));
+  Item_int *bucket_capacity = dynamic_cast<Item_int *>(*(it++));
+  Item_int *bucket_fill_rate = dynamic_cast<Item_int *>(*(it++));
+  if (table_name_item == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+             "call changeset backpressure failed, illegal table name");
+    return;
+  }
+
+  if (slow_down_trigger_item == nullptr || slow_down_trigger_item->value < 0) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset backpressure failed, illegal backpressure threshold");
+    return;
+  }
+
+  if (bucket_capacity == nullptr || bucket_capacity->value < 0) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset backpressure failed, illegal bucket capacity");
+    return;
+  }
+
+  if (bucket_fill_rate == nullptr || bucket_fill_rate->value < 0) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset backpressure failed, illegal bucket fill rate");
+    return;
+  }
+
+  std::string table_name(table_name_item->val_str(nullptr)->ptr(),
                          table_name_item->val_str(nullptr)->length());
+  uint64_t slow_down_trigger = slow_down_trigger_item->value;
+  uint64_t capacity = bucket_capacity->value;
+  uint64_t fill_rate = bucket_fill_rate->value;
 
-  sql_print_information("changeset.stop(%s)", table_name.data());
+  sql_print_information("changeset.backpressure(%s, %lu, %lu, %lu)", table_name.data(),
+    slow_down_trigger, capacity, fill_rate);
 
-  if (gChangesetManager.fence_change(table_name)) {
+  if (gChangesetManager.set_backpressure(table_name, slow_down_trigger, capacity, fill_rate)) {
     my_printf_error(ER_CHANGESET_COMMAND_ERROR, "changeset not exists", 0);
     return;
   }
@@ -378,7 +454,9 @@ void Sql_cmd_changeset_proc_stop::send_result(THD *thd, bool error) {
   my_eof(thd);
 }
 
-///////////////////////// polarx.changeset_stats ///////////////////////////////
+/**
+ * polarx.changeset_stats
+ */
 Proc *Changeset_proc_stats::instance() {
   static Proc *proc = new Changeset_proc_stats(key_memory_package);
   return proc;
@@ -411,20 +489,24 @@ void Sql_cmd_changeset_proc_stats::send_result(THD *thd, bool error) {
     proto->start_row();
     proto->store(full_table_name.db_name.data(), &my_charset_utf8mb3_bin);
     proto->store(full_table_name.tb_name.data(), &my_charset_utf8mb3_bin);
-    proto->store_longlong(stats.insert_count, false);
-    proto->store_longlong(stats.update_count, false);
-    proto->store_longlong(stats.delete_count, false);
-    proto->store_longlong(stats.file_count, false);
-    proto->store_longlong(stats.memory_size, false);
+    proto->store_longlong(stats.insert_count, true);
+    proto->store_longlong(stats.update_count, true);
+    proto->store_longlong(stats.delete_count, true);
+    proto->store_longlong(stats.file_count, true);
+    proto->store_longlong(stats.memory_size, true);
+    proto->store_longlong(stats.current_pk_num, true);
+    proto->store(stats.backpressure_trigger.data(), &my_charset_utf8mb3_bin);
+    proto->store(stats.bucket_available_tokens.data(), &my_charset_utf8mb3_bin);
+    proto->store(stats.bucket_fill_rate.data(), &my_charset_utf8mb3_bin);
     proto->end_row();
   }
 
   my_eof(thd);
 }
 
-//////////////////////////// polarx.changeset_times
-///////////////////////////////////
-
+/**
+ * polarx.changeset_times
+ */
 Proc *Changeset_proc_times::instance() {
   static Proc *proc = new Changeset_proc_times(key_memory_package);
   return proc;
@@ -448,11 +530,16 @@ void Sql_cmd_changeset_proc_times::send_result(THD *thd, bool error) {
 
   // process parameters
   // finish_changeset(table_name)
+  if (m_list == nullptr) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+      "call changeset times failed, illegal table name");
+    return;
+  }
   auto it = m_list->begin();
   Item_string *table_name_item = dynamic_cast<Item_string *>(*(it++));
   if (table_name_item == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
-             "call changeset times failed, table name is illegal");
+             "call changeset times failed, illegal table name");
     return;
   }
 
@@ -473,7 +560,8 @@ void Sql_cmd_changeset_proc_times::send_result(THD *thd, bool error) {
 
   proto->start_row();
   proto->store(table_name.data(), &my_charset_utf8mb3_bin);
-  proto->store_longlong(stats.file_count + 2, false);
+  proto->store_longlong(stats.file_count + 2, true);
+  proto->store_longlong(stats.current_pk_num, true);
   proto->end_row();
 
   my_eof(thd);
@@ -486,7 +574,6 @@ bool Sql_cmd_changeset_proc::check_parameter() {
 
 bool Sql_cmd_changeset_proc::check_access(THD *) { return false; }
 
-//////////////////////////// polarx.changeset_end
-///////////////////////////////////
+/* polarx.changeset_end */
 
 }  // namespace im

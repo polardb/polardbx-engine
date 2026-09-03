@@ -1,0 +1,366 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Prepare - Create table with vector index
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+name VARCHAR(100),
+v VECTOR(5),
+INDEX idx_name(name),
+VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO t1(name, v) VALUES ('test1', VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(name, v) VALUES ('test2', VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO t1(name, v) VALUES ('test3', VEC_FROMTEXT('[3,4,5,6,7]'));
+
+# 2. SHOW CREATE TABLE - should include vector index information
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`),
+  VECTOR KEY `vi` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+
+# 3. SHOW INDEX FROM - complete index information
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+t1	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+
+# 4. SHOW TABLE STATUS
+SHOW TABLE STATUS LIKE 't1';
+Name	Engine	Version	Row_format	Rows	Avg_row_length	Data_length	Max_data_length	Index_length	Data_free	Auto_increment	Create_time	Update_time	Check_time	Collation	Checksum	Create_options	Comment
+t1	InnoDB	10	Dynamic	3	5461	16384	0	16384	0	4	#	#	NULL	utf8mb4_0900_ai_ci	NULL		
+
+# 5. INFORMATION_SCHEMA.STATISTICS - verify vector index fields
+SELECT 
+TABLE_SCHEMA,
+TABLE_NAME,
+INDEX_NAME,
+SEQ_IN_INDEX,
+COLUMN_NAME,
+INDEX_TYPE,
+NULLABLE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	SEQ_IN_INDEX	COLUMN_NAME	INDEX_TYPE	NULLABLE
+test	t1	idx_name	1	name	BTREE	YES
+test	t1	PRIMARY	1	id	BTREE	
+
+# 6. INFORMATION_SCHEMA.COLUMNS - vector column metadata
+SELECT 
+COLUMN_NAME,
+ORDINAL_POSITION,
+COLUMN_DEFAULT,
+IS_NULLABLE,
+DATA_TYPE,
+COLUMN_TYPE,
+COLUMN_KEY,
+EXTRA
+FROM INFORMATION_SCHEMA.COLUMNS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+COLUMN_NAME	ORDINAL_POSITION	COLUMN_DEFAULT	IS_NULLABLE	DATA_TYPE	COLUMN_TYPE	COLUMN_KEY	EXTRA
+id	1	NULL	NO	int	int	PRI	auto_increment
+name	2	NULL	YES	varchar	varchar(100)	MUL	
+v	3	NULL	YES	vector	vector(5)		
+
+# 7. INFORMATION_SCHEMA.TABLES - table metadata
+SELECT 
+TABLE_NAME,
+TABLE_TYPE,
+ENGINE,
+ROW_FORMAT,
+TABLE_ROWS
+FROM INFORMATION_SCHEMA.TABLES 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+TABLE_NAME	TABLE_TYPE	ENGINE	ROW_FORMAT	TABLE_ROWS
+t1	BASE TABLE	InnoDB	Dynamic	3
+
+# 8. INFORMATION_SCHEMA.INNODB_TABLES - verify auxiliary tables for vector index
+# Vector index auxiliary tables follow pattern: vidx_<table_id>_*
+SELECT 
+TABLE_ID,
+NAME,
+FLAG,
+N_COLS,
+SPACE
+FROM INFORMATION_SCHEMA.INNODB_TABLES 
+WHERE NAME LIKE CONCAT(DATABASE(), '/t1') OR NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+TABLE_ID	NAME	FLAG	N_COLS	SPACE
+#	test/t1	33	9	#
+#	test/vidx_XXXX_0	33	10	#
+
+# 9. INFORMATION_SCHEMA.INNODB_INDEXES - index information including auxiliary
+SELECT 
+i.NAME AS INDEX_NAME,
+t.NAME AS TABLE_NAME,
+i.TYPE,
+i.N_FIELDS,
+i.SPACE
+FROM INFORMATION_SCHEMA.INNODB_INDEXES i
+JOIN INFORMATION_SCHEMA.INNODB_TABLES t ON i.TABLE_ID = t.TABLE_ID
+WHERE t.NAME LIKE CONCAT(DATABASE(), '/t1') OR t.NAME LIKE CONCAT(DATABASE(), '/vidx_%');
+INDEX_NAME	TABLE_NAME	TYPE	N_FIELDS	SPACE
+PRIMARY	test/t1	3	8	#
+idx_name	test/t1	0	4	#
+GEN_CLUST_INDEX	test/vidx_XXXX_0	1	10	#
+tref	test/vidx_XXXX_0	2	7	#
+layer	test/vidx_XXXX_0	0	4	#
+
+# 10. INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+SELECT 
+TABLE_NAME,
+COLUMN_NAME,
+CONSTRAINT_NAME,
+ORDINAL_POSITION
+FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION;
+TABLE_NAME	COLUMN_NAME	CONSTRAINT_NAME	ORDINAL_POSITION
+t1	id	PRIMARY	1
+
+# 11. INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+SELECT 
+CONSTRAINT_NAME,
+CONSTRAINT_TYPE
+FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+CONSTRAINT_NAME	CONSTRAINT_TYPE
+PRIMARY	PRIMARY KEY
+
+# 12. Create table with multiple indexes including vector
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL,
+b VARCHAR(50),
+v VECTOR(10),
+INDEX idx_a(a),
+INDEX idx_b(b),
+UNIQUE INDEX idx_ab(a, b),
+VECTOR INDEX vi(v) m=32 distance=cosine
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `a` int NOT NULL,
+  `b` varchar(50) DEFAULT NULL,
+  `v` vector(10) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_ab` (`a`,`b`),
+  KEY `idx_a` (`a`),
+  KEY `idx_b` (`b`),
+  VECTOR KEY `vi` (`v`) M=32 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW INDEX FROM t2;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t2	0	PRIMARY	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+t2	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=32, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=10	YES	NULL
+t2	0	idx_ab	1	a	A	0	NULL	NULL		BTREE			YES	NULL
+t2	0	idx_ab	2	b	A	0	NULL	NULL	YES	BTREE			YES	NULL
+t2	1	idx_a	1	a	A	0	NULL	NULL		BTREE			YES	NULL
+t2	1	idx_b	1	b	A	0	NULL	NULL	YES	BTREE			YES	NULL
+# Verify all indexes in INFORMATION_SCHEMA
+SELECT 
+INDEX_NAME,
+NON_UNIQUE,
+COLUMN_NAME,
+INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't2'
+ORDER BY INDEX_NAME, SEQ_IN_INDEX;
+INDEX_NAME	NON_UNIQUE	COLUMN_NAME	INDEX_TYPE
+idx_a	1	a	BTREE
+idx_ab	0	a	BTREE
+idx_ab	0	b	BTREE
+idx_b	1	b	BTREE
+PRIMARY	0	id	BTREE
+
+# 13. After ALTER TABLE - verify metadata updated
+ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0;
+ALTER TABLE t1 RENAME INDEX `vi` TO `vi_renamed`;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) DEFAULT NULL,
+  `v` vector(5) DEFAULT NULL,
+  `extra` int DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_name` (`name`),
+  VECTOR KEY `vi_renamed` (`v`) M=16 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t1	1	vi_renamed	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+t1	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SELECT 
+INDEX_NAME,
+COLUMN_NAME,
+INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1' AND INDEX_NAME LIKE '%vi%';
+INDEX_NAME	COLUMN_NAME	INDEX_TYPE
+
+# 14. After DROP and recreate vector index
+ALTER TABLE t1 DROP INDEX `vi_renamed`;
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t1	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SELECT 
+INDEX_NAME
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1';
+INDEX_NAME
+idx_name
+PRIMARY
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+SHOW INDEX FROM t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+t1	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SELECT 
+INDEX_NAME,
+COLUMN_NAME,
+INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	COLUMN_NAME	INDEX_TYPE
+
+# 15. INFORMATION_SCHEMA with different databases
+CREATE DATABASE IF NOT EXISTS test_vidx_db;
+USE test_vidx_db;
+CREATE TABLE t_other (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Query across databases
+SELECT 
+TABLE_SCHEMA,
+TABLE_NAME,
+INDEX_NAME,
+COLUMN_NAME
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE INDEX_NAME = 'vi' AND TABLE_SCHEMA IN ('test', 'test_vidx_db')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	COLUMN_NAME
+DROP TABLE t_other;
+DROP DATABASE test_vidx_db;
+USE test;
+
+# 16. EXPLAIN output for vector index queries
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	3	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=3; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,VEC_ToText(`test`.`t1`.`v`) AS `VEC_TOTEXT(v)` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[1,2,3,4,5]')) limit 3
+EXPLAIN FORMAT=JSON SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "1.30"
+    },
+    "ordering_operation": {
+      "using_filesort": false,
+      "table": {
+        "table_name": "t1",
+        "access_type": "index",
+        "key": "vi",
+        "used_key_parts": [
+          "v"
+        ],
+        "key_length": "23",
+        "rows_examined_per_scan": 3,
+        "rows_produced_per_join": 3,
+        "filtered": "100.00",
+        "using_vector_index": "algo=HNSW; ef_search=20; ef_construction=10; limit=3; metric=EUCLIDEAN",
+        "cost_info": {
+          "read_cost": "1.00",
+          "eval_cost": "0.30",
+          "prefix_cost": "1.30",
+          "data_read_per_join": "1K"
+        },
+        "used_columns": [
+          "id",
+          "v"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,VEC_ToText(`test`.`t1`.`v`) AS `VEC_TOTEXT(v)` from `test`.`t1` FORCE INDEX (`vi`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[1,2,3,4,5]')) limit 3
+
+# 17. INFORMATION_SCHEMA.INNODB_COLUMNS for vector column
+SELECT 
+c.NAME AS COLUMN_NAME,
+c.POS,
+c.MTYPE,
+c.LEN
+FROM INFORMATION_SCHEMA.INNODB_COLUMNS c
+JOIN INFORMATION_SCHEMA.INNODB_TABLES t ON c.TABLE_ID = t.TABLE_ID
+WHERE t.NAME LIKE CONCAT(DATABASE(), '/t1')
+ORDER BY c.POS;
+COLUMN_NAME	POS	MTYPE	LEN
+id	0	6	4
+name	1	12	400
+v	2	4	20
+extra	3	6	4
+
+# 18. Cleanup
+DROP TABLE t2;
+DROP TABLE t1;
+
+# 19. Multi-index metadata in INFORMATION_SCHEMA
+CREATE TABLE t_mi (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(5),
+v2 VECTOR(3),
+VECTOR INDEX vi1(v1) M=16 DISTANCE=euclidean,
+VECTOR INDEX vi2(v2) M=8 DISTANCE=cosine
+) ENGINE=InnoDB;
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t_mi(v1, v2) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'), VEC_FROMTEXT('[0,1,0]'));
+# 19a. STATISTICS shows both vector indexes
+SELECT INDEX_NAME, COLUMN_NAME, INDEX_TYPE
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_mi' AND INDEX_TYPE = 'VECTOR'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	INDEX_TYPE
+# 19b. INNODB_TABLES shows multiple vidx_ auxiliary tables
+SELECT NAME FROM INFORMATION_SCHEMA.INNODB_TABLES
+WHERE NAME LIKE CONCAT(DATABASE(), '/vidx_%')
+ORDER BY NAME;
+NAME
+test/vidx_XXXX_0
+test/vidx_XXXX_1
+# 19c. VECTOR_INDEXES returns correct rows for multi-index table
+SELECT INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_mi'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	METRIC_TYPE	DIMENSION	HLINDEX_TABLE_NAME
+vi1	v1	EUCLIDEAN	5	HLINDEX_TABLE_NAME
+vi2	v2	COSINE	3	HLINDEX_TABLE_NAME
+# 19d. SHOW INDEX lists both vector indexes with params
+SHOW INDEX FROM t_mi WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_mi	1	vi1	1	v1	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+t_mi	1	vi2	1	v2	NULL	NULL	NULL	NULL		VECTOR		M=8, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+DROP TABLE t_mi;
+SET GLOBAL vidx_disabled = ON;

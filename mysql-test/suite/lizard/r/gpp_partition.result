@@ -1,0 +1,116 @@
+#
+# Test GPP (Guess Primary Page) support for partitioned tables.
+# GPP should work with filesort, multi-update, and multi-delete
+# on partition tables just as it does on non-partitioned tables.
+#
+set global innodb_lizard_stat_enabled=on;
+set global innodb_index_pos_guess_clust_enabled=on;
+set opt_index_format_gpp_enabled=true;
+# -----------------------------------------------------------------------
+# Create a HASH-partitioned table with composite PK, secondary index,
+# and LONGTEXT column to force rowid mode in filesort.
+# -----------------------------------------------------------------------
+CREATE TABLE tp (
+id INT NOT NULL,
+name VARCHAR(50) NOT NULL,
+k INT NOT NULL,
+c INT NOT NULL,
+data LONGTEXT,
+PRIMARY KEY (id, name),
+KEY idx_k (k)
+) ENGINE=InnoDB
+PARTITION BY HASH(id) PARTITIONS 4;
+# -----------------------------------------------------------------------
+# Insert 100 rows, distributed across 4 partitions.
+# -----------------------------------------------------------------------
+INSERT INTO tp (id, name, k, c, data)
+WITH RECURSIVE seq AS (
+SELECT 1 AS i
+UNION ALL
+SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT
+i,
+CONCAT('user_', LPAD(i, 5, '0')),
+(i * 3) MOD 97,
+100 - i,
+REPEAT(CHAR(65 + (i MOD 26) USING ascii), 1500)
+FROM seq;
+SELECT COUNT(*) AS row_count FROM tp;
+row_count
+100
+# ===================================================================
+# Test 1: filesort on partition table - ORDER BY c
+# Verify filesort GPP attempts = 100 and hit > 0
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT * FROM tp ORDER BY c;
+include/assert.inc [[partition filesort] gpp total (hit+miss) should be 100]
+include/assert.inc [[partition filesort] gpp hit should be > 0]
+# ===================================================================
+# Test 2: filesort result correctness on partition table
+# ===================================================================
+SELECT id, name, k, c, LEFT(data, 5) AS data_prefix
+FROM tp ORDER BY c LIMIT 5;
+id	name	k	c	data_prefix
+100	user_00100	9	0	WWWWW
+99	user_00099	6	1	VVVVV
+98	user_00098	3	2	UUUUU
+97	user_00097	0	3	TTTTT
+96	user_00096	94	4	SSSSS
+# ===================================================================
+# Test 3: multi-table UPDATE on partition table with GPP
+# Create a driver table and do UPDATE tp JOIN t_drv ...
+# ===================================================================
+CREATE TABLE t_drv (
+id INT NOT NULL PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t_drv (id, val)
+WITH RECURSIVE seq AS (
+SELECT 1 AS i
+UNION ALL
+SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT i, i * 10 FROM seq;
+call dbms_stat.flush_gpp();
+UPDATE t_drv JOIN tp ON t_drv.id = tp.id SET tp.c = tp.c + 1;
+include/assert.inc [[partition multi-update] gpp total (hit+miss) should be 100]
+include/assert.inc [[partition multi-update] gpp hit should be > 0]
+# ===================================================================
+# Test 4: multi-table DELETE on partition table with GPP
+# Delete all matching rows, verify GPP stats.
+# ===================================================================
+call dbms_stat.flush_gpp();
+DELETE tp FROM t_drv JOIN tp ON t_drv.id = tp.id;
+include/assert.inc [[partition multi-delete] gpp total (hit+miss) should be 100]
+include/assert.inc [[partition multi-delete] gpp hit should be > 0]
+include/assert.inc [[partition multi-delete] all 100 rows should be deleted]
+# ===================================================================
+# Test 5: GPP disabled - partition table should show 0 stats
+# ===================================================================
+INSERT INTO tp (id, name, k, c, data)
+WITH RECURSIVE seq AS (
+SELECT 1 AS i
+UNION ALL
+SELECT i + 1 FROM seq WHERE i < 100
+)
+SELECT
+i,
+CONCAT('user_', LPAD(i, 5, '0')),
+(i * 3) MOD 97,
+100 - i,
+REPEAT(CHAR(65 + (i MOD 26) USING ascii), 1500)
+FROM seq;
+set global innodb_index_pos_guess_clust_enabled=off;
+call dbms_stat.flush_gpp();
+SELECT * FROM tp ORDER BY c;
+include/assert.inc [[partition GPP disabled] filesort gpp hit and miss should both be 0]
+# -----------------------------------------------------------------------
+# Clean up
+# -----------------------------------------------------------------------
+DROP TABLE tp;
+DROP TABLE t_drv;
+SET opt_index_format_gpp_enabled= 1;
+SET GLOBAL innodb_lizard_stat_enabled= 0;
+SET GLOBAL innodb_index_pos_guess_clust_enabled= 1;

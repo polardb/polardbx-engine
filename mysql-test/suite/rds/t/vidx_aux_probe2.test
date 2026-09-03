@@ -1,0 +1,59 @@
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("\\[ERROR\\].*");
+CALL mtr.add_suppression("\\[Warning\\].*");
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+CREATE TABLE t1 (id INT PRIMARY KEY, v VECTOR(4), VECTOR INDEX vi(v)) ENGINE=InnoDB;
+INSERT INTO t1 VALUES
+ (1, VEC_FROMTEXT('[1,0,0,0]')),
+ (2, VEC_FROMTEXT('[0,1,0,0]')),
+ (3, VEC_FROMTEXT('[0,0,1,0]'));
+
+SELECT NAME INTO @aux_full FROM information_schema.INNODB_TABLES WHERE NAME LIKE 'test/vidx_%' LIMIT 1;
+--let $aux= `SELECT SUBSTRING_INDEX(@aux_full, '/', -1)`
+SELECT TABLE_ID INTO @aux0 FROM information_schema.INNODB_TABLES WHERE NAME = @aux_full;
+
+--echo ===== ON: ALTER aux DISCARD TABLESPACE (gap fixed: now rejected) =====
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NOT_ALLOWED_COMMAND
+eval ALTER TABLE test.`$aux` DISCARD TABLESPACE;
+--echo # aux TABLE_ID after DISCARD attempt (1=unchanged, expect 1 now):
+SELECT (@aux0 = TABLE_ID) AS aux_unchanged_after_discard
+  FROM information_schema.INNODB_TABLES WHERE NAME = @aux_full;
+--echo # base OPTIMIZE after DISCARD attempt (must not crash):
+OPTIMIZE TABLE t1;
+SELECT 'survived after discard probe' AS r1;
+
+--echo ===== OFF: aux unreachable for all admin/alter DDL =====
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+FLUSH TABLES;
+--connect (con_off, localhost, root,,)
+--connection con_off
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+--error ER_NO_SUCH_TABLE
+eval ALTER TABLE test.`$aux` ENGINE=InnoDB;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+eval OPTIMIZE TABLE test.`$aux`;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+eval ANALYZE TABLE test.`$aux`;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+eval REPAIR TABLE test.`$aux`;
+--replace_regex /vidx_[0-9]+_[0-9]+/vidx_XXXXX_X/
+eval CHECK TABLE test.`$aux`;
+--disconnect con_off
+--connection default
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--echo # base OPTIMIZE still ok after OFF probes:
+OPTIMIZE TABLE t1;
+SELECT 'survived OFF probe' AS r2;
+
+DROP TABLE t1;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL vidx_disabled = ON;

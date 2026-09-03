@@ -1,0 +1,95 @@
+#
+# Boundary coverage for the sample_percentage hint value.
+#
+# The percentage travels from the hint text to the storage engine as a plain
+# double, and three layers used to disagree about what the value 0 means:
+#
+#   PT_hint_sample_percentage::contextualize()  clamps the parsed value into
+#                                               [0, 100], so 0 is a value the
+#                                               engine must accept.
+#   Sampler::skip()                             treated 0 as "skip everything",
+#                                               i.e. an empty result set.
+#   ha_innobase::lizard_sample_init_low()       asserted the value was strictly
+#                                               above 0 and aborted otherwise.
+#
+# The assertion is ut_a, which is compiled into release builds too, so a plain
+# SELECT carrying sample_percentage(0.0) crashed the server. There was no
+# concurrency involved and no special table shape required.
+#
+# The engine now asserts the range the hint layer actually guarantees, [0, 100],
+# and Sampler::skip() decides the two boundaries by range rather than by exact
+# floating point equality. Comparing a double with == 0.00 made behaviour depend
+# on the literal being exactly representable, and would have fallen through to
+# the random draw for any value merely adjacent to a bound.
+#
+# A negative literal never reaches either layer: the hint grammar has no sign, so
+# it is a hint syntax error and the whole hint is dropped. That is pinned below
+# too, because it is the only reason the clamp toward 0 is unreachable from SQL
+# and therefore the only reason 0 has to be spelled out explicitly to hit the
+# old crash.
+#
+# Both sampler implementations are exercised, because skip() is shared but its
+# effect differs: RecordSampler skips individual records while BlockSampler
+# skips whole leaf pages.
+#
+
+--source include/have_debug.inc
+
+--disable_warnings
+DROP TABLE IF EXISTS t_rec, t_blk;
+--enable_warnings
+
+--echo #################
+--echo # Record Mode: height 0, so create_sampler() picks RecordSampler
+--echo #################
+
+CREATE TABLE t_rec (id INT PRIMARY KEY) ENGINE = InnoDB;
+INSERT INTO t_rec VALUES (1), (2), (3);
+
+--echo # 0 percent yields an empty result instead of aborting the server
+SELECT /*+ sample_percentage(0.0) */ COUNT(*) FROM t_rec;
+SELECT /*+ sample_percentage(0) */ COUNT(*) FROM t_rec;
+
+--echo # a negative literal is a hint syntax error, so the hint is dropped and
+--echo # the statement degrades to an ordinary full scan
+SELECT /*+ sample_percentage(-1) */ COUNT(*) FROM t_rec;
+SELECT /*+ sample_percentage(-0.5) */ COUNT(*) FROM t_rec;
+
+--echo # 100 percent samples every row
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t_rec;
+SELECT /*+ sample_percentage(100.0) */ id FROM t_rec;
+
+--echo # percentages above 100 are clamped down to 100
+SELECT /*+ sample_percentage(150.0) */ COUNT(*) FROM t_rec;
+
+--echo #################
+--echo # Block Mode: height 1, so create_sampler() picks BlockSampler
+--echo #################
+
+CREATE TABLE t_blk (id INT PRIMARY KEY) ENGINE = InnoDB;
+
+# Cap every page at two records so three rows are enough to split the root and
+# leave the tree at height 1, which is what makes create_sampler() read node
+# pointers at level 1. suite/innodb/t/innodb_bug14676111.test uses the same knob.
+SET @old_limit_optimistic = @@GLOBAL.innodb_limit_optimistic_insert_debug;
+SET GLOBAL innodb_limit_optimistic_insert_debug = 2;
+INSERT INTO t_blk VALUES (10), (20), (30);
+SET GLOBAL innodb_limit_optimistic_insert_debug = @old_limit_optimistic;
+
+--echo # 0 percent makes BlockSampler skip every leaf page
+SELECT /*+ sample_percentage(0.0) */ COUNT(*) FROM t_blk;
+SELECT /*+ sample_percentage(0) */ COUNT(*) FROM t_blk;
+
+--echo # a negative literal is a hint syntax error, so the hint is dropped and
+--echo # the statement degrades to an ordinary full scan
+SELECT /*+ sample_percentage(-1) */ COUNT(*) FROM t_blk;
+SELECT /*+ sample_percentage(-0.5) */ COUNT(*) FROM t_blk;
+
+--echo # 100 percent opens every leaf page
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t_blk;
+SELECT /*+ sample_percentage(100.0) */ id FROM t_blk;
+
+--echo # percentages above 100 are clamped down to 100
+SELECT /*+ sample_percentage(150.0) */ COUNT(*) FROM t_blk;
+
+DROP TABLE t_rec, t_blk;

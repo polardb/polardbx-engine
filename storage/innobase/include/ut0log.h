@@ -294,6 +294,36 @@ class error : public logger {
 #endif /* !UNIV_NO_ERR_MSGS */
 };
 
+/** The class error is used to emit system messages.  Refer to the
+documentation of class info for further details. */
+class system: public logger {
+ public:
+#ifndef UNIV_NO_ERR_MSGS
+  /** Default constructor uses ER_IB_MSG_0 */
+  system() : logger(SYSTEM_LEVEL) {}
+
+  /** Constructor.
+  @param[in]    err             Error code from errmsg-*.txt.
+  @param[in]    args            Variable length argument list */
+  template <class... Args>
+  explicit system(int err, Args &&... args)
+      : logger(SYSTEM_LEVEL, err, std::forward<Args>(args)...) {}
+
+  /** Constructor.
+  @param[in]	err		Error code from errmsg-*.txt.
+  @param[in]	args		Variable length argument list */
+  template <class... Args>
+  explicit system(const char *subsys, int err, Args &&...args)
+      : logger(subsys, SYSTEM_LEVEL, err, std::forward<Args>(args)...) {}
+
+#else
+  /** Destructor */
+  ~system() override;
+#endif /* !UNIV_NO_ERR_MSGS */
+};
+
+
+
 /** The class fatal is used to emit an error message and stop the server
 by crashing it.  Use this class when MySQL server needs to be stopped
 immediately.  Refer to the documentation of class info for usage details. */

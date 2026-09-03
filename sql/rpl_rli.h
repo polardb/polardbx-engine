@@ -65,7 +65,7 @@
 
 #include "replica_read_manager.h"
 #include "sql/consensus/consensus_channel.h"
-#include "sql/lizard_rpl_rli.h"
+#include "sql/komodo0rpl0rli.h"
 #include "sql/rpl_applier_reader.h"  // Rpl_applier_reader
 
 class Commit_order_manager;
@@ -524,7 +524,6 @@ class Relay_log_info : public Rpl_info {
       char const *param_privilege_checks_username,
       char const *param_privilege_checks_hostname);
 
-  void set_privilege_checks_user();
   /**
     Checks the validity and integrity of the data related to
     `PRIVILEGE_CHECKS_USER`, specifically the user name and the user
@@ -833,6 +832,13 @@ class Relay_log_info : public Rpl_info {
     @return RETURN_STATUS_OK or RETURN_STATUS_REPORTED_ERROR.
   */
   enum_return_status add_gtid_set(const Gtid_set *gtid_set);
+
+  /**
+    Remove truncated GTID set to received GTID set.
+
+    @param gtid_set the gtid_set to remove
+  */
+  void truncate_gtid_set(const Gtid_set *gtid_set);
 
   const Gtid_set *get_gtid_set() const { return gtid_set; }
 
@@ -2146,10 +2152,10 @@ class Relay_log_info : public Rpl_info {
   virtual void post_commit(bool on_rollback);
 
  protected:
-  lizard::Begin_events_before_gtid_manager m_b_events_before_gtid_mgr;
+  komodo::Begin_events_before_gtid_manager m_b_events_before_gtid_mgr;
 
  public:
-  lizard::Begin_events_before_gtid_manager &get_b_events_before_gtid_mgr() {
+  komodo::Begin_events_before_gtid_manager &get_b_events_before_gtid_mgr() {
     return m_b_events_before_gtid_mgr;
   }
 
@@ -2168,11 +2174,11 @@ class Relay_log_info : public Rpl_info {
   virtual void set_xpaxos_relay_log_info() {}
   virtual void update_xpaxos_applied_index() {}
 
- private:
-  friend lizard::Begin_events_before_gtid_manager;
-
   char consensus_privilege_checks_username[PRIV_CHECKS_USERNAME_LENGTH + 4];
   char consensus_privilege_checks_hostname[PRIV_CHECKS_USERNAME_LENGTH + 4];
+
+ private:
+  friend komodo::Begin_events_before_gtid_manager;
 };
 
 /**

@@ -43,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 
 #include "lizard0btr0types.h"
+#include "lizard0spc0encode.h"
 
 /** Maximum record size which can be stored on a page, without using the
 special big record storage structure */
@@ -248,7 +249,7 @@ static inline void btr_leaf_page_release(buf_block_t *block, ulint latch_mode,
  @param[in] offsets  Array returned by rec_get_offsets()
  @return child node address */
 [[nodiscard]] static inline page_no_t btr_node_ptr_get_child_page_no(
-    const rec_t *rec, const ulint *offsets);
+    const Slice *slc);
 
 /** Returns the child page of a node pointer and sx-latches it.
 @param[in]  node_ptr  node pointer
@@ -257,8 +258,8 @@ static inline void btr_leaf_page_release(buf_block_t *block, ulint latch_mode,
 @param[in]  mtr mtr
 @param[in]  type latch type
 @return child page, latched as per the type */
-buf_block_t *btr_node_ptr_get_child(const rec_t *node_ptr, dict_index_t *index,
-                                    const ulint *offsets, mtr_t *mtr,
+buf_block_t *btr_node_ptr_get_child(const Slice *slc, dict_index_t *index,
+                                    mtr_t *mtr,
                                     rw_lock_type_t type = RW_SX_LATCH);
 
 /** Create the root node for a new index tree.
@@ -278,14 +279,24 @@ page_mark_t btr_create(ulint type, space_id_t space, space_index_t index_id,
 @param[in]      page_id         Root page id
 @param[in]      page_size       Page size
 @param[in]      index_id        PAGE_INDEX_ID contents
+@param[in]      ahi             whether the FSP-layer per-page free path
+                                should still try to drop AHI entries on
+                                each freed page.  Pass false on call sites
+                                that can prove every page of the tree has
+                                no AHI attached at the moment of the call;
+                                this avoids the per-page BP page_hash peek
+                                in btr_search_drop_page_hash_when_freed,
+                                which is O(used_pages) for large indexes.
 @param[in,out]  mtr             Mini-transaction */
 void btr_free_if_exists(const page_id_t &page_id, const page_size_t &page_size,
-                        space_index_t index_id, mtr_t *mtr);
+                        space_index_t index_id, bool ahi, mtr_t *mtr);
 
 /** Free an index tree in a temporary tablespace.
 @param[in]      page_id         root page id
-@param[in]      page_size       page size */
-void btr_free(const page_id_t &page_id, const page_size_t &page_size);
+@param[in]      page_size       page size
+@param[in]      ahi             whether the FSP layer should still drop AHI
+                                entries on every freed page */
+void btr_free(const page_id_t &page_id, const page_size_t &page_size, bool ahi);
 
 /** Truncate an index tree. We just free all except the root.
 Currently, this function is only specific for clustered indexes and the only
@@ -306,13 +317,14 @@ void btr_truncate_recover(const dict_index_t *index);
  we cannot reverse it: therefore enough free disk space must be
  guaranteed to be available before this function is called.
  @return inserted record */
-[[nodiscard]] rec_t *btr_root_raise_and_insert(
+[[nodiscard]] reg_t btr_root_raise_and_insert(
     uint32_t flags,        /*!< in: undo logging and locking flags */
     btr_cur_t *cursor,     /*!< in: cursor at which to insert: must be
                            on the root page; when the function returns,
                            the cursor is positioned on the predecessor
                            of the inserted record */
-    ulint **offsets,       /*!< out: offsets on inserted record */
+    Slice **slc,           /*!< in: offsets on inserted record */
+    Slice_ctx *sctx,       /*!< in: slice context. */
     mem_heap_t **heap,     /*!< in/out: pointer to memory heap
                            that can be emptied, or NULL */
     const dtuple_t *tuple, /*!< in: tuple to insert */
@@ -332,6 +344,7 @@ dropped: it cannot exist.
 page.
 @param[in,out] cursor   Page cursor.
 @param[in]     index    The index tree of the page.
+@param[in]     encoder  spc page encoder
 @param[in,out] mtr      Mini-transaction
 @retval true if the operation was successful
 @retval false if it is a compressed page, and re-compression failed */
@@ -358,33 +371,44 @@ bool btr_page_reorganize(page_cur_t *cursor, dict_index_t *index, mtr_t *mtr);
  inserts converging to left.
  @return true if split recommended */
 [[nodiscard]] bool btr_page_get_split_rec_to_left(
-    btr_cur_t *cursor,  /*!< in: cursor at which to insert */
-    rec_t **split_rec); /*!< out: if split recommended,
+    btr_cur_t *cursor, /*!< in: cursor at which to insert */
+    reg_t *split_reg); /*!< out: if split recommended,
                      the first record on upper half page,
                      or NULL if tuple should be first */
 /** Decides if the page should be split at the convergence point of
  inserts converging to right.
  @return true if split recommended */
 [[nodiscard]] bool btr_page_get_split_rec_to_right(
-    btr_cur_t *cursor,  /*!< in: cursor at which to insert */
-    rec_t **split_rec); /*!< out: if split recommended,
+    btr_cur_t *cursor, /*!< in: cursor at which to insert */
+    reg_t *split_reg); /*!< out: if split recommended,
                      the first record on upper half page,
                      or NULL if tuple should be first */
 
-/** Splits an index page to halves and inserts the tuple. It is assumed
- that mtr holds an x-latch to the index tree. NOTE: the tree x-latch is
- released within this function! NOTE that the operation of this
- function must always succeed, we cannot reverse it: therefore enough
- free disk space (2 pages) must be guaranteed to be available before
- this function is called.
+/** Splits an index page to halves and inserts the tuple.
+ It is assumed that mtr holds an x-latch to the index tree.
+ NOTE: the tree x-latch is released within this function!
+ NOTE that the operation of this function must always succeed,
+ we cannot reverse it: therefore enough free disk space (2 pages)
+ must be guaranteed to be available before this function is called.
 
+ @param[in]      flags   Undo logging and locking flags
+ @param[in,out]  cursor  Cursor at which to insert; when the
+                        function returns, the cursor is positioned
+                        on the predecessor of the inserted record
+@param[in,out]  slc     Slice for the inserted record; updated by callee
+@param[in,out]  sctx    Slice context used instead of offsets; caller
+                        is responsible for lifetime; must not be null
+ @param[in,out]  heap    Pointer to temporary heap that can be emptied, or NULL
+ @param[in]      tuple   Tuple to insert
+ @param[in,out]  mtr     Mini-transaction
  @return inserted record */
-[[nodiscard]] rec_t *btr_page_split_and_insert(
+[[nodiscard]] reg_t btr_page_split_and_insert(
     uint32_t flags,        /*!< in: undo logging and locking flags */
     btr_cur_t *cursor,     /*!< in: cursor at which to insert; when the
                            function returns, the cursor is positioned
                            on the predecessor of the inserted record */
-    ulint **offsets,       /*!< out: offsets on inserted record */
+    Slice **slc,           /*!< out: offsets on inserted record */
+    Slice_ctx *sctx,       /*!< in: slice context. */
     mem_heap_t **heap,     /*!< in/out: pointer to memory heap
                            that can be emptied, or NULL */
     const dtuple_t *tuple, /*!< in: tuple to insert */
@@ -508,12 +532,13 @@ void btr_page_free(dict_index_t *index, /*!< in: index tree */
 /** Creates a new index page (not the root, and also not
  used in page reorganization).  @see btr_page_empty(). */
 void btr_page_create(
-    buf_block_t *block,         /*!< in/out: page to be created */
-    page_zip_des_t *page_zip,   /*!< in/out: compressed page, or NULL */
-    dict_index_t *index,        /*!< in: index */
-    ulint level,                /*!< in: the B-tree level of the page */
-    page_type_t root_page_type, /*!< in: root page type */
-    mtr_t *mtr);                /*!< in: mtr */
+    buf_block_t *block,          /*!< in/out: page to be created */
+    page_zip_des_t *page_zip,    /*!< in/out: compressed page, or NULL */
+    dict_index_t *index,         /*!< in: index */
+    ulint level,                 /*!< in: the B-tree level of the page */
+    page_type_t root_page_type,  /*!< in: root page type */
+    page_dict_desc_t *dict_desc, /*!< in: spc page dictionary description */
+    mtr_t *mtr);                 /*!< in: mtr */
 
 /** Frees a file page used in an index tree. Can be used also to BLOB
  external storage pages.
@@ -544,7 +569,7 @@ void btr_print_index(dict_index_t *index, /*!< in: index */
 the index.
  @return true if ok */
 [[nodiscard]] bool btr_index_rec_validate(
-    const rec_t *rec,          /*!< in: index record */
+    creg_t reg,                /*!< in: index record */
     const dict_index_t *index, /*!< in: index */
     bool dump_on_error);       /*!< in: true if the function
                                should print hex dump of
@@ -565,6 +590,8 @@ dberr_t btr_sdi_create_index(space_id_t space_id, bool dict_locked);
 constexpr uint32_t BTR_N_LEAF_PAGES = 1;
 constexpr uint32_t BTR_TOTAL_SIZE = 2;
 
+#ifndef INNODB_BTR0BTR_IC_STANDALONE
 #include "btr0btr.ic"
+#endif /* !INNODB_BTR0BTR_IC_STANDALONE */
 
 #endif

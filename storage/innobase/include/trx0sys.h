@@ -53,19 +53,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 #include "trx0trx.h"
 
-#include "lizard0erase0types.h"
-#include "lizard0purge0types.h"
-
-
-namespace lizard {
-extern trx_id_t gcs_load_min_active_tid();
-}
+#include "lizard0trx0erase0types.h"
+#include "lizard0trx0purge0types.h"
 
 #ifndef UNIV_HOTBACKUP
 
-// Forward declaration
-class MVCC;
-class ReadView;
+namespace lizard {
+extern trx_id_t gcs_load_next_tid();
+struct pe_heap_t;
+extern ulint trx_rseg_history_len();
+}  // namespace lizard
 
 /** The transaction system */
 extern trx_sys_t *trx_sys;
@@ -78,8 +75,8 @@ static inline bool trx_sys_hdr_page(const page_id_t &page_id);
 /** Creates and initializes the central memory structures for the transaction
  system. This is called when the database is started.
  @return pair of min binary heaps of rsegs to purge / erase */
-std::pair<lizard::purge_heap_t *, lizard::erase_heap_t *>
-trx_sys_init_at_db_start(void);
+lizard::pe_heap_t *trx_sys_init_at_db_start(void);
+
 /** Creates the trx_sys instance and initializes purge_queue and mutex. */
 void trx_sys_create(void);
 /** Creates and initializes the transaction system at the database creation. */
@@ -139,7 +136,7 @@ static inline void trx_sysf_rseg_set_page_no(trx_sysf_t *sys_header, ulint i,
 /** Allocates a new transaction id (for trx->id). Before calling,
 the trx_sys_mutex must be acquired.
 @return new, allocated trx id */
-inline trx_id_t trx_sys_allocate_trx_id();
+// inline trx_id_t trx_sys_allocate_trx_id();
 
 // /** Allocates a new transaction number (for trx->no). Before calling,
 // the trx_sys_serialisation_mutex must be acquired.
@@ -149,7 +146,7 @@ inline trx_id_t trx_sys_allocate_trx_id();
 /** Retrieves a next value that will be allocated if trx_sys_allocate_trx_id()
 or trx_sys_allocate_trx_id_trx_no() was called.
 @return the next trx->id or trx->no that will be allocated */
-inline trx_id_t trx_sys_get_next_trx_id_or_no();
+// inline trx_id_t trx_sys_get_next_trx_id_or_no();
 
 #ifdef UNIV_DEBUG
 /* Flag to control TRX_RSEG_N_SLOTS behavior debugging. */
@@ -223,7 +220,7 @@ void trx_sys_close(void);
 
 /** Determine if there are incomplete transactions in the system.
 @return whether incomplete transactions need rollback */
-static inline bool trx_sys_need_rollback();
+// static inline bool trx_sys_need_rollback();
 
 /** Reads number of recovered transactions which have state
 equal to TRX_STATE_ACTIVE (so are not prepared transactions).
@@ -253,11 +250,11 @@ static inline void trx_sys_rw_trx_add(trx_t *trx);
 
 #endif /* !UNIV_HOTBACKUP */
 
-#ifdef UNIV_DEBUG
-/** Validate the trx_sys_t::rw_trx_list.
- @return true if the list is valid */
-bool trx_sys_validate_trx_list();
-#endif /* UNIV_DEBUG */
+// #ifdef UNIV_DEBUG
+///** Validate the trx_sys_t::rw_trx_list.
+// @return true if the list is valid */
+// bool trx_sys_validate_trx_list();
+// #endif /* UNIV_DEBUG */
 
 /** Initialize trx_sys_undo_spaces, called once during srv_start(). */
 void trx_sys_undo_spaces_init();
@@ -469,10 +466,6 @@ struct trx_sys_t {
 
   /** @{ */
 
-  /** Multi version concurrency control manager */
-
-  // MVCC *mvcc;
-
   /** Vector of pointers to rollback segments. These rsegs are iterated
   and added to the end under a read lock. They are deleted under a write
   lock while the vector is adjusted. They are created and destroyed in
@@ -487,12 +480,16 @@ struct trx_sys_t {
 
   /** Length of the TRX_RSEG_HISTORY list (update undo logs for committed
   transactions). */
-  std::atomic<uint64_t> rseg_history_len;
+  std::atomic<uint64_t> update_rseg_history_len;
 
   /** @} */
 
   /* Members protected by either trx_sys_t::mutex or serialisation_mutex. */
   char pad1[ut::INNODB_CACHE_LINE_SIZE];
+
+  /** Length of the TRX_RSEG_HISTORY list (txn slot logs for committed
+   * transactions)*/
+  std::atomic<uint64_t> txn_rseg_history_len;
 
   /** @{ */
 
@@ -505,12 +502,12 @@ struct trx_sys_t {
   trx_sys_t::serialisation_mutex. Note: it might be in parallel
   used for both trx->id and trx->no assignments (for different
   trx_t objects). */
-  std::atomic<trx_id_t> next_trx_id_or_no;
+  // std::atomic<trx_id_t> next_trx_id_or_no;
 
   /** @} */
 
   /* Members protected by serialisation_mutex. */
-  char pad2[ut::INNODB_CACHE_LINE_SIZE];
+ // char pad2[ut::INNODB_CACHE_LINE_SIZE];
 
   /** @{ */
 
@@ -541,7 +538,7 @@ struct trx_sys_t {
   // trx_id_t rw_max_trx_no;
 #endif /* UNIV_DEBUG */
 
-  char pad3[ut::INNODB_CACHE_LINE_SIZE];
+ // char pad3[ut::INNODB_CACHE_LINE_SIZE];
 
   /* The minimum trx->no inside the serialisation_list. Protected by
   the serialisation_mutex. Might be read without the mutex. */
@@ -561,9 +558,9 @@ struct trx_sys_t {
 
   /** List of active and committed in memory read-write transactions, sorted
   on trx id, biggest first. Recovered transactions are always on this list. */
-  UT_LIST_BASE_NODE_T(trx_t, trx_list) rw_trx_list;
+  // UT_LIST_BASE_NODE_T(trx_t, trx_list) rw_trx_list;
 
-  char pad6[ut::INNODB_CACHE_LINE_SIZE];
+  // char pad6[ut::INNODB_CACHE_LINE_SIZE];
 
   /** List of transactions created for MySQL. All user transactions are
   on mysql_trx_list. The rw_trx_list can contain system transactions and
@@ -589,7 +586,7 @@ struct trx_sys_t {
   Xa_group_shard xa_group_shards[XA_GROUP_SHARDS_N];
 
   /** Number of transactions currently in the XA PREPARED state. */
-  ulint n_prepared_trx;
+  // ulint n_prepared_trx;
 
   /** True if XA PREPARED trxs are found. */
   bool found_prepared_trx;
@@ -656,6 +653,8 @@ static inline void trx_sys_gtids_mem_mutex_exit() {
 
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_TRX0SYS_IC_STANDALONE
 #include "trx0sys.ic"
+#endif /* !INNODB_TRX0SYS_IC_STANDALONE */
 
 #endif

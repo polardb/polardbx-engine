@@ -129,11 +129,10 @@ struct first_page_t : public basic_page_t {
   void mark_cannot_be_partially_updated(trx_t *trx);
 
   /** Allocate the first page for uncompressed LOB.
+  @param[in]    ctx             insert context providing index/is_bulk.
   @param[in,out]        alloc_mtr       the allocation mtr.
-  @param[in]    is_bulk         true if it is bulk operation.
-                                  (OPCODE_INSERT_BULK)
   return the allocated buffer block.*/
-  buf_block_t *alloc(mtr_t *alloc_mtr, bool is_bulk);
+  buf_block_t *alloc(InsertContext *ctx, mtr_t *alloc_mtr);
 
   /** Free all the index pages.  The list of index pages can be accessed
   by traversing via the FIL_PAGE_NEXT field.*/
@@ -266,10 +265,9 @@ struct first_page_t : public basic_page_t {
 
   /** Allocate one index entry.  If required an index page (of type
   FIL_PAGE_TYPE_LOB_INDEX) will be allocated.
-  @param[in]    bulk    true if it is a bulk operation
-                          (OPCODE_INSERT_BULK), false otherwise.
+  @param[in]    ctx     insert context providing index/is_bulk.
   @return the file list node of the index entry. */
-  flst_node_t *alloc_index_entry(bool bulk);
+  flst_node_t *alloc_index_entry(InsertContext *ctx);
 
   /** Get a pointer to the beginning of the index entry nodes in the
   first part of the page.
@@ -375,12 +373,14 @@ struct first_page_t : public basic_page_t {
   point to remaining data.
   @param[in,out]  want    Requested amount of data to be replaced. After the
   call it will contain amount of data yet to be replaced.
+  @param[in]      ctx     insert context providing index/is_bulk for new page
+                          allocation.
   @param[in]      mtr     Mini-transaction context.
   @return  the newly allocated buffer block.
   @return  nullptr if new page could not be allocated
   (DB_OUT_OF_FILE_SPACE). */
   buf_block_t *replace(trx_t *trx, ulint offset, const byte *&ptr, ulint &want,
-                       mtr_t *mtr);
+                       InsertContext *ctx, mtr_t *mtr);
 
   /** Replace data in the page inline.
   @param[in]    offset  Location where replace operation starts.

@@ -37,6 +37,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 namespace lizard {
 
+/** Whether to enable guess mode for btr_pcur_t::restore_position. */
+extern bool index_pcur_guess_restore_enabled;
+
+/** Whether to skip optimistic restore and go directly to guess+search path. */
+extern bool inject_stress_test_for_guess;
+
 /** Validate page cursor */
 extern bool pcur_position_validate(btr_pcur_t *pcur, const rec_t *rec,
                                    const dict_index_t *index);

@@ -28,6 +28,9 @@ readonly MERGE_TEST_COVERAGE=3
 # skip mtr
 readonly MANUAL=4
 readonly MANUAL_ALL=5
+readonly MANUAL_COVERAGE=6
+ 
+readonly PAXOS_STABILITY=7
 
 GET_TEST_TYPE() {
   local res=0
@@ -41,6 +44,10 @@ GET_TEST_TYPE() {
     res=$MANUAL
   elif [ "$1" = "MANUAL_ALL" ]; then
     res=$MANUAL_ALL
+  elif [ "$1" = "MANUAL_COVERAGE" ]; then
+    res=$MANUAL_COVERAGE
+  elif [ "$1" = "PAXOS_STABILITY" ]; then
+    res=$PAXOS_STABILITY
   else
     #use daily regression by default
     res=$DAILY_REGRESSION

@@ -88,8 +88,8 @@ dberr_t Deleter::free_first_page() {
   if (m_ctx.is_compressed() && m_ctx.get_page_zip() != nullptr) {
     m_ctx.m_blobref.set_page_no(next_page_no, nullptr);
     m_ctx.m_blobref.set_length(0, nullptr);
-    page_zip_write_blob_ptr(m_ctx.get_page_zip(), m_ctx.m_rec, m_ctx.m_index,
-                            m_ctx.m_offsets, m_ctx.m_field_no, &m_mtr);
+    page_zip_write_blob_ptr(m_ctx.get_page_zip(), m_ctx.m_slc, m_ctx.m_index,
+                            m_ctx.m_field_no, &m_mtr);
   } else {
     m_ctx.m_blobref.set_page_no(next_page_no, &m_mtr);
     m_ctx.m_blobref.set_length(0, &m_mtr);

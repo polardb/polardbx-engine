@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2012-08-21 Sunny Bains.
  ***********************************************************************/
 
+#if !defined(UNIV_LIBRARY)
+#ifndef sync0policy_h
+#define INNODB_SYNC0POLICY_IC_STANDALONE
+#include "sync0policy.h"
+#undef INNODB_SYNC0POLICY_IC_STANDALONE
+#endif /* !sync0policy_h */
 #include "sync0debug.h"
 
 template <typename Mutex>
@@ -92,3 +98,4 @@ void MutexDebug<Mutex>::release(const Mutex *) UNIV_NOTHROW {
 }
 
 #endif /* UNIV_DEBUG */
+#endif /* !defined(UNIV_LIBRARY) */

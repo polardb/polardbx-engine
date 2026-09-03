@@ -1,0 +1,543 @@
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+CREATE FUNCTION get_table_id(tbl_name VARCHAR(64))
+RETURNS BIGINT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+DECLARE tid BIGINT;
+SELECT table_id INTO tid FROM information_schema.innodb_tables
+WHERE name = CONCAT('test/', tbl_name);
+RETURN tid;
+END//
+
+================================================================
+Category 1: No Rebuild -- Normal Traversal
+================================================================
+CREATE TABLE c1_add_col (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_add_col VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c1_drop_col (id INT PRIMARY KEY, name VARCHAR(64), age INT);
+INSERT INTO c1_drop_col VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+CREATE TABLE c1_rename_col (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_rename_col VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c1_alter_default (id INT PRIMARY KEY, name VARCHAR(64) DEFAULT 'unknown');
+INSERT INTO c1_alter_default VALUES (1, 'Alice');
+CREATE TABLE c1_vcol (id INT PRIMARY KEY, price INT, qty INT);
+INSERT INTO c1_vcol VALUES (1, 100, 5), (2, 200, 3);
+CREATE TABLE c1_add_idx (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c1_add_idx VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c1_drop_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_name(name));
+INSERT INTO c1_drop_idx VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c1_rename_idx (id INT PRIMARY KEY, name VARCHAR(64), INDEX idx_old(name));
+INSERT INTO c1_rename_idx VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c1_fk_parent (id INT PRIMARY KEY);
+INSERT INTO c1_fk_parent VALUES (1), (2);
+CREATE TABLE c1_fk_child (id INT PRIMARY KEY, pid INT, INDEX(pid));
+INSERT INTO c1_fk_child VALUES (1, 1), (2, 2);
+SET @ts_cat1 = NOW(6);
+
+--- 1.1 ADD COLUMN (INSTANT) ---
+SELECT get_table_id('c1_add_col') INTO @tid_before;
+ALTER TABLE c1_add_col ADD COLUMN email VARCHAR(128) DEFAULT 'n/a';
+SELECT get_table_id('c1_add_col') INTO @tid_after;
+include/assert.inc [ADD COLUMN (INSTANT) should not change table_id]
+# Historical rows show DEFAULT value for new column
+SELECT * FROM c1_add_col AS OF TIMESTAMP @ts_cat1;
+id	name	email
+1	Alice	n/a
+2	Bob	n/a
+
+--- 1.2 DROP COLUMN ---
+SELECT get_table_id('c1_drop_col') INTO @tid_before;
+ALTER TABLE c1_drop_col DROP COLUMN age;
+SELECT get_table_id('c1_drop_col') INTO @tid_after;
+include/assert.inc [DROP COLUMN should not change table_id]
+# Dropped column no longer appears in result
+SELECT * FROM c1_drop_col AS OF TIMESTAMP @ts_cat1;
+id	name
+1	Alice
+2	Bob
+
+--- 1.3 RENAME COLUMN ---
+SELECT get_table_id('c1_rename_col') INTO @tid_before;
+ALTER TABLE c1_rename_col RENAME COLUMN name TO full_name;
+SELECT get_table_id('c1_rename_col') INTO @tid_after;
+include/assert.inc [RENAME COLUMN should not change table_id]
+# Result uses current (renamed) column name
+SELECT * FROM c1_rename_col AS OF TIMESTAMP @ts_cat1;
+id	full_name
+1	Alice
+2	Bob
+
+--- 1.4 ALTER COLUMN DEFAULT ---
+SELECT get_table_id('c1_alter_default') INTO @tid_before;
+ALTER TABLE c1_alter_default ALTER COLUMN name SET DEFAULT 'nobody';
+SELECT get_table_id('c1_alter_default') INTO @tid_after;
+include/assert.inc [ALTER DEFAULT should not change table_id]
+# Existing data unchanged
+SELECT * FROM c1_alter_default AS OF TIMESTAMP @ts_cat1;
+id	name
+1	Alice
+
+--- 1.5 ADD VIRTUAL COLUMN ---
+SELECT get_table_id('c1_vcol') INTO @tid_before;
+ALTER TABLE c1_vcol ADD COLUMN total INT AS (price * qty) VIRTUAL;
+SELECT get_table_id('c1_vcol') INTO @tid_after;
+include/assert.inc [ADD VIRTUAL COLUMN should not change table_id]
+# Virtual column shows computed value from historical base data
+SELECT * FROM c1_vcol AS OF TIMESTAMP @ts_cat1;
+id	price	qty	total
+1	100	5	500
+2	200	3	600
+
+--- 1.6 ADD INDEX (special case) ---
+SELECT get_table_id('c1_add_idx') INTO @tid_before;
+ALTER TABLE c1_add_idx ADD INDEX idx_name(name);
+SELECT get_table_id('c1_add_idx') INTO @tid_after;
+include/assert.inc [ADD INDEX should not change table_id]
+# Via primary key -> success
+SELECT * FROM c1_add_idx AS OF TIMESTAMP @ts_cat1 FORCE INDEX(PRIMARY);
+id	name
+1	Alice
+2	Bob
+# Via new index -> ER_AS_OF_TABLE_DEF_CHANGED
+SELECT * FROM c1_add_idx AS OF TIMESTAMP @ts_cat1 FORCE INDEX(idx_name);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 1.7 DROP INDEX ---
+SELECT get_table_id('c1_drop_idx') INTO @tid_before;
+ALTER TABLE c1_drop_idx DROP INDEX idx_name;
+SELECT get_table_id('c1_drop_idx') INTO @tid_after;
+include/assert.inc [DROP INDEX should not change table_id]
+# Normal traversal after DROP INDEX
+SELECT * FROM c1_drop_idx AS OF TIMESTAMP @ts_cat1;
+id	name
+1	Alice
+2	Bob
+
+--- 1.8 RENAME INDEX ---
+SELECT get_table_id('c1_rename_idx') INTO @tid_before;
+ALTER TABLE c1_rename_idx RENAME INDEX idx_old TO idx_new;
+SELECT get_table_id('c1_rename_idx') INTO @tid_after;
+include/assert.inc [RENAME INDEX should not change table_id]
+# Normal traversal after RENAME INDEX
+SELECT * FROM c1_rename_idx AS OF TIMESTAMP @ts_cat1;
+id	name
+1	Alice
+2	Bob
+
+--- 1.9 ADD FOREIGN KEY (with foreign_key_checks=OFF, INPLACE NO-REBUILD) ---
+# When foreign_key_checks is disabled, ADD FOREIGN KEY uses INPLACE algorithm
+# ADD FK is INPLACE NO-REBUILD (part of INNOBASE_FOREIGN_OPERATIONS)
+# This does NOT change table_id, so AS OF query works normally
+SELECT get_table_id('c1_fk_child') INTO @tid_before;
+SET @ts_cat1_fk_inplace = NOW(6);
+SET foreign_key_checks = OFF;
+ALTER TABLE c1_fk_child ADD CONSTRAINT fk_pid_inplace FOREIGN KEY (pid) REFERENCES c1_fk_parent(id);
+SET foreign_key_checks = ON;
+SELECT get_table_id('c1_fk_child') INTO @tid_after;
+include/assert.inc [ADD FK (INPLACE) should not change table_id]
+# ADD FK is NO-REBUILD, table_id unchanged, normal traversal
+SELECT * FROM c1_fk_child AS OF TIMESTAMP @ts_cat1_fk_inplace;
+id	pid
+1	1
+2	2
+
+--- 1.11 DROP FOREIGN KEY ---
+SET @ts_cat1_fk_drop = NOW(6);
+SELECT get_table_id('c1_fk_child') INTO @tid_before;
+ALTER TABLE c1_fk_child DROP FOREIGN KEY fk_pid_inplace;
+SELECT get_table_id('c1_fk_child') INTO @tid_after;
+include/assert.inc [DROP FK should not change table_id]
+# DROP FOREIGN KEY does not change table_id
+# Normal traversal after DROP FOREIGN KEY
+SELECT * FROM c1_fk_child AS OF TIMESTAMP @ts_cat1_fk_drop;
+id	pid
+1	1
+2	2
+
+================================================================
+Category 2: INPLACE Rebuild -- Error (ER_AS_OF_TABLE_DEF_CHANGED)
+================================================================
+CREATE TABLE c2_force (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_force VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c2_optimize (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_optimize VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c2_change_pk (id INT NOT NULL, val INT NOT NULL, PRIMARY KEY(id));
+INSERT INTO c2_change_pk VALUES (1, 100), (2, 200);
+CREATE TABLE c2_not_null (id INT PRIMARY KEY, name VARCHAR(64) NULL);
+INSERT INTO c2_not_null VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c2_row_fmt (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c2_row_fmt VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c2_implicit (id INT PRIMARY KEY, name VARCHAR(64), age INT, INDEX idx_age(age));
+INSERT INTO c2_implicit VALUES (1, 'Alice', 30), (2, 'Bob', 25);
+SET @ts_cat2 = NOW(6);
+SELECT get_table_id('c2_force') INTO @tid_c2_force_before;
+SELECT get_table_id('c2_optimize') INTO @tid_c2_optimize_before;
+SELECT get_table_id('c2_change_pk') INTO @tid_c2_change_pk_before;
+SELECT get_table_id('c2_not_null') INTO @tid_c2_not_null_before;
+SELECT get_table_id('c2_row_fmt') INTO @tid_c2_row_fmt_before;
+SELECT get_table_id('c2_implicit') INTO @tid_c2_implicit_before;
+UPDATE c2_force SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_optimize SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_optimize SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_change_pk SET val = 101 WHERE id = 1;
+UPDATE c2_change_pk SET val = 201 WHERE id = 2;
+UPDATE c2_not_null SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_not_null SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_row_fmt SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_row_fmt SET name = 'Bob_v2' WHERE id = 2;
+UPDATE c2_implicit SET name = 'Alice_v2' WHERE id = 1;
+UPDATE c2_implicit SET name = 'Bob_v2' WHERE id = 2;
+ALTER TABLE c2_force FORCE;
+OPTIMIZE TABLE c2_optimize;
+Table	Op	Msg_type	Msg_text
+test.c2_optimize	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.c2_optimize	optimize	status	OK
+ALTER TABLE c2_change_pk DROP PRIMARY KEY, ADD PRIMARY KEY(val);
+ALTER TABLE c2_not_null MODIFY COLUMN name VARCHAR(64) NOT NULL;
+ALTER TABLE c2_row_fmt ROW_FORMAT = COMPRESSED;
+ALTER TABLE c2_implicit DROP COLUMN age;
+SELECT get_table_id('c2_force') INTO @tid_c2_force_after;
+SELECT get_table_id('c2_optimize') INTO @tid_c2_optimize_after;
+SELECT get_table_id('c2_change_pk') INTO @tid_c2_change_pk_after;
+SELECT get_table_id('c2_not_null') INTO @tid_c2_not_null_after;
+SELECT get_table_id('c2_row_fmt') INTO @tid_c2_row_fmt_after;
+SELECT get_table_id('c2_implicit') INTO @tid_c2_implicit_after;
+include/assert.inc [ALTER FORCE should change table_id (INPLACE rebuild)]
+include/assert.inc [OPTIMIZE should change table_id (INPLACE rebuild)]
+include/assert.inc [DROP+ADD PK should change table_id (INPLACE rebuild)]
+include/assert.inc [NOT NULL should change table_id (INPLACE rebuild)]
+include/assert.inc [ROW_FORMAT should change table_id (INPLACE rebuild)]
+include/assert.inc [Implicit rebuild should change table_id]
+
+--- 2.1 ALTER TABLE FORCE (detailed version chain behavior) ---
+# Unmodified row (id=1): only INSERTed before @ts, INSERT-type
+# roll_ptr -> trx_undo_prev_version_build returns early without
+# reading undo -> no table_id check -> row visible -> success
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2 WHERE id = 1;
+id	name
+1	Alice
+# Modified row (id=2): UPDATEd after @ts but before rebuild,
+# undo record contains old table_id -> mismatch after rebuild -> error
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2 WHERE id = 2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# Full table scan: encounters modified row -> entire query fails
+SELECT * FROM c2_force AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 2.1b ALTER TABLE FORCE -- rebuild secondary boundary ---
+# Purpose:
+#   After INPLACE rebuild, both clustered and secondary index
+#   generations are regenerated and only contain the CURRENT
+#   row/key values. An AS OF snapshot that predates an UPDATE on
+#   the indexed column must not silently return an empty result.
+#
+# Why this is a separate sub-case from 2.1:
+#   2.1 covers clustered rebuild behavior via WHERE id = <pk>.
+#   This sub-case targets two path-specific risks that 2.1 does
+#   not exercise:
+#     (a) FORCE INDEX(PRIMARY) with a non-key historical predicate
+#         (WHERE name='Alice') must not filter the historical row
+#         out using the current clustered value before AS OF
+#         version construction.
+#     (b) FORCE INDEX(idx_name) looking up a historical secondary
+#         key that only existed before the rebuild must not
+#         short-circuit to empty success -- the current rebuilt
+#         secondary has no entry for the old key, so the engine
+#         must reject the access path rather than silently miss
+#         the row.
+#
+# Timeline:
+#   S0: INSERT (1,'Alice'),(2,'Carol'); idx_name has 'Alice'
+#   T1: UPDATE id=1 name='Alice' -> 'Bob'  (idx_name now has 'Bob')
+#   T2: ALTER TABLE ... FORCE        (rebuild clustered + secondary)
+#
+# Expected after rebuild: both FORCE INDEX(PRIMARY) WHERE name='Alice'
+# and FORCE INDEX(idx_name) WHERE name='Alice' report
+# ER_AS_OF_TABLE_DEF_CHANGED instead of returning 0 rows.
+CREATE TABLE c2_force_sec (
+id INT PRIMARY KEY,
+name VARCHAR(64),
+KEY idx_name(name)
+) ENGINE=InnoDB;
+INSERT INTO c2_force_sec VALUES (1, 'Alice'), (2, 'Carol');
+SET @ts_cat2b = NOW(6);
+# Change the secondary key value BEFORE the table rebuild, so the
+# AS OF @ts_cat2b snapshot requires the historical key 'Alice'.
+UPDATE c2_force_sec SET name = 'Bob' WHERE id = 1;
+# Rebuild both clustered and secondary index generations together.
+ALTER TABLE c2_force_sec FORCE;
+# Current state after rebuild (sanity check).
+SELECT id, name FROM c2_force_sec ORDER BY id;
+id	name
+1	Bob
+2	Carol
+# (a) PRIMARY path with an old non-key predicate must not return
+# empty success; it must signal the table-def-changed boundary.
+SELECT id, name FROM c2_force_sec AS OF TIMESTAMP @ts_cat2b
+FORCE INDEX(PRIMARY) WHERE name = 'Alice';
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# (b) Secondary old-key lookup after rebuild must be rejected
+# rather than scanning the rebuilt index (which only contains 'Bob'
+# and 'Carol') and silently returning an empty set.
+SELECT id, name FROM c2_force_sec AS OF TIMESTAMP @ts_cat2b
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+DROP TABLE c2_force_sec;
+
+--- 2.2 OPTIMIZE TABLE ---
+SELECT * FROM c2_optimize AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 2.3 DROP PRIMARY KEY + ADD PRIMARY KEY ---
+SELECT * FROM c2_change_pk AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 2.4 MODIFY COLUMN NULL to NOT NULL ---
+SELECT * FROM c2_not_null AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 2.5 CHANGE ROW_FORMAT ---
+SELECT * FROM c2_row_fmt AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 2.6 Implicit rebuild: DROP COLUMN with associated index ---
+# DROP COLUMN on a column that has an index triggers implicit
+# INPLACE rebuild (engine auto-drops the index first)
+SELECT * FROM c2_implicit AS OF TIMESTAMP @ts_cat2;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+================================================================
+Category 3: COPY Rebuild -- Empty Result
+================================================================
+CREATE TABLE c3_shrink (id INT PRIMARY KEY, name VARCHAR(64));
+INSERT INTO c3_shrink VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c3_type (id INT PRIMARY KEY, val INT);
+INSERT INTO c3_type VALUES (1, 100), (2, 200);
+CREATE TABLE c3_drop_pk (id INT NOT NULL, name VARCHAR(64));
+ALTER TABLE c3_drop_pk ADD PRIMARY KEY(id);
+INSERT INTO c3_drop_pk VALUES (1, 'Alice'), (2, 'Bob');
+CREATE TABLE c3_fk_parent (id INT PRIMARY KEY);
+INSERT INTO c3_fk_parent VALUES (1), (2);
+CREATE TABLE c3_fk_child (id INT PRIMARY KEY, pid INT, INDEX(pid));
+INSERT INTO c3_fk_child VALUES (1, 1), (2, 2);
+SET @ts_cat3 = NOW(6);
+SELECT get_table_id('c3_shrink') INTO @tid_c3_shrink_before;
+SELECT get_table_id('c3_type') INTO @tid_c3_type_before;
+SELECT get_table_id('c3_drop_pk') INTO @tid_c3_drop_pk_before;
+SELECT get_table_id('c3_fk_child') INTO @tid_c3_fk_child_before;
+ALTER TABLE c3_shrink MODIFY COLUMN name VARCHAR(32);
+ALTER TABLE c3_type MODIFY COLUMN val BIGINT;
+ALTER TABLE c3_drop_pk DROP PRIMARY KEY;
+ALTER TABLE c3_fk_child ADD CONSTRAINT fk_pid FOREIGN KEY (pid) REFERENCES c3_fk_parent(id);
+SELECT get_table_id('c3_shrink') INTO @tid_c3_shrink_after;
+SELECT get_table_id('c3_type') INTO @tid_c3_type_after;
+SELECT get_table_id('c3_drop_pk') INTO @tid_c3_drop_pk_after;
+SELECT get_table_id('c3_fk_child') INTO @tid_c3_fk_child_after;
+include/assert.inc [MODIFY shrink should change table_id (COPY rebuild)]
+include/assert.inc [MODIFY type should change table_id (COPY rebuild)]
+include/assert.inc [DROP PK should change table_id (COPY rebuild)]
+include/assert.inc [ADD FK (COPY) should change table_id]
+
+--- 3.1 MODIFY COLUMN (shrink column width) ---
+# COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_shrink AS OF TIMESTAMP @ts_cat3;
+id	name
+
+--- 3.2 MODIFY COLUMN (change data type INT -> BIGINT) ---
+# COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_type AS OF TIMESTAMP @ts_cat3;
+id	val
+
+--- 3.3 DROP PRIMARY KEY (only, no new PK added) ---
+# COPY rebuild: all rows appear as newly inserted -> empty result
+SELECT * FROM c3_drop_pk AS OF TIMESTAMP @ts_cat3;
+id	name
+
+--- 3.4 ADD FOREIGN KEY (foreign_key_checks=ON, COPY rebuild) ---
+# foreign_key_checks=ON -> ADD FK uses COPY algorithm -> table rebuilt
+# table_id change above confirms COPY rebuild occurred
+# The FK helper index is rebuilt and may not contain all AS OF-visible keys.
+SELECT * FROM c3_fk_child AS OF TIMESTAMP @ts_cat3;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 3.5 COPY rebuild + secondary index interaction ---
+# COPY creates an entirely new table. ALL indexes (including secondary)
+# are re-created with the DDL transaction's timestamp.
+# The optimizer may choose a covering index scan on the secondary index,
+# which is not safe for the AS OF snapshot -> ER_AS_OF_TABLE_DEF_CHANGED.
+# Forcing PRIMARY avoids the secondary index -> empty result.
+CREATE TABLE c3_sec_idx (id INT PRIMARY KEY, pid INT, INDEX idx_pid(pid));
+INSERT INTO c3_sec_idx VALUES (1, 10), (2, 20);
+SET @ts_cat3_sec = NOW(6);
+# COPY rebuild (change column type)
+ALTER TABLE c3_sec_idx MODIFY COLUMN pid BIGINT;
+# 3.5a: FORCE INDEX on secondary index -> conservatively rejected
+# The rebuilt current secondary may miss keys visible at the AS OF snapshot.
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec FORCE INDEX(idx_pid);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+# 3.5b: FORCE INDEX(PRIMARY) -> empty result (COPY INSERT undo)
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec FORCE INDEX(PRIMARY);
+id	pid
+# 3.5c: Default SELECT * may pick the rebuilt secondary and is rejected
+SELECT * FROM c3_sec_idx AS OF TIMESTAMP @ts_cat3_sec;
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 3.6 TRUNCATE TABLE ---
+# TRUNCATE drops and recreates the physical table generation.
+# The current table is empty; PRIMARY AS OF before TRUNCATE therefore
+# returns empty. The secondary index generation is newer than the
+# snapshot and must be rejected explicitly.
+CREATE TABLE c3_truncate (
+id INT PRIMARY KEY,
+name VARCHAR(64),
+KEY idx_name(name)
+) ENGINE=InnoDB;
+INSERT INTO c3_truncate VALUES (1, 'Alice'), (2, 'Bob');
+SET @ts_cat3_truncate = NOW(6);
+SELECT get_table_id('c3_truncate') INTO @tid_c3_truncate_before;
+TRUNCATE TABLE c3_truncate;
+SELECT get_table_id('c3_truncate') INTO @tid_c3_truncate_after;
+include/assert.inc [TRUNCATE TABLE should change table_id]
+# Current table is empty after TRUNCATE.
+SELECT * FROM c3_truncate ORDER BY id;
+id	name
+# PRIMARY path: new empty physical generation -> empty result.
+SELECT * FROM c3_truncate AS OF TIMESTAMP @ts_cat3_truncate FORCE INDEX(PRIMARY);
+id	name
+# Secondary path: rebuilt index generation is not visible at @ts.
+SELECT id, name FROM c3_truncate AS OF TIMESTAMP @ts_cat3_truncate
+FORCE INDEX(idx_name) WHERE name = 'Alice';
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+================================================================
+Category 4: Complex Scenario - Multiple DDLs with AS OF queries
+================================================================
+CREATE TABLE c4_complex (
+id INT PRIMARY KEY,
+name VARCHAR(64),
+age INT,
+salary INT,
+INDEX idx_name(name)
+);
+INSERT INTO c4_complex VALUES (1, 'Alice', 30, 5000), (2, 'Bob', 25, 4000), (3, 'Charlie', 35, 6000);
+
+# Record timestamp T1 (initial state)
+SET @ts_t1 = NOW(6);
+# Insert more data after T1
+INSERT INTO c4_complex VALUES (4, 'David', 28, 4500);
+
+# Record timestamp T2 (after first insert)
+SET @ts_t2 = NOW(6);
+# ADD INDEX (Category 1: no rebuild, but new index cannot be used for AS OF before this point)
+SELECT get_table_id('c4_complex') INTO @tid_before;
+ALTER TABLE c4_complex ADD INDEX idx_age(age);
+SELECT get_table_id('c4_complex') INTO @tid_after;
+include/assert.inc [ADD INDEX should not change table_id]
+# Insert more data after ADD INDEX
+INSERT INTO c4_complex VALUES (5, 'Eve', 32, 5500);
+
+# Record timestamp T3 (after ADD INDEX)
+SET @ts_t3 = NOW(6);
+# ADD COLUMN (Category 1: instant, no rebuild)
+SELECT get_table_id('c4_complex') INTO @tid_before;
+ALTER TABLE c4_complex ADD COLUMN email VARCHAR(128) DEFAULT 'unknown';
+SELECT get_table_id('c4_complex') INTO @tid_after;
+include/assert.inc [ADD COLUMN should not change table_id]
+# Update some data after ADD COLUMN
+UPDATE c4_complex SET email = 'alice@example.com' WHERE id = 1;
+
+# Record timestamp T4 (after ADD COLUMN)
+SET @ts_t4 = NOW(6);
+# DROP COLUMN (Category 1: instant, no rebuild)
+SELECT get_table_id('c4_complex') INTO @tid_before;
+ALTER TABLE c4_complex DROP COLUMN salary;
+SELECT get_table_id('c4_complex') INTO @tid_after;
+include/assert.inc [DROP COLUMN should not change table_id]
+# Update data after DROP COLUMN
+UPDATE c4_complex SET age = 31 WHERE id = 1;
+
+# Record timestamp T5 (after DROP COLUMN)
+SET @ts_t5 = NOW(6);
+
+--- 4.1 AS OF T1 (initial state): should show 3 rows, no email column, has salary column ---
+# Query via PRIMARY KEY (should work)
+SELECT id, name, age FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(PRIMARY);
+id	name	age
+1	Alice	30
+2	Bob	25
+3	Charlie	35
+# Query via old index idx_name (should work - existed at T1)
+SELECT id, name FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(idx_name);
+id	name
+1	Alice
+2	Bob
+3	Charlie
+# Query via new index idx_age (should ERROR)
+SELECT id, age FROM c4_complex AS OF TIMESTAMP @ts_t1 FORCE INDEX(idx_age);
+ERROR HY000: The definition of the table required by the flashback query has changed; the query may be using a secondary index created after the AS OF snapshot, or the table was rebuilt and version history is truncated
+
+--- 4.2 AS OF T2 (after first insert): should show 4 rows ---
+SELECT id, name, age FROM c4_complex AS OF TIMESTAMP @ts_t2 FORCE INDEX(PRIMARY);
+id	name	age
+1	Alice	30
+2	Bob	25
+3	Charlie	35
+4	David	28
+
+--- 4.3 AS OF T3 (after ADD INDEX): should show 5 rows, can use idx_age ---
+# Query via new index idx_age (should work now - existed at T3)
+SELECT id, age FROM c4_complex AS OF TIMESTAMP @ts_t3 FORCE INDEX(idx_age) WHERE age = 30;
+id	age
+1	30
+
+--- 4.4 AS OF T4 (after ADD COLUMN): should show email column with DEFAULT values ---
+# At T4, email column exists but only id=1 has been updated
+SELECT id, name, age, email FROM c4_complex AS OF TIMESTAMP @ts_t4 FORCE INDEX(PRIMARY);
+id	name	age	email
+1	Alice	30	alice@example.com
+2	Bob	25	unknown
+3	Charlie	35	unknown
+4	David	28	unknown
+5	Eve	32	unknown
+
+--- 4.5 AS OF T5 (after DROP COLUMN): salary column should not appear ---
+# salary column was dropped, so it should not appear in results
+SELECT id, name, age, email FROM c4_complex AS OF TIMESTAMP @ts_t5 FORCE INDEX(PRIMARY);
+id	name	age	email
+1	Alice	31	alice@example.com
+2	Bob	25	unknown
+3	Charlie	35	unknown
+4	David	28	unknown
+5	Eve	32	unknown
+
+--- 4.6 Current state: all changes applied ---
+SELECT * FROM c4_complex FORCE INDEX(PRIMARY);
+id	name	age	email
+1	Alice	31	alice@example.com
+2	Bob	25	unknown
+3	Charlie	35	unknown
+4	David	28	unknown
+5	Eve	32	unknown
+
+--- 4.7 Verify table_id remained unchanged throughout (Category 1 DDLs) ---
+# All Category 1 DDLs should not change table_id
+# (already verified above: before/after values should be equal)
+
+================================================================
+Cleanup
+================================================================
+DROP TABLE IF EXISTS c1_fk_child, c1_fk_parent;
+DROP TABLE IF EXISTS c1_add_col, c1_drop_col, c1_rename_col, c1_alter_default;
+DROP TABLE IF EXISTS c1_vcol, c1_add_idx, c1_drop_idx, c1_rename_idx;
+DROP TABLE IF EXISTS c2_force, c2_force_sec, c2_optimize, c2_change_pk;
+Warnings:
+Note	1051	Unknown table 'test.c2_force_sec'
+DROP TABLE IF EXISTS c2_not_null, c2_row_fmt, c2_implicit;
+DROP TABLE IF EXISTS c3_fk_child, c3_fk_parent;
+DROP TABLE IF EXISTS c3_shrink, c3_type, c3_drop_pk, c3_sec_idx, c3_truncate;
+DROP TABLE IF EXISTS c4_complex;
+DROP FUNCTION IF EXISTS get_table_id;
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

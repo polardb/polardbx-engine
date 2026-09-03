@@ -30,6 +30,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 //
 
 #include "changeset_manager.h"
+#include "sql/komodo0xlog.h"
 
 namespace im {
 ChangesetManager gChangesetManager;
@@ -37,7 +38,8 @@ ChangesetManager gChangesetManager;
 std::atomic_bool ChangesetManager::changeset_start(false);
 
 int ChangesetManager::start_track(const std::string &table_name,
-                                  u_int64_t memory_limit) {
+                                  uint64_t memory_limit,
+                                  bool acquire_lock) {
   sql_print_information("changeset-manager start: table=%s memoryLimit=%ld",
                         table_name.data(), memory_limit);
 
@@ -61,9 +63,23 @@ int ChangesetManager::start_track(const std::string &table_name,
     return 1;
   }
 
+  if (acquire_lock) {
+    sql_print_information("changeset acquire meta data lock");
+    MDL_request mdl_request;
+    MDL_REQUEST_INIT(&mdl_request, MDL_key::TABLE, current_thd->db().str, table_name.data(),
+                     MDL_SHARED_NO_WRITE, MDL_TRANSACTION);
+
+    if (current_thd->mdl_context.acquire_lock(&mdl_request,
+                     current_thd->variables.lock_wait_timeout)) {
+      my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0),
+               "changeset start failed, failed to acquire meta data lock");
+      return 1;
+    }
+  }
+
   TABLE *table;
   int err = 0;
-  if ((err = open_table(table_name, &table))) {
+  if ((err = open_table(table_name, &table, TL_WRITE))) {
     return err;
   }
 
@@ -89,16 +105,7 @@ int ChangesetManager::stop_track(const std::string &table_name) {
     return 1;
   }
 
-  // lock the table
-  TABLE *table;
-  int err = 0;
-  if ((err = open_table(table_name, &table, TL_WRITE))) {
-    my_printf_error(ER_CHANGESET_COMMAND_ERROR,
-                    "lock table when stop track failed", 0);
-    return err;
-  }
-
-  { erase_changeset(full_table_name); }
+  erase_changeset(full_table_name);
 
   if (has_changeset(full_table_name)) {
     sql_print_information("stop track changeset failed %s\n",
@@ -106,11 +113,6 @@ int ChangesetManager::stop_track(const std::string &table_name) {
   } else {
     sql_print_information("stop track changeset %s", table_name.c_str());
   }
-
-  mysql_unlock_some_tables(current_thd, &table, 1);
-
-  ha_commit_trans(current_thd, false, true);
-  close_thread_tables(current_thd);
 
   return 0;
 }
@@ -128,7 +130,8 @@ void ChangesetManager::close_changeset(const std::string &db_name, const std::st
   }
 }
 
-int ChangesetManager::fence_change(const std::string &table_name) {
+int ChangesetManager::set_backpressure(const std::string &table_name, uint64_t slow_down_trigger,
+                                       uint64_t capacity, uint64_t fill_rate) {
   if (current_thd->db().str == nullptr) {
     my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "please use database first");
     return 1;
@@ -139,21 +142,7 @@ int ChangesetManager::fence_change(const std::string &table_name) {
     return 1;
   }
 
-  // lock the table
-  TABLE *table;
-  int err = 0;
-  if ((err = open_table(table_name, &table, TL_WRITE))) {
-    my_printf_error(ER_CHANGESET_COMMAND_ERROR,
-                    "lock table when stop track failed", 0);
-    return err;
-  }
-
-  set_changeset_stop(full_table_name);
-
-  mysql_unlock_some_tables(current_thd, &table, 1);
-
-  ha_commit_trans(current_thd, false, true);
-  close_thread_tables(current_thd);
+  init_backpressure(full_table_name, slow_down_trigger, capacity, fill_rate);
 
   return 0;
 }
@@ -199,11 +188,10 @@ void ChangesetManager::get_primary_keys(uchar const *record, KEY *key_info,
     return;
   }
 
-  uint length, offset;
   for (uint i = 0; i < key_info->actual_key_parts; ++i) {
-    offset = key_info->key_part[i].offset;
-    length = Changeset::my_get_key_length(&key_info->key_part[i],  (uchar const *) record + offset);
-    pk.append((const char *)record + offset, length);
+    uint offset = key_info->key_part[i].offset;
+    uint length = Changeset::my_get_key_length(&key_info->key_part[i], record + offset);
+    pk.append(reinterpret_cast<const char *>(record) + offset, length);
   }
 }
 
@@ -220,7 +208,7 @@ void ChangesetManager::write_row_to_cache(THD *thd, TABLE *table,
   DBTableName full_table_name(db_name, table_name);
   std::string pk;
 
-  if (is_changeset_stop(full_table_name)) {
+  if (!check_changeset_effective(full_table_name)) {
     return;
   }
 
@@ -251,7 +239,7 @@ void ChangesetManager::update_row_to_cache(THD *thd, TABLE *table,
   std::string pk_delete;
   std::string pk_insert;
 
-  if (is_changeset_stop(full_table_name)) {
+  if (!check_changeset_effective(full_table_name, 2)) {
     return;
   }
 
@@ -280,7 +268,7 @@ void ChangesetManager::delete_row_to_cache(THD *thd, TABLE *table,
 
   std::string pk;
 
-  if (is_changeset_stop(full_table_name)) {
+  if (!check_changeset_effective(full_table_name)) {
     return;
   }
 
@@ -331,8 +319,7 @@ void ChangesetManager::commit_change(THD *thd) {
   }
 
   // if not leader, close all changeset
-  if (consensus_log_manager.get_status() !=
-      Consensus_Log_System_Status::BINLOG_WORKING) {
+  if (!komodo::xlog_engine_binlog_working()) {
     sql_print_information("current dn is not leader, clean changeset start");
     erase_all_changeset();
     sql_print_information("clean all changeset finish");
@@ -349,10 +336,6 @@ void ChangesetManager::commit_change(THD *thd) {
     commit(full_table_name, cache);
   }
 
-  erase_changeset_cache_by_thd(thd);
-}
-
-void ChangesetManager::rollback_change(THD *thd) {
   erase_changeset_cache_by_thd(thd);
 }
 
@@ -400,7 +383,7 @@ inline ChangeSetCache *ChangesetManager::get_changeset_from_cache(
   return thd->changeset_map[full_table_name].get();
 }
 
-void inline ChangesetManager::erase_changeset_cache_by_thd(THD *thd) {
+void ChangesetManager::erase_changeset_cache_by_thd(THD *thd) {
   thd->changeset_map.clear();
 }
 
@@ -414,44 +397,21 @@ inline Changeset *ChangesetManager::get_changeset_ptr(
   return it->second.get();
 }
 
-bool inline ChangesetManager::is_changeset_stop(
-    const DBTableName &full_table_name) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
-  auto cs = get_changeset_ptr(full_table_name);
-  if (cs == nullptr) {
-    return true;
-  }
-  return cs->is_stop();
-}
-
-void ChangesetManager::set_changeset_stop(const DBTableName &full_table_name) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
-  auto cs = get_changeset_ptr(full_table_name);
-  if (cs == nullptr) {
-    return;
-  }
-  cs->set_stop(true);
-}
-
 inline void ChangesetManager::commit(const DBTableName &full_table_name,
                                      std::unique_ptr<ChangeSetCache> &cache) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
+  CautoSpinRWLock lock(rw_lock, false, 2000);
   auto cs = get_changeset_ptr(full_table_name);
   if (cs == nullptr) {
     return;
   }
 
-  if (cs->is_stop()) {
-    // do nothing
-  } else {
-    cs->append_changeset(cache);
-  }
+  cs->append_changeset(cache);
 }
 
 void ChangesetManager::fetch_changeset(
     const DBTableName &full_table_name, bool delete_last_cs,
     std::vector<ChangesetResult *> &res, TABLE *table) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
+  CautoSpinRWLock lock(rw_lock, false, 2000);
   auto cs = get_changeset_ptr(full_table_name);
   if (cs == nullptr) {
     return;
@@ -462,7 +422,7 @@ void ChangesetManager::fetch_changeset(
 
 Changeset::Stats ChangesetManager::fetch_changeset_stats(
     const DBTableName &full_table_name) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
+  CautoSpinRWLock lock(rw_lock, false, 2000);
   auto cs = get_changeset_ptr(full_table_name);
   if (cs == nullptr) {
     return Changeset::Stats();
@@ -472,13 +432,13 @@ Changeset::Stats ChangesetManager::fetch_changeset_stats(
 }
 
 bool ChangesetManager::has_changeset(const DBTableName &full_table_name) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, false, 2000);
+  CautoSpinRWLock lock(rw_lock, false, 2000);
 
   return changeset_map.count(full_table_name);
 }
 
 void ChangesetManager::erase_changeset(const DBTableName &full_table_name) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, true, 2000);
+  CautoSpinRWLock lock(rw_lock, true, 2000);
 
   changeset_map.erase(full_table_name);
 
@@ -488,14 +448,16 @@ void ChangesetManager::erase_changeset(const DBTableName &full_table_name) {
 }
 
 void ChangesetManager::erase_all_changeset() {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, true, 2000);
+  CautoSpinRWLock lock(rw_lock, true, 2000);
+  CautoSpinRWLock prepared_lock(prepared_rw_lock, true, 2000);
   changeset_map.clear();
+  prepared_changeset_map.clear();
   changeset_start.store(false);
 }
 
 void ChangesetManager::init_changeset(const DBTableName &full_table_name,
-                                      u_int64_t memory_limit) {
-  polarx_rpc::CautoSpinRWLock lock(rw_lock, true, 2000);
+                                      uint64_t memory_limit) {
+  CautoSpinRWLock lock(rw_lock, true, 2000);
   if (changeset_map.empty()) {
     changeset_start.store(true);
   }
@@ -506,6 +468,82 @@ void ChangesetManager::init_changeset(const DBTableName &full_table_name,
   auto &cs = changeset_map[full_table_name];
   cs->init(full_table_name);
   cs->memory_limit = memory_limit;
+}
+
+void ChangesetManager::init_backpressure(const DBTableName &full_table_name, uint64_t slow_down_trigger,
+                                         uint64_t capacity, uint64_t fill_rate) {
+  CautoSpinRWLock lock(rw_lock, false, 2000);
+  auto cs = get_changeset_ptr(full_table_name);
+  if (cs == nullptr) {
+    return;
+  }
+  if (fill_rate == 0 || slow_down_trigger == 0) {
+    cs->backpressure = false;
+  } else {
+    cs->backpressure = true;
+    cs->token_bucket.set_capacity_and_fill_rate(
+      static_cast<double>(capacity), static_cast<double>(fill_rate));
+    cs->backpressure_trigger = slow_down_trigger;
+  }
+}
+
+bool ChangesetManager::check_changeset_effective(const DBTableName &full_table_name, double tokens) {
+  {
+    CautoSpinRWLock lock(rw_lock, false, 2000);
+    auto cs = get_changeset_ptr(full_table_name);
+    if (cs == nullptr) {
+      return false;
+    }
+    cs->do_backpressure(tokens);
+  }
+  return true;
+}
+
+void ChangesetManager::save_prepared_changeset(THD *thd, XID *xid) {
+  if (!is_changeset_enable() || thd->changeset_map.empty()) {
+    return;
+  }
+
+  CautoSpinRWLock lock(prepared_rw_lock, true, 2000);
+  char tmpbuf[XID::ser_buf_size];
+  std::string xid_ser = xid->serialize(tmpbuf);
+  sql_print_information("[xa recover] save prepared changeset map, xid: %s", xid_ser.c_str());
+  for (auto &item: thd->changeset_map) {
+    auto &full_table_name = item.first;
+    auto &cache = item.second;
+    if (cache == nullptr) {
+      continue;
+    }
+    prepared_changeset_map[xid_ser].emplace(full_table_name, std::move(cache));
+  }
+  erase_changeset_cache_by_thd(thd);
+}
+
+bool ChangesetManager::load_prepared_changeset(THD *thd, XID *xid) {
+  if (!is_changeset_enable()) {
+    return false;
+  }
+
+  if (!thd->changeset_map.empty()) {
+    my_error(ER_CHANGESET_COMMAND_ERROR, MYF(0), "[xa recover] changeset map not empty");
+    return true;
+  }
+
+  CautoSpinRWLock lock(prepared_rw_lock, true, 2000);
+  char tmpbuf[XID::ser_buf_size];
+  std::string xid_ser = xid->serialize(tmpbuf);
+  sql_print_information("[xa recover] load prepared changeset map, xid: %s", xid_ser.c_str());
+  auto it = prepared_changeset_map.find(xid_ser);
+  if (it == prepared_changeset_map.end()) {
+    sql_print_information("[xa recover] prepared changeset map is empty, xid: %s", xid_ser.c_str());
+    return false;
+  }
+
+  for (auto &item : it->second) {
+    thd->changeset_map.emplace(item.first, std::move(item.second));
+  }
+  prepared_changeset_map.erase(xid_ser);
+  return false;
 }
 
 }  // namespace im

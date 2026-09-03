@@ -61,9 +61,9 @@ set autocommit=0;
 set transaction_isolation='SERIALIZABLE';
 set names 'big5';
 set max_join_size=100;
-# Setting max_join_size value to 1000 to fetch the below session variables as the 
+# Setting max_join_size value to 10000 to fetch the below session variables as the 
 # rows returned are > 100
-set max_join_size=1000;
+set max_join_size=10000;
 SHOW SESSION VARIABLES like 'autocommit';
 SHOW SESSION VARIABLES like 'transaction_isolation';
 SHOW SESSION VARIABLES like 'character_set_client';

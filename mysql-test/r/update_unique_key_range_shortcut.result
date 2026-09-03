@@ -1,0 +1,195 @@
+SET @save_optimizer_switch=@@optimizer_switch;
+SET @save_optimizer_trace=@@optimizer_trace;
+SET @save_optimizer_trace_max_mem_size=@@optimizer_trace_max_mem_size;
+SET @save_unique_key_range_shortcut=@@global.unique_key_range_shortcut;
+SELECT @@global.unique_key_range_shortcut AS default_off_should_be_0;
+default_off_should_be_0
+0
+SET GLOBAL unique_key_range_shortcut=ON;
+SELECT @@global.unique_key_range_shortcut AS on_should_be_1;
+on_should_be_1
+1
+SET GLOBAL unique_key_range_shortcut=ON;
+SET optimizer_switch =
+'index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on';
+SET optimizer_trace='enabled=on,one_line=off';
+SET optimizer_trace_max_mem_size=1048576;
+CREATE TABLE d(n INT PRIMARY KEY) ENGINE=InnoDB;
+INSERT INTO d VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);
+CREATE TABLE t (
+id INT NOT NULL,
+u1 INT NOT NULL,
+u2 INT NOT NULL,
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+PRIMARY KEY(id),
+UNIQUE KEY uk_u1_u2(u1, u2),
+KEY idx_a(a),
+KEY idx_b(b)
+) ENGINE=InnoDB;
+INSERT INTO t
+SELECT
+d1.n * 100 + d2.n * 10 + d3.n + 1 AS id,
+d1.n * 100 + d2.n * 10 + d3.n + 1 AS u1,
+1000 - (d1.n * 100 + d2.n * 10 + d3.n) AS u2,
+(d1.n * 100 + d2.n * 10 + d3.n) % 4 AS a,
+(d1.n * 100 + d2.n * 10 + d3.n) % 8 AS b,
+0 AS c
+FROM d d1, d d2, d d3;
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+EXPLAIN SELECT * FROM t
+WHERE u1 = 124 AND u2 = 877 AND a = 3 AND b = 3 FOR UPDATE;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	SIMPLE	t	#	#	#	uk_u1_u2	#	#	#	#	#
+EXPLAIN UPDATE t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND a = 3 AND b = 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	range	#	uk_u1_u2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_0;
+ror_should_be_0
+0
+START TRANSACTION;
+UPDATE t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND a = 3 AND b = 3;
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_0;
+ror_should_be_0
+0
+ROLLBACK;
+SET GLOBAL unique_key_range_shortcut=OFF;
+EXPLAIN UPDATE t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND a = 3 AND b = 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	range	#	uk_u1_u2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+SET GLOBAL unique_key_range_shortcut=ON;
+EXPLAIN UPDATE t SET c = c + 1
+WHERE id = 124 AND a = 3 AND b = 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	range	#	PRIMARY	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_0;
+ror_should_be_0
+0
+EXPLAIN UPDATE t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND (a = 3 OR b = 3);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	range	#	uk_u1_u2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_index_merge_union"%' AS union_should_be_0;
+union_should_be_0
+0
+EXPLAIN DELETE FROM t
+WHERE u1 = 124 AND u2 = 877 AND (a = 3 OR b = 3);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	DELETE	t	NULL	range	#	uk_u1_u2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_index_merge_union"%' AS union_should_be_0;
+union_should_be_0
+0
+EXPLAIN UPDATE /*+ INDEX_MERGE(t idx_a, idx_b) */ t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND a = 3 AND b = 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	index_merge	#	idx_b,idx_a	#	#	#	#	Using intersect(idx_b,idx_a); Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+EXPLAIN UPDATE t SET c = c + 1
+WHERE u1 = 124 AND a = 3 AND b = 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	t	NULL	range	#	uk_u1_u2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+CREATE TABLE tn (
+id INT NOT NULL,
+nu INT NULL,
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+PRIMARY KEY(id),
+UNIQUE KEY uk_nu(nu),
+KEY idx_a(a),
+KEY idx_b(b)
+) ENGINE=InnoDB;
+INSERT INTO tn VALUES
+(1, NULL, 1, 1, 0),
+(2, NULL, 1, 1, 0),
+(3, 3, 1, 1, 0);
+ANALYZE TABLE tn;
+Table	Op	Msg_type	Msg_text
+test.tn	analyze	status	OK
+EXPLAIN UPDATE tn SET c = c + 1
+WHERE nu IS NULL AND a = 1 AND b = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	tn	NULL	range	#	uk_nu	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+EXPLAIN UPDATE t SET c = c + 1
+WHERE u1 = 124 AND u2 = 877 AND 0;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	NULL	NULL	NULL	#	NULL	#	#	#	#	Impossible WHERE
+CREATE TABLE tv (
+id INT NOT NULL,
+v1 VARCHAR(50) NOT NULL,
+v2 VARCHAR(50) NOT NULL,
+nv VARCHAR(50) NULL,
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+PRIMARY KEY(id),
+UNIQUE KEY uk_v1_v2(v1, v2),
+UNIQUE KEY uk_nv(nv),
+KEY idx_a(a),
+KEY idx_b(b)
+) ENGINE=InnoDB;
+INSERT INTO tv VALUES
+(1, 'foo', 'bar', NULL, 1, 1, 0),
+(2, 'foo', 'baz', NULL, 1, 1, 0),
+(3, 'abc', 'xyz', 'hello', 0, 0, 0);
+ANALYZE TABLE tv;
+Table	Op	Msg_type	Msg_text
+test.tv	analyze	status	OK
+EXPLAIN UPDATE tv SET c = c + 1
+WHERE v1 = 'foo' AND v2 = 'bar' AND a = 1 AND b = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	tv	NULL	range	#	uk_v1_v2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_0;
+ror_should_be_0
+0
+EXPLAIN UPDATE tv SET c = c + 1
+WHERE v1 = 'foo' AND a = 1 AND b = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	tv	NULL	range	#	uk_v1_v2	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+EXPLAIN UPDATE tv SET c = c + 1
+WHERE nv IS NULL AND a = 1 AND b = 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+#	UPDATE	tv	NULL	range	#	uk_nv	#	#	#	#	Using where
+SELECT TRACE INTO @trace FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+SELECT @trace LIKE '%"analyzing_roworder_intersect"%' AS ror_should_be_1;
+ror_should_be_1
+1
+DROP TABLE tv;
+DROP TABLE tn;
+DROP TABLE t;
+DROP TABLE d;
+SET optimizer_trace=@save_optimizer_trace;
+SET optimizer_trace_max_mem_size=@save_optimizer_trace_max_mem_size;
+SET optimizer_switch=@save_optimizer_switch;
+SET GLOBAL unique_key_range_shortcut=@save_unique_key_range_shortcut;

@@ -1,0 +1,59 @@
+# 1: Set parameters
+set @orig_max_undo_log_size = @@innodb_max_undo_log_size;
+set @orig_truncate_frequency = @@innodb_purge_rseg_truncate_frequency;
+set @orig_log_error_verbosity = @@global.log_error_verbosity;
+set global innodb_max_undo_log_size=10485760;
+set global innodb_purge_rseg_truncate_frequency=1;
+set global log_error_verbosity=3;
+
+# 2: Block purge, fill undo with single large transaction
+set global innodb_purge_stop_now=ON;
+create table t1(c1 int, c2 varchar(700), primary key(c1, c2)) engine=InnoDB;
+create procedure insert_data()
+begin
+declare i int default 1;
+while (i <= 12000) do
+insert into t1 values (i, repeat('x', 700));
+set i = i + 1;
+end while;
+end;$$
+begin;
+call insert_data();
+commit;
+# 3: Set super_read_only, then release purge
+set global super_read_only=1;
+set global innodb_purge_stop_now=OFF;
+# 4: Verify truncate ran via error log
+Pattern "Completed truncate of undo tablespace" found
+# 5: Verify no trunc.log residue
+select tablespace_name, file_name from information_schema.files
+where file_name like "%undo%";
+TABLESPACE_NAME	FILE_NAME
+innodb_undo_001	./undo_001
+innodb_undo_002	./undo_002
+innodb_undo_003	./undo_003
+innodb_undo_004	./undo_004
+innodb_undo_005	./undo_005
+innodb_undo_006	./undo_006
+select name, row_format from information_schema.innodb_tablespaces
+where name like '%undo%';
+name	row_format
+innodb_undo_001	Undo
+innodb_undo_002	Undo
+innodb_undo_003	Undo
+innodb_undo_004	Undo
+innodb_undo_005	Undo
+innodb_undo_006	Undo
+undo_001
+undo_002
+undo_003
+undo_004
+undo_005
+undo_006
+set global innodb_max_undo_log_size=@orig_max_undo_log_size;
+set global innodb_purge_rseg_truncate_frequency=@orig_truncate_frequency;
+set global log_error_verbosity=@orig_log_error_verbosity;
+set global super_read_only = 0;
+set global read_only = 0;
+drop procedure insert_data;
+drop table t1;

@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 12/7/1995 Heikki Tuuri
  *******************************************************/
 
+#ifndef mtr0log_h
+#define INNODB_MTR0LOG_IC_STANDALONE
+#include "mtr0log.h"
+#undef INNODB_MTR0LOG_IC_STANDALONE
+#endif /* !mtr0log_h */
 #include "buf0dblwr.h"
 #include "fsp0types.h"
 #include "mach0data.h"

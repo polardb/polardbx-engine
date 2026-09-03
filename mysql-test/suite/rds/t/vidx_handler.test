@@ -1,0 +1,176 @@
+##########################################
+# The HANDLER statement with VECTOR INDEX#
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo # 1. Create table with vector index
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(20),
+  v VECTOR(5),
+  VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+
+--echo
+--echo # 2. Insert test data
+INSERT INTO t1(name, v) VALUES 
+  ('vec1', VEC_FROMTEXT("[1,2,3,4,5]")),
+  ('vec2', VEC_FROMTEXT("[5,4,3,2,1]")),
+  ('vec3', VEC_FROMTEXT("[1,1,1,1,1]")),
+  ('vec4', VEC_FROMTEXT("[2,2,2,2,2]")),
+  ('vec5', VEC_FROMTEXT("[3,3,3,3,3]"));
+
+--echo
+--echo # 3. Verify data before HANDLER operations
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 4. HANDLER OPEN and READ operations
+--echo # Open handler on table with vector index
+HANDLER t1 OPEN;
+
+--echo # Read first row (vector column will be in binary format)
+--echo # Using disable_result_log for binary output
+--disable_result_log
+HANDLER t1 READ FIRST;
+--enable_result_log
+
+--echo # Read subsequent rows
+--disable_result_log
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+--enable_result_log
+
+--echo # Try to read beyond last row (should return empty)
+--disable_result_log
+HANDLER t1 READ NEXT;
+--enable_result_log
+
+--echo # Close handler
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 5. HANDLER with PRIMARY KEY index
+HANDLER t1 OPEN;
+
+--echo # Read using PRIMARY key
+--disable_result_log
+HANDLER t1 READ `PRIMARY` FIRST;
+HANDLER t1 READ `PRIMARY` NEXT;
+--enable_result_log
+
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 6. HANDLER READ with specific key value
+HANDLER t1 OPEN;
+
+--echo # Read specific row by PRIMARY key
+--disable_result_log
+HANDLER t1 READ `PRIMARY` = (3);
+--enable_result_log
+
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 7. Multiple HANDLER sessions
+HANDLER t1 OPEN AS h1;
+HANDLER t1 OPEN AS h2;
+
+--disable_result_log
+HANDLER h1 READ FIRST;
+HANDLER h2 READ FIRST;
+HANDLER h1 READ NEXT;
+HANDLER h2 READ NEXT;
+--enable_result_log
+
+HANDLER h1 CLOSE;
+HANDLER h2 CLOSE;
+
+--echo
+--echo # 8. HANDLER with WHERE clause
+HANDLER t1 OPEN;
+
+--disable_result_log
+HANDLER t1 READ FIRST WHERE id > 2;
+HANDLER t1 READ NEXT WHERE id > 2;
+--enable_result_log
+
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 9. HANDLER with LIMIT clause
+HANDLER t1 OPEN;
+
+--disable_result_log
+HANDLER t1 READ FIRST LIMIT 2;
+--enable_result_log
+
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 10. Verify table is still accessible after HANDLER operations
+SELECT id, name, VEC_TOTEXT(v) FROM t1 ORDER BY id;
+
+--echo
+--echo # 11. ANN query still works after HANDLER operations
+SELECT id, name, VEC_TOTEXT(v) 
+FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]"))
+LIMIT 3;
+
+--echo
+--echo # 12. HANDLER on table without vector index for comparison
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(20),
+  data VARCHAR(100)
+) ENGINE=InnoDB;
+
+INSERT INTO t2(name, data) VALUES ('a', 'data1'), ('b', 'data2'), ('c', 'data3');
+
+HANDLER t2 OPEN;
+HANDLER t2 READ FIRST;
+HANDLER t2 READ NEXT;
+HANDLER t2 CLOSE;
+
+--echo
+--echo # 13. HANDLER during concurrent DML (insert data with handler open)
+HANDLER t1 OPEN;
+
+--echo # Insert new row while handler is open
+INSERT INTO t1(name, v) VALUES ('vec6', VEC_FROMTEXT("[6,6,6,6,6]"));
+
+--echo # Read should see the data
+--disable_result_log
+HANDLER t1 READ FIRST;
+HANDLER t1 READ NEXT;
+--enable_result_log
+
+HANDLER t1 CLOSE;
+
+--echo # Verify inserted data
+SELECT id, name, VEC_TOTEXT(v) FROM t1 WHERE name = 'vec6';
+
+--echo
+--echo # 14. HANDLER with NULL vector values
+INSERT INTO t1(name, v) VALUES ('null_vec', NULL);
+
+HANDLER t1 OPEN;
+--disable_result_log
+HANDLER t1 READ `PRIMARY` LAST;
+--enable_result_log
+HANDLER t1 CLOSE;
+
+--echo
+--echo # 15. Cleanup
+DROP TABLE t1;
+DROP TABLE t2;
+
+SET GLOBAL vidx_disabled = ON;

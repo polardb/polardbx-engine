@@ -354,4 +354,22 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
 int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
                        const char *subclass_name);
 
+/**
+ * Call audit plugins of POLARX_CONNECTION_CONTROL audit class.
+ *
+ * @param[in] thd              Current thread data.
+ * @param[in] subclass         Type of general detail audit event.
+ * @param[in] subclass_name    Subclass name.
+ * @param[in] user             User name.
+ * @param[in] host             Host name.
+ * @param[in] ip               IP address.
+ * @param[in] successful_login login successfully
+ *
+ * @return Value returned is not taken into consideration by the server.
+ */
+int mysql_audit_notify(
+    THD *thd, mysql_event_polarx_connection_control_subclass_t subclass,
+    const char *subclass_name, const char *user, const char *host,
+    const char *ip, bool successful_login);
+
 #endif /* SQL_AUDIT_INCLUDED */

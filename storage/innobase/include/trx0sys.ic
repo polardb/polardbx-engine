@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 3/26/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef trx0sys_h
+#define INNODB_TRX0SYS_IC_STANDALONE
+#include "trx0sys.h"
+#undef INNODB_TRX0SYS_IC_STANDALONE
+#endif /* !trx0sys_h */
 #include "data0type.h"
 #include "srv0srv.h"
 #include "trx0trx.h"
@@ -54,7 +59,7 @@ constexpr uint32_t TRX_SYS_RSEG_PAGE_NO = 4;
 constexpr uint32_t TRX_SYS_RSEG_SLOT_SIZE = 8;
 
 /** Writes the value of max_trx_id to the file based trx system header. */
-void trx_sys_write_max_trx_id(void);
+// void trx_sys_write_max_trx_id(void);
 
 /** Checks if a page address is the trx sys header page.
 @param[in]      page_id page id
@@ -209,7 +214,7 @@ static inline trx_t *trx_rw_is_active(trx_id_t trx_id, bool do_ref_count) {
   was set to larger than trx_id, so we decide to return nullptr, even though, if
   we were to repeat the call in just a moment we might get a different result if
   the trx_sys_rw_trx_add() for the trx_id happens meanwhile. */
-  ut_ad(trx_id < trx_sys_get_next_trx_id_or_no());
+  ut_ad(trx_id < lizard::gcs_load_next_tid());
 
 //  auto &shard = trx_sys->get_shard_by_trx_id(trx_id);
 //  if (trx_id < shard.active_rw_trxs.peek().min_id()) {
@@ -227,39 +232,39 @@ static inline trx_t *trx_rw_is_active(trx_id_t trx_id, bool do_ref_count) {
       UT_LOCATION_HERE);
 }
 
-inline trx_id_t trx_sys_get_trx_id_write_margin() {
-  DBUG_EXECUTE_IF("trx_sys_low_trx_id_write_margin", return 8;);
-  return TRX_SYS_TRX_ID_WRITE_MARGIN;
-}
+// inline trx_id_t trx_sys_get_trx_id_write_margin() {
+//   DBUG_EXECUTE_IF("trx_sys_low_trx_id_write_margin", return 8;);
+//   return TRX_SYS_TRX_ID_WRITE_MARGIN;
+// }
 
-/** Allocates a new transaction id or transaction number.
-@return new, allocated trx id or trx no */
-inline trx_id_t trx_sys_allocate_trx_id_or_no() {
-  ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
+///** Allocates a new transaction id or transaction number.
+//@return new, allocated trx id or trx no */
+// inline trx_id_t trx_sys_allocate_trx_id_or_no() {
+//  ut_ad(trx_sys_mutex_own() || trx_sys_gtids_mem_mutex_own());
+//
+//  trx_id_t trx_id = trx_sys->next_trx_id_or_no.fetch_add(1);
+//
+//  if (trx_id % trx_sys_get_trx_id_write_margin() == 0) {
+//    /* Reserve the next range of trx_id values. This thread has acquired
+//    either the trx_sys_mutex or the trx_sys_serialisation_mutex.
+//
+//    Therefore at least one of these two mutexes, is latched and it stays
+//    latched until the call to trx_sys_write_max_trx_id() is finished.
+//
+//    Meanwhile other threads could be acquiring the other of these two mutexes,
+//    reserving more and more trx_id values, until TRX_SYS_TRX_ID_WRITE_MARGIN
+//    next values are reserved, when another trx_sys_write_max_trx_id() would
+//    be called. */
+//
+//    trx_sys_write_max_trx_id();
+//  }
+//  return trx_id;
+//}
 
-  trx_id_t trx_id = trx_sys->next_trx_id_or_no.fetch_add(1);
-
-  if (trx_id % trx_sys_get_trx_id_write_margin() == 0) {
-    /* Reserve the next range of trx_id values. This thread has acquired
-    either the trx_sys_mutex or the trx_sys_serialisation_mutex.
-
-    Therefore at least one of these two mutexes, is latched and it stays
-    latched until the call to trx_sys_write_max_trx_id() is finished.
-
-    Meanwhile other threads could be acquiring the other of these two mutexes,
-    reserving more and more trx_id values, until TRX_SYS_TRX_ID_WRITE_MARGIN
-    next values are reserved, when another trx_sys_write_max_trx_id() would
-    be called. */
-
-    trx_sys_write_max_trx_id();
-  }
-  return trx_id;
-}
-
-inline trx_id_t trx_sys_allocate_trx_id() {
-  ut_ad(trx_sys_mutex_own());
-  return trx_sys_allocate_trx_id_or_no();
-}
+// inline trx_id_t trx_sys_allocate_trx_id() {
+//   ut_ad(trx_sys_mutex_own());
+//   return trx_sys_allocate_trx_id_or_no();
+// }
 
 // inline trx_id_t trx_sys_allocate_trx_no() {
 //   ut_ad(trx_sys_gtids_mem_mutex_own());
@@ -272,26 +277,26 @@ inline trx_id_t trx_sys_allocate_trx_id() {
 //   return (trx_sys->serialisation_min_trx_no.load());
 // }
 
-inline trx_id_t trx_sys_get_next_trx_id_or_no() {
-  return trx_sys->next_trx_id_or_no.load();
-}
+// inline trx_id_t trx_sys_get_next_trx_id_or_no() {
+//   return trx_sys->next_trx_id_or_no.load();
+// }
 
-/** Determine if there are incomplete transactions in the system.
-@return whether incomplete transactions need rollback */
-static inline bool trx_sys_need_rollback() {
-  ulint n_trx;
-
-  trx_sys_mutex_enter();
-
-  n_trx = UT_LIST_GET_LEN(trx_sys->rw_trx_list);
-  ut_ad(n_trx >= trx_sys->n_prepared_trx);
-  n_trx -= trx_sys->n_prepared_trx;
-
-  trx_sys_mutex_exit();
-
-  return (n_trx > 0);
-}
-
+///** Determine if there are incomplete transactions in the system.
+//@return whether incomplete transactions need rollback */
+// static inline bool trx_sys_need_rollback() {
+//  ulint n_trx;
+//
+//  trx_sys_mutex_enter();
+//
+//  n_trx = UT_LIST_GET_LEN(trx_sys->rw_trx_list);
+//  ut_ad(n_trx >= trx_sys->n_prepared_trx);
+//  n_trx -= trx_sys->n_prepared_trx;
+//
+//  trx_sys_mutex_exit();
+//
+//  return (n_trx > 0);
+//}
+//
 static inline void trx_sys_rw_trx_add(trx_t *trx) {
   const trx_id_t trx_id = trx->id;
   ut_ad(trx_id != 0);

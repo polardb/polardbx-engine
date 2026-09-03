@@ -213,8 +213,8 @@ command. */
                                    debugging without UNIV_DEBUG */
 #define UNIV_BLOB_LIGHT_DEBUG      /* Enable off-page column \
                                    debugging without UNIV_DEBUG */
-#define UNIV_DEBUG_LOCK_VALIDATE   /* Enable                       \
-                                   ut_ad(lock_rec_validate_page()) \
+#define UNIV_DEBUG_LOCK_VALIDATE   /* Enable                      \
+                                   ut_d(lock_rec_validate_page()) \
                                    assertions. */
 #define UNIV_LRU_DEBUG             /* debug the buffer pool LRU */
 #define UNIV_HASH_DEBUG            /* debug HASH_ macros */
@@ -680,6 +680,10 @@ as a standalone library. */
   if (Sync_point::enabled((s))) { \
     __VA_ARGS__                   \
   }
+#define IF_ENABLED_THD(thd, s, ...)      \
+  if (Sync_point::enabled((thd), (s))) { \
+    __VA_ARGS__                          \
+  }
 #else
 
 /* Expand the macro if we are generating Doxygen documentation. */
@@ -690,6 +694,7 @@ as a standalone library. */
 #endif /* DOXYGEN_IF_DEBUG */
 
 #define IF_ENABLED(s, ...)
+#define IF_ENABLED_THD(thd, s, ...)
 #endif /* UNIV_DEBUG */
 
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG

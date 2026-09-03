@@ -268,10 +268,10 @@ insert into t1 values (24, 'a');
 set global consensus_force_promote=1;
 --sleep 2
 
-show global status like '%fifo%';
+show global status like "Consensus_fifo_cache_log_count";
 --eval call dbms_consensus.force_purge_cache($index_trunc);
 --sleep 2
-show global status like '%fifo%';
+show global status like "Consensus_fifo_cache_log_count";
 
 --connection conn3
 --exec echo "restart" > $MYSQLTEST_VARDIR/tmp/mysqld.3.expect

@@ -1,0 +1,18 @@
+INSERT INTO t_legacy VALUES (1, REPEAT('a', 255));
+SELECT id FROM t_legacy FORCE INDEX (idx_legacy)
+WHERE c = REPEAT('a', 255);
+id
+1
+CHECK TABLE t_legacy;
+Table	Op	Msg_type	Msg_text
+test.t_legacy	check	status	OK
+DROP TABLE t_legacy;
+INSERT INTO t_exact VALUES (1, REPEAT('b', 255));
+SELECT id FROM t_exact FORCE INDEX (idx_exact)
+WHERE c = REPEAT('b', 255);
+id
+1
+CHECK TABLE t_exact;
+Table	Op	Msg_type	Msg_text
+test.t_exact	check	status	OK
+DROP TABLE t_exact;

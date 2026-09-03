@@ -9,6 +9,7 @@ SET DEBUG_SYNC = 'RESET';
 --echo #
 --echo # Bug#15863023 SUPPORT IN-PLACE EXTENSION OF VARCHAR COLUMN
 --echo #
+set opt_index_format_spc_enabled=OFF;
 create table t1 (a SERIAL PRIMARY KEY, c varchar(2) UNIQUE) ENGINE=InnoDB;
 INSERT INTO t1 (c) VALUES('a'),('bb');
 --enable_info

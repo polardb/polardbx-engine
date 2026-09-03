@@ -49,92 +49,94 @@ MACRO(MYSQL_ADD_COMPONENT component_arg)
   STRING(TOLOWER ${component} component_lower)
   STRING(TOLOWER component_${component} target)
 
-  GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
-  LIST(FIND CWD_DEFINITIONS "MYSQL_SERVER" FOUND_DEFINITION)
-  IF(NOT FOUND_DEFINITION EQUAL -1)
-    MESSAGE(FATAL_ERROR
-      "component ${component} has -DMYSQL_SERVER")
-  ENDIF()
-
-  # If not dynamic component, add it to list of built-ins
-  IF (ARG_STATIC)
-    IF (NOT "${component}" STREQUAL "MYSQL_SERVER")
-      MESSAGE(FATAL_ERROR "Only one server built-in component is expected.")
-    ENDIF()
-  ENDIF()
-
-  # Build either static library or module
-  IF (ARG_STATIC)
-    SET(kind STATIC)
-  ELSEIF(ARG_MODULE_ONLY)
-    SET(kind MODULE)
+  IF(ARG_TEST_ONLY AND NOT WITH_TEST_ONLY_PLUGINS)
+    MESSAGE(STATUS "Skipping the ${component} test component.")
   ELSE()
-    MESSAGE(FATAL_ERROR "Unknown component type ${target}")
-  ENDIF()
-
-  ADD_VERSION_INFO(${target} ${kind} SOURCES)
-  ADD_LIBRARY(${target} ${kind} ${SOURCES})
-
-  TARGET_COMPILE_DEFINITIONS(${target} PUBLIC MYSQL_COMPONENT)
-  IF(COMPRESS_DEBUG_SECTIONS)
-    MY_TARGET_LINK_OPTIONS(${target}
-      "LINKER:--compress-debug-sections=zlib")
-  ENDIF()
-
-  IF(ARG_LINK_LIBRARIES)
-    TARGET_LINK_LIBRARIES(${target} ${ARG_LINK_LIBRARIES})
-  ENDIF()
-
-  SET_TARGET_PROPERTIES(${target} PROPERTIES PREFIX "")
-  ADD_DEPENDENCIES(${target} GenError)
-
-  IF (ARG_MODULE_ONLY)
-    # Store all components in the same directory, for easier testing.
-    SET_TARGET_PROPERTIES(${target} PROPERTIES
-      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugin_output_directory
-      )
-
-    # For APPLE: adjust path dependecy for SSL shared libraries.
-    SET_PATH_TO_CUSTOM_SSL_FOR_APPLE(${target})
-
-    IF(WIN32_CLANG AND WITH_ASAN)
-      TARGET_LINK_LIBRARIES(${target}
-        "${ASAN_LIB_DIR}/clang_rt.asan_dll_thunk-x86_64.lib")
+    GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
+    LIST(FIND CWD_DEFINITIONS "MYSQL_SERVER" FOUND_DEFINITION)
+    IF(NOT FOUND_DEFINITION EQUAL -1)
+      MESSAGE(FATAL_ERROR
+        "component ${component} has -DMYSQL_SERVER")
     ENDIF()
 
-    # To hide the component symbols in the shared object
-    IF(UNIX)
-      IF(MY_COMPILER_IS_CLANG AND WITH_UBSAN)
-        # nothing, clang/ubsan gets confused
-        UNSET(COMPONENT_COMPILE_VISIBILITY CACHE)
-      ELSE()
-        # Use this also for component libraries and tests.
-        SET(COMPONENT_COMPILE_VISIBILITY
-          "-fvisibility=hidden" CACHE INTERNAL
-          "Use -fvisibility=hidden for components" FORCE)
-        TARGET_COMPILE_OPTIONS(${target} PRIVATE "-fvisibility=hidden")
+    # If not dynamic component, add it to list of built-ins
+    IF (ARG_STATIC)
+      IF (NOT "${component}" STREQUAL "MYSQL_SERVER")
+        MESSAGE(FATAL_ERROR "Only one server built-in component is expected.")
       ENDIF()
     ENDIF()
 
-    IF(NOT ARG_SKIP_INSTALL)
-      # Install dynamic library.
-      IF(ARG_TEST_ONLY)
-        SET(INSTALL_COMPONENT Test)
-      ELSE()
+    # Build either static library or module
+    IF (ARG_STATIC)
+      SET(kind STATIC)
+    ELSEIF(ARG_MODULE_ONLY)
+      SET(kind MODULE)
+    ELSE()
+      MESSAGE(FATAL_ERROR "Unknown component type ${target}")
+    ENDIF()
+
+    ADD_VERSION_INFO(${target} ${kind} SOURCES)
+    ADD_LIBRARY(${target} ${kind} ${SOURCES})
+
+    TARGET_COMPILE_DEFINITIONS(${target} PUBLIC MYSQL_COMPONENT)
+    IF(COMPRESS_DEBUG_SECTIONS)
+      MY_TARGET_LINK_OPTIONS(${target}
+        "LINKER:--compress-debug-sections=zlib")
+    ENDIF()
+
+    IF(ARG_LINK_LIBRARIES)
+      TARGET_LINK_LIBRARIES(${target} ${ARG_LINK_LIBRARIES})
+    ENDIF()
+
+    SET_TARGET_PROPERTIES(${target} PROPERTIES PREFIX "")
+    ADD_DEPENDENCIES(${target} GenError)
+
+    IF (ARG_MODULE_ONLY)
+      # Store all components in the same directory, for easier testing.
+      SET_TARGET_PROPERTIES(${target} PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/plugin_output_directory
+        )
+
+      # For APPLE: adjust path dependecy for SSL shared libraries.
+      SET_PATH_TO_CUSTOM_SSL_FOR_APPLE(${target})
+
+      IF(WIN32_CLANG AND WITH_ASAN)
+        TARGET_LINK_LIBRARIES(${target}
+          "${ASAN_LIB_DIR}/clang_rt.asan_dll_thunk-x86_64.lib")
+      ENDIF()
+
+      # To hide the component symbols in the shared object
+      IF(UNIX)
+        IF(MY_COMPILER_IS_CLANG AND WITH_UBSAN)
+          # nothing, clang/ubsan gets confused
+          UNSET(COMPONENT_COMPILE_VISIBILITY CACHE)
+        ELSE()
+          # Use this also for component libraries and tests.
+          SET(COMPONENT_COMPILE_VISIBILITY
+            "-fvisibility=hidden" CACHE INTERNAL
+            "Use -fvisibility=hidden for components" FORCE)
+          TARGET_COMPILE_OPTIONS(${target} PRIVATE "-fvisibility=hidden")
+        ENDIF()
+      ENDIF()
+
+      # Test-only components are loaded from the build directory by the test suite
+      # and are never installed (Bug #85439771).
+      IF(NOT ARG_SKIP_INSTALL AND NOT ARG_TEST_ONLY)
+        # Install dynamic library.
         SET(INSTALL_COMPONENT Server)
+
+        ADD_INSTALL_RPATH_FOR_OPENSSL(${target})
+        MYSQL_INSTALL_TARGET(${target}
+          DESTINATION ${INSTALL_PLUGINDIR}
+          COMPONENT ${INSTALL_COMPONENT})
+        INSTALL_DEBUG_TARGET(${target}
+          DESTINATION ${INSTALL_PLUGINDIR}/debug
+          COMPONENT ${INSTALL_COMPONENT})
       ENDIF()
-
-      ADD_INSTALL_RPATH_FOR_OPENSSL(${target})
-      MYSQL_INSTALL_TARGET(${target}
-        DESTINATION ${INSTALL_PLUGINDIR}
-        COMPONENT ${INSTALL_COMPONENT})
-      INSTALL_DEBUG_TARGET(${target}
-        DESTINATION ${INSTALL_PLUGINDIR}/debug
-        COMPONENT ${INSTALL_COMPONENT})
     ENDIF()
-  ENDIF()
 
-  ADD_DEPENDENCIES(component_all ${target})
+    ADD_DEPENDENCIES(component_all ${target})
+  ENDIF()
 
 ENDMACRO(MYSQL_ADD_COMPONENT)
 

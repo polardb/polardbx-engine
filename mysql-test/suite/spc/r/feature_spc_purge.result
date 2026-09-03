@@ -1,0 +1,108 @@
+SET @old_innodb_stats_auto_recalc = @@innodb_stats_auto_recalc;
+SET GLOBAL innodb_stats_auto_recalc = OFF;
+#
+# PART 1: Purge delete-marked records in SPC index
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SET GLOBAL innodb_purge_stop_now = ON;
+SELECT index_name, INDEX_PAGE_TYPE
+FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE SCHEMA_NAME = 'test' AND TABLE_NAME = 't1'
+  ORDER BY index_name;
+index_name	INDEX_PAGE_TYPE
+idx_c	SPC_PAGE
+PRIMARY	INDEX
+# Step 1: con1 opens snapshot before the DELETE -- sees all 50 rows
+BEGIN;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+50
+# Step 2: default DELETEs rows id<=25 and commits
+BEGIN;
+DELETE FROM t1 WHERE id <= 25;
+COMMIT;
+# Step 3: purge is stopped; del-marks remain, con1 snapshot must still see 50 rows
+# con1 must still see 50 rows (snapshot predates DELETE)
+include/assert.inc [con1 snapshot sees all 50 rows through SPC index even after DELETE]
+COMMIT;
+# Step 4: ReadView released, purge can now physically remove delete-marks
+SET GLOBAL innodb_purge_run_now = ON;
+include/assert.inc [After purge: 25 rows remain in SPC index]
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+25
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+COUNT(*)
+25
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+# Step 5: re-insert purged keys must succeed (no ghost del-marks blocking)
+BEGIN;
+INSERT INTO t1 VALUES (1,  CONCAT(REPEAT('a', 100), 'reinsert1'));
+INSERT INTO t1 VALUES (10, CONCAT(REPEAT('a', 100), 'reinsert10'));
+INSERT INTO t1 VALUES (25, CONCAT(REPEAT('a', 100), 'reinsert25'));
+COMMIT;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+28
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+#
+# PART 2: Purge old versions of updated records
+#
+DROP TABLE IF EXISTS t1;
+Warnings:
+Note	1051	Unknown table 'test.t1'
+CREATE TABLE t1 (
+id  INT PRIMARY KEY,
+c   VARCHAR(120),
+KEY idx_c (c)
+) ENGINE=InnoDB;
+SET GLOBAL innodb_purge_stop_now = ON;
+# Multiple updates to generate a long version chain
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('b', 100)) WHERE id <= 25;
+COMMIT;
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id <= 25;
+COMMIT;
+BEGIN;
+UPDATE t1 SET c = CONCAT(REPEAT('d', 100)) WHERE id <= 25;
+COMMIT;
+# Run purge: old versions should be purged
+SET GLOBAL innodb_purge_run_now = ON;
+SELECT COUNT(*) FROM t1 FORCE INDEX (idx_c);
+COUNT(*)
+50
+SELECT COUNT(*) FROM t1 FORCE INDEX (PRIMARY);
+COUNT(*)
+50
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT(id, c))) AS chk FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;
+# Cleanup
+SET GLOBAL innodb_stats_auto_recalc = @old_innodb_stats_auto_recalc;
+SET GLOBAL innodb_purge_run_now = ON;

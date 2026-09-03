@@ -31,6 +31,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created June 2005 by Marko Makela
  *******************************************************/
 
+#ifndef page0zip_h
+#define INNODB_PAGE0ZIP_IC_STANDALONE
+#include "page0zip.h"
+#undef INNODB_PAGE0ZIP_IC_STANDALONE
+#endif /* !page0zip_h */
 #include "mtr0log.h"
 #include "page0page.h"
 #include "page0zip.h"
@@ -135,7 +140,8 @@ tablespace is not compressed
 @return false if the entire record can be stored locally on the page */
 static inline bool page_zip_rec_needs_ext(ulint rec_size, ulint comp,
                                           ulint n_fields,
-                                          const page_size_t &page_size) {
+                                          const page_size_t &page_size,
+                                          ulint page_dict_size) {
   ut_ad(rec_size > (comp ? REC_N_NEW_EXTRA_BYTES : REC_N_OLD_EXTRA_BYTES));
   ut_ad(comp || !page_size.is_compressed());
 
@@ -145,6 +151,7 @@ static inline bool page_zip_rec_needs_ext(ulint rec_size, ulint comp,
 
   if (page_size.is_compressed()) {
     ut_ad(comp);
+    ut_ad(page_dict_size == 0);
     /* On a compressed page, there is a two-byte entry in
     the dense page directory for every record.  But there
     is no record header.  There should be enough room for
@@ -156,7 +163,8 @@ static inline bool page_zip_rec_needs_ext(ulint rec_size, ulint comp,
             rec_size >= page_get_free_space_of_empty(true) / 2);
   }
 
-  return (rec_size >= page_get_free_space_of_empty(comp) / 2);
+  return (rec_size >=
+          (page_get_free_space_of_empty(comp) - page_dict_size) / 2);
 }
 #endif /* !UNIV_HOTBACKUP */
 

@@ -11,7 +11,7 @@
  * @author yingqiang.zyq(yingqiang.zyq@alibaba-inc.com)
  * @date 07/30/2016 02:41:21 PM
  * @version 1.0
- * @brief unit test for alisql::Consensus
+ * @brief unit test for alisql::Protocol
  *
  **/
 
@@ -20,7 +20,6 @@
 #include <memory>
 #include <thread>
 #include "client_service.h"
-#include "consensus.h"
 #include "easyNet.h"
 #include "files.h"
 #include "paxos.h"
@@ -28,6 +27,7 @@
 #include "paxos_configuration.h"
 #include "paxos_log.h"
 #include "paxos_server.h"
+#include "protocol.h"
 #include "service.h"
 
 #include "file_paxos_log.h"
@@ -209,11 +209,11 @@ TEST(consensus, StableConfiguration_uncontinue_serverid) {
   EXPECT_EQ(v1[2], "127.0.0.1:10002");
 }
 
-TEST(consensus, PaxosLog) {
+TEST(consensus, PaxosLogHandler) {
   // TODO need a factory.
-  // PaxosLog *rlog= new PaxosLog();
-  PaxosLog *rlog =
-      (PaxosLog *)new RDPaxosLog("paxosLogTestDir", true, 4 * 1024 * 1024);
+  // PaxosLogHandler *rlog= new PaxosLogHandler();
+  PaxosLogHandler *rlog =
+      (PaxosLogHandler *)new RDPaxosLog("paxosLogTestDir", true, 4 * 1024 * 1024);
   LogEntry entry;
 
   EXPECT_EQ(rlog->getLastLogIndex(), 0);
@@ -311,9 +311,9 @@ TEST(consensus, PaxosLog) {
 }
 
 TEST(consensus, FilePaxosLog) {
-  // PaxosLog *rlog= new PaxosLog();
-  PaxosLog *rlog =
-      (PaxosLog *)new FilePaxosLog("filelog", FilePaxosLog::LTSync);
+  // PaxosLogHandler *rlog= new PaxosLogHandler();
+  PaxosLogHandler *rlog =
+      (PaxosLogHandler *)new FilePaxosLog("filelog", FilePaxosLog::LTSync);
   LogEntry entry;
 
   EXPECT_EQ(rlog->getLastLogIndex(), 0);
@@ -453,7 +453,7 @@ TEST(consensus, RemoteServerSendMsg) {
   msg.set_clusterid(0);
   msg.set_msgid(0);
   msg.set_serverid(0);
-  msg.set_msgtype((int)Consensus::LeaderCommand);
+  msg.set_msgtype((int)::LeaderCommand);
   msg.set_term(2);
   msg.set_leaderid(3);
   EXPECT_TRUE(msg.IsInitialized());
@@ -476,7 +476,7 @@ TEST(consensus, Paxos_requestVote3) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -694,11 +694,11 @@ TEST(consensus, Paxos_requestVoteAuto) {
   strConfig.emplace_back("127.0.0.1:11012");
   strConfig.emplace_back("127.0.0.1:11013");
 
-  std::shared_ptr<PaxosLog> rlog1 =
+  std::shared_ptr<PaxosLogHandler> rlog1 =
       std::make_shared<RDPaxosLog>("paxosLogTestDir11", true, 4 * 1024 * 1024);
-  std::shared_ptr<PaxosLog> rlog2 =
+  std::shared_ptr<PaxosLogHandler> rlog2 =
       std::make_shared<RDPaxosLog>("paxosLogTestDir12", true, 4 * 1024 * 1024);
-  std::shared_ptr<PaxosLog> rlog3 =
+  std::shared_ptr<PaxosLogHandler> rlog3 =
       std::make_shared<RDPaxosLog>("paxosLogTestDir13", true, 4 * 1024 * 1024);
 
   auto *paxos1 = new Paxos(500, rlog1);
@@ -727,7 +727,7 @@ void applyThread(Paxos *paxos) {
   paxos->waitCommitIndexUpdate(0);
   EXPECT_GE(paxos->getCommitIndex(), 1);
   uint64_t i = 0;
-  std::shared_ptr<PaxosLog> log = paxos->getLog();
+  std::shared_ptr<PaxosLogHandler> log = paxos->getLog();
   for (i = 1; i <= paxos->getCommitIndex(); ++i) {
     LogEntry entry;
     log->getEntry(i, entry);
@@ -791,7 +791,7 @@ TEST(consensus, Paxos_replicateLog) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir21", true, 4 * 1024 * 1024);
   auto *cs1 = new ClientService();
@@ -896,7 +896,7 @@ TEST(consensus, Paxos_AliSQLServer) {
   std::shared_ptr<AliSQLServer> aserver;
   std::shared_ptr<AliSQLServer> aserver1 = std::make_shared<AliSQLServer>(1);
 
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   std::shared_ptr<FailRDPaxosLog> rdlog;
   rlog1 = rlog = rdlog = std::make_shared<FailRDPaxosLog>(
       "paxosLogTestDir1", true, 4 * 1024 * 1024);
@@ -1099,7 +1099,7 @@ TEST(consensus, callback2) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 12500;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir21", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -1169,7 +1169,7 @@ TEST(consensus, timeout_set) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   const uint64_t timeout = 2000;
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -1237,7 +1237,7 @@ TEST(consensus, fix_match_index) {
   std::vector<std::string> strConfig = {"127.0.0.1:11001", "127.0.0.1:11002",
                                         "127.0.0.1:11003"};
   uint64_t timeout = 10000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -1317,7 +1317,7 @@ TEST(consensus, checksum) {
   std::vector<std::string> strConfig = {"127.0.0.1:11001", "127.0.0.1:11002",
                                         "127.0.0.1:11003"};
   uint64_t timeout = 10000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -1396,7 +1396,7 @@ TEST(consensus, update_commitindex_in_leader_transfer) {
   std::vector<std::string> strConfig = {"127.0.0.1:11001", "127.0.0.1:11002",
                                         "127.0.0.1:11003"};
   uint64_t timeout = 10000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   auto *paxos1 = new Paxos(timeout, rlog);
@@ -1455,7 +1455,7 @@ TEST(consensus, flow_control) {
   std::vector<std::string> strConfig = {"127.0.0.1:11001", "127.0.0.1:11002",
                                         "127.0.0.1:11003"};
   uint64_t timeout = 5000;  // 1s heartbeat
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);
@@ -1518,7 +1518,7 @@ TEST(consensus, memory_usage_count) {
   std::vector<std::string> strConfig = {"127.0.0.1:11001", "127.0.0.1:11002",
                                         "127.0.0.1:11003"};
   uint64_t timeout = 5000;  // 1s heartbeat
-  std::shared_ptr<PaxosLog> rlog, rlog1;
+  std::shared_ptr<PaxosLogHandler> rlog, rlog1;
   rlog1 = rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog1);
@@ -1572,7 +1572,7 @@ TEST(consensus, paxos_force_promote) {
   strConfig.emplace_back("127.0.0.1:11003");
 
   uint64_t timeout = 10000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog, 3000);
@@ -1642,7 +1642,7 @@ TEST(consensus, extra_info) {
   strConfig.emplace_back("127.0.0.1:11002");
   strConfig.emplace_back("127.0.0.1:11003");
   uint64_t timeout = 5000;
-  std::shared_ptr<PaxosLog> rlog;
+  std::shared_ptr<PaxosLogHandler> rlog;
   rlog =
       std::make_shared<RDPaxosLog>("paxosLogTestDir1", true, 4 * 1024 * 1024);
   Paxos *paxos1 = new Paxos(timeout, rlog);

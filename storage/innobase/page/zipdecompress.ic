@@ -42,7 +42,9 @@ external tools. */
 #include "fil0types.h"
 #include "page0types.h"
 
+#ifndef INNODB_PAGE_PAGE_IC_STANDALONE
 #include "page/page.ic"
+#endif /* !INNODB_PAGE_PAGE_IC_STANDALONE */
 /** Size of an compressed page directory entry */
 constexpr uint32_t PAGE_ZIP_DIR_SLOT_SIZE = 2;
 

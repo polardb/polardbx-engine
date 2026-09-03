@@ -44,6 +44,7 @@ Created 10/13/2010 Jimmy Yang */
 
 #include <current_thd.h>
 
+#include "lizard0txn.h"
 #include "lizard0undo.h"
 
 /** Parallel sort degree, must be a power of 2. */
@@ -703,8 +704,9 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
 
     ut_a(t_ctx->m_handler_id < FTS_NUM_AUX_INDEX);
 
-    auto &fields = key_buffer->m_dtuples[key_buffer->m_n_tuples];
+    dfield_t *fields;
     auto field = fields = key_buffer->alloc(FTS_NUM_FIELDS_SORT);
+    key_buffer->m_dtuples.push_back(fields);
 
     /* The first field is the tokenized word */
     dfield_set_data(field, t_str.f_str, t_str.f_len);
@@ -778,8 +780,8 @@ bool FTS::Parser::doc_tokenize(doc_id_t doc_id, fts_doc_t *doc,
     for 1 bytes, larger than that 2 bytes. */
     cur_len += t_str.f_len < 128 ? 2 : 3;
 
-    /* Reserve one byte for the end marker of Aligned_buffer. */
-    if (key_buffer->m_total_size + cur_len >= key_buffer->m_buffer_size - 1) {
+    if (!key_buffer->will_fit(cur_len)) {
+      key_buffer->pop_unfinished_tuple();
       buf_full = true;
       break;
     }
@@ -1142,6 +1144,8 @@ dberr_t FTS::Inserter::write_word(Insert *ins_ctx,
                                   " index table, error ("
                                << ut_strerr(err) << ")";
       ret = err;
+    } else {
+      ut_ad(ins_ctx->m_btr_bulk->get_n_recs() > 0);
     }
 
     ut::free(fts_node->ilist);
@@ -1281,7 +1285,7 @@ dberr_t FTS::Inserter::insert(Builder *builder,
     /** Allocate txn undo log hdr to commit scn, it will
     commit by fts_commit */
     mutex_enter(&trx->undo_mutex);
-    dberr_t error = lizard::trx_always_assign_txn_undo(trx);
+    dberr_t error = lizard::trx_always_assign_txn_slot(trx);
     mutex_exit(&trx->undo_mutex);
 
     ut_a(error == DB_SUCCESS);
@@ -1354,7 +1358,8 @@ dberr_t FTS::Inserter::insert(Builder *builder,
 
   /* Create bulk load instance */
   ins_ctx.m_btr_bulk = ut::new_withkey<Btree_load>(
-      ut::make_psi_memory_key(mem_key_ddl), aux_index, trx->id, observer);
+      ut::make_psi_memory_key(mem_key_ddl), aux_index, trx->id,
+      observer IF_DEBUG(, m_ctx.thd()));
 
   /* Create tuple for insert. */
   ins_ctx.m_tuple =
@@ -1387,21 +1392,21 @@ dberr_t FTS::Inserter::insert(Builder *builder,
 
   /* Lizard: Set SCN column and UNDO_PTR column */
   {
-    lizard::trx_write_scn(trx_scn_buf, &trx->txn_desc);
+    lizard::txn_desc_write_scn(trx_scn_buf, &trx->txn_desc);
     auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 4);
     dfield_set_data(field, &trx_scn_buf, DATA_SCN_ID_LEN);
   }
 
   /* Lizard: Set the real value */
   {
-    lizard::trx_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
+    lizard::txn_desc_write_undo_ptr(undo_ptr_buf, &trx->txn_desc);
     auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 5);
     dfield_set_data(field, &undo_ptr_buf, DATA_UNDO_PTR_LEN);
   }
 
   /* Lizard: Set the real value */
   {
-    lizard::trx_write_gcn(trx_gcn_buf, &trx->txn_desc);
+    lizard::txn_desc_write_gcn(trx_gcn_buf, &trx->txn_desc);
     auto field = dtuple_get_nth_field(ins_ctx.m_tuple, 6);
     dfield_set_data(field, &trx_gcn_buf, DATA_GCN_ID_LEN);
   }
@@ -1549,18 +1554,18 @@ dberr_t FTS::start_parse_threads(Builder *builder) noexcept {
 #else
     Runnable runnable{PSI_NOT_INSTRUMENTED, seqnum};
 #endif /* UNIV_PFS_THREAD */
+    runnable([&]() {
+      auto thd = create_internal_thd();
+      ut_ad(current_thd == thd);
 
-    my_thread_init();
+      thd->push_diagnostics_area(&parser->da, false);
+      parser->parse(builder);
+      thd->pop_diagnostics_area();
 
-    auto thd = create_internal_thd();
-    ut_ad(current_thd == thd);
-
-    thd->push_diagnostics_area(&parser->da, false);
-    parser->parse(builder);
-    thd->pop_diagnostics_area();
-
-    destroy_internal_thd(current_thd);
-    my_thread_end();
+      destroy_internal_thd(current_thd);
+      /* Return value ignored but required for Runnable::operator() */
+      return DB_SUCCESS;
+    });
   };
 
   size_t seqnum{1};
@@ -1621,7 +1626,7 @@ dberr_t FTS::insert(Builder *builder) noexcept {
 #endif /* UNIV_PFS_THREAD */
 
     if (!handler->m_files.empty()) {
-      err = m_inserter->insert(builder, handler);
+      err = runnable([&]() { return m_inserter->insert(builder, handler); });
     }
   };
 

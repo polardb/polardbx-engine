@@ -178,9 +178,10 @@ void gp_wait_suspend_thread(trx_t *trx);
   @retval         true    visible = true
   @retval         false
 */
-bool gp_clust_or_panda_rec_cons_read_sees(
-    trx_t *trx, const rec_t *rec, dict_index_t *index, const ulint *offsets,
-    btr_pcur_t *pcur, lizard::Vision *vision, dberr_t *error);
+bool gp_clust_or_panda_rec_cons_read_sees(trx_t *trx, const Slice *slc,
+                                          dict_index_t *index, btr_pcur_t *pcur,
+                                          lizard::Vision *vision,
+                                          dberr_t *error);
 
 /**
   Cancal all blocked global query when commit
@@ -231,23 +232,16 @@ inline gp_state_t *trx_gp_state(trx_t *trx) { return &trx->gp_state; }
 /** Return the prepared transaction wait information */
 inline gp_wait_t *trx_gp_wait(trx_t *trx) { return &trx->gp_wait; }
 
-/**-------------------- DEBUG ----------------------*/
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
+/** Whether the global query state is in the initial state */
+inline bool gp_state_is_initial(const trx_t *trx) {
+  return trx->gp_state.waiting == false &&
+         trx->gp_state.blocking_trx == nullptr;
+}
 
-#define assert_gp_state_initial(trx)             \
-  do {                                           \
-    ut_a(trx->gp_state.waiting == false &&       \
-         trx->gp_state.blocking_trx == nullptr); \
-  } while (0)
-
-#define assert_gp_state_allocated(trx)           \
-  do {                                           \
-    ut_a(trx->gp_state.waiting != false &&       \
-         trx->gp_state.blocking_trx != nullptr); \
-  } while (0)
-#else
-#define assert_gp_state_initial(trx)
-#define assert_gp_state_allocated(trx)
-#endif  // defined UNIV_DEBUG || defined LIZARD_DEBUG
+/** Whether the global query state has been allocated */
+inline bool gp_state_is_allocated(const trx_t *trx) {
+  return trx->gp_state.waiting != false &&
+         trx->gp_state.blocking_trx != nullptr;
+}
 
 #endif

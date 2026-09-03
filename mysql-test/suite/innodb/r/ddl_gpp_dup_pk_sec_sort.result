@@ -1,0 +1,45 @@
+DROP TABLE IF EXISTS t_repro;
+DROP TABLE IF EXISTS t_seq;
+SET SESSION opt_index_format_gpp_enabled = ON;
+SET SESSION opt_index_format_hippo_enabled = ON;
+SET SESSION opt_index_format_panda_enabled = OFF;
+SET SESSION opt_index_format_spc_enabled = OFF;
+SET @old_innodb_ddl_threads = @@GLOBAL.innodb_ddl_threads;
+SET @old_innodb_ddl_buffer_size = @@GLOBAL.innodb_ddl_buffer_size;
+SET GLOBAL innodb_ddl_threads = 1;
+SET GLOBAL innodb_ddl_buffer_size = 65536;
+CREATE TABLE t_seq (n INT NOT NULL PRIMARY KEY) ENGINE=MEMORY;
+INSERT INTO t_seq VALUES (0);
+INSERT INTO t_seq SELECT n + 1 FROM t_seq;
+INSERT INTO t_seq SELECT n + 2 FROM t_seq;
+INSERT INTO t_seq SELECT n + 4 FROM t_seq;
+INSERT INTO t_seq SELECT n + 8 FROM t_seq;
+INSERT INTO t_seq SELECT n + 16 FROM t_seq;
+INSERT INTO t_seq SELECT n + 32 FROM t_seq;
+INSERT INTO t_seq SELECT n + 64 FROM t_seq;
+INSERT INTO t_seq SELECT n + 128 FROM t_seq;
+INSERT INTO t_seq SELECT n + 256 FROM t_seq;
+INSERT INTO t_seq SELECT n + 512 FROM t_seq;
+CREATE TABLE t_repro (
+id INT NOT NULL,
+XM VARCHAR(50) DEFAULT NULL,
+ZGH VARCHAR(20) NOT NULL,
+jbxx_id VARCHAR(20) NOT NULL,
+pad1 VARCHAR(255) DEFAULT NULL,
+pad2 VARCHAR(255) DEFAULT NULL,
+pad3 VARCHAR(255) DEFAULT NULL,
+PRIMARY KEY (id),
+KEY idx_XM (XM)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+INSERT INTO t_repro VALUES
+(1, 'same_xm', '20149339', '6135', REPEAT('a', 32), REPEAT('b', 32), REPEAT('c', 32));
+INSERT INTO t_repro VALUES
+(2, 'filler_xm', 'Z200000', 'J200000', REPEAT('a', 32), REPEAT('b', 32), REPEAT('c', 32));
+INSERT INTO t_repro VALUES
+(3, 'same_xm', '20149339', '6135', REPEAT('d', 32), REPEAT('e', 32), REPEAT('f', 32));
+ALTER TABLE t_repro DROP PRIMARY KEY, ADD PRIMARY KEY (ZGH, jbxx_id) USING BTREE;
+ERROR 23000: Duplicate entry '20149339-6135' for key 't_repro.PRIMARY'
+DROP TABLE t_repro;
+DROP TABLE t_seq;
+SET GLOBAL innodb_ddl_threads = @old_innodb_ddl_threads;
+SET GLOBAL innodb_ddl_buffer_size = @old_innodb_ddl_buffer_size;

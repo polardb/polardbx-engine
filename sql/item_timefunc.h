@@ -1692,4 +1692,48 @@ class Item_func_internal_check_time final : public Item_datetime_func {
 bool make_date_time(Date_time_format *format, MYSQL_TIME *l_time,
                     enum_mysql_timestamp_type type, String *str);
 
+/**
+MODIFY_ON_UPDATE function: only update the column value if other columns
+in the row have been modified.
+
+Usage: MODIFY_ON_UPDATE(value)
+- If other columns changed: set column to value
+- If other columns unchanged: keep original value
+
+This function is only meaningful in UPDATE statements.
+Supports all column types (INT, VARCHAR, DATETIME, DECIMAL, etc.).
+*/
+class Item_func_mod_onupd : public Item_func {
+ public:
+  Item_func_mod_onupd(const POS &pos, Item *arg) : Item_func(pos, arg) {}
+
+  const char *func_name() const override { return "modify_on_update"; }
+  enum Functype functype() const override { return MOD_ONUPD_FUNC; }
+  bool itemize(Parse_context *pc, Item **res) override;
+
+  /**
+   * Evaluate the argument and store its value into the target field.
+   * Called only when other columns in the row have actually changed.
+   *
+   * @param field  The field to store the value into
+   *
+   * @retval false  Success
+   * @retval true   Error occurred
+   */
+  bool set_mod_onupd(Field *field);
+
+  bool resolve_type(THD *thd) override;
+
+  enum Item_result result_type() const override {
+    return args[0]->result_type();
+  }
+
+  double val_real() override;
+  longlong val_int() override;
+  String *val_str(String *str) override;
+  my_decimal *val_decimal(my_decimal *dec) override;
+  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzy_date) override;
+  bool get_time(MYSQL_TIME *ltime) override;
+};
+
 #endif /* ITEM_TIMEFUNC_INCLUDED */

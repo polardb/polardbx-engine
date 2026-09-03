@@ -1270,7 +1270,7 @@ test.t3	analyze	status	OK
 EXPLAIN  select fld3,period,price,price2 from t2,t3 where t2.fld1=t3.t2nr and period >= 1001 and period <= 1002 and t2.companynr = 37 order by fld3,period, price;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	t2	NULL	ALL	fld1	NULL	NULL	NULL	1199	10.00	Using where; Using temporary; Using filesort
-1	SIMPLE	t3	NULL	eq_ref	PRIMARY,period	PRIMARY	4	test.t2.fld1	1	20.00	Using where
+1	SIMPLE	t3	NULL	eq_ref	PRIMARY,period	PRIMARY	4	test.t2.fld1	1	36.72	Using where
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t2`.`fld3` AS `fld3`,`test`.`t3`.`period` AS `period`,`test`.`t3`.`price` AS `price`,`test`.`t3`.`price2` AS `price2` from `test`.`t2` join `test`.`t3` where ((`test`.`t2`.`companynr` = 37) and (`test`.`t2`.`fld1` = `test`.`t3`.`t2nr`) and (`test`.`t3`.`period` >= 1001) and (`test`.`t3`.`period` <= 1002)) order by `test`.`t2`.`fld3`,`test`.`t3`.`period`,`test`.`t3`.`price`
 select fld3,period,price,price2 from t2,t3 where t2.fld1=t3.t2nr and period >= 1001 and period <= 1002 and t2.companynr = 37 order by fld3,period, price;
@@ -2553,7 +2553,7 @@ INSERT INTO t1 VALUES (2,'b');
 INSERT INTO t1 VALUES (3,'c');
 EXPLAIN SELECT i FROM t1 WHERE i=1;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index; Directly search via Primary Index
 Warnings:
 Note	1003	/* select#1 */ select '1' AS `i` from `test`.`t1` where true
 DROP TABLE t1;

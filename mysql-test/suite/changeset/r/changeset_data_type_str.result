@@ -16,23 +16,23 @@ VALUES
 ('Hello', 'Hello', 'This is a test string.', 'Hello World', 'Data1'),
 ('World', 'World', 'Another example of text.', 'Hello World', 'Data2');
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	2	0	0	0	600
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	2	0	0	0	600	2	-	-	-
 INSERT INTO c8 (a, b, c, d, e)
 VALUES('这是中文', '这是中文', '这是中文', 'This is a test string.', 'Data3');
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	3	0	0	0	907
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	3	0	0	0	907	3	-	-	-
 INSERT INTO c8 (a, b, c, d, e)
 VALUES('This is emoji 😅😎', 'This is emoji 😅😎', 'This is emoji 😅😎', 'This is a test string.', 'Data4');
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	4	0	0	0	1234
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	4	0	0	0	1234	4	-	-	-
 INSERT INTO c8 (a, b, c, d, e)
 VALUES('君の日本語は本当に上手です', '君の日本語は本当に上手です', '君の日本語は本当に上手です', 'This is a test string.', 'Data5');
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	5	0	0	0	1595
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	5	0	0	0	1595	5	-	-	-
 INSERT INTO c8 (a, b, c, d, e)
 VALUES('이건 한국어야', '이건 한국어야', '이건 한국어야', 'This is a test string.', 'Data6');
 select * from c8;
@@ -44,8 +44,8 @@ World	World	Another example of text.	Hello World	Data2
 君の日本語は本当に上手です	君の日本語は本当に上手です	君の日本語は本当に上手です	This is a test string.	Data5
 这是中文	这是中文	这是中文	This is a test string.	Data3
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	6	0	0	0	1916
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	6	0	0	0	1916	6	-	-	-
 call polarx.changeset_fetch('c8');
 OP	a	b	c	d
 INSERT	Hello	Hello	This is a test string.	Hello World
@@ -56,8 +56,8 @@ INSERT	君の日本語は本当に上手です	君の日本語は本当に上手
 INSERT	这是中文	这是中文	这是中文	This is a test string.
 update c8 set e = "test_value";
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	6	6	0	0	5748
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	6	6	0	0	5748	12	-	-	-
 call polarx.changeset_fetch('c8');
 OP	a	b	c	d
 DELETE	Hello	Hello	This is a test string.	Hello World
@@ -73,12 +73,12 @@ INSERT	君の日本語は本当に上手です	君の日本語は本当に上手
 DELETE	这是中文	这是中文	这是中文	This is a test string.
 INSERT	这是中文	这是中文	这是中文	This is a test string.
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
-test	c8	6	6	0	0	3832
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
+test	c8	6	6	0	0	3832	0	-	-	-
 call polarx.changeset_finish('c8');
 SEQ	ROW
 call polarx.changeset_stats('c8');
-SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE
+SCHEMA	TABLE	NUM_INSERTS	NUM_UPDATES	NUM_DELETES	NUM_FILES	MEMORY_SIZE	CURRENT_PRIMARY_KEY_NUM	BACKPRESSURE_TRIGGER	BUCKET_AVAILABLE_TOKENS	BUCKET_FILL_RATE
 select * from c8;
 a	b	c	d	e
 Hello	Hello	This is a test string.	Hello World	test_value

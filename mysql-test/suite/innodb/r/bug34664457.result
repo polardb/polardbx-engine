@@ -1,0 +1,19 @@
+CREATE TABLE t_parent (
+id INT PRIMARY KEY
+) ENGINE=InnoDB;
+CREATE TABLE t_child (
+id INT PRIMARY KEY,
+parent_id INT,
+doc JSON,
+CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES t_parent(id)
+ON UPDATE CASCADE,
+INDEX idx_tags ((CAST(doc->'$[*]' AS UNSIGNED ARRAY)))
+) ENGINE=InnoDB;
+INSERT INTO t_parent VALUES (2);
+INSERT INTO t_child VALUES (100, 2, '[1, 2, 3]');
+UPDATE t_parent SET id = 20 WHERE id = 2;
+SELECT id, parent_id, doc FROM t_child;
+id	parent_id	doc
+100	20	[1, 2, 3]
+DROP TABLE t_child;
+DROP TABLE t_parent;

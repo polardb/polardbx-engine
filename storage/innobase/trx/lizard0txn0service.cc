@@ -42,11 +42,11 @@ void xa_addr_t::decide_if_ac_commit(const trx_t *trx) {
     reset();
     return;
   }
-  ut_a(trx->txn_desc.maddr.is_null());
+  ut_a(trx->txn_desc.xa_maddr().is_null());
   ut_ad(is_valid());
 
   if (trx->id != tid) {
-    ut_a(undo_ptr_get_slot(trx->txn_desc.undo_ptr) != slot_ptr);
+    ut_a(undo_addr_t::decode_slot(trx->txn_desc.undo_ptr) != slot_ptr);
   } else {
     reset();
   }

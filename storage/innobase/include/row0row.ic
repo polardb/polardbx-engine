@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 4/20/1996 Heikki Tuuri
  *******************************************************/
 
+#ifndef row0row_h
+#define INNODB_ROW0ROW_IC_STANDALONE
+#include "row0row.h"
+#undef INNODB_ROW0ROW_IC_STANDALONE
+#endif /* !row0row_h */
 #include <cmath>
 #include <cstdint>
 
@@ -38,55 +43,49 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 
 static inline ulint row_get_trx_id_offset(const dict_index_t *index,
-                                          const ulint *offsets) {
-  ulint pos;
+                                          const Slice *slc) {
   ulint offset;
   ulint len;
 
-  ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(rec_offs_validate(nullptr, index, offsets));
+  ut_ad(index->is_clustered() || index->is_panda() || index->is_hippo());
 
-  pos = index->get_sys_col_pos(DATA_TRX_ID);
-
-  offset = rec_get_nth_field_offs(index, offsets, pos, &len);
+  offset = slc->get_nth_sys_field_offs(DATA_TRX_ID, ULINT_UNDEFINED, &len);
 
   ut_ad(len == DATA_TRX_ID_LEN);
 
   return (offset);
 }
 
-static inline trx_id_t row_get_rec_trx_id(const rec_t *rec,
-                                          const dict_index_t *index,
-                                          const ulint *offsets) {
+static inline trx_id_t row_get_rec_trx_id(const Slice *slc,
+                                          const dict_index_t *index) {
   ulint offset;
 
-  ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(index->is_clustered() || index->is_panda() || index->is_hippo());
+  ut_ad(slc->is_positioned(index));
 
   offset = index->trx_id_offset;
 
   if (!offset) {
-    offset = row_get_trx_id_offset(index, offsets);
+    offset = row_get_trx_id_offset(index, slc);
   }
 
-  return (trx_read_trx_id(rec + offset));
+  return (trx_read_trx_id(slc->rec() + offset));
 }
 
-static inline roll_ptr_t row_get_rec_roll_ptr(const rec_t *rec,
-                                              const dict_index_t *index,
-                                              const ulint *offsets) {
+static inline roll_ptr_t row_get_rec_roll_ptr(const Slice *slc,
+                                              const dict_index_t *index) {
   ulint offset;
 
   ut_ad(index->is_clustered() || index->is_panda());
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
 
   offset = index->trx_id_offset;
 
   if (!offset) {
-    offset = row_get_trx_id_offset(index, offsets);
+    offset = row_get_trx_id_offset(index, slc);
   }
 
-  return (trx_read_roll_ptr(rec + offset + DATA_TRX_ID_LEN));
+  return (trx_read_roll_ptr(slc->rec() + offset + DATA_TRX_ID_LEN));
 }
 
 static inline dtuple_t *row_build_index_entry(const dtuple_t *row,
@@ -104,15 +103,12 @@ static inline dtuple_t *row_build_index_entry(const dtuple_t *row,
 /** Builds from a secondary index record a row reference with which we can
  search the clustered index record. */
 static inline void row_build_row_ref_fast(
-    dtuple_t *ref,        /*!< in/out: typed data tuple where the
-                          reference is built */
-    const ulint *map,     /*!< in: array of field numbers in rec
-                          telling how ref should be built from
-                          the fields of rec */
-    const rec_t *rec,     /*!< in: record in the index; must be
-                          preserved while ref is used, as we do
-                          not copy field values to heap */
-    const ulint *offsets) /*!< in: array returned by rec_get_offsets() */
+    dtuple_t *ref,    /*!< in/out: typed data tuple where the
+                      reference is built */
+    const ulint *map, /*!< in: array of field numbers in rec
+                      telling how ref should be built from
+                      the fields of rec */
+    const Slice *slc) /*!< in: array returned by rec_get_offsets() */
 {
   dfield_t *dfield;
   const byte *field;
@@ -121,8 +117,8 @@ static inline void row_build_row_ref_fast(
   ulint field_no;
   ulint i;
 
-  ut_ad(rec_offs_validate(rec, nullptr, offsets));
-  ut_ad(!rec_offs_any_extern(offsets));
+  ut_ad(slc->validate());
+  ut_ad(!rec_offs_any_extern(slc->offsets()));
   ref_len = dtuple_get_n_fields(ref);
 
   for (i = 0; i < ref_len; i++) {
@@ -131,7 +127,8 @@ static inline void row_build_row_ref_fast(
     field_no = *(map + i);
 
     if (field_no != ULINT_UNDEFINED) {
-      field = rec_get_nth_field(nullptr, rec, offsets, field_no, &len);
+      // field = rec_get_nth_field(nullptr, slc->rec(), slc, field_no, &len);
+      field = const_cast<Slice *>(slc)->get_nth_field(nullptr, field_no, &len);
       dfield_set_data(dfield, field, len);
     }
   }

@@ -168,7 +168,15 @@ class Query_string_builder {
     return *this;
   }
 
-  void clear() { m_str.clear(); }
+  void clear() {
+    if (m_str.capacity() > 1024) {
+      std::string new_buf;
+      new_buf.reserve(1024);
+      m_str.swap(new_buf);
+    } else {
+      m_str.clear();
+    }
+  }
 
   void reserve(size_t bytes) { m_str.reserve(bytes); }
 

@@ -1,0 +1,251 @@
+--source include/have_log_bin.inc
+--source include/have_gtid.inc
+--source include/have_blackhole.inc
+--source include/have_debug_sync.inc
+
+--disable_query_log
+
+call mtr.add_suppression("The consensus follower is not allowed to to do current operation.");
+
+--source include/paxos.inc
+
+# Test BLACKHOLE engine GTID consistency and data synchronization in master-slave replication
+# Verify that when writing to BLACKHOLE tables, slave can correctly apply binlog and maintain GTID consistency
+
+# Connect to 3 server nodes
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+
+--connection conn1
+CREATE TABLE test_blackhole (
+  id INT PRIMARY KEY,
+  data VARCHAR(255)
+) ENGINE=BLACKHOLE;
+
+CREATE TABLE test_innodb (
+  id INT PRIMARY KEY,
+  data VARCHAR(255)
+) ENGINE=INNODB;
+
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#-----------------------------------------------------------
+# Case 1. Basic test: Insert data into BLACKHOLE table
+#-----------------------------------------------------------
+--echo # Case 1. Test: Insert data into BLACKHOLE table (single statement transactions)
+--connection conn1
+SET AUTOCOMMIT=1;
+INSERT INTO test_blackhole VALUES (1, 'blackhole_test1');
+INSERT INTO test_blackhole VALUES (2, 'blackhole_test2');
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#------------------------------------------------------------
+# Case 2. Test: XA transaction with only BLACKHOLE operations
+#------------------------------------------------------------
+--echo # Case 2. Test: XA transaction with only BLACKHOLE operations
+--connection conn1
+XA START 'xid_blackhole_only';
+INSERT INTO test_blackhole VALUES (5, 'xa_blackhole_only_1');
+INSERT INTO test_blackhole VALUES (6, 'xa_blackhole_only_2');
+XA END 'xid_blackhole_only';
+XA COMMIT 'xid_blackhole_only' ONE PHASE;
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#------------------------------------------------------------
+# Case 3. Test: Transaction with InnoDB first, then BLACKHOLE
+#------------------------------------------------------------
+--echo # Case 3. Test: Transaction with InnoDB first, then BLACKHOLE
+--connection conn1
+BEGIN;
+INSERT INTO test_innodb VALUES (10, 'innodb_in_transaction');
+INSERT INTO test_blackhole VALUES (11, 'blackhole_in_transaction');
+COMMIT;
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave1 data
+SELECT * FROM test_innodb WHERE id = 10;
+
+--echo # Verify slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave2 data
+SELECT * FROM test_innodb WHERE id = 10;
+
+#---------------------------------------------------------------
+# Case 4. Test: Transaction with BLACKHOLE first, then BLACKHOLE
+#---------------------------------------------------------------
+--echo # Case 4. Test: Transaction with BLACKHOLE first, then InnoDB
+--connection conn1
+BEGIN;
+INSERT INTO test_blackhole VALUES (12, 'blackhole_first_in_transaction');
+INSERT INTO test_innodb VALUES (13, 'innodb_second_in_transaction');
+COMMIT;
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave1 data
+SELECT * FROM test_innodb WHERE id = 13;
+
+--echo # Verify slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave2 data
+SELECT * FROM test_innodb WHERE id = 13;
+
+#--------------------------------------------------------------
+# Case 5 Test: XA transaction with BLACKHOLE first, then InnoDB
+#--------------------------------------------------------------
+--echo # Case 5 Test: XA transaction with BLACKHOLE first, then InnoDB
+--connection conn1
+XA START 'xid_blackhole_1';
+INSERT INTO test_blackhole VALUES (20, 'xa_blackhole_first');
+INSERT INTO test_innodb VALUES (21, 'xa_innodb_second');
+XA END 'xid_blackhole_1';
+XA COMMIT 'xid_blackhole_1' ONE PHASE;
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave1 data
+SELECT * FROM test_innodb WHERE id = 21;
+
+--echo # Check slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave2 data
+SELECT * FROM test_innodb WHERE id = 21;
+
+#---------------------------------------------------------------
+# Case 6. Test: XA transaction with InnoDB first, then BLACKHOLE
+#---------------------------------------------------------------
+--echo # Case 6. Test: XA transaction with InnoDB first, then BLACKHOLE
+--connection conn1
+XA START 'xid_innodb_first';
+INSERT INTO test_innodb VALUES (22, 'xa_innodb_first');
+INSERT INTO test_blackhole VALUES (23, 'xa_blackhole_second');
+XA END 'xid_innodb_first';
+XA COMMIT 'xid_innodb_first' ONE PHASE;
+FLUSH LOGS;
+
+--echo # Wait for slave synchronization
+--source include/wait_follower_catchup.inc
+
+--echo # Check apply_index
+select count(distinct APPLIED_INDEX) = 1 as distinct_apply_index from information_schema.alisql_cluster_global;
+
+--echo # Check master GTID status
+--source include/check_gtid_increase.inc
+
+--echo # Verify slave1 GTID status
+--connection conn2
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave1 data
+SELECT * FROM test_innodb WHERE id = 22;
+
+--echo # Verify slave2 GTID status
+--connection conn3
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+--echo # Verify slave2 data
+SELECT * FROM test_innodb WHERE id = 22;
+
+#-----------------------------------------------------------
+# Clean up test data
+#-----------------------------------------------------------
+--echo # Clean up test data
+--connection conn1
+DROP TABLE test_blackhole;
+DROP TABLE test_innodb;
+--source include/wait_follower_catchup.inc
+
+--disconnect conn1
+--disconnect conn2
+--disconnect conn3

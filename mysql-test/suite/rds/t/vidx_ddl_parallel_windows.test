@@ -1,0 +1,183 @@
+####################################################################
+# Parallel DDL direct build across memory-budget windows.           #
+#                                                                  #
+# A 1 MiB vidx_hnsw_cache_size cannot hold this 600 x VECTOR(1024) #
+# graph. The direct builder must persist multiple windows. The      #
+# DEBUG_SYNC point is after one window's graph fixup and before its #
+# handover, so two executions give deterministic window boundaries: #
+#                                                                  #
+#   boundary 1: batch counter and work completed include window 1;  #
+#   boundary 2: both must have advanced while building window 2.    #
+#                                                                  #
+# The second batch-counter delta is the key regression assertion:   #
+# an implementation that parallelizes only window 1 reaches the     #
+# second fixup without advancing Vidx_ddl_parallel_batches.         #
+#                                                                  #
+# The window-2 decode delta covers read-through: the handover       #
+# discards vector payloads, so continuation-window searches must    #
+# reload historical nodes on the executors' own load channels.      #
+# Vidx_decode_vec_node_count counts every such load whichever       #
+# thread performs it (there is no leader-mediated load protocol).   #
+####################################################################
+--source include/have_debug_sync.inc
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/count_sessions.inc
+
+--disable_query_log
+CREATE DATABASE vidx_ddl_parallel_windows;
+USE vidx_ddl_parallel_windows;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET SESSION transaction_isolation = 'READ-COMMITTED';
+SET SESSION vidx_ddl_threads = 4;
+SET SESSION vidx_hnsw_ef_search = 600;
+
+let $save_cache = query_get_value(SHOW GLOBAL VARIABLES LIKE 'vidx_hnsw_cache_size', Value, 1);
+SET GLOBAL vidx_hnsw_cache_size = 1048576;
+
+# Make current and archived stage progress observable, preserving the server's
+# original PFS setup for exact restoration at the end of the test.
+let $save_inst_en = query_get_value(SELECT ENABLED FROM performance_schema.setup_instruments WHERE NAME = 'stage/sql/vector index build', ENABLED, 1);
+let $save_inst_tm = query_get_value(SELECT TIMED FROM performance_schema.setup_instruments WHERE NAME = 'stage/sql/vector index build', TIMED, 1);
+let $save_cons_cur = query_get_value(SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME = 'events_stages_current', ENABLED, 1);
+let $save_cons_his = query_get_value(SELECT ENABLED FROM performance_schema.setup_consumers WHERE NAME = 'events_stages_history_long', ENABLED, 1);
+UPDATE performance_schema.setup_instruments
+  SET ENABLED = 'YES', TIMED = 'YES'
+  WHERE NAME = 'stage/sql/vector index build';
+UPDATE performance_schema.setup_consumers
+  SET ENABLED = 'YES'
+  WHERE NAME IN ('events_stages_current', 'events_stages_history_long');
+TRUNCATE TABLE performance_schema.events_stages_history_long;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(1024)
+) ENGINE = InnoDB;
+SET @save_cte_depth = @@SESSION.cte_max_recursion_depth;
+SET SESSION cte_max_recursion_depth = 1000;
+INSERT INTO t1(id, v)
+  WITH RECURSIVE seq(n) AS (
+    SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < 600
+  )
+  SELECT n, VEC_FROMTEXT(CONCAT('[', n, REPEAT(',7', 1023), ']'))
+  FROM seq;
+SET SESSION cte_max_recursion_depth = @save_cte_depth;
+
+let $ddl_conn_id = `SELECT CONNECTION_ID()`;
+let $ddl_thread_id = query_get_value(SELECT THREAD_ID FROM performance_schema.threads WHERE PROCESSLIST_ID = $ddl_conn_id, THREAD_ID, 1);
+let $batch0 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+
+connect (observer, localhost, root,,);
+connection default;
+SET DEBUG_SYNC =
+  'vidx_ddl_direct_build_after_fixup SIGNAL ddl_window_done WAIT_FOR ddl_window_go EXECUTE 2';
+--send ALTER TABLE t1 ADD VECTOR INDEX vi(v)
+
+# The soft budget is checked only after a complete micro-batch is published, so
+# window 1 must contain at least one counted parallel batch after its uncounted
+# serial seed.  Since a second fixup must follow, work1 must still be < 600.
+connection observer;
+SET DEBUG_SYNC = 'now WAIT_FOR ddl_window_done TIMEOUT 300';
+let $batch1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $decoded1 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+let $work1 = query_get_value(SELECT WORK_COMPLETED AS completed FROM performance_schema.events_stages_current WHERE THREAD_ID = $ddl_thread_id AND EVENT_NAME = 'stage/sql/vector index build', completed, 1);
+if (`SELECT $batch1 <= $batch0`) {
+  --echo FATAL: window 1 published no parallel batch ($batch0 -> $batch1)
+  --die first memory-budget window stopped before a complete micro-batch
+}
+if (`SELECT $work1 IS NULL OR $work1 <= 0 OR $work1 >= 600`) {
+  --echo FATAL: invalid window-1 work completed value $work1
+  --die first fixup was not an intermediate build window
+}
+--echo VERDICT window 1 published parallel batches: PASS
+SET DEBUG_SYNC = 'now SIGNAL ddl_window_go';
+
+# Second persisted window: this delta distinguishes all-window parallelism
+# from the old implementation that switched window 2+ to the serial loop.
+SET DEBUG_SYNC = 'now WAIT_FOR ddl_window_done TIMEOUT 300';
+let $batch2 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+let $decoded2 = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_decode_vec_node_count', Value, 1);
+let $work2 = query_get_value(SELECT WORK_COMPLETED AS completed FROM performance_schema.events_stages_current WHERE THREAD_ID = $ddl_thread_id AND EVENT_NAME = 'stage/sql/vector index build', completed, 1);
+if (`SELECT $batch2 <= $batch1`) {
+  --echo FATAL: window 2 added no parallel batch ($batch1 -> $batch2)
+  --die continuation window fell back to serial graph construction
+}
+if (`SELECT $work2 IS NULL OR $work2 <= $work1 OR $work2 > 600`) {
+  --echo FATAL: work completed did not advance across window 2 ($work1 -> $work2)
+  --die continuation-window progress accounting is broken
+}
+if (`SELECT $decoded2 <= $decoded1`) {
+  --echo FATAL: continuation window loaded no historical nodes ($decoded1 -> $decoded2)
+  --die continuation-window read-through resolved no miss
+}
+--echo VERDICT window 2 added parallel batches: PASS
+--echo VERDICT continuation window read-through loaded historical nodes: PASS
+--echo VERDICT work-completed advanced across window 2: PASS
+SET DEBUG_SYNC = 'now SIGNAL ddl_window_go';
+
+connection default;
+--disable_result_log
+--reap
+--enable_result_log
+SET DEBUG_SYNC = 'RESET';
+
+# The archived stage event must close at the exact copied-row total even if
+# more than two memory-budget windows were needed after the observed pair.
+let $work_final = query_get_value(SELECT MAX(WORK_COMPLETED) AS completed FROM performance_schema.events_stages_history_long WHERE THREAD_ID = $ddl_thread_id AND EVENT_NAME = 'stage/sql/vector index build' AND WORK_ESTIMATED = 600, completed, 1);
+if (`SELECT $work_final IS NULL OR $work_final != 600`) {
+  --echo FATAL: final stage progress is $work_final, expected 600
+  --die multi-window DDL did not account every copied row
+}
+--echo VERDICT final stage progress 600/600: PASS
+
+# Disk truth and ANN probes cover rows from the beginning, middle, and end of
+# the scan, catching a lost continuation window even when the ALTER succeeds.
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_parallel_windows/t1', TABLE_ID, 1);
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM `vidx_', $tid, '_0` WHERE TREF IS NOT NULL');
+PREPARE stmt FROM @s;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+if (`SELECT @live IS NULL OR @live != 600`) {
+  --echo FATAL: live graph row count is @live, expected 600
+  --die multi-window direct build lost graph rows
+}
+--echo VERDICT live==600 across windows: PASS
+
+SET @nn1 = NULL;
+SET @nn300 = NULL;
+SET @nn600 = NULL;
+SELECT id INTO @nn1 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[1', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn300 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[300', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+SELECT id INTO @nn600 FROM t1 FORCE INDEX(vi)
+  ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[600', REPEAT(',7', 1023), ']')))
+  LIMIT 1;
+if (`SELECT @nn1 IS NULL OR @nn1 != 1 OR @nn300 IS NULL OR @nn300 != 300 OR @nn600 IS NULL OR @nn600 != 600`) {
+  --echo FATAL: ANN self-probes returned @nn1, @nn300, @nn600
+  --die multi-window graph is not fully reachable
+}
+--echo VERDICT ANN self-probes across windows: PASS
+
+DROP TABLE t1;
+eval SET GLOBAL vidx_hnsw_cache_size = $save_cache;
+eval UPDATE performance_schema.setup_instruments
+  SET ENABLED = '$save_inst_en', TIMED = '$save_inst_tm'
+  WHERE NAME = 'stage/sql/vector index build';
+eval UPDATE performance_schema.setup_consumers
+  SET ENABLED = '$save_cons_cur'
+  WHERE NAME = 'events_stages_current';
+eval UPDATE performance_schema.setup_consumers
+  SET ENABLED = '$save_cons_his'
+  WHERE NAME = 'events_stages_history_long';
+SET SESSION vidx_hnsw_ef_search = DEFAULT;
+SET SESSION vidx_ddl_threads = DEFAULT;
+SET GLOBAL show_vidx_hlindex_tables = DEFAULT;
+SET GLOBAL vidx_disabled = DEFAULT;
+DROP DATABASE vidx_ddl_parallel_windows;
+--enable_query_log
+
+disconnect observer;
+--source include/wait_until_count_sessions.inc

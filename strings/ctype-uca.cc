@@ -822,7 +822,11 @@ class uca_scanner_900 : public my_uca_scanner {
  public:
   uca_scanner_900(const Mb_wc mb_wc, const CHARSET_INFO *cs_arg,
                   const uchar *str, size_t length)
-      : my_uca_scanner(cs_arg, str, length), mb_wc(mb_wc) {}
+      : my_uca_scanner(cs_arg, str, length), mb_wc(mb_wc), skip_hangul_decompose(false) {}
+
+  uca_scanner_900(const Mb_wc mb_wc, const CHARSET_INFO *cs_arg,
+                  const uchar *str, size_t length, bool skip_hangul_decompose)
+      : my_uca_scanner(cs_arg, str, length), mb_wc(mb_wc), skip_hangul_decompose(skip_hangul_decompose) {}
 
   inline int next();
 
@@ -855,7 +859,11 @@ class uca_scanner_900 : public my_uca_scanner {
 
  private:
   const Mb_wc mb_wc;
-
+  /*
+     Flag to skip Hangul syllable decomposition for PolarDB-X CN collation.
+     Set once in constructor to avoid repeated strcmp() calls in next_implicit().
+   */
+  const bool skip_hangul_decompose;
   inline int next_raw();
   inline int more_weight();
   uint16 apply_case_first(uint16 weight);
@@ -1208,14 +1216,17 @@ static uint16 change_zh_implicit(uint16 weight) {
 template <class Mb_wc, int LEVELS_FOR_COMPARE>
 ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_implicit(
     my_wc_t ch) {
-  my_wc_t hangul_jamo[HANGUL_JAMO_MAX_LENGTH];
-  int jamo_cnt;
-  if ((jamo_cnt = my_decompose_hangul_syllable(ch, hangul_jamo))) {
-    my_put_jamo_weights(hangul_jamo, jamo_cnt);
-    num_of_ce_left = jamo_cnt - 1;
-    wbeg = implicit + MY_UCA_900_CE_SIZE + weight_lv;
-    wbeg_stride = MY_UCA_900_CE_SIZE;
-    return *(implicit + weight_lv);
+
+  if (!skip_hangul_decompose) {
+    my_wc_t hangul_jamo[HANGUL_JAMO_MAX_LENGTH];
+    int jamo_cnt;
+    if ((jamo_cnt = my_decompose_hangul_syllable(ch, hangul_jamo))) {
+      my_put_jamo_weights(hangul_jamo, jamo_cnt);
+      num_of_ce_left = jamo_cnt - 1;
+      wbeg = implicit + MY_UCA_900_CE_SIZE + weight_lv;
+      wbeg_stride = MY_UCA_900_CE_SIZE;
+      return *(implicit + weight_lv);
+    }
   }
 
   /*
@@ -1255,7 +1266,6 @@ ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_implicit(
 
   return *(implicit + weight_lv);
 }
-
 /**
   Return implicit UCA weight
   Used for code points that do not have assigned UCA weights.
@@ -5028,6 +5038,82 @@ static void my_hash_sort_uca_900(const CHARSET_INFO *cs, const uchar *s,
 
 }  // extern "C"
 
+template <class Mb_wc, int LEVELS_FOR_COMPARE>
+static void my_hash_sort_uca_900_as_cs_tmpl_for_cn(const CHARSET_INFO *cs, const Mb_wc mb_wc,
+                                      const uchar *s, size_t slen, uint64 *n1) {
+  uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE> scanner(mb_wc, cs, s, slen, true);
+  /*
+    A variation of the FNV-1a hash. The differences between this and
+    standard FNV-1a as described in literature are:
+     - We work naturally on 16-bit weights, so we XOR in the entire weight
+       instead of hashing byte-by-byte. (This is effectively a speed/quality
+       tradeoff, as it will reduce avalanche.)
+     - We use the n1 seed by XOR-ing it onto the offset basis; FNV-1a as
+       typically described does not use a seed. This should be safe, since
+       there's nothing magical about the offset basis; it's just the FNV-1a
+       hash of some human-readable text.
+    This is nowhere near a perfect hash function; it has suboptimal avalanche
+    characteristics, and it not multicollision resistant. In particular,
+    it fails many SMHasher tests, mostly for bias (collision tests are fine).
+    However, it is of much better quality than the home-grown hash used
+    for other collations (which fails _all_ SMHasher tests), while being
+    much faster.
+    We ignore the n2 seed entirely, since we don't need it. The caller is
+    responsible for doing hash folding at the end; we can't do that.
+    See http://isthe.com/chongo/tech/comp/fnv/#FNV-param for constants.
+  */
+  uint64 h = *n1;
+  h ^= 14695981039346656037ULL;
+  scanner.for_each_weight(
+      [&](int s_res, bool) -> bool {
+        h ^= s_res;
+        h *= 1099511628211ULL;
+        return true;
+      },
+      [](int) { return true; });
+  *n1 = h;
+}
+
+extern "C" {
+  static void my_hash_sort_uca_900_as_cs_for_cn(const CHARSET_INFO *cs, const uchar *s,
+                                   size_t slen, uint64 *n1, uint64 *) {
+    if (cs->cset->mb_wc == my_mb_wc_utf8mb4_thunk) {
+      switch (cs->levels_for_compare) {
+        case 1:
+          return my_hash_sort_uca_900_as_cs_tmpl_for_cn<Mb_wc_utf8mb4, 1>(cs, Mb_wc_utf8mb4(),
+                                                             s, slen, n1);
+        case 2:
+          return my_hash_sort_uca_900_as_cs_tmpl_for_cn<Mb_wc_utf8mb4, 2>(cs, Mb_wc_utf8mb4(),
+                                                             s, slen, n1);
+        default:
+          assert(false);
+        case 3:
+          return my_hash_sort_uca_900_as_cs_tmpl_for_cn<Mb_wc_utf8mb4, 3>(cs, Mb_wc_utf8mb4(),
+                                                             s, slen, n1);
+        case 4:
+          return my_hash_sort_uca_900_as_cs_tmpl_for_cn<Mb_wc_utf8mb4, 4>(cs, Mb_wc_utf8mb4(),
+                                                             s, slen, n1);
+      }
+    }
+    Mb_wc_through_function_pointer mb_wc(cs);
+    switch (cs->levels_for_compare) {
+      case 1:
+        return my_hash_sort_uca_900_as_cs_tmpl_for_cn<decltype(mb_wc), 1>(cs, mb_wc, s, slen,
+                                                             n1);
+      case 2:
+        return my_hash_sort_uca_900_as_cs_tmpl_for_cn<decltype(mb_wc), 2>(cs, mb_wc, s, slen,
+                                                             n1);
+      default:
+        assert(false);
+      case 3:
+        return my_hash_sort_uca_900_as_cs_tmpl_for_cn<decltype(mb_wc), 3>(cs, mb_wc, s, slen,
+                                                             n1);
+      case 4:
+        return my_hash_sort_uca_900_as_cs_tmpl_for_cn<decltype(mb_wc), 4>(cs, mb_wc, s, slen,
+                                                             n1);
+    }
+  }
+}  // extern "C"
 /*
   Check if a constant can be propagated
 
@@ -6051,6 +6137,20 @@ MY_COLLATION_HANDLER my_collation_uca_900_handler = {
     my_strnxfrm_uca_900,  my_strnxfrmlen_uca_900, my_like_range_mb,
     my_wildcmp_uca,       my_strcasecmp_uca,      my_instr_mb,
     my_hash_sort_uca_900, my_propagate_uca_900};
+
+MY_COLLATION_HANDLER my_collation_uca_900_ai_ci_for_cn_handler = {
+  my_coll_init_uca, /* init */
+  my_coll_uninit_uca,   my_strnncoll_uca_900,   my_strnncollsp_uca_900,
+  my_strnxfrm_uca_900,  my_strnxfrmlen_uca_900, my_like_range_mb,
+  my_wildcmp_uca,       my_strcasecmp_uca,      my_instr_mb,
+  my_hash_sort_any_uca, my_propagate_uca_900};
+
+MY_COLLATION_HANDLER my_collation_uca_900_as_cs_for_cn_handler = {
+  my_coll_init_uca, /* init */
+  my_coll_uninit_uca,   my_strnncoll_uca_900,   my_strnncollsp_uca_900,
+  my_strnxfrm_uca_900,  my_strnxfrmlen_uca_900, my_like_range_mb,
+  my_wildcmp_uca,       my_strcasecmp_uca,      my_instr_mb,
+  my_hash_sort_uca_900_as_cs_for_cn, my_propagate_uca_900};
 
 /*
   We consider bytes with code more than 127 as a letter.
@@ -11957,3 +12057,74 @@ CHARSET_INFO my_charset_utf8mb4_mn_cyrl_0900_as_cs = {
     &my_charset_utf8mb4_handler,
     &my_collation_uca_900_handler,
     NO_PAD};
+
+//force use UCA_V400
+CHARSET_INFO my_charset_utf8mb4_0900_ai_ci_for_cn = {
+  400,
+  0,
+  0,                                       /* number       */
+  MY_CS_UTF8MB4_UCA_FLAGS, /* state    */
+  "utf8mb4",                               /* csname       */
+  "utf8mb4_0900_ai_ci_polardbx_cn",                    /* m_coll_name  */
+  "UTF-8 Unicode for PolarDB-X CN",                         /* comment      */
+  nullptr,                                 /* tailoring    */
+  nullptr,                                 /* coll_param   */
+  ctype_utf8,                              /* ctype        */
+  nullptr,                                 /* to_lower     */
+  nullptr,                                 /* to_upper     */
+  nullptr,                                 /* sort_order   */
+  &my_uca_v400,                            /* uca_400      */
+  nullptr,                                 /* tab_to_uni   */
+  nullptr,                                 /* tab_from_uni */
+  &my_unicase_unicode900,                  /* caseinfo     */
+  nullptr,                                 /* state_map    */
+  nullptr,                                 /* ident_map    */
+  0,                                       /* strxfrm_multiply */
+  1,                                       /* caseup_multiply  */
+  1,                                       /* casedn_multiply  */
+  1,                                       /* mbminlen      */
+  4,                                       /* mbmaxlen      */
+  1,                                       /* mbmaxlenlen   */
+  9,                                       /* min_sort_char */
+  0x10FFFF,                                /* max_sort_char */
+  ' ',                                     /* pad char      */
+  false, /* escape_with_backslash_is_dangerous */
+  1,     /* levels_for_compare */
+  &my_charset_utf8mb4_handler,
+  &my_collation_uca_900_ai_ci_for_cn_handler,
+  NO_PAD};
+
+CHARSET_INFO my_charset_utf8mb4_zh_0900_as_cs_for_cn = {
+  401,
+  0,
+  0,                                      /* number       */
+  MY_CS_UTF8MB4_UCA_FLAGS | MY_CS_CSSORT, /* state    */
+  MY_UTF8MB4,                             /* csname       */
+  "utf8mb4_zh_0900_as_cs_polardbx_cn",            /* m_coll_name  */
+  "UTF-8 Unicode for PolarDB-X CN",                                     /* comment      */
+  zh_cldr_30,                             /* tailoring    */
+  &zh_coll_param,                         /* coll_param   */
+  ctype_utf8,                             /* ctype        */
+  nullptr,                                /* to_lower     */
+  nullptr,                                /* to_upper     */
+  nullptr,                                /* sort_order   */
+  &my_uca_v900,                           /* uca          */
+  nullptr,                                /* tab_to_uni   */
+  nullptr,                                /* tab_from_uni */
+  &my_unicase_unicode900,                 /* caseinfo     */
+  nullptr,                                /* state_map    */
+  nullptr,                                /* ident_map    */
+  0,                                      /* strxfrm_multiply */
+  1,                                      /* caseup_multiply  */
+  1,                                      /* casedn_multiply  */
+  1,                                      /* mbminlen      */
+  4,                                      /* mbmaxlen      */
+  1,                                      /* mbmaxlenlen   */
+  32,                                     /* min_sort_char */
+  0x10FFFF,                               /* max_sort_char */
+  ' ',                                    /* pad char      */
+  false, /* escape_with_backslash_is_dangerous */
+  3,     /* levels_for_compare */
+  &my_charset_utf8mb4_handler,
+  &my_collation_uca_900_as_cs_for_cn_handler,
+  NO_PAD};

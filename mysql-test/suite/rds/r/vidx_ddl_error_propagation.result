@@ -1,0 +1,4 @@
+# Phase A: ordinary pass-2 write error fails direct ALTER
+VERDICT A failed ALTER rolled back; clean retry succeeded: PASS
+# Phase B: ordinary serial reverse-edge error fails direct ALTER
+VERDICT B failed ALTER rolled back; clean retry succeeded: PASS

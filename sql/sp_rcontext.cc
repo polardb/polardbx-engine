@@ -527,6 +527,9 @@ bool sp_cursor::Query_fetch_into_spvars::prepare(
     return an error if column count does not match value count.
   */
   field_count = CountVisibleFields(fields);
+
+  if (reject_encryption_transfer(thd, fields)) return true;
+
   return Query_result_interceptor::prepare(thd, fields, u);
 }
 

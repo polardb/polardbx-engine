@@ -1,0 +1,211 @@
+# Test: Verify that opt_index_format_spc_enabled (and panda/hippo) session
+# variables are correctly replicated through binlog to follower nodes.
+# Leader creates indexes under different format settings; follower must
+# produce identical INDEX_PAGE_TYPE in INNODB_INDEX_STATUS.
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+
+# -----------------------------------------------------------------------
+# Save original values on both nodes
+# -----------------------------------------------------------------------
+--connection conn1
+--let $orig_spc = `SELECT @@session.opt_index_format_spc_enabled`
+--let $orig_panda = `SELECT @@session.opt_index_format_panda_enabled`
+--let $orig_hippo = `SELECT @@session.opt_index_format_hippo_enabled`
+
+--connection conn2
+--let $orig_spc_f = `SELECT @@session.opt_index_format_spc_enabled`
+--let $orig_panda_f = `SELECT @@session.opt_index_format_panda_enabled`
+--let $orig_hippo_f = `SELECT @@session.opt_index_format_hippo_enabled`
+
+# -----------------------------------------------------------------------
+# PART 1: spc=ON, panda=OFF, hippo=OFF
+#   Non-unique secondary index should become SPC_PAGE
+# -----------------------------------------------------------------------
+--echo # PART 1: spc=ON only
+--connection conn1
+SET session opt_index_format_spc_enabled = ON;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+
+CREATE TABLE t_spc (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_a (a),
+  KEY idx_b (b)
+) ENGINE=InnoDB;
+
+INSERT INTO t_spc VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+
+--echo # Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_spc' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+--connection conn2
+--source include/wait_apply_catchup.inc
+
+--echo # Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_spc' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# -----------------------------------------------------------------------
+# PART 2: spc=OFF, panda=ON, hippo=OFF
+#   Unique secondary index should become PANDA_INDEX
+# -----------------------------------------------------------------------
+--echo # PART 2: panda=ON only
+--connection conn1
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = ON;
+SET session opt_index_format_hippo_enabled = OFF;
+
+CREATE TABLE t_panda (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_a (a),
+  KEY idx_b (b)
+) ENGINE=InnoDB;
+
+INSERT INTO t_panda VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+
+--echo # Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_panda' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+--connection conn2
+--source include/wait_apply_catchup.inc
+
+--echo # Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_panda' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# -----------------------------------------------------------------------
+# PART 3: spc=OFF, panda=OFF, hippo=ON
+#   Non-unique secondary index should become HIPPO_INDEX
+# -----------------------------------------------------------------------
+--echo # PART 3: hippo=ON only
+--connection conn1
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = ON;
+
+CREATE TABLE t_hippo (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_a (a),
+  KEY idx_b (b)
+) ENGINE=InnoDB;
+
+INSERT INTO t_hippo VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+
+--echo # Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_hippo' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+--connection conn2
+--source include/wait_apply_catchup.inc
+
+--echo # Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_hippo' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# -----------------------------------------------------------------------
+# PART 4: All OFF -> normal INDEX
+# -----------------------------------------------------------------------
+--echo # PART 4: all format OFF
+--connection conn1
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+
+CREATE TABLE t_normal (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_a (a),
+  KEY idx_b (b)
+) ENGINE=InnoDB;
+
+INSERT INTO t_normal VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+
+--echo # Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_normal' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+--connection conn2
+--source include/wait_apply_catchup.inc
+
+--echo # Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_normal' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# -----------------------------------------------------------------------
+# PART 5: Switch format mid-stream on same table via ADD INDEX
+#   Existing SPC index stays, new index created with spc=OFF is normal
+# -----------------------------------------------------------------------
+--echo # PART 5: mixed formats on same table via ADD INDEX
+--connection conn1
+SET session opt_index_format_spc_enabled = ON;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+
+CREATE TABLE t_mixed (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  c  INT,
+  KEY idx_a (a)
+) ENGINE=InnoDB;
+
+INSERT INTO t_mixed VALUES (1, 'aaa', 10, 100), (2, 'bbb', 20, 200);
+
+--echo # Leader: idx_a should be SPC_PAGE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# Now add another index with spc=OFF
+SET session opt_index_format_spc_enabled = OFF;
+ALTER TABLE t_mixed ADD INDEX idx_b (b);
+
+# And another index with panda=ON (non-unique, so panda won't apply)
+SET session opt_index_format_panda_enabled = ON;
+ALTER TABLE t_mixed ADD INDEX idx_c (c);
+
+--echo # Leader: idx_a=SPC_PAGE, idx_b=INDEX, idx_c=INDEX
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+--connection conn2
+--source include/wait_apply_catchup.inc
+
+--echo # Follower: should match leader exactly
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+
+# -----------------------------------------------------------------------
+# Cleanup
+# -----------------------------------------------------------------------
+--echo # Cleanup
+--connection conn1
+DROP TABLE t_spc, t_panda, t_hippo, t_normal, t_mixed;
+--source include/wait_follower_catchup.inc
+
+--eval SET session opt_index_format_spc_enabled = $orig_spc
+--eval SET session opt_index_format_panda_enabled = $orig_panda
+--eval SET session opt_index_format_hippo_enabled = $orig_hippo
+
+--connection conn2
+--eval SET session opt_index_format_spc_enabled = $orig_spc_f
+--eval SET session opt_index_format_panda_enabled = $orig_panda_f
+--eval SET session opt_index_format_hippo_enabled = $orig_hippo_f
+
+--disconnect conn1
+--disconnect conn2
+
+--connection default

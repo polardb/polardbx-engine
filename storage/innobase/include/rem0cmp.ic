@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 7/1/1994 Heikki Tuuri
  ************************************************************************/
 
+#ifndef rem0cmp_h
+#define INNODB_REM0CMP_IC_STANDALONE
+#include "rem0cmp.h"
+#undef INNODB_REM0CMP_IC_STANDALONE
+#endif /* !rem0cmp_h */
 #include <mysql_com.h>
 
 #include "field_types.h"  // enum_field_types
@@ -95,17 +100,15 @@ static inline int cmp_multi_value_dfield_dfield(const dfield_t *dfield1,
               : 1);
 }
 
-static inline int cmp_rec_rec(const rec_t *rec1, const rec_t *rec2,
-                              const ulint *offsets1, const ulint *offsets2,
+static inline int cmp_rec_rec(const Slice *slc1, const Slice *slc2,
                               const dict_index_t *index,
                               bool spatial_index_non_leaf,
                               ulint *matched_fields, bool cmp_btree_recs) {
   ulint match_f;
   int ret;
 
-  ret = cmp_rec_rec_with_match(rec1, rec2, offsets1, offsets2, index,
-                               spatial_index_non_leaf, false, &match_f,
-                               cmp_btree_recs);
+  ret = cmp_rec_rec_with_match(slc1, slc2, index, spatial_index_non_leaf, false,
+                               &match_f, cmp_btree_recs);
 
   if (matched_fields != nullptr) {
     *matched_fields = match_f;

@@ -41,7 +41,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 
 namespace lizard {
-class Ha_var_hint;
+class dd_var_options_t;
 }
 
 /** "GEN_CLUST_INDEX" is the name reserved for InnoDB default
@@ -185,6 +185,8 @@ class ha_innobase : public handler {
   int rnd_next(uchar *buf) override;
 
   int rnd_pos(uchar *buf, uchar *pos) override;
+
+  int guess_pos(uchar *buf, uchar *pos, komodo::guess_mode_t gmode) override;
 
   int ft_init() override;
 
@@ -333,6 +335,13 @@ class ha_innobase : public handler {
  public:
   int rename_table(const char *from, const char *to,
                    const dd::Table *from_table, dd::Table *to_table) override;
+
+  /** Analyze SPC statistics and return formatted string.
+   * @param str_out  Output string for formatted SPC statistics
+   * @retval HA_ADMIN_OK      Success
+   * @retval HA_ADMIN_FAILED  Analysis failed
+   */
+  int analyze_spc(std::string *str_out) override;
 
   int check(THD *thd, HA_CHECK_OPT *check_opt) override;
 
@@ -693,7 +702,12 @@ class ha_innobase : public handler {
   /** polarx sampler v3. */
   lizard::Sampler *m_sampler;
 
+  /** Saved innodb_lock_wait_timeout for set_lock_wait_timeout restore. */
+  ulong m_stored_lock_wait_timeout{0};
+
  public:
+  void set_consistent_read(bool enable) override;
+  void set_lock_wait_timeout(ulong seconds) override;
   virtual void get_create_info(const char *table, const dd::Table *table_def,
                                HA_CREATE_INFO *create_info) override;
 
@@ -893,7 +907,7 @@ class create_table_info_t {
                                 table, NULL otherwise.
   @return 0 or error number */
   int create_table(const dd::Table *dd_table, const dd::Table *old_part_table,
-                   const lizard::Ha_var_hint *var_hint);
+                   const komodo::dd_var_options_t *var_options);
 
   /** Update the internal data dictionary. */
   int create_table_update_dict();
@@ -1003,7 +1017,7 @@ class create_table_info_t {
   @return HA_* level error */
   int create_table_def(const dd::Table *dd_table,
                        const dd::Table *old_part_table,
-                       const lizard::Ha_table_hint *table_hint);
+                       const komodo::Dict_table_hint *table_hint);
 
   /** Initialize the autoinc of this table if necessary, which should
   be called before we flush logs, so autoinc counter can be persisted. */
@@ -1086,7 +1100,7 @@ class innobase_basic_ddl {
   @param[in]    old_flags2      old Table flags2
   @param[in]    old_dd_table    Table def for old table. Used in truncate or
                                 while adding a new partition
-  @param[in]    var_hint        ddl hint from handler.
+  @param[in]    var_options        ddl hint from handler.
   @return       error number
   @retval       0 on success */
   template <typename Table>
@@ -1095,7 +1109,7 @@ class innobase_basic_ddl {
                          bool file_per_table, bool evictable, bool skip_strict,
                          uint32_t old_flags, uint32_t old_flags2,
                          const dd::Table *old_dd_table,
-                         const lizard::Ha_var_hint *var_hint);
+                         const komodo::dd_var_options_t *var_options);
 
   /** Drop an InnoDB table.
   @tparam               Table           dd::Table or dd::Partition
@@ -1367,4 +1381,9 @@ after DDL
 @param[in,out]  thd     THD object
 @param[in,out]  table   InnoDB table object */
 void innobase_discard_table(THD *thd, dict_table_t *table);
+
+/** Force InnoDB to do sharp checkpoint. This forces a flush of all
+dirty pages. */
+void advance_checkpoint_now();
+
 #endif /* ha_innodb_h */

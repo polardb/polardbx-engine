@@ -149,6 +149,16 @@ class Rpl_transaction_write_set_ctx {
   */
   bool get_has_related_foreign_keys();
 
+  /*
+    Mark transactions that touch tables with a HNSW vector index (hlindex).
+    The auxiliary table rows modified by HNSW graph traversal are NOT included
+    in the write set because the traversal is non-deterministic; replica may
+    access different auxiliary-table rows than master.  Transactions marked
+    here will fall back to COMMIT_ORDER dependency tracking.
+  */
+  void set_has_hlindex();
+  bool get_has_hlindex();
+
   /**
     Identifies situations where the limit for number of write set entries
     already exceeded the configure limit.
@@ -250,6 +260,7 @@ class Rpl_transaction_write_set_ctx {
   std::vector<uint64> write_set;
   bool m_has_missing_keys;
   bool m_has_related_foreign_keys;
+  bool m_has_hlindex;
 
   /**
     Contains information related to SAVEPOINTs. The key on map is the

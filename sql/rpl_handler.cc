@@ -1,4 +1,5 @@
-/* Copyright (c) 2008, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/* Copyright (c) 2008, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -19,6 +20,8 @@
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
+
+#define LOG_SUBSYSTEM_TAG "Repl"
 
 #include "sql/rpl_handler.h"
 
@@ -43,6 +46,7 @@
 #include "mysql/service_mysql_alloc.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
+#include "sql/column_encryption/encdb_service.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/handler.h"
@@ -73,6 +77,8 @@ Server_state_delegate *server_state_delegate;
 
 Binlog_transmit_delegate *binlog_transmit_delegate;
 Binlog_relay_IO_delegate *binlog_relay_io_delegate;
+
+Encdb_delegate *encdb_delegate;
 
 bool opt_replication_optimize_for_static_plugin_config{false};
 std::atomic<bool> opt_replication_sender_observe_commit_only{false};
@@ -359,6 +365,7 @@ int delegates_init() {
       place_transmit_mem[sizeof(Binlog_transmit_delegate)];
   alignas(Binlog_relay_IO_delegate) static char
       place_relay_io_mem[sizeof(Binlog_relay_IO_delegate)];
+  alignas(Encdb_delegate) static char place_encdb_mem[sizeof(Encdb_delegate)];
 
   transaction_delegate = new (place_trans_mem) Trans_delegate;
   if (!transaction_delegate->is_inited()) {
@@ -385,6 +392,12 @@ int delegates_init() {
     return 1;
   }
 
+  encdb_delegate = new (place_encdb_mem) Encdb_delegate;
+  if (!encdb_delegate->is_inited()) {
+    LogErr(ERROR_LEVEL, ER_RPL_BINLOG_RELAY_DELEGATES_INIT_FAILED);
+    return 1;
+  }
+
   return 0;
 }
 
@@ -406,6 +419,7 @@ void delegates_destroy() {
     binlog_transmit_delegate->~Binlog_transmit_delegate();
   if (binlog_relay_io_delegate)
     binlog_relay_io_delegate->~Binlog_relay_IO_delegate();
+  if (encdb_delegate) encdb_delegate->~Encdb_delegate();
 }
 
 static void delegates_update_plugin_ref_count() {
@@ -543,6 +557,30 @@ void delegates_update_lock_type() {
      order to remove the observers.                                    \
   */                                                                   \
   if (!plugins.empty()) plugin_unlock_list(0, &plugins[0], plugins.size());
+
+/*
+  This macro is used by almost all the Delegate methods to iterate
+  over all the observers running given callback function of the
+  delegate .
+  Add observer plugins to the thd->lex list, after each statement, all
+  plugins add to thd->lex will be automatically unlocked.
+ */
+#define FOREACH_OBSERVER_NONE_LOCK(r, f, thd, args)                    \
+  /*                                                                   \
+     Use a struct to make sure that they are allocated adjacent, check \
+     delete_dynamic().                                                 \
+  */                                                                   \
+  Observer_info_iterator iter = observer_info_iter();                  \
+  Observer_info *info = iter++;                                        \
+  for (; info; info = iter++) {                                        \
+    if (((Observer *)info->observer)->f &&                             \
+        ((Observer *)info->observer)->f args) {                        \
+      r = 1;                                                           \
+      sql_print_error("Run function '" #f "' in plugin '%s' failed",   \
+                      info->plugin_int->name.str);                     \
+      break;                                                           \
+    }                                                                  \
+  };
 
 static bool se_before_commit(THD *, plugin_ref plugin, void *arg) {
   handlerton *hton = plugin_data<handlerton *>(plugin);
@@ -1292,6 +1330,72 @@ int Binlog_relay_IO_delegate::applier_log_event(THD *thd, int &out) {
   return ret;
 }
 
+int Encdb_delegate::encdb_rule_func(const st_org_field *org_field,
+                                    bool *need_encrypt) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(ret, encdb_rule_func, thd,
+                             (org_field, need_encrypt));
+  return ret;
+}
+
+int Encdb_delegate::rule_spread_insert_or_create_select(
+    const char *source_db, const char *source_table, const char *source_field,
+    const char *target_db, const char *target_table, const char *target_field,
+    bool target_tmp_table) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(ret, rule_spread_insert_or_create_select, thd,
+                             (source_db, source_table, source_field, target_db,
+                              target_table, target_field, target_tmp_table));
+  return ret;
+}
+
+int Encdb_delegate::rule_spread_rename_table(const char *source_db,
+                                             const char *source_table,
+                                             const char *target_db,
+                                             const char *target_table,
+                                             bool target_tmp_table) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(
+      ret, rule_spread_rename_table, thd,
+      (source_db, source_table, target_db, target_table, target_tmp_table));
+  return ret;
+}
+
+int Encdb_delegate::rule_spread_rename_column(const char *source_db,
+                                              const char *source_table,
+                                              const char *source_field,
+                                              const char *target_field,
+                                              bool target_tmp_table) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(
+      ret, rule_spread_rename_column, thd,
+      (source_db, source_table, source_field, target_field, target_tmp_table));
+  return ret;
+}
+
+int Encdb_delegate::reload_encdb_rule() {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(ret, reload_encdb_rule, thd, ());
+  return ret;
+}
+
+int Encdb_delegate::encdb_encrypt(uint8_t *dst, uint32_t *dst_len,
+                                  const uint8_t *src, uint32_t src_len,
+                                  const char *param, int type) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(ret, encdb_encrypt, thd,
+                             (dst, dst_len, src, src_len, param, type));
+  return ret;
+}
+
+int Encdb_delegate::encdb_expected_length(uint32_t src_len,
+                                          uint32_t *ciphertext_length) {
+  int ret = 0;
+  FOREACH_OBSERVER_NONE_LOCK(ret, encdb_expected_length, thd,
+                             (src_len, ciphertext_length));
+  return ret;
+}
+
 int register_trans_observer(Trans_observer *observer, void *p) {
   return transaction_delegate->add_observer(observer, (st_plugin_int *)p);
 }
@@ -1345,6 +1449,16 @@ int register_binlog_relay_io_observer(Binlog_relay_IO_observer *observer,
 int unregister_binlog_relay_io_observer(Binlog_relay_IO_observer *observer,
                                         void *) {
   return binlog_relay_io_delegate->remove_observer(observer);
+}
+
+int register_encdb_observer(Encdb_observer *observer, void *p) {
+  DBUG_ENTER("register_encdb_observer");
+  int result = encdb_delegate->add_observer(observer, (st_plugin_int *)p);
+  DBUG_RETURN(result);
+}
+
+int unregister_encdb_observer(Encdb_observer *observer) {
+  return encdb_delegate->remove_observer(observer);
 }
 
 static bool is_show_status(enum_sql_command sql_command) {

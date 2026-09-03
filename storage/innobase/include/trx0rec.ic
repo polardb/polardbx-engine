@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 3/26/1996 Heikki Tuuri
  *******************************************************/
 
+#if !defined(UNIV_HOTBACKUP)
+#ifndef trx0rec_h
+#define INNODB_TRX0REC_IC_STANDALONE
+#include "trx0rec.h"
+#undef INNODB_TRX0REC_IC_STANDALONE
+#endif /* !trx0rec_h */
 #ifndef UNIV_HOTBACKUP
 /** Reads from an undo log record the record type.
  @return record type */
@@ -95,3 +101,4 @@ static inline trx_undo_rec_t *trx_undo_rec_copy(const page_t *undo_page,
   return ((trx_undo_rec_t *)mem_heap_dup(heap, undo_rec, len));
 }
 #endif /* !UNIV_HOTBACKUP */
+#endif /* !defined(UNIV_HOTBACKUP) */

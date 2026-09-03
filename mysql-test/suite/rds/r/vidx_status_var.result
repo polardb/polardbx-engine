@@ -1,0 +1,232 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+# 1. Show all Vidx status variables
+SHOW GLOBAL STATUS LIKE 'Vidx_%';
+Variable_name	Value
+Vidx_acquire_start_hits	#
+Vidx_acquire_start_misses	#
+Vidx_cache_usage	#
+Vidx_ddl_build_error_count	#
+Vidx_ddl_build_windows	#
+Vidx_ddl_direct_builds_active	#
+Vidx_ddl_parallel_batches	#
+Vidx_ddl_parallel_load_rounds	#
+Vidx_ddl_parallel_loaded_nodes	#
+Vidx_decode_start_node_count	#
+Vidx_decode_vec_node_count	#
+Vidx_hnsw_share_count	#
+Vidx_hnsw_trx_count	#
+Vidx_indep_dml_commit	#
+Vidx_indep_dml_commit_error	#
+Vidx_indep_dml_deadlock	#
+Vidx_insert_count	#
+Vidx_insert_partial_orphan	#
+Vidx_invalidate_count	#
+Vidx_invalidate_skip_not_found	#
+Vidx_invalidate_skip_read_timeout	#
+Vidx_invalidate_skip_tref_changed	#
+Vidx_invalidate_skip_update_timeout	#
+Vidx_last_diameter_init	#
+Vidx_last_ef_power_init	#
+Vidx_load_node_hits	#
+Vidx_load_node_misses	#
+Vidx_load_vec_misses	#
+Vidx_neighbor_save_count	#
+Vidx_neighbor_save_skip_not_found	#
+Vidx_prefetch_lock_timeout	#
+Vidx_query_count	#
+Vidx_read_skip_orphan	#
+Vidx_save_neighbor_skip_lock_timeout	#
+Vidx_save_retry_dup_key	#
+Vidx_save_target_skip_lock_timeout	#
+Vidx_update_count	#
+Vidx_update_partial_orphan	#
+Vidx_update_skipped	#
+
+# 2. Create table with vector index
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# 3. Test Vidx_insert_count increment
+# Record initial insert count
+# Insert data
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,2,3,4,5]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,4,3,2,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1,1,1]"));
+# Record insert count after inserts
+# Verify insert count incremented
+OK: Vidx_insert_count incremented correctly
+
+# 4. Test Vidx_query_count increment
+# Record initial query count
+# Execute ANN queries
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,4,3,2,1]")) LIMIT 2;
+# Record query count after queries
+# Verify query count incremented
+OK: Vidx_query_count incremented correctly
+
+# 5. Test Vidx_update_count increment
+# Record initial update count
+# Execute updates
+UPDATE t1 SET v = VEC_FROMTEXT("[9,9,9,9,9]") WHERE id = 1;
+UPDATE t1 SET v = VEC_FROMTEXT("[8,8,8,8,8]") WHERE id = 2;
+# Record update count after updates
+# Verify update count incremented
+OK: Vidx_update_count incremented correctly
+
+# 6. Test Vidx_invalidate_count increment
+# Record initial invalidate count
+# Execute delete (drives the invalidate path on the aux table)
+DELETE FROM t1 WHERE id = 3;
+# Record invalidate count after delete
+# Verify invalidate count incremented
+OK: Vidx_invalidate_count incremented correctly
+
+# 7. Test cache related status variables
+# Insert more data to populate cache
+# Record cache stats before query
+# Execute queries to trigger cache activity
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 10;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 10;
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.1,0.2,0.3,0.4,0.5]")) LIMIT 10;
+# Record cache stats after queries
+# Display cache statistics change
+SELECT 'Vidx_cache_usage changed' AS stat_name;
+stat_name
+Vidx_cache_usage changed
+SELECT 'Vidx_load_node_hits changed' AS stat_name;
+stat_name
+Vidx_load_node_hits changed
+SELECT 'Vidx_load_node_misses changed' AS stat_name;
+stat_name
+Vidx_load_node_misses changed
+
+# 8. Test load_vec related status variables
+# Execute more queries
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.9,0.8,0.7,0.6,0.5]")) LIMIT 20;
+# Vec load stats recorded
+
+# 9. Test acquire_start related status variables
+# Insert and query to trigger acquire operations
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[0.1,0.1,0.1,0.1,0.1]"));
+SELECT id, VEC_TOTEXT(v) FROM t1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.1,0.1,0.1,0.1,0.1]")) LIMIT 5;
+# Acquire start stats recorded
+
+# 10. Display all Vidx status variables after operations
+SHOW GLOBAL STATUS LIKE 'Vidx_%';
+Variable_name	Value
+Vidx_acquire_start_hits	#
+Vidx_acquire_start_misses	#
+Vidx_cache_usage	#
+Vidx_ddl_build_error_count	#
+Vidx_ddl_build_windows	#
+Vidx_ddl_direct_builds_active	#
+Vidx_ddl_parallel_batches	#
+Vidx_ddl_parallel_load_rounds	#
+Vidx_ddl_parallel_loaded_nodes	#
+Vidx_decode_start_node_count	#
+Vidx_decode_vec_node_count	#
+Vidx_hnsw_share_count	#
+Vidx_hnsw_trx_count	#
+Vidx_indep_dml_commit	#
+Vidx_indep_dml_commit_error	#
+Vidx_indep_dml_deadlock	#
+Vidx_insert_count	#
+Vidx_insert_partial_orphan	#
+Vidx_invalidate_count	#
+Vidx_invalidate_skip_not_found	#
+Vidx_invalidate_skip_read_timeout	#
+Vidx_invalidate_skip_tref_changed	#
+Vidx_invalidate_skip_update_timeout	#
+Vidx_last_diameter_init	#
+Vidx_last_ef_power_init	#
+Vidx_load_node_hits	#
+Vidx_load_node_misses	#
+Vidx_load_vec_misses	#
+Vidx_neighbor_save_count	#
+Vidx_neighbor_save_skip_not_found	#
+Vidx_prefetch_lock_timeout	#
+Vidx_query_count	#
+Vidx_read_skip_orphan	#
+Vidx_save_neighbor_skip_lock_timeout	#
+Vidx_save_retry_dup_key	#
+Vidx_save_target_skip_lock_timeout	#
+Vidx_update_count	#
+Vidx_update_partial_orphan	#
+Vidx_update_skipped	#
+
+# 11. Test status variables with transaction
+# Record counts before transaction
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[7,7,7,7,7]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[6,6,6,6,6]"));
+COMMIT;
+OK: Vidx_insert_count incremented for committed transaction
+
+# 12. Test status variables with rollback
+BEGIN;
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[5,5,5,5,5]"));
+ROLLBACK;
+# Note: Insert count may or may not increment on rollback depending on implementation
+
+# 13. Test decode_* status variables
+# Decode stats recorded
+SELECT 'Decode statistics captured' AS status;
+status
+Decode statistics captured
+
+# 14. Test cache_usage status variable
+# Cache usage recorded
+
+# 15. Final status display
+SHOW GLOBAL STATUS LIKE 'Vidx_%';
+Variable_name	Value
+Vidx_acquire_start_hits	#
+Vidx_acquire_start_misses	#
+Vidx_cache_usage	#
+Vidx_ddl_build_error_count	#
+Vidx_ddl_build_windows	#
+Vidx_ddl_direct_builds_active	#
+Vidx_ddl_parallel_batches	#
+Vidx_ddl_parallel_load_rounds	#
+Vidx_ddl_parallel_loaded_nodes	#
+Vidx_decode_start_node_count	#
+Vidx_decode_vec_node_count	#
+Vidx_hnsw_share_count	#
+Vidx_hnsw_trx_count	#
+Vidx_indep_dml_commit	#
+Vidx_indep_dml_commit_error	#
+Vidx_indep_dml_deadlock	#
+Vidx_insert_count	#
+Vidx_insert_partial_orphan	#
+Vidx_invalidate_count	#
+Vidx_invalidate_skip_not_found	#
+Vidx_invalidate_skip_read_timeout	#
+Vidx_invalidate_skip_tref_changed	#
+Vidx_invalidate_skip_update_timeout	#
+Vidx_last_diameter_init	#
+Vidx_last_ef_power_init	#
+Vidx_load_node_hits	#
+Vidx_load_node_misses	#
+Vidx_load_vec_misses	#
+Vidx_neighbor_save_count	#
+Vidx_neighbor_save_skip_not_found	#
+Vidx_prefetch_lock_timeout	#
+Vidx_query_count	#
+Vidx_read_skip_orphan	#
+Vidx_save_neighbor_skip_lock_timeout	#
+Vidx_save_retry_dup_key	#
+Vidx_save_target_skip_lock_timeout	#
+Vidx_update_count	#
+Vidx_update_partial_orphan	#
+Vidx_update_skipped	#
+
+# 16. Clean up
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

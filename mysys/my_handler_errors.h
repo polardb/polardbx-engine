@@ -138,7 +138,8 @@ static const char *handler_error_messages[] = {
     "Snapshot too old",
     "Prepare wait timeout",
     "Sample hint syntax error",
-    "Transaction is too big"
+    "Transaction is too big",
+    "Register InnoDB and allocate update undo log error"
 };
 
 extern void my_handler_error_register(void);

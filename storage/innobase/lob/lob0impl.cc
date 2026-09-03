@@ -66,14 +66,17 @@ bool plist_base_node_t::validate() const {
 #endif /* UNIV_DEBUG */
 
 /** Allocate one node page. */
-buf_block_t *node_page_t::alloc(first_page_t &first_page, bool bulk) {
+buf_block_t *node_page_t::alloc(first_page_t &first_page, InsertContext *ctx) {
   ut_ad(m_block == nullptr);
+
   page_no_t hint = FIL_NULL;
 
   /* For testing purposes, pretend that the LOB page allocation failed.*/
   DBUG_EXECUTE_IF("innodb_lob_alloc_node_page_failed", return (nullptr););
 
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  ut_ad(ctx != nullptr);
+  ut_ad(m_index == ctx->index());
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -151,7 +154,7 @@ void z_frag_entry_t::free_frag_page(mtr_t *mtr, dict_index_t *index) {
 @param[in]      blob    in memory copy of the LOB.
 @param[in]      len     the length of the LOB.
 @param[in]      mtr     the mini-transaction context.
-@param[in]      bulk    true if bulk operation, false otherwise.
+@param[in]      ctx     insert context providing index/is_bulk.
 @param[out]     start_page_no   the first page into which zlib stream
                                 was written.
 @param[out]     frag_id the fragment id that contains last part of the
@@ -159,7 +162,8 @@ void z_frag_entry_t::free_frag_page(mtr_t *mtr, dict_index_t *index) {
 @return DB_SUCCESS on success, error code on error. */
 dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
                       trx_id_t trxid, byte *blob, ulint len, mtr_t *mtr,
-                      bool bulk, page_no_t &start_page_no, frag_id_t &frag_id) {
+                      InsertContext *ctx, page_no_t &start_page_no,
+                      frag_id_t &frag_id) {
   ulint remain = len;
   start_page_no = FIL_NULL;
   frag_id = FRAG_ID_NULL;
@@ -193,7 +197,7 @@ dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
     page. */
 
     z_data_page_t data_page(mtr, index);
-    buf_block_t *tmp_block = data_page.alloc(first_page_no + 1, bulk);
+    buf_block_t *tmp_block = data_page.alloc(first_page_no + 1, ctx);
 
     if (tmp_block == nullptr) {
       return (DB_OUT_OF_FILE_SPACE);
@@ -220,7 +224,7 @@ dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
     z_frag_page_t frag_page(mtr, index);
     z_frag_entry_t frag_entry(mtr);
 
-    frag_id = first.alloc_fragment(bulk, remain, frag_page, frag_entry);
+    frag_id = first.alloc_fragment(ctx, remain, frag_page, frag_entry);
 
     if (frag_id == FRAG_ID_NULL) {
       return (DB_OUT_OF_FILE_SPACE);
@@ -251,7 +255,7 @@ dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
   /* As long as data cannot fit into a fragment page, use a data page. */
   while (remain > 0 && !z_frag_page_t::can_data_fit(index, remain)) {
     z_data_page_t data_page(mtr, index);
-    buf_block_t *new_block = data_page.alloc(first_page_no + 1, bulk);
+    buf_block_t *new_block = data_page.alloc(first_page_no + 1, ctx);
 
     if (new_block == nullptr) {
       return (DB_OUT_OF_FILE_SPACE);
@@ -285,7 +289,7 @@ dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
     z_frag_page_t frag_page(mtr, index);
     z_frag_entry_t frag_entry(mtr);
 
-    frag_id = first.alloc_fragment(bulk, remain, frag_page, frag_entry);
+    frag_id = first.alloc_fragment(ctx, remain, frag_page, frag_entry);
 
     if (frag_id == FRAG_ID_NULL) {
       return (DB_OUT_OF_FILE_SPACE);
@@ -325,7 +329,7 @@ dberr_t z_insert_strm(dict_index_t *index, z_first_page_t &first,
 
 dberr_t z_insert_chunk(dict_index_t *index, z_first_page_t &first, trx_t *trx,
                        byte *blob, ulint len, z_index_entry_t *out_entry,
-                       mtr_t *mtr, bool bulk) {
+                       mtr_t *mtr, InsertContext *ctx) {
   ut_ad(len <= Z_CHUNK_SIZE);
   ut_ad(first.get_page_type() == FIL_PAGE_TYPE_ZLOB_FIRST);
   dberr_t err(DB_SUCCESS);
@@ -361,14 +365,14 @@ dberr_t z_insert_chunk(dict_index_t *index, z_first_page_t &first, trx_t *trx,
   page_no_t z_page_no;
   frag_id_t z_frag_id;
   err = z_insert_strm(index, first, trxid, tmpbuf.get(), strm.total_out, mtr,
-                      bulk, z_page_no, z_frag_id);
+                      ctx, z_page_no, z_frag_id);
 
   if (err != DB_SUCCESS) {
     deflateEnd(&strm);
     return (err);
   }
 
-  z_index_entry_t entry = first.alloc_index_entry(bulk);
+  z_index_entry_t entry = first.alloc_index_entry(ctx);
 
   if (entry.is_null()) {
     deflateEnd(&strm);
@@ -439,7 +443,7 @@ dberr_t z_insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
   }
 
   z_first_page_t first(mtr, index);
-  buf_block_t *first_block = first.alloc(ctx->is_bulk());
+  buf_block_t *first_block = first.alloc(ctx);
 
   if (first_block == nullptr) {
     return (DB_OUT_OF_FILE_SPACE);
@@ -470,7 +474,7 @@ dberr_t z_insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
     ulint size = (remain >= chunk_size) ? chunk_size : remain;
 
     err = z_insert_chunk(index, first, trx, ptr, size, &entry, mtr,
-                         ctx->is_bulk());
+                         ctx);
 
     if (err != DB_SUCCESS) {
       return (err);
@@ -542,14 +546,14 @@ dberr_t z_print_info(const dict_index_t *index, const lob::ref_t &ref,
 }
 
 buf_block_t *z_frag_page_t::alloc(z_first_page_t &first, page_no_t hint,
-                                  bool bulk) {
+                                  InsertContext *ctx) {
   /* The m_block member could point to valid block.  Overwriting it is
   good enough. */
 
   /* For testing purposes, pretend that the LOB page allocation failed.*/
   DBUG_EXECUTE_IF("innodb_lob_alloc_z_frag_page_failed", return (nullptr););
 
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -614,14 +618,15 @@ bool z_frag_page_t::can_data_fit(dict_index_t *index, ulint data_size) {
   return (data_size < (max_size / 4));
 }
 
-buf_block_t *z_frag_node_page_t::alloc(z_first_page_t &first, bool bulk) {
+buf_block_t *z_frag_node_page_t::alloc(z_first_page_t &first,
+                                       InsertContext *ctx) {
   ut_ad(m_block == nullptr);
   page_no_t hint = FIL_NULL;
 
   DBUG_EXECUTE_IF("innodb_lob_alloc_z_frag_node_page_failed",
                   return (nullptr););
 
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -956,7 +961,7 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
   ut_ad(ref.validate(ctx->get_mtr()));
 
   first_page_t first(mtr, index);
-  buf_block_t *first_block = first.alloc(mtr, ctx->is_bulk());
+  buf_block_t *first_block = first.alloc(ctx, mtr);
 
   if (first_block == nullptr) {
     /* Allocation of the first page of LOB failed. */
@@ -973,6 +978,7 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
   }
 
   page_id_t first_page_id(space_id, first_page_no);
+  GuardFirstPage guard(ctx, &first, &ref, field, first_page_id, page_size);
 
   flst_base_node_t *index_list = first.index_list();
 
@@ -982,7 +988,7 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
 
   {
     /* Insert an index entry in LOB index. */
-    flst_node_t *node = first.alloc_index_entry(ctx->is_bulk());
+    flst_node_t *node = first.alloc_index_entry(ctx);
 
     /* Here the first index entry is being allocated.  Since this will be
     allocated in the first page of LOB, it cannot be nullptr. */
@@ -1008,7 +1014,7 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
 
   while (remaining > 0) {
     data_page_t data_page(mtr, index);
-    buf_block_t *block = data_page.alloc(mtr, ctx->is_bulk());
+    buf_block_t *block = data_page.alloc(ctx, mtr);
 
     if (block == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;
@@ -1020,7 +1026,7 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
     data_page.set_trx_id(trxid);
 
     /* Allocate a new index entry */
-    flst_node_t *node = first.alloc_index_entry(ctx->is_bulk());
+    flst_node_t *node = first.alloc_index_entry(ctx);
 
     if (node == nullptr) {
       ret = DB_OUT_OF_FILE_SPACE;
@@ -1046,8 +1052,6 @@ dberr_t insert(InsertContext *ctx, trx_t *trx, ref_t &ref,
 
     if (++nth_blob_page % commit_freq == 0) {
       ctx->check_redolog();
-      ref.set_ref(ctx->get_field_ref(field->field_no));
-      first.load_x(first_page_id, page_size);
     }
   }
 
@@ -1242,14 +1246,14 @@ ulint read(ReadContext *ctx, ref_t ref, ulint offset, ulint len, byte *buf) {
   return total_read;
 }
 
-buf_block_t *z_index_page_t::alloc(z_first_page_t &first, bool bulk) {
+buf_block_t *z_index_page_t::alloc(z_first_page_t &first, InsertContext *ctx) {
   ut_ad(m_block == nullptr);
   page_no_t hint = FIL_NULL;
 
   /* For testing purposes, pretend that the LOB page allocation failed.*/
   DBUG_EXECUTE_IF("innodb_lob_alloc_z_index_page_failed", return (nullptr););
 
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -1269,16 +1273,15 @@ buf_block_t *z_index_page_t::alloc(z_first_page_t &first, bool bulk) {
 
 /** Allocate one data page.
 @param[in]      hint    hint page number for allocation.
-@param[in]      bulk    true if bulk operation (OPCODE_INSERT_BULK)
-                        false otherwise.
+@param[in]      ctx     insert context providing index/is_bulk.
 @return the allocated buffer block. */
-buf_block_t *z_data_page_t::alloc(page_no_t hint, bool bulk) {
+buf_block_t *z_data_page_t::alloc(page_no_t hint, InsertContext *ctx) {
   ut_ad(m_block == nullptr);
 
   /* For testing purposes, pretend that the LOB page allocation failed.*/
   DBUG_EXECUTE_IF("innodb_lob_alloc_z_data_page_failed", return (nullptr););
 
-  m_block = alloc_lob_page(m_index, m_mtr, hint, bulk);
+  m_block = ctx->alloc_lob_page(hint, m_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);

@@ -1,0 +1,407 @@
+SET opt_index_format_hippo_enabled=off;
+CREATE TABLE dummy_table (id int primary key);
+INSERT INTO dummy_table VALUES (1);
+CREATE PROCEDURE populate_spc(IN tbl VARCHAR(64), IN n INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE prefix VARCHAR(200);
+SET prefix = REPEAT('a', 190);
+START TRANSACTION;
+WHILE (i <= n) DO
+SET @s = CONCAT('INSERT INTO ', tbl,
+' VALUES (', i, ',',
+' CONCAT(''', prefix, ''', LPAD(', i, ',10,''0'')),',
+' CONCAT(''', prefix, ''', LPAD(', i, ' % 100,10,''0'')))');
+PREPARE stmt FROM @s;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END|
+#####################################
+# Test 1: Basic SPC Index Export/Import
+#   - 500 rows with long common prefix → encoded pages
+#   - 5 extra rows after batch → last page may be non-encoded
+#####################################
+CREATE TABLE t1 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1),
+INDEX idx_c1_prefix (c1(64)),
+INDEX idx_c1c2 (c1, c2)
+) ENGINE=InnoDB;
+CALL populate_spc('t1', 500);
+INSERT INTO t1 VALUES (501, CONCAT(REPEAT('a',190), 'EXTRA00001'),
+CONCAT(REPEAT('a',190), 'EXTRA_0001'));
+INSERT INTO t1 VALUES (502, CONCAT(REPEAT('a',190), 'EXTRA00002'),
+CONCAT(REPEAT('a',190), 'EXTRA_0002'));
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	SPC_PAGE
+idx_c1c2	SPC_PAGE
+idx_c1_prefix	SPC_PAGE
+PRIMARY	INDEX
+include/assert.inc [Pre-export: PK and SPC index checksum must match]
+include/assert.inc [Pre-export: PK and SPC prefix index checksum must match]
+CHECKSUM TABLE t1;
+Table	Checksum
+test.t1	4222443122
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM dummy_table;
+id
+1
+FLUSH TABLE t1 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t1;
+CREATE TABLE t1 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1),
+INDEX idx_c1_prefix (c1(64)),
+INDEX idx_c1c2 (c1, c2)
+) ENGINE=InnoDB;
+ALTER TABLE t1 DISCARD TABLESPACE;
+ALTER TABLE t1 IMPORT TABLESPACE;
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+CHECKSUM TABLE t1;
+Table	Checksum
+test.t1	4222443122
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+502
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	SPC_PAGE
+idx_c1c2	SPC_PAGE
+idx_c1_prefix	SPC_PAGE
+PRIMARY	INDEX
+include/assert.inc [Post-import: PK and SPC index checksum must match]
+include/assert.inc [Post-import: PK and SPC prefix index checksum must match]
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1) WHERE c1 < CONCAT(REPEAT('a',190), '0000000100');
+COUNT(*)
+99
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1_prefix) WHERE c1 < CONCAT(REPEAT('a',190), '0000000100');
+COUNT(*)
+99
+SELECT COUNT(*) FROM t1 FORCE INDEX(idx_c1c2);
+COUNT(*)
+502
+SELECT id FROM t1 FORCE INDEX(idx_c1) WHERE c1 LIKE '%EXTRA%' ORDER BY id;
+id
+501
+502
+SELECT c1 FROM t1 FORCE INDEX(idx_c1) WHERE c1 LIKE '%0000000001' LIMIT 1;
+ERROR HY000: Table definition has changed, please retry transaction
+COMMIT;
+DROP TABLE t1;
+#####################################
+# Test 2: SPC -> non-SPC Mismatch (should fail)
+#####################################
+CREATE TABLE t2 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, 100), (2, 200);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	SPC_PAGE
+FLUSH TABLE t2 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t2;
+SET opt_index_format_spc_enabled=off;
+CREATE TABLE t2 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SET opt_index_format_spc_enabled=on;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	INDEX
+ALTER TABLE t2 DISCARD TABLESPACE;
+ALTER TABLE t2 IMPORT TABLESPACE;
+ERROR HY000: Schema mismatch (Page type (17855) of the index idx_c1 is mismatch with the page type (42) tablespace meta-data file.)
+DROP TABLE t2;
+#####################################
+# Test 3: non-SPC -> SPC Mismatch (should fail)
+#####################################
+SET opt_index_format_spc_enabled=off;
+CREATE TABLE t3 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SET opt_index_format_spc_enabled=on;
+INSERT INTO t3 VALUES (1, 100), (2, 200);
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	INDEX
+FLUSH TABLE t3 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t3;
+CREATE TABLE t3 (
+id int NOT NULL PRIMARY KEY,
+c1 int NOT NULL,
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c1	SPC_PAGE
+ALTER TABLE t3 DISCARD TABLESPACE;
+ALTER TABLE t3 IMPORT TABLESPACE;
+ERROR HY000: Schema mismatch (Page type (42) of the index idx_c1 is mismatch with the page type (17855) tablespace meta-data file.)
+DROP TABLE t3;
+#####################################
+# Test 4: DML after Import (encoded SPC pages)
+#####################################
+CREATE TABLE t4 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+CALL populate_spc('t4', 500);
+FLUSH TABLE t4 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t4;
+CREATE TABLE t4 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+ALTER TABLE t4 DISCARD TABLESPACE;
+ALTER TABLE t4 IMPORT TABLESPACE;
+CHECK TABLE t4;
+Table	Op	Msg_type	Msg_text
+test.t4	check	status	OK
+# DML operations after import on encoded SPC pages
+INSERT INTO t4 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+CONCAT(REPEAT('a',190),'0000000501'));
+UPDATE t4 SET c1 = CONCAT(REPEAT('a',190),'UPDATED001') WHERE id = 1;
+DELETE FROM t4 WHERE id = 250;
+SELECT COUNT(*) FROM t4;
+COUNT(*)
+500
+include/assert.inc [Post-DML: PK and SPC index checksum must match]
+DROP TABLE t4;
+#####################################
+# Test 5: Rollback after Import
+#####################################
+CREATE TABLE t5 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+FLUSH TABLE t5 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t5;
+CREATE TABLE t5 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t5 DISCARD TABLESPACE;
+ALTER TABLE t5 IMPORT TABLESPACE;
+CHECK TABLE t5;
+Table	Op	Msg_type	Msg_text
+test.t5	check	status	OK
+# Rollback INSERT after import
+BEGIN;
+INSERT INTO t5 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'));
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+COUNT(*)
+501
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+# Rollback DELETE after import
+BEGIN;
+DELETE FROM t5 WHERE id = 1;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+COUNT(*)
+499
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+# Rollback UPDATE after import
+BEGIN;
+UPDATE t5 SET c1 = CONCAT(REPEAT('b',190),'ROLLBACKME') WHERE id = 100;
+include/assert.inc [During txn: PK and SPC index checksum must match]
+ROLLBACK;
+SELECT COUNT(*) FROM t5 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+DROP TABLE t5;
+#####################################
+# Test 6: MVCC after Import (concurrent read/write)
+#####################################
+CREATE TABLE t6 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+CALL populate_spc('t6', 500);
+FLUSH TABLE t6 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t6;
+CREATE TABLE t6 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t6 DISCARD TABLESPACE;
+ALTER TABLE t6 IMPORT TABLESPACE;
+CHECK TABLE t6;
+Table	Op	Msg_type	Msg_text
+test.t6	check	status	OK
+SELECT COUNT(*) FROM t6;
+COUNT(*)
+500
+SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+INSERT INTO t6 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+CONCAT(REPEAT('a',190),'0000000501'));
+UPDATE t6 SET c1 = CONCAT(REPEAT('a',190),'UPDATED001') WHERE id = 1;
+DELETE FROM t6 WHERE id = 500;
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+COMMIT;
+SELECT COUNT(*) FROM t6 FORCE INDEX(idx_c1);
+COUNT(*)
+500
+DROP TABLE t6;
+#####################################
+# Test 7: Partition Table Import with SPC Index
+#####################################
+CREATE TABLE t7 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB
+PARTITION BY RANGE(id) (
+PARTITION p0 VALUES LESS THAN (300),
+PARTITION p1 VALUES LESS THAN MAXVALUE
+);
+CALL populate_spc('t7', 500);
+SELECT TABLE_NAME, INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME LIKE 't7#p#%' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_c1'
+ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	INDEX_PAGE_TYPE
+t7#p#p0	idx_c1	SPC_PAGE
+t7#p#p1	idx_c1	SPC_PAGE
+SELECT COUNT(*) FROM t7 PARTITION (p0);
+COUNT(*)
+299
+FLUSH TABLE t7 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t7;
+CREATE TABLE t7 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+INDEX idx_c1 (c1)
+) ENGINE=InnoDB;
+ALTER TABLE t7 DISCARD TABLESPACE;
+ALTER TABLE t7 IMPORT TABLESPACE;
+CHECK TABLE t7;
+Table	Op	Msg_type	Msg_text
+test.t7	check	status	OK
+SELECT COUNT(*) FROM t7;
+COUNT(*)
+299
+include/assert.inc [Partition import: PK and SPC index checksum must match]
+INSERT INTO t7 VALUES (600, CONCAT(REPEAT('a',190),'0000000600'),
+CONCAT(REPEAT('a',190),'0000000000'));
+DELETE FROM t7 WHERE id = 1;
+SELECT COUNT(*) FROM t7 FORCE INDEX(idx_c1);
+COUNT(*)
+299
+DROP TABLE t7;
+#####################################
+# Test 8: Mixed SPC and non-SPC indexes
+#  unique index → NOT SPC; non-unique → SPC
+#####################################
+CREATE TABLE t8 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+UNIQUE KEY uk_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t8' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_c2	SPC_PAGE
+PRIMARY	INDEX
+uk_c1	PANDA_INDEX
+CHECKSUM TABLE t8;
+Table	Checksum
+test.t8	3184281706
+FLUSH TABLE t8 FOR EXPORT;
+UNLOCK TABLES;
+DROP TABLE t8;
+CREATE TABLE t8 (
+id  INT NOT NULL PRIMARY KEY,
+c1  VARCHAR(200),
+c2  VARCHAR(200),
+UNIQUE KEY uk_c1 (c1),
+INDEX idx_c2 (c2)
+) ENGINE=InnoDB;
+ALTER TABLE t8 DISCARD TABLESPACE;
+ALTER TABLE t8 IMPORT TABLESPACE;
+CHECK TABLE t8;
+Table	Op	Msg_type	Msg_text
+test.t8	check	status	OK
+CHECKSUM TABLE t8;
+Table	Checksum
+test.t8	3184281706
+SELECT COUNT(*) FROM t8 FORCE INDEX(uk_c1);
+COUNT(*)
+500
+SELECT COUNT(*) FROM t8 FORCE INDEX(idx_c2);
+COUNT(*)
+500
+include/assert.inc [Mixed index import: PK and SPC(idx_c2) checksum must match]
+INSERT INTO t8 VALUES (501, CONCAT(REPEAT('a',190),'0000000501'),
+CONCAT(REPEAT('a',190),'0000000001'));
+UPDATE t8 SET c2 = CONCAT(REPEAT('b',190),'UPDATED001') WHERE id = 150;
+DELETE FROM t8 WHERE id = 1;
+SELECT COUNT(*) FROM t8;
+COUNT(*)
+500
+DROP TABLE t8;
+#####################################
+# Cleanup
+#####################################
+DROP PROCEDURE populate_spc;
+DROP TABLE dummy_table;
+SET opt_index_format_hippo_enabled=default;
+# Test completed successfully

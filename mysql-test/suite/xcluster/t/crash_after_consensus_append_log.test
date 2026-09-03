@@ -35,10 +35,10 @@ while ($iter <= 2)
 
 
 	# pre-cmd maybe commit or not
-	--echo # 0$iter. normal commit + simulate_crash_after_consensus_append_log
+	--echo # 0$iter. normal commit + crash_after_append_log_in_sync
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+	SET SESSION debug="+d,crash_after_append_log_in_sync";
 	begin;
 	--eval $sql
 	--error 2013
@@ -56,10 +56,10 @@ while ($iter <= 2)
 	--source include/wait_leader_apply_catchup.inc
 
 
-	--echo # 1$iter. xa prepare + simulate_crash_after_consensus_append_log
+	--echo # 1$iter. xa prepare + crash_after_append_log_in_sync
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+	SET SESSION debug="+d,crash_after_append_log_in_sync";
 	xa start 'xx';
 	--eval $sql
 	xa end 'xx';
@@ -84,10 +84,10 @@ while ($iter <= 2)
 
 
 	# pre-cmd maybe commit or not
-	--echo # 2$iter. xa commit one phase + simulate_crash_after_consensus_append_log
+	--echo # 2$iter. xa commit one phase + crash_after_append_log_in_sync
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
-	SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+	SET SESSION debug="+d,crash_after_append_log_in_sync";
 	xa start 'xx';
 	--eval $sql
 	xa end 'xx';
@@ -108,7 +108,7 @@ while ($iter <= 2)
 	--source include/wait_leader_apply_catchup.inc
 
 
-	--echo # 3$iter. xa commit + simulate_crash_after_consensus_append_log
+	--echo # 3$iter. xa commit + crash_after_append_log_in_sync
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 	xa start 'xx';
@@ -116,7 +116,7 @@ while ($iter <= 2)
 	xa end 'xx';
 	xa prepare 'xx';
 
-	SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+	SET SESSION debug="+d,crash_after_append_log_in_sync";
 	--error 2013
 	xa commit 'xx';
 
@@ -135,7 +135,7 @@ while ($iter <= 2)
 	--source include/wait_leader_apply_catchup.inc
 
 
-	--echo # 4$iter. xa rollback + simulate_crash_after_consensus_append_log
+	--echo # 4$iter. xa rollback + crash_after_append_log_in_sync
 	-- exec echo "wait" > $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
 
 	xa start 'xx';
@@ -143,7 +143,7 @@ while ($iter <= 2)
 	xa end 'xx';
 	xa prepare 'xx';
 
-	SET SESSION debug="+d,simulate_crash_after_consensus_append_log";
+	SET SESSION debug="+d,crash_after_append_log_in_sync";
 	--error 2013
 	xa rollback 'xx';
 

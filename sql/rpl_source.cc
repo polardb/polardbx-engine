@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_source.h"
 
 #include <fcntl.h>
@@ -77,11 +79,11 @@
 #include "thr_mutex.h"
 #include "typelib.h"
 
-#include "bl_consensus_log.h"
+#include "komodo0consensus0xlog.h"
 #include "my_macros.h"
 #include "paxos.pb.h"
 #include "scope_guard.h"
-#include "sql/consensus_log_manager.h"  // ConsensusLogManager
+#include "sql/komodo0xlog.h"
 
 int max_binlog_dump_events = 0;  // unlimited
 bool opt_sporadic_binlog_dump_fail = false;
@@ -1161,6 +1163,15 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
     goto end;
   }
 
+  /*
+    No RESET MASTER commands are allowed while XPaxos is running and disable it
+  */
+  if (opt_enable_consensus && !opt_consensus_enable_reset_master) {
+    my_error(ER_CANT_RESET_MASTER, MYF(0), "PolarDB-X XPaxos is running");
+    ret = true;
+    goto end;
+  }
+
   if (mysql_bin_log.is_open()) {
     /*
       mysql_bin_log.reset_logs will delete the binary logs *and* clear
@@ -1175,11 +1186,9 @@ bool reset_master(THD *thd, bool unlock_global_read_lock) {
     */
     ret = mysql_bin_log.reset_logs(thd);
 
-    //append empty log for crash recover
-    if (!ret && thd->variables.opt_consensus_safe_for_reset_master && consensus_ptr) {
-      alisql::LogEntry entry1;
-      consensus_ptr->getLog()->getEmptyEntry(entry1);
-      consensus_ptr->replicateLog(entry1);
+    // append empty log for crash recover
+    if (!ret && thd->variables.opt_consensus_safe_for_reset_master) {
+      komodo::xlog_replicate_empty_log();
     }
 
   } else {

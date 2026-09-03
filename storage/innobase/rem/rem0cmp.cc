@@ -40,6 +40,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "handler0alter.h"
 #include "rem0cmp.h"
 #include "srv0srv.h"
+
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+
 namespace dd {
 class Spatial_reference_system;
 }
@@ -540,8 +544,8 @@ inline int cmp_data(ulint mtype, ulint prtype, bool is_asc, const byte *data1,
   return (is_asc ? cmp : -cmp);
 }
 
-int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const rec_t *rec,
-                            const ulint *offsets, page_cur_mode_t mode,
+int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const Slice *slc,
+                            page_cur_mode_t mode,
                             const dd::Spatial_reference_system *srs) {
   const dfield_t *dtuple_field;
   ulint dtuple_f_len;
@@ -552,7 +556,8 @@ int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const rec_t *rec,
   dtuple_field = dtuple_get_nth_field(dtuple, 0);
   dtuple_f_len = dfield_get_len(dtuple_field);
 
-  rec_b_ptr = rec_get_nth_field(nullptr, rec, offsets, 0, &rec_f_len);
+  // rec_b_ptr = rec_get_nth_field(nullptr, rec, slc, 0, &rec_f_len);
+  rec_b_ptr = const_cast<Slice *>(slc)->get_nth_field(nullptr, 0, &rec_f_len);
   ret = cmp_gis_field(
       mode, static_cast<const byte *>(dfield_get_data(dtuple_field)),
       (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len, srs);
@@ -560,8 +565,7 @@ int cmp_dtuple_rec_with_gis(const dtuple_t *dtuple, const rec_t *rec,
   return (ret);
 }
 
-int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const rec_t *rec,
-                                     const ulint *offsets,
+int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const Slice *slc,
                                      const dd::Spatial_reference_system *srs) {
   const dfield_t *dtuple_field; /* current field in logical record */
   ulint dtuple_f_len;           /* the length of the current field
@@ -574,7 +578,8 @@ int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const rec_t *rec,
   dtuple_field = dtuple_get_nth_field(dtuple, 0);
   dtuple_f_len = dfield_get_len(dtuple_field);
 
-  rec_b_ptr = rec_get_nth_field(nullptr, rec, offsets, 0, &rec_f_len);
+  // rec_b_ptr = rec_get_nth_field(nullptr, rec, slc, 0, &rec_f_len);
+  rec_b_ptr = const_cast<Slice *>(slc)->get_nth_field(nullptr, 0, &rec_f_len);
   ret = cmp_gis_field(
       PAGE_CUR_WITHIN, static_cast<const byte *>(dfield_get_data(dtuple_field)),
       (unsigned)dtuple_f_len, rec_b_ptr, (unsigned)rec_f_len, srs);
@@ -584,7 +589,8 @@ int cmp_dtuple_rec_with_gis_internal(const dtuple_t *dtuple, const rec_t *rec,
 
   dtuple_field = dtuple_get_nth_field(dtuple, 1);
   dtuple_f_len = dfield_get_len(dtuple_field);
-  rec_b_ptr = rec_get_nth_field(nullptr, rec, offsets, 1, &rec_f_len);
+  // rec_b_ptr = rec_get_nth_field(nullptr, rec, slc, 1, &rec_f_len);
+  rec_b_ptr = const_cast<Slice *>(slc)->get_nth_field(nullptr, 1, &rec_f_len);
 
   return (cmp_data(dtuple_field->type.mtype, dtuple_field->type.prtype, true,
                    static_cast<const byte *>(dtuple_field->data), dtuple_f_len,
@@ -596,23 +602,23 @@ int cmp_data_data(ulint mtype, ulint prtype, bool is_asc, const byte *data1,
   return (cmp_data(mtype, prtype, is_asc, data1, len1, data2, len2));
 }
 
-int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple, const rec_t *rec,
-                                  const dict_index_t *index,
-                                  const ulint *offsets, ulint n_cmp,
-                                  ulint *matched_fields) {
+int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple,
+                                  const dict_index_t *index, const Slice *slc,
+                                  ulint n_cmp, ulint *matched_fields) {
   ut_ad(dtuple_check_typed(dtuple));
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
 
   ut_ad(n_cmp > 0);
   ut_ad(*matched_fields == DISABLE_MIN_REC_FLAG_CHECK ||
         *matched_fields <= n_cmp);
   ut_ad(n_cmp <= dtuple_get_n_fields(dtuple));
   ut_ad(*matched_fields == DISABLE_MIN_REC_FLAG_CHECK ||
-        *matched_fields <= rec_offs_n_fields(offsets));
+        *matched_fields <= rec_offs_n_fields(slc->offsets()));
   ut_ad(lizard::row_index_entry_cmp_fields_check(index, dtuple));
 
   if (*matched_fields == 0) {
-    ulint rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));
+    ulint rec_info =
+        rec_get_info_bits(slc->rec(), rec_offs_comp(slc->offsets()));
     ulint tup_info = dtuple_get_info_bits(dtuple);
 
     /* The leftmost node pointer record is defined as
@@ -643,15 +649,18 @@ int cmp_dtuple_rec_with_match_low(const dtuple_t *dtuple, const rec_t *rec,
     stored field.  Only clustered index records can
     contain externally stored fields, and the first fields
     (primary key fields) should already differ. */
-    ut_ad(!rec_offs_nth_extern(index, offsets, i));
+    ut_ad(!rec_offs_nth_extern(index, slc->offsets(), i));
 
     /* So does the field with default value */
-    ut_ad(!rec_offs_nth_default(index, offsets, i));
+    ut_ad(!rec_offs_nth_default(index, slc->offsets(), i));
 
     ulint rec_f_len;
 
+    // const auto rec_b_ptr =
+    //     rec_get_nth_field(index, slc->rec(), slc, i, &rec_f_len);
+    ut_ad(slc->is_positioned(index));
     const auto rec_b_ptr =
-        rec_get_nth_field(index, rec, offsets, i, &rec_f_len);
+        const_cast<Slice *>(slc)->get_nth_field(index, i, &rec_f_len);
 
     ut_ad(!dfield_is_ext(dtuple_field));
 
@@ -727,9 +736,9 @@ static inline ulint cmp_get_pad_char(const dtype_t *type) {
   }
 }
 
-int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple, const rec_t *rec,
-                                    const dict_index_t *index,
-                                    const ulint *offsets, ulint *matched_fields,
+int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple,
+                                    const dict_index_t *index, const Slice *slc,
+                                    ulint *matched_fields,
                                     ulint *matched_bytes) {
   ulint n_cmp = dtuple_get_n_fields_cmp(dtuple);
   ulint cur_field; /* current field number */
@@ -737,17 +746,17 @@ int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple, const rec_t *rec,
   int ret; /* return value */
 
   ut_ad(dtuple_check_typed(dtuple));
-  ut_ad(rec_offs_validate(rec, index, offsets));
+  ut_ad(slc->is_positioned(index));
   ut_ad(!(REC_INFO_MIN_REC_FLAG & dtuple_get_info_bits(dtuple)));
   ut_ad(!(REC_INFO_MIN_REC_FLAG &
-          rec_get_info_bits(rec, rec_offs_comp(offsets))));
+          rec_get_info_bits(slc->rec(), rec_offs_comp(slc->offsets()))));
 
   cur_field = *matched_fields;
   cur_bytes = *matched_bytes;
 
   ut_ad(n_cmp <= dtuple_get_n_fields(dtuple));
   ut_ad(cur_field <= n_cmp);
-  ut_ad(cur_field + (cur_bytes > 0) <= rec_offs_n_fields(offsets));
+  ut_ad(cur_field + (cur_bytes > 0) <= rec_offs_n_fields(slc->offsets()));
 
   /* Match fields in a loop; stop if we run out of fields in dtuple
   or find an externally stored field */
@@ -760,7 +769,7 @@ int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple, const rec_t *rec,
     const byte *rec_b_ptr;
     ulint rec_f_len;
 
-    ut_ad(!rec_offs_nth_default(index, offsets, cur_field));
+    ut_ad(!rec_offs_nth_default(index, slc->offsets(), cur_field));
 
     /* For now, change buffering is only supported on
     indexes with ascending order on the columns. */
@@ -768,8 +777,11 @@ int cmp_dtuple_rec_with_match_bytes(const dtuple_t *dtuple, const rec_t *rec,
         dict_index_is_ibuf(index) || index->fields[cur_field].is_ascending;
 
     dtuple_b_ptr = static_cast<const byte *>(dfield_get_data(dfield));
-    rec_b_ptr = rec_get_nth_field(index, rec, offsets, cur_field, &rec_f_len);
-    ut_ad(!rec_offs_nth_extern(index, offsets, cur_field));
+    // rec_b_ptr =
+    //     rec_get_nth_field(index, slc->rec(), slc, cur_field, &rec_f_len);
+    rec_b_ptr =
+        const_cast<Slice *>(slc)->get_nth_field(index, cur_field, &rec_f_len);
+    ut_ad(!rec_offs_nth_extern(index, slc->offsets(), cur_field));
 
     /* If we have matched yet 0 bytes, it may be that one or
     both the fields are SQL null, or the record or dtuple may be
@@ -875,28 +887,27 @@ order_resolved:
   return (ret);
 }
 
-int cmp_dtuple_rec(const dtuple_t *dtuple, const rec_t *rec,
-                   const dict_index_t *index, const ulint *offsets) {
+int cmp_dtuple_rec(const dtuple_t *dtuple, const dict_index_t *index,
+                   const Slice *slc) {
   ulint matched_fields = 0;
 
-  return (dtuple->compare(rec, index, offsets, &matched_fields));
+  return (dtuple->compare(index, slc, &matched_fields));
 }
 
-bool cmp_dtuple_is_prefix_of_rec(const dtuple_t *dtuple, const rec_t *rec,
-                                 const dict_index_t *index,
-                                 const ulint *offsets) {
+bool cmp_dtuple_is_prefix_of_rec(const dtuple_t *dtuple,
+                                 const dict_index_t *index, const Slice *slc) {
   ut_ad(!dict_index_is_spatial(index));
 
   auto n_fields = dtuple_get_n_fields(dtuple);
 
-  if (n_fields > rec_offs_n_fields(offsets)) {
+  if (n_fields > rec_offs_n_fields(slc->offsets())) {
     ut_d(ut_error);
     ut_o(return (false));
   }
 
   ulint matched_fields = 0;
 
-  return (dtuple->compare(rec, index, offsets, &matched_fields) == 0);
+  return (dtuple->compare(index, slc, &matched_fields) == 0);
 }
 
 /** Compare two physical record fields.
@@ -909,9 +920,10 @@ bool cmp_dtuple_is_prefix_of_rec(const dtuple_t *dtuple, const rec_t *rec,
 @retval positive if rec1 field is greater than rec2
 @retval negative if rec1 field is less than rec2
 @retval 0 if rec1 field equals to rec2 */
-[[nodiscard]] static int cmp_rec_rec_simple_field(
-    const rec_t *rec1, const rec_t *rec2, const ulint *offsets1,
-    const ulint *offsets2, const dict_index_t *index, ulint n) {
+[[nodiscard]] static int cmp_rec_rec_simple_field(const Slice *slc1,
+                                                  const Slice *slc2,
+                                                  const dict_index_t *index,
+                                                  ulint n) {
   ulint rec1_f_len;
   ulint rec2_f_len;
   const byte *rec1_b_ptr;
@@ -919,29 +931,32 @@ bool cmp_dtuple_is_prefix_of_rec(const dtuple_t *dtuple, const rec_t *rec,
   const dict_col_t *col = index->get_col(n);
   const dict_field_t *field = index->get_field(n);
 
-  ut_ad(!rec_offs_nth_extern(index, offsets1, n));
-  ut_ad(!rec_offs_nth_extern(index, offsets2, n));
+  ut_ad(!rec_offs_nth_extern(index, slc1->offsets(), n));
+  ut_ad(!rec_offs_nth_extern(index, slc2->offsets(), n));
+  ut_ad(slc1->index() == index && slc2->index() == index);
 
-  rec1_b_ptr = rec_get_nth_field_instant(rec1, offsets1, n, index, &rec1_f_len);
-  rec2_b_ptr = rec_get_nth_field_instant(rec2, offsets2, n, index, &rec2_f_len);
+  rec1_b_ptr =
+      const_cast<Slice *>(slc1)->get_nth_field_instant(index, n, &rec1_f_len);
+  rec2_b_ptr =
+      const_cast<Slice *>(slc2)->get_nth_field_instant(index, n, &rec2_f_len);
 
   return (cmp_data(col->mtype, col->prtype, field->is_ascending, rec1_b_ptr,
                    rec1_f_len, rec2_b_ptr, rec2_f_len));
 }
 
-int cmp_rec_rec_simple(const rec_t *rec1, const rec_t *rec2,
-                       const ulint *offsets1, const ulint *offsets2,
+int cmp_rec_rec_simple(const Slice *slc1, const Slice *slc2,
                        const dict_index_t *index, TABLE *table) {
   ulint n;
   bool null_eq{};
   const auto n_uniq = dict_index_get_n_unique(index);
 
-  ut_ad(rec_offs_n_fields(offsets1) >= n_uniq);
-  ut_ad(rec_offs_comp(offsets1) == rec_offs_comp(offsets2));
-  ut_ad(rec_offs_n_fields(offsets2) == rec_offs_n_fields(offsets2));
+  ut_ad(rec_offs_n_fields(slc1->offsets()) >= n_uniq);
+  ut_ad(rec_offs_comp(slc1->offsets()) == rec_offs_comp(slc2->offsets()));
+  ut_ad(rec_offs_n_fields(slc1->offsets()) ==
+        rec_offs_n_fields(slc2->offsets()));
 
   for (n = 0; n < n_uniq; n++) {
-    auto r = cmp_rec_rec_simple_field(rec1, rec2, offsets1, offsets2, index, n);
+    auto r = cmp_rec_rec_simple_field(slc1, slc2, index, n);
 
     if (r != 0) {
       return r;
@@ -949,10 +964,10 @@ int cmp_rec_rec_simple(const rec_t *rec1, const rec_t *rec2,
 
     /* If the fields are internally equal, they must both
     be NULL or non-NULL. */
-    ut_ad(rec_offs_nth_sql_null(index, offsets1, n) ==
-          rec_offs_nth_sql_null(index, offsets2, n));
+    ut_ad(rec_offs_nth_sql_null(index, slc1->offsets(), n) ==
+          rec_offs_nth_sql_null(index, slc2->offsets(), n));
 
-    if (rec_offs_nth_sql_null(index, offsets1, n)) {
+    if (rec_offs_nth_sql_null(index, slc1->offsets(), n)) {
       ut_ad(!(index->get_col(n)->prtype & DATA_NOT_NULL));
       null_eq = true;
     }
@@ -963,41 +978,40 @@ int cmp_rec_rec_simple(const rec_t *rec1, const rec_t *rec2,
 
   if (!null_eq && table && dict_index_is_unique(index)) {
     /* Report erroneous row using new version of table. */
-    innobase_rec_to_mysql(table, rec1, index, offsets1);
+    innobase_rec_to_mysql(table, slc1, index);
     return 0;
   }
 
   /* Else, keep comparing so that we have the full internal order. */
   for (; n < dict_index_get_n_fields(index); n++) {
-    auto r = cmp_rec_rec_simple_field(rec1, rec2, offsets1, offsets2, index, n);
+    auto r = cmp_rec_rec_simple_field(slc1, slc2, index, n);
 
     if (r != 0) {
       return r;
     }
 
     /* If the fields are equal, they must both be NULL or non-NULL. */
-    ut_ad(rec_offs_nth_sql_null(index, offsets1, n) ==
-          rec_offs_nth_sql_null(index, offsets2, n));
+    ut_ad(rec_offs_nth_sql_null(index, slc1->offsets(), n) ==
+          rec_offs_nth_sql_null(index, slc2->offsets(), n));
   }
 
   return 0;
 }
 
-int cmp_rec_rec_with_match(const rec_t *rec1, const rec_t *rec2,
-                           const ulint *offsets1, const ulint *offsets2,
+int cmp_rec_rec_with_match(const Slice *slc1, const Slice *slc2,
                            const dict_index_t *index,
                            bool spatial_index_non_leaf, bool nulls_unequal,
                            ulint *matched_fields, bool cmp_btree_recs) {
-  ut_ad(rec1 != nullptr);
-  ut_ad(rec2 != nullptr);
+  ut_ad(slc1->rec() != nullptr);
+  ut_ad(slc2->rec() != nullptr);
   ut_ad(index != nullptr);
-  ut_ad(rec_offs_validate(rec1, index, offsets1));
-  ut_ad(rec_offs_validate(rec2, index, offsets2));
-  ut_ad(rec_offs_comp(offsets1) == rec_offs_comp(offsets2));
+  ut_ad(slc1->is_positioned(index));
+  ut_ad(slc2->is_positioned(index));
+  ut_ad(rec_offs_comp(slc1->offsets()) == rec_offs_comp(slc2->offsets()));
 
-  const auto comp = rec_offs_comp(offsets1);
-  const auto rec1_n_fields = rec_offs_n_fields(offsets1);
-  const auto rec2_n_fields = rec_offs_n_fields(offsets2);
+  const auto comp = rec_offs_comp(slc1->offsets());
+  const auto rec1_n_fields = rec_offs_n_fields(slc1->offsets());
+  const auto rec2_n_fields = rec_offs_n_fields(slc2->offsets());
 
   *matched_fields = 0;
 
@@ -1005,10 +1019,10 @@ int cmp_rec_rec_with_match(const rec_t *rec1, const rec_t *rec2,
   during index validation. */
   if (cmp_btree_recs) {
     /* Test if rec is the predefined minimum record */
-    if (rec_get_info_bits(rec1, comp) & REC_INFO_MIN_REC_FLAG) {
-      ut_ad(!(rec_get_info_bits(rec2, comp) & REC_INFO_MIN_REC_FLAG));
+    if (rec_get_info_bits(slc1->rec(), comp) & REC_INFO_MIN_REC_FLAG) {
+      ut_ad(!(rec_get_info_bits(slc2->rec(), comp) & REC_INFO_MIN_REC_FLAG));
       return (-1);
-    } else if (rec_get_info_bits(rec2, comp) & REC_INFO_MIN_REC_FLAG) {
+    } else if (rec_get_info_bits(slc2->rec(), comp) & REC_INFO_MIN_REC_FLAG) {
       return (1);
     }
   }
@@ -1066,18 +1080,18 @@ int cmp_rec_rec_with_match(const rec_t *rec1, const rec_t *rec2,
     leaf page records. These fields should already differ
     in the primary key columns already, before DB_TRX_ID,
     DB_ROLL_PTR, and any externally stored columns. */
-    ut_ad(!rec_offs_nth_extern(index, offsets1, i));
-    ut_ad(!rec_offs_nth_extern(index, offsets2, i));
+    ut_ad(!rec_offs_nth_extern(index, slc1->offsets(), i));
+    ut_ad(!rec_offs_nth_extern(index, slc2->offsets(), i));
 
     ulint r1_len;
 
     const auto r1 =
-        rec_get_nth_field_instant(rec1, offsets1, i, index, &r1_len);
+        const_cast<Slice *>(slc1)->get_nth_field_instant(index, i, &r1_len);
 
     ulint r2_len;
 
     const auto r2 =
-        rec_get_nth_field_instant(rec2, offsets2, i, index, &r2_len);
+        const_cast<Slice *>(slc2)->get_nth_field_instant(index, i, &r2_len);
 
     if (nulls_unequal && r1_len == UNIV_SQL_NULL && r2_len == UNIV_SQL_NULL) {
       *matched_fields = i;
@@ -1120,8 +1134,8 @@ void test_cmp_data_data(ulint len) {
 
 #endif /* UNIV_COMPILE_TEST_FUNCS */
 
-int dtuple_t::compare(const rec_t *rec, const dict_index_t *index,
-                      const ulint *offsets, ulint *matched_fields) const {
-  return (cmp_dtuple_rec_with_match_low(this, rec, index, offsets, n_fields_cmp,
+int dtuple_t::compare(const dict_index_t *index, const Slice *slc,
+                      ulint *matched_fields) const {
+  return (cmp_dtuple_rec_with_match_low(this, index, slc, n_fields_cmp,
                                         matched_fields));
 }

@@ -83,4 +83,7 @@ enum rec_format_enum {
 };
 typedef enum rec_format_enum rec_format_t;
 
+class Slice;
+class DSlice;
+
 #endif

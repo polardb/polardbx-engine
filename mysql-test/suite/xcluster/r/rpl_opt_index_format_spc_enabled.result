@@ -1,0 +1,150 @@
+# PART 1: spc=ON only
+SET session opt_index_format_spc_enabled = ON;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+CREATE TABLE t_spc (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_a (a),
+KEY idx_b (b)
+) ENGINE=InnoDB;
+INSERT INTO t_spc VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+# Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_spc' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	SPC_PAGE
+PRIMARY	INDEX
+# Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_spc' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	SPC_PAGE
+PRIMARY	INDEX
+# PART 2: panda=ON only
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = ON;
+SET session opt_index_format_hippo_enabled = OFF;
+CREATE TABLE t_panda (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_a (a),
+KEY idx_b (b)
+) ENGINE=InnoDB;
+INSERT INTO t_panda VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+# Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_panda' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	PANDA_INDEX
+idx_b	INDEX
+PRIMARY	INDEX
+# Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_panda' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	PANDA_INDEX
+idx_b	INDEX
+PRIMARY	INDEX
+# PART 3: hippo=ON only
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = ON;
+CREATE TABLE t_hippo (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_a (a),
+KEY idx_b (b)
+) ENGINE=InnoDB;
+INSERT INTO t_hippo VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+# Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_hippo' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	HIPPO_INDEX
+PRIMARY	INDEX
+# Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_hippo' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	HIPPO_INDEX
+PRIMARY	INDEX
+# PART 4: all format OFF
+SET session opt_index_format_spc_enabled = OFF;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+CREATE TABLE t_normal (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+UNIQUE KEY idx_a (a),
+KEY idx_b (b)
+) ENGINE=InnoDB;
+INSERT INTO t_normal VALUES (1, 'aaa', 10), (2, 'bbb', 20), (3, 'ccc', 30);
+# Leader: check INDEX_PAGE_TYPE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_normal' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	INDEX
+PRIMARY	INDEX
+# Follower: check INDEX_PAGE_TYPE (should match leader)
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_normal' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	INDEX
+idx_b	INDEX
+PRIMARY	INDEX
+# PART 5: mixed formats on same table via ADD INDEX
+SET session opt_index_format_spc_enabled = ON;
+SET session opt_index_format_panda_enabled = OFF;
+SET session opt_index_format_hippo_enabled = OFF;
+CREATE TABLE t_mixed (
+id INT PRIMARY KEY,
+a  VARCHAR(100),
+b  INT,
+c  INT,
+KEY idx_a (a)
+) ENGINE=InnoDB;
+INSERT INTO t_mixed VALUES (1, 'aaa', 10, 100), (2, 'bbb', 20, 200);
+# Leader: idx_a should be SPC_PAGE
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+PRIMARY	INDEX
+SET session opt_index_format_spc_enabled = OFF;
+ALTER TABLE t_mixed ADD INDEX idx_b (b);
+SET session opt_index_format_panda_enabled = ON;
+ALTER TABLE t_mixed ADD INDEX idx_c (c);
+# Leader: idx_a=SPC_PAGE, idx_b=INDEX, idx_c=INDEX
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_b	INDEX
+idx_c	INDEX
+PRIMARY	INDEX
+# Follower: should match leader exactly
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+WHERE TABLE_NAME='t_mixed' AND SCHEMA_NAME='test' ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_a	SPC_PAGE
+idx_b	INDEX
+idx_c	INDEX
+PRIMARY	INDEX
+# Cleanup
+DROP TABLE t_spc, t_panda, t_hippo, t_normal, t_mixed;
+SET session opt_index_format_spc_enabled = 0;
+SET session opt_index_format_panda_enabled = 1;
+SET session opt_index_format_hippo_enabled = 1;
+SET session opt_index_format_spc_enabled = 0;
+SET session opt_index_format_panda_enabled = 1;
+SET session opt_index_format_hippo_enabled = 1;

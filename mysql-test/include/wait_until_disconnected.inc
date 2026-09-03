@@ -6,7 +6,15 @@
 let $counter= 500;
 if ($disconnect_timeout)
 {
-  let $counter = `SELECT $disconnect_timeout * 10`;
+  # Use --expr (client-side arithmetic, no server connection needed)
+  # Original: SELECT $disconnect_timeout * 10 (converts seconds to 0.1s iterations)
+  --let $__dt_factor= 10
+  --expr $counter= $disconnect_timeout * $__dt_factor
+}
+if ($ASAN_OPTIONS) {
+  # 3x multiplier for ASAN (server shutdown is I/O bound, not CPU bound)
+  --let $__asan_mult= 3
+  --expr $counter= $counter * $__asan_mult
 }
 let $mysql_errno= 0;
 while (!$mysql_errno)

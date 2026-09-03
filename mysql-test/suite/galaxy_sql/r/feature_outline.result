@@ -1,3 +1,4 @@
+set global opt_outline_enabled = on;
 call mtr.add_suppression("mysql.outline");
 call mtr.add_suppression("Statement outline");
 create database outline_db;
@@ -547,3 +548,4 @@ call dbms_outln.flush_outline();
 drop database outline_db;
 drop user 'u0'@'%';
 drop user 'u1'@'%';
+set global opt_outline_enabled = default;

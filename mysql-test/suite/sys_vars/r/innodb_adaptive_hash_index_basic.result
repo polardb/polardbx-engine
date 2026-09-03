@@ -36,13 +36,13 @@ innodb_adaptive_hash_index	OFF
 set @@global.innodb_adaptive_hash_index=1;
 select @@global.innodb_adaptive_hash_index;
 @@global.innodb_adaptive_hash_index
-0
+1
 select * from performance_schema.global_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 select * from performance_schema.session_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 set global innodb_adaptive_hash_index=0;
 select @@global.innodb_adaptive_hash_index;
 @@global.innodb_adaptive_hash_index
@@ -56,13 +56,13 @@ innodb_adaptive_hash_index	OFF
 set @@global.innodb_adaptive_hash_index='ON';
 select @@global.innodb_adaptive_hash_index;
 @@global.innodb_adaptive_hash_index
-0
+1
 select * from performance_schema.global_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 select * from performance_schema.session_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 set session innodb_adaptive_hash_index='OFF';
 ERROR HY000: Variable 'innodb_adaptive_hash_index' is a GLOBAL variable and should be set with SET GLOBAL
 set @@session.innodb_adaptive_hash_index='ON';
@@ -77,13 +77,13 @@ set global innodb_adaptive_hash_index=-3;
 ERROR 42000: Variable 'innodb_adaptive_hash_index' can't be set to the value of '-3'
 select @@global.innodb_adaptive_hash_index;
 @@global.innodb_adaptive_hash_index
-0
+1
 select * from performance_schema.global_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 select * from performance_schema.session_variables where variable_name='innodb_adaptive_hash_index';
 VARIABLE_NAME	VARIABLE_VALUE
-innodb_adaptive_hash_index	OFF
+innodb_adaptive_hash_index	ON
 set global innodb_adaptive_hash_index='AUTO';
 ERROR 42000: Variable 'innodb_adaptive_hash_index' can't be set to the value of 'AUTO'
 SET @@global.innodb_adaptive_hash_index = @start_global_value;

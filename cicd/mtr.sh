@@ -24,12 +24,28 @@
 
 source cicd/common.sh
 
-PARALLEL=20
+PARALLEL=48
 PERL_BIN=perl
+return_code=0
+
+# 解析命令行参数
+if [ "$#" -gt 0 ]; then
+  mtr_case="$*"
+fi
+
+# build.sh 在 DAILY_REGRESSION / MANUAL / MANUAL_ALL 时编译带 -DWITH_ASAN=1，
+# MTR 需要 --sanitize 才能设置 $ASAN_OPTIONS，使测试脚本的 ASAN 超时适配生效。
+SANITIZE_FLAGS=""
+if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
+  [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ]; then
+  SANITIZE_FLAGS="--sanitize"
+fi
 
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
   [ "${TEST_TYPE_ENUM}" -eq "${MERGE_TEST_COVERAGE}" ] ||
-  [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ]; then
+  [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ] ||
+  [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_COVERAGE}" ]; then
+  set -x
   ${PERL_BIN} "${CICD_BUILD_ROOT}"/mysql-test/mysql-test-run.pl \
     --report-unstable-tests \
     --timer \
@@ -43,9 +59,12 @@ if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
     --report-features \
     --unit-tests-report \
     --big-test \
-    --testcase-timeout=90 \
-    --suite-timeout=600 \
-    --start-timeout=600 \
+    --testcase-timeout=1200 \
+    --suite-timeout=4800 \
+    --start-timeout=4800 \
+    ${SANITIZE_FLAGS} \
     --xml-report="${RESULT_PATH}"/mtr_result.xml \
     --port-base=10000
+  return_code=$?
 fi
+exit ${return_code}

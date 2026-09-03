@@ -273,12 +273,33 @@ MACRO (MYSQL_USE_BUNDLED_OPENSSL)
     INSTALL_COMMAND ""
   )
 
-  EXECUTE_PROCESS(COMMAND ./config ${OPENSSL_CONFIGURE_OPTS}
-    WORKING_DIRECTORY ${SOURCE_DIR}
-  )
-  EXECUTE_PROCESS(COMMAND ${MAKE_COMMAND} include/openssl/opensslconf.h
-    WORKING_DIRECTORY ${SOURCE_DIR}
-  )
+  # Running "./config" rewrites configdata.pm, which makes the openssl
+  # makefile regenerate include/openssl/opensslconf.h with a fresh timestamp.
+  # Almost every source file in the tree depends on that header, so doing this
+  # unconditionally turns every cmake re-run (a mere "git checkout" touching
+  # some CMakeLists.txt is enough) into a full rebuild. Configure only when it
+  # has not been done yet, or when something it depends on has changed.
+  STRING(REPLACE ";" " " OPENSSL_CONFIGURE_OPTS_STR "${OPENSSL_CONFIGURE_OPTS}")
+  FILE(MD5 ${SOURCE_DIR}/include/openssl/opensslv.h OPENSSL_VERSION_MD5)
+  SET(OPENSSL_CONFIGURE_STAMP
+    "${OPENSSL_CONFIGURE_OPTS_STR} ${OPENSSL_VERSION_MD5}")
+
+  IF(NOT EXISTS ${SOURCE_DIR}/configdata.pm OR
+      NOT EXISTS ${SOURCE_DIR}/include/openssl/opensslconf.h OR
+      NOT "${OPENSSL_CONFIGURED_STAMP}" STREQUAL "${OPENSSL_CONFIGURE_STAMP}")
+    MESSAGE(STATUS "Configuring bundled OpenSSL: ${OPENSSL_CONFIGURE_OPTS_STR}")
+    EXECUTE_PROCESS(COMMAND ./config ${OPENSSL_CONFIGURE_OPTS}
+      WORKING_DIRECTORY ${SOURCE_DIR}
+    )
+    EXECUTE_PROCESS(COMMAND ${MAKE_COMMAND} include/openssl/opensslconf.h
+      WORKING_DIRECTORY ${SOURCE_DIR}
+    )
+    SET(OPENSSL_CONFIGURED_STAMP "${OPENSSL_CONFIGURE_STAMP}"
+      CACHE INTERNAL "Bundled OpenSSL has been configured with these options")
+  ELSE()
+    MESSAGE(STATUS
+      "Bundled OpenSSL already configured: ${OPENSSL_CONFIGURE_OPTS_STR}")
+  ENDIF()
 
   SET(MY_OPENSSL_LIBSSL "${BINARY_DIR}/libssl.a")
   SET(MY_OPENSSL_LIBCRYPTO "${BINARY_DIR}/libcrypto.a")
@@ -528,7 +549,7 @@ MACRO (MYSQL_CHECK_SSL)
     CMAKE_POP_CHECK_STATE()
 
     IF(OPENSSL_FOUND AND HAVE_SHA512_DIGEST_LENGTH)
-      SET(SSL_LIBRARIES ${MY_OPENSSL_LIBRARY} ${MY_CRYPTO_LIBRARY})
+      SET(SSL_LIBRARIES ${MY_OPENSSL_LIBRARY} ${MY_CRYPTO_LIBRARY} -pthread)
       IF(SOLARIS)
         SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBSOCKET})
       ENDIF()

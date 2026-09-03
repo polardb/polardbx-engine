@@ -1,0 +1,618 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+########################################
+# Setup: Create tables with vector indexes
+########################################
+# Insert seed data
+# Baseline: verify SHOW INDEX works
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SHOW INDEX FROM t_cos;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cos	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cos	1	vi_cos	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+# Baseline: verify VECTOR_INDEXES works
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, ALGORITHM, METRIC_TYPE, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	COLUMN_NAME	ALGORITHM	METRIC_TYPE	DIMENSION	M	HLINDEX_TABLE_NAME
+t_cos	vi_cos	v	HNSW	COSINE	3	6	vidx_XXXX_N
+t_main	vi_main	v	HNSW	EUCLIDEAN	4	16	vidx_XXXX_N
+########################################
+# Scenario 1: Concurrent SHOW INDEX from multiple sessions
+# Risk: UNION ALL derived table construction under contention
+########################################
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# All sessions execute SHOW INDEX simultaneously
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SHOW INDEX FROM t_cos;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cos	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cos	1	vi_cos	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SHOW INDEX FROM t_cos;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cos	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cos	1	vi_cos	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+# Verify no crash and results consistent
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+########################################
+# Scenario 2: SHOW INDEX while DML is in-flight
+# Risk: DD read racing with aux table modification
+########################################
+BEGIN;
+INSERT INTO t_main(name, v) VALUES ('inflight_1', VEC_FROMTEXT('[99,99,99,99]'));
+INSERT INTO t_main(name, v) VALUES ('inflight_2', VEC_FROMTEXT('[88,88,88,88]'));
+# SHOW INDEX while con1 has uncommitted DML
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# VECTOR_INDEXES query while con1 has uncommitted DML
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+TABLE_NAME	INDEX_NAME	COLUMN_NAME	METRIC_TYPE	DIMENSION	M
+t_main	vi_main	v	EUCLIDEAN	4	16
+COMMIT;
+# SHOW INDEX after commit — should be identical structure
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# Data integrity check
+SELECT COUNT(*) AS row_count FROM t_main;
+row_count
+22
+########################################
+# Scenario 3: SHOW INDEX racing with DROP INDEX
+# Risk: VECTOR_INDEXES branch returns empty mid-drop, UNION ALL still correct
+########################################
+# SHOW INDEX before DROP
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# DROP the vector index
+ALTER TABLE t_main DROP INDEX vi_main;
+# SHOW INDEX after DROP — vector row should be gone
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# VECTOR_INDEXES after DROP — should be empty for t_main
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+TABLE_NAME	INDEX_NAME
+# Recreate vector index for subsequent tests
+ALTER TABLE t_main ADD VECTOR INDEX vi_main(v) m=16 distance=euclidean;
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+TABLE_NAME	INDEX_NAME	COLUMN_NAME	METRIC_TYPE	DIMENSION	M
+t_main	vi_main	v	EUCLIDEAN	4	16
+########################################
+# Scenario 4: SHOW INDEX racing with CREATE INDEX
+# Risk: New VECTOR index appears mid-query in UNION ALL
+########################################
+CREATE TABLE t_add_idx (
+id INT PRIMARY KEY AUTO_INCREMENT,
+v VECTOR(4)
+) ENGINE=InnoDB;
+INSERT INTO t_add_idx(v) VALUES (VEC_FROMTEXT('[1,2,3,4]'));
+INSERT INTO t_add_idx(v) VALUES (VEC_FROMTEXT('[5,6,7,8]'));
+# SHOW INDEX before CREATE VECTOR INDEX
+SHOW INDEX FROM t_add_idx;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_add_idx	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+ALTER TABLE t_add_idx ADD VECTOR INDEX vi_new(v) distance=cosine;
+# SHOW INDEX after CREATE — must show VECTOR row
+SHOW INDEX FROM t_add_idx;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_add_idx	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_add_idx	1	vi_new	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, METRIC_TYPE FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_add_idx';
+TABLE_NAME	INDEX_NAME	METRIC_TYPE
+t_add_idx	vi_new	COSINE
+DROP TABLE t_add_idx;
+########################################
+# Scenario 5: VECTOR_INDEXES full scan while DML storms
+# Risk: Full table scan on mysql.tables + DD parse under write load
+########################################
+# Full scan VECTOR_INDEXES while DML storms in progress
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, INDEX_NAME;
+TABLE_NAME	INDEX_NAME	DIMENSION	M
+t_cos	vi_cos	3	6
+t_main	vi_main	4	16
+# SHOW INDEX while DML storms in progress
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SHOW INDEX FROM t_cos;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cos	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cos	1	vi_cos	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+COMMIT;
+COMMIT;
+SELECT COUNT(*) AS total_after_storm FROM t_main;
+total_after_storm
+64
+########################################
+# Scenario 6: SHOW INDEX racing with TRUNCATE TABLE
+# Risk: TRUNCATE drops and recreates aux tables; SHOW INDEX UNION reads DD
+########################################
+CREATE TABLE t_trunc (
+id INT PRIMARY KEY AUTO_INCREMENT,
+v VECTOR(3),
+VECTOR INDEX vi_trunc(v)
+) ENGINE=InnoDB;
+# Before TRUNCATE
+SHOW INDEX FROM t_trunc;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_trunc	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_trunc	1	vi_trunc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_trunc';
+TABLE_NAME	INDEX_NAME
+t_trunc	vi_trunc
+# TRUNCATE
+TRUNCATE TABLE t_trunc;
+# After TRUNCATE — index metadata should still exist
+SHOW INDEX FROM t_trunc;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_trunc	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_trunc	1	vi_trunc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_trunc';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_trunc	vi_trunc	3
+DROP TABLE t_trunc;
+########################################
+# Scenario 7: Concurrent RENAME TABLE + SHOW INDEX
+# Risk: Table name mismatch between SHOW_STATISTICS and VECTOR_INDEXES branches
+########################################
+CREATE TABLE t_ren (
+id INT PRIMARY KEY AUTO_INCREMENT,
+v VECTOR(4),
+INDEX idx_id(id),
+VECTOR INDEX vi_ren(v)
+) ENGINE=InnoDB;
+SHOW INDEX FROM t_ren;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_ren	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_ren	1	vi_ren	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_ren	1	idx_id	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+RENAME TABLE t_ren TO t_ren2;
+SHOW INDEX FROM t_ren2;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_ren2	0	PRIMARY	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+t_ren2	1	vi_ren	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_ren2	1	idx_id	1	id	A	0	NULL	NULL		BTREE			YES	NULL
+SELECT TABLE_NAME, INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_ren2';
+TABLE_NAME	INDEX_NAME
+t_ren2	vi_ren
+DROP TABLE t_ren2;
+########################################
+# Scenario 8: Rapid DDL cycle + metadata queries
+# Risk: Stale DD cache between CREATE/DROP cycles
+########################################
+CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+SHOW INDEX FROM t_cycle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cycle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cycle	1	vi_cyc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cycle	vi_cyc	3
+DROP TABLE t_cycle;
+CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+SHOW INDEX FROM t_cycle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cycle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cycle	1	vi_cyc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cycle	vi_cyc	3
+DROP TABLE t_cycle;
+CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+SHOW INDEX FROM t_cycle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cycle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cycle	1	vi_cyc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cycle	vi_cyc	3
+DROP TABLE t_cycle;
+CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+SHOW INDEX FROM t_cycle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cycle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cycle	1	vi_cyc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cycle	vi_cyc	3
+DROP TABLE t_cycle;
+CREATE TABLE t_cycle (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_cyc(v)) ENGINE=InnoDB;
+INSERT INTO t_cycle VALUES (1, VEC_FROMTEXT('[1,2,3]'));
+SHOW INDEX FROM t_cycle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_cycle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_cycle	1	vi_cyc	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cycle';
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cycle	vi_cyc	3
+DROP TABLE t_cycle;
+########################################
+# Scenario 9: Cross-database concurrent VECTOR_INDEXES queries
+# Risk: Concurrent DD reads across schemas
+########################################
+CREATE DATABASE IF NOT EXISTS vidx_db_a;
+CREATE DATABASE IF NOT EXISTS vidx_db_b;
+USE vidx_db_a;
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t_a (id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_a(v)) ENGINE=InnoDB;
+USE vidx_db_b;
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t_b (id INT PRIMARY KEY, v VECTOR(5), VECTOR INDEX vi_b(v) distance=cosine) ENGINE=InnoDB;
+# Cross-database VECTOR_INDEXES full scan
+SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, DIMENSION, METRIC_TYPE
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA IN ('vidx_db_a', 'vidx_db_b')
+ORDER BY TABLE_SCHEMA, TABLE_NAME;
+TABLE_SCHEMA	TABLE_NAME	INDEX_NAME	DIMENSION	METRIC_TYPE
+vidx_db_a	t_a	vi_a	3	EUCLIDEAN
+vidx_db_b	t_b	vi_b	5	COSINE
+USE vidx_db_a;
+SHOW INDEX FROM t_a;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_a	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_a	1	vi_a	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+USE vidx_db_b;
+SHOW INDEX FROM t_b;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_b	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_b	1	vi_b	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+USE test;
+USE test;
+USE test;
+USE test;
+USE test;
+DROP DATABASE vidx_db_a;
+DROP DATABASE vidx_db_b;
+########################################
+# Scenario 10: SHOW INDEX + ANN query interleaved
+# Risk: UNION ALL query builder contention with optimizer ANN path
+########################################
+# SHOW INDEX interleaved with ANN queries
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+SELECT id, name FROM t_main FORCE INDEX(vi_main)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[300,300,300,300]')) LIMIT 5;
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# VECTOR_INDEXES interleaved with ANN
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+INDEX_NAME	DIMENSION	M
+vi_main	4	16
+SELECT id FROM t_main FORCE INDEX(vi_main)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[305,305,305,305]')) LIMIT 3;
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+INDEX_NAME	DIMENSION	M
+vi_main	4	16
+########################################
+# Scenario 11: SHOW INDEX with optimizer_switch variations
+# Risk: derived_condition_pushdown=off causes full materialization
+########################################
+# Default (derived_condition_pushdown=on)
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# Turn off derived_condition_pushdown
+SET SESSION optimizer_switch = 'derived_condition_pushdown=off';
+SHOW INDEX FROM t_main;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_main	0	PRIMARY	1	id	A	2	NULL	NULL		BTREE			YES	NULL
+t_main	1	vi_main	1	v	NULL	NULL	NULL	NULL		VECTOR		M=16, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+t_main	1	idx_name	1	name	A	2	NULL	NULL	YES	BTREE			YES	NULL
+# Verify VECTOR_INDEXES also unaffected
+SELECT INDEX_NAME, DIMENSION, METRIC_TYPE FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+INDEX_NAME	DIMENSION	METRIC_TYPE
+vi_main	4	EUCLIDEAN
+SET SESSION optimizer_switch = 'derived_condition_pushdown=on';
+########################################
+# Scenario 12: Repeated SHOW INDEX in tight loop (stress)
+# Risk: Memory leak or resource exhaustion in query builder
+########################################
+# No crash after 50 rapid iterations - pass
+########################################
+# Scenario 13: Table with ONLY vector index (no btree)
+# Risk: SHOW_STATISTICS branch returns empty, only VECTOR_INDEXES has rows
+########################################
+CREATE TABLE t_vec_only (
+id INT NOT NULL,
+v VECTOR(4),
+VECTOR INDEX vi_only(v) distance=euclidean
+) ENGINE=InnoDB;
+# SHOW INDEX must return vector row even with no btree index
+SHOW INDEX FROM t_vec_only;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_vec_only	1	vi_only	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+SELECT INDEX_NAME, DIMENSION, M FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_vec_only';
+INDEX_NAME	DIMENSION	M
+vi_only	4	6
+# Also test SHOW KEYS syntax (alias for SHOW INDEX)
+SHOW KEYS FROM t_vec_only;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_vec_only	1	vi_only	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+# And qualified db.table syntax
+SHOW INDEX FROM test.t_vec_only;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_vec_only	1	vi_only	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+DROP TABLE t_vec_only;
+########################################
+# Scenario 14: DROP TABLE while another session queries metadata
+# Risk: Table disappears mid-UNION evaluation, should error not crash
+########################################
+CREATE TABLE t_drop_race (
+id INT PRIMARY KEY,
+v VECTOR(3),
+INDEX idx_id(id),
+VECTOR INDEX vi_dr(v)
+) ENGINE=InnoDB;
+# Metadata read before DROP
+SHOW INDEX FROM t_drop_race;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_drop_race	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_drop_race	1	vi_dr	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_drop_race	1	idx_id	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_drop_race';
+INDEX_NAME
+vi_dr
+DROP TABLE t_drop_race;
+# After DROP — expect error, not crash
+SHOW INDEX FROM t_drop_race;
+ERROR 42S02: Table 'test.t_drop_race' doesn't exist
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_drop_race';
+INDEX_NAME
+########################################
+# Scenario 15: PREPARE/EXECUTE SHOW INDEX across DDL
+# Risk: Prepared statement cache not reflecting DD changes
+########################################
+CREATE TABLE t_prep (
+id INT PRIMARY KEY,
+name VARCHAR(20),
+v VECTOR(3),
+INDEX idx_name(name),
+VECTOR INDEX vi_prep(v)
+) ENGINE=InnoDB;
+# PREPARE before DDL
+PREPARE stmt_show FROM 'SHOW INDEX FROM t_prep';
+PREPARE stmt_vi FROM 'SELECT INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?';
+SET @tbl = 't_prep';
+EXECUTE stmt_show;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_prep	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_prep	1	vi_prep	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_prep	1	idx_name	1	name	A	1	NULL	NULL	YES	BTREE			YES	NULL
+EXECUTE stmt_vi USING @tbl;
+INDEX_NAME	DIMENSION
+vi_prep	3
+# DDL: drop vector index
+ALTER TABLE t_prep DROP INDEX vi_prep;
+# EXECUTE after DDL — should reflect new state (no vector row)
+EXECUTE stmt_show;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_prep	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_prep	1	idx_name	1	name	A	1	NULL	NULL	YES	BTREE			YES	NULL
+EXECUTE stmt_vi USING @tbl;
+INDEX_NAME	DIMENSION
+# DDL: recreate vector index
+ALTER TABLE t_prep ADD VECTOR INDEX vi_prep2(v) distance=cosine;
+# EXECUTE again — should show new vector index
+EXECUTE stmt_show;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_prep	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_prep	1	vi_prep2	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=COSINE, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_prep	1	idx_name	1	name	A	1	NULL	NULL	YES	BTREE			YES	NULL
+EXECUTE stmt_vi USING @tbl;
+INDEX_NAME	DIMENSION
+vi_prep2	3
+DEALLOCATE PREPARE stmt_show;
+DEALLOCATE PREPARE stmt_vi;
+DROP TABLE t_prep;
+########################################
+# Scenario 16: vidx_disabled toggle mid-session
+# Risk: VECTOR_INDEXES branch behavior during feature flag flip
+########################################
+CREATE TABLE t_toggle (
+id INT PRIMARY KEY,
+v VECTOR(3),
+VECTOR INDEX vi_tog(v)
+) ENGINE=InnoDB;
+# With vidx_disabled=OFF — should see vector index
+SET GLOBAL vidx_disabled = OFF;
+SHOW INDEX FROM t_toggle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_toggle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_toggle	1	vi_tog	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_toggle';
+INDEX_NAME
+vi_tog
+# Toggle to ON mid-session
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL vidx_disabled = ON;
+# With vidx_disabled=ON — SHOW INDEX behavior
+SHOW INDEX FROM t_toggle;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_toggle	0	PRIMARY	1	id	A	1	NULL	NULL		BTREE			YES	NULL
+t_toggle	1	vi_tog	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+# VECTOR_INDEXES should still reflect DD state (view is metadata, not runtime)
+SELECT INDEX_NAME FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_toggle';
+INDEX_NAME
+vi_tog
+SET GLOBAL vidx_disabled = OFF;
+DROP TABLE t_toggle;
+########################################
+# Scenario 17: Many tables with vector indexes (full scan stress)
+# Risk: VECTOR_INDEXES full scan on 10+ tables
+########################################
+# Full scan should return all 10 vector indexes + t_main + t_cos
+SELECT TABLE_NAME, INDEX_NAME, DIMENSION
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	DIMENSION
+t_cos	vi_cos	3
+t_main	vi_main	4
+t_many_1	vi_m	3
+t_many_10	vi_m	3
+t_many_2	vi_m	3
+t_many_3	vi_m	3
+t_many_4	vi_m	3
+t_many_5	vi_m	3
+t_many_6	vi_m	3
+t_many_7	vi_m	3
+t_many_8	vi_m	3
+t_many_9	vi_m	3
+# Filtered scan (single table) still fast
+SELECT INDEX_NAME, DIMENSION FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_many_5';
+INDEX_NAME	DIMENSION
+vi_m	3
+# Concurrent full scan from multiple sessions
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+SELECT * FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = DATABASE();
+# Cleanup many tables
+########################################
+# Scenario 18: HLINDEX_TABLE_NAME deep coverage
+# Verify: naming convention, DDL consistency, TRUNCATE survival
+########################################
+# 18.1 Naming convention: HLINDEX_TABLE_NAME matches vidx_*_0 pattern
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+HLINDEX_TABLE_NAME LIKE 'vidx_%\\_0' AS name_matches_pattern
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME;
+TABLE_NAME	INDEX_NAME	HLINDEX_TABLE_NAME	name_matches_pattern
+t_cos	vi_cos	vidx_XXXX_N	1
+t_main	vi_main	vidx_XXXX_N	1
+# 18.2 Capture HLINDEX_TABLE_NAME before DDL
+SELECT @saved_hlidx := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cos';
+@saved_hlidx := HLINDEX_TABLE_NAME
+vidx_XXXX_N
+# 18.3 DROP + CREATE vector index: HLINDEX_TABLE_NAME should change
+# (new se_private_id => new aux table name)
+ALTER TABLE t_cos DROP INDEX vi_cos;
+ALTER TABLE t_cos ADD VECTOR INDEX vi_cos_new(v) distance=cosine;
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+HLINDEX_TABLE_NAME = @saved_hlidx AS same_as_before
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_cos';
+TABLE_NAME	INDEX_NAME	HLINDEX_TABLE_NAME	same_as_before
+t_cos	vi_cos_new	vidx_XXXX_N	0
+# 18.4 TRUNCATE: HLINDEX_TABLE_NAME changes (TRUNCATE drops+recreates aux table, new se_private_id)
+SELECT @hlidx_before_trunc := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+@hlidx_before_trunc := HLINDEX_TABLE_NAME
+vidx_XXXX_N
+TRUNCATE TABLE t_main;
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+HLINDEX_TABLE_NAME = @hlidx_before_trunc AS same_after_trunc
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_main';
+TABLE_NAME	INDEX_NAME	HLINDEX_TABLE_NAME	same_after_trunc
+t_main	vi_main	vidx_XXXX_N	0
+# 18.5 RENAME TABLE: HLINDEX_TABLE_NAME unchanged (aux table not renamed)
+CREATE TABLE t_hlidx_ren (
+id INT PRIMARY KEY, v VECTOR(3), VECTOR INDEX vi_hr(v)
+) ENGINE=InnoDB;
+SELECT @hlidx_ren := HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_hlidx_ren';
+@hlidx_ren := HLINDEX_TABLE_NAME
+vidx_XXXX_N
+RENAME TABLE t_hlidx_ren TO t_hlidx_ren2;
+SELECT TABLE_NAME, INDEX_NAME, HLINDEX_TABLE_NAME,
+HLINDEX_TABLE_NAME = @hlidx_ren AS same_after_rename
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_hlidx_ren2';
+TABLE_NAME	INDEX_NAME	HLINDEX_TABLE_NAME	same_after_rename
+t_hlidx_ren2	vi_hr	vidx_XXXX_N	1
+DROP TABLE t_hlidx_ren2;
+# 18.6 Recreate t_cos vector index to original for other scenario consistency
+ALTER TABLE t_cos DROP INDEX vi_cos_new;
+ALTER TABLE t_cos ADD VECTOR INDEX vi_cos(v) distance=cosine;
+########################################
+# Cleanup
+########################################
+DROP TABLE t_cos;
+DROP TABLE t_main;
+SET GLOBAL vidx_disabled = ON;

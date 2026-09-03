@@ -1,0 +1,166 @@
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--disable_ps_protocol
+ 
+call mtr.add_suppression("Fail to recycle table");
+ 
+set session recycle_bin=on;
+ 
+SET AUTOCOMMIT=1;
+SET GLOBAL recycle_scheduler = ON;
+SET GLOBAL recycle_scheduler_interval = 1;
+SET GLOBAL recycle_bin_retention=604800;
+ 
+--echo ------------------------------------------------------
+--echo 1. Capacity limit
+--echo ------------------------------------------------------
+ 
+SET GLOBAL recycle_bin_capacity_limit = 163840;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+create table test1(id int);
+insert into test1 values(1);
+drop table test1;
+ 
+create table test2(id int);
+insert into test2 values(2);
+drop table test2;
+ 
+create table test3(id int);
+insert into test3 values(3);
+drop table test3;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+--echo ------------------------------------------------------
+--echo 2. Truncate table behavior with capacity limit
+--echo ------------------------------------------------------
+ 
+create table truncate_test(id int, data varchar(200));
+insert into truncate_test values(1, repeat('T', 200));
+insert into truncate_test values(2, repeat('U', 200));
+insert into truncate_test values(3, repeat('V', 200));
+ 
+SELECT COUNT(*) AS 'Row_Count' FROM truncate_test;
+ 
+truncate table truncate_test;
+ 
+SELECT COUNT(*) AS 'Row_Count_After_Truncate' FROM truncate_test;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+--echo ------------------------------------------------------
+--echo 3. Scheduler disabled behavior
+--echo ------------------------------------------------------
+ 
+SET GLOBAL recycle_scheduler = OFF;
+SELECT @@global.recycle_scheduler;
+ 
+SET GLOBAL recycle_bin_capacity_limit = 163840;
+ 
+create table no_cleanup1(id int, data varchar(100));
+insert into no_cleanup1 values(1, repeat('X', 100));
+drop table no_cleanup1;
+ 
+create table no_cleanup2(id int, data varchar(100));
+insert into no_cleanup2 values(1, repeat('Y', 100));
+drop table no_cleanup2;
+ 
+create table no_cleanup3(id int, data varchar(100));
+insert into no_cleanup3 values(1, repeat('Z', 100));
+drop table no_cleanup3;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+--echo ------------------------------------------------------
+--echo 4. Dynamic parameter adjustment behavior
+--echo ------------------------------------------------------
+ 
+SET GLOBAL recycle_scheduler = ON;
+SELECT @@global.recycle_scheduler;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+SET GLOBAL recycle_bin_capacity_limit = 655360;
+ 
+drop table truncate_test;
+create table dynamic1(id int, data varchar(100));
+insert into dynamic1 values(1, repeat('D1', 50));
+drop table dynamic1;
+ 
+create table dynamic2(id int, data varchar(100));
+insert into dynamic2 values(1, repeat('D2', 50));
+drop table dynamic2;
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+SET GLOBAL recycle_bin_capacity_limit = 163840; 
+ 
+--disable_result_log
+SELECT SLEEP(2);
+--enable_result_log
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+--echo ------------------------------------------------------
+--echo 5. Restore and purge recycle table
+--echo ------------------------------------------------------
+ 
+--error ER_PREPARE_RECYCLE_TABLE_ERROR
+call dbms_recycle.restore_table("__innodb_791", "", "");
+ 
+select id from dynamic2;
+ 
+drop table dynamic2;
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+call dbms_recycle.purge_table("__innodb_791");
+ 
+--replace_column 5 # 6 #
+call dbms_recycle.show_tables();
+ 
+--echo ------------------------------------------------------
+--echo 6. Cleanup and reset
+--echo ------------------------------------------------------
+SET GLOBAL recycle_bin_capacity_limit = 0;
+SET GLOBAL recycle_scheduler_interval = 30;
+SET GLOBAL recycle_scheduler = OFF;
+ 
+SELECT @@global.recycle_bin_capacity_limit AS 'Capacity_Limit';
+SELECT @@global.recycle_scheduler AS 'Scheduler_Status';
+ 
+--enable_ps_protocol

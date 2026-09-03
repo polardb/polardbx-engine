@@ -39,6 +39,7 @@
 #include "sql/iterators/row_iterator.h"
 #include "sql/join_optimizer/bit_utils.h"
 #include "sql/key.h"
+#include "sql/komodo0sql0guess0clust.h"
 #include "sql/psi_memory_key.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
@@ -59,7 +60,8 @@ IndexMergeIterator::IndexMergeIterator(
     : TableRowIterator(thd, table),
       pk_quick_select(std::move(pk_quick_select)),
       m_children(std::move(children)),
-      mem_root(return_mem_root) {}
+      mem_root(return_mem_root), 
+      m_gmode(komodo::GM_INDEX_MERGE) {}
 
 IndexMergeIterator::~IndexMergeIterator() {
   DBUG_TRACE;
@@ -103,6 +105,9 @@ bool IndexMergeIterator::Init() {
   empty_record(table());
 
   handler *file = table()->file;
+  ut_ad(file->gpp_length == komodo::SQL_GPP_LENGTH);
+  assert(m_gmode != komodo::GM_NONE);
+
   DBUG_TRACE;
 
   /* We're going to just read rowids. */
@@ -123,8 +128,14 @@ bool IndexMergeIterator::Init() {
     DBUG_EXECUTE_IF("index_merge_may_not_create_a_Unique", DBUG_ABORT(););
     DBUG_EXECUTE_IF("only_one_Unique_may_be_created",
                     DBUG_SET("+d,index_merge_may_not_create_a_Unique"););
-    unique.reset(new (mem_root) Unique(refpos_order_cmp, (void *)file,
-                                       file->ref_length, sort_buffer_size));
+
+    uint rg_length = file->ref_length + file->gpp_length;
+
+    /* The length of the elements in the unique is ref_length + gpp_length. */
+    unique.reset(new (mem_root)
+                     Unique(komodo::refpos_order_cmp_with_gpp, (void *)file,
+                            rg_length, sort_buffer_size));
+
     if (unique == nullptr) {
       return true;
     }
@@ -141,8 +152,8 @@ bool IndexMergeIterator::Init() {
     }
   }
 
-  assert(file->ref_length == unique->get_size());
-  assert(sort_buffer_size == unique->get_max_in_memory_size());
+  assert(file->ref_length + file->gpp_length == unique->get_size());
+  ut_ad(sort_buffer_size == unique->get_max_in_memory_size());
 
   {
     const Key_map covering_keys_save = table()->covering_keys;
@@ -202,7 +213,7 @@ bool IndexMergeIterator::Init() {
   read_record.reset();  // Clear out any previous iterator.
   read_record = init_table_iterator(thd(), table(),
                                     /*ignore_not_found_rows=*/false,
-                                    /*count_examined_rows=*/false);
+                                    /*count_examined_rows=*/false, m_gmode);
   if (read_record == nullptr) return true;
   return false;
 }

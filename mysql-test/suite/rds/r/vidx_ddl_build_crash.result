@@ -1,0 +1,101 @@
+CALL mtr.add_suppression("\\[ERROR\\].*Scanned file '.*' for tablespace .* cannot be opened because it is not in a sub-directory named for the schema");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Tablespace .*, name '.*', file '*.*' is missing!");
+CREATE DATABASE vidx_ddl_build_crash;
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+CREATE TABLE t2 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+40
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+40
+
+############################################
+# Arm A: crash before the graph table is   #
+# created -- the ALTER must vanish         #
+############################################
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,crash_before_vidx_ddl";
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# Assert: recovery rolled the ALTER back completely
+VERDICT A no vector index after recovery: PASS
+VERDICT A no orphan auxiliary table: PASS
+SELECT COUNT(*) AS t1_rows_after_recovery FROM t1;
+t1_rows_after_recovery
+40
+# A plain retry after recovery must build the graph in full
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+VERDICT A retry live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+id
+20
+
+############################################
+# Arm B: crash after the build committed,  #
+# before the InnoDB post-ddl cleanup       #
+############################################
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,ddl_log_before_post_ddl";
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# Assert: whatever recovery decided, the state is self-consistent --
+# a surviving vector index owns a complete, searchable graph, and a
+# rolled-back one owns no graph table at all.
+VERDICT B recovery left a self-consistent state: PASS
+# t1's graph, built before the crash, must still be intact
+VERDICT B unrelated graph intact: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+id
+7
+# Rebuilding t2's index from scratch must work after recovery
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+VERDICT B rebuild live==base: PASS
+SELECT id FROM t2 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[33,34,35,36,37]')) LIMIT 1;
+id
+33
+
+############################################
+# Arm C: crash mid-build, rows already in  #
+# the uncommitted DDL transaction          #
+############################################
+CREATE TABLE t3 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,vidx_ddl_crash_mid_build";
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+# Assert: the half-built graph must not survive the restart
+VERDICT C no vector index after mid-build crash: PASS
+VERDICT C no orphan auxiliary table: PASS
+SELECT COUNT(*) AS t3_rows_after_recovery FROM t3;
+t3_rows_after_recovery
+40
+# A plain retry after recovery must build the graph in full
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+VERDICT C retry live==base: PASS
+SELECT id FROM t3 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[13,14,15,16,17]')) LIMIT 1;
+id
+13
+DROP TABLE t1, t2, t3;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_build_crash;

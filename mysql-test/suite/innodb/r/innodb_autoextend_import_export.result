@@ -46,7 +46,7 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource	37748736	4194304
+db_source/tsource	41943040	4194304
 USE db_destination;
 CREATE TABLE tsource (c1 INT, c2 TEXT) AUTOEXTEND_SIZE 4M;
 ALTER TABLE tsource DISCARD TABLESPACE;
@@ -67,8 +67,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource	37748736	4194304
-db_destination/tsource	37748736	4194304
+db_source/tsource	41943040	4194304
+db_destination/tsource	41943040	4194304
 DROP TABLE tsource;
 USE db_source;
 DROP TABLE tsource;
@@ -84,7 +84,7 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource	37748736	4194304
+db_source/tsource	41943040	4194304
 USE db_destination;
 CREATE TABLE tsource (c1 INT, c2 TEXT) AUTOEXTEND_SIZE 4M;
 ALTER TABLE tsource DISCARD TABLESPACE;
@@ -106,8 +106,8 @@ COUNT(*)
 SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespaces
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
-db_source/tsource	37748736	4194304
-db_destination/tsource	37748736	4194304
+db_source/tsource	41943040	4194304
+db_destination/tsource	41943040	4194304
 DROP TABLE tsource;
 USE db_source;
 DROP TABLE tsource;
@@ -150,7 +150,7 @@ SELECT NAME, FILE_SIZE, AUTOEXTEND_SIZE FROM information_schema.innodb_tablespac
 WHERE NAME LIKE '%tsource%';
 NAME	FILE_SIZE	AUTOEXTEND_SIZE
 db_source/tsource	8388608	8388608
-db_destination/tsource	37748736	4194304
+db_destination/tsource	41943040	4194304
 DROP TABLE tsource;
 USE db_source;
 DROP TABLE tsource;

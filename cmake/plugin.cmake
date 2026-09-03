@@ -129,6 +129,13 @@ MACRO(MYSQL_ADD_PLUGIN plugin_arg)
     SET(WITHOUT_${plugin} 0)
   ENDIF()
 
+  # Only clear WITH_: setting WITHOUT_ would make the ELSE branch below force it
+  # into the cache, where it survives switching the option back on. Module builds
+  # are excluded by the same condition instead.
+  IF(ARG_TEST_ONLY AND NOT WITH_TEST_ONLY_PLUGINS)
+    SET(WITH_${plugin} 0)
+  ENDIF()
+
   IF(ARG_STORAGE_ENGINE)
     SET(with_var "WITH_${plugin}_STORAGE_ENGINE" )
   ELSE()
@@ -183,7 +190,8 @@ MACRO(MYSQL_ADD_PLUGIN plugin_arg)
         PARENT_SCOPE)
     ENDIF()
 
-  ELSEIF(NOT WITHOUT_${plugin} AND NOT ARG_STATIC_ONLY)
+  ELSEIF(NOT WITHOUT_${plugin} AND NOT ARG_STATIC_ONLY AND
+         NOT (ARG_TEST_ONLY AND NOT WITH_TEST_ONLY_PLUGINS))
     IF(NOT ARG_MODULE_OUTPUT_NAME)
       IF(ARG_STORAGE_ENGINE)
         SET(ARG_MODULE_OUTPUT_NAME "ha_${target}")
@@ -239,12 +247,11 @@ MACRO(MYSQL_ADD_PLUGIN plugin_arg)
     # For APPLE: adjust path dependecy for SSL shared libraries.
     SET_PATH_TO_CUSTOM_SSL_FOR_APPLE(${target})
 
-    # Install dynamic library
-    IF(NOT ARG_SKIP_INSTALL)
+    # Install dynamic library. Test-only plugins are loaded from the build
+    # directory by the test suite and are never installed (Bug #85439771).
+    IF(NOT ARG_SKIP_INSTALL AND NOT ARG_TEST_ONLY)
       SET(INSTALL_COMPONENT Server)
-      IF(ARG_TEST_ONLY)
-        SET(INSTALL_COMPONENT Test)
-      ELSEIF(ARG_CLIENT_ONLY)
+      IF(ARG_CLIENT_ONLY)
         SET(INSTALL_COMPONENT Client)
       ENDIF()
 

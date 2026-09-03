@@ -67,7 +67,7 @@ class Sql_cmd_xa_prepare : public Sql_cmd {
   /** Lizard: Delay my_ok because we want to send result set. */
   void set_delay_ok() { m_delay_ok = true; }
 
- private:
+ protected:
   /** The XID associated with the underlying XA transaction. */
   xid_t *m_xid;
 
@@ -83,6 +83,41 @@ class Sql_cmd_xa_prepare : public Sql_cmd {
     @retval true   Failure
   */
   bool trans_xa_prepare(THD *thd);
+
+  /**
+   * Hook function called after XA prepare succeeds.
+   *
+   * This hook is called immediately after the transaction is successfully
+   * prepared (state set to XA_PREPARED), regardless of whether detach is
+   * enabled. When detach is enabled, this hook is guaranteed to be called
+   * before detach_xa_transaction(), ensuring that some work can be safely
+   * performed.
+   *
+   * @param[in] thd The THD session object.
+   */
+  virtual void on_xa_prepare_success(THD *) {}
+};
+
+class Sql_cmd_ac_prepare : public Sql_cmd_xa_prepare {
+ public:
+  Sql_cmd_ac_prepare(xid_t *xid_arg, gcn_t pre_commit_gcn_arg,
+                     xa_branch_t *xa_branch_arg);
+
+  virtual ~Sql_cmd_ac_prepare() override = default;
+
+  bool execute(THD *thd) override;
+
+  gcn_tuple_t get_pmmt() { return m_pmmt; }
+
+ protected:
+  void on_xa_prepare_success(THD *thd) override;
+
+ private:
+  gcn_t m_pre_commit_gcn;
+
+  xa_branch_t *m_xa_branch;
+
+  gcn_tuple_t m_pmmt;
 };
 
 #endif  // XA_SQL_CMD_XA_PREPARE

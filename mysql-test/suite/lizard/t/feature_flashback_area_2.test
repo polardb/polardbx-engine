@@ -33,6 +33,7 @@ select * from bar as of timestamp date_add(now(), interval 2 hour);
 set @past_timestamp = (select now());
 sleep 2;
 update bar set c2 = 3 where c1 = 1;
+SET GLOBAL innodb_purge_run_now=ON;
 --source include/wait_innodb_all_purged.inc
 sleep 2;
 --error ER_SNAPSHOT_TOO_OLD
@@ -45,6 +46,7 @@ select c1 from bar as of timestamp @past_timestamp force index(c2) where c2 = 1;
 set @past_timestamp = (select now());
 sleep 2;
 update bar set c2 = 4 where c1 = 1;
+SET GLOBAL innodb_purge_run_now=ON;
 --source include/wait_innodb_all_purged.inc
 sleep 2;
 set query_via_flashback_area = 1;
@@ -60,6 +62,7 @@ set global innodb_txn_retention = 0;
 set @past_timestamp = (select now());
 sleep 2;
 update bar set c2 = 5 where c1 = 1;
+SET GLOBAL innodb_purge_run_now=ON;
 --source include/wait_innodb_all_purged.inc
 sleep 2;
 set query_via_flashback_area = 1;

@@ -1,0 +1,429 @@
+########################################################################
+# Setup
+########################################################################
+SET opt_index_format_hippo_enabled=on;
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_purge_stop_now = ON;
+########################################################################
+# Test 1: INSERT buffering
+# Inserts to non-root pages should be buffered, merge must be correct
+########################################################################
+CREATE TABLE t_ibuf1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf1]
+# Insert enough data to create multiple index pages
+# (changes to root page are never buffered)
+INSERT INTO t_ibuf1 VALUES(0, 'a', 1);
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+# Table should have 4096 rows
+SELECT COUNT(*) FROM t_ibuf1;
+COUNT(*)
+4096
+# Force merge by reading from index
+SELECT COUNT(*) FROM t_ibuf1 USE INDEX(idx_val) WHERE val = 'a';
+COUNT(*)
+4096
+# Verify data integrity - compare secondary index vs primary index
+include/assert.inc [Secondary index count (4096) should match primary index count (4096)]
+SELECT MIN(id), MAX(id), COUNT(DISTINCT id) FROM t_ibuf1;
+MIN(id)	MAX(id)	COUNT(DISTINCT id)
+1	6132	4096
+DROP TABLE t_ibuf1;
+########################################################################
+# Test 2: DELETE_MARK buffering
+# DELETE operations should be buffered, merge must correctly mark records
+########################################################################
+CREATE TABLE t_ibuf2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf2]
+# Insert data
+INSERT INTO t_ibuf2 VALUES(0, 'x', 1);
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+# 1024 rows
+SELECT COUNT(*) FROM t_ibuf2;
+COUNT(*)
+1024
+# Delete half the records - should be buffered
+DELETE FROM t_ibuf2 WHERE id % 2 = 0;
+# Force merge by reading from index
+SELECT COUNT(*) FROM t_ibuf2 USE INDEX(idx_val) WHERE val = 'x';
+COUNT(*)
+512
+# Verify correct records remain - compare secondary index vs primary index
+include/assert.inc [Secondary index count (512) should match primary index count (512)]
+SELECT COUNT(*) FROM t_ibuf2;
+COUNT(*)
+512
+SELECT MIN(id), MAX(id) FROM t_ibuf2;
+MIN(id)	MAX(id)
+1	1525
+# All remaining ids should be odd
+SELECT COUNT(*) FROM t_ibuf2 WHERE id % 2 = 1;
+COUNT(*)
+512
+DROP TABLE t_ibuf2;
+########################################################################
+# Test 3: PURGE buffering with hippo_purge_enabled = OFF (default)
+# PURGE should NOT be buffered when disabled
+########################################################################
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+CREATE TABLE t_ibuf3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf3]
+INSERT INTO t_ibuf3 VALUES(0, 'y', 1);
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+SELECT COUNT(*) FROM t_ibuf3;
+COUNT(*)
+1024
+# Delete records to create delete-marked entries
+BEGIN;
+DELETE FROM t_ibuf3 WHERE id <= 512;
+COMMIT;
+# Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+# Verify remaining records - compare secondary index vs primary index
+include/assert.inc [Secondary index count (759) should match primary index count (759)]
+# Can insert with previously deleted ids
+INSERT INTO t_ibuf3 VALUES(1, 'z', 1);
+INSERT INTO t_ibuf3 VALUES(100, 'z', 1);
+SELECT * FROM t_ibuf3 WHERE val = 'z' ORDER BY id;
+id	val	padding
+1	z	1
+100	z	1
+DROP TABLE t_ibuf3;
+########################################################################
+# Test 4: PURGE buffering with hippo_purge_enabled = ON
+# PURGE should be buffered, merge must correctly remove records
+########################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+CREATE TABLE t_ibuf4 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+padding INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf4]
+INSERT INTO t_ibuf4 VALUES(0, 'p', 1);
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+SELECT COUNT(*) FROM t_ibuf4;
+COUNT(*)
+1024
+# Delete records
+BEGIN;
+DELETE FROM t_ibuf4 WHERE id <= 512;
+COMMIT;
+# Enable purge (with PURGE buffering enabled)
+SET GLOBAL innodb_purge_run_now = ON;
+# Force merge by reading
+# Verify: deleted records are purged - compare secondary index vs primary index
+include/assert.inc [Secondary index count (759) should match primary index count (759)]
+SELECT MIN(id), MAX(id) FROM t_ibuf4;
+MIN(id)	MAX(id)
+513	1526
+# Can reuse deleted ids
+INSERT INTO t_ibuf4 VALUES(1, 'q', 1);
+INSERT INTO t_ibuf4 VALUES(256, 'q', 1);
+SELECT * FROM t_ibuf4 WHERE val = 'q' ORDER BY id;
+id	val	padding
+1	q	1
+256	q	1
+DROP TABLE t_ibuf4;
+########################################################################
+# Test 5: Mixed operations - INSERT + DELETE + PURGE
+########################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+CREATE TABLE t_ibuf5 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+data VARCHAR(100),
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf5]
+# Phase 1: Initial inserts (buffered)
+INSERT INTO t_ibuf5 VALUES(0, 'a', 'initial');
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+SELECT COUNT(*) FROM t_ibuf5;
+COUNT(*)
+256
+# Phase 2: Delete some (buffered)
+DELETE FROM t_ibuf5 WHERE id % 3 = 0;
+SELECT COUNT(*) FROM t_ibuf5;
+COUNT(*)
+171
+# Phase 3: Insert more with different val (buffered)
+INSERT INTO t_ibuf5 VALUES(0, 'b', 'new1');
+INSERT INTO t_ibuf5 SELECT 0, 'b', 'new2' FROM t_ibuf5 WHERE val = 'a' LIMIT 50;
+# Phase 4: Update some (creates delete-mark + insert)
+UPDATE t_ibuf5 SET val = 'c' WHERE id % 5 = 1 AND val = 'a';
+# Phase 5: Trigger purge
+SET GLOBAL innodb_purge_run_now = ON;
+# Force merge
+SELECT val, COUNT(*) cnt FROM t_ibuf5 USE INDEX(idx_val) GROUP BY val ORDER BY val;
+val	cnt
+a	137
+b	51
+c	34
+# Verify data integrity - compare secondary index vs primary index
+include/assert.inc [Secondary index total count (222) should match primary index total count (222)]
+SELECT COUNT(*) total, 
+SUM(CASE WHEN val='a' THEN 1 ELSE 0 END) as cnt_a,
+SUM(CASE WHEN val='b' THEN 1 ELSE 0 END) as cnt_b,
+SUM(CASE WHEN val='c' THEN 1 ELSE 0 END) as cnt_c
+FROM t_ibuf5;
+total	cnt_a	cnt_b	cnt_c
+222	137	51	34
+DROP TABLE t_ibuf5;
+########################################################################
+# Test 6: Concurrent sessions with change buffer
+########################################################################
+SET GLOBAL innodb_purge_stop_now = ON;
+CREATE TABLE t_ibuf6 (
+id INT PRIMARY KEY,
+val INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf6]
+# Insert initial data
+SELECT COUNT(*) FROM t_ibuf6;
+COUNT(*)
+1000
+# Connection 1: Insert more data
+INSERT INTO t_ibuf6 SELECT id + 1000, val + 1000 FROM t_ibuf6 WHERE id <= 500;
+# Connection 2: Delete some data
+DELETE FROM t_ibuf6 WHERE id BETWEEN 200 AND 300;
+# Connection 1: More inserts
+INSERT INTO t_ibuf6 VALUES(2001, 2001), (2002, 2002);
+# Default: Verify all changes
+SET GLOBAL innodb_purge_run_now = ON;
+# Force merge and verify - compare secondary index vs primary index
+include/assert.inc [Secondary index count (1401) should match primary index count (1401)]
+SELECT COUNT(*) FROM t_ibuf6 USE INDEX(idx_val);
+COUNT(*)
+1401
+SELECT COUNT(*) FROM t_ibuf6;
+COUNT(*)
+1401
+# Verify specific ranges
+SELECT COUNT(*) FROM t_ibuf6 WHERE id BETWEEN 200 AND 300;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t_ibuf6 WHERE id > 1000;
+COUNT(*)
+502
+SELECT COUNT(*) FROM t_ibuf6 WHERE id > 2000;
+COUNT(*)
+2
+DROP TABLE t_ibuf6;
+########################################################################
+# Test 7: Rollback with change buffer
+# Rolled-back operations should be correctly handled after merge
+########################################################################
+CREATE TABLE t_ibuf7 (
+id INT PRIMARY KEY,
+val INT,
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf7]
+# Insert initial data
+SELECT COUNT(*) FROM t_ibuf7;
+COUNT(*)
+500
+# Start transaction, make changes, then rollback
+BEGIN;
+INSERT INTO t_ibuf7 VALUES(501, 501), (502, 502), (503, 503);
+DELETE FROM t_ibuf7 WHERE id <= 10;
+UPDATE t_ibuf7 SET val = val + 1000 WHERE id BETWEEN 100 AND 110;
+ROLLBACK;
+# After rollback, data should be unchanged
+SELECT COUNT(*) FROM t_ibuf7;
+COUNT(*)
+500
+SELECT COUNT(*) FROM t_ibuf7 WHERE id <= 10;
+COUNT(*)
+10
+SELECT COUNT(*) FROM t_ibuf7 WHERE id > 500;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t_ibuf7 WHERE val BETWEEN 100 AND 110;
+COUNT(*)
+11
+# Force merge
+SELECT COUNT(*) FROM t_ibuf7 USE INDEX(idx_val);
+COUNT(*)
+500
+# Verify integrity after merge - compare secondary index vs primary index
+include/assert.inc [Secondary index count (500) should match primary index count (500)]
+SELECT COUNT(*) FROM t_ibuf7;
+COUNT(*)
+500
+DROP TABLE t_ibuf7;
+########################################################################
+# Test 8: Different innodb_change_buffering modes
+########################################################################
+# Test 8a: IBUF_USE_INSERT only
+SET GLOBAL innodb_change_buffering = 'inserts';
+CREATE TABLE t_ibuf8a (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf8a]
+INSERT INTO t_ibuf8a VALUES(0, 'm');
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+SELECT COUNT(*) FROM t_ibuf8a;
+COUNT(*)
+1024
+include/assert.inc [Secondary index count (1024) should match primary index count (1024)]
+SELECT COUNT(*) FROM t_ibuf8a USE INDEX(idx_val) WHERE val = 'm';
+COUNT(*)
+1024
+DROP TABLE t_ibuf8a;
+# Test 8b: IBUF_USE_DELETE_MARK only
+SET GLOBAL innodb_change_buffering = 'deletes';
+CREATE TABLE t_ibuf8b (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf8b]
+INSERT INTO t_ibuf8b VALUES(0, 'n');
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+DELETE FROM t_ibuf8b WHERE id % 2 = 0;
+SELECT COUNT(*) FROM t_ibuf8b;
+COUNT(*)
+512
+include/assert.inc [Secondary index count (512) should match primary index count (512)]
+SELECT COUNT(*) FROM t_ibuf8b USE INDEX(idx_val) WHERE val = 'n';
+COUNT(*)
+512
+DROP TABLE t_ibuf8b;
+# Test 8c: IBUF_USE_ALL
+SET GLOBAL innodb_change_buffering = 'all';
+CREATE TABLE t_ibuf8c (
+id INT AUTO_INCREMENT PRIMARY KEY,
+val CHAR(1),
+INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+# Verify all secondary indexes are HIPPO_INDEX
+include/assert.inc [Index idx_val page_type (HIPPO_INDEX) should be HIPPO_INDEX for table t_ibuf8c]
+INSERT INTO t_ibuf8c VALUES(0, 'o');
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+DELETE FROM t_ibuf8c WHERE id % 3 = 0;
+UPDATE t_ibuf8c SET val = 'p' WHERE id % 5 = 0;
+SET GLOBAL innodb_purge_run_now = ON;
+SELECT COUNT(*) FROM t_ibuf8c;
+COUNT(*)
+683
+include/assert.inc [Secondary index total count (683) should match primary index total count (683)]
+SELECT val, COUNT(*) FROM t_ibuf8c USE INDEX(idx_val) GROUP BY val ORDER BY val;
+val	COUNT(*)
+o	547
+p	136
+DROP TABLE t_ibuf8c;
+########################################################################
+# Cleanup
+########################################################################
+SET GLOBAL innodb_change_buffering_debug = 0;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;
+########################################################################
+# Test completed successfully
+########################################################################

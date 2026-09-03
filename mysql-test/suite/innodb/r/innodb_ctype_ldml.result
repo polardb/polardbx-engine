@@ -549,6 +549,8 @@ ucs2_vn_ci	ucs2	359
 ucs2_5624_1	ucs2	360
 utf8_5624_5	utf8mb3	368
 utf32_test_ci	utf32	391
+utf8mb4_0900_ai_ci_polardbx_cn	utf8mb4	400
+utf8mb4_zh_0900_as_cs_polardbx_cn	utf8mb4	401
 latin1_test	latin1	1025
 utf8_maxuserid_ci	utf8mb3	2047
 show collation like '%test%';

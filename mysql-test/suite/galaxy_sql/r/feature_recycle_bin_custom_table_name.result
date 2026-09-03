@@ -1,0 +1,224 @@
+call mtr.add_suppression("Fail to recycle table");
+call mtr.add_suppression("The consensus follower is not allowed to to do current operation.");
+create database db_recycle_test;
+------------------------------------------------------
+1. Test custom table name with session variable
+------------------------------------------------------
+set global recycle_scheduler=off;
+use db_recycle_test;
+SET SESSION recycle_bin_table_name = 'custom_table_001';
+SET SESSION recycle_bin = ON;
+create table t1(id int, name varchar(50));
+insert into t1 values(1, 'test1');
+drop table t1;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+create table t2(id int, name varchar(50));
+insert into t2 values(2, 'test2');
+SET SESSION recycle_bin_table_name = 'custom_table_002';
+drop table t2;
+show variables like "recycle_bin_table_name";
+Variable_name	Value
+recycle_bin_table_name	
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+-------------------------------------------------------
+2. Test default table naming (without session variable)
+-- Drop table without setting custom name
+-------------------------------------------------------
+create table t3(id int, name varchar(50));
+insert into t3 values(3, 'test3');
+drop table t3;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+-----------------------------------------------------------
+3. Test consistency across 3 nodes
+-- Verify custom table names are consistent on all nodes
+-----------------------------------------------------------
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+------------------------------------------------------
+4. Test truncate operations with custom table names
+-- Mix truncate and drop operations
+------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'custom_truncate_001';
+create table t_truncate1(id int, name varchar(50));
+insert into t_truncate1 values(1, 'truncate_test1');
+truncate table t_truncate1;
+SET SESSION recycle_bin_table_name = 'custom_drop_after_truncate';
+drop table t_truncate1;
+create table t_mixed(id int, name varchar(50));
+insert into t_mixed values(1, 'mixed_test1');
+SET SESSION recycle_bin_table_name = 'custom_mixed_001';
+truncate table t_mixed;
+insert into t_mixed values(2, 'mixed_test2');
+drop table t_mixed;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+------------------------------------------------------------------
+5. Test table name validation
+-- Verify check_recycle_bin_table_name function works correctly
+------------------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'valid_table_name';
+SET SESSION recycle_bin_table_name = 'table123';
+SET SESSION recycle_bin_table_name = 'my_table_001';
+SET SESSION recycle_bin_table_name = NULL;
+SET SESSION recycle_bin_table_name = '';
+ERROR 42000: Incorrect table name ''
+SET SESSION recycle_bin_table_name = 'this_is_a_very_long_table_name_that_exceeds_the_maximum_length_limit_of_sixty_four_characters';
+ERROR 42000: Identifier name 'this_is_a_very_long_table_name_that_exceeds_the_maximum_length_limit_of_sixty_four_characters' is too long
+------------------------------------------------------
+6. Test session variable reset behavior
+-- Verify session variable is reset after each use
+------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'test_reset';
+create table t4(id int);
+insert into t4 values(4);
+drop table t4;
+create table t5(id int);
+insert into t5 values(5);
+drop table t5;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+----------------------------------------------------------------------------
+7. Test recycle_bin_table_name duplicate handling
+-- Verify warning when using same custom table name for different tables
+----------------------------------------------------------------------------
+SET SESSION recycle_bin_table_name = 'new_case_table';
+CREATE TABLE t6(id INT);
+INSERT INTO t6 VALUES(1);
+DROP TABLE t6;
+SET SESSION recycle_bin_table_name = 'new_case_table';
+CREATE TABLE t7(id INT);
+INSERT INTO t7 VALUES(1);
+DROP TABLE t7;
+Warnings:
+Warning	7589	Table 'new_case_table' already exists in recycle_bin
+SHOW WARNINGS;
+Level	Code	Message
+Warning	7589	Table 'new_case_table' already exists in recycle_bin
+----------------------------------------------------------------------------
+8. Test drop database with custom recycle table name
+-- Verify database drop operations dosen't work with custom table naming
+----------------------------------------------------------------------------
+CREATE DATABASE new_db_for_tests;
+USE new_db_for_tests;
+CREATE TABLE t8(id INT);
+INSERT INTO t8 VALUES(1);
+CREATE TABLE t9(id INT);
+INSERT INTO t9 VALUES(2);
+SET SESSION recycle_bin_table_name = 'drop_db';
+DROP DATABASE new_db_for_tests;
+CALL dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_172	new_db_for_tests	t8	#	#
+__recycle_bin__	__innodb_173	new_db_for_tests	t9	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	new_case_table	db_recycle_test	t6	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+------------------------------------------------------
+9. Final verification and cleanup
+-- Final check of all tables in recycle bin
+------------------------------------------------------
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_172	new_db_for_tests	t8	#	#
+__recycle_bin__	__innodb_173	new_db_for_tests	t9	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	new_case_table	db_recycle_test	t6	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_172	new_db_for_tests	t8	#	#
+__recycle_bin__	__innodb_173	new_db_for_tests	t9	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	new_case_table	db_recycle_test	t6	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_167	db_recycle_test	t3	#	#
+__recycle_bin__	__innodb_169	db_recycle_test	t5	#	#
+__recycle_bin__	__innodb_172	new_db_for_tests	t8	#	#
+__recycle_bin__	__innodb_173	new_db_for_tests	t9	#	#
+__recycle_bin__	__innodb_746	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_drop_after_truncate	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	custom_mixed_001	db_recycle_test	t_mixed	#	#
+__recycle_bin__	custom_table_001	db_recycle_test	t1	#	#
+__recycle_bin__	custom_table_002	db_recycle_test	t2	#	#
+__recycle_bin__	custom_truncate_001	db_recycle_test	t_truncate1	#	#
+__recycle_bin__	new_case_table	db_recycle_test	t6	#	#
+__recycle_bin__	test_reset	db_recycle_test	t4	#	#
+drop database db_recycle_test;

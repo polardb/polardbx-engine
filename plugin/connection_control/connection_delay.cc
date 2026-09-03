@@ -31,6 +31,7 @@
 #include "my_systime.h"
 #include "mysqld_error.h"
 #include "plugin/connection_control/connection_control.h"
+#include "plugin/connection_control/connection_refuse_api.h"
 #include "plugin/connection_control/security_context_wrapper.h"
 #include "sql/current_thd.h" /* current_thd */
 #include "sql/item_cmpfunc.h"
@@ -56,27 +57,9 @@ static ST_FIELD_INFO failed_attempts_view_fields[] = {
     {"USERHOST", USERNAME_LENGTH + HOSTNAME_LENGTH + 6, MYSQL_TYPE_STRING, 0,
      MY_I_S_UNSIGNED, nullptr, 0},
     {"FAILED_ATTEMPTS", 16, MYSQL_TYPE_LONG, 0, MY_I_S_UNSIGNED, nullptr, 0},
-    {"BEGIN_TIME", 0, MYSQL_TYPE_DATETIME, 0, MY_I_S_UNSIGNED, nullptr, 0},
     {nullptr, 0, MYSQL_TYPE_NULL, 0, 0, nullptr, 0}};
 
 namespace connection_control {
-
-/** constants/variables declared in connection_delay_interfaces.h */
-
-int64 DEFAULT_THRESHOLD = 3;
-int64 MIN_THRESHOLD = 0;
-int64 DISABLE_THRESHOLD = 0;
-int64 MAX_THRESHOLD = INT_MAX32;
-
-int64 DEFAULT_MAX_DELAY = INT_MAX32;
-int64 DEFAULT_MIN_DELAY = 1000;
-int64 MIN_DELAY = 1000;
-int64 MAX_DELAY = INT_MAX32;
-
-int64 DEFAULT_REFUSE_PERIOD = 0;
-int64 DISABLE_REFUSE_PERIOD = 0;
-int64 MAX_REFUSE_PERIOD = INT_MAX32;
-int64 MIN_REFUSE_PERIOD = 0;
 
 /** variables used by connection_delay.cc */
 static mysql_rwlock_t connection_event_delay_lock;
@@ -88,29 +71,13 @@ static opt_connection_control opt_enums[] = {
 size_t opt_enums_size = 4;
 
 static stats_connection_control status_vars_enums[] = {
-    STAT_CONNECTION_DELAY_TRIGGERED, STAT_CONNECTION_REFUSE_TRIGGERED};
-size_t status_vars_enums_size = 2;
+    STAT_CONNECTION_DELAY_TRIGGERED};
+size_t status_vars_enums_size = 1;
 
 static Connection_delay_action *g_max_failed_connection_handler = nullptr;
 
 Sql_string I_S_CONNECTION_CONTROL_FAILED_ATTEMPTS_USERHOST(
     "information_schema.connection_control_failed_login_attempts.userhost");
-
-/*
- * Trans the time to MYSQL_TIME
- *
- * @param[in] ms
- * @param[out] to
- */
-static void time_to_MYSQL_TIME(const int64 ms, MYSQL_TIME &to) {
-  std::time_t time = ms / 1000;
-  std::tm tm;
-  to.time_type = MYSQL_TIMESTAMP_DATETIME;
-
-  /** Thread safe */
-  localtime_r(&time, &tm);
-  localtime_to_TIME(&to, &tm);
-}
 
 /**
   Helper function for Connection_delay_event::reset_all
@@ -265,9 +232,6 @@ bool Connection_delay_event::match_entry(const Sql_string &s, void *value) {
   Connection_event_record **searched_entry = nullptr;
   Connection_event_record *searched_entry_info = nullptr;
   int64 count = DISABLE_THRESHOLD;
-  int64 begin_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count();
   bool error = true;
   DBUG_TRACE;
 
@@ -279,18 +243,12 @@ bool Connection_delay_event::match_entry(const Sql_string &s, void *value) {
   if (searched_entry && searched_entry != MY_LF_ERRPTR) {
     searched_entry_info = *searched_entry;
     count = searched_entry_info->get_count();
-    begin_time = searched_entry_info->get_begin_time();
     error = false;
   }
 
   lf_hash_search_unpin(pins);
   lf_hash_put_pins(pins);
-
-  auto record_value =
-      reinterpret_cast<Connection_delay_event_record_value *>(value);
-
-  record_value->m_count = count;
-  record_value->m_begin_time = begin_time;
+  *(reinterpret_cast<int64 *>(value)) = count;
 
   return error;
 }
@@ -346,15 +304,10 @@ int connection_delay_IS_table_writer(const uchar *ptr,
   const Connection_event_record *entry_info;
   entry = reinterpret_cast<const Connection_event_record *const *>(ptr);
   entry_info = *entry;
-
-  MYSQL_TIME to;
-  time_to_MYSQL_TIME(entry_info->get_begin_time(), to);
-
   connection_delay_IS_table->field[0]->store((char *)entry_info->get_userhost(),
                                              entry_info->get_length(),
                                              system_charset_info);
   connection_delay_IS_table->field[1]->store(entry_info->get_count(), true);
-  connection_delay_IS_table->field[2]->store_time(&to, 0);
   if (schema_table_store_record(thd, connection_delay_IS_table)) return 1;
   /* Always return "no match" so that we go over all entries in the hash */
   return 0;
@@ -393,7 +346,6 @@ void Connection_delay_event::fill_IS_table(Table_ref *tables) {
   triggered
   @param [in] min_delay         Lower cap on wait
   @param [in] max_delay         Upper cap on wait
-  @param [in] disable_period    period of refusing connections
   @param [in] sys_vars          System variables
   @param [in] sys_vars_size     Size of sys_vars array
   @param [in] status_vars       Status variables
@@ -402,14 +354,14 @@ void Connection_delay_event::fill_IS_table(Table_ref *tables) {
 */
 
 Connection_delay_action::Connection_delay_action(
-    int64 threshold, int64 min_delay, int64 max_delay, int64 refuse_period,
+    int64 threshold, int64 min_delay, int64 max_delay,
     opt_connection_control *sys_vars, size_t sys_vars_size,
     stats_connection_control *status_vars, size_t status_vars_size,
-    mysql_rwlock_t *lock)
-    : m_threshold(threshold),
+    mysql_rwlock_t *lock, bool enabled)
+    : Connection_event_observer(enabled),
+      m_threshold(threshold),
       m_min_delay(min_delay),
       m_max_delay(max_delay),
-      m_refuse_period(refuse_period),
       m_lock(lock) {
   if (sys_vars_size) {
     for (uint i = 0; i < sys_vars_size; ++i) m_sys_vars.push_back(sys_vars[i]);
@@ -563,13 +515,11 @@ bool Connection_delay_action::notify_event(
   RD_lock rd_lock(m_lock);
 
   int64 threshold = this->get_threshold();
-  int64 refuse_period = this->get_refuse_period();
 
-  /** If feature is disabled, return */
-  if (threshold <= DISABLE_THRESHOLD) {
-    return error;
-  }
-  /** Try to find the entry in hash */
+  /* If feature was disabled, return */
+  if (threshold <= DISABLE_THRESHOLD) return error;
+
+  int64 current_count = 0;
   bool user_present = false;
   Sql_string userhost;
 
@@ -578,55 +528,19 @@ bool Connection_delay_action::notify_event(
   DBUG_PRINT("info", ("Connection control : Connection event lookup for: %s",
                       userhost.c_str()));
 
-  /* Cache current stored value */
-  Connection_delay_event_record_value current_value;
-  user_present = !m_userhost_hash.match_entry(userhost, (void *)&current_value);
+  /* Cache current failure count */
+  user_present = m_userhost_hash.match_entry(userhost, (void *)&current_count)
+                     ? false
+                     : true;
 
-  int64 current_count = current_value.m_count;
-  int64 begin_time = current_value.m_begin_time;
-
-  /** Whne threshold is crossed, we have two options:
-   * 1. Wait for some time regardless of connection success or failure. This is
-   *    the default option. The connection will be held when waiting, which
-   *    might cause the server to be unresponsive.
-   * 2. Refuse connections from this user for a period of time, just return the
-   *    error immediately. Although the connection will not be held, the
-   *    attacker could brute force the password. To aovid this, we do not
-   *    authenticate the password with the period.
-   */
-  if (refuse_period > DISABLE_REFUSE_PERIOD) {
-    int64 current_time =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count();
-    if (current_time - begin_time >= refuse_period) {
-      if (user_present) {
-        // we have to reset the count
-        (void)m_userhost_hash.remove_entry(userhost);
-      }
-    } else if (current_count >= threshold || current_count < 0) {
-      /** Here, we can not expose the result of authentication to users. So we
-       * don't modify the count */
-      thd->get_stmt_da()->set_overwrite_status(true);
-      thd->get_stmt_da()->set_error_status(
-          thd, ER_CONN_CONTROL_CONN_REFUSE_CONNECTION);
-      thd->get_stmt_da()->set_overwrite_status(false);
-
-      if ((error = coordinator->notify_status_var(
-               &self, STAT_CONNECTION_REFUSE_TRIGGERED, ACTION_INC))) {
-        error_handler->handle_error(
-            ER_CONN_CONTROL_STAT_CONN_REFUSE_TRIGGERED_RESET_FAILED);
-      }
-      return false;
-    }
-  } else if (current_count >= threshold || current_count < 0) {
+  if (current_count >= threshold || current_count < 0) {
     /*
-        If threshold is crosed, regardless of connection success
-        or failure, wait for (current_count + 1) - threshold seconds
-        Note that current_count is not yet updated in hash. So we
-        have to consider current connection as well - Hence the usage
-        of current_count + 1.
-      */
+      If threshold is crosed, regardless of connection success
+      or failure, wait for (current_count + 1) - threshold seconds
+      Note that current_count is not yet updated in hash. So we
+      have to consider current connection as well - Hence the usage
+      of current_count + 1.
+    */
     ulonglong wait_time = get_wait_time((current_count + 1) - threshold);
 
     if ((error = coordinator->notify_status_var(
@@ -702,11 +616,6 @@ bool Connection_delay_action::notify_sys_var(
         error_handler->handle_error(
             ER_CONN_CONTROL_STAT_CONN_DELAY_TRIGGERED_RESET_FAILED);
       }
-      if ((error = coordinator->notify_status_var(
-               &self, STAT_CONNECTION_REFUSE_TRIGGERED, ACTION_RESET))) {
-        error_handler->handle_error(
-            ER_CONN_CONTROL_STAT_CONN_REFUSE_TRIGGERED_RESET_FAILED);
-      }
       break;
     }
     case OPT_MIN_CONNECTION_DELAY:
@@ -721,21 +630,15 @@ bool Connection_delay_action::notify_sys_var(
       break;
     }
     case OPT_REFUSE_CONNECTION_PERIOD: {
+      /** Disable connection delay if connection refuse is enabled. */
       int64 new_period = *(static_cast<int64 *>(new_value));
-      assert(new_period >= DEFAULT_REFUSE_PERIOD);
-      set_refuse_period(new_period);
 
-      if ((error = coordinator->notify_status_var(
-               &self, STAT_CONNECTION_DELAY_TRIGGERED, ACTION_RESET))) {
-        error_handler->handle_error(
-            ER_CONN_CONTROL_STAT_CONN_DELAY_TRIGGERED_RESET_FAILED);
+      if (new_period > DISABLE_REFUSE_PERIOD) {
+        set_enabled(false);
+        m_userhost_hash.reset_all();
+      } else {
+        set_enabled(true);
       }
-      if ((error = coordinator->notify_status_var(
-               &self, STAT_CONNECTION_REFUSE_TRIGGERED, ACTION_RESET))) {
-        error_handler->handle_error(
-            ER_CONN_CONTROL_STAT_CONN_REFUSE_TRIGGERED_RESET_FAILED);
-      }
-
       break;
     }
     default:
@@ -743,6 +646,42 @@ bool Connection_delay_action::notify_sys_var(
       assert(false);
       error_handler->handle_error(ER_CONN_CONTROL_INVALID_CONN_DELAY_TYPE);
   };
+  return error;
+}
+
+/**
+ * Handle a connection control event, we only care about the unlock event.
+ *
+ * @param[in] coordinator Handle to coordinator
+ * @param[in] authentication_event Authentication event
+ * @param[in] error_handler Error handler
+ */
+bool Connection_delay_action::notify_event(
+    Connection_event_coordinator_services *,
+    const mysql_event_polarx_connection_control *event, Error_handler *) {
+  DBUG_TRACE;
+  bool error = false;
+
+  if (event->event_subclass != MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK)
+    return error;
+
+  RD_lock rd_lock(m_lock);
+  int threshold = this->get_threshold();
+
+  /** If feature is disabled, do nothing */
+  if (threshold <= DISABLE_THRESHOLD) {
+    return error;
+  }
+
+  Sql_string user_host;
+
+  user_host.append("'");
+  user_host.append(event->user.str, event->user.length);
+  user_host.append("'@'");
+  user_host.append(event->host.str, event->host.length);
+  user_host.append("'");
+  m_userhost_hash.remove_entry(user_host);
+
   return error;
 }
 
@@ -840,22 +779,16 @@ void Connection_delay_action::fill_IS_table(THD *thd, Table_ref *tables,
   if (cond != nullptr &&
       !get_equal_condition_argument(
           cond, &eq_arg, I_S_CONNECTION_CONTROL_FAILED_ATTEMPTS_USERHOST)) {
-    Connection_delay_event_record_value current_value;
-
-    if (m_userhost_hash.match_entry(eq_arg, (void *)&current_value)) {
+    int64 current_count = 0;
+    if (m_userhost_hash.match_entry(eq_arg, (void *)&current_count)) {
       /* There are no matches given the condition */
       return;
     } else {
       /* There is exactly one matching userhost entry */
-      MYSQL_TIME to;
       TABLE *table = tables->table;
-
-      time_to_MYSQL_TIME(current_value.m_begin_time, to);
       table->field[0]->store(eq_arg.c_str(), eq_arg.length(),
                              system_charset_info);
-      table->field[1]->store(current_value.m_count, true);
-      table->field[2]->store_time(&to, 0);
-
+      table->field[1]->store(current_count, true);
       schema_table_store_record(thd, table);
     }
   } else
@@ -879,8 +812,9 @@ bool init_connection_delay_event(
   g_max_failed_connection_handler = new Connection_delay_action(
       g_variables.failed_connections_threshold,
       g_variables.min_connection_delay, g_variables.max_connection_delay,
-      g_variables.refuse_connection_period, opt_enums, opt_enums_size,
-      status_vars_enums, status_vars_enums_size, &connection_event_delay_lock);
+      opt_enums, opt_enums_size, status_vars_enums, status_vars_enums_size,
+      &connection_event_delay_lock,
+      g_variables.refuse_connection_period <= DISABLE_REFUSE_PERIOD);
   if (!g_max_failed_connection_handler) {
     error_handler->handle_error(ER_CONN_CONTROL_DELAY_ACTION_INIT_FAILED);
     return true;

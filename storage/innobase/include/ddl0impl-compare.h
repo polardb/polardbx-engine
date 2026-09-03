@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define ddl0impl_compare_h
 
 #include "ddl0impl.h"
+#include "dict0dict.h"
 #include "rem0cmp.h"
 
 namespace ddl {
@@ -47,6 +48,14 @@ struct Compare_key {
         m_n_unique(dict_index_get_n_unique(index)),
         m_n_fields(compare_all ? dict_index_get_n_fields(index) : m_n_unique),
         m_fields(index->fields) {
+    if (compare_all && !index->is_clustered()) {
+      /* Lizard secondary indexes can append functional suffix fields, such as
+      GPP or transactional fields. They are stored in the physical index entry
+      and must be copied by DDL, but they do not participate in the secondary
+      B-tree order. DDL sort should compare only the ordering prefix and leave
+      duplicate new-primary-key detection to the clustered builder. */
+      m_n_fields -= lizard::dict_index_n_sec_functional_fields(index);
+    }
     ut_a(m_n_unique <= m_n_fields);
     ut_a(m_dups == nullptr || index == m_dups->m_index);
   }
@@ -124,7 +133,7 @@ struct Compare_key {
   const size_t m_n_unique{};
 
   /** Total number of fields in the index key. */
-  const size_t m_n_fields{};
+  size_t m_n_fields{};
 
   /** Index key fields. */
   const dict_field_t *m_fields{};

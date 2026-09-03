@@ -127,6 +127,8 @@ inline std::ostream &operator<<(std::ostream &out, const row_ext_t &obj) {
   return (obj.print(out));
 }
 
+#ifndef INNODB_ROW0EXT_IC_STANDALONE
 #include "row0ext.ic"
+#endif /* !INNODB_ROW0EXT_IC_STANDALONE */
 
 #endif

@@ -1,0 +1,241 @@
+SET opt_index_format_spc_enabled=on;
+SET GLOBAL innodb_lock_wait_timeout = 2;
+SET innodb_lock_wait_timeout = 2;
+##################################################################
+# Test 1: MDL behavior during ADD INDEX
+##################################################################
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val INT NOT NULL,
+data VARCHAR(100)
+) ENGINE=InnoDB;
+INSERT INTO t1 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3');
+# Phase 1: Transaction BEFORE DDL blocks DDL
+BEGIN;
+SELECT * FROM t1 WHERE val=10;
+id	val	data
+1	10	row1
+SET lock_wait_timeout = 2;
+ALTER TABLE t1 ADD KEY idx_val (val) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}', ALGORITHM=INPLACE, LOCK=NONE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+# Phase 2: DML DURING DDL works
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t1 ADD KEY idx_val (val) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# These should succeed during DDL execute phase
+BEGIN;
+SELECT * FROM t1 WHERE val=10;
+id	val	data
+1	10	row1
+INSERT INTO t1 VALUES (4, 40, 'new_row');
+UPDATE t1 SET data='updated' WHERE id=1;
+DELETE FROM t1 WHERE id=3;
+COMMIT;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Phase 3: Commit phase blocks new transactions
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'alter_table_inplace_before_commit SIGNAL before_commit WAIT_FOR continue_commit';
+ALTER TABLE t1 ADD COLUMN extra INT DEFAULT 0, ALGORITHM=INPLACE;
+SET DEBUG_SYNC = 'now WAIT_FOR before_commit';
+# This should timeout (DDL holds MDL_EXCLUSIVE)
+SET lock_wait_timeout = 2;
+SELECT * FROM t1 WHERE val=10;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+SET DEBUG_SYNC = 'now SIGNAL continue_commit';
+# Verify final state
+SELECT * FROM t1 ORDER BY id;
+id	val	data	extra
+1	10	updated	0
+2	20	row2	0
+4	40	new_row	0
+SELECT * FROM t1 FORCE INDEX(idx_val) WHERE val=40;
+id	val	data	extra
+4	40	new_row	0
+# Verify idx_val is SPC index
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t1' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_val';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_val	SPC_PAGE
+DROP TABLE t1;
+##################################################################
+# Test 2: MDL behavior during table rebuild (DROP PK + ADD PK)
+##################################################################
+CREATE TABLE t2 (
+id INT NOT NULL,
+val INT NOT NULL,
+data VARCHAR(100),
+PRIMARY KEY(id),
+KEY idx_val (val) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}'
+) ENGINE=InnoDB;
+INSERT INTO t2 VALUES (1, 100, 'row1'), (2, 200, 'row2'), (3, 300, 'row3');
+# Phase 1: Transaction BEFORE DDL blocks DDL
+BEGIN;
+SELECT * FROM t2 WHERE val=100;
+id	val	data
+1	100	row1
+SET lock_wait_timeout = 2;
+ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+# Phase 2: DML DURING rebuild works
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t2 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# These should succeed during DDL execute phase
+BEGIN;
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=100;
+id	val	data
+1	100	row1
+INSERT INTO t2 VALUES (4, 400, 'new_row');
+UPDATE t2 SET data='updated' WHERE id=1;
+DELETE FROM t2 WHERE id=3;
+COMMIT;
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify PK changed and SPC index still works
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `val` int NOT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`val`),
+  KEY `idx_val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t2 ORDER BY val;
+id	val	data
+1	100	updated
+2	200	row2
+4	400	new_row
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=400;
+id	val	data
+4	400	new_row
+SELECT * FROM t2 FORCE INDEX(idx_val) WHERE val=300;
+id	val	data
+# Verify idx_val is still SPC index after rebuild
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t2' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_val';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_val	SPC_PAGE
+DROP TABLE t2;
+##################################################################
+# Test 3: MVCC snapshot visibility during DDL
+##################################################################
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val INT NOT NULL
+) ENGINE=InnoDB;
+INSERT INTO t3 VALUES (1, 10), (2, 20), (3, 30);
+# Start DDL
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_apply_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t3 ADD KEY idx_val (val) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}', ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# Start a snapshot read before modifications
+BEGIN;
+SELECT * FROM t3 ORDER BY id;
+id	val
+1	10
+2	20
+3	30
+# Make modifications in another transaction
+BEGIN;
+UPDATE t3 SET val=11 WHERE id=1;
+INSERT INTO t3 VALUES (4, 40);
+DELETE FROM t3 WHERE id=2;
+COMMIT;
+# Snapshot read should still see old data
+SELECT * FROM t3 ORDER BY id;
+id	val
+1	10
+2	20
+3	30
+COMMIT;
+# After commit, should see new data
+SELECT * FROM t3 ORDER BY id;
+id	val
+1	11
+3	30
+4	40
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify SPC index is correct after DDL
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=11;
+id	val
+1	11
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=40;
+id	val
+4	40
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=10;
+id	val
+SELECT * FROM t3 FORCE INDEX(idx_val) WHERE val=20;
+id	val
+# Verify idx_val is SPC index
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t3' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_val';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_val	SPC_PAGE
+DROP TABLE t3;
+##################################################################
+# Test 4: Concurrent reads via SPC index during DDL
+##################################################################
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+val INT NOT NULL,
+KEY idx_val (val) SECONDARY_ENGINE_ATTRIBUTE='{"spc":"true"}'
+) ENGINE=InnoDB;
+INSERT INTO t4 VALUES (1, 10), (2, 20), (3, 30), (4, 40), (5, 50);
+# Start table rebuild
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL bulk_done WAIT_FOR continue_apply';
+ALTER TABLE t4 DROP PRIMARY KEY, ADD PRIMARY KEY (val), ALGORITHM=INPLACE, LOCK=NONE;
+SET DEBUG_SYNC = 'now WAIT_FOR bulk_done';
+# Multiple concurrent reads via SPC index during DDL
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val BETWEEN 10 AND 30 ORDER BY val;
+id	val
+1	10
+2	20
+3	30
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val > 30 ORDER BY val;
+id	val
+4	40
+5	50
+# Modifications during DDL
+BEGIN;
+UPDATE t4 SET val=15 WHERE id=1;
+INSERT INTO t4 VALUES (6, 60);
+COMMIT;
+# Read again
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val=15;
+id	val
+1	15
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val=60;
+id	val
+6	60
+SET DEBUG_SYNC = 'now SIGNAL continue_apply';
+# Verify final state
+SELECT * FROM t4 ORDER BY val;
+id	val
+1	15
+2	20
+3	30
+4	40
+5	50
+6	60
+SELECT * FROM t4 FORCE INDEX(idx_val) WHERE val IN (15, 60) ORDER BY val;
+id	val
+1	15
+6	60
+# Verify idx_val is still SPC index after rebuild
+SELECT INDEX_NAME, INDEX_PAGE_TYPE FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS 
+WHERE TABLE_NAME='t4' AND SCHEMA_NAME='test' AND INDEX_NAME='idx_val';
+INDEX_NAME	INDEX_PAGE_TYPE
+idx_val	SPC_PAGE
+DROP TABLE t4;
+##################################################################
+# Cleanup
+##################################################################
+SET DEBUG_SYNC = 'RESET';
+SET opt_index_format_spc_enabled=default;
+SET GLOBAL innodb_lock_wait_timeout = DEFAULT;

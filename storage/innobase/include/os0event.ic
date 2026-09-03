@@ -30,6 +30,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  Inlined implementation for os_event_*
  *******************************************************************/
 
+#if !defined(UNIV_HOTBACKUP)
+#ifndef os0event_h
+#define INNODB_OS0EVENT_IC_STANDALONE
+#include "os0event.h"
+#undef INNODB_OS0EVENT_IC_STANDALONE
+#endif /* !os0event_h */
 /** Waits in loop until a provided condition is satisfied. Combines usage
 of spin-delay and event.
 
@@ -136,3 +142,4 @@ inline static Wait_stats os_event_wait_for(os_event_t &event,
     }
   }
 }
+#endif /* !defined(UNIV_HOTBACKUP) */

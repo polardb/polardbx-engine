@@ -1,0 +1,12 @@
+#
+# Bug#34797257 index merge: crash and assertion in ha_innopart::extra
+#
+# In this scenario partition pruning is able to determine that all
+# partitions have been pruned; queries using index merge hints should
+# work correctly instead of touching the uninitialized ordered scan
+# state in ha_innopart::extra(HA_EXTRA_SECONDARY_SORT_ROWID).
+#
+
+CREATE TABLE t (c0 INT, c1 INT, KEY i0 (c0), KEY i1 (c1)) ENGINE=innodb PARTITION BY LIST (CEILING(c1)) (PARTITION a VALUES IN (NULL));
+SELECT /*+ INDEX_MERGE(t)*/ c1 FROM t WHERE c0=255 AND c1=1;
+DROP TABLE t;

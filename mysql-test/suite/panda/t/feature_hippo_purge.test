@@ -1,0 +1,294 @@
+################################################################################
+# HIPPO Index Purge Test
+#
+# This test verifies HIPPO-specific purge optimization:
+# - row_purge_poss_sec_fast() - Fast path using rec_tid on HIPPO index
+#
+# Key scenarios:
+# 1. rec_tid > 0: Fast path can directly determine if record can be purged
+# 2. rec_tid == 0: Rollback case, fallback to slow path
+#
+# Verification method:
+# - Execute DELETE/UPDATE to create delete-marked records
+# - Trigger purge and wait for completion
+# - Verify records are physically deleted (can re-insert same values)
+################################################################################
+
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+--echo ########################################################################
+--echo # Setup
+--echo ########################################################################
+
+SET opt_index_format_hippo_enabled=on;
+SET @old_innodb_stats_auto_recalc = @@innodb_stats_auto_recalc;
+SET GLOBAL innodb_stats_auto_recalc = OFF;
+
+# Stop purge initially to control when it runs
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--echo ########################################################################
+--echo # Test 1: Basic purge with DELETE (rec_tid > 0, fast path)
+--echo # Verify row_purge_poss_sec_fast correctly identifies purgeable records
+--echo ########################################################################
+
+CREATE TABLE t_purge1 (
+  id INT PRIMARY KEY,
+  val INT,
+  data VARCHAR(100),
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+--echo # Insert initial data
+INSERT INTO t_purge1 VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');
+
+--echo # Delete records - creates delete-marked entries in HIPPO index
+BEGIN;
+DELETE FROM t_purge1 WHERE id = 2;
+COMMIT;
+
+--echo # Before purge: record with val=200 is delete-marked but still exists in index
+--echo # (HIPPO is non-unique, so no duplicate key check)
+
+--echo # Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # After purge: delete-marked record should be physically removed
+--echo # Insert new record with same val (no conflict since old is purged)
+INSERT INTO t_purge1 VALUES (20, 200, 'reused val');
+
+SELECT * FROM t_purge1 ORDER BY id;
+SELECT * FROM t_purge1 USE INDEX(idx_val) ORDER BY val;
+
+DROP TABLE t_purge1;
+
+--echo ########################################################################
+--echo # Test 2: Purge with UPDATE on indexed column (rec_tid > 0)
+--echo # UPDATE creates old delete-marked entry + new entry
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_purge2 (
+  id INT PRIMARY KEY,
+  val INT,
+  data VARCHAR(100),
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+INSERT INTO t_purge2 VALUES (1, 100, 'a'), (2, 200, 'b'), (3, 300, 'c');
+
+--echo # Update indexed column - old value 200 becomes delete-marked
+BEGIN;
+UPDATE t_purge2 SET val = 2000 WHERE id = 2;
+COMMIT;
+
+--echo # Before purge: both val=200 (delete-marked) and val=2000 exist
+SELECT * FROM t_purge2 USE INDEX(idx_val) ORDER BY val;
+
+--echo # Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # After purge: val=200 should be physically removed
+--echo # Can insert new record with val=200
+INSERT INTO t_purge2 VALUES (20, 200, 'reused');
+
+SELECT * FROM t_purge2 ORDER BY id;
+SELECT * FROM t_purge2 USE INDEX(idx_val) ORDER BY val;
+
+DROP TABLE t_purge2;
+
+--echo ########################################################################
+--echo # Test 3: Purge after ROLLBACK (rec_tid = 0, fallback to slow path)
+--echo # When transaction rolls back, rec_tid becomes 0
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_purge3 (
+  id INT PRIMARY KEY,
+  val INT,
+  data VARCHAR(100),
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+INSERT INTO t_purge3 VALUES (1, 100, 'a'), (2, 200, 'b');
+
+--echo # Start transaction, insert, then rollback
+--echo # This creates records with rec_tid that will become 0 after rollback
+BEGIN;
+INSERT INTO t_purge3 VALUES (3, 300, 'c');
+INSERT INTO t_purge3 VALUES (4, 400, 'd');
+ROLLBACK;
+
+--echo # After rollback, records are delete-marked with rec_tid = 0
+--echo # Purge should still work via slow path
+
+--echo # Enable purge  
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Verify rolled-back records are gone and we can insert same values
+INSERT INTO t_purge3 VALUES (3, 300, 'new c');
+INSERT INTO t_purge3 VALUES (4, 400, 'new d');
+
+SELECT * FROM t_purge3 ORDER BY id;
+SELECT * FROM t_purge3 USE INDEX(idx_val) ORDER BY val;
+
+DROP TABLE t_purge3;
+
+--echo ########################################################################
+--echo # Test 4: Mixed scenario - DELETE + ROLLBACK
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_purge4 (
+  id INT PRIMARY KEY,
+  val INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+INSERT INTO t_purge4 VALUES (1, 100), (2, 200), (3, 300), (4, 400), (5, 500);
+
+--echo # Committed delete (rec_tid > 0)
+BEGIN;
+DELETE FROM t_purge4 WHERE id = 2;
+COMMIT;
+
+--echo # Rolled-back delete (rec_tid = 0 after rollback)
+BEGIN;
+DELETE FROM t_purge4 WHERE id = 4;
+ROLLBACK;
+
+--echo # id=2 should be delete-marked (purgeable via fast path)
+--echo # id=4 should still exist (rollback undid the delete)
+
+--echo # Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Verify: id=2 is gone, id=4 still exists
+SELECT * FROM t_purge4 ORDER BY id;
+
+--echo # Can reuse val=200
+INSERT INTO t_purge4 VALUES (20, 200);
+SELECT * FROM t_purge4 ORDER BY id;
+
+DROP TABLE t_purge4;
+
+--echo ########################################################################
+--echo # Test 5: Concurrent transactions and purge
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_purge5 (
+  id INT PRIMARY KEY,
+  val INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+INSERT INTO t_purge5 VALUES (1, 100), (2, 200), (3, 300);
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo # Connection 1: Start long-running transaction, read data
+--connection con1
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+BEGIN;
+SELECT * FROM t_purge5 USE INDEX(idx_val) ORDER BY val;
+
+--echo # Connection 2: Delete and commit
+--connection con2
+BEGIN;
+DELETE FROM t_purge5 WHERE id = 2;
+COMMIT;
+
+--echo # Default: Try to purge (should not purge due to active read view)
+--connection default
+SET GLOBAL innodb_purge_run_now = ON;
+# Brief pause for purge attempt
+SELECT SLEEP(1);
+
+--echo # Connection 1: Still sees id=2 (MVCC)
+--connection con1
+SELECT * FROM t_purge5 USE INDEX(idx_val) ORDER BY val;
+COMMIT;
+
+--echo # Now purge should be able to clean up
+--connection default
+--source include/wait_innodb_all_purged.inc
+
+--echo # Verify id=2 is now purged, can reuse val=200
+INSERT INTO t_purge5 VALUES (20, 200);
+SELECT * FROM t_purge5 ORDER BY id;
+
+--connection con1
+--disconnect con1
+--connection con2
+--disconnect con2
+--connection default
+
+DROP TABLE t_purge5;
+
+--echo ########################################################################
+--echo # Test 6: Large batch delete and purge
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_purge6 (
+  id INT PRIMARY KEY,
+  val INT,
+  padding VARCHAR(200),
+  INDEX idx_val(val)
+) ENGINE=InnoDB;
+
+--echo # Insert 1000 rows
+--disable_query_log
+let $i = 1;
+while ($i <= 1000) {
+  eval INSERT INTO t_purge6 VALUES ($i, $i, REPEAT('x', 100));
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t_purge6;
+
+--echo # Delete half the rows
+DELETE FROM t_purge6 WHERE id % 2 = 0;
+SELECT COUNT(*) FROM t_purge6;
+
+--echo # Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Verify we can reuse deleted values
+INSERT INTO t_purge6 VALUES (2, 2, 'reused');
+INSERT INTO t_purge6 VALUES (100, 100, 'reused');
+INSERT INTO t_purge6 VALUES (500, 500, 'reused');
+
+SELECT COUNT(*) FROM t_purge6;
+SELECT * FROM t_purge6 WHERE id IN (2, 100, 500) ORDER BY id;
+
+DROP TABLE t_purge6;
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+SET GLOBAL innodb_stats_auto_recalc = @old_innodb_stats_auto_recalc;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################
+

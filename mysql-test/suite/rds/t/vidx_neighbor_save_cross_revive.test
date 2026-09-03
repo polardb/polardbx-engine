@@ -1,0 +1,132 @@
+--source include/have_debug.inc
+--source include/big_test.inc
+
+# save_neighbors_only regression: cross base-row neighbor-revive race.
+# Scenario: many UPDATE on hot ids (invalidate IDX_TREF entries) running
+# alongside INSERT that triggers search likely to pick those same nodes as
+# neighbors. Pre-Plan-W this triggers ER_DUP_KEY (1022) via save() reviving
+# stale IDX_TREF entries written from cached snapshots.
+#           Vidx_neighbor_save_count grows.
+# Related: save_neighbors_only commit dd578613c1c.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# Tight-cluster seed: 40 hot rows in a single cluster region (likely
+# selected as neighbors by search()).
+--disable_query_log
+let $i = 1;
+while ($i <= 40)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_inv   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_skip_tref_changed'`;
+
+DELIMITER $$;
+
+# Worker A: pound the hot rows with UPDATEs → invalidate their IDX_TREF.
+CREATE PROCEDURE p_hot_upd(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 1500 DO
+    UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, ",", (j+p_offset)%100, "]")) WHERE id = (j % 40) + 1;
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+# Worker B: INSERT into the same neighborhood — search() will pick the
+# hot rows as neighbors → drives update_second_degree_neighbors path.
+CREATE PROCEDURE p_neighbor_ins(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 1000 DO
+    INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT("[", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, ",", (j%40)+1, "]")));
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+DELIMITER ;$$
+
+connect (cUp1, localhost, root,,);
+connect (cUp2, localhost, root,,);
+connect (cIns1, localhost, root,,);
+connect (cIns2, localhost, root,,);
+
+--connection cUp1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_hot_upd(13)
+--connection cUp2
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_hot_upd(29)
+--connection cIns1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_neighbor_ins(5)
+--connection cIns2
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_neighbor_ins(17)
+
+--connection cUp1
+--error 0,1213,1022,1062
+--reap
+--connection cUp2
+--error 0,1213,1022,1062
+--reap
+--connection cIns1
+--error 0,1213,1022,1062
+--reap
+--connection cIns2
+--error 0,1213,1022,1062
+--reap
+
+--connection default
+
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_inv   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_skip_tref_changed'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_inv   = `SELECT $a_inv - $b_inv`;
+
+# Stable result: emit only pre-evaluated 0/1 booleans.  --die below is
+# the real signal; --echo is for diagnosis when the test fails.
+let $ok_nbr = `SELECT $d_nbr > 0`;
+let $ok_dup = `SELECT $d_dup = 0`;
+# $d_inv is ulonglong so >=0 is structurally true — drop the echo.
+--echo == save_neighbors_only cross-revive deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 even with cross-revive pressure
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+disconnect cUp1;
+disconnect cUp2;
+disconnect cIns1;
+disconnect cIns2;
+
+DROP PROCEDURE p_hot_upd;
+DROP PROCEDURE p_neighbor_ins;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

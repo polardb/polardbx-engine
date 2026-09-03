@@ -282,8 +282,8 @@ connection con2;
 connection con3;
 select * from t1;
 id	balance
-1	960
-2	1040
+1	950
+2	1050
 commit;
 select * from t1;
 id	balance

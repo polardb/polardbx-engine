@@ -33,6 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef page0cur_h
 #define page0cur_h
 
+#include "rem0types.h"
 #include "univ.i"
 
 #include "buf0types.h"
@@ -42,6 +43,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "page0page.h"
 #include "rem0rec.h"
 #include "rem0wrec.h"
+
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 #define PAGE_CUR_ADAPT
 
@@ -67,6 +71,9 @@ static inline rec_t *page_cur_get_rec(page_cur_t *cur); /*!< in: page cursor */
 #define page_cur_get_page_zip(cur) buf_block_get_page_zip((cur)->block)
 #define page_cur_get_rec(cur) (cur)->rec
 #endif /* UNIV_DEBUG */
+
+static inline reg_t page_cur_get_reg(page_cur_t *cur);
+static inline creg_t page_cur_get_creg(const page_cur_t *cur);
 
 /** Sets the cursor object to point before the first user record on the page.
 @param[in]      block   index page
@@ -116,13 +123,14 @@ mtr_commit().
 @param[in,out] cursor    Page cursor.
 @param[in]     tuple     Pointer to a data tuple
 @param[in]     index     Index descriptor.
-@param[in]      offsets  Offsets on *rec.
+@param[in]     rec       Record to insert, or nullptr.
+@param[in,out] offsets   Offsets on *rec.
 @param[in,out] heap      Pointer to memory heap, or to nullptr.
 @param[in]     mtr       Mini-transaction handle, or nullptr.
 @return pointer to record if succeed, NULL otherwise */
-[[nodiscard]] static inline rec_t *page_cur_tuple_insert(
-    page_cur_t *cursor, const dtuple_t *tuple, dict_index_t *index,
-    ulint **offsets, mem_heap_t **heap, mtr_t *mtr);
+[[nodiscard]] static inline reg_t page_cur_tuple_insert(
+    page_cur_t *cursor, const dtuple_t *tuple, dict_index_t *index, Slice **slc,
+    Slice_ctx *sctx, mem_heap_t **heap, mtr_t *mtr);
 #endif /* !UNIV_HOTBACKUP */
 
 /** Inserts a record next to page cursor. Returns pointer to inserted record
@@ -141,20 +149,18 @@ ibuf_reset_free_bits() before mtr_commit().
 @param[in,out]  offsets rec_get_offsets(rec, index)
 @param[in]      mtr     Mini-transaction handle, or NULL
 @return pointer to record if succeed, NULL otherwise */
-static inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec,
-                                         dict_index_t *index, ulint *offsets,
-                                         mtr_t *mtr);
+static inline reg_t page_cur_rec_insert(page_cur_t *cursor, dict_index_t *index,
+                                        Slice *slc, mtr_t *mtr);
 
 /** Inserts a record next to page cursor on an uncompressed page.
  Returns pointer to inserted record if succeed, i.e., enough
  space available, NULL otherwise. The cursor stays at the same position.
  @return pointer to record if succeed, NULL otherwise */
-[[nodiscard]] rec_t *page_cur_insert_rec_low(
-    rec_t *current_rec,  /*!< in: pointer to current record after
-                     which the new record is inserted */
+[[nodiscard]] reg_t page_cur_insert_rec_low(
+    reg_t current_reg,   /*!< in: pointer to current record after
+                      which the new record is inserted */
     dict_index_t *index, /*!< in: record descriptor */
-    const rec_t *rec,    /*!< in: pointer to a physical record */
-    ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
+    Slice *slc,          /*!< in/out: a record, might make valid) */
     mtr_t *mtr);         /*!< in: mini-transaction handle, or NULL */
 
 /** Inserts a record next to page cursor on an uncompressed page.
@@ -166,9 +172,9 @@ static inline rec_t *page_cur_rec_insert(page_cur_t *cursor, const rec_t *rec,
 @param[in]      rec_size        The size of new record
 
 @return pointer to record if succeed, NULL otherwise */
-rec_t *page_cur_direct_insert_rec_low(rec_t *current_rec, dict_index_t *index,
-                                      const dtuple_t *tuple, mtr_t *mtr,
-                                      ulint rec_size);
+reg_t page_cur_direct_insert_rec_low(reg_t current_reg, dict_index_t *index,
+                                     const dtuple_t *tuple, mtr_t *mtr,
+                                     ulint rec_size);
 
 /** Inserts a record next to page cursor on a compressed and uncompressed
  page. Returns pointer to inserted record if succeed, i.e.,
@@ -181,11 +187,10 @@ rec_t *page_cur_direct_insert_rec_low(rec_t *current_rec, dict_index_t *index,
  or by invoking ibuf_reset_free_bits() before mtr_commit().
 
  @return pointer to record if succeed, NULL otherwise */
-[[nodiscard]] rec_t *page_cur_insert_rec_zip(
+[[nodiscard]] reg_t page_cur_insert_rec_zip(
     page_cur_t *cursor,  /*!< in/out: page cursor */
     dict_index_t *index, /*!< in: record descriptor */
-    const rec_t *rec,    /*!< in: pointer to a physical record */
-    ulint *offsets,      /*!< in/out: rec_get_offsets(rec, index) */
+    Slice *slc,          /*!< in/out: rec_get_offsets(rec, index) */
     mtr_t *mtr);         /*!< in: mini-transaction handle, or NULL */
 /** Copies records from page to a newly created page, from a given record
  onward, including that record. Infimum and supremum records are not copied.
@@ -196,7 +201,7 @@ rec_t *page_cur_direct_insert_rec_low(rec_t *current_rec, dict_index_t *index,
  or by invoking ibuf_reset_free_bits() before mtr_commit(). */
 void page_copy_rec_list_end_to_created_page(
     page_t *new_page,    /*!< in/out: index page to copy to */
-    rec_t *rec,          /*!< in: first record to copy */
+    reg_t reg,           /*!< in: first record to copy */
     dict_index_t *index, /*!< in: record descriptor */
     mtr_t *mtr);         /*!< in: mtr */
 /** Deletes a record at the page cursor. The cursor is moved to the
@@ -204,8 +209,8 @@ void page_copy_rec_list_end_to_created_page(
 void page_cur_delete_rec(
     page_cur_t *cursor,        /*!< in/out: a page cursor */
     const dict_index_t *index, /*!< in: record descriptor */
-    const ulint *offsets,      /*!< in: rec_get_offsets(
-                               cursor->rec, index) */
+    Slice *slc,                /*!< in/out: rec_get_offsets(
+                                         cursor->rec, index) */
     mtr_t *mtr);               /*!< in: mini-transaction handle */
 #ifndef UNIV_HOTBACKUP
 /** Search the right position for a page cursor.
@@ -302,8 +307,7 @@ any changes. It is used by the IMPORT tablespace functions.
 @param[in] index The index that the record belongs to.
 @param[in,out] pcur Page cursor on record to delete.
 @param[in] offsets Offsets for record. */
-bool page_delete_rec(const dict_index_t *index, page_cur_t *pcur,
-                     const ulint *offsets);
+bool page_delete_rec(const dict_index_t *index, page_cur_t *pcur, Slice *slc);
 
 /** Index page cursor */
 
@@ -321,6 +325,8 @@ struct page_cur_t {
   buf_block_t *block{nullptr};
 };
 
+#ifndef INNODB_PAGE0CUR_IC_STANDALONE
 #include "page0cur.ic"
+#endif /* !INNODB_PAGE0CUR_IC_STANDALONE */
 
 #endif

@@ -35,8 +35,10 @@
 #include "sql/transaction.h"  // trans_reset_one_shot_chistics, trans_track_end_trx
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "sql/mysqld.h"  // innodb_hton
-#include "sql/bl_consensus_log.h"
-#include "sql/consensus_admin.h"
+#include "sql/komodo0xlog.h"
+#include "sql/serverless/komodo0switchover0manager.h"
+
+#include "sql/xa/komodo0xa.h"
 
 namespace {
 /**
@@ -66,14 +68,15 @@ enum_sql_command Sql_cmd_xa_commit::sql_command_code() const {
 enum xa_option_words Sql_cmd_xa_commit::get_xa_opt() const { return m_xa_opt; }
 
 bool Sql_cmd_xa_commit::execute(THD *thd) {
-  if (check_limit_xa(thd, m_xa_opt == XA_ONE_PHASE)) return true;
+  auto switchover_manager = komodo::xlog_engine_get_switchover_manager();
+  if (switchover_manager->check_xa_limited(thd, m_xa_opt == XA_ONE_PHASE)) return true;
+  auto xa_running_count_guard =
+      create_lock_guard([&] { switchover_manager->inc_xa_running_count(); },
+                        [&] { switchover_manager->dec_xa_running_count(); });
 
-  xa_finishing_count++;
+  thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
 
   bool st = trans_xa_commit(thd);
-
-  xa_finishing_count--;
-  assert(xa_finishing_count >= 0);
 
   if (!st) {
     thd->mdl_context.release_transactional_locks();
@@ -87,6 +90,7 @@ bool Sql_cmd_xa_commit::execute(THD *thd) {
       my_ok(thd);
     }
   }
+  thd->cpolicy_ctx.reset();
   return st;
 }
 
@@ -98,8 +102,6 @@ bool Sql_cmd_xa_commit::trans_xa_commit(THD *thd) {
 
   /* Inform clone handler of XA operation. */
   Clone_handler::XA_Operation xa_guard(thd);
-
-  raii::Sentry<> cp_ctx_guard{[&]() -> void { thd->cpolicy_ctx.reset(); }};
 
   if (!xid_state->has_same_xid(this->m_xid)) {
     return this->process_detached_xa_commit(thd);
@@ -123,8 +125,6 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
     if ((res = r)) my_error(r == 1 ? ER_XA_RBROLLBACK : ER_XAER_RMERR, MYF(0));
   } else if (xid_state->has_state(XID_STATE::XA_PREPARED) &&
              m_xa_opt == XA_NONE) {
-    thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
-
     MDL_request mdl_request;
 
     /*
@@ -211,12 +211,12 @@ bool Sql_cmd_xa_commit::process_attached_xa_commit(THD *thd) const {
 bool Sql_cmd_xa_commit::process_detached_xa_commit(THD *thd) {
   DBUG_TRACE;
 
-  thd->cpolicy_ctx.activate_xa_commit(thd->variables.innodb_commit_gcn);
   raii::Sentry<> dispose_guard{[this]() -> void { this->dispose(); }};
   if (this->find_and_initialize_xa_context(thd)) return true;
   if (this->acquire_locks(thd)) return true;
   raii::Sentry<> acquired_locks_guard{
       [this]() -> void { this->release_locks(); }};
+  if (this->load_changeset_context(thd)) return true;
   this->setup_thd_context(thd);
   if (this->enter_commit_order(thd)) return true;
 
@@ -234,6 +234,41 @@ bool Sql_cmd_xa_commit::process_detached_xa_commit(THD *thd) {
   this->cleanup_context(thd);
 
   return this->m_result;
+}
+
+Sql_cmd_ac_commit::Sql_cmd_ac_commit(xid_t *xid_arg,
+                                     enum xa_option_words xa_option,
+                                     gcn_t commit_gcn_arg,
+                                     xa_addr_t *master_addr_arg)
+    : Sql_cmd_xa_commit(xid_arg, xa_option),
+      m_commit_gcn(commit_gcn_arg),
+      m_master_addr(master_addr_arg) {}
+
+bool Sql_cmd_ac_commit::execute(THD *thd) {
+  auto switchover_manager = komodo::xlog_engine_get_switchover_manager();
+  if (switchover_manager->check_xa_limited(thd, m_xa_opt == XA_ONE_PHASE)) return true;
+  auto xa_running_count_guard =
+      create_lock_guard([&] { switchover_manager->inc_xa_running_count(); },
+                        [&] { switchover_manager->dec_xa_running_count(); });
+
+  thd->cpolicy_ctx.activate_ac_commit(m_commit_gcn, *m_master_addr);
+
+  bool st = trans_xa_commit(thd);
+
+  if (!st) {
+    thd->mdl_context.release_transactional_locks();
+    /*
+        We've just done a commit, reset transaction
+        isolation level and access mode to the session default.
+    */
+    trans_reset_one_shot_chistics(thd);
+
+    if (!m_delay_ok) {
+      my_ok(thd);
+    }
+  }
+  thd->cpolicy_ctx.reset();
+  return st;
 }
 
 namespace {

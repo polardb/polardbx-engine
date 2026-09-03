@@ -91,7 +91,8 @@ tablespace is not compressed
 @param[in]      page_size       page size
 @return false if the entire record can be stored locally on the page */
 [[nodiscard]] static inline bool page_zip_rec_needs_ext(
-    ulint rec_size, ulint comp, ulint n_fields, const page_size_t &page_size);
+    ulint rec_size, ulint comp, ulint n_fields, const page_size_t &page_size,
+    ulint page_dict_size);
 #endif /* !UNIV_HOTBACKUP */
 
 /** Determine the guaranteed free space on an empty page.
@@ -205,9 +206,8 @@ static inline void page_zip_write_header(page_zip_des_t *page_zip,
  have been written to the uncompressed page. */
 void page_zip_write_rec(
     page_zip_des_t *page_zip,  /*!< in/out: compressed page */
-    const byte *rec,           /*!< in: record being written */
+    const Slice *slc,          /*!< in: rec_get_offsets(rec, index) */
     const dict_index_t *index, /*!< in: the index the record belongs to */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     ulint create);             /*!< in: nonzero=insert, zero=update */
 
 /** Parses a log record of writing a BLOB pointer of a record.
@@ -222,13 +222,12 @@ byte *page_zip_parse_write_blob_ptr(
  The information must already have been updated on the uncompressed page. */
 void page_zip_write_blob_ptr(
     page_zip_des_t *page_zip,  /*!< in/out: compressed page */
-    const byte *rec,           /*!< in/out: record whose data is being
+    const Slice *slc,          /*!< in/out: record whose data is being
                                written */
     const dict_index_t *index, /*!< in: index of the page */
-    const ulint *offsets,      /*!< in: rec_get_offsets(rec, index) */
     ulint n,                   /*!< in: column index */
     mtr_t *mtr);               /*!< in: mini-transaction handle,
-                       or NULL if no logging is needed */
+                                or NULL if no logging is needed */
 
 /** Parses a log record of writing the node pointer of a record.
  @return end of log record or NULL */
@@ -254,9 +253,9 @@ void page_zip_write_node_ptr(page_zip_des_t *page_zip, byte *rec, ulint size,
 @param[in] trx_id_col Column number of trx_id in rec
 @param[in] trx_id Transaction identifier
 @param[in] roll_ptr Roll_ptr */
-void page_zip_write_trx_id_and_roll_ptr(page_zip_des_t *page_zip, byte *rec,
-                                        const ulint *offsets, ulint trx_id_col,
-                                        trx_id_t trx_id, roll_ptr_t roll_ptr);
+void page_zip_write_trx_id_and_roll_ptr(page_zip_des_t *page_zip, Slice *slc,
+                                        ulint trx_id_col, trx_id_t trx_id,
+                                        roll_ptr_t roll_ptr);
 
 /** Write the "deleted" flag of a record on a compressed page.  The flag must
  already have been written on the uncompressed page. */
@@ -288,9 +287,8 @@ is deleted.
 @param[in]      index           index of rec
 @param[in]      offsets         rec_get_offsets(rec)
 @param[in]      free            previous start of the free list */
-void page_zip_dir_delete(page_zip_des_t *page_zip, byte *rec,
-                         const dict_index_t *index, const ulint *offsets,
-                         const byte *free);
+void page_zip_dir_delete(page_zip_des_t *page_zip, Slice *slc,
+                         const dict_index_t *index, const byte *free);
 
 /** Add a slot to the dense page directory.
 @param[in,out] page_zip Compressed page
@@ -376,6 +374,8 @@ static inline void page_zip_reset_stat_per_index();
 
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef INNODB_PAGE0ZIP_IC_STANDALONE
 #include "page0zip.ic"
+#endif /* !INNODB_PAGE0ZIP_IC_STANDALONE */
 
 #endif /* page0zip_h */

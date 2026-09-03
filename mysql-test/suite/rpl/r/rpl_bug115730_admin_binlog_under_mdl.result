@@ -1,0 +1,159 @@
+include/master-slave.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection slave]
+STOP REPLICA SQL_THREAD;
+SET GLOBAL replica_parallel_workers = 4;
+SET GLOBAL replica_parallel_type    = 'LOGICAL_CLOCK';
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
+START REPLICA SQL_THREAD;
+[connection master]
+CREATE DATABASE bug115730_db;
+CREATE TABLE bug115730_db.t1 (id INT) ENGINE=InnoDB;
+INSERT INTO bug115730_db.t1 VALUES (0);
+CREATE TABLE bug115730_db.t3 (id INT) ENGINE=InnoDB;
+INSERT INTO bug115730_db.t3 VALUES (100);
+CREATE TABLE bug115730_db.pt (id INT) ENGINE=InnoDB PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20), PARTITION p2 VALUES LESS THAN MAXVALUE);
+INSERT INTO bug115730_db.pt VALUES (1), (5), (15), (25);
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+# --- scenario 1: ANALYZE TABLE + XA PREPARE in same BGC group ---
+[connection master]
+SET DEBUG_SYNC = 'bgc_before_flush_stage SIGNAL admin_in_bgc1 WAIT_FOR xa_in_bgc1';
+ANALYZE TABLE bug115730_db.t1;
+SET DEBUG_SYNC = 'now WAIT_FOR admin_in_bgc1';
+SET DEBUG_SYNC = 'bgc_before_flush_stage SIGNAL xa_in_bgc1';
+XA START 'bug115730_xa1';
+INSERT INTO bug115730_db.t1 VALUES (1);
+XA END 'bug115730_xa1';
+XA PREPARE 'bug115730_xa1';
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	analyze	status	OK
+XA COMMIT 'bug115730_xa1';
+[connection master]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 1: replica row count matches master after ANALYZE+XA]
+include/assert.inc [scenario 1: no replica applier worker reported an error]
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG_SYNC = 'RESET';
+# --- scenario 2: OPTIMIZE TABLE main-loop path replicates ---
+[connection master]
+SET @save_fulltext_only = @@GLOBAL.innodb_optimize_fulltext_only;
+SET GLOBAL innodb_optimize_fulltext_only = ON;
+OPTIMIZE TABLE bug115730_db.t1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	status	OK
+SET GLOBAL innodb_optimize_fulltext_only = @save_fulltext_only;
+include/assert.inc [scenario 2: OPTIMIZE produced binlog events on master]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 2: OPTIMIZE replicated, t1 readable]
+include/assert.inc [scenario 2: no replica applier worker reported an error]
+# --- scenario 3: OPTIMIZE TABLE HA_ADMIN_TRY_ALTER path replicates ---
+[connection master]
+OPTIMIZE TABLE bug115730_db.t1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t1	optimize	status	OK
+include/assert.inc [scenario 3: OPTIMIZE (TRY_ALTER) produced binlog events on master]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 3: OPTIMIZE (TRY_ALTER) replicated, t1 readable]
+include/assert.inc [scenario 3: no replica applier worker reported an error]
+# --- scenario 3b: single-table OPTIMIZE writes exactly one binlog event ---
+[connection master]
+OPTIMIZE TABLE bug115730_db.t1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t1	optimize	status	OK
+include/assert_grep.inc [scenario 3b: single-table OPTIMIZE recorded exactly one binlog event]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 3b: no replica applier worker reported an error]
+include/assert.inc [scenario 3b: OPTIMIZE replicated, t1 still readable]
+# --- scenario 4: multi-table ANALYZE still writes to binlog ---
+[connection master]
+ANALYZE TABLE bug115730_db.t1, bug115730_db.t3;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	analyze	status	OK
+bug115730_db.t3	analyze	status	OK
+include/assert.inc [scenario 4: multi-table ANALYZE produced binlog events on master]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 4: multi-table ANALYZE replicated to slave (t3 readable)]
+include/assert.inc [scenario 4: no replica applier worker reported an error]
+# --- scenario 5: multi-table OPTIMIZE replicates ---
+[connection master]
+OPTIMIZE TABLE bug115730_db.t1, bug115730_db.t3;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t1	optimize	status	OK
+bug115730_db.t3	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t3	optimize	status	OK
+include/assert.inc [scenario 5: multi-table OPTIMIZE produced binlog events on master]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 5: multi-table OPTIMIZE replicated (t1 readable)]
+include/assert.inc [scenario 5: multi-table OPTIMIZE replicated (t3 readable)]
+include/assert.inc [scenario 5: no replica applier worker reported an error]
+# --- scenario 6: partitioned-table OPTIMIZE writes exactly one binlog event ---
+[connection master]
+OPTIMIZE TABLE bug115730_db.pt;
+Table	Op	Msg_type	Msg_text
+bug115730_db.pt	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.pt	optimize	status	OK
+include/assert_grep.inc [scenario 6: partitioned-table OPTIMIZE recorded exactly one binlog event]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 6: no replica applier worker reported an error]
+include/assert.inc [scenario 6: partitioned OPTIMIZE replicated, pt readable]
+# --- scenario 7: ALTER TABLE ... OPTIMIZE PARTITION writes exactly one binlog event ---
+[connection master]
+ALTER TABLE bug115730_db.pt OPTIMIZE PARTITION p0, p1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.pt	optimize	note	Table does not support optimize on partitions. All partitions will be rebuilt and analyzed.
+bug115730_db.pt	optimize	status	OK
+include/assert_grep.inc [scenario 7: ALTER TABLE ... OPTIMIZE PARTITION recorded exactly one binlog event]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 7: no replica applier worker reported an error]
+include/assert.inc [scenario 7: ALTER ... OPTIMIZE PARTITION replicated, pt readable]
+# --- scenario 8: TRY_ALTER failure writes exactly one binlog event via caller ---
+[connection master]
+SET SESSION debug = '+d,admin_try_alter_fail_after_recreate';
+OPTIMIZE TABLE bug115730_db.t1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t1	optimize	error	Unknown error
+bug115730_db.t1	optimize	status	Operation failed
+Warnings:
+Error	1105	Unknown error
+SET SESSION debug = '-d,admin_try_alter_fail_after_recreate';
+include/assert_grep.inc [scenario 8: failed TRY_ALTER recorded exactly one binlog event]
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+include/assert.inc [scenario 8: no replica applier worker reported an error]
+include/assert.inc [scenario 8: t1 still readable after failed OPTIMIZE]
+# --- scenario 9: sql_log_bin=0 suppresses binlog for single-table OPTIMIZE ---
+[connection master]
+SET sql_log_bin = 0;
+OPTIMIZE TABLE bug115730_db.t1;
+Table	Op	Msg_type	Msg_text
+bug115730_db.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
+bug115730_db.t1	optimize	status	OK
+SET sql_log_bin = 1;
+include/assert.inc [scenario 9: binlog position unchanged when sql_log_bin=0]
+[connection master]
+DROP DATABASE bug115730_db;
+include/sync_slave_sql_with_master.inc [FOR CHANNEL 'test']
+[connection slave]
+STOP REPLICA SQL_THREAD;
+SET GLOBAL replica_parallel_workers = 4;
+SET GLOBAL replica_parallel_type    = 'LOGICAL_CLOCK';
+Warnings:
+Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
+START REPLICA SQL_THREAD;
+include/rpl_end.inc

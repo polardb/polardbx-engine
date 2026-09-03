@@ -441,6 +441,8 @@ struct PRINT_EVENT_INFO {
   uint8_t opt_flashback_area;
   uint8_t opt_index_format_gpp_enabled;
   uint8_t opt_index_format_panda_enabled;
+  uint8_t opt_index_format_hippo_enabled;
+  uint8_t opt_index_format_spc_enabled;
 
   PRINT_EVENT_INFO();
 
@@ -851,6 +853,11 @@ class Log_event {
            type == binary_log::ROTATE_EVENT ||
            type == binary_log::CONSENSUS_EMPTY_EVENT ||
            type == binary_log::CONSENSUS_CLUSTER_INFO_EVENT;
+  }
+
+  static bool is_polarx_event(const Log_event_type type) {
+    return (Log_event_type::CONSENSUS_LOG_EVENT <= type &&
+            type <= Log_event_type::GCN_LOG_EVENT);
   }
 
   /**
@@ -1533,6 +1540,14 @@ class Query_log_event : public virtual binary_log::Query_event,
   /** Whether or not the statement represented by this event requires
     `Q_OPT_INDEX_FORMAT_PANDA_ENBLED` to be logged along aside. */
   bool need_opt_index_format_panda_enabled{false};
+
+  /** Whether or not the statement represented by this event requires
+      `Q_OPT_INDEX_FORMAT_HIPPO_ENABLED` to be logged along aside. */
+  bool need_opt_index_format_hippo_enabled{false};
+
+  /** Whether or not the statement represented by this event requires
+      `Q_OPT_INDEX_FORMAT_SPC_ENABLED` to be logged along aside. */
+  bool need_opt_index_format_spc_enabled{false};
 };
 
 /**
@@ -3839,7 +3854,11 @@ class Gtid_log_event : public binary_log::Gtid_event, public Log_event {
            get_commit_group_ticket_length();
   }
 
-  size_t get_event_length() { return LOG_EVENT_HEADER_LEN + get_data_size(); }
+  size_t get_event_length() {
+    return LOG_EVENT_HEADER_LEN + get_data_size();
+  }
+
+  size_t get_trx_length() const { return transaction_length; }
 
  private:
   /// Used internally by both print() and pack_info().

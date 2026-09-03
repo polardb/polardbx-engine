@@ -92,6 +92,8 @@ enum Extra_tag {
   ET_SKIP_RECORDS_IN_RANGE,
   ET_USING_SECONDARY_ENGINE,
   ET_REMATERIALIZE,
+  ET_USING_FAST_LOOKUP,
+  ET_USING_VECTOR_INDEX,
   //------------------------------------
   ET_total
 };

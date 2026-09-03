@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_mta_submode.h"
 
 #include <limits.h>
@@ -27,7 +29,7 @@
 #include <time.h>
 #include <memory>
 
-#include "consensus_log_manager.h"
+#include "sql/komodo0xlog.h"
 #include "lex_string.h"
 #include "libbinlogevents/include/compression/iterator.h"
 #include "m_string.h"
@@ -58,6 +60,8 @@
 #include "sql/sql_class.h"                         // THD
 #include "sql/system_variables.h"
 #include "sql/table.h"
+
+#include "sql/rpl_msr.h"
 
 /**
  Does necessary arrangement before scheduling next event.
@@ -644,10 +648,9 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
       ptr_group->last_committed = last_committed =
           static_cast<Gtid_log_event *>(ev)->last_committed;
 
-      // GalaxyEngine slave does not rotated as leader, so need decided
-      // logically
-      if (ConsensusLogManager::enable_consensus()
-          && (sequence_number == 1 || last_sequence_number == 0)) {
+      // XPaxos master may not rotate binlog, so still need decided logically
+      if (!Multisource_info::is_xpaxos_channel(rli) &&
+          (sequence_number == 1 || last_sequence_number == 0)) {
         first_event = true;
         force_new_group = true;
       }
@@ -668,17 +671,37 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
   } else {
     if (unlikely(clock_leq(sequence_number, last_committed) &&
                  last_committed != SEQ_UNINIT)) {
-      /* inconsistent (buggy) timestamps */
-      LogErr(ERROR_LEVEL, ER_RPL_INCONSISTENT_TIMESTAMPS_IN_TRX,
-             sequence_number, last_committed);
-      return ER_MTS_CANT_PARALLEL;
+      // XPaxos slave does not rotate as leader, so ignore this check
+      if (Multisource_info::is_xpaxos_channel(rli)) {
+        force_new_group = true;
+        xp::info(ER_XP_APPLIER) << "skip last_committed check and force start new group from index:"
+                                << rli->get_consensus_apply_index()
+                                << ", sequence_number:" << sequence_number
+                                << ", last_committed:" << last_committed
+                                << ", last_sequence_number:" << last_sequence_number;
+      } else {
+        /* inconsistent (buggy) timestamps */
+        LogErr(ERROR_LEVEL, ER_RPL_INCONSISTENT_TIMESTAMPS_IN_TRX,
+              sequence_number, last_committed);
+        return ER_MTS_CANT_PARALLEL;
+      }
     }
     if (unlikely(clock_leq(sequence_number, last_sequence_number) &&
                  sequence_number != SEQ_UNINIT)) {
-      /* inconsistent (buggy) timestamps */
-      LogErr(ERROR_LEVEL, ER_RPL_INCONSISTENT_SEQUENCE_NO_IN_TRX,
-             sequence_number, last_sequence_number);
-      return ER_MTS_CANT_PARALLEL;
+      // XPaxos slave does not rotate as leader, so ignore this check
+      if (Multisource_info::is_xpaxos_channel(rli)) {
+        force_new_group = true;
+        xp::info(ER_XP_APPLIER) << "skip last_sequence_number check and force start new group from index:"
+                                << rli->get_consensus_apply_index()
+                                << ", sequence_number:" << sequence_number
+                                << ", last_committed:" << last_committed
+                                << ", last_sequence_number:" << last_sequence_number;
+      } else {
+        /* inconsistent (buggy) timestamps */
+        LogErr(ERROR_LEVEL, ER_RPL_INCONSISTENT_SEQUENCE_NO_IN_TRX,
+              sequence_number, last_sequence_number);
+        return ER_MTS_CANT_PARALLEL;
+      }
     }
     /*
       Transaction sequence as scheduled may have gaps, even in

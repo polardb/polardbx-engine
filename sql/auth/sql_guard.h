@@ -343,6 +343,59 @@ class Role_entity_guard : public Entity_guard {
   static Role_entity_guard *instance();
 };
 /**
+  Proxies_priv guard of table proxies_priv.
+
+  Block a normal (non-SUPER) user from writing this table via direct DML
+  (INSERT/UPDATE/DELETE/REPLACE/LOAD): an empty/NULL/'%'/mixed-case Proxied_user
+  would otherwise slip past a field-value check yet act as an "any user"
+  wildcard in ACL_PROXY_USER::matches(), enabling proxy-authentication
+  impersonation of a reserved account. Proxy grants must be managed via
+  GRANT/REVOKE PROXY; internal ACL cleanup (DROP/RENAME USER) keeps working
+  through the selective reserved-name fallback.
+*/
+class Proxies_priv_entity_guard : public Entity_guard {
+ public:
+  static constexpr const char *proxies_priv_key = "mysql\0proxies_priv\0";
+  static constexpr const std::size_t key_len = 19;
+
+  Proxies_priv_entity_guard() {}
+
+  Proxies_priv_entity_guard(const Proxies_priv_entity_guard &src);
+
+  ~Proxies_priv_entity_guard() override {}
+
+  /* Entity record guard should implement those three strategies */
+  /**
+    Guard the table insert operation
+  */
+  virtual bool guard_insert(THD *thd, TABLE *table) override;
+  /**
+    Guard the table update operation
+  */
+  virtual bool guard_update(THD *thd, TABLE *table) override;
+  /**
+    Guard the table delete operation
+  */
+  virtual bool guard_delete(THD *thd, TABLE *table, uint record_pos) override;
+
+  /**
+    String format: [schema + "\0" + table]
+    Here it is the proxies_priv_key
+  */
+  virtual const String_type object_name() override;
+
+  virtual Proxies_priv_entity_guard *clone() const override;
+  virtual Proxies_priv_entity_guard *clone(MEM_ROOT *mem_root) const override;
+  /**
+    Explicit call destroy if placement new object
+  */
+  virtual void destroy() const override;
+  /**
+    Singleton instance will be registered when booting.
+  */
+  static Proxies_priv_entity_guard *instance();
+};
+/**
   Global internal guard strategy:
    1) protect system table
    2) protect internal account record in

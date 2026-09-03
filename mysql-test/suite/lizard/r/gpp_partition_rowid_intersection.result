@@ -1,0 +1,99 @@
+#
+# Test GPP (Guess Primary Page) for ROWID INTERSECTION index merge
+# on HASH-partitioned tables. INDEX_MERGE hint with AND conditions
+# triggers intersection merge; GPP should accelerate the clustered
+# index lookup when merging rowids from multiple secondary indexes.
+#
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+# -----------------------------------------------------------------------
+# Create a HASH-partitioned table with multiple secondary indexes.
+# -----------------------------------------------------------------------
+CREATE TABLE tp (
+id  INT AUTO_INCREMENT,
+a   VARCHAR(10) NOT NULL,
+b   INT         NOT NULL,
+c   INT         NOT NULL,
+d   CHAR(1)     NOT NULL DEFAULT 'A',
+PRIMARY KEY (id),
+KEY idx_a (a),
+KEY idx_b (b),
+KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY HASH(id) PARTITIONS 4;
+# -----------------------------------------------------------------------
+# Insert 1000 rows distributed across 4 partitions.
+# -----------------------------------------------------------------------
+CREATE PROCEDURE insert_tp_data(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+START TRANSACTION;
+WHILE i <= num_rows DO
+INSERT INTO tp (id, a, b, c, d) VALUES (
+i,
+CONCAT('NO', LPAD(i, 4, '0')),
+i * 10,
+i * 50,
+ELT(((i - 1) % 3) + 1, 'A', 'B', 'C')
+);
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END//
+CALL insert_tp_data(1000);
+SELECT COUNT(*) AS row_count FROM tp;
+row_count
+1000
+# -----------------------------------------------------------------------
+# Warm up: verify secondary index GPP info is valid via point lookups.
+# -----------------------------------------------------------------------
+SELECT * FROM tp WHERE a = 'NO0001';
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM tp WHERE b = 10;
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM tp WHERE c = 100 AND d = 'B';
+id	a	b	c	d
+2	NO0002	20	100	B
+# ===================================================================
+# Test 1: Intersection merge with INDEX_MERGE hint (idx_a AND PRIMARY)
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,PRIMARY) */ * FROM tp WHERE a = "NO0001" AND id < 100;
+id	a	b	c	d
+1	NO0001	10	50	A
+include/assert.inc [[partition intersection] gpp total (hit+miss) should be > 0]
+# ===================================================================
+# Test 2: Intersection merge with two secondary indexes (idx_a, idx_b)
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b) */ * FROM tp WHERE a = "NO0001" AND b = 10;
+id	a	b	c	d
+1	NO0001	10	50	A
+include/assert.inc [[partition intersection idx_a,idx_b] gpp total (hit+miss) should be > 0]
+# ===================================================================
+# Test 3: Intersection merge with composite secondary index (idx_a, idx_cd)
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,idx_cd) */ * FROM tp WHERE a = "NO0001" AND c = 50 AND d = "A";
+id	a	b	c	d
+1	NO0001	10	50	A
+include/assert.inc [[partition intersection idx_a,idx_cd] gpp total (hit+miss) should be > 0]
+# -----------------------------------------------------------------------
+# Clean up
+# -----------------------------------------------------------------------
+DROP PROCEDURE insert_tp_data;
+DROP TABLE tp;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_index_purge_guess_clust_enabled = 1;
+SET GLOBAL innodb_index_scan_guess_clust_enabled = 1;
+SET GLOBAL innodb_adaptive_hash_index = 0;
+SET GLOBAL innodb_polarx_btree_search_mode = 1;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';

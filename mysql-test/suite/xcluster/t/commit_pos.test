@@ -10,12 +10,14 @@ select * from information_schema.consensus_commit_position;
 
 --connection default
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
 flush local logs;
 sleep 1;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
@@ -23,12 +25,14 @@ select * from information_schema.consensus_commit_position;
 create table t (id int);
 insert into t values (1);
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
 flush local logs;
 sleep 1;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
@@ -36,6 +40,7 @@ insert into t values (2);
 --source include/wait_apply_catchup.inc
 
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;
@@ -43,6 +48,7 @@ flush local logs;
 flush local logs;
 sleep 1;
 --replace_column 2 # 3 #
+--replace_regex /master-bin\.\d{6}/master-bin.NNNNNN/
 select * from information_schema.consensus_commit_position;
 #--replace_column 2 # 3 #
 #show consensus commit point;

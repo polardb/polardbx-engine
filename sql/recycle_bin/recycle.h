@@ -48,9 +48,15 @@ extern PSI_memory_key key_memory_recycle;
 /* Thread local state */
 class Recycle_state {
  public:
-  explicit Recycle_state() : m_set(false), m_priv_relax(false) {}
+  explicit Recycle_state()
+      : m_set(false), m_priv_relax(false), m_name_len(0) {
+    m_name[0] = '\0';
+  }
 
-  explicit Recycle_state(const Recycle_state &other) : m_set(other.m_set) {}
+  /* THD owns it by pointer and guards embed it by value, so copying a
+     thread-local recycle state is meaningless. */
+  Recycle_state(const Recycle_state &) = delete;
+  Recycle_state &operator=(const Recycle_state &) = delete;
 
   void set() { m_set = true; }
 
@@ -60,11 +66,29 @@ class Recycle_state {
 
   void set_priv_relax() { m_priv_relax = true; }
 
+  void set_name(const char *name, size_t length) {
+    assert(name != nullptr);
+    assert(length > 0 && length <= NAME_LEN);
+    memcpy(m_name, name, length);
+    m_name[length] = '\0';
+    m_name_len = length;
+  }
+
+  LEX_CSTRING name() const {
+    return m_name_len == 0 ? LEX_CSTRING{nullptr, 0}
+                           : LEX_CSTRING{m_name, m_name_len};
+  }
+
+  bool has_name() const { return m_name_len > 0; }
+
  private:
   /* label thread state to treat specially */
   bool m_set;
   /* Whether check the recycle schema access rule */
   bool m_priv_relax;
+  /* The custom name selected by the current recycle DDL. */
+  char m_name[NAME_LEN + 1];
+  size_t m_name_len;
 };
 
 /* Lex local state */

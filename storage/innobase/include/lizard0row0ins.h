@@ -36,7 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "btr0cur.h"
 #include "data0data.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 
 namespace lizard {
 

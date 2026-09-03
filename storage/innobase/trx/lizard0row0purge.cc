@@ -30,19 +30,22 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2024-09-24 by Yichang Song
  *******************************************************/
 
+#include <tuple>
+
 #include "current_thd.h"
 #include "debug_sync.h"
 #include "dict0dd.h"
 #include "dict0dict.h"
+#include "lizard0row0lotus.h"
 #include "log0chkp.h"
 #include "row0purge.h"
 #include "row0row.h"
 #include "sql_base.h"
 #include "trx0rec.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0dict0mem.h"
-#include "lizard0purge.h"
+#include "lizard0trx0purge.h"
 #include "lizard0row.h"
 #include "lizard0row0purge.h"
 
@@ -51,11 +54,9 @@ namespace lizard {
     purge_node_t *node, dict_index_t *index, ulint mode) {
   bool success = true;
   mtr_t mtr;
-  rec_t *rec;
-  mem_heap_t *heap = nullptr;
-  ulint *offsets;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  rec_offs_init(offsets_);
+
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   ut_ad(index && dict_index_is_panda(index));
   ut_ad(!node->found_clust);
@@ -78,17 +79,14 @@ namespace lizard {
     goto func_exit;
   }
 
-  rec = node->pcur.get_rec();
+  slc = sctx.get_offsets(node->pcur.get_reg(), index, ULINT_UNDEFINED);
 
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-
-  if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, offsets)) {
+  if (node->roll_ptr != row_get_rec_roll_ptr(slc, index)) {
     /* Someone else has modified the record later: do not remove */
     goto func_exit;
   }
 
-  ut_ad(rec_get_deleted_flag(rec, rec_offs_comp(offsets)));
+  ut_ad(rec_get_deleted_flag(slc->rec(), rec_offs_comp(slc->offsets())));
 
   if (mode == BTR_MODIFY_LEAF) {
     success = btr_cur_optimistic_delete(node->pcur.get_btr_cur(), 0, &mtr);
@@ -122,10 +120,6 @@ namespace lizard {
   }
 
 func_exit:
-  if (heap) {
-    mem_heap_free(heap);
-  }
-
   mtr_commit(&mtr);
   node->pcur.close();
 
@@ -203,4 +197,108 @@ cleanup:
 
   return (purged);
 }
+
+/** Determines if it is possible to remove a secondary index entry. Fast path
+for hippo index. Removal is possible if the trx id in the secondary index record
+matches the trx id in the undo record and the record is delete-marked.
+
+@param[in]  node            row purge node
+@param[in]  index           secondary index
+@param[in]  entry           secondary index entry
+@param[in]  cur             cursor on secondary index
+@return std::pair<trx_id_t, bool> if trx id is not 0, then removal can be
+determined. Otherwise, the slow path should be used.
+ */
+static std::pair<trx_id_t, bool> row_purge_poss_sec_fast(purge_node_t *node,
+                                                         dict_index_t *index,
+                                                         const dtuple_t *entry,
+                                                         btr_cur_t *cur) {
+  ut_ad(!index->is_clustered());
+
+  if (!index->is_hippo() || cur == nullptr || !hippo_purge_enabled) {
+    return std::make_pair(0, false);
+  }
+
+  ut_ad(cur);
+  bool can_delete = false;
+
+  reg_t reg = btr_cur_get_reg(cur);
+
+  Slice_ctx sctx(&node->heap);
+  Slice *slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
+
+  trx_id_t rec_tid = row_get_rec_trx_id(slc, index);
+  if (rec_tid > 0) {
+    can_delete =
+        (rec_tid == node->modifier_trx_id &&
+         rec_get_deleted_flag(reg.rec, dict_table_is_comp(index->table)));
+  }
+
+  return std::make_pair(rec_tid, can_delete);
+}
+
+/** Determines if it is possible to remove a secondary index entry.
+@param[in]  node            row purge node
+@param[in]  index           secondary index
+@param[in]  entry           secondary index entry
+@param[in]  cur             cursor on secondary index
+@return true if removal is possible, false if not
+ */
+bool row_purge_poss_sec(purge_node_t *node, dict_index_t *index,
+                        const dtuple_t *entry, btr_cur_t *cur) {
+  trx_id_t rec_tid = 0;
+  bool can_delete = false;
+
+  std::tie(rec_tid, can_delete) =
+      row_purge_poss_sec_fast(node, index, entry, cur);
+  if (rec_tid > 0) return can_delete;
+
+  return row_purge_poss_sec_slow(node, index, entry, cur);
+}
+
+/**
+ * Allocates and initializes the TRX_ID field in a partial row during purge
+ * operations.
+ *
+ * During purge operations, trx_undo_rec_get_partial_row() creates a partial row
+ * with only ordering fields initialized, leaving system columns (like TRX_ID)
+ * as DATA_MISSING. This function properly initializes the TRX_ID field in the
+ * clustered index row by:
+ * 1. Setting the correct data type for the TRX_ID field
+ * 2. Allocating memory for the field data
+ * 3. Initializing the field with a zero transaction ID value
+ *
+ * Note that this does not fully initialize the entire row - only the TRX_ID
+ * field is initialized. However, this is sufficient for building secondary
+ * index entries for both hippo and regular secondary indexes during purge
+ * operations. In particular, this TRX_ID initialization is critical for hippo
+ * secondary indexes, which include the TID column in their index entries.
+ *
+ * @param[in] index  The clustered index (must be a clustered index)
+ * @param[in,out] row  The partial row tuple to initialize
+ * @param[in] heap  Memory heap for field data allocation
+ */
+void row_purge_alloc_trx_id_field(const dict_index_t *index, dtuple_t *row,
+                                  mem_heap_t *heap) {
+  ut_ad(index->is_clustered());
+
+  const dict_col_t *col = index->table->get_sys_col(DATA_TRX_ID);
+  ulint col_no = dict_col_get_no(col);
+  dfield_t *dfield = dtuple_get_nth_field(row, col_no);
+  ut_ad(dtype_get_mtype(dfield_get_type(dfield)) == DATA_MISSING);
+  ut_ad(dtype_get_prtype(dfield_get_type(dfield)) == 0);
+
+  col->copy_type(&dfield->type);
+
+  ut_ad(dtype_get_mtype(dfield_get_type(dfield)) == DATA_SYS);
+  ut_ad((dtype_get_prtype(dfield_get_type(dfield)) & DATA_SYS_PRTYPE_MASK) ==
+        DATA_TRX_ID);
+
+  byte *buf = static_cast<byte *>(mem_heap_alloc(heap, DATA_TRX_ID_LEN));
+  mach_write_to_6(buf, 0);
+  dfield_set_data(dfield, buf, DATA_TRX_ID_LEN);
+
+  ut_ad(dfield_get_len(dfield) == DATA_TRX_ID_LEN);
+}
+
 }  // namespace lizard

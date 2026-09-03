@@ -848,15 +848,17 @@ inc_file_pos:
   @param[IN] tid        thread id on which to release lock
   @returns true if we have to retry.
 */
-bool MYSQL_RDS_AUDIT_LOG::write_to_buf(const char *log_str, ulong len,
+bool MYSQL_RDS_AUDIT_LOG::write_to_buf(const char *log_str, ulong log_len,
                                        ulong tid) {
   my_off_t curr_buf_offset = 0;
   my_off_t plus_buf_offset = 0;
   my_off_t curr_flu_offset = 0;
+  ulong len = 0;
 
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::write_to_buf");
 
 retry:
+  len = std::min((ulonglong)log_len, log_buf_size);
   /*
     It's possible that m_strategy is changed while waiting in
     buf_full_handle() with LOCK_log released.
@@ -996,6 +998,10 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
           serialized_len = m_serializer->serialize_connection_event_v4(
               event_rds_connection, buf, buf_len);
           break;
+        case MYSQL_V5:
+          serialized_len = m_serializer->serialize_connection_event_v5(
+              event_rds_connection, buf, buf_len);
+          break;
         default:
           assert(0);
       }
@@ -1047,6 +1053,10 @@ void MYSQL_RDS_AUDIT_LOG::process_event(mysql_event_class_t event_class,
           serialized_len = m_serializer->serialize_query_event_v4(
               event_rds_query, buf, buf_len);
           break;
+        case MYSQL_V5:
+          serialized_len = m_serializer->serialize_query_event_v5(
+              event_rds_query, buf, buf_len);
+          break;
         default:
           assert(0);
       }
@@ -1068,7 +1078,7 @@ skip_write_log:
   DBUG_VOID_RETURN;
 }
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
 uint MYSQL_RDS_AUDIT_LOG::log_debug = 0;
 #endif
 
@@ -1082,7 +1092,7 @@ uint MYSQL_RDS_AUDIT_LOG::log_debug = 0;
 void MYSQL_RDS_AUDIT_LOG::write_log(const char *log_str, ulong len, ulong tid) {
   DBUG_ENTER("MYSQL_RDS_AUDIT_LOG::write_log");
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   DBUG_EXECUTE_IF("rds_audit_pwrite_err", MYSQL_RDS_AUDIT_LOG::log_debug = 1;);
   DBUG_EXECUTE_IF("rds_audit_pwrite_0", MYSQL_RDS_AUDIT_LOG::log_debug = 2;);
 #endif
@@ -1308,7 +1318,7 @@ bool MYSQL_RDS_AUDIT_LOG::pwrite_batch(const uchar *pwrite_buf,
                                pwrite_len - already_written,
                                pwrite_offset + already_written, MYF(0));
     log_file_writes++;
-#ifndef DBUG_OFF
+#ifndef NDEBUG
     if (log_debug == 1)
       written = (size_t)-1;
     else if (log_debug == 2)
@@ -1317,10 +1327,11 @@ bool MYSQL_RDS_AUDIT_LOG::pwrite_batch(const uchar *pwrite_buf,
     /* Error occurs */
     if (written == (size_t)-1) {
       if ((pwrite_err_num++) % 1000 == 0) {
+        /* Also eat "log_fd == -1" error. */
         sql_print_error(
             "audit my_pwrite got -1: to_write(%lld), already_written(%lld), "
-            "errno(%d), total_err_num(%lu)",
-            pwrite_len, already_written, errno, pwrite_err_num);
+            "errno(%d), total_err_num(%lu), log_fd(%d)",
+            pwrite_len, already_written, errno, pwrite_err_num, log_fd);
       }
       DBUG_RETURN(false);
     }
@@ -1514,7 +1525,11 @@ void MYSQL_RDS_AUDIT_LOG::flush_log_buf(bool flush_all) {
     2. m_enabled is relative higher level switch, when flushing log_buf to
        file, we should only consider whether there is a valid fd to write to.
   */
-  if (log_fd == -1) goto finish;
+  /*
+    Revision:
+    Let pwrite_batch eat "log_fd == -1" error.
+  */
+  // if (log_fd == -1) goto finish;
 
   /*
     This means we are using write-to-file algorithm.

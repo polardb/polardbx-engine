@@ -36,6 +36,8 @@
 #include <optional>
 #include <utility>
 
+#include "column_encryption/column_encryption.h"
+#include "column_encryption/encdb_service.h"
 #include "decimal.h"
 #include "float.h"
 #include "limits.h"
@@ -147,7 +149,7 @@ Item::Item()
       unsigned_flag(false),
       m_is_window_function(false),
       m_accum_properties(0),
-      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {
+      m_encryption_type(komodo::COLUMN_ENCRYPTION_TYPE_NONE) {
 #ifndef NDEBUG
   contextualized = true;
 #endif  // NDEBUG
@@ -174,7 +176,7 @@ Item::Item(THD *thd, const Item *item)
       unsigned_flag(item->unsigned_flag),
       m_is_window_function(item->m_is_window_function),
       m_accum_properties(item->m_accum_properties),
-      m_encrypted_type(item->m_encrypted_type) {
+      m_encryption_type(item->m_encryption_type) {
 #ifndef NDEBUG
   assert(item->contextualized);
   contextualized = true;
@@ -203,7 +205,7 @@ Item::Item(const POS &)
       unsigned_flag(false),
       m_is_window_function(false),
       m_accum_properties(0),
-      m_encrypted_type(COULUMN_ENCRYPTED_TYPE_NONE) {}
+      m_encryption_type(komodo::COLUMN_ENCRYPTION_TYPE_NONE) {}
 
 bool Item::may_eval_const_item(const THD *thd) const {
   return !thd->lex->is_view_context_analysis() || basic_const_item();
@@ -2856,13 +2858,9 @@ inline static uint32 adjust_max_effective_column_length(Field *field_par,
   return new_max_length > max_length ? new_max_length : max_length;
 }
 
-void Item_field::set_encrypted_type(Field *field) {
+void Item_field::set_encryption_type(Field *field) {
   /** Copy the column encryption type from the field to the item. */
-  m_encrypted_type = field->encrypted_type();
-
-  if (has_encrypted_type(m_encrypted_type)) {
-    set_encrypted_column();
-  }
+  m_encryption_type = komodo::get_encryption_type_for_field(field);
 }
 
 void Item_field::set_field(Field *field_par) {
@@ -2906,7 +2904,7 @@ void Item_field::set_field(Field *field_par) {
   if (!can_use_prefix_key)
     field->table->covering_keys.subtract(field->part_of_prefixkey);
 
-  set_encrypted_type(field);
+  set_encryption_type(field);
 
   fixed = true;
 }
@@ -2960,11 +2958,19 @@ void Item_ident::print(const THD *thd, String *str, enum_query_type query_type,
       // mode '2' does not apply to aliases:
       (lower_case_table_names == 2 && !alias_name_used())) {
     if (table_name_arg && table_name_arg[0]) {
+      if (strlen(table_name_arg) + 1 >= MAX_ALIAS_NAME) {
+        my_error(ER_TOO_LONG_IDENT, MYF(0), table_name_arg);
+        return ;
+      }
       my_stpcpy(t_name_buff, table_name_arg);
       my_casedn_str(files_charset_info, t_name_buff);
       t_name = t_name_buff;
     }
     if (db_name_arg && db_name_arg[0]) {
+      if (strlen(db_name_arg) + 1 >= MAX_ALIAS_NAME) {
+        my_error(ER_TOO_LONG_IDENT, MYF(0), db_name_arg);
+        return ;
+      }
       my_stpcpy(d_name_buff, db_name_arg);
       my_casedn_str(files_charset_info, d_name_buff);
       d_name = d_name_buff;

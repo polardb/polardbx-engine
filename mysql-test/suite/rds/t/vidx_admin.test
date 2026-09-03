@@ -1,0 +1,269 @@
+##########################################
+# VECTOR INDEX with Admin DDL operations #
+# OPTIMIZE / REPAIR / CHECK / ANALYZE    #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--echo #
+--echo # 1. Setup: Create table with VECTOR INDEX and insert data
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  extra INT DEFAULT 0,
+  VECTOR INDEX vi(v) m=12 distance=euclidean
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t1;
+
+--echo # Insert deterministic data for later verification
+INSERT INTO t1(id, v, extra) VALUES (1, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'), 10);
+INSERT INTO t1(id, v, extra) VALUES (2, VEC_FROMTEXT('[0.0, 1.0, 0.0, 0.0]'), 20);
+INSERT INTO t1(id, v, extra) VALUES (3, VEC_FROMTEXT('[0.0, 0.0, 1.0, 0.0]'), 30);
+INSERT INTO t1(id, v, extra) VALUES (4, VEC_FROMTEXT('[0.0, 0.0, 0.0, 1.0]'), 40);
+INSERT INTO t1(id, v, extra) VALUES (5, VEC_FROMTEXT('[1.0, 1.0, 0.0, 0.0]'), 50);
+INSERT INTO t1(id, v, extra) VALUES (6, VEC_FROMTEXT('[0.0, 1.0, 1.0, 0.0]'), 60);
+INSERT INTO t1(id, v, extra) VALUES (7, VEC_FROMTEXT('[0.0, 0.0, 1.0, 1.0]'), 70);
+INSERT INTO t1(id, v, extra) VALUES (8, VEC_FROMTEXT('[1.0, 0.0, 0.0, 1.0]'), 80);
+
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # Verify auxiliary tables exist
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # Baseline ANN search: nearest to [1,0,0,0] should be id=1
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo #
+--echo # ==========================================================
+--echo # 2. OPTIMIZE TABLE with data + search verification
+--echo # ==========================================================
+--echo # OPTIMIZE TABLE in InnoDB maps to ALTER TABLE ENGINE=InnoDB (table rebuild).
+--echo # Risk: auxiliary table data must be rebuilt consistently.
+--echo #
+OPTIMIZE TABLE t1;
+
+--echo # 2.1 Verify structure preserved
+SHOW CREATE TABLE t1;
+
+--echo # 2.2 Verify data count preserved
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # 2.3 Verify auxiliary tables still exist
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # 2.4 Verify VECTOR INDEX metadata in information_schema
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+
+--echo # 2.5 Verify ANN search still works correctly after OPTIMIZE
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 2.6 Verify EXPLAIN still uses vector index scan
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo #
+--echo # 2.7 OPTIMIZE TABLE after DML (insert + delete + update cycle)
+--echo #
+DELETE FROM t1 WHERE id IN (3, 5);
+UPDATE t1 SET v = VEC_FROMTEXT('[0.5, 0.5, 0.5, 0.5]') WHERE id = 7;
+INSERT INTO t1(id, v, extra) VALUES (9, VEC_FROMTEXT('[0.9, 0.1, 0.0, 0.0]'), 90);
+
+OPTIMIZE TABLE t1;
+
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # ANN search after OPTIMIZE post-DML
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo #
+--echo # 2.8 Multiple consecutive OPTIMIZE TABLE (stability)
+--echo #
+OPTIMIZE TABLE t1;
+OPTIMIZE TABLE t1;
+
+SHOW CREATE TABLE t1;
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo #
+--echo # ==========================================================
+--echo # 3. REPAIR TABLE
+--echo # ==========================================================
+--echo # InnoDB does not support REPAIR (returns "note: The storage engine
+--echo # for the table doesn't support repair"). Must verify:
+--echo # - No error/crash
+--echo # - Auxiliary tables unaffected
+--echo # - Data intact
+--echo #
+REPAIR TABLE t1;
+
+--echo # 3.1 Verify structure preserved
+SHOW CREATE TABLE t1;
+
+--echo # 3.2 Verify data preserved
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # 3.3 Verify auxiliary tables unaffected
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # 3.4 Verify ANN search still works
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo #
+--echo # ==========================================================
+--echo # 4. CHECK TABLE
+--echo # ==========================================================
+--echo # CHECK TABLE validates InnoDB's internal indexes. Must verify:
+--echo # - No crash when table has vector index
+--echo # - Auxiliary tables not corrupted/misreported
+--echo # - Data accessible after CHECK
+--echo #
+CHECK TABLE t1;
+
+--echo # 4.1 Verify structure preserved
+SHOW CREATE TABLE t1;
+
+--echo # 4.2 Verify data preserved
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # 4.3 Verify ANN search still works
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 4.4 CHECK TABLE with EXTENDED option
+CHECK TABLE t1 EXTENDED;
+
+--echo # 4.5 CHECK TABLE with FOR UPGRADE option
+CHECK TABLE t1 FOR UPGRADE;
+
+--echo #
+--echo # ==========================================================
+--echo # 5. ANALYZE TABLE
+--echo # ==========================================================
+--echo # ANALYZE TABLE recalculates index statistics. Must verify:
+--echo # - Statistics updated without affecting auxiliary tables
+--echo # - Vector index still functional
+--echo #
+ANALYZE TABLE t1;
+
+--echo # 5.1 Verify structure preserved
+SHOW CREATE TABLE t1;
+
+--echo # 5.2 Verify data preserved
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # 5.3 Verify auxiliary tables unaffected
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo # 5.4 Verify ANN search still works
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo # 5.5 Verify EXPLAIN after ANALYZE (optimizer should pick vector index)
+EXPLAIN SELECT * FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+
+--echo #
+--echo # ==========================================================
+--echo # 6. Combined Admin operations sequence
+--echo # ==========================================================
+--echo # ANALYZE -> INSERT -> CHECK -> OPTIMIZE -> ANN search
+--echo #
+ANALYZE TABLE t1;
+INSERT INTO t1(id, v, extra) VALUES (10, VEC_FROMTEXT('[0.0, 0.0, 0.0, 0.0]'), 100);
+CHECK TABLE t1;
+OPTIMIZE TABLE t1;
+
+SELECT COUNT(*) AS row_count FROM t1;
+
+--echo # Final ANN search validation
+--disable_result_log
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]')) AS dist
+FROM t1
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1.0, 0.0, 0.0, 0.0]'))
+LIMIT 3;
+--enable_result_log
+
+--echo #
+--echo # ==========================================================
+--echo # 7. Admin DDL on empty table with VECTOR INDEX
+--echo # ==========================================================
+--echo #
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(4),
+  VECTOR INDEX vi2(v) m=12 distance=cosine
+) ENGINE=InnoDB;
+
+OPTIMIZE TABLE t2;
+SHOW CREATE TABLE t2;
+
+REPAIR TABLE t2;
+SHOW CREATE TABLE t2;
+
+CHECK TABLE t2;
+SHOW CREATE TABLE t2;
+
+ANALYZE TABLE t2;
+SHOW CREATE TABLE t2;
+
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+DROP TABLE t2;
+
+--echo #
+--echo # ==========================================================
+--echo # 8. Cleanup
+--echo # ==========================================================
+--echo #
+DROP TABLE t1;
+
+--echo # Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES
+WHERE NAME LIKE 'test/vidx_%';
+
+SET GLOBAL vidx_disabled = ON;

@@ -1,0 +1,55 @@
+create table t1 (c1 longblob);
+###################
+# Case: Resize
+###################
+call dbms_consensus.force_purge_cache(4611686018427387904);
+set global consensus_log_cache_size = 2*1024*1024;
+set debug = "+d,fifo_cache_disable_evicit_oldest_try";
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+show global status like "consensus_fifo_cache_log_count";
+Variable_name	Value
+Consensus_fifo_cache_log_count	7
+set global consensus_log_cache_size = 4*1024*1024;
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+insert into t1 values (repeat('a', 255*1024));
+show global status like "consensus_fifo_cache_log_count";
+Variable_name	Value
+Consensus_fifo_cache_log_count	15
+set global consensus_log_cache_size = 2*1024*1024;
+show global status like "consensus_fifo_cache_log_count";
+Variable_name	Value
+Consensus_fifo_cache_log_count	7
+set debug = "-d,fifo_cache_disable_evicit_oldest_try";
+###################
+# Case: Handle error
+###################
+set debug = "+d,fifo_cache_simulate_write_error";
+insert into t1 values (repeat('a', 255*1024));
+Got one of the listed errors
+###################
+# Cleanup
+###################
+drop table t1;

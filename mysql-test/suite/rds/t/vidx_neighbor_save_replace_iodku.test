@@ -1,0 +1,123 @@
+--source include/have_debug.inc
+
+# save_neighbors_only regression: REPLACE INTO and INSERT ... ON DUPLICATE KEY UPDATE
+# exercise hlindexes_on_delete + hlindexes_on_insert in sequence.  This
+# confirms save_neighbors_only invariants (no revive, no dup_key) on the
+# delete-then-insert flow.
+#           Vidx_save_retry_dup_key delta = 0, data integrity preserved.
+# Related: save_neighbors_only commit dd578613c1c.
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+--disable_query_log
+let $i = 1;
+while ($i <= 40)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_ins   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $b_del   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_count'`;
+
+DELIMITER $$;
+
+# REPLACE on existing id (DELETE + INSERT in storage layer).
+CREATE PROCEDURE p_replace(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 600 DO
+    REPLACE INTO t1(id, v) VALUES ((j % 40) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, "]")));
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+# INSERT ... ON DUPLICATE KEY UPDATE on the same id range.
+CREATE PROCEDURE p_iodku(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 600 DO
+    INSERT INTO t1(id, v) VALUES ((j % 40) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, ",", (j+p_offset)%150, "]"))) ON DUPLICATE KEY UPDATE v = VEC_FROMTEXT(CONCAT("[", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, ",", (j+p_offset+1)%150, "]"));
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+DELIMITER ;$$
+
+connect (cRep, localhost, root,,);
+connect (cIod, localhost, root,,);
+
+--connection cRep
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_replace(11)
+--connection cIod
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_iodku(23)
+
+--connection cRep
+--error 0,1213,1022,1062
+--reap
+--connection cIod
+--error 0,1213,1022,1062
+--reap
+
+--connection default
+
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_ins   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_insert_count'`;
+let $a_del   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_invalidate_count'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_ins   = `SELECT $a_ins - $b_ins`;
+let $d_del   = `SELECT $a_del - $b_del`;
+
+let $ok_nbr = `SELECT $d_nbr > 0`;
+let $ok_dup = `SELECT $d_dup = 0`;
+let $ok_ins = `SELECT $d_ins > 0`;
+let $ok_del = `SELECT $d_del > 0`;
+--echo == save_neighbors_only REPLACE/IODKU deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+--echo insert_count_gt_0=$ok_ins
+--echo delete_count_gt_0=$ok_del
+
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 on REPLACE/IODKU
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+# Sanity: row count is still <= 40 (REPLACE/IODKU keep distinct ids).
+let $row_count = `SELECT COUNT(*) FROM t1`;
+let $ok_rc = `SELECT $row_count <= 40`;
+--echo row_count_le_40=$ok_rc
+if (`SELECT $row_count > 40`) {
+  --die Data integrity violated: REPLACE/IODKU produced extra rows
+}
+
+disconnect cRep;
+disconnect cIod;
+
+DROP PROCEDURE p_replace;
+DROP PROCEDURE p_iodku;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

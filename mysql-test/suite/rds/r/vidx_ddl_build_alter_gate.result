@@ -1,0 +1,146 @@
+CREATE DATABASE vidx_ddl_build_alter_gate;
+USE vidx_ddl_build_alter_gate;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+a INT NOT NULL,
+v VECTOR(5)
+) ENGINE = InnoDB;
+SET SESSION vidx_ddl_threads = 4;
+
+############################################
+# Phase A: ADD VECTOR INDEX + ADD INDEX   #
+# in a single ALTER                       #
+############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), ADD INDEX ka(a);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ka` (`a`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi	v	5	6	HLINDEX_TABLE_NAME
+VERDICT A live==base after vector+plain ADD: PASS
+# Both indexes must be usable
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+id
+7
+SELECT id FROM t1 FORCE INDEX(ka) WHERE a = 70;
+id
+7
+
+############################################
+# Phase B: second vector index rebuilds    #
+# every slot                               #
+############################################
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v) M=8;
+Warnings:
+Warning	1831	Duplicate index 'vi2' defined on the table 'vidx_ddl_build_alter_gate.t1'. This is deprecated and will be disallowed in a future release.
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi	v	5	6	HLINDEX_TABLE_NAME
+vi2	v	5	8	HLINDEX_TABLE_NAME
+VERDICT B every slot rebuilt to live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+id
+7
+SELECT id FROM t1 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[31,32,33,34,35]')) LIMIT 1;
+id
+31
+
+############################################
+# Phase C: explicit ALGORITHM=COPY         #
+############################################
+ALTER TABLE t1 DROP INDEX vi2;
+ALTER TABLE t1 DROP INDEX vi;
+ALTER TABLE t1 ADD VECTOR INDEX vi(v), ALGORITHM=COPY;
+VERDICT C live==base under explicit COPY: PASS
+
+############################################
+# Phase D: single RENAME INDEX             #
+############################################
+ALTER TABLE t1 RENAME INDEX vi TO vi_renamed;
+SHOW INDEX FROM t1 WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	1	vi_renamed	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+# A rename touches metadata only: the graph stays searchable
+SELECT id FROM t1 FORCE INDEX(vi_renamed) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+id
+7
+ALTER TABLE t1 RENAME INDEX vi_renamed TO vi;
+
+############################################
+# Phase E: rejected combinations           #
+############################################
+# E1 adding a vector index while dropping another index
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), DROP INDEX ka;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+# E2 dropping the vector index while adding another index
+ALTER TABLE t1 DROP INDEX vi, ADD INDEX kb(a);
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+# E3 two RENAME INDEX clauses at once
+ALTER TABLE t1 RENAME INDEX vi TO vi_x, RENAME INDEX ka TO ka_x;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+# E4 ADD VECTOR INDEX with ALGORITHM=INPLACE
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), ALGORITHM=INPLACE;
+ERROR 0A000: ALGORITHM=INPLACE is not supported for this operation. Try ALGORITHM=COPY.
+# E5 ADD VECTOR INDEX with LOCK=NONE
+ALTER TABLE t1 ADD VECTOR INDEX vi2(v), LOCK=NONE;
+ERROR 0A000: LOCK=NONE is not supported for this operation. Try LOCK=SHARED.
+# E6 ADD VECTOR INDEX on a temporary table
+CREATE TEMPORARY TABLE t_tmp (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(5)
+) ENGINE = InnoDB;
+ALTER TABLE t_tmp ADD VECTOR INDEX vi(v);
+ERROR 42000: This version of MySQL doesn't yet support 'the VECTOR index in partitioned or temp tables'
+DROP TEMPORARY TABLE t_tmp;
+# Assert: the table and its single graph survived every rejection
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ka` (`a`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+VERDICT E rejections leave no auxiliary table: PASS
+VERDICT E existing graph intact after rejections: PASS
+
+############################################
+# Phase F: DROP vector + DROP plain index  #
+############################################
+ALTER TABLE t1 DROP INDEX vi, DROP INDEX ka;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` int NOT NULL,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+VERDICT F graph dropped with the index: PASS
+
+# No rejected or accepted combination may be reported as a build error
+VERDICT build-error-count unchanged: PASS
+DROP TABLE t1;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+DROP DATABASE IF EXISTS vidx_ddl_build_alter_gate;

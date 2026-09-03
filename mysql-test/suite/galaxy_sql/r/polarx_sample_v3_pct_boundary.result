@@ -1,0 +1,79 @@
+DROP TABLE IF EXISTS t_rec, t_blk;
+#################
+# Record Mode: height 0, so create_sampler() picks RecordSampler
+#################
+CREATE TABLE t_rec (id INT PRIMARY KEY) ENGINE = InnoDB;
+INSERT INTO t_rec VALUES (1), (2), (3);
+# 0 percent yields an empty result instead of aborting the server
+SELECT /*+ sample_percentage(0.0) */ COUNT(*) FROM t_rec;
+COUNT(*)
+0
+SELECT /*+ sample_percentage(0) */ COUNT(*) FROM t_rec;
+COUNT(*)
+0
+# a negative literal is a hint syntax error, so the hint is dropped and
+# the statement degrades to an ordinary full scan
+SELECT /*+ sample_percentage(-1) */ COUNT(*) FROM t_rec;
+COUNT(*)
+3
+Warnings:
+Warning	1064	Optimizer hint syntax error near '-1) */ COUNT(*) FROM t_rec' at line 1
+SELECT /*+ sample_percentage(-0.5) */ COUNT(*) FROM t_rec;
+COUNT(*)
+3
+Warnings:
+Warning	1064	Optimizer hint syntax error near '-0.5) */ COUNT(*) FROM t_rec' at line 1
+# 100 percent samples every row
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t_rec;
+COUNT(*)
+3
+SELECT /*+ sample_percentage(100.0) */ id FROM t_rec;
+id
+1
+2
+3
+# percentages above 100 are clamped down to 100
+SELECT /*+ sample_percentage(150.0) */ COUNT(*) FROM t_rec;
+COUNT(*)
+3
+#################
+# Block Mode: height 1, so create_sampler() picks BlockSampler
+#################
+CREATE TABLE t_blk (id INT PRIMARY KEY) ENGINE = InnoDB;
+SET @old_limit_optimistic = @@GLOBAL.innodb_limit_optimistic_insert_debug;
+SET GLOBAL innodb_limit_optimistic_insert_debug = 2;
+INSERT INTO t_blk VALUES (10), (20), (30);
+SET GLOBAL innodb_limit_optimistic_insert_debug = @old_limit_optimistic;
+# 0 percent makes BlockSampler skip every leaf page
+SELECT /*+ sample_percentage(0.0) */ COUNT(*) FROM t_blk;
+COUNT(*)
+0
+SELECT /*+ sample_percentage(0) */ COUNT(*) FROM t_blk;
+COUNT(*)
+0
+# a negative literal is a hint syntax error, so the hint is dropped and
+# the statement degrades to an ordinary full scan
+SELECT /*+ sample_percentage(-1) */ COUNT(*) FROM t_blk;
+COUNT(*)
+3
+Warnings:
+Warning	1064	Optimizer hint syntax error near '-1) */ COUNT(*) FROM t_blk' at line 1
+SELECT /*+ sample_percentage(-0.5) */ COUNT(*) FROM t_blk;
+COUNT(*)
+3
+Warnings:
+Warning	1064	Optimizer hint syntax error near '-0.5) */ COUNT(*) FROM t_blk' at line 1
+# 100 percent opens every leaf page
+SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t_blk;
+COUNT(*)
+3
+SELECT /*+ sample_percentage(100.0) */ id FROM t_blk;
+id
+10
+20
+30
+# percentages above 100 are clamped down to 100
+SELECT /*+ sample_percentage(150.0) */ COUNT(*) FROM t_blk;
+COUNT(*)
+3
+DROP TABLE t_rec, t_blk;

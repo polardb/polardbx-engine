@@ -414,6 +414,7 @@ dberr_t Loader::scan_and_build_indexes() noexcept {
   SYNC_POINT_ADD(thd, "ddl_btree_build_interrupt");
   SYNC_POINT_ADD(thd, "ddl_btree_build_sleep");
   SYNC_POINT_ADD(thd, "ddl_btree_build_insert_return_interrupt");
+  SYNC_POINT_ADD(thd, "ddl_btree_build_spc_encoder_fail");
 
   auto cleanup = [&]() {
     for (auto &s : sync_points) {

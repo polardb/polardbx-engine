@@ -1,0 +1,246 @@
+##############################################################
+# Crash recovery around the DDL direct build.                #
+#                                                            #
+# The build writes the whole graph into the #sql intermediate #
+# table inside the still-uncommitted ALTER transaction, so a  #
+# crash can only ever leave one of two states behind: the     #
+# ALTER never happened, or it happened completely.  A         #
+# half-built graph must never survive a restart.              #
+#                                                            #
+# Arm A  crash before the auxiliary graph table is created    #
+#        (crash_before_vidx_ddl, reached from the ALTER's      #
+#        create_table): recovery rolls the ALTER back, the     #
+#        table keeps no vector index, no orphan graph table    #
+#        is left, and a plain retry builds the graph in full.  #
+# Arm B  crash after the graph was built and the DDL          #
+#        transaction committed, before the InnoDB post-ddl     #
+#        cleanup (ddl_log_before_post_ddl): recovery must      #
+#        leave a self-consistent state -- if the vector index  #
+#        survived, its graph is complete and searchable.       #
+# Arm C  crash in the MIDDLE of the build, after a batch of    #
+#        graph rows entered the still-uncommitted DDL          #
+#        transaction (vidx_ddl_crash_mid_build): recovery must  #
+#        roll the whole ALTER back; the in-flight graph rows   #
+#        must not survive as an orphan table.                  #
+#                                                            #
+# Arm B asserts self-consistency rather than pinning which of  #
+# the two states wins, because that split belongs to the       #
+# atomic-DDL layer, not to the vector build.                   #
+##############################################################
+--source include/have_debug.inc
+--source include/not_valgrind.inc
+--source include/not_crashrep.inc
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("\\[ERROR\\].*Scanned file '.*' for tablespace .* cannot be opened because it is not in a sub-directory named for the schema");
+CALL mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Tablespace .*, name '.*', file '*.*' is missing!");
+
+CREATE DATABASE vidx_ddl_build_crash;
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+CREATE TABLE t2 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t1 VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  eval INSERT INTO t2 VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SELECT COUNT(*) AS t1_rows FROM t1;
+SELECT COUNT(*) AS t2_rows FROM t2;
+
+--echo
+--echo ############################################
+--echo # Arm A: crash before the graph table is   #
+--echo # created -- the ALTER must vanish         #
+--echo ############################################
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,crash_before_vidx_ddl";
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+--source include/start_mysqld_no_echo.inc
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--echo # Assert: recovery rolled the ALTER back completely
+let $vi_cnt = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_build_crash' AND TABLE_NAME = 't1', c, 1);
+if ($vi_cnt != 0) {
+  --die Arm A: the vector index survived a crash that preceded its graph table
+}
+--echo VERDICT A no vector index after recovery: PASS
+let $aux_cnt = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_crash/vidx_%', c, 1);
+if ($aux_cnt != 0) {
+  --echo FATAL: $aux_cnt orphan auxiliary tables after recovery
+  --die Arm A: recovery left an orphan auxiliary graph table
+}
+--echo VERDICT A no orphan auxiliary table: PASS
+SELECT COUNT(*) AS t1_rows_after_recovery FROM t1;
+
+--echo # A plain retry after recovery must build the graph in full
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_crash/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Arm A: retry after crash recovery built an incomplete graph
+}
+--echo VERDICT A retry live==base: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Arm B: crash after the build committed,  #
+--echo # before the InnoDB post-ddl cleanup       #
+--echo ############################################
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,ddl_log_before_post_ddl";
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+
+--source include/start_mysqld_no_echo.inc
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--echo # Assert: whatever recovery decided, the state is self-consistent --
+--echo # a surviving vector index owns a complete, searchable graph, and a
+--echo # rolled-back one owns no graph table at all.
+let $vi_cnt = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_build_crash' AND TABLE_NAME = 't2', c, 1);
+let $aux_cnt = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_crash/vidx_%', c, 1);
+if ($vi_cnt == 1) {
+  let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_crash/t2', TABLE_ID, 1);
+  --disable_query_log
+  eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+  PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+  SET @probe = NULL;
+  SELECT id INTO @probe FROM t2 FORCE INDEX(vi)
+    ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[20,21,22,23,24]')) LIMIT 1;
+  --enable_query_log
+  if (`SELECT @live <> 40`) {
+    --die Arm B: a half-built graph survived the crash
+  }
+  if (`SELECT @probe IS NULL OR @probe <> 20`) {
+    --die Arm B: the surviving graph is not searchable
+  }
+}
+if ($vi_cnt == 0) {
+  # t1's graph is the only one that may exist at this point.
+  if ($aux_cnt != 1) {
+    --die Arm B: the rolled-back ALTER left an orphan graph table
+  }
+}
+if (`SELECT $vi_cnt NOT IN (0, 1)`) {
+  --die Arm B: unexpected vector index count on t2 after recovery
+}
+--echo VERDICT B recovery left a self-consistent state: PASS
+
+--echo # t1's graph, built before the crash, must still be intact
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_crash/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Arm B: an unrelated graph lost nodes across the crash
+}
+--echo VERDICT B unrelated graph intact: PASS
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[7,8,9,10,11]')) LIMIT 1;
+
+--echo # Rebuilding t2's index from scratch must work after recovery
+# The DROP is conditional on what recovery decided, so keep it out of the
+# recorded output.
+--disable_query_log
+if ($vi_cnt == 1) {
+  ALTER TABLE t2 DROP INDEX vi;
+}
+--enable_query_log
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_crash/t2', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Arm B: rebuild after crash recovery produced an incomplete graph
+}
+--echo VERDICT B rebuild live==base: PASS
+SELECT id FROM t2 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[33,34,35,36,37]')) LIMIT 1;
+
+--echo
+--echo ############################################
+--echo # Arm C: crash mid-build, rows already in  #
+--echo # the uncommitted DDL transaction          #
+--echo ############################################
+CREATE TABLE t3 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 40) {
+  eval INSERT INTO t3 VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SET SESSION vidx_ddl_threads = 4;
+SET DEBUG = "d,vidx_ddl_crash_mid_build";
+--source include/expect_crash.inc
+--error 0,CR_SERVER_LOST,ER_INTERNAL_ERROR
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+
+--source include/start_mysqld_no_echo.inc
+USE vidx_ddl_build_crash;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+
+--echo # Assert: the half-built graph must not survive the restart
+let $vi_cnt = query_get_value(SELECT COUNT(*) AS c FROM INFORMATION_SCHEMA.VECTOR_INDEXES WHERE TABLE_SCHEMA = 'vidx_ddl_build_crash' AND TABLE_NAME = 't3', c, 1);
+if ($vi_cnt != 0) {
+  --die Arm C: the vector index survived a crash that happened mid-build
+}
+--echo VERDICT C no vector index after mid-build crash: PASS
+let $aux_cnt = query_get_value(SELECT COUNT(*) AS c FROM information_schema.innodb_tables WHERE NAME LIKE 'vidx_ddl_build_crash/vidx_%', c, 1);
+# t1 and t2 each keep exactly one graph at this point; anything more is an
+# orphan of the rolled-back t3 build.
+if ($aux_cnt != 2) {
+  --echo FATAL: $aux_cnt auxiliary tables where only the two committed graphs may exist
+  --die Arm C: mid-build crash left orphan graph rows behind
+}
+--echo VERDICT C no orphan auxiliary table: PASS
+SELECT COUNT(*) AS t3_rows_after_recovery FROM t3;
+
+--echo # A plain retry after recovery must build the graph in full
+ALTER TABLE t3 ADD VECTOR INDEX vi(v);
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME = 'vidx_ddl_build_crash/t3', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 40`) {
+  --die Arm C: retry after mid-build crash produced an incomplete graph
+}
+--echo VERDICT C retry live==base: PASS
+SELECT id FROM t3 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[13,14,15,16,17]')) LIMIT 1;
+
+DROP TABLE t1, t2, t3;
+SET SESSION vidx_ddl_threads = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_build_crash;

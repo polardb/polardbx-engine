@@ -1,0 +1,79 @@
+#
+# Test LOB prealloc: calc_lob_prealloc_pages() under-estimates.
+#
+# Injects innodb_lob_prealloc_underestimate which subtracts 1 page per
+# field (if pages_for_field > 1) in calc_lob_prealloc_pages().
+# The pre-allocated pool is exhausted mid-write; alloc_lob_page() then
+# calls fill_lob_page() with refill=true to top up the pool.
+#
+# Two assertions in the code are guarded via DBUG_EVALUATE_IF so that
+# the debug build does not abort:
+#   - ut_ad(!refill)               in fill()
+#   - ut_ad(expect_unused || ...)  in clear() for leftover refill pages
+#
+# Flow:
+# 1. INSERT large BLOB with underestimate flag: pre-alloc runs out,
+#    refill triggers -> Lizard_lob_prealloc_underestimate_pages increases.
+# 2. UPDATE to a new large BLOB with underestimate flag -> same.
+#
+
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+--source include/have_innodb_max_16k.inc
+
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+SET GLOBAL innodb_lob_prealloc = ON;
+
+CREATE TABLE t1 (id BIGINT PRIMARY KEY, b LONGBLOB);
+
+--echo ####################################################################################
+--echo # 1. INSERT with underestimate: pre-alloc runs out, refill path triggered
+--echo ####################################################################################
+
+SET @under_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+SET DEBUG = '+d,innodb_lob_prealloc_underestimate';
+INSERT INTO t1 VALUES (1, REPEAT('x', 65536));
+SET DEBUG = '-d,innodb_lob_prealloc_underestimate';
+
+SET @under_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+# refill was triggered; LOB_PREALLOC_HEURISTIC_PAGES (10) extra pages allocated
+if (`SELECT CONVERT(@under_after, SIGNED) <= CONVERT(@under_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_underestimate_pages should have increased."
+  --die
+}
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 2. UPDATE with underestimate: pre-alloc runs out, refill path triggered
+--echo ####################################################################################
+
+SET @under_before = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                     WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+SET DEBUG = '+d,innodb_lob_prealloc_underestimate';
+UPDATE t1 SET b = REPEAT('y', 65536) WHERE id = 1;
+SET DEBUG = '-d,innodb_lob_prealloc_underestimate';
+
+SET @under_after = (SELECT VARIABLE_VALUE FROM performance_schema.global_status
+                    WHERE VARIABLE_NAME = 'Lizard_lob_prealloc_underestimate_pages');
+
+if (`SELECT CONVERT(@under_after, SIGNED) <= CONVERT(@under_before, SIGNED)`)
+{
+  --echo "Unexpected: Lizard_lob_prealloc_underestimate_pages should have increased."
+  --die
+}
+
+CHECK TABLE t1;
+
+--echo ####################################################################################
+--echo # 3. cleanup
+--echo ####################################################################################
+
+DROP TABLE t1;
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

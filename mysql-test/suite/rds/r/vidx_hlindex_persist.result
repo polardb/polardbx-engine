@@ -1,0 +1,324 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+########################################
+# Scenario 1: DML->SELECT lock state switch
+# Verifies store_lock clears LOCK_X between DML and SELECT
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# INSERT (F_WRLCK) then immediate ANN SELECT (F_RDLCK)
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[1,1,1,1,1]'));
+SELECT id FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+id
+1
+3
+# UPDATE (F_WRLCK) then SELECT
+UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9,9,9]') WHERE id = 1;
+SELECT id FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 1;
+id
+1
+# DELETE (F_WRLCK) then SELECT
+DELETE FROM t1 WHERE id = 2;
+SELECT id FROM t1 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1,1]')) LIMIT 2;
+id
+3
+1
+# Rapid alternation: INSERT-SELECT x3
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[2,2,2,2,2]'));
+SELECT COUNT(*) FROM t1 FORCE INDEX(`vi`)
+WHERE VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,2,2,2,2]')) IS NOT NULL;
+COUNT(*)
+3
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[3,3,3,3,3]'));
+SELECT COUNT(*) FROM t1 FORCE INDEX(`vi`)
+WHERE VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3,3]')) IS NOT NULL;
+COUNT(*)
+4
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT('[4,4,4,4,4]'));
+SELECT COUNT(*) FROM t1 FORCE INDEX(`vi`)
+WHERE VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4,4]')) IS NOT NULL;
+COUNT(*)
+5
+DROP TABLE t1;
+########################################
+# Scenario 2: DDL destroys + rebuilds hlindex
+########################################
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+# ANN query (establishes cached hlindex)
+SELECT id FROM t2 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# TRUNCATE destroys hlindex via intern_close_table
+TRUNCATE TABLE t2;
+# Re-insert + query (hlindex_open recreates from scratch)
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[10,20,30,40,50]'));
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[50,40,30,20,10]'));
+SELECT id FROM t2 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,20,30,40,50]')) LIMIT 1;
+id
+1
+# DROP + ADD VECTOR INDEX
+ALTER TABLE t2 DROP INDEX vi;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# DML after index rebuild
+INSERT INTO t2(v) VALUES (VEC_FROMTEXT('[7,7,7,7,7]'));
+SELECT id FROM t2 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[7,7,7,7,7]')) LIMIT 1;
+id
+3
+DROP TABLE t2;
+########################################
+# Scenario 3: FLUSH TABLES invalidates cached hlindex
+########################################
+CREATE TABLE t3 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+# Query to cache hlindex
+SELECT id FROM t3 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# FLUSH TABLES - TABLE instances destroyed, hlindex included
+FLUSH TABLES;
+# Query after flush (new TABLE instance, fresh hlindex_open)
+SELECT id FROM t3 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# DML after flush
+INSERT INTO t3(v) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'));
+# Single-table flush
+FLUSH TABLE t3;
+SELECT id FROM t3 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 1;
+id
+3
+DROP TABLE t3;
+########################################
+# Scenario 4: Cross-THD rebind
+########################################
+CREATE TABLE t4 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+INSERT INTO t4(v) VALUES (VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO t4(v) VALUES (VEC_FROMTEXT('[2,2,2,2,2]'));
+SELECT id FROM t4 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,1,1,1,1]')) LIMIT 1;
+id
+1
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# c2 may get the same TABLE instance c1 used (cross-THD rebind)
+SELECT id FROM t4 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,2,2,2,2]')) LIMIT 1;
+id
+2
+UPDATE t4 SET v = VEC_FROMTEXT('[8,8,8,8,8]') WHERE id = 1;
+SELECT id FROM t4 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[8,8,8,8,8]')) LIMIT 1;
+id
+1
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# c3 reuses again
+INSERT INTO t4(v) VALUES (VEC_FROMTEXT('[5,5,5,5,5]'));
+SELECT id FROM t4 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,5,5,5,5]')) LIMIT 1;
+id
+3
+SELECT COUNT(*) FROM t4;
+COUNT(*)
+3
+DROP TABLE t4;
+########################################
+# Scenario 5: Multi-statement transaction hlindex reuse
+########################################
+CREATE TABLE t5 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Multiple INSERTs in one txn (hlindex_lock idempotent for same THD)
+BEGIN;
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[1,0,0,0,0]'));
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[0,1,0,0,0]'));
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[0,0,1,0,0]'));
+# ANN within same txn (switch from F_WRLCK to F_RDLCK mid-txn)
+SELECT id FROM t5 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0,0,0]')) LIMIT 2;
+COMMIT;
+# Verify committed
+SELECT COUNT(*) FROM t5;
+COUNT(*)
+3
+# ROLLBACK scenario: hlindex state must be clean afterwards
+BEGIN;
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[99,99,99,99,99]'));
+ROLLBACK;
+# SELECT after rollback should work without stale state
+SELECT id FROM t5 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,0,0,0,0]')) LIMIT 1;
+id
+1
+# INSERT after rollback
+INSERT INTO t5(v) VALUES (VEC_FROMTEXT('[7,7,7,7,7]'));
+SELECT COUNT(*) FROM t5;
+COUNT(*)
+4
+DROP TABLE t5;
+########################################
+# Scenario 6: Concurrent DDL waits for DML (MDL serialization)
+########################################
+CREATE TABLE t6 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[5,4,3,2,1]'));
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+BEGIN;
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[10,10,10,10,10]'));
+# DML holds MDL_SHARED_WRITE on t6
+# DDL needs MDL_EXCLUSIVE - will wait
+SET SESSION lock_wait_timeout = 5;
+ALTER TABLE t6 DROP INDEX vi;
+# Commit releases MDL, unblocking DDL
+COMMIT;
+SHOW CREATE TABLE t6;
+Table	Create Table
+t6	CREATE TABLE `t6` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# INSERT without vector index (hlindex destroyed, no crash)
+INSERT INTO t6(v) VALUES (VEC_FROMTEXT('[20,20,20,20,20]'));
+SELECT COUNT(*) FROM t6;
+COUNT(*)
+4
+DROP TABLE t6;
+########################################
+# Scenario 7: Rapid INSERT+SELECT stress (50 iterations)
+########################################
+CREATE TABLE t7 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+# Verify all 50 rows present
+SELECT COUNT(*) FROM t7;
+COUNT(*)
+50
+# Final ANN query
+SELECT id FROM t7 FORCE INDEX(`vi`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[25,25,25,25,25]')), id LIMIT 3;
+id
+26
+25
+27
+DROP TABLE t7;
+########################################
+# Scenario 8: Multi-index lock state transitions
+# Verifies all hlindex slots are correctly locked/unlocked
+########################################
+CREATE TABLE t8 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(5),
+v2 VECTOR(5),
+VECTOR INDEX vi1(v1),
+VECTOR INDEX vi2(v2)
+) ENGINE=InnoDB;
+# INSERT locks multiple hlindex slots, then SELECT switches to F_RDLCK
+INSERT INTO t8(v1, v2) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'), VEC_FROMTEXT('[5,4,3,2,1]'));
+INSERT INTO t8(v1, v2) VALUES (VEC_FROMTEXT('[2,3,4,5,6]'), VEC_FROMTEXT('[6,5,4,3,2]'));
+INSERT INTO t8(v1, v2) VALUES (VEC_FROMTEXT('[3,4,5,6,7]'), VEC_FROMTEXT('[7,6,5,4,3]'));
+# ANN on v1 (rebinds hlindex slot 0 as F_RDLCK)
+SELECT id FROM t8 FORCE INDEX(`vi1`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# ANN on v2 (rebinds hlindex slot 1 as F_RDLCK)
+SELECT id FROM t8 FORCE INDEX(`vi2`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[5,4,3,2,1]')) LIMIT 1;
+id
+1
+# Rapid INSERT-SELECT alternation on multi-index table
+INSERT INTO t8(v1, v2) VALUES (VEC_FROMTEXT('[4,4,4,4,4]'), VEC_FROMTEXT('[8,8,8,8,8]'));
+SELECT id FROM t8 FORCE INDEX(`vi1`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[4,4,4,4,4]')) LIMIT 1;
+id
+4
+SELECT id FROM t8 FORCE INDEX(`vi2`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[8,8,8,8,8]')) LIMIT 1;
+id
+4
+# FLUSH TABLES invalidates all hlindex slots
+FLUSH TABLES;
+# Re-query after flush (fresh hlindex_open for both slots)
+SELECT id FROM t8 FORCE INDEX(`vi1`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+SELECT id FROM t8 FORCE INDEX(`vi2`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[5,4,3,2,1]')) LIMIT 1;
+id
+1
+# TRUNCATE with multi-index
+TRUNCATE TABLE t8;
+INSERT INTO t8(v1, v2) VALUES (VEC_FROMTEXT('[9,9,9,9,9]'), VEC_FROMTEXT('[1,1,1,1,1]'));
+SELECT id FROM t8 FORCE INDEX(`vi1`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 1;
+id
+1
+SELECT id FROM t8 FORCE INDEX(`vi2`)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[1,1,1,1,1]')) LIMIT 1;
+id
+1
+DROP TABLE t8;
+########################################
+# Cleanup
+########################################
+SET GLOBAL vidx_disabled = ON;

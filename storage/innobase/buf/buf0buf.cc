@@ -73,6 +73,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dict.h"
 #include "log0recv.h"
 #include "os0thread-create.h"
+#include "os0enc.h"
 #include "page0zip.h"
 #include "srv0mon.h"
 #include "srv0srv.h"
@@ -626,6 +627,9 @@ void buf_page_print(const byte *read_buf, const page_size_t &page_size,
     space_index_t index_id;
     case FIL_PAGE_INDEX:
     case FIL_PAGE_RTREE:
+    case FIL_PAGE_INDEX_PANDA:
+    case FIL_PAGE_INDEX_HIPPO:
+    case FIL_PAGE_INDEX_SPC:
       index_id = btr_page_get_index_id(read_buf);
       fprintf(stderr,
               "InnoDB: Page may be an index page where"
@@ -2171,7 +2175,7 @@ static void buf_pool_resize() {
                     "Disabling adaptive hash index.");
 
   /* disable AHI if needed */
-  const bool btr_search_was_enabled = btr_search_disable();
+  const bool btr_search_was_enabled = btr_search_disable_by_internal();
 
   if (btr_search_was_enabled) {
     ib::info(ER_IB_MSG_60) << "disabled adaptive hash index.";
@@ -2588,7 +2592,7 @@ withdraw_retry:
 
   /* enable AHI if needed */
   if (btr_search_was_enabled) {
-    btr_search_enable();
+    btr_search_enable_by_internal();
     ib::info(ER_IB_MSG_70) << "Re-enabled adaptive hash index.";
   }
 
@@ -2651,6 +2655,9 @@ void buf_pool_clear_hash_index(void) {
 
   DEBUG_SYNC_C("purge_wait_for_btr_search_latch");
 
+  bool pause_before_processing = DBUG_EVALUATE_IF(
+      "buf_pool_clear_hash_index_check_other_blocks", true, false);
+
   for (ulong p = 0; p < srv_buf_pool_instances; p++) {
     buf_pool_t *const buf_pool = buf_pool_from_array(p);
     buf_chunk_t *const chunks = buf_pool->chunks;
@@ -2670,6 +2677,13 @@ void buf_pool_clear_hash_index(void) {
           /* The block is already not in AHI, and it can't be added before the
           AHI is re-enabled, so there's nothing to be done here. */
           continue;
+        }
+
+        /* Identify target block and sync with test */
+        if (pause_before_processing && block->page.old &&
+            !block->page.is_dirty()) {
+          DEBUG_SYNC_C("buf_pool_clear_hash_index_will_process_block");
+          pause_before_processing = false;
         }
 
         /* This latch will prevent block state transitions. It is important for
@@ -2705,6 +2719,8 @@ void buf_pool_clear_hash_index(void) {
             /* No other state should have AHI */
             ut_ad(block->ahi.index == nullptr);
             ut_ad(block->ahi.n_pointers == 0);
+            /* Go to next block as AHI is already nullptr */
+            continue;
         }
 
 #if defined UNIV_AHI_DEBUG || defined UNIV_DEBUG
@@ -2716,6 +2732,13 @@ void buf_pool_clear_hash_index(void) {
         btr_search_set_block_not_cached(block);
       }
     }
+  }
+
+  /* Main intent was to identify target block. Due to rare race conditions, such
+  block is not found. To prevent timeout, unblock in case target block is not
+  found */
+  if (pause_before_processing) {
+    DEBUG_SYNC_C("buf_pool_clear_hash_index_will_process_block");
   }
 }
 
@@ -3368,6 +3391,9 @@ bool buf_zip_decompress(buf_block_t *block, /*!< in/out: block */
                         bool check) /*!< in: true=verify the page checksum */
 {
   const byte *frame = block->page.zip.data;
+  const auto space = block->page.get_space();
+  const bool report_as_enc_checksum =
+      enc_checksum_verify_enabled() && space != nullptr && space->is_encrypted();
 
   ut_ad(block->page.size.is_compressed());
   ut_a(block->page.id.space() != 0);
@@ -3376,15 +3402,20 @@ bool buf_zip_decompress(buf_block_t *block, /*!< in/out: block */
       BlockReporter(false, frame, block->page.size, false);
 
   if (check && !compressed.verify_zip_checksum()) {
-    ib::error(ER_IB_MSG_71)
-        << "Compressed page checksum mismatch " << block->page.id
-        << "): stored: " << mach_read_from_4(frame + FIL_PAGE_SPACE_OR_CHKSUM)
-        << ", crc32: "
-        << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_CRC32)
-        << " innodb: "
-        << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_INNODB)
-        << ", none: "
-        << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_NONE);
+    if (report_as_enc_checksum) {
+      innodb_log_tde_enc_checksum_mismatch(block->page.id.space(),
+                                           block->page.id.page_no());
+    } else {
+      ib::error(ER_IB_MSG_71)
+          << "Compressed page checksum mismatch " << block->page.id
+          << "): stored: " << mach_read_from_4(frame + FIL_PAGE_SPACE_OR_CHKSUM)
+          << ", crc32: "
+          << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_CRC32)
+          << " innodb: "
+          << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_INNODB)
+          << ", none: "
+          << compressed.calc_zip_checksum(SRV_CHECKSUM_ALGORITHM_NONE);
+    }
 
     return false;
   }
@@ -3419,6 +3450,11 @@ bool buf_zip_decompress(buf_block_t *block, /*!< in/out: block */
       /* Copy to uncompressed storage. */
       memcpy(block->frame, frame, block->page.size.physical());
       return true;
+
+    case FIL_PAGE_INDEX_PANDA:
+    case FIL_PAGE_INDEX_HIPPO:
+    case FIL_PAGE_INDEX_SPC:
+      ut_error;
   }
 
   ib::error(ER_IB_MSG_73) << "Unknown compressed page type "
@@ -4048,34 +4084,16 @@ dberr_t Buf_fetch<T>::check_state(buf_block_t *&block) {
 
 template <typename T>
 void Buf_fetch<T>::read_page() {
-  bool success{};
-  auto sync = m_mode != Page_fetch::SCAN;
-
-  if (sync) {
-    ulint type = 0;
-    if (m_mode == Page_fetch::IGNORE_MISSING_NOWAIT) {
-      type |= IORequest::IGNORE_MISSING;
-    }
-    success = buf_read_page(m_page_id, m_page_size, type);
-  } else {
-    dberr_t err;
-
-    auto ret = buf_read_page_low(&err, false, 0, BUF_READ_ANY_PAGE, m_page_id,
-                                 m_page_size, false);
-    success = ret > 0;
-
-    if (success) {
-      srv_stats.buf_pool_reads.add(1);
-    }
-
-    ut_a(err != DB_TABLESPACE_DELETED);
-
-    /* Increment number of I/O operations used for LRU policy. */
-    buf_LRU_stat_inc_io();
+  ulint type = 0;
+  if (m_mode == Page_fetch::IGNORE_MISSING_NOWAIT) {
+    type |= IORequest::IGNORE_MISSING;
   }
-
-  if (success) {
-    if (sync) {
+  if (buf_read_page(m_page_id, m_page_size, type)) {
+    /* Avoid doing read-ahead for parallel scans (well, at least currently this
+    flag is used only during the parallel scans). This would cause unnecessary
+    IO when the process is already being parallelized on higher level of
+    abstraction. */
+    if (m_mode != Page_fetch::SCAN) {
       buf_read_ahead_random(m_page_id, m_page_size, ibuf_inside(m_mtr));
     }
     m_retries = 0;
@@ -4341,21 +4359,19 @@ buf_block_t *Buf_fetch<T>::single_page() {
   /* Check if this is the first access to the page */
   const auto access_time = buf_page_is_accessed(&block->page);
 
+  /* This is a heuristic and we don't care about ordering issues. */
+  if (access_time == std::chrono::steady_clock::time_point{}) {
+    buf_page_mutex_enter(block);
+
+    buf_page_set_accessed(&block->page);
+
+    buf_page_mutex_exit(block);
+  }
+
   /* Don't move the page to the head of the LRU list so that the
   page can be discarded quickly if it is not accessed again. */
-  if (m_mode != Page_fetch::SCAN) {
-    /* This is a heuristic and we don't care about ordering issues. */
-    if (access_time == std::chrono::steady_clock::time_point{}) {
-      buf_page_mutex_enter(block);
-
-      buf_page_set_accessed(&block->page);
-
-      buf_page_mutex_exit(block);
-    }
-
-    if (m_mode != Page_fetch::PEEK_IF_IN_POOL) {
-      buf_page_make_young_if_needed(&block->page);
-    }
+  if (m_mode != Page_fetch::PEEK_IF_IN_POOL && m_mode != Page_fetch::SCAN) {
+    buf_page_make_young_if_needed(&block->page);
   }
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
@@ -4381,7 +4397,7 @@ buf_block_t *Buf_fetch<T>::single_page() {
 
   mtr_add_page(block);
 
-  if (m_mode != Page_fetch::PEEK_IF_IN_POOL && m_mode != Page_fetch::SCAN &&
+  if (m_mode != Page_fetch::PEEK_IF_IN_POOL &&
       access_time == std::chrono::steady_clock::time_point{}) {
     /* In the case of a first access, try to apply linear read-ahead */
 
@@ -4772,7 +4788,7 @@ static void buf_page_init(buf_pool_t *buf_pool, const page_id_t &page_id,
   ut_ad(buf_pool == buf_pool_get(page_id));
 
   ut_ad(mutex_own(buf_page_get_mutex(&block->page)));
-  ut_a(buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE);
+  ut_a(buf_block_get_state(block) == BUF_BLOCK_READY_FOR_USE);
 
   ut_ad(rw_lock_own(buf_page_hash_lock_get(buf_pool, page_id), RW_LOCK_X));
 
@@ -5239,7 +5255,7 @@ static void buf_page_monitor(
   bool is_leaf = false;
   bool is_ibuf = false;
 
-  if (page_type == FIL_PAGE_INDEX || page_type == FIL_PAGE_RTREE) {
+  if (fil_page_type_is_btree_index(page_type) || page_type == FIL_PAGE_RTREE) {
     is_leaf = page_is_leaf(frame);
 
     const space_index_t ibuf_index_id =
@@ -5262,8 +5278,13 @@ static void buf_page_monitor(
 
   switch (page_type) {
     case FIL_PAGE_INDEX:
+    case FIL_PAGE_INDEX_PANDA:
+    case FIL_PAGE_INDEX_HIPPO:
+    case FIL_PAGE_INDEX_SPC:
       /* Check if it is an index page for insert buffer */
       if (is_ibuf) {
+        /** Panda actually not support ibuf. */
+        ut_ad(page_type != FIL_PAGE_INDEX_PANDA);
         if (is_leaf) {
           counter = MONITOR_RW_COUNTER(io_type, MONITOR_INDEX_IBUF_LEAF_PAGE);
         } else {
@@ -5689,6 +5710,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
     byte *frame{};
     page_no_t read_page_no;
     space_id_t read_space_id;
+    const auto space = bpage->get_space();
+    const bool report_as_enc_checksum =
+        enc_checksum_verify_enabled() && space != nullptr &&
+        space->is_encrypted();
     bool is_wrong_page_id [[maybe_unused]] = false;
 
     if (bpage->size.is_compressed()) {
@@ -5780,7 +5805,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
     corrupt:
       /* Compressed pages are basically gibberish avoid
       printing the contents. */
-      if (!compressed_page) {
+      if (report_as_enc_checksum) {
+        innodb_log_tde_enc_checksum_mismatch(bpage->id.space(),
+                                             bpage->id.page_no());
+      } else if (!compressed_page) {
         ib::error(ER_IB_MSG_81)
             << "Database page corruption on disk"
                " or a failed file read of page "
@@ -5825,8 +5853,10 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict) {
 
     if (uncompressed && !Compression::is_compressed_page(frame) &&
         !recv_no_ibuf_operations &&
-        fil_page_get_type(frame) == FIL_PAGE_INDEX && page_is_leaf(frame) &&
-        !fsp_is_system_temporary(bpage->id.space()) &&
+        (fil_page_get_type(frame) == FIL_PAGE_INDEX ||
+         fil_page_get_type(frame) == FIL_PAGE_INDEX_HIPPO ||
+         fil_page_get_type(frame) == FIL_PAGE_INDEX_SPC) &&
+        page_is_leaf(frame) && !fsp_is_system_temporary(bpage->id.space()) &&
         !fsp_is_undo_tablespace(bpage->id.space()) && !bpage->was_stale()) {
       ibuf_merge_or_delete_for_page((buf_block_t *)bpage, bpage->id,
                                     &bpage->size, true);

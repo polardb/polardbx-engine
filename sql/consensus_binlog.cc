@@ -23,11 +23,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#include "consensus_log_manager.h"
+#include "consensus_cache_manager.h"
 #include "consensus_recovery_manager.h"
 #include "sql/binlog.h"
-#include "sql/bl_consensus_log.h"
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0consensus0xlog.h"
+#include "sql/consensus_logindex_manager.h"
 
 #include "my_config.h"
 
@@ -48,265 +48,263 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "replica_read_manager.h"
 #include "sql/sys_vars_ext.h"
 #include "storage/innobase/include/ut0dbg.h"
+#include "sql/komodo0xlog.h"
 
-static void correct_binlog_event_log_pos(char *buf, size_t buf_len,
-                                         ulonglong offset, uint32_t *crc = nullptr) {
-  if (!opt_consensuslog_revise) return;
-  // calc correct end_log_pos
-  ulonglong end_log_pos =
-      my_b_safe_tell(mysql_bin_log.get_binlog_file()->get_io_cache());
-  end_log_pos += offset + buf_len;
-  // inc the length of consensus_log_event
-  end_log_pos += Consensus_log_event::MAX_EVENT_LENGTH;
-  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
-    end_log_pos += 4;  // checksum length
 
-  // correct end_log_pos in ev->temp_buf
-  int4store(buf + LOG_POS_OFFSET, end_log_pos);
+#include "sql/consensus/komodo0fifo0cache.h"
 
-  // update checksum field because we modify the event's content
-  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF) {
-    uint32_t tmp_crc = checksum_crc32(0L, NULL, 0);
-    tmp_crc = checksum_crc32(tmp_crc, (const unsigned char *)buf,
-                         buf_len - BINLOG_CHECKSUM_LEN);
-    int4store(buf + buf_len - BINLOG_CHECKSUM_LEN, tmp_crc);
-    if (crc) *crc = tmp_crc;
-  }
-}
+// static void correct_binlog_event_log_pos(char *buf, size_t buf_len,
+//                                          ulonglong offset, uint32_t *crc = nullptr) {
+//   if (!opt_consensuslog_revise) return;
+//   // calc correct end_log_pos
+//   ulonglong end_log_pos =
+//       my_b_safe_tell(mysql_bin_log.get_binlog_file()->get_io_cache());
+//   end_log_pos += offset + buf_len;
+//   // inc the length of consensus_log_event
+//   end_log_pos += Consensus_log_event::MAX_EVENT_LENGTH;
+//   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
+//     end_log_pos += 4;  // checksum length
 
-int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
-                      Log_event *ev, ulonglong &total_batch_size) {
-  int error = 0;
-  uint flag = 0;
-  uint64 start_pos = 0,
-         end_pos = opt_consensus_large_event_split_size > ev->buf_len
-                       ? ev->buf_len
-                       : opt_consensus_large_event_split_size;
-  std::string log_content = consensus_log_manager.get_empty_log();
-  uint32 event_crc32 = 0;
-  // correct before split
-  uint64 offset = log_content.length() + Consensus_log_event::MAX_EVENT_LENGTH;
-  if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
-    offset += BINLOG_CHECKSUM_LEN;
-  offset *= (ev->buf_len / opt_consensus_large_event_split_size);
-  correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, offset, &event_crc32);
+//   // correct end_log_pos in ev->temp_buf
+//   int4store(buf + LOG_POS_OFFSET, end_log_pos);
 
-  while (start_pos < ev->buf_len) {
-    uint64 blen = end_pos - start_pos;
-    memcpy(buffer, ev->temp_buf + start_pos, blen);
-    total_batch_size += blen;
-    if (total_batch_size == total_size)
-      flag = Consensus_log_event_flag::FLAG_LARGE_TRX_END;
-    else
-      flag = Consensus_log_event_flag::FLAG_LARGE_TRX;
-    if (end_pos == ev->buf_len)
-      flag |= Consensus_log_event_flag::FLAG_BLOB_END;
-    else if (start_pos == 0) {
-      consensus_log_manager.get_fifo_cache_manager()->set_lock_blob_index(
-          consensus_log_manager.get_current_index());
-      flag |= (Consensus_log_event_flag::FLAG_BLOB |
-               Consensus_log_event_flag::FLAG_BLOB_START);
-    } else
-      flag |= Consensus_log_event_flag::FLAG_BLOB;
-    thd->consensus_index = consensus_log_manager.get_current_index();
-    uint64 crc32 = opt_consensus_checksum ? checksum_crc32(0, buffer, blen) : 0;
-    xp::info(ER_XP_COMMIT) << "large_event_flush batch_size " << blen
-                           << ", total_batch_size " << total_batch_size
-                           << ", original buf_size " << total_size
-                           << ", consensus_index " << thd->consensus_index
-                           << ", start_pos " << start_pos << ", end_pos "
-                           << end_pos << ", buf_len " << ev->buf_len
-                           << ", flag " << flag << ", crc32 " << crc32
-                           << ", event_crc32 " << event_crc32;
-    if (end_pos == ev->buf_len) {
-      error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
-                                                ev->buf_len);
-    } else {
-      correct_binlog_event_log_pos((char *)log_content.data(),
-                                   log_content.length(), 0);
-      error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
-                                                log_content.length());
-    }
-    if (!error && consensus_log_manager.get_fifo_cache_manager())
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-          thd->consensus_term, thd->consensus_index, blen, buffer, false, flag,
-          crc32);
+//   // update checksum field because we modify the event's content
+//   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF) {
+//     uint32_t tmp_crc = checksum_crc32(0L, NULL, 0);
+//     tmp_crc = checksum_crc32(tmp_crc, (const unsigned char *)buf,
+//                          buf_len - BINLOG_CHECKSUM_LEN);
+//     int4store(buf + buf_len - BINLOG_CHECKSUM_LEN, tmp_crc);
+//     if (crc) *crc = tmp_crc;
+//   }
+// }
 
-    if (!error) {
-      if (end_pos == ev->buf_len) {
-        error = mysql_bin_log.write_buf_to_log_file((uchar *)ev->temp_buf,
-                                                    ev->buf_len);
-        if (consensus_log_manager.get_fifo_cache_manager())
-          consensus_log_manager.get_fifo_cache_manager()->set_lock_blob_index(0);
-      } else
-        error = mysql_bin_log.write_buf_to_log_file((uchar *)log_content.data(),
-                                                    log_content.length());
-      if (!error) {
-        error = mysql_bin_log.flush_and_sync(false);
-          consensus_log_manager.set_sync_index_if_greater(thd->consensus_index);
-        if (alisql_server) alisql_server->writeLogDoneInternal(thd->consensus_index, true);
-      }
-    }
-    DBUG_EXECUTE_IF("crash_during_large_event_binlog_flush", {
-      static int ccnt = 0;
-      ccnt++;
-      if (ccnt > 1) {
-        DBUG_SUICIDE();
-      }
-    });
-    DBUG_EXECUTE_IF("crash_during_large_event_binlog_flush_slow",
-                    { /* let follower get the log */
-                      static int ccnt = 0;
-                      ccnt++;
-                      if (ccnt > 1) {
-                        sleep(2);
-                        DBUG_SUICIDE();
-                      }
-                    });
-    start_pos = end_pos;
-    end_pos = (end_pos + opt_consensus_large_event_split_size > ev->buf_len)
-                  ? ev->buf_len
-                  : (end_pos + opt_consensus_large_event_split_size);
-  }
-  return error;
-}
+// int large_event_flush(THD *thd, uchar *buffer, ulonglong total_size,
+//                       Log_event *ev, ulonglong &total_batch_size) {
+//   int error = 0;
+//   uint flag = 0;
+//   uint64 start_pos = 0,
+//          end_pos = opt_consensus_large_event_split_size > ev->buf_len
+//                        ? ev->buf_len
+//                        : opt_consensus_large_event_split_size;
+//   auto &log_manager = komodo::xlog_engine_get_log_manager();
+//   std::string log_content = log_manager.get_empty_log();
+//   uint32 event_crc32 = 0;
+//   // correct before split
+//   uint64 offset = log_content.length() + Consensus_log_event::MAX_EVENT_LENGTH;
+//   ulonglong large_event_split_size = opt_consensus_large_event_split_size;
 
-int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size) {
-  int error = 0;
-  Log_event *ev = NULL;
-  uint flag = 0;
-  bool force_batch = false;
-  uint64 crc32 = 0;
-  Format_description_log_event fd_ev;
-  IO_CACHE *consensus_log = consensus_log_manager.get_cache();
-  ulonglong batch_size = 0, total_batch_size = 0;
-  // init consensus_log for read
-  reinit_io_cache(consensus_log, READ_CACHE, 0, 0, 0);
-  Binlog_read_error m_error;
-  Write_cache_istream consensus_log_istream(consensus_log);
-  Binlog_event_data_istream consensus_log_data_istream(
-      &m_error, &consensus_log_istream, UINT_MAX);
-  Binlog_event_object_istream<Binlog_event_data_istream>
-      consensus_log_event_istream(&m_error, &consensus_log_data_istream);
-  Default_binlog_event_allocator default_alloc;
-  /*
-   * the max size of buffer is opt_consensus_max_log_size
-   * do not use more than this restriction
-   */
-  while (!error &&
-         (ev = consensus_log_event_istream.read_event_object(
-              fd_ev, opt_source_verify_checksum, &default_alloc)) != NULL) {
-    if (ev->buf_len > opt_consensus_max_log_size ||
-        DBUG_EVALUATE_IF("force_large_trx_single_ev", 1, 0))
-      force_batch = true; /* current ev is large event */
-    else
-      force_batch = false;
-    /*
-     * When should we batch a consensus log?
-     * 1. current buffer must not empty
-     * 2. current buffer size is larger than opt_consensus_large_trx_split_size
-     * 3. current buffer size is ok, but if we add next event, the buffer will
-     * overflow
-     * 4. force do a batch: large event OR for debug
-     */
-    if (batch_size > 0 &&
-        (batch_size > opt_consensus_large_trx_split_size ||
-         batch_size + ev->buf_len > opt_consensus_max_log_size ||
-         force_batch)) {
-      total_batch_size += batch_size;
-      flag = Consensus_log_event_flag::FLAG_LARGE_TRX;
-      assert(total_batch_size < total_size);
-      thd->consensus_index = consensus_log_manager.get_current_index();
-      xp::info(ER_XP_COMMIT)
-          << "large_trx_flush batch_size " << batch_size << ", buf_len "
-          << ev->buf_len << ", max_log_size " << opt_consensus_max_log_size
-          << ", large_trx_split_size " << opt_consensus_large_trx_split_size
-          << ", total_batch_size " << total_batch_size << ", original buf_size "
-          << total_size << ", consensus_index " << thd->consensus_index;
-      crc32 =
-          opt_consensus_checksum ? checksum_crc32(0, buffer, batch_size) : 0;
-      error = mysql_bin_log.write_consensus_log(
-          flag, thd->consensus_term, batch_size); /* inc current index inside */
-      if (!error && consensus_log_manager.get_fifo_cache_manager())
-        error =
-            consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-                thd->consensus_term, thd->consensus_index, batch_size, buffer,
-                false, flag, crc32);
+//   if (binlog_checksum_options != binary_log::BINLOG_CHECKSUM_ALG_OFF)
+//     offset += BINLOG_CHECKSUM_LEN;
+//   offset *= (ev->buf_len / large_event_split_size);
+//   correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, offset, &event_crc32);
 
-      if (!error) {
-        DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush2", {
-          static int ccnt = 0;
-          ccnt++;
-          if (ccnt > 1) {
-            // force miss 1 byte and then crash
-            mysql_bin_log.write_buf_to_log_file(buffer, batch_size - 1);
-            mysql_bin_log.flush_and_sync(true);
-            DBUG_SUICIDE();
-          }
-        });
-        error = mysql_bin_log.write_buf_to_log_file(buffer, batch_size);
-        /* for large trx, sync directly after flush for performance */
-        if (!error) {
-          error = mysql_bin_log.flush_and_sync(false);
-          consensus_log_manager.set_sync_index_if_greater(thd->consensus_index);
-          /* use lockless writeLogDone */
-          if (alisql_server) alisql_server->writeLogDoneInternal(thd->consensus_index, true);
-        }
-      }
-      batch_size = 0;
-      DEBUG_SYNC(thd, "large_trx_sync_part");
-      DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush", {
-        static int ccnt = 0;
-        ccnt++;
-        if (ccnt > 1) {
-          DBUG_SUICIDE();
-        }
-      });
-      DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush_slow",
-                      { /* let follower get the log */
-                        static int ccnt = 0;
-                        ccnt++;
-                        if (ccnt > 1) {
-                          sleep(2);
-                          DBUG_SUICIDE();
-                        }
-                      });
-    }
-    if (ev->buf_len > opt_consensus_max_log_size) {
-      /* current ev is large event */
-      assert(batch_size == 0);
-      error = large_event_flush(thd, buffer, total_size, ev, total_batch_size);
-      delete ev;
-    } else {
-      correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, batch_size);
-      memcpy(buffer + batch_size, ev->temp_buf, ev->buf_len);
-      batch_size += ev->buf_len;
-      delete ev;
-    }
-  }
-  /* deal with remained buffer */
-  if (batch_size > 0) {
-    total_batch_size += batch_size;
-    flag = Consensus_log_event_flag::FLAG_LARGE_TRX_END;
-    thd->consensus_index = consensus_log_manager.get_current_index();
-    xp::info(ER_XP_COMMIT) << "large_trx_flush batch_size " << batch_size
-                           << ", total_batch_size " << total_batch_size
-                           << ", consensus_index " << thd->consensus_index;
-    assert(total_batch_size == total_size && batch_size > 0);
-    crc32 = opt_consensus_checksum ? checksum_crc32(0, buffer, batch_size) : 0;
-    error = mysql_bin_log.write_consensus_log(
-        flag, thd->consensus_term, batch_size); /* inc current index inside */
-    if (!error && consensus_log_manager.get_fifo_cache_manager())
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-          thd->consensus_term, thd->consensus_index, batch_size, buffer, false,
-          flag, crc32);
+//   while (start_pos < ev->buf_len) {
+//     uint64 blen = end_pos - start_pos;
+//     memcpy(buffer, ev->temp_buf + start_pos, blen);
+//     total_batch_size += blen;
+//     if (total_batch_size == total_size)
+//       flag = komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END;
+//     else
+//       flag = komodo::Consensus_log_event_flag::FLAG_LARGE_TRX;
+//     if (end_pos == ev->buf_len)
+//       flag |= komodo::Consensus_log_event_flag::FLAG_BLOB_END;
+//     else if (start_pos == 0) {
+//       flag |= (komodo::Consensus_log_event_flag::FLAG_BLOB |
+//                komodo::Consensus_log_event_flag::FLAG_BLOB_START);
+//     } else
+//       flag |= komodo::Consensus_log_event_flag::FLAG_BLOB;
+//     thd->consensus_index = komodo::xlog_log_manager_get_current_index();
+//     xp::info(ER_XP_COMMIT) << "large_event_flush batch_size " << blen
+//                            << ", total_batch_size " << total_batch_size
+//                            << ", original buf_size " << total_size
+//                            << ", consensus_index " << thd->consensus_index
+//                            << ", start_pos " << start_pos << ", end_pos "
+//                            << end_pos << ", buf_len " << ev->buf_len
+//                            << ", flag " << flag
+//                            << ", event_crc32 " << event_crc32;
+//     if (end_pos == ev->buf_len) {
+//       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
+//                                                 ev->buf_len);
+//     } else {
+//       correct_binlog_event_log_pos((char *)log_content.data(),
+//                                    log_content.length(), 0);
+//       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
+//                                                 log_content.length());
+//     }
 
-    if (!error) error = mysql_bin_log.write_buf_to_log_file(buffer, batch_size);
-  }
-  /* set consensus cache_log back to write cache */
-  reinit_io_cache(consensus_log, WRITE_CACHE, 0, 0, 1);
-  return error;
-}
+//     if (!error) {
+//       komodo::xlog_engine_add_log_to_cache(
+//           thd->consensus_term, thd->consensus_index, blen, buffer, false, flag);
+//       if (end_pos == ev->buf_len) {
+//         error = mysql_bin_log.write_buf_to_log_file((uchar *)ev->temp_buf,
+//                                                     ev->buf_len);
+//       } else
+//         error = mysql_bin_log.write_buf_to_log_file((uchar *)log_content.data(),
+//                                                     log_content.length());
+//       if (!error) {
+//         error = mysql_bin_log.flush_and_sync(false);
+//         log_manager.set_sync_index_if_greater(thd->consensus_index);
+//         komodo::xlog_write_log_done_internal(thd->consensus_index, true);
+//       }
+//     }
+//     DBUG_EXECUTE_IF("crash_during_large_event_binlog_flush", {
+//       static int ccnt = 0;
+//       ccnt++;
+//       if (ccnt > 1) {
+//         DBUG_SUICIDE();
+//       }
+//     });
+//     DBUG_EXECUTE_IF("crash_during_large_event_binlog_flush_slow",
+//                     { /* let follower get the log */
+//                       static int ccnt = 0;
+//                       ccnt++;
+//                       if (ccnt > 1) {
+//                         sleep(2);
+//                         DBUG_SUICIDE();
+//                       }
+//                     });
+//     start_pos = end_pos;
+//     end_pos = (end_pos + large_event_split_size > ev->buf_len)
+//                   ? ev->buf_len
+//                   : (end_pos + large_event_split_size);
+//   }
+//   return error;
+// }
+
+// int large_trx_flush(THD *thd, uchar *buffer, ulonglong total_size) {
+//   int error = 0;
+//   Log_event *ev = NULL;
+//   uint flag = 0;
+//   bool force_batch = false;
+//   Format_description_log_event fd_ev;
+//   auto &log_manager = komodo::xlog_engine_get_log_manager();
+//   IO_CACHE *consensus_log = log_manager.get_cache();
+//   ulonglong batch_size = 0, total_batch_size = 0;
+//   // init consensus_log for read
+//   reinit_io_cache(consensus_log, READ_CACHE, 0, 0, 0);
+//   Binlog_read_error m_error;
+//   Write_cache_istream consensus_log_istream(consensus_log);
+//   Binlog_event_data_istream consensus_log_data_istream(
+//       &m_error, &consensus_log_istream, UINT_MAX);
+//   Binlog_event_object_istream<Binlog_event_data_istream>
+//       consensus_log_event_istream(&m_error, &consensus_log_data_istream);
+//   Default_binlog_event_allocator default_alloc;
+
+//   /*
+//    * the max size of buffer is opt_consensus_max_log_size
+//    * do not use more than this restriction
+//    */
+//   while (!error &&
+//          (ev = consensus_log_event_istream.read_event_object(
+//               fd_ev, opt_source_verify_checksum, &default_alloc)) != NULL) {
+//     if (ev->buf_len > opt_consensus_max_log_size ||
+//         DBUG_EVALUATE_IF("force_large_trx_single_ev", 1, 0))
+//       force_batch = true; /* current ev is large event */
+//     else
+//       force_batch = false;
+//     /*
+//      * When should we batch a consensus log?
+//      * 1. current buffer must not empty
+//      * 2. current buffer size is larger than opt_consensus_large_trx_split_size
+//      * 3. current buffer size is ok, but if we add next event, the buffer will
+//      * overflow
+//      * 4. force do a batch: large event OR for debug
+//      */
+//     if (batch_size > 0 &&
+//         (batch_size > opt_consensus_large_trx_split_size ||
+//          batch_size + ev->buf_len > opt_consensus_max_log_size ||
+//          force_batch)) {
+//       total_batch_size += batch_size;
+//       flag = komodo::Consensus_log_event_flag::FLAG_LARGE_TRX;
+//       assert(total_batch_size < total_size);
+//       thd->consensus_index = komodo::xlog_log_manager_get_current_index();
+//       xp::info(ER_XP_COMMIT)
+//           << "large_trx_flush batch_size " << batch_size << ", buf_len "
+//           << ev->buf_len << ", max_log_size " << opt_consensus_max_log_size
+//           << ", large_trx_split_size " << opt_consensus_large_trx_split_size
+//           << ", total_batch_size " << total_batch_size << ", original buf_size "
+//           << total_size << ", consensus_index " << thd->consensus_index;
+//       /* inc current index inside */
+//       error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
+//                                                 batch_size);
+//       if (!error) {
+//         komodo::xlog_engine_add_log_to_cache(thd->consensus_term,
+//                                              thd->consensus_index, batch_size,
+//                                              buffer, false, flag);
+//         DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush2", {
+//           static int ccnt = 0;
+//           ccnt++;
+//           if (ccnt > 1) {
+//             // force miss 1 byte and then crash
+//             mysql_bin_log.write_buf_to_log_file(buffer, batch_size - 1);
+//             mysql_bin_log.flush_and_sync(true);
+//             DBUG_SUICIDE();
+//           }
+//         });
+//         error = mysql_bin_log.write_buf_to_log_file(buffer, batch_size);
+//         /* for large trx, sync directly after flush for performance */
+//         if (!error) {
+//           error = mysql_bin_log.flush_and_sync(false);
+//           log_manager.set_sync_index_if_greater(thd->consensus_index);
+//           /* use lockless writeLogDone */
+//           komodo::xlog_write_log_done_internal(thd->consensus_index, true);
+//         }
+//       }
+//       batch_size = 0;
+//       DEBUG_SYNC(thd, "large_trx_sync_part");
+//       DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush", {
+//         static int ccnt = 0;
+//         ccnt++;
+//         if (ccnt > 1) {
+//           DBUG_SUICIDE();
+//         }
+//       });
+//       DBUG_EXECUTE_IF("crash_during_large_trx_binlog_flush_slow",
+//                       { /* let follower get the log */
+//                         static int ccnt = 0;
+//                         ccnt++;
+//                         if (ccnt > 1) {
+//                           sleep(2);
+//                           DBUG_SUICIDE();
+//                         }
+//                       });
+//     }
+//     if (ev->buf_len > opt_consensus_max_log_size) {
+//       /* current ev is large event */
+//       assert(batch_size == 0);
+//       error = large_event_flush(thd, buffer, total_size, ev, total_batch_size);
+//       delete ev;
+//     } else {
+//       correct_binlog_event_log_pos(ev->temp_buf, ev->buf_len, batch_size);
+//       memcpy(buffer + batch_size, ev->temp_buf, ev->buf_len);
+//       batch_size += ev->buf_len;
+//       delete ev;
+//     }
+//   }
+//   /* deal with remained buffer */
+//   if (batch_size > 0) {
+//     total_batch_size += batch_size;
+//     flag = komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END;
+//     thd->consensus_index = komodo::xlog_log_manager_get_current_index();
+//     xp::info(ER_XP_COMMIT) << "large_trx_flush batch_size " << batch_size
+//                            << ", total_batch_size " << total_batch_size
+//                            << ", consensus_index " << thd->consensus_index;
+//     assert(total_batch_size == total_size && batch_size > 0);
+//     /* inc current index inside */
+//     error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
+//                                               batch_size);
+//     if (!error) {
+//       komodo::xlog_engine_add_log_to_cache(thd->consensus_term,
+//                                            thd->consensus_index, batch_size,
+//                                            buffer, false, flag);
+
+//       error = mysql_bin_log.write_buf_to_log_file(buffer, batch_size);
+//     }
+//   }
+//   /* set consensus cache_log back to write cache */
+//   reinit_io_cache(consensus_log, WRITE_CACHE, 0, 0, 1);
+//   return error;
+// }
 
 bool MYSQL_BIN_LOG::open_for_normandy(
 #ifdef HAVE_PSI_INTERFACE
@@ -420,20 +418,20 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
 
     binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
     Log_event *ev = NULL;
-    Previous_consensus_index_log_event *prev_consensus_index_ev = NULL;
-    bool find_prev_consensus_log = false;
+    uint64 prev_consensus_index = 0;
 
     binlog_file_reader.add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT);
-    while (!find_prev_consensus_log &&
+    while (!prev_consensus_index &&
            (ev = binlog_file_reader.read_event_object()) != NULL) {
       switch (ev->get_type_code()) {
-        case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
-          prev_consensus_index_ev = (Previous_consensus_index_log_event *)ev;
-          consensus_log_manager.get_log_file_index()->add_to_index_list(
-              prev_consensus_index_ev->get_index(),
+        case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT: {
+          auto prev_consensus_index_ev = (Previous_consensus_index_log_event *)ev;
+          prev_consensus_index = prev_consensus_index_ev->get_index();
+          komodo::xlog_engine_get_log_file_index()->add_to_index_list(
+              prev_consensus_index,
               prev_consensus_index_ev->common_header->when.tv_sec, *iter);
-          find_prev_consensus_log = true;
           break;
+        }
         default:
           break;
       }
@@ -441,11 +439,10 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
       ev = nullptr;
     }
 
-    xp::info(ER_XP_COMMIT) << "build_consensus_log_index finish, log file " << iter->c_str()
-                           << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
-                           << ", find_prev_consensus_log " << find_prev_consensus_log;
+    xp::system(ER_XP_COMMIT) << "build_consensus_log_index finish, log file " << iter->c_str()
+                           << ", prev_consensus_index " << prev_consensus_index;
 
-    if (!find_prev_consensus_log) {
+    if (!prev_consensus_index) {
       return 1;
     }
   }
@@ -453,20 +450,17 @@ int MYSQL_BIN_LOG::build_consensus_log_index() {
   return 0;
 }
 
-int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term) {
-  LOG_INFO log_info;
-  bool found = false;
+uint64 MYSQL_BIN_LOG::get_last_index_of_term(const uint64 term) {
+  uint64 last_index = 0;
   std::vector<std::string> consensuslog_file_name_vector;
-  get_consensus_log_file_list(consensuslog_file_name_vector);
+  komodo::xlog_engine_get_log_file_index()->get_log_file_list(consensuslog_file_name_vector);
 
   for (auto iter = consensuslog_file_name_vector.rbegin();
-       !found && iter != consensuslog_file_name_vector.rend(); ++iter) {
+       !last_index && iter != consensuslog_file_name_vector.rend(); ++iter) {
     uint64 current_term = 0;
-    uint64 current_index = 0;
-    uint64 current_flag = 0;
 
     Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
-    if (binlog_file_reader.open(iter->c_str())) return 1;
+    if (binlog_file_reader.open(iter->c_str())) return 0;
 
     binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
     Log_event *ev = NULL;
@@ -479,17 +473,13 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term) {
         case binary_log::CONSENSUS_LOG_EVENT:
           consensus_log_ev = (Consensus_log_event *)ev;
           current_term = consensus_log_ev->get_term();
-          current_index = consensus_log_ev->get_index();
-          current_flag = consensus_log_ev->get_flag();
           // if find larger term, skip current file to previous one
           if (current_term > term) {
             skip = true;
           }
-          if (current_term <= term &&
-              !(current_flag & Consensus_log_event_flag::FLAG_LARGE_TRX)) {
-            consensus_log_manager.get_recovery_manager()
-                ->set_last_leader_term_index(current_index);
-            found = true;
+          if (current_term == term
+              && !(consensus_log_ev->get_flag() & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX)) {
+            last_index = consensus_log_ev->get_index();
           }
           break;
         default:
@@ -499,27 +489,76 @@ int MYSQL_BIN_LOG::init_last_index_of_term(uint64 term) {
       ev = nullptr;
     }
 
-    xp::info(ER_XP_COMMIT) << "init_last_index_of_term finish, log file " << iter->c_str()
-                            << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
-                            << ", found " << found;
+    xp::info(ER_XP_COMMIT) << "get_last_index_of_term, log file " << iter->c_str()
+          << ", last_index " << last_index
+          << ", skip_event_count " << binlog_file_reader.get_skip_event_count();
   }
-  xp::info(ER_XP_COMMIT) << "last log term is " << term
-                         << ", last log term index is "
-                         << consensus_log_manager.get_recovery_manager()
-                                ->get_last_leader_term_index();
-  return !found;
+
+  xp::info(ER_XP_COMMIT) << "get_last_index_of_term finish" 
+    << ", term:" << term
+    << ", last_index:" << last_index;
+
+  return last_index;
+}
+
+uint64 MYSQL_BIN_LOG::get_first_index_of_last_file_term(const uint64 term) {
+  std::vector<std::string> consensuslog_file_name_vector;
+  get_consensus_log_file_list(consensuslog_file_name_vector);
+  uint64 first_index = 0;
+  uint64 current_term = 0;
+  //only check last file
+  const auto last_file_name = consensuslog_file_name_vector.rbegin()->c_str();
+
+  Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
+  if (binlog_file_reader.open(last_file_name)) return 0;
+
+  binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
+  Log_event *ev = NULL;
+  Consensus_log_event *consensus_log_ev = NULL;
+  bool skip = false;
+
+  binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
+  while (!skip && (ev = binlog_file_reader.read_event_object()) != NULL) {
+    switch (ev->get_type_code()) {
+      case binary_log::CONSENSUS_LOG_EVENT:
+        consensus_log_ev = (Consensus_log_event *)ev;
+        current_term = consensus_log_ev->get_term();
+        // if find larger term, skip
+        if (current_term > term) {
+          skip = true;
+          break;
+        }
+
+        if (current_term == term) {
+          first_index = consensus_log_ev->get_index();
+          skip = true;
+        }
+        break;
+      default:
+        break;
+    }
+    delete ev;
+    ev = nullptr;
+  }
+
+  xp::info(ER_XP_COMMIT) << "get_first_index_of_last_file_term finish" 
+    << ", term:" << term
+    << ", first_index:" << first_index
+    << ", skip_event_count " << binlog_file_reader.get_skip_event_count();
+
+  return first_index;
 }
 
 int MYSQL_BIN_LOG::get_consensus_log_file_list(
     std::vector<std::string> &consensuslog_file_name_vector) {
-  consensus_log_manager.get_log_file_index()->get_log_file_list(
+  komodo::xlog_engine_get_log_file_index()->get_log_file_list(
       consensuslog_file_name_vector);
   return 0;
 }
 
 int MYSQL_BIN_LOG::find_log_by_consensus_index(uint64 consensus_index,
                                                std::string &file_name) {
-  return consensus_log_manager.get_log_file_index()->get_log_file_from_index(
+  return komodo::xlog_engine_get_log_file_index()->get_log_file_from_index(
       consensus_index, file_name);
 }
 
@@ -554,7 +593,7 @@ int MYSQL_BIN_LOG::get_trx_end_index(uint64 firstIndex, uint64 &nextIndex) {
         currentFlag = consensus_log_ev->get_flag();
         if (firstIndex <= currentIndex) {
           nextIndex = currentIndex;
-          if (!(currentFlag & Consensus_log_event_flag::FLAG_LARGE_TRX))
+          if (!(currentFlag & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX))
             ret = 0;
         }
         break;
@@ -632,7 +671,7 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
         } else if (!found && consensus_log_ev->get_index() > consensus_index) {
           xp::info(ER_XP_COMMIT)
               << "directly read log error, log size is error";
-          abort();
+          _exit(2);  // Using _exit(), since exit() is not async signal safe
         }
         break;
       default:
@@ -640,10 +679,10 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
           end_pos = my_b_tell(binlog_file_reader.get_io_cache());
           assert(end_pos > start_pos);
           if (end_pos - start_pos == consensus_log_length) {
-            if (need_content && (cflag & Consensus_log_event_flag::FLAG_BLOB)) {
+            if (need_content && (cflag & komodo::Consensus_log_event_flag::FLAG_BLOB)) {
               blob_index_list.push_back(cindex);
             } else if (need_content &&
-                       (cflag & Consensus_log_event_flag::FLAG_BLOB_END)) {
+                       (cflag & komodo::Consensus_log_event_flag::FLAG_BLOB_END)) {
               blob_index_list.push_back(cindex);
               if (found) {
                 assert(consensus_index >= blob_index_list[0] &&
@@ -705,8 +744,6 @@ int MYSQL_BIN_LOG::read_log_by_consensus_index(
 int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                                          const char *file_name,
                                          uint64 start_index) {
-  // const char *errmsg = NULL;
-  // IO_CACHE log;
   LOG_INFO linfo;
 
   strncpy(linfo.log_file_name, file_name, FN_REFLEN - 1);
@@ -733,15 +770,15 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
   uint64 current_term = 0;
   uint32 consensus_log_length = 0;
   uint current_flag = 0;
-  uint64 current_crc32 = 0;
   bool stop_prefetch = false;
   std::string log_content;
   std::vector<uint64> blob_index_list;
   std::vector<uint64> blob_term_list;
   std::vector<uint64> blob_flag_list;
-  ConsensusPreFetchManager *prefetch_mgr =
-      consensus_log_manager.get_prefetch_manager();
-  ConsensusPreFetchChannel *prefetch_channel =
+  komodo::Consensus_prefetch_manager *prefetch_mgr =
+      komodo::xlog_engine_get_prefetch_manager();
+  assert(prefetch_mgr);
+  komodo::Consensus_prefetch_channel *prefetch_channel =
       prefetch_mgr->get_prefetch_channel(channel_id);
   prefetch_channel->set_prefetching(true);
   if (prefetch_channel->get_channel_id() == 0)
@@ -762,11 +799,11 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
            * 1. not large trx, not blob
            * 2. current_index + window_size < start_index
            */
-          if ((!(current_flag & (Consensus_log_event_flag::FLAG_LARGE_TRX |
-                                 Consensus_log_event_flag::FLAG_LARGE_TRX_END |
-                                 Consensus_log_event_flag::FLAG_BLOB |
-                                 Consensus_log_event_flag::FLAG_BLOB_START |
-                                 Consensus_log_event_flag::FLAG_BLOB_END))) &&
+          if ((!(current_flag & (komodo::Consensus_log_event_flag::FLAG_LARGE_TRX |
+                                 komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END |
+                                 komodo::Consensus_log_event_flag::FLAG_BLOB |
+                                 komodo::Consensus_log_event_flag::FLAG_BLOB_START |
+                                 komodo::Consensus_log_event_flag::FLAG_BLOB_END))) &&
               (current_index + prefetch_channel->get_window_size() <
                start_index)) {
             binlog_file_reader.seek(start_pos + consensus_log_length);
@@ -778,30 +815,26 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
            * 3. current_index + window_size >= start_index
            */
           if ((!(current_flag &
-                 (Consensus_log_event_flag::FLAG_LARGE_TRX |
-                  Consensus_log_event_flag::FLAG_LARGE_TRX_END |
-                  Consensus_log_event_flag::FLAG_BLOB |
-                  Consensus_log_event_flag::FLAG_BLOB_START |
-                  Consensus_log_event_flag::FLAG_BLOB_END |
-                  Consensus_log_event_flag::FLAG_CONFIG_CHANGE))) &&
+                 (komodo::Consensus_log_event_flag::FLAG_LARGE_TRX |
+                  komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END |
+                  komodo::Consensus_log_event_flag::FLAG_BLOB |
+                  komodo::Consensus_log_event_flag::FLAG_BLOB_START |
+                  komodo::Consensus_log_event_flag::FLAG_BLOB_END |
+                  komodo::Consensus_log_event_flag::FLAG_CONFIG_CHANGE))) &&
               (current_index + prefetch_channel->get_window_size() >=
                start_index)) {
             fetch_binlog_by_offset(binlog_file_reader, start_pos,
                                    start_pos + consensus_log_length, NULL,
                                    log_content);
-            current_crc32 = opt_consensus_checksum
-                                ? checksum_crc32(0, get_uchar_str(log_content),
-                                                 log_content.size())
-                                : 0;
             int result = 0;
             while ((result = prefetch_channel->add_log_to_prefetch_cache(
                         current_term, current_index, log_content.size(),
-                        get_uchar_str(log_content), false, current_flag,
-                        current_crc32)) == CLC_FULL) {
+                        komodo::get_uchar_str(log_content), false, current_flag,
+                        0)) == komodo::CLC_FULL) {
               // wait condition already executed in add log to prefetch cache
             }
-            if (result == CLC_INTERRUPT ||
-                current_index == consensus_log_manager.get_sync_index())
+            if (result == komodo::CLC_INTERRUPT ||
+                current_index == komodo::xlog_engine_get_sync_index())
               stop_prefetch = true;
             end_pos = start_pos + consensus_log_length;
             binlog_file_reader.seek(end_pos);
@@ -818,16 +851,16 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
               end_pos - start_pos == consensus_log_length) {
             if (prefetch_channel->get_channel_id() == 0 &&
                 (current_flag &
-                 (Consensus_log_event_flag::FLAG_LARGE_TRX |
-                  Consensus_log_event_flag::FLAG_LARGE_TRX_END))) {
+                 (komodo::Consensus_log_event_flag::FLAG_LARGE_TRX |
+                  komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END))) {
               prefetch_channel->add_log_to_large_trx_table(
                   current_term, current_index, (rci_ev != NULL), current_flag);
             }
-            if (current_flag & Consensus_log_event_flag::FLAG_BLOB) {
+            if (current_flag & komodo::Consensus_log_event_flag::FLAG_BLOB) {
               blob_index_list.push_back(current_index);
               blob_term_list.push_back(current_term);
               blob_flag_list.push_back(current_flag);
-            } else if (current_flag & Consensus_log_event_flag::FLAG_BLOB_END) {
+            } else if (current_flag & komodo::Consensus_log_event_flag::FLAG_BLOB_END) {
               blob_index_list.push_back(current_index);
               blob_term_list.push_back(current_term);
               blob_flag_list.push_back(current_flag);
@@ -842,20 +875,15 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                   int result = 0;
                   log_content.assign(ev->temp_buf + blob_start_pos - start_pos,
                                      blob_end_pos - blob_start_pos);
-                  current_crc32 =
-                      opt_consensus_checksum
-                          ? checksum_crc32(0, get_uchar_str(log_content),
-                                           log_content.size())
-                          : 0;
                   while ((result = prefetch_channel->add_log_to_prefetch_cache(
                               blob_term_list[i], blob_index_list[i],
-                              log_content.size(), get_uchar_str(log_content),
-                              false, blob_flag_list[i], current_crc32)) ==
-                         CLC_FULL) {
+                              log_content.size(), komodo::get_uchar_str(log_content),
+                              false, blob_flag_list[i], 0)) ==
+                         komodo::CLC_FULL) {
                     // wait condition already executed in add log to prefetch
                     // cache
                   }
-                  if (result == CLC_INTERRUPT) {
+                  if (result == komodo::CLC_INTERRUPT) {
                     stop_prefetch = true;
                     break;  // break iterate blob_index_list
                   }
@@ -873,21 +901,16 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                   start_index) {
                 fetch_binlog_by_offset(binlog_file_reader, start_pos, end_pos,
                                        rci_ev, log_content);
-                current_crc32 =
-                    opt_consensus_checksum
-                        ? checksum_crc32(0, get_uchar_str(log_content),
-                                         log_content.size())
-                        : 0;
                 int result = 0;
                 while ((result = prefetch_channel->add_log_to_prefetch_cache(
                             current_term, current_index, log_content.size(),
-                            get_uchar_str(log_content), (rci_ev != NULL),
-                            current_flag, current_crc32)) == CLC_FULL) {
+                            komodo::get_uchar_str(log_content), (rci_ev != NULL),
+                            current_flag, 0)) == komodo::CLC_FULL) {
                   // wait condition already executed in add log to prefetch
                   // cache
                 }
-                if (result == CLC_INTERRUPT ||
-                    current_index == consensus_log_manager.get_sync_index()) {
+                if (result == komodo::CLC_INTERRUPT ||
+                    current_index == komodo::xlog_engine_get_sync_index()) {
                   stop_prefetch = true;  // because truncate log happened, stop
                                          // prefetch and retry
                 }
@@ -918,7 +941,7 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
                          << ", prefetch_window_size "
                          << prefetch_channel->get_window_size()
                          << ", sync_index "
-                         << consensus_log_manager.get_sync_index()
+                         << komodo::xlog_engine_get_sync_index()
                          << ", file_name " << file_name << ", get_error_type  "
                          << binlog_file_reader.get_error_type();
 
@@ -933,21 +956,27 @@ int MYSQL_BIN_LOG::prefetch_logs_of_file(THD *thd, uint64 channel_id,
 */
 int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
                                                uint64 consensus_index,
-                                               uint64 *pos) {
+                                               uint64 *pos,
+                                               Gtid_set *truncated_gtids) {
   Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
   if (binlog_file_reader.open(file_name)) return 1;
 
   binlog_file_reader.seek(BIN_LOG_HEADER_SIZE);
   Log_event *ev = NULL;
+  Gtid_log_event *gtid_ev = NULL;
   Consensus_log_event *consensus_log_ev = NULL;
   Previous_consensus_index_log_event *consensus_prev_ev = NULL;
   bool found = false;
   bool first_log_in_file = false;
+  bool is_first_found_gtid = true;
+  Gtid gtid;
   binlog_file_reader.add_expected_event(binary_log::CONSENSUS_LOG_EVENT)
+                    .add_expected_event(binary_log::GTID_LOG_EVENT)
                     .add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
                     .add_expected_event(binary_log::PREVIOUS_GTIDS_LOG_EVENT);
 
-  while (!found && (ev = binlog_file_reader.read_event_object()) != NULL) {
+  while ((!found || truncated_gtids != nullptr)
+         && (ev = binlog_file_reader.read_event_object()) != NULL) {
     switch (ev->get_type_code()) {
       case binary_log::CONSENSUS_LOG_EVENT:
         consensus_log_ev = (Consensus_log_event *)ev;
@@ -956,6 +985,22 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
           found = true;
           *pos = my_b_tell(binlog_file_reader.get_io_cache()) +
                  consensus_log_ev->get_length();
+        }
+        break;
+      case binary_log::GTID_LOG_EVENT:
+        gtid_ev = (Gtid_log_event *)ev;
+        if (found && truncated_gtids) {
+          //first gtid is not truncated one
+          if (is_first_found_gtid) {
+            is_first_found_gtid = false;
+          } else {
+            gtid.gno = gtid_ev->get_gno();
+            truncated_gtids->get_sid_map()->get_sid_lock()->wrlock();
+            gtid.sidno = gtid_ev->get_sidno(truncated_gtids->get_sid_map());
+            truncated_gtids->ensure_sidno(gtid.sidno);
+            truncated_gtids->_add_gtid(gtid);
+            truncated_gtids->get_sid_map()->get_sid_lock()->unlock();
+          }
         }
         break;
       case binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT:
@@ -967,6 +1012,7 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
         if (first_log_in_file) {
           *pos = my_b_tell(binlog_file_reader.get_io_cache());
           found = true;
+          is_first_found_gtid = false;
         }
         break;
       default:
@@ -978,7 +1024,11 @@ int MYSQL_BIN_LOG::find_pos_by_consensus_index(const char *file_name,
   xp::info(ER_XP_COMMIT) << "find_pos_by_consensus_index finish, log file " << file_name
                           << ", consensus_index " << consensus_index
                           << ", skip_event_count " << binlog_file_reader.get_skip_event_count()
-                          << ", found " << found;
+                          << ", found " << found
+                          << ", pos " << *pos;
+  if (truncated_gtids)
+    komodo::log_gtid_set(truncated_gtids, true, "truncated_gtids");
+
   return !found;
 }
 
@@ -1057,7 +1107,7 @@ int MYSQL_BIN_LOG::truncate_files_after(std::string &file_name) {
   xp::info(ER_XP_COMMIT) << "truncate_files_after file:" << file_name.c_str();
 
   // truncate consensus log file index
-  consensus_log_manager.get_log_file_index()->truncate_after(file_name);
+  komodo::xlog_engine_get_log_file_index()->truncate_after(file_name);
 
   // modify index file
   truncate_logs_from_index(exist_vector, file_name);
@@ -1078,31 +1128,34 @@ int MYSQL_BIN_LOG::truncate_files_after(std::string &file_name) {
 }
 
 int MYSQL_BIN_LOG::truncate_single_file_by_consensus_index(
-    const char *file_name, uint64 consensus_index, uint64 *offset) {
+    const char *file_name, const uint64 consensus_index, const uint64 offset) {
   assert(consensus_index != 0);
-  *offset = 0;
   File file;
   mysql_mutex_assert_owner(&LOCK_log);
-  if (find_pos_by_consensus_index(file_name, consensus_index, offset)) {
-    xp::error(ER_XP_COMMIT) << "Failed to find pos by consensus index "
-                            << consensus_index << " when truncate ";
-    return -1;
-  }
 
   if ((file = mysql_file_open(key_file_binlog, file_name, O_RDWR | O_BINARY,
                               MYF(MY_WME))) < 0) {
     xp::error(ER_XP_COMMIT) << "Failed to open the binlog file when truncate.";
     return -1;
   }
-  if (my_chsize(file, *offset, 0, MYF(MY_WME))) {
+  if (my_chsize(file, offset, 0, MYF(MY_WME))) {
     xp::error(ER_XP_COMMIT) << "Failed to resize binlog file when truncate.";
     mysql_file_close(file, MYF(MY_WME));
     return -1;
   } else {
     xp::system(ER_XP_COMMIT) << "Truncate binlog file " << file_name
                            << ", consensus_index " << consensus_index
-                           << ", Binlog trimmed to " << *offset << " position.";
+                           << ", Binlog trimmed to " << offset << " position.";
     mysql_file_close(file, MYF(MY_WME));
+  }
+  return 0;
+}
+
+int MYSQL_BIN_LOG::truncate_rli_gtid_set(const Gtid_set *truncated_gtids)
+{
+  if (truncated_gtids != nullptr) {
+    auto rli_info = komodo::xlog_engine_get_log_manager().get_relay_log_info();
+    rli_info->truncate_gtid_set(truncated_gtids);
   }
   return 0;
 }
@@ -1111,18 +1164,24 @@ int MYSQL_BIN_LOG::consensus_truncate_log(uint64 consensus_index) {
   std::string file_name;
   uint64 offset = 0;
   if (!is_relay_log) mysql_mutex_lock(&LOCK_sync);
+  Gtid_set truncated_gtids((is_relay_log ? previous_gtid_set_relaylog->get_sid_map() : nullptr),
+                           (is_relay_log ? previous_gtid_set_relaylog->get_sid_map()->get_sid_lock() : nullptr));
+  Gtid_set *truncated_gtids_ptr = is_relay_log ? &truncated_gtids : nullptr;
+  mysql_mutex_assert_owner(&LOCK_log);
 
   // truncate must not cross binlog file.
   if (find_log_by_consensus_index(consensus_index, file_name) ||
       truncate_files_after(file_name) ||
+      find_pos_by_consensus_index(file_name.c_str(), consensus_index, &offset, truncated_gtids_ptr) ||
       truncate_single_file_by_consensus_index(file_name.c_str(),
-                                              consensus_index, &offset) ||
+                                              consensus_index, offset) ||
+      truncate_rli_gtid_set(truncated_gtids_ptr) ||
       m_binlog_file->truncate(offset)) {
     xp::error(ER_XP_COMMIT)
         << "Truncate cannot find consensus index log "
         << ", file_name " << file_name << ", consensus_index "
         << consensus_index << ", offset " << offset;
-    abort();
+    _exit(2);  // Using _exit(), since exit() is not async signal safe
   } else {
     update_binlog_end_pos();
     xp::system(ER_XP_COMMIT)
@@ -1181,7 +1240,7 @@ int MYSQL_BIN_LOG::consensus_prefetch_log_entries(THD *thd, uint64 channel_id,
   if (find_log_by_consensus_index(consensus_index, file_name) ||
       prefetch_logs_of_file(thd, channel_id, file_name.c_str(),
                             consensus_index)) {
-    xp::error(ER_XP_COMMIT)
+    xp::warn(ER_XP_COMMIT)
         << "Prefetch cannot find consensus index log " << consensus_index;
     ret = 1;
   }
@@ -1210,17 +1269,17 @@ static void store_gtid_for_xpaxos(const char *buf, size_t buf_size,
 
 static void revise_one_event(uchar *event_ptr, size_t event_len,
                              size_t log_pos) {
+
   /* PolarDB-X Engine: fix timestamp for non-leader local event */
-  if (consensus_log_manager.get_status() !=
-      Consensus_Log_System_Status::BINLOG_WORKING) {
+  if (!komodo::xlog_engine_binlog_working()) {
     uint32 tt = uint4korr(event_ptr);
     if (!Log_event::is_local_event_type(
             static_cast<Log_event_type>(event_ptr[EVENT_TYPE_OFFSET]))) {
       // cache the last timestamp
-      consensus_log_manager.set_event_timestamp(tt);
+      komodo::xlog_engine_get_log_manager().set_event_timestamp(tt);
     } else {
       // set control event timestamp to the lastest non-control one
-      uint32 last_tt = consensus_log_manager.get_event_timestamp();
+      uint32 last_tt = komodo::xlog_log_manager_get_event_timestamp();
       if (last_tt) int4store(event_ptr, last_tt);
     }
   }
@@ -1238,10 +1297,8 @@ static void revise_one_event(uchar *event_ptr, size_t event_len,
 }
 
 static int init_consensus_event_timestamp(uchar *buf, size_t len) {
-  if (opt_consensuslog_revise &&
-      consensus_log_manager.get_status() !=
-          Consensus_Log_System_Status::BINLOG_WORKING &&
-      consensus_log_manager.get_event_timestamp() == 0) {
+  if (opt_consensuslog_revise && !komodo::xlog_engine_binlog_working() &&
+      komodo::xlog_log_manager_get_event_timestamp() == 0) {
     /* get event timestamp from current buffer */
     size_t event_len = 0;
     uchar *header = buf;
@@ -1249,7 +1306,7 @@ static int init_consensus_event_timestamp(uchar *buf, size_t len) {
       event_len = uint4korr(header + EVENT_LEN_OFFSET);
       if (!Log_event::is_local_event_type(
               static_cast<Log_event_type>(header[EVENT_TYPE_OFFSET]))) {
-        consensus_log_manager.set_event_timestamp(uint4korr(header));
+        komodo::xlog_engine_get_log_manager().set_event_timestamp(uint4korr(header));
         break;
       }
       header += event_len;
@@ -1311,9 +1368,9 @@ static int verify_checksum(uchar *buf, size_t len) {
   return 0;
 }
 
-int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
-                                        bool *rotate_var, Relay_log_info *rli,
-                                        bool with_check) {
+int MYSQL_BIN_LOG::append_consensus_log(komodo::ConsensusLogEntry &log,
+                                        uint64 *index, bool *rotate_var,
+                                        Relay_log_info *rli, bool with_check) {
   int error = 0;
   uint64 bytes = 0;
   uchar *real_buffer = NULL;
@@ -1323,12 +1380,10 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     [&] { mysql_mutex_lock(&LOCK_log); },
     [&] { mysql_mutex_unlock(&LOCK_log); }
   );
+  auto &log_manager = komodo::xlog_engine_get_log_manager();
+
   if (with_check) {
-    auto term_guard = create_lock_guard(
-      [&] { mysql_mutex_lock(consensus_log_manager.get_term_lock()); },
-      [&] { mysql_mutex_unlock(consensus_log_manager.get_term_lock()); }
-    );
-    if (consensus_log->getCurrentTerm() != log.term) {
+    if (komodo::xlog_engine_get_handler_current_term() != log.term) {
       /* set index to 0 to mark it fail */
       *index = 0;
       /* return 0 do not let it abort */
@@ -1336,12 +1391,12 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     }
   }
 
-  if (log.flag & Consensus_log_event_flag::FLAG_LARGE_TRX) {
-    consensus_log_manager.set_in_large_trx_appending(true);
-  } else if (log.flag & Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
-    ut_a(consensus_log_manager.get_in_large_trx_appending());
+  if (log.flag & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX) {
+    log_manager.set_in_large_trx_appending(true);
+  } else if (log.flag & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
+    ut_a(log_manager.get_in_large_trx_appending());
   } else {
-    consensus_log_manager.set_in_large_trx_appending(false);
+    log_manager.set_in_large_trx_appending(false);
   }
 
   // cluster info should consider real binlog format size
@@ -1349,33 +1404,33 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     Consensus_cluster_info_log_event ev(log.buf_size, (char *)(log.buffer));
     ev.common_footer->checksum_alg =
         static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
-    error = ev.write(consensus_log_manager.get_log_file());
-    real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
-  } else if (log.flag & Consensus_log_event_flag::FLAG_BLOB) {
-    ut_a(consensus_log_manager.get_in_large_trx_appending());
-    if (log.flag & Consensus_log_event_flag::FLAG_BLOB_START) {
+    error = ev.write(log_manager.get_log_file());
+    real_buf_size = log_manager.serialize_cache(&real_buffer);
+  } else if (log.flag & komodo::Consensus_log_event_flag::FLAG_BLOB) {
+    ut_a(log_manager.get_in_large_trx_appending());
+    if (log.flag & komodo::Consensus_log_event_flag::FLAG_BLOB_START) {
       /* some log may truncate after leader crash recovery, so if
        * FLAG_BLOB_START, clear the cache */
-      reinit_io_cache(consensus_log_manager.get_cache(), WRITE_CACHE, 0, 0, 1);
-      consensus_log_manager.set_in_large_event_appending(true);
+      reinit_io_cache(log_manager.get_cache(), WRITE_CACHE, 0, 0, 1);
+      log_manager.set_in_large_event_appending(true);
     }
-    ut_a(consensus_log_manager.get_in_large_event_appending());
+    ut_a(log_manager.get_in_large_event_appending());
     /* save empty log as a replace to binlog */
-    std::string empty_log = consensus_log_manager.get_empty_log();
+    std::string empty_log = log_manager.get_empty_log();
     real_buffer = (uchar *)my_malloc(key_memory_thd_main_mem_root,
                                      empty_log.length(), MYF(MY_WME));
     memcpy(real_buffer, empty_log.data(), empty_log.length());
     real_buf_size = empty_log.length();
     /* save real data to cache */
-    my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
-    xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
+    my_b_write(log_manager.get_cache(), log.buffer, log.buf_size);
+    xp::info(ER_XP_COMMIT) << "large event: cache the current log"
                            << ", index " << log.index
                            << ", size " << log.buf_size << ", cache size "
-                           << my_b_tell(consensus_log_manager.get_cache());
-  } else if (log.flag & Consensus_log_event_flag::FLAG_BLOB_END) {
-    ut_a(consensus_log_manager.get_in_large_trx_appending());
-    ut_a(consensus_log_manager.get_in_large_event_appending());
-    consensus_log_manager.set_in_large_event_appending(false);
+                           << my_b_tell(log_manager.get_cache());
+  } else if (log.flag & komodo::Consensus_log_event_flag::FLAG_BLOB_END) {
+    ut_a(log_manager.get_in_large_trx_appending());
+    ut_a(log_manager.get_in_large_event_appending());
+    log_manager.set_in_large_event_appending(false);
 
     DBUG_EXECUTE_IF("crash_during_large_event_receive", { DBUG_SUICIDE(); });
     DBUG_EXECUTE_IF("crash_during_large_event_receive_slow", {
@@ -1383,19 +1438,19 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
       DBUG_SUICIDE();
     });
     /* save real data to cache, now cache has the integrated blob event */
-    my_b_write(consensus_log_manager.get_cache(), log.buffer, log.buf_size);
-    real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
-    xp::info(ER_XP_COMMIT) << "Large event: cache the current log finish"
+    my_b_write(log_manager.get_cache(), log.buffer, log.buf_size);
+    real_buf_size = log_manager.serialize_cache(&real_buffer);
+    xp::info(ER_XP_COMMIT) << "large event: cache the current log finish"
                            << ", index " << log.index
                            << ", size " << log.buf_size << ", whole log "
                            << real_buf_size;
   } else {
-    ut_a(!consensus_log_manager.get_in_large_event_appending());
+    ut_a(!log_manager.get_in_large_event_appending());
     real_buffer = log.buffer;
     real_buf_size = log.buf_size;
   }
 
-  *index = consensus_log_manager.get_current_index();
+  *index = komodo::xlog_log_manager_get_current_index();
   if (*index != log.index) {
     // leader write empty log entry with index 0
     if (log.index != 0) {
@@ -1403,10 +1458,6 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
           << "Consensus Index Mismatch, system current index is " << *index
           << ", but the log index is " << log.index;
       error = 1;
-    } else {
-      log.checksum = opt_consensus_checksum
-                         ? checksum_crc32(0, log.buffer, log.buf_size)
-                         : 0;
     }
   }
 
@@ -1432,13 +1483,17 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
   //NOTE::large event in fifo cache is different from which in pefetch (read from binlog).
   //      because appended data will changed(timestamp/pos) after writed into binlog, 
   //      SO, do not use one large event from fifo cahce + prefetch cache
-  if (!error)
-    error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-        log.term, *index, log.buf_size, log.buffer, log.outer, log.flag,
-        log.checksum);
 
-  if (!error)
+  /**
+    Revision:
+    Not care about opt_consensus_checksum again, so just let it mix-used.
+  */
+  if (!error) {
+    komodo::xlog_engine_add_log_to_cache(log.term, *index, log.buf_size,
+                                         log.buffer, log.outer, log.flag);
+
     error = init_consensus_event_timestamp(real_buffer, real_buf_size);
+  }
 
   if (!error) error = write_consensus_log(log.flag, log.term, real_buf_size);
 
@@ -1451,8 +1506,9 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
     bytes_written += bytes;
   }
 
-  if (log.outer || (log.flag & (Consensus_log_event_flag::FLAG_BLOB |
-                                Consensus_log_event_flag::FLAG_BLOB_END))) {
+  if (log.outer ||
+      (log.flag & (komodo::Consensus_log_event_flag::FLAG_BLOB |
+                   komodo::Consensus_log_event_flag::FLAG_BLOB_END))) {
     my_free(real_buffer);
   }
 
@@ -1460,16 +1516,13 @@ int MYSQL_BIN_LOG::append_consensus_log(ConsensusLogEntry &log, uint64 *index,
 
   if (error) goto err;
 
-  consensus_log_manager.set_sync_index_if_greater(*index);
+  log_manager.set_sync_index_if_greater(*index);
   // signal_update();
   end_pos = my_b_safe_tell(m_binlog_file->get_io_cache());
   update_binlog_end_pos(m_binlog_file->get_binlog_name(), end_pos);
   if (end_pos >= (my_off_t)max_size) *rotate_var = true;
 
-  if (opt_cluster_log_type_instance && consensus_ptr) {
-    consensus_ptr->updateAppliedIndex(*index);
-    replica_read_manager.update_lsn(*index);
-  }
+  komodo::xlog_update_logger_applied_index(*index);
 
 err:
   if (error) {
@@ -1481,32 +1534,34 @@ err:
 }
 
 int MYSQL_BIN_LOG::append_multi_consensus_logs(
-    std::vector<ConsensusLogEntry> &logs, uint64 *max_index, bool *rotate_var,
-    Relay_log_info *rli) {
+    std::vector<komodo::ConsensusLogEntry> &logs, uint64 *max_index,
+    bool *rotate_var, Relay_log_info *rli) {
   int error = 0;
   my_off_t end_pos = 0;
   auto log_guard = create_lock_guard(
     [&] { mysql_mutex_lock(&LOCK_log); },
     [&] { mysql_mutex_unlock(&LOCK_log); }
   );
+  auto &log_manager = komodo::xlog_engine_get_log_manager();
   for (auto iter = logs.begin(); iter != logs.end(); iter++) {
     uint64 bytes = 0;
     size_t real_buf_size = 0;
     uchar *real_buffer = NULL;
-    *max_index = consensus_log_manager.get_current_index();
+    *max_index = komodo::xlog_log_manager_get_current_index();
     if (*max_index != iter->index) {
       xp::error(ER_XP_COMMIT)
           << "Consensus Index Mismatch, system current index is " << *max_index
           << ", but the log index is " << iter->index;
-      abort();
+      _exit(2);  // Using _exit(), since exit() is not async signal safe
     }
 
-    if (iter->flag & Consensus_log_event_flag::FLAG_LARGE_TRX) {
-      consensus_log_manager.set_in_large_trx_appending(true);
-    } else if (iter->flag & Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
-      ut_a(consensus_log_manager.get_in_large_trx_appending());
+    if (iter->flag & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX) {
+      log_manager.set_in_large_trx_appending(true);
+    } else if (iter->flag &
+               komodo::Consensus_log_event_flag::FLAG_LARGE_TRX_END) {
+      ut_a(log_manager.get_in_large_trx_appending());
     } else {
-      consensus_log_manager.set_in_large_trx_appending(false);
+      log_manager.set_in_large_trx_appending(false);
     }
 
     // cluster info should consider real binlog format size
@@ -1515,35 +1570,35 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
                                           (char *)(iter->buffer));
       ev.common_footer->checksum_alg =
           static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
-      error = ev.write(consensus_log_manager.get_log_file());
-      real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
-    } else if (iter->flag & Consensus_log_event_flag::FLAG_BLOB) {
-      ut_a(consensus_log_manager.get_in_large_trx_appending());
-      if (iter->flag & Consensus_log_event_flag::FLAG_BLOB_START) {
+      error = ev.write(log_manager.get_log_file());
+      real_buf_size = log_manager.serialize_cache(&real_buffer);
+    } else if (iter->flag & komodo::Consensus_log_event_flag::FLAG_BLOB) {
+      ut_a(log_manager.get_in_large_trx_appending());
+      if (iter->flag & komodo::Consensus_log_event_flag::FLAG_BLOB_START) {
         /* some log may truncate after leader crash recovery, so if
          * FLAG_BLOB_START, clear the cache */
-        reinit_io_cache(consensus_log_manager.get_cache(), WRITE_CACHE, 0, 0,
+        reinit_io_cache(log_manager.get_cache(), WRITE_CACHE, 0, 0,
                         1);
-        consensus_log_manager.set_in_large_event_appending(true);
+        log_manager.set_in_large_event_appending(true);
       }
-      ut_a(consensus_log_manager.get_in_large_event_appending());
+      ut_a(log_manager.get_in_large_event_appending());
       /* save empty log as a replace to binlog */
-      std::string empty_log = consensus_log_manager.get_empty_log();
+      std::string empty_log = log_manager.get_empty_log();
       real_buffer = (uchar *)my_malloc(key_memory_thd_main_mem_root,
                                        empty_log.length(), MYF(MY_WME));
       memcpy(real_buffer, empty_log.data(), empty_log.length());
       real_buf_size = empty_log.length();
       /* save real data to cache */
-      my_b_write(consensus_log_manager.get_cache(), iter->buffer,
+      my_b_write(log_manager.get_cache(), iter->buffer,
                  iter->buf_size);
-      xp::info(ER_XP_COMMIT) << "Large event: cache the current log"
+      xp::info(ER_XP_COMMIT) << "large event: cache the current log"
                              << ", index " << iter->index
                              << ", size " << iter->buf_size << ", cache size "
-                             << my_b_tell(consensus_log_manager.get_cache());
-    } else if (iter->flag & Consensus_log_event_flag::FLAG_BLOB_END) {
-      ut_a(consensus_log_manager.get_in_large_trx_appending());
-      ut_a(consensus_log_manager.get_in_large_event_appending());
-      consensus_log_manager.set_in_large_event_appending(false);
+                             << my_b_tell(log_manager.get_cache());
+    } else if (iter->flag & komodo::Consensus_log_event_flag::FLAG_BLOB_END) {
+      ut_a(log_manager.get_in_large_trx_appending());
+      ut_a(log_manager.get_in_large_event_appending());
+      log_manager.set_in_large_event_appending(false);
 
       DBUG_EXECUTE_IF("crash_during_large_event_receive", { DBUG_SUICIDE(); });
       DBUG_EXECUTE_IF("crash_during_large_event_receive_slow", {
@@ -1551,16 +1606,16 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
         DBUG_SUICIDE();
       });
       /* save real data to cache, now cache has the integrated blob event */
-      my_b_write(consensus_log_manager.get_cache(), iter->buffer,
+      my_b_write(log_manager.get_cache(), iter->buffer,
                  iter->buf_size);
       /* read the total cache */
-      real_buf_size = consensus_log_manager.serialize_cache(&real_buffer);
+      real_buf_size = log_manager.serialize_cache(&real_buffer);
       xp::info(ER_XP_COMMIT)
-          << "Large event: cache the current log finish"
+          << "large event: cache the current log finish"
           << ", index " << iter->index
           << ", size " << iter->buf_size << ", whole log " << real_buf_size;
     } else {
-      ut_a(!consensus_log_manager.get_in_large_event_appending());
+      ut_a(!log_manager.get_in_large_event_appending());
       real_buffer = iter->buffer;
       real_buf_size = iter->buf_size;
     }
@@ -1588,13 +1643,14 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
     //NOTE::large event in fifo cache is different from which in pefetch (read from binlog).
     //      because appended data will changed(timestamp/pos) after writed into binlog, 
     //      SO, do not use one large event from fifo cahce + prefetch cache
-    if (!error)
-      error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-          iter->term, *max_index, iter->buf_size, iter->buffer, iter->outer,
-          iter->flag, iter->checksum);
+    if (!error) {
+      komodo::xlog_engine_add_log_to_cache(iter->term, *max_index,
+                                           iter->buf_size, iter->buffer,
+                                           iter->outer, iter->flag);
 
-    if (!error)
       error = init_consensus_event_timestamp(real_buffer, real_buf_size);
+    }
+
     if (!error)
       error = write_consensus_log(iter->flag, iter->term, real_buf_size);
     if (!error)
@@ -1610,8 +1666,8 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
     }
 
     if (iter->outer ||
-        (iter->flag & (Consensus_log_event_flag::FLAG_BLOB |
-                       Consensus_log_event_flag::FLAG_BLOB_END))) {
+        (iter->flag & (komodo::Consensus_log_event_flag::FLAG_BLOB |
+                       komodo::Consensus_log_event_flag::FLAG_BLOB_END))) {
       my_free(real_buffer);
     }
 
@@ -1622,16 +1678,13 @@ int MYSQL_BIN_LOG::append_multi_consensus_logs(
 
   if (error) goto err;
 
-  consensus_log_manager.set_sync_index_if_greater(*max_index);
+  log_manager.set_sync_index_if_greater(*max_index);
   // signal_update();
   end_pos = my_b_safe_tell(m_binlog_file->get_io_cache());
   update_binlog_end_pos(m_binlog_file->get_binlog_name(), end_pos);
   if (end_pos >= (my_off_t)max_size) *rotate_var = true;
 
-  if (opt_cluster_log_type_instance && consensus_ptr) {
-    consensus_ptr->updateAppliedIndex(*max_index);
-    replica_read_manager.update_lsn(*max_index);
-  }
+  komodo::xlog_update_logger_applied_index(*max_index);
 
 err:
   if (error) {
@@ -1640,89 +1693,6 @@ err:
     exec_binlog_error_action_abort(err_buff);
   }
   return error;
-}
-
-int MYSQL_BIN_LOG::rotate_consensus_log() {
-  int error = 0;
-  bool need_real_rotate = false;
-
-  mysql_mutex_lock(&LOCK_rotate);
-  need_real_rotate = !rotating;
-  if (!rotating) rotating = true;
-  mysql_mutex_unlock(&LOCK_rotate);
-  if (need_real_rotate) {
-    mysql_mutex_lock(&LOCK_log);
-    bool check_purge = false;
-    error = rotate(false, &check_purge);
-    mysql_mutex_unlock(&LOCK_log);
-
-    mysql_mutex_lock(&LOCK_rotate);
-    rotating = false;
-    mysql_mutex_unlock(&LOCK_rotate);
-  }
-  return error;
-}
-
-void MYSQL_BIN_LOG::consensus_rollback_with_flush_nothing(THD *thd, bool is_my_thd) {
-  /*
-    If xa commit error, we can not simply roll back the trx of this THD.
-    Because the trx is prepared by 'xa prepare' and its consensus index
-    may reach a majority in the cluster. It must not be rolled back.
-    Currently, we crash the server to handle the consistency by recovery.
-  */
-  if (thd->consensus_error != THD::CSS_NONE) {
-    if (thd->get_transaction()->xid_state()->has_state(XID_STATE::XA_PREPARED)) {
-      xp::warn(ER_XP_COMMIT) << "xa commit/rollback fail, restart to deal with it"
-        << ", commit_error: " << thd->commit_error
-        << ", consensus_error: " << thd->consensus_error
-        << ", sql_command: " << thd->lex->sql_command
-        << ", xid " << *thd->get_transaction()->xid_state()->get_xid();
-      flush_error_log_messages();
-      exec_binlog_error_action_exit(
-        "xa commit/rollback fail, restart to deal with it");
-    }
-
-    if (thd->get_transaction()->m_flags.commit_low )
-      trx_coordinator::rollback_in_engines(thd, thd->get_transaction()->m_flags.real_commit);
-    gtid_state->update_on_rollback(thd);
-    thd_get_cache_mngr(thd)->reset();
-    if (thd->get_stmt_da()->is_ok())
-      thd->get_stmt_da()->reset_diagnostics_area();
-    if (is_my_thd)
-      my_error(THD::Consensus_error_code[thd->consensus_error], MYF(0));
-  }
-}
-
-void MYSQL_BIN_LOG::consensus_wait_commit(THD *thd) {
-  if (opt_initialize) return;
-  if (!consensus_ptr) return;
-  if (thd->commit_error == THD::CE_NONE
-      && thd->consensus_error == THD::CSS_NONE
-      && (DBUG_EVALUATE_IF("force_in_wait_commit", true, false)
-          || (consensus_ptr->waitCommitIndexUpdate(thd->consensus_index - 1, thd->consensus_term) < thd->consensus_index
-              && thd->consensus_index > consensus_log_manager.get_consensus_info()->get_start_apply_index()))) {
-    xp::warn(ER_XP_COMMIT)
-        << "Failed to commit from shutdown or leadership changed"
-        << ", system current term:" 
-        << consensus_log_manager.get_consensus_info()->get_current_term()
-        << ", system apply index:"
-        << consensus_log_manager.get_consensus_info()->get_start_apply_index()
-        << ", thd consensus term:" << thd->consensus_term
-        << ", thd consensus index:" << thd->consensus_index
-        << ", isShutdown:" << consensus_ptr->isShutdown()
-        << ", sql_command:" << thd->lex->sql_command;
-
-    //skip commit
-    thd->get_transaction()->m_flags.commit_low = false;
-    if (consensus_ptr->isShutdown())
-      thd->consensus_error = THD::CSS_SHUTDOWN;
-    else
-      thd->consensus_error = THD::CSS_LEADERSHIP_CHANGED;
-    thd->commit_error = THD::CE_COMMIT_ERROR;
-
-    exec_binlog_error_action_exit(
-          "Waiting for consensus majority commit failed, restart to deal with it");
-  }
 }
 
 void binlog_commit_pos_watcher(bool *is_running) {
@@ -1740,7 +1710,7 @@ void binlog_commit_pos_watcher(bool *is_running) {
       which means commit position locates in last binlog file.
     */
     log_name =
-        consensus_log_manager.get_log_file_index()->get_last_log_file_name();
+        komodo::xlog_engine_get_log_file_index()->get_last_log_file_name();
     Binlog_file_reader binlog_file_reader(opt_source_verify_checksum);
     if (binlog_file_reader.open(log_name.c_str())) {
       xp::error(ER_XP_COMMIT)
@@ -1748,6 +1718,7 @@ void binlog_commit_pos_watcher(bool *is_running) {
           << log_name.c_str();
       skip = true;
     }
+    auto &log_manager = komodo::xlog_engine_get_log_manager();
 
     binlog_file_reader.add_expected_event(binary_log::PREVIOUS_CONSENSUS_INDEX_LOG_EVENT)
                       .add_expected_event(binary_log::CONSENSUS_LOG_EVENT);
@@ -1764,20 +1735,20 @@ void binlog_commit_pos_watcher(bool *is_running) {
             2. reopen the same binlog file because truncateLog happens
           */
           pos = binlog_file_reader.position();
-          if (prev_index > consensus_log_manager.get_commit_pos_index() ||
-              (prev_index == consensus_log_manager.get_commit_pos_index()
-               && pos != consensus_log_manager.get_commit_pos_position())) {
-            consensus_log_manager.update_commit_pos(log_name, pos, prev_index);
+          if (prev_index > log_manager.get_commit_pos_index() ||
+              (prev_index == log_manager.get_commit_pos_index()
+               && pos != log_manager.get_commit_pos_position())) {
+            log_manager.update_commit_pos(log_name, pos, prev_index);
             retry = 0;  // reset retry times after a success update_commit_pos
           }
 
           // push to a commitIndex larger than the reported one
           while (*is_running &&
-                 ((commitIndex = consensus_ptr->getCommitIndex()) <=
-                  consensus_log_manager.get_commit_pos_index())) {
+                 ((commitIndex = komodo::xlog_get_paxos_commit_index()) <=
+                  log_manager.get_commit_pos_index())) {
             my_sleep(opt_commit_pos_watcher_interval);
             // check whether 'flush log' happens
-            if (log_name != consensus_log_manager.get_log_file_index()
+            if (log_name != komodo::xlog_engine_get_log_file_index()
                                 ->get_last_log_file_name()) {
               skip = true;
               break;
@@ -1798,18 +1769,18 @@ void binlog_commit_pos_watcher(bool *is_running) {
             }
             pos =
                 binlog_file_reader.position() + consensus_log_ev->get_length();
-            consensus_log_manager.update_commit_pos(
+            log_manager.update_commit_pos(
                 log_name, pos, consensus_log_ev->get_index());
             retry = 0;  // reset retry times after a success update_commit_pos
           }
 
           // push to a commitIndex larger than the reported one
           while (*is_running &&
-                 ((commitIndex = consensus_ptr->getCommitIndex()) <=
-                  consensus_log_manager.get_commit_pos_index())) {
+                 ((commitIndex = komodo::xlog_get_paxos_commit_index()) <=
+                  log_manager.get_commit_pos_index())) {
             my_sleep(opt_commit_pos_watcher_interval);
             // check whether 'flush log' happens
-            if (log_name != consensus_log_manager.get_log_file_index()
+            if (log_name != komodo::xlog_engine_get_log_file_index()
                                 ->get_last_log_file_name()) {
               skip = true;
               break;
@@ -1842,16 +1813,17 @@ void binlog_commit_pos_watcher(bool *is_running) {
 bool MYSQL_BIN_LOG::write_consensus_log(uint flag, uint64 term, uint64 length) {
   DBUG_ENTER("MYSQL_BIN_LOG::write_consensus_log");
 
-  Consensus_log_event rev(flag, term, consensus_log_manager.get_current_index(),
-                          length);
+  Consensus_log_event rev(
+      flag, term,
+      komodo::xlog_engine_get_log_manager().fetch_and_inc_current_index(),
+      length);
   rev.common_footer->checksum_alg =
       static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
-  if (!(rev.get_flag() & Consensus_log_event_flag::FLAG_LARGE_TRX))
-    if (alisql_server) alisql_server->setLastNonCommitDepIndex(rev.get_index());
+  if (!(rev.get_flag() & komodo::Consensus_log_event_flag::FLAG_LARGE_TRX))
+    komodo::xlog_set_last_non_commit_dep_index(rev.get_index());
   if (opt_consensuslog_revise && is_xpaxos_log && is_relay_log)
-    rev.consensus_extra_time = consensus_log_manager.get_event_timestamp();
+    rev.consensus_extra_time = komodo::xlog_log_manager_get_event_timestamp();
   if (write_event_to_binlog(&rev)) return true;
-  if (!opt_initialize) consensus_log_manager.incr_current_index();
   DBUG_RETURN(false);
 }
 
@@ -1967,7 +1939,7 @@ uint64 MYSQL_BIN_LOG::wait_xid_disappear() {
     DEBUG_SYNC(current_thd, "before_rotate_binlog_file");
     mysql_cond_wait(&m_prep_xids_cond, &LOCK_xids);
   }
-  uint64 sync_index = consensus_log_manager.get_sync_index();
+  uint64 sync_index = komodo::xlog_engine_get_sync_index();
   assert(get_prep_xids() == 0);
   mysql_mutex_unlock(&LOCK_xids);
   return sync_index;
@@ -1996,97 +1968,6 @@ bool MYSQL_BIN_LOG::write_buf_to_log_file(uchar *buffer, size_t buf_size) {
   return ret;
 }
 
-int flush_consensus_log(THD *thd, binlog_cache_data *, Binlog_event_writer *,
-                        bool &mark_as_rollback, my_off_t &bytes_in_cache) {
-  int error = 0;
-  ulonglong buf_size;
-  uchar *buffer = NULL;
-  uint flag = 0;
-  bool is_large_trx = false;
-  // alloc the buffer
-  // NOTE: already write_cache in MYSQL_BIN_LOG::write_transaction
-  // error = mysql_bin_log.write_cache(thd, binlog_cache, writer);
-  buf_size = my_b_tell(consensus_log_manager.get_cache());
-  // determine whether log is too large
-  if (consensus_log_manager.get_fifo_cache_manager()
-      && buf_size > opt_consensus_max_log_size)
-    is_large_trx = true;
-  // group update do not support large trx
-  DBUG_EXECUTE_IF("simulate_trx_cache_error", {
-    if (thd->consensus_index != 0) mark_as_rollback = true;
-  });
-  DBUG_EXECUTE_IF("simulate_trx_cache_error_slow", {
-    if (thd->consensus_index != 0) {
-      consensus_ptr->leaderTransfer(2);
-      sleep(5);
-      mark_as_rollback = true;
-    }
-  });
-  if (mark_as_rollback || (!opt_consensus_large_trx && is_large_trx)) {
-    const char *query_str = 
-      (thd->query().str && thd->query().length > 0)
-        ? thd->query().str
-        : "";
-    char local_time_buff[iso8601_size];
-    make_iso8601_timestamp(local_time_buff, thd->start_utime,
-                          iso8601_sysvar_logtimestamps);
-    xp::warn(ER_XP_COMMIT)
-        << "Trx is too large trx, but @@consensus_large_trx disabled"
-        << ", size " << buf_size
-        << ", begin time: " << local_time_buff
-        << ", sql: " << std::string(query_str, 512);
-    thd->commit_error = THD::CE_COMMIT_ERROR;
-    thd->consensus_error = THD::CSS_LOG_TOO_LARGE;
-    bytes_in_cache = 0;
-    // clear the cache
-    reinit_io_cache(consensus_log_manager.get_cache(), WRITE_CACHE, 0, 0, 1);
-    // rollback logical clock
-    mysql_bin_log.m_dependency_tracker.step_down();
-    goto end;
-  }
-
-  DBUG_EXECUTE_IF("force_large_trx", { is_large_trx = true; });
-  if (!is_large_trx) {
-    // firstly write consensus log event
-    if (!error) {
-      buf_size = consensus_log_manager.serialize_cache(&buffer);
-      thd->consensus_index = consensus_log_manager.get_current_index();
-      error = mysql_bin_log.write_consensus_log(flag, thd->consensus_term,
-                                                buf_size);
-    }
-
-    // secondly write consensus_log_body
-    if (!error) {
-      uint64 crc32 =
-          opt_consensus_checksum ? checksum_crc32(0, buffer, buf_size) : 0;
-      if (consensus_log_manager.get_fifo_cache_manager())
-        error = consensus_log_manager.get_fifo_cache_manager()->add_log_to_cache(
-            thd->consensus_term, thd->consensus_index, buf_size, buffer, false,
-            flag, crc32, true);
-      if (!error) error = mysql_bin_log.write_buf_to_log_file(buffer, buf_size);
-
-      if ((opt_consensus_disable_fifo_cache || !consensus_log_manager.get_fifo_cache_manager())
-          && buffer)
-        my_free(buffer);
-      buffer = NULL; /* fifo cache reuse the buffer */
-    }
-  } else {
-    if (!error) {
-      size_t buffer_maxsize = opt_consensus_max_log_size;
-      buffer = (uchar *)my_malloc(key_memory_thd_main_mem_root, buffer_maxsize,
-                                  MYF(MY_WME));
-      error = large_trx_flush(thd, buffer, buf_size);
-    }
-  }
-end:
-  if (buffer) {
-    my_free(buffer);
-  }
-
-  return error;
-}
-
-bool MYSQL_BIN_LOG::is_in_leader_transfer()
-{
-  return consensus_log_manager.is_in_leader_transfer();
+bool MYSQL_BIN_LOG::is_in_switchover() {
+  return komodo::xlog_engine_get_switchover_manager()->is_in_switchover();
 }

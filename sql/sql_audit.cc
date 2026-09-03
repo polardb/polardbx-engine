@@ -60,6 +60,13 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
+static bool opt_rds_audit_log_enabled = true;
+
+void rds_audit_log_enabled_sync(bool value) {
+  opt_rds_audit_log_enabled = value;
+}
+
+
 /**
   @class Audit_error_handler
 
@@ -449,16 +456,6 @@ int mysql_audit_notify(THD *thd, mysql_event_connection_subclass_t subclass,
 
     return handler.get_result(event_class_dispatch_error(
         thd, MYSQL_AUDIT_CONNECTION_CLASS, subclass_name, &event));
-  } else if (subclass == MYSQL_AUDIT_CONNECTION_CONNECT ||
-             subclass == MYSQL_AUDIT_CONNECTION_CHANGE_USER) {
-    int result = event_class_dispatch_error(thd, MYSQL_AUDIT_CONNECTION_CLASS,
-                                            subclass_name, &event);
-    if (errcode && (thd->get_stmt_da()->mysql_errno() ==
-                    ER_CONN_CONTROL_CONN_REFUSE_CONNECTION)) {
-      /** Connection delay plugin has changed the error code. */
-      return ER_CONN_CONTROL_CONN_REFUSE_CONNECTION;
-    }
-    return result;
   }
 
   return event_class_dispatch_error(thd, MYSQL_AUDIT_CONNECTION_CLASS,
@@ -1016,6 +1013,8 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_connection_subclass_t subclass,
   /* Skip rds audit for bootstrap */
   if (opt_initialize) return 0;
 
+  if (!opt_rds_audit_log_enabled) return 0;
+
   mysql_event_rds_connection event;
   char user_buff[USERNAME_LENGTH + 1] = "";
   ulonglong current_utime;
@@ -1076,6 +1075,8 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   if (opt_initialize) return 0;
   /* Skip rds audit for dd upgrade */
   if (thd->is_server_upgrade_thread()) return 0;
+
+  if (!opt_rds_audit_log_enabled) return 0;
 
   mysql_event_rds_query event;
   char user_buff[USERNAME_LENGTH + 1] = "";
@@ -1139,6 +1140,10 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   event.memory_used = 0;
   event.query_memory_used = 0;
   event.trx_id = thd->audit_trx_ctx.trx_id;
+  event.cpu_time_sec = thd->audit_trx_ctx.cpu_time_sec;
+  event.cpu_time_percent = thd->audit_trx_ctx.cpu_time_percent;
+  event.trx_affected_rows = thd->audit_trx_ctx.trx_affected_rows;
+  event.binlog_cache_used = thd->audit_trx_ctx.binlog_cache_used;
 
   /*
     reset trx_id for a thd in PPS_transaction when a tx ends.
@@ -1148,6 +1153,10 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
   if (thd->audit_trx_ctx.trx_id != 0 &&
       thd->audit_trx_ctx.state != AUDIT_trx_ctx::AUDIT_TRX_ACTIVE) {
     thd->audit_trx_ctx.set_trx_id(0);
+    thd->audit_trx_ctx.set_trx_affected_rows(0);
+    thd->audit_trx_ctx.set_binlog_cache_used(0);
+    thd->audit_trx_ctx.set_cpu_time_sec(0);
+    thd->audit_trx_ctx.set_cpu_time_percent(0);
   }
 
   struct PPI_stat *ppi_stat = thd->ppi_statement_stat.get();
@@ -1168,6 +1177,44 @@ int mysql_audit_notify(THD *thd, mysql_event_rds_query_subclass_t subclass,
 
   return handler.get_result(event_class_dispatch_error(
       thd, MYSQL_AUDIT_RDS_QUERY_CLASS, subclass_name, &event));
+}
+
+int mysql_audit_notify(
+    THD *thd, mysql_event_polarx_connection_control_subclass_t subclass,
+    const char *subclass_name, const char *user, const char *host,
+    const char *ip, bool successful_login) {
+  if (mysql_audit_acquire_plugins(thd,
+                                  MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS,
+                                  static_cast<unsigned long>(subclass)))
+    return 0;
+
+  mysql_event_polarx_connection_control event;
+  event.event_subclass = subclass;
+
+  LEX_CSTRING obj_str;
+  lex_cstring_set(&obj_str, user ? user : "");
+  event.user.str = obj_str.str;
+  event.user.length = obj_str.length;
+
+  lex_cstring_set(&obj_str, host ? host : "");
+  event.host.str = obj_str.str;
+  event.host.length = obj_str.length;
+
+  lex_cstring_set(&obj_str, ip ? ip : "");
+  event.ip.str = obj_str.str;
+  event.ip.length = obj_str.length;
+
+  event.successful_login = successful_login;
+
+  if (subclass == MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_UNLOCK) {
+    Ignore_event_error_handler handler(thd, subclass_name);
+    return handler.get_result(event_class_dispatch_error(
+        thd, MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS, subclass_name,
+        &event));
+  }
+
+  return event_class_dispatch_error(
+      thd, MYSQL_AUDIT_POLARX_CONNECTION_CONTROL_CLASS, subclass_name, &event);
 }
 
 /**

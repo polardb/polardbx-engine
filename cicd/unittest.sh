@@ -34,20 +34,25 @@ exclude_prefixes=(
     "gcs"
     "group_replication"
 )
-
+ 
 regex="("
 for prefix in "${exclude_prefixes[@]}"; do
     regex+="$prefix|"
 done
 regex=${regex%|}
 regex+=").*"
-
+return_code=0
 if [ "${TEST_TYPE_ENUM}" -eq "${DAILY_REGRESSION}" ] ||
+    [ "${TEST_TYPE_ENUM}" -eq "${MERGE_PRECHECK}" ] ||
     [ "${TEST_TYPE_ENUM}" -eq "${MERGE_TEST_COVERAGE}" ] ||
     [ "${TEST_TYPE_ENUM}" -eq "${MANUAL}" ] ||
-    [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ]; then
-    cd "${CICD_BUILD_ROOT}" &&
-        ${CTEST_BIN} --progress --parallel "${CORES}" --output-on-failure \
-            --timeout "${TIME_OUT}" -E "${regex}" --output-junit \
-            "${RESULT_PATH}"/unittest_result.xml
+    [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_ALL}" ] ||
+    [ "${TEST_TYPE_ENUM}" -eq "${MANUAL_COVERAGE}" ]; then
+    cd "${CICD_BUILD_ROOT}" || exit 101
+    set -x
+    ${CTEST_BIN} --progress --parallel "${CORES}" --output-on-failure \
+        --timeout "${TIME_OUT}" -E "${regex}" --output-junit \
+        "${RESULT_PATH}"/unittest_result.xml
+    return_code=$?
 fi
+exit ${return_code}

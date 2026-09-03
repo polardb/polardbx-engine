@@ -49,13 +49,15 @@
 #include "integer_digits.h"
 #include "m_string.h"
 #include "map_helpers.h"
+#include "murmurhash/murmurhash3.h"
+#include "my_byteorder.h"
 #include "mutex_lock.h"  // MUTEX_LOCK
 #include "my_bit.h"      // my_count_bits
 #include "my_bitmap.h"
-#include "my_byteorder.h"
 #include "my_dbug.h"
 #include "my_double2ulonglong.h"
 #include "my_hostname.h"
+#include "my_inttypes.h"
 #include "my_loglevel.h"
 #include "my_psi_config.h"
 #include "my_sqlcommand.h"
@@ -96,6 +98,7 @@
 #include "sql/debug_sync.h"      // DEBUG_SYNC
 #include "sql/derror.h"          // ER_THD
 #include "sql/error_handler.h"   // Internal_error_handler
+#include "sql/field.h"
 #include "sql/item.h"            // Item_json
 #include "sql/item_cmpfunc.h"    // get_datetime_value
 #include "sql/item_json_func.h"  // get_json_wrapper
@@ -104,6 +107,7 @@
 #include "sql/key.h"
 #include "sql/log_event.h"  // server_version
 #include "sql/mdl.h"
+#include "sql/murmurhash/murmurhash3.h"
 #include "sql/mysqld.h"                // log_10 stage_user_sleep
 #include "sql/parse_tree_helpers.h"    // PT_item_list
 #include "sql/parse_tree_node_base.h"  // Parse_context
@@ -143,6 +147,7 @@
 #include "sql_string.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_mutex.h"
+#include "sql/sys_vars_ext.h"
 
 using std::max;
 using std::min;
@@ -6917,6 +6922,8 @@ bool Item_user_var_as_out_param::fix_fields(THD *thd, Item **ref) {
   mysql_mutex_lock(&thd->LOCK_thd_data);
   entry = get_variable(thd, name, cs);
   if (entry != nullptr) entry->set_type(STRING_RESULT);
+  if (entry != nullptr && cs && opt_load_data_var_inherit_charset)
+    entry->collation.set(cs);
   mysql_mutex_unlock(&thd->LOCK_thd_data);
 
   return entry == nullptr;
@@ -9166,6 +9173,11 @@ longlong Item_func_is_visible_dd_object::val_int() {
     show_table =
         show_table || (table_type == dd::Abstract_table::HT_HIDDEN_DDL);
 
+  // Expose HT_HIDDEN_SE tables in I_S when the debug sysvar is ON.
+  if (opt_show_vidx_hlindex_tables)
+    show_table =
+        show_table || (table_type == dd::Abstract_table::HT_HIDDEN_SE);
+
   if (arg_count == 1 || show_table == false) return (show_table ? 1 : 0);
 
   // Skip generated invisible primary key and key columns.
@@ -9997,4 +10009,248 @@ type_conversion_status Item_func_alter_type::save_in_field_inner(Field *to,
   copy->invoke_do_copy();
   delete copy;
   return TYPE_OK;
+}
+Item_func_polardbx_hasher::Item_func_polardbx_hasher(const POS &pos, PT_item_list *args)
+    : Item_int_func(pos, args), column_count(0),
+      m_has_range_params(false), m_min_range(0), m_max_range(0),
+      m_range_params_initialized(false) {}
+
+bool Item_func_polardbx_hasher::fix_fields(THD *thd, Item **ref) {
+  // Disable constant propagation for all arguments FIRST, before any fix_fields
+  // Hashcode depends on field type (int vs bigint), which is lost when
+  // constants are propagated from conditions like WHERE id=1
+  // This must be done early, before propagate_cond_constants runs and
+  // before arguments' fix_fields is called (which may trigger constant propagation)
+  for (uint i = 0; i < arg_count; i++) {
+    // Disable constant propagation on the argument and all its sub-items
+    args[i]->walk(&Item::disable_constant_propagation, enum_walk::POSTFIX,
+                  nullptr);
+  }
+  // Call parent's fix_fields
+  if (Item_int_func::fix_fields(thd, ref)) return true;
+
+  // Initialize range parameters (executed only once in fix_fields phase)
+  if (!m_range_params_initialized) {
+    init_range_params();
+    m_range_params_initialized = true;
+  }
+
+  return false;
+}
+
+void Item_func_polardbx_hasher::init_range_params() {
+  // Reset state
+  m_has_range_params = false;
+  m_min_range = 0;
+  m_max_range = 0;
+  column_count = arg_count;
+
+  // If argument count < 3, cannot be range parameters
+  if (arg_count < 3) {
+    return;
+  }
+
+  Item *last_arg = args[arg_count - 1];
+  Item *second_last_arg = args[arg_count - 2];
+
+  // If the last two arguments are fields, cannot be range parameters
+  bool last_is_field = (last_arg->type() == Item::FIELD_ITEM);
+  bool second_last_is_field = (second_last_arg->type() == Item::FIELD_ITEM);
+
+  if (last_is_field || second_last_is_field) {
+    return;
+  }
+
+  // Calculate range parameter values
+  // Range parameters are guaranteed to be within Java Long range (-9223372036854775808L to 9223372036854775807L)
+  // and won't be strings or floating-point numbers, so we can directly use val_int()
+  // val_int() will automatically handle type conversion (including DECIMAL to longlong)
+  longlong max_val = last_arg->val_int();
+  bool max_valid = !last_arg->null_value;
+
+  longlong min_val = second_last_arg->val_int();
+  bool min_valid = !second_last_arg->null_value;
+
+  // If both values are valid and min <= max, consider them as range parameters
+  if (max_valid && min_valid) {
+    m_has_range_params = true;
+    m_min_range = min_val;
+    m_max_range = max_val;
+    column_count = arg_count - 2;
+  }
+}
+longlong calculate_field_polardbx_hasher(const int partCnt, Item **args) {
+  ulong nr1 = 1, nr2 = 4;
+  int i = 0;
+  do {
+    Field *field = args[i]->get_tmp_table_field();
+    if (field == nullptr) {
+      my_error(ER_WRONG_ARGUMENTS, MYF(0), "polardbx_hasher");
+      return 0;
+    }
+    if (field->is_null()) {
+      nr1 ^= (nr1 << 1) | 1;
+    } else {
+      //because CN truncate it to 32bit, we need to keep the same hash value
+      nr1 = nr1 & 0xffffffff;
+      nr2 = nr2 & 0xffffffff;
+      field->polarx_cn_hash(&nr1, &nr2);
+    }
+    ++i;
+  } while (i < partCnt);
+  uint64_t hash[2];
+#ifdef WORDS_BIGENDIAN
+  // On big-endian systems, need to convert to little-endian format first for compatibility
+  // Use compiler built-in byte swap for better performance, fallback to manual swap if unavailable
+  ulong nr1_le;
+  #if defined(__GNUC__) || defined(__clang__)
+    nr1_le = __builtin_bswap32(static_cast<uint32>(nr1));
+  #elif defined(_MSC_VER)
+    nr1_le = _byteswap_ulong(static_cast<uint32>(nr1));
+  #else
+    // Fallback: use MySQL's standard byte order conversion functions
+    uchar nr1_bytes[4];
+    int4store(nr1_bytes, static_cast<uint32>(nr1));
+    nr1_le = uint4korr(nr1_bytes);
+  #endif
+  MurmurHash3_128(&nr1_le, sizeof(nr1_le), 0, hash);
+#else
+  MurmurHash3_128(&nr1, sizeof(nr1), 0, hash);
+#endif
+  if (hash[0] == MAX_64BIT) {
+    hash[0] = MAX_64BIT - 1;
+  }
+  if (hash[0] == MIN_64BIT) {
+    hash[0] = MIN_64BIT + 1;
+  }
+  nr1 = hash[0];
+  return nr1;
+}
+
+longlong Item_func_polardbx_hasher::val_int() {
+  DBUG_TRACE;
+
+  // Use cached column count (if initialized) or default value
+  int actual_column_count = m_range_params_initialized ? column_count : arg_count;
+
+  // Calculate hash value
+  longlong hash_value = calculate_field_polardbx_hasher(actual_column_count, args);
+
+  // Check if calculate_field_polardbx_hasher encountered an error
+  // If error occurred (e.g., field == nullptr), should return immediately to avoid continuing execution
+  THD *thd = current_thd;
+  if (thd && thd->is_error()) {
+    null_value = true;
+    return 0;
+  }
+
+  // If initialized and range parameters detected, perform range validation
+  if (m_range_params_initialized && m_has_range_params) {
+    // Check if range parameters are valid (this check should be done during initialization, but kept for safety)
+    if (m_min_range > m_max_range) {
+      my_error(ER_INVALID_HASH_RANGE, MYF(0), m_min_range, m_max_range);
+      null_value = true;
+      return 0;
+    }
+
+    // Check if hash value is within range
+    if (hash_value < m_min_range || hash_value > m_max_range) {
+      String split_key_values;
+      String tmp_str;
+      tmp_str.alloc(1024);
+      split_key_values.alloc(2048);
+
+      for (int i = 0; i < actual_column_count; i++) {
+        if (i > 0) {
+          split_key_values.append(", ", 2);
+        }
+
+        const char *field_name = nullptr;
+        if (args[i]->type() == Item::FIELD_ITEM) {
+          Item_field *field_item = down_cast<Item_field *>(args[i]);
+          if (field_item && field_item->field_name) {
+            field_name = field_item->field_name;
+          }
+        }
+
+        if (field_name) {
+          split_key_values.append(field_name, strlen(field_name));
+        } else {
+          split_key_values.append("col", 3);
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%d", i + 1);
+          split_key_values.append(buf, strlen(buf));
+        }
+
+        split_key_values.append("=", 1);
+
+        tmp_str.length(0);
+        bool value_set = false;
+
+        if (args[i]->result_type() == INT_RESULT) {
+          longlong int_val = args[i]->val_int();
+          if (!args[i]->null_value) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%lld", int_val);
+            split_key_values.append(buf, strlen(buf));
+            value_set = true;
+          }
+        } else if (args[i]->result_type() == REAL_RESULT) {
+          double real_val = args[i]->val_real();
+          if (!args[i]->null_value) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%.15g", real_val);
+            split_key_values.append(buf, strlen(buf));
+            value_set = true;
+          }
+        } else if (args[i]->result_type() == DECIMAL_RESULT) {
+          my_decimal dec_val;
+          if (args[i]->val_decimal(&dec_val) && !args[i]->null_value) {
+            String dec_str;
+            dec_str.alloc(64);
+            my_decimal2string(E_DEC_FATAL_ERROR, &dec_val, &dec_str);
+            split_key_values.append(dec_str.ptr(), dec_str.length());
+            value_set = true;
+          }
+        } else {
+          if (args[i]->val_str(&tmp_str)) {
+            if (tmp_str.length() > 0) {
+              size_t max_len = 200;  // Limit maximum length of each value
+              if (tmp_str.length() > max_len) {
+                split_key_values.append(tmp_str.ptr(), max_len);
+                split_key_values.append("...", 3);
+              } else {
+                split_key_values.append(tmp_str.ptr(), tmp_str.length());
+              }
+              value_set = true;
+            } else {
+              split_key_values.append("(empty)", 7);
+              value_set = true;
+            }
+          }
+        }
+
+        if (!value_set) {
+          split_key_values.append("NULL", 4);
+        }
+      }
+
+      sql_print_error("polardbx_hasher: Hash value %lld computed from partitioning key [%s] "
+                      "is out of expected source partition range [%lld, %lld]. "
+                      "This indicates a data consistency issue during partition migration.",
+                      hash_value, split_key_values.c_ptr_safe(), m_min_range, m_max_range);
+
+      const char *split_key_str = split_key_values.c_ptr_safe();
+      if (split_key_str == nullptr) {
+        split_key_str = "(unknown)";
+      }
+      my_error(ER_HASH_VALUE_OUT_OF_RANGE, MYF(0), hash_value, split_key_str, m_min_range, m_max_range);
+
+      null_value = true;
+      return 0;
+    }
+  }
+
+  null_value = false;
+  return hash_value;
 }

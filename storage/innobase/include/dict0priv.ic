@@ -30,9 +30,18 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created  Wed 13 Oct 2010 16:10:14 EST Sunny Bains
  ***********************************************************************/
 
+#ifndef dict0priv_h
+#define INNODB_DICT0PRIV_IC_STANDALONE
+#define INNODB_DICT0PRIV_IC_STANDALONE_ACTIVE
+#endif /* !dict0priv_h */
 #include "dict0dict.h"
 #include "dict0load.h"
 #include "dict0priv.h"
+#ifdef INNODB_DICT0PRIV_IC_STANDALONE_ACTIVE
+#include "dict0priv.h"
+#undef INNODB_DICT0PRIV_IC_STANDALONE
+#undef INNODB_DICT0PRIV_IC_STANDALONE_ACTIVE
+#endif /* INNODB_DICT0PRIV_IC_STANDALONE_ACTIVE */
 
 inline dict_table_t *dict_table_get_low(const char *table_name,
                                         const std::string *prev_table) {

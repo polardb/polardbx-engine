@@ -1,0 +1,572 @@
+################################################################################
+# HIPPO Index Change Buffer Test
+#
+# This test verifies HIPPO index works correctly with change buffer:
+# 1. INSERT buffering
+# 2. DELETE_MARK buffering  
+# 3. PURGE buffering (controlled by change_buffering_hippo_purge_enabled)
+#
+# Key: After change buffer merge, data must be correct
+################################################################################
+
+--source include/have_debug.inc
+--source include/count_sessions.inc
+
+--echo ########################################################################
+--echo # Setup
+--echo ########################################################################
+
+SET opt_index_format_hippo_enabled=on;
+
+# Enable change buffer debug mode to force buffering
+SET GLOBAL innodb_change_buffering_debug = 1;
+SET GLOBAL innodb_change_buffering = 'all';
+
+# Stop purge initially
+SET GLOBAL innodb_purge_stop_now = ON;
+
+--echo ########################################################################
+--echo # Test 1: INSERT buffering
+--echo # Inserts to non-root pages should be buffered, merge must be correct
+--echo ########################################################################
+
+CREATE TABLE t_ibuf1 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf1
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+--echo # Insert enough data to create multiple index pages
+--echo # (changes to root page are never buffered)
+INSERT INTO t_ibuf1 VALUES(0, 'a', 1);
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+INSERT INTO t_ibuf1 SELECT 0, val, padding FROM t_ibuf1;
+
+--echo # Table should have 4096 rows
+SELECT COUNT(*) FROM t_ibuf1;
+
+--echo # Force merge by reading from index
+SELECT COUNT(*) FROM t_ibuf1 USE INDEX(idx_val) WHERE val = 'a';
+
+--echo # Verify data integrity - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf1 USE INDEX(idx_val) WHERE val = 'a', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf1 FORCE INDEX(PRIMARY) WHERE val = 'a', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+
+SELECT MIN(id), MAX(id), COUNT(DISTINCT id) FROM t_ibuf1;
+
+DROP TABLE t_ibuf1;
+
+--echo ########################################################################
+--echo # Test 2: DELETE_MARK buffering
+--echo # DELETE operations should be buffered, merge must correctly mark records
+--echo ########################################################################
+
+CREATE TABLE t_ibuf2 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf2
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+--echo # Insert data
+INSERT INTO t_ibuf2 VALUES(0, 'x', 1);
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+INSERT INTO t_ibuf2 SELECT 0, val, padding FROM t_ibuf2;
+
+--echo # 1024 rows
+SELECT COUNT(*) FROM t_ibuf2;
+
+--echo # Delete half the records - should be buffered
+DELETE FROM t_ibuf2 WHERE id % 2 = 0;
+
+--echo # Force merge by reading from index
+SELECT COUNT(*) FROM t_ibuf2 USE INDEX(idx_val) WHERE val = 'x';
+
+--echo # Verify correct records remain - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf2 USE INDEX(idx_val) WHERE val = 'x', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf2 FORCE INDEX(PRIMARY) WHERE val = 'x', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+
+SELECT COUNT(*) FROM t_ibuf2;
+SELECT MIN(id), MAX(id) FROM t_ibuf2;
+
+--echo # All remaining ids should be odd
+SELECT COUNT(*) FROM t_ibuf2 WHERE id % 2 = 1;
+
+DROP TABLE t_ibuf2;
+
+--echo ########################################################################
+--echo # Test 3: PURGE buffering with hippo_purge_enabled = OFF (default)
+--echo # PURGE should NOT be buffered when disabled
+--echo ########################################################################
+
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+
+CREATE TABLE t_ibuf3 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf3
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_ibuf3 VALUES(0, 'y', 1);
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+INSERT INTO t_ibuf3 SELECT 0, val, padding FROM t_ibuf3;
+
+SELECT COUNT(*) FROM t_ibuf3;
+
+--echo # Delete records to create delete-marked entries
+BEGIN;
+DELETE FROM t_ibuf3 WHERE id <= 512;
+COMMIT;
+
+--echo # Enable purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Verify remaining records - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf3 USE INDEX(idx_val) WHERE val = 'y', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf3 FORCE INDEX(PRIMARY) WHERE val = 'y', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+
+--echo # Can insert with previously deleted ids
+INSERT INTO t_ibuf3 VALUES(1, 'z', 1);
+INSERT INTO t_ibuf3 VALUES(100, 'z', 1);
+SELECT * FROM t_ibuf3 WHERE val = 'z' ORDER BY id;
+
+DROP TABLE t_ibuf3;
+
+--echo ########################################################################
+--echo # Test 4: PURGE buffering with hippo_purge_enabled = ON
+--echo # PURGE should be buffered, merge must correctly remove records
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+
+CREATE TABLE t_ibuf4 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  padding INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf4
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_ibuf4 VALUES(0, 'p', 1);
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+INSERT INTO t_ibuf4 SELECT 0, val, padding FROM t_ibuf4;
+
+SELECT COUNT(*) FROM t_ibuf4;
+
+--echo # Delete records
+BEGIN;
+DELETE FROM t_ibuf4 WHERE id <= 512;
+COMMIT;
+
+--echo # Enable purge (with PURGE buffering enabled)
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Force merge by reading
+--echo # Verify: deleted records are purged - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf4 USE INDEX(idx_val) WHERE val = 'p', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf4 FORCE INDEX(PRIMARY) WHERE val = 'p', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+
+SELECT MIN(id), MAX(id) FROM t_ibuf4;
+
+--echo # Can reuse deleted ids
+INSERT INTO t_ibuf4 VALUES(1, 'q', 1);
+INSERT INTO t_ibuf4 VALUES(256, 'q', 1);
+SELECT * FROM t_ibuf4 WHERE val = 'q' ORDER BY id;
+
+DROP TABLE t_ibuf4;
+
+--echo ########################################################################
+--echo # Test 5: Mixed operations - INSERT + DELETE + PURGE
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = ON;
+
+CREATE TABLE t_ibuf5 (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  data VARCHAR(100),
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf5
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+--echo # Phase 1: Initial inserts (buffered)
+INSERT INTO t_ibuf5 VALUES(0, 'a', 'initial');
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+INSERT INTO t_ibuf5 SELECT 0, val, data FROM t_ibuf5;
+
+SELECT COUNT(*) FROM t_ibuf5;
+
+--echo # Phase 2: Delete some (buffered)
+DELETE FROM t_ibuf5 WHERE id % 3 = 0;
+SELECT COUNT(*) FROM t_ibuf5;
+
+--echo # Phase 3: Insert more with different val (buffered)
+INSERT INTO t_ibuf5 VALUES(0, 'b', 'new1');
+INSERT INTO t_ibuf5 SELECT 0, 'b', 'new2' FROM t_ibuf5 WHERE val = 'a' LIMIT 50;
+
+--echo # Phase 4: Update some (creates delete-mark + insert)
+UPDATE t_ibuf5 SET val = 'c' WHERE id % 5 = 1 AND val = 'a';
+
+--echo # Phase 5: Trigger purge
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Force merge
+SELECT val, COUNT(*) cnt FROM t_ibuf5 USE INDEX(idx_val) GROUP BY val ORDER BY val;
+
+--echo # Verify data integrity - compare secondary index vs primary index
+--let $sec_total = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf5 USE INDEX(idx_val), cnt, 1)
+--let $pri_total = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf5 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index total count ($sec_total) should match primary index total count ($pri_total)
+--let $assert_cond = $sec_total = $pri_total
+--source include/assert.inc
+
+SELECT COUNT(*) total, 
+       SUM(CASE WHEN val='a' THEN 1 ELSE 0 END) as cnt_a,
+       SUM(CASE WHEN val='b' THEN 1 ELSE 0 END) as cnt_b,
+       SUM(CASE WHEN val='c' THEN 1 ELSE 0 END) as cnt_c
+FROM t_ibuf5;
+
+DROP TABLE t_ibuf5;
+
+--echo ########################################################################
+--echo # Test 6: Concurrent sessions with change buffer
+--echo ########################################################################
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t_ibuf6 (
+  id INT PRIMARY KEY,
+  val INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf6
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+--echo # Insert initial data
+--disable_query_log
+let $i = 1;
+while ($i <= 1000) {
+  eval INSERT INTO t_ibuf6 VALUES ($i, $i);
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t_ibuf6;
+
+--connect(con1, localhost, root,,)
+--connect(con2, localhost, root,,)
+
+--echo # Connection 1: Insert more data
+--connection con1
+INSERT INTO t_ibuf6 SELECT id + 1000, val + 1000 FROM t_ibuf6 WHERE id <= 500;
+
+--echo # Connection 2: Delete some data
+--connection con2
+DELETE FROM t_ibuf6 WHERE id BETWEEN 200 AND 300;
+
+--echo # Connection 1: More inserts
+--connection con1
+INSERT INTO t_ibuf6 VALUES(2001, 2001), (2002, 2002);
+
+--echo # Default: Verify all changes
+--connection default
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+--echo # Force merge and verify - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf6 USE INDEX(idx_val), cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf6 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+SELECT COUNT(*) FROM t_ibuf6 USE INDEX(idx_val);
+SELECT COUNT(*) FROM t_ibuf6;
+
+--echo # Verify specific ranges
+SELECT COUNT(*) FROM t_ibuf6 WHERE id BETWEEN 200 AND 300;
+SELECT COUNT(*) FROM t_ibuf6 WHERE id > 1000;
+SELECT COUNT(*) FROM t_ibuf6 WHERE id > 2000;
+
+--connection con1
+--disconnect con1
+--connection con2
+--disconnect con2
+--connection default
+
+DROP TABLE t_ibuf6;
+
+--echo ########################################################################
+--echo # Test 7: Rollback with change buffer
+--echo # Rolled-back operations should be correctly handled after merge
+--echo ########################################################################
+
+CREATE TABLE t_ibuf7 (
+  id INT PRIMARY KEY,
+  val INT,
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf7
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+--echo # Insert initial data
+--disable_query_log
+let $i = 1;
+while ($i <= 500) {
+  eval INSERT INTO t_ibuf7 VALUES ($i, $i);
+  inc $i;
+}
+--enable_query_log
+
+SELECT COUNT(*) FROM t_ibuf7;
+
+--echo # Start transaction, make changes, then rollback
+BEGIN;
+INSERT INTO t_ibuf7 VALUES(501, 501), (502, 502), (503, 503);
+DELETE FROM t_ibuf7 WHERE id <= 10;
+UPDATE t_ibuf7 SET val = val + 1000 WHERE id BETWEEN 100 AND 110;
+ROLLBACK;
+
+--echo # After rollback, data should be unchanged
+SELECT COUNT(*) FROM t_ibuf7;
+SELECT COUNT(*) FROM t_ibuf7 WHERE id <= 10;
+SELECT COUNT(*) FROM t_ibuf7 WHERE id > 500;
+SELECT COUNT(*) FROM t_ibuf7 WHERE val BETWEEN 100 AND 110;
+
+--echo # Force merge
+SELECT COUNT(*) FROM t_ibuf7 USE INDEX(idx_val);
+
+--echo # Verify integrity after merge - compare secondary index vs primary index
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf7 USE INDEX(idx_val), cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf7 FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+
+SELECT COUNT(*) FROM t_ibuf7;
+
+DROP TABLE t_ibuf7;
+
+--echo ########################################################################
+--echo # Test 8: Different innodb_change_buffering modes
+--echo ########################################################################
+
+--echo # Test 8a: IBUF_USE_INSERT only
+SET GLOBAL innodb_change_buffering = 'inserts';
+
+CREATE TABLE t_ibuf8a (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf8a
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_ibuf8a VALUES(0, 'm');
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+INSERT INTO t_ibuf8a SELECT 0, val FROM t_ibuf8a;
+
+SELECT COUNT(*) FROM t_ibuf8a;
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8a USE INDEX(idx_val) WHERE val = 'm', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8a FORCE INDEX(PRIMARY) WHERE val = 'm', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+SELECT COUNT(*) FROM t_ibuf8a USE INDEX(idx_val) WHERE val = 'm';
+
+DROP TABLE t_ibuf8a;
+
+--echo # Test 8b: IBUF_USE_DELETE_MARK only
+SET GLOBAL innodb_change_buffering = 'deletes';
+
+CREATE TABLE t_ibuf8b (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf8b
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_ibuf8b VALUES(0, 'n');
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+INSERT INTO t_ibuf8b SELECT 0, val FROM t_ibuf8b;
+
+DELETE FROM t_ibuf8b WHERE id % 2 = 0;
+
+SELECT COUNT(*) FROM t_ibuf8b;
+--let $sec_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8b USE INDEX(idx_val) WHERE val = 'n', cnt, 1)
+--let $pri_count = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8b FORCE INDEX(PRIMARY) WHERE val = 'n', cnt, 1)
+--let $assert_text = Secondary index count ($sec_count) should match primary index count ($pri_count)
+--let $assert_cond = $sec_count = $pri_count
+--source include/assert.inc
+SELECT COUNT(*) FROM t_ibuf8b USE INDEX(idx_val) WHERE val = 'n';
+
+DROP TABLE t_ibuf8b;
+
+--echo # Test 8c: IBUF_USE_ALL
+SET GLOBAL innodb_change_buffering = 'all';
+
+CREATE TABLE t_ibuf8c (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  val CHAR(1),
+  INDEX idx_val(val)
+) ENGINE=InnoDB STATS_PERSISTENT=0;
+
+--echo # Verify all secondary indexes are HIPPO_INDEX
+--let $TABLE_NAME = t_ibuf8c
+--let $INDEX_NAME = idx_val
+--source suite/panda/include/verify_hippo_index_page_type.inc
+
+INSERT INTO t_ibuf8c VALUES(0, 'o');
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+INSERT INTO t_ibuf8c SELECT 0, val FROM t_ibuf8c;
+
+DELETE FROM t_ibuf8c WHERE id % 3 = 0;
+UPDATE t_ibuf8c SET val = 'p' WHERE id % 5 = 0;
+
+SET GLOBAL innodb_purge_run_now = ON;
+--source include/wait_innodb_all_purged.inc
+
+SELECT COUNT(*) FROM t_ibuf8c;
+--let $sec_total = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8c USE INDEX(idx_val), cnt, 1)
+--let $pri_total = query_get_value(SELECT COUNT(*) as cnt FROM t_ibuf8c FORCE INDEX(PRIMARY), cnt, 1)
+--let $assert_text = Secondary index total count ($sec_total) should match primary index total count ($pri_total)
+--let $assert_cond = $sec_total = $pri_total
+--source include/assert.inc
+SELECT val, COUNT(*) FROM t_ibuf8c USE INDEX(idx_val) GROUP BY val ORDER BY val;
+
+DROP TABLE t_ibuf8c;
+
+--echo ########################################################################
+--echo # Cleanup
+--echo ########################################################################
+
+SET GLOBAL innodb_change_buffering_debug = 0;
+SET GLOBAL innodb_change_buffering = 'all';
+SET GLOBAL innodb_change_buffering_hippo_purge_enabled = OFF;
+SET GLOBAL innodb_purge_run_now = ON;
+SET opt_index_format_hippo_enabled=default;
+
+--source include/wait_until_count_sessions.inc
+
+--echo ########################################################################
+--echo # Test completed successfully
+--echo ########################################################################
+

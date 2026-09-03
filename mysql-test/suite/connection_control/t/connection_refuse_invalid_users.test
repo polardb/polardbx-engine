@@ -97,55 +97,31 @@ let $REFUSE_STATS=0;
 --source ../inc/check_connection_refuse.inc
 
 --echo
---echo # Following attempts will be refused to authenticate within the period
+--echo # Following attempts will not be refused to authenticate cause these users don't exist
 
 let $USER=u1;
 let $PASSWORD=hoho;
-let $REFUSE=1;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $REFUSE_STATS=1;
+let $REFUSE_STATS=0;
 --source ../inc/check_connection_refuse.inc
 
 let $USER=u2;
 let $PASSWORD=hoho;
-let $REFUSE=1;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $REFUSE_STATS=2;
+let $REFUSE_STATS=0;
 --source ../inc/check_connection_refuse.inc
 
 let $USER=u3;
 let $PASSWORD=hoho;
-let $REFUSE=1;
+let $REFUSE=0;
 let $SUCCESS=0;
-let $REFUSE_STATS=3;
+let $REFUSE_STATS=0;
 --source ../inc/check_connection_refuse.inc
 
 --sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
-
-let $USER=u3;
-let $PASSWORD=abcd;
-let $REFUSE=1;
-let $SUCCESS=0;
-let $REFUSE_STATS=4;
---source ../inc/check_connection_refuse.inc
-
-let $USER=u2;
-let $PASSWORD=abcd;
-let $REFUSE=1;
-let $SUCCESS=0;
-let $REFUSE_STATS=5;
---source ../inc/check_connection_refuse.inc
-
-let $USER=u1;
-let $PASSWORD=abcd;
-let $REFUSE=1;
-let $SUCCESS=0;
-let $REFUSE_STATS=6;
---source ../inc/check_connection_refuse.inc
-
---sorted_result
-SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_failed_login_attempts;
+SELECT USERHOST, FAILED_ATTEMPTS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
 
 --echo
 --echo # ----------------------------------------------------------------------

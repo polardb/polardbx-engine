@@ -66,6 +66,7 @@
 #include "thr_lock.h"
 
 #include "sql/recycle_bin/recycle_table.h"
+#include "vidx/vidx_index.h"
 
 namespace dd {
 class Table;
@@ -706,6 +707,9 @@ void Sql_cmd_truncate_table::truncate_temporary(THD *thd,
 
     // Create a clone of the tdef which can be manipulated by ha_create_table
     Up_table tdef_clone = Up_table{tdef_holder->clone()};
+
+    assert(!vidx::dd_table_has_hlindexes(tdef_clone.get()));
+
     m_error = ha_create_table(thd, saved_norm_path.c_str(), table_ref->db,
                               table_ref->table_name, &create_info, true, true,
                               tdef_clone.get());

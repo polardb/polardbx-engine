@@ -1,0 +1,66 @@
+# ================================================================
+# Test: AS OF cross-DDL -- IMPORT TABLESPACE boundary
+#
+# IMPORT TABLESPACE replaces the physical tablespace behind an
+# existing DD table. It does not rewrite creator_* through
+# dd_write_index(), so this test locks down the AS OF behavior:
+# a snapshot before IMPORT must not return rows from the imported
+# source tablespace through either primary or secondary access paths.
+# ================================================================
+
+--echo # Verify AS OF before IMPORT TABLESPACE does not expose imported source rows.
+SET GLOBAL innodb_undo_retention = 9000;
+SET SESSION as_of_cross_ddl_enabled = ON;
+
+--disable_warnings
+DROP TABLE IF EXISTS dst_import_asof;
+DROP TABLE IF EXISTS src_import_asof;
+--enable_warnings
+
+CREATE TABLE dst_import_asof (
+  id INT PRIMARY KEY,
+  name VARCHAR(64),
+  INDEX idx_name(name)
+) ENGINE=InnoDB;
+
+CREATE TABLE src_import_asof LIKE dst_import_asof;
+
+INSERT INTO dst_import_asof VALUES (1, "dst_old"), (2, "dst_keep");
+INSERT INTO src_import_asof VALUES (9, "src_old");
+
+sleep 3;
+SET @ts_before_import = NOW(6);
+sleep 3;
+
+ALTER TABLE dst_import_asof DISCARD TABLESPACE;
+
+FLUSH TABLES src_import_asof FOR EXPORT;
+LET $MYSQLD_DATADIR = `SELECT @@datadir`;
+--copy_file $MYSQLD_DATADIR/test/src_import_asof.ibd $MYSQLTEST_VARDIR/tmp/dst_import_asof.ibd
+--copy_file $MYSQLD_DATADIR/test/src_import_asof.cfg $MYSQLTEST_VARDIR/tmp/dst_import_asof.cfg
+UNLOCK TABLES;
+
+--copy_file $MYSQLTEST_VARDIR/tmp/dst_import_asof.ibd $MYSQLD_DATADIR/test/dst_import_asof.ibd
+--copy_file $MYSQLTEST_VARDIR/tmp/dst_import_asof.cfg $MYSQLD_DATADIR/test/dst_import_asof.cfg
+
+ALTER TABLE dst_import_asof IMPORT TABLESPACE;
+
+--echo # Current table uses the imported source tablespace.
+SELECT id, name FROM dst_import_asof ORDER BY id;
+
+--echo # AS OF before import returns empty through PRIMARY, not imported source rows.
+SELECT id, name FROM dst_import_asof AS OF TIMESTAMP @ts_before_import
+FORCE INDEX(PRIMARY) ORDER BY id;
+
+--echo # AS OF before import also returns empty through secondary access.
+SELECT id, name FROM dst_import_asof AS OF TIMESTAMP @ts_before_import
+FORCE INDEX(idx_name) WHERE name IN ("dst_old", "dst_keep", "src_old") ORDER BY id;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/dst_import_asof.ibd
+--remove_file $MYSQLTEST_VARDIR/tmp/dst_import_asof.cfg
+
+DROP TABLE dst_import_asof;
+DROP TABLE src_import_asof;
+
+SET GLOBAL innodb_undo_retention = DEFAULT;
+SET SESSION as_of_cross_ddl_enabled = DEFAULT;

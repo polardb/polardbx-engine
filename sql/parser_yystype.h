@@ -58,7 +58,7 @@
 #include "sql/xa.h"                   // xa_option_words
 #include "thr_lock.h"                 // thr_lock_type
                                       //
-#include "sql/lizard/lizard_snapshot.h"
+#include "sql/transaction/komodo0snapshot.h"
 
 class Index_hint;
 class Item;
@@ -712,8 +712,8 @@ union YYSTYPE {
   my_thread_id query_id;
   Bipartite_name bipartite_name;
   Set_operator query_operator;
-  lizard::Snapshot_hint *snapshot_hint;
-  struct lizard::Table_snapshot_hint_and_alias table_snapshot_hint_and_alias;
+  komodo::Snapshot_hint *snapshot_hint;
+  struct komodo::Table_snapshot_hint_and_alias table_snapshot_hint_and_alias;
 };
 
 static_assert(sizeof(YYSTYPE) <= 40, "YYSTYPE is too big");

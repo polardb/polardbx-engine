@@ -1,0 +1,115 @@
+##########################################
+# VECTOR INDEX coexistence with regular indexes (GPP/Panda/Hippo)
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo #
+--echo # Cleanup before test
+--echo #
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+--echo #
+--echo # 4.1 Create table with both regular secondary index and VECTOR INDEX
+--echo #
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(5),
+  extra INT,
+  name VARCHAR(100),
+  INDEX idx_extra(extra),
+  INDEX idx_name(name),
+  VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+
+--echo #
+--echo # 4.2 SHOW CREATE TABLE - verify both index types show correctly
+--echo #
+SHOW CREATE TABLE t1;
+
+--echo # Verify via SHOW INDEX
+SHOW INDEX FROM t1;
+
+--echo #
+--echo # 4.3 DML operations (Blocked by INSERT crash bug)
+--echo #
+# Note: INSERT/UPDATE/DELETE tests are blocked by INSERT crash bug at lock0lock.cc:5283
+# The following tests would be:
+# INSERT INTO t1(v, extra, name) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'), 100, 'test1');
+# UPDATE t1 SET extra = 200 WHERE id = 1;
+# DELETE FROM t1 WHERE id = 1;
+
+--echo #
+--echo # 4.4 Check DD system tables - verify se_private_data and options have no conflicts
+--echo #
+
+--echo # Check via I_S.STATISTICS - both index types should coexist
+SELECT INDEX_NAME, INDEX_TYPE, COLUMN_NAME 
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+
+--echo # Check auxiliary tables exist
+SELECT COUNT(*) > 0 AS has_vidx_tables 
+FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+
+--echo #
+--echo # 4.5 ALTER TABLE DROP regular index - verify VECTOR INDEX unaffected
+--echo #
+ALTER TABLE t1 DROP INDEX idx_extra;
+SHOW CREATE TABLE t1;
+
+--echo # Verify VECTOR INDEX still exists
+SELECT INDEX_NAME, INDEX_TYPE 
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+
+--echo #
+--echo # 4.6 ALTER TABLE ADD regular index - verify VECTOR INDEX unaffected  
+--echo #
+ALTER TABLE t1 ADD INDEX idx_extra_new(extra);
+SHOW CREATE TABLE t1;
+
+--echo # Add another type of index - UNIQUE
+ALTER TABLE t1 ADD UNIQUE INDEX idx_name_unique(name);
+SHOW CREATE TABLE t1;
+
+--echo # Verify both regular indexes and VECTOR INDEX coexist
+SELECT INDEX_NAME, INDEX_TYPE, NON_UNIQUE
+FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+
+--echo #
+--echo # Additional: Test with FULLTEXT index coexistence
+--echo #
+CREATE TABLE t2 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3),
+  content TEXT,
+  FULLTEXT INDEX ft_content(content),
+  VECTOR INDEX vi(v) m=8 distance=cosine
+) ENGINE=InnoDB;
+
+SHOW CREATE TABLE t2;
+
+--echo # Drop FULLTEXT, keep VECTOR
+ALTER TABLE t2 DROP INDEX ft_content;
+SHOW CREATE TABLE t2;
+
+--echo # Re-add FULLTEXT
+ALTER TABLE t2 ADD FULLTEXT INDEX ft_content_new(content);
+SHOW CREATE TABLE t2;
+
+--echo #
+--echo # Cleanup
+--echo #
+DROP TABLE t1, t2;
+
+SET GLOBAL vidx_disabled = ON;

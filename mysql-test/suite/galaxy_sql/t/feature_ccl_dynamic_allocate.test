@@ -1,0 +1,31 @@
+delimiter |;
+create procedure LoopAddCclRule()
+begin
+ declare i int default 0;
+ DECLARE tablename VARCHAR(100);
+ while i < 200 do
+    set tablename = concat('sbtest', i);
+    call dbms_ccl.add_ccl_rule('select', '', '', 2, tablename);
+    set i = i + 1;
+    end while;
+end |
+delimiter ;|
+
+
+--disable_ps_protocol
+connection default;
+
+CALL LoopAddCclRule();
+--replace_column 11 #
+call dbms_ccl.show_ccl_rule();
+
+call dbms_ccl.add_ccl_rule_returning('select', '', '', 2, 'sbtest201');
+--replace_column 11 #
+call dbms_ccl.show_ccl_rule();
+
+#truncate table mysql.concurrency_control;
+call dbms_ccl.del_all_ccl_rule();
+call dbms_ccl.flush_ccl_rule();
+call dbms_ccl.show_ccl_rule();
+
+drop procedure LoopAddCclRule;

@@ -124,6 +124,9 @@ class IndexMergeIterator : public TableRowIterator {
   bool doing_pk_scan;
 
   MEM_ROOT *mem_root;
+
+  /** Guess mode for index merge. */
+  komodo::guess_mode_t m_gmode;
 };
 
 #endif  // SQL_RANGE_OPTIMIZER_INDEX_MERGE_H_

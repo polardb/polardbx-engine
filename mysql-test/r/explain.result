@@ -732,13 +732,13 @@ INSERT INTO t1 VALUES (1),(2),(3);
 START TRANSACTION;
 EXPLAIN SELECT * FROM t1 WHERE c1 = 1 FOR UPDATE;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index; Directly search via Primary Index
 Warnings:
 Note	1003	/* select#1 */ select '1' AS `c1` from `test`.`t1` where true
 START TRANSACTION;
 EXPLAIN SELECT * FROM t1 WHERE c1 = 1 FOR UPDATE;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index
+1	SIMPLE	t1	NULL	const	PRIMARY	PRIMARY	4	const	1	100.00	Using index; Directly search via Primary Index
 Warnings:
 Note	1003	/* select#1 */ select '1' AS `c1` from `test`.`t1` where true
 DROP TABLE t1;

@@ -1,0 +1,74 @@
+# Test check_drop_db_priv function
+# Verify DROP DATABASE privilege check with security enhancement mode
+
+--disable_warnings
+DROP DATABASE IF EXISTS test_drop_db_priv;
+DROP USER IF EXISTS 'test_drop_user'@'localhost';
+--enable_warnings
+
+# Test 1: Normal mode - only DROP_ACL required
+SET GLOBAL polarx_security_enhancement_mode = OFF;
+CREATE DATABASE test_drop_db_priv;
+CREATE USER 'test_drop_user'@'localhost';
+GRANT DROP ON test_drop_db_priv.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+
+connect (con1,localhost,test_drop_user,,);
+connection con1;
+DROP DATABASE test_drop_db_priv;
+connection default;
+disconnect con1;
+
+# Test 2: Security enhancement mode ON - need DROP_DATABASE_ADMIN
+CREATE DATABASE test_drop_db_priv;
+SET GLOBAL polarx_security_enhancement_mode = ON;
+
+connect (con2,localhost,test_drop_user,,);
+connection con2;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+DROP DATABASE test_drop_db_priv;
+connection default;
+disconnect con2;
+
+# Test 2.5: Security enhancement mode ON - DROP ON *.* also blocked
+DROP DATABASE IF EXISTS test_drop_db_priv;
+CREATE DATABASE test_drop_db_priv;
+REVOKE DROP ON test_drop_db_priv.* FROM 'test_drop_user'@'localhost';
+GRANT DROP ON *.* TO 'test_drop_user'@'localhost';
+GRANT ALL ON test_drop_db_priv.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+
+connect (con2_5,localhost,test_drop_user,,);
+connection con2_5;
+--error ER_SPECIFIC_ACCESS_DENIED_ERROR
+DROP DATABASE test_drop_db_priv;
+connection default;
+disconnect con2_5;
+
+# Test 3: Security enhancement mode ON - with DROP_DATABASE_ADMIN
+GRANT DROP_DATABASE_ADMIN ON *.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+
+connect (con3,localhost,test_drop_user,,);
+connection con3;
+DROP DATABASE test_drop_db_priv;
+connection default;
+disconnect con3;
+
+# Test 4: Security enhancement mode ON - SUPER_ACL can bypass DROP_DATABASE_ADMIN
+CREATE DATABASE test_drop_db_priv;
+REVOKE DROP_DATABASE_ADMIN ON *.* FROM 'test_drop_user'@'localhost';
+GRANT SUPER ON *.* TO 'test_drop_user'@'localhost';
+FLUSH PRIVILEGES;
+
+connect (con4,localhost,test_drop_user,,);
+connection con4;
+DROP DATABASE test_drop_db_priv;
+connection default;
+disconnect con4;
+
+# Cleanup
+SET GLOBAL polarx_security_enhancement_mode = OFF;
+DROP USER 'test_drop_user'@'localhost';
+DROP DATABASE IF EXISTS test_drop_db_priv;
+

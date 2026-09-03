@@ -20,6 +20,8 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include "sql/rpl_rli.h"
 
 #include <stdio.h>
@@ -30,6 +32,7 @@
 #include <regex>
 
 #include "libbinlogevents/include/binlog_event.h"
+#include "log.h"
 #include "m_ctype.h"
 #include "mutex_lock.h"  // Mutex_lock
 #include "my_bitmap.h"
@@ -77,8 +80,9 @@
 #include "sql_string.h"
 #include "thr_mutex.h"
 
-#include "sql/consensus_log_manager.h"  // ConsensusLogManager
-#include "sql/bl_consensus_log.h"
+#include "sql/binlog/komodo0recovery.h"
+#include "sql/komodo0xlog.h"
+#include "sql/komodo0consensus0xlog.h"
 
 class Item;
 
@@ -262,6 +266,7 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
   until_option = nullptr;
   rpl_filter = nullptr;
   applier_reader = nullptr;
+  relay_log.is_xpaxos_log = false;
   m_consensus_index_buf = nullptr;
   consensus_privilege_checks_username[0] = '\0';
   consensus_privilege_checks_hostname[0] = '\0';
@@ -426,11 +431,10 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
     mysql_mutex_lock(&data_lock);
     last_master_timestamp = new_ts;
 
-    if (consensus_ptr) {
-      long time_diff = ((long)(time(nullptr) - last_master_timestamp) - mi->clock_diff_with_master);
-      time_diff = (last_master_timestamp ? max(0L, time_diff) : 0);
-      consensus_ptr->updateApplyDelaySeconds(time_diff);
-    }
+    long time_diff = ((long)(time(nullptr) - last_master_timestamp) -
+                      mi->clock_diff_with_master);
+    time_diff = (last_master_timestamp ? max(0L, time_diff) : 0);
+    komodo::xlog_update_apply_delay_seconds(time_diff);
 
     mysql_mutex_unlock(&data_lock);
   }
@@ -1625,7 +1629,7 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
 
     /* We send the warning only at startup, not after every RESET SLAVE */
     if (!opt_relay_logname_supplied && !opt_relaylog_index_name_supplied &&
-        !name_warning_sent) {
+        !name_warning_sent && !relay_log.is_xpaxos_log) {
       /*
         User didn't give us info to name the relay log index file.
         Picking `hostname`-relay-bin.index like we do, causes replication to
@@ -1665,11 +1669,11 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
       /* Store the GTID of a transaction spanned in multiple relay log files */
       Gtid_monitoring_info *partial_trx = mi->get_gtid_monitoring_info();
       partial_trx->clear();
-#ifndef NDEBUG
+
       get_sid_lock()->wrlock();
-      gtid_set->dbug_print("set of GTIDs in relay log before initialization");
+      komodo::log_gtid_set(gtid_set, false, "previous_gtid_set_relaylog_0");
       get_sid_lock()->unlock();
-#endif
+
       /*
         In the init_gtid_set below we pass the mi->transaction_parser.
         This will be useful to ensure that we only add a GTID to
@@ -1691,12 +1695,12 @@ int Relay_log_info::rli_init_info(bool skip_received_gtid_set_recovery) {
         return 1;
       }
       gtid_retrieved_initialized = true;
-#ifndef NDEBUG
-      get_sid_lock()->wrlock();
-      gtid_set->dbug_print("set of GTIDs in relay log after initialization");
-      get_sid_lock()->unlock();
-#endif
     }
+
+    get_sid_lock()->wrlock();
+    komodo::log_gtid_set(gtid_set, false, "previous_gtid_set_relaylog_1");
+    get_sid_lock()->unlock();
+
     /*
       Configures what object is used by the current log to store processed
       gtid(s). This is necessary in the MYSQL_BIN_LOG::MYSQL_BIN_LOG to
@@ -2344,24 +2348,11 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   //  mysqld_main->init_server_components->ReplicaInitializer::init_replica
   //    ->create_slave_info_objects->load_mi_and_rli_from_repositories
   //    ->rli_init_info->read_info->set_privilege_checks_user
-  //move set_privilege_checks_user into xpaxos_set_privilege_checks_user()
-  if (ConsensusLogManager::enable_consensus()
-      && consensus_ptr == nullptr
-      && username != nullptr
-      && hostname != nullptr
-      && (strlen(username) > 0 || strlen(hostname) > 0)) {
-    if (strlen(username) > 0)
-      memcpy(consensus_privilege_checks_username, username, strlen(username) + 1);
-    if (strlen(hostname) > 0)
-      memcpy(consensus_privilege_checks_hostname, hostname, strlen(hostname) + 1);
-    xp::info(ER_XP_RECOVERY)
-        << "skip set_privilege_checks_user for"
-        <<" channel: " << channel
-        <<", username: " << username
-        <<", hostname: " << hostname;
-
+  //move set_privilege_checks_user into rpl_set_privilege_checks_user()
+  if (komodo::xlog_engine_rpl_save_privilege_checks_user(this, username,
+                                                              hostname))
     return false;
-  }
+
   enum_priv_checks_status error = set_privilege_checks_user(username, hostname);
   if (!!error) {
     set_privilege_checks_user_corrupted(true);
@@ -2371,26 +2362,6 @@ bool Relay_log_info::read_info(Rpl_info_handler *from) {
   }
 
   return false;
-}
-
-void Relay_log_info::set_privilege_checks_user() {
-  if (consensus_ptr != nullptr 
-      && (strlen(consensus_privilege_checks_username) > 0 || strlen(consensus_privilege_checks_hostname) > 0)) {
-    xp::info(ER_XP_RECOVERY)
-        << "do set_privilege_checks_user now for"
-        <<" channel: " << get_channel()
-        <<", username: " << consensus_privilege_checks_username
-        <<", hostname: " << consensus_privilege_checks_hostname;
-    enum_priv_checks_status status = set_privilege_checks_user(
-        consensus_privilege_checks_username, consensus_privilege_checks_hostname);
-    if (!!status) {
-      set_privilege_checks_user_corrupted(true);
-      report_privilege_check_error(WARNING_LEVEL, status, false, get_channel(), consensus_privilege_checks_username,
-                                  consensus_privilege_checks_hostname);
-    }
-    consensus_privilege_checks_username[0] = '\0';
-    consensus_privilege_checks_hostname[0] = '\0';
-  }
 }
 
 bool Relay_log_info::set_info_search_keys(Rpl_info_handler *to) {
@@ -2786,6 +2757,14 @@ enum_return_status Relay_log_info::add_gtid_set(const Gtid_set *gtid_set) {
   get_sid_lock()->unlock();
 
   return return_status;
+}
+
+void Relay_log_info::truncate_gtid_set(const Gtid_set *truncated_gtids) {
+  DBUG_TRACE;
+
+  get_sid_lock()->wrlock();
+  this->gtid_set->remove_gtid_set(truncated_gtids);
+  get_sid_lock()->unlock();
 }
 
 const char *Relay_log_info::get_until_log_name() {

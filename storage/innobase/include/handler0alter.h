@@ -38,8 +38,8 @@ constexpr uint32_t ERROR_STR_LENGTH = 1024;
 @param[in] rec Record
 @param[in] index Index
 @param[in] offsets rec_get_offsets( rec, index, ...) */
-void innobase_rec_to_mysql(struct TABLE *table, const rec_t *rec,
-                           const dict_index_t *index, const ulint *offsets);
+void innobase_rec_to_mysql(struct TABLE *table, const Slice *slc,
+                           const dict_index_t *index);
 
 /** Copies an InnoDB index entry to table->record[0].
 @param[in,out] table Mysql table

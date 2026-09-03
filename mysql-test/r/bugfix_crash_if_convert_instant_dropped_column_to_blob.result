@@ -1,0 +1,102 @@
+############
+# Prepare t1 to be the matched basic.
+CREATE TABLE `t1` (
+`id` bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
+`c1` longtext DEFAULT NULL,
+`c2` longtext DEFAULT NULL,
+`c3` longtext DEFAULT NULL
+) ENGINE=InnoDB ROW_FORMAT=REDUNDANT;
+
+############
+# ROW_FORMAT REDUNDANT
+DROP TABLE IF EXISTS `t2`;
+Warnings:
+Note	1051	Unknown table 'test.t2'
+CREATE TABLE `t2` LIKE `t1`;
+INSERT INTO `t2` (id, `c1`, `c2`) VALUES
+(1, repeat('x', 8000), NULL),
+(2, repeat('x', 8000), NULL),
+(3, repeat('x', 8000), repeat('x', 7000)),
+(4, repeat('x', 8000), repeat('x', 7000)),
+(5, 'x', NULL),
+(6, 'x', NULL),
+(7, NULL, NULL),
+(8, NULL, NULL);
+ALTER TABLE `t2` DROP COLUMN `c1`, ALGORITHM=INSTANT;
+UPDATE `t2` SET `c2`=repeat('y', 7000), `c3`=repeat('y', 6000) where id = 1 or id = 3 or id = 5 or id = 7;
+UPDATE `t2` SET `c2`=repeat('y', 7000) where id = 2 or id = 4 or id = 6 or id = 8;
+
+############
+# ROW_FORMAT COMPACT
+ALTER TABLE `t1` ROW_FORMAT=COMPACT;
+DROP TABLE IF EXISTS `t2`;
+CREATE TABLE `t2` LIKE `t1`;
+INSERT INTO `t2` (id, `c1`, `c2`) VALUES
+(1, repeat('x', 8000), NULL),
+(2, repeat('x', 8000), NULL),
+(3, repeat('x', 8000), repeat('x', 7000)),
+(4, repeat('x', 8000), repeat('x', 7000)),
+(5, 'x', NULL),
+(6, 'x', NULL),
+(7, NULL, NULL),
+(8, NULL, NULL);
+ALTER TABLE `t2` DROP COLUMN `c1`, ALGORITHM=INSTANT;
+UPDATE `t2` SET `c2`=repeat('y', 7000), `c3`=repeat('y', 6000) where id = 1 or id = 3 or id = 5 or id = 7;
+UPDATE `t2` SET `c2`=repeat('y', 7000) where id = 2 or id = 4 or id = 6 or id = 8;
+
+############
+# ROW_FORMAT DYNAMIC
+ALTER TABLE `t1` ROW_FORMAT=DYNAMIC;
+DROP TABLE IF EXISTS `t2`;
+CREATE TABLE `t2` LIKE `t1`;
+INSERT INTO `t2` (id, `c1`, `c2`) VALUES
+(1, repeat('x', 8000), NULL),
+(2, repeat('x', 8000), NULL),
+(3, repeat('x', 8000), repeat('x', 7000)),
+(4, repeat('x', 8000), repeat('x', 7000)),
+(5, 'x', NULL),
+(6, 'x', NULL),
+(7, NULL, NULL),
+(8, NULL, NULL);
+ALTER TABLE `t2` DROP COLUMN `c1`, ALGORITHM=INSTANT;
+UPDATE `t2` SET `c2`=repeat('y', 7000), `c3`=repeat('y', 6000) where id = 1 or id = 3 or id = 5 or id = 7;
+UPDATE `t2` SET `c2`=repeat('y', 7000) where id = 2 or id = 4 or id = 6 or id = 8;
+
+############
+# ROW_FORMAT COMPRESSED: instant drop is not supported.
+
+############
+# Build same datas in the basic table t1
+INSERT INTO `t1` (id, `c1`, `c2`) VALUES
+(1, repeat('x', 8000), NULL),
+(2, repeat('x', 8000), NULL),
+(3, repeat('x', 8000), repeat('x', 7000)),
+(4, repeat('x', 8000), repeat('x', 7000)),
+(5, 'x', NULL),
+(6, 'x', NULL),
+(7, NULL, NULL),
+(8, NULL, NULL);
+ALTER TABLE `t1` DROP COLUMN `c1`, ALGORITHM=COPY;
+UPDATE `t1` SET `c2`=repeat('y', 7000), `c3`=repeat('y', 6000) where id = 1 or id = 3 or id = 5 or id = 7;
+UPDATE `t1` SET `c2`=repeat('y', 7000) where id = 2 or id = 4 or id = 6 or id = 8;
+
+############
+# Check all tables' checksum
+CREATE TABLE `table_checksum` (
+`table_name` VARCHAR(20) NOT NULL PRIMARY KEY,
+`checksum_int` BIGINT NOT NULL
+);
+# 4 expected
+SELECT COUNT(*) FROM `table_checksum`;
+COUNT(*)
+4
+# 1 expected
+SELECT COUNT(DISTINCT checksum_int) FROM `table_checksum`;
+COUNT(DISTINCT checksum_int)
+1
+
+############
+# CLEAR
+DROP TABLE `t1`;
+DROP TABLE `t2`;
+DROP TABLE `table_checksum`;

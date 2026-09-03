@@ -12087,6 +12087,9 @@ ER_IB_INDEX_LOG_VERSION_MISMATCH
 ER_DIAGNOSE_CMD_LOG
   eng "[Diagnose] user:%s host:%s sql:%.512s."
 
+ER_IB_DDL_CONVERT_HEAP_NOT_FOUND
+  eng "Heap required to convert columns is not present."
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.
@@ -12179,7 +12182,7 @@ ER_ROLL_FORWARD_SCN
   eng "%s"
 
 ER_LIZARD_GTID
-  eng "%s : %s"
+  eng "%s:%s"
 
 ER_XA_SPEC_VERSION_NOT_MATCH
   eng "Binlog file version %d is lower than XA specification recovery version %d"
@@ -12206,22 +12209,22 @@ ER_XP_0
   eng "%s"
 
 ER_XP_RECOVERY
-  eng "[Recovery] %s"
+  eng "Recovery: %s"
 
 ER_XP_FIFO
-  eng "[FIFO] %s"
+  eng "FIFO: %s"
 
 ER_XP_PREFETCH
-  eng "[Prefetch] %s"
+  eng "Prefetch: %s"
 
 ER_XP_APPLIER
-  eng "[Applier] %s"
+  eng "Applier: %s"
 
 ER_XP_COMMIT
-  eng "[Commit] %s"
+  eng "Commit: %s"
 
 ER_XP_PROTO
-  eng "[Proto] %s"
+  eng "Proto: %s"
 
 ER_TDE_GET_MASTER_KEY_ID
   eng "%s"
@@ -12237,6 +12240,33 @@ ER_CONN_CONTROL_STAT_CONN_REFUSE_TRIGGERED_RESET_FAILED
 
 ER_LICENSE_FILE_ERROR
   eng "%s"
+
+ER_CONN_CONTROL_REFUSE_ACTION_INIT_FAILED
+  eng "Failed to initialize Connection_refuse_action"
+
+ER_CONN_CONTROL_INVALID_CONN_REFUSE_TYPE
+  eng "Unexpected option type for connection refuse."
+
+ER_CONN_CONTROL_FAILED_TO_UPDATE_CONN_REFUSE_HASH
+  eng "Failed to update connection refuse hash for account : %s for ip adress: %s"
+
+ER_SINGLE_SHARD_READ_SCN_TOO_OLD
+  eng "Single Shard Read too old because SCN vision."
+
+ER_SINGLE_SHARD_READ_GCN_TOO_OLD
+  eng "Single Shard Read too old because GCN vision."
+
+ER_FTRUNC_LOCK_ACQUIRE_FAILED
+  eng "Failed to acquire FTRUNC_LOCK MDL lock for file truncate"
+
+ER_KOMODO_ASSERTION
+  eng "Komodo: Assertion failure: %s:%lu%s%s thread %s."
+
+ER_REARRANGE_WRONG_DATA_SIZE
+  eng "Rearrange: Page old data size %lu, new data size %lu, expect beneficial size %lu, page old max ins size %lu, new max ins size %lu"
+
+ER_IB_MSG_ENC_CKSUM_FAIL
+  eng "enc_checksum detected checksum mismatch, page %s"
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for

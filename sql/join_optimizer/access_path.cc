@@ -417,13 +417,15 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
       case AccessPath::INDEX_SCAN: {
         const auto &param = path->index_scan();
         if (param.reverse) {
+          assert(param.vec_func == nullptr);
+
           iterator = NewIterator<IndexScanIterator<true>>(
               thd, mem_root, param.table, param.idx, param.use_order,
-              path->num_output_rows(), examined_rows);
+              path->num_output_rows(), examined_rows, param.vec_func);
         } else {
           iterator = NewIterator<IndexScanIterator<false>>(
               thd, mem_root, param.table, param.idx, param.use_order,
-              path->num_output_rows(), examined_rows);
+              path->num_output_rows(), examined_rows, param.vec_func);
         }
         break;
       }
@@ -1469,4 +1471,17 @@ table_map GetHashJoinTables(AccessPath *path) {
         return false;
       });
   return tables;
+}
+
+void DisablePushdownRangeLimit(AccessPath *path) {
+  if (path->type != AccessPath::INDEX_RANGE_SCAN) {
+    return;
+  }
+
+  const auto &param = path->index_range_scan();
+  QUICK_RANGE ** ranges = param.ranges;
+  for (unsigned range_idx = 0; range_idx < param.num_ranges; ++range_idx) {
+    QUICK_RANGE *cur_range = ranges[range_idx];
+    cur_range->limit = HA_POS_ERROR;
+  }
 }

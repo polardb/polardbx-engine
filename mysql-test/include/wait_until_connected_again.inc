@@ -27,6 +27,9 @@ if ($VALGRIND_TEST) {
 if ($TSAN_OPTIONS) {
   --let $wait_counter= 15000
 }
+if ($ASAN_OPTIONS) {
+  --let $wait_counter= 10000
+}
 if ($MTR_MANUAL_DEBUG) {
   --let $counter = 864000
 }
@@ -91,11 +94,17 @@ let $enable_consensus = `SELECT @@enable_consensus`;
 if ($enable_consensus)
 {
   let $wait_timeout= 60;
+  if ($ASAN_OPTIONS) {
+    let $wait_timeout= 300;
+  }
   let $wait_condition= select count(*)=1 from information_schema.alisql_cluster_local where role='leader';
   --source include/wait_condition.inc
 
   # wait leader enable read/write
   let $wait_timeout= 60;
+  if ($ASAN_OPTIONS) {
+    let $wait_timeout= 300;
+  }
   let $wait_condition= select SERVER_READY_FOR_RW='Yes' from information_schema.alisql_cluster_local;
   --source include/wait_condition.inc
 }

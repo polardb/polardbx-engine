@@ -52,6 +52,8 @@ inline dict_table_t *dict_table_get_low(
 static inline dict_table_t *dict_table_check_if_in_cache_low(
     const char *table_name); /*!< in: table name */
 
+#ifndef INNODB_DICT0PRIV_IC_STANDALONE
 #include "dict0priv.ic"
+#endif /* !INNODB_DICT0PRIV_IC_STANDALONE */
 
 #endif /* dict0priv.h */

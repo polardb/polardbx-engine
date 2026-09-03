@@ -1269,6 +1269,7 @@ class buf_page_t {
     m_version = 0;
     if (id.space() != UINT32_UNDEFINED) {
       m_space = fil_space_get(id.space());
+      /* There could be non-existent tablespace while importing it */
       if (m_space) {
         m_space->inc_ref();
         /* We don't have a way to check the MDL locks, which are guarding the
@@ -2669,6 +2670,8 @@ inline void buf_block_reset_page_type_on_mismatch(buf_block_t &block,
     fil_page_reset_type(page_id, page, type, &mtr);
   }
 }
+#ifndef INNODB_BUF0BUF_IC_STANDALONE
 #include "buf0buf.ic"
+#endif /* !INNODB_BUF0BUF_IC_STANDALONE */
 
 #endif /* !buf0buf_h */

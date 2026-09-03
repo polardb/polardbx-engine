@@ -1,0 +1,385 @@
+RESET SLAVE ALL;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+#
+# Test 0a: ALTER TABLE MODIFY COLUMN INVISIBLE should fail
+#
+CREATE TABLE tmi_t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+ALTER TABLE tmi_t1 MODIFY COLUMN v VECTOR(5) INVISIBLE;
+ERROR HY000: Incorrect usage of vector index: Only support one visible VECTOR column
+DROP TABLE tmi_t1;
+#
+# Test 0b: DROP INDEX should succeed for vector index
+#
+CREATE TABLE tmi_t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+SHOW INDEX FROM tmi_t1 WHERE Key_name = 'vi';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+DROP INDEX vi ON tmi_t1;
+SHOW INDEX FROM tmi_t1 WHERE Key_name = 'vi';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+DROP TABLE tmi_t1;
+#
+# Test 0c: ALTER TABLE DROP INDEX should succeed for vector index
+#
+CREATE TABLE tmi_t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+ALTER TABLE tmi_t1 DROP INDEX vi;
+SHOW INDEX FROM tmi_t1 WHERE Key_name = 'vi';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+DROP TABLE tmi_t1;
+#
+# Test 1: Single-index baseline
+#
+CREATE TABLE tmi_t0 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+);
+INSERT INTO tmi_t0 (v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO tmi_t0 (v) VALUES (VEC_FROMTEXT('[6,7,8,9,10]'));
+SELECT id FROM tmi_t0 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+id
+1
+2
+DROP TABLE tmi_t0;
+#
+# Test 2: CREATE TABLE with 2 vector indexes on same column
+#
+CREATE TABLE tmi_t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v),
+VECTOR INDEX vi2(v)
+);
+Warnings:
+Warning	1831	Duplicate index 'vi2' defined on the table 'test.tmi_t1'. This is deprecated and will be disallowed in a future release.
+INSERT INTO tmi_t1 (v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO tmi_t1 (v) VALUES (VEC_FROMTEXT('[6,7,8,9,10]'));
+# Query uses vector index
+SELECT id FROM tmi_t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 2;
+id
+1
+2
+SHOW CREATE TABLE tmi_t1;
+Table	Create Table
+tmi_t1	CREATE TABLE `tmi_t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(5) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10,
+  VECTOR KEY `vi2` (`v`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# SHOW INDEX lists both vector indexes
+SHOW INDEX FROM tmi_t1 WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_t1	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+tmi_t1	1	vi2	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+# VECTOR_INDEXES shows both
+SELECT INDEX_NAME, COLUMN_NAME, METRIC_TYPE, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_t1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	METRIC_TYPE	M	HLINDEX_TABLE_NAME
+vi	v	EUCLIDEAN	6	HLINDEX_TABLE_NAME
+vi2	v	EUCLIDEAN	6	HLINDEX_TABLE_NAME
+DROP TABLE tmi_t1;
+#
+# Test 3: Two vector indexes on different columns
+#
+CREATE TABLE t_multi (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(3),
+v2 VECTOR(4),
+VECTOR INDEX idx_v1(v1),
+VECTOR INDEX idx_v2(v2)
+);
+INSERT INTO t_multi (v1, v2) VALUES (VEC_FROMTEXT('[1,2,3]'), VEC_FROMTEXT('[1,0,0,0]'));
+INSERT INTO t_multi (v1, v2) VALUES (VEC_FROMTEXT('[4,5,6]'), VEC_FROMTEXT('[0,1,0,0]'));
+INSERT INTO t_multi (v1, v2) VALUES (VEC_FROMTEXT('[7,8,9]'), VEC_FROMTEXT('[0,0,1,0]'));
+# Search on v1
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,2,3]')) LIMIT 1;
+id
+1
+# Search on v2
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[0,0,1,0]')) LIMIT 1;
+id
+3
+SHOW CREATE TABLE t_multi;
+Table	Create Table
+t_multi	CREATE TABLE `t_multi` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v1` vector(3) DEFAULT NULL,
+  `v2` vector(4) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `idx_v1` (`v1`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10,
+  VECTOR KEY `idx_v2` (`v2`) M=6 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# SHOW INDEX should list both vector indexes
+SHOW INDEX FROM t_multi;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_multi	0	PRIMARY	1	id	A	#	NULL	NULL		BTREE			YES	NULL
+t_multi	1	idx_v1	1	v1	NULL	#	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_multi	1	idx_v2	1	v2	NULL	#	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+# INFORMATION_SCHEMA.VECTOR_INDEXES should return 2 rows
+SELECT INDEX_NAME, COLUMN_NAME, METRIC_TYPE, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_multi'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	METRIC_TYPE	M	HLINDEX_TABLE_NAME
+idx_v1	v1	EUCLIDEAN	6	HLINDEX_TABLE_NAME
+idx_v2	v2	EUCLIDEAN	6	HLINDEX_TABLE_NAME
+# EXPLAIN should pick idx_v1 for v1 query
+EXPLAIN SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,2,3]')) LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_multi	NULL	ALL	NULL	NULL	NULL	NULL	X	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_multi`.`id` AS `id` from `test`.`t_multi` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_multi`.`v1`,VEC_FromText('[1,2,3]')) limit 1
+# EXPLAIN should pick idx_v2 for v2 query
+EXPLAIN SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[0,0,1,0]')) LIMIT 1;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_multi	NULL	ALL	NULL	NULL	NULL	NULL	X	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_multi`.`id` AS `id` from `test`.`t_multi` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_multi`.`v2`,VEC_FromText('[0,0,1,0]')) limit 1
+#
+# Test 4: TRUNCATE with multiple vector indexes
+#
+TRUNCATE TABLE t_multi;
+SELECT COUNT(*) AS cnt FROM t_multi;
+cnt
+0
+INSERT INTO t_multi (v1, v2) VALUES (VEC_FROMTEXT('[9,8,7]'), VEC_FROMTEXT('[0,0,0,1]'));
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[9,8,7]')) LIMIT 1;
+id
+1
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+id
+1
+# Metadata intact after TRUNCATE
+SHOW INDEX FROM t_multi WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_multi	1	idx_v1	1	v1	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_multi	1	idx_v2	1	v2	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, METRIC_TYPE, DIMENSION, M
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_multi'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	METRIC_TYPE	DIMENSION	M
+idx_v1	v1	EUCLIDEAN	3	HLINDEX_TABLE_NAME
+idx_v2	v2	EUCLIDEAN	4	HLINDEX_TABLE_NAME
+#
+# Test 5: RENAME with multiple vector indexes
+#
+RENAME TABLE t_multi TO t_renamed;
+SELECT id FROM t_renamed ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[9,8,7]')) LIMIT 1;
+id
+1
+# Metadata reflects new table name
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_renamed'
+ORDER BY INDEX_NAME;
+TABLE_NAME	INDEX_NAME	COLUMN_NAME
+t_renamed	idx_v1	v1
+t_renamed	idx_v2	v2
+RENAME TABLE t_renamed TO t_multi;
+#
+# Test 6: UPDATE routes to correct hlindex
+#
+UPDATE t_multi SET v1 = VEC_FROMTEXT('[0,0,0]') WHERE id = 1;
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0,0,0]')) LIMIT 1;
+id
+1
+#
+# Test 7: DELETE with multiple indexes
+#
+DELETE FROM t_multi WHERE id = 1;
+SELECT COUNT(*) AS cnt FROM t_multi;
+cnt
+0
+# Search still works on both indexes after DELETE
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[9,8,7]')) LIMIT 1;
+id
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+id
+#
+# Test 8: OPTIMIZE TABLE with multiple indexes
+#
+OPTIMIZE TABLE t_multi;
+Table	Op	Msg_type	Msg_text
+test.t_multi	optimize	note	Table does not support optimize, doing recreate + analyze instead
+test.t_multi	optimize	status	OK
+# Both indexes usable after OPTIMIZE
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[9,8,7]')) LIMIT 1;
+id
+SELECT id FROM t_multi ORDER BY VEC_DISTANCE_EUCLIDEAN(v2, VEC_FROMTEXT('[0,0,0,1]')) LIMIT 1;
+id
+SHOW INDEX FROM t_multi WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_multi	1	idx_v1	1	v1	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=3	YES	NULL
+t_multi	1	idx_v2	1	v2	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=4	YES	NULL
+DROP TABLE t_multi;
+#
+# Test 9: DROP + ADD vector index cycles (multi-index ALTER TABLE)
+# Verifies: cascade F_UNLCK releases ALL hlindex slots; metadata and
+# query correctness after each DDL step; repeated cycles.
+#
+CREATE TABLE tmi_da (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v),
+VECTOR INDEX vi2(v)
+);
+Warnings:
+Warning	1831	Duplicate index 'vi2' defined on the table 'test.tmi_da'. This is deprecated and will be disallowed in a future release.
+INSERT INTO tmi_da (v) VALUES (VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO tmi_da (v) VALUES (VEC_FROMTEXT('[6,7,8,9,10]'));
+INSERT INTO tmi_da (v) VALUES (VEC_FROMTEXT('[2,4,6,8,10]'));
+# -- Initial state: 2 indexes (vi, vi2)
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+tmi_da	1	vi2	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi	v	5	6	HLINDEX_TABLE_NAME
+vi2	v	5	6	HLINDEX_TABLE_NAME
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# -- Step 1: DROP vi → only vi2 remains
+DROP INDEX vi ON tmi_da;
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi2	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi2	v	5	6	HLINDEX_TABLE_NAME
+# Search still works via vi2
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# -- Step 2: ADD vi3 → now vi2 + vi3
+ALTER TABLE tmi_da ADD VECTOR INDEX vi3(v);
+Warnings:
+Warning	1831	Duplicate index 'vi3' defined on the table 'test.tmi_da'. This is deprecated and will be disallowed in a future release.
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi2	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+tmi_da	1	vi3	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi2	v	5	6	HLINDEX_TABLE_NAME
+vi3	v	5	6	HLINDEX_TABLE_NAME
+# Both indexes serve queries
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 1;
+id
+1
+# INSERT after ADD INDEX
+INSERT INTO tmi_da (v) VALUES (VEC_FROMTEXT('[3,3,3,3,3]'));
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3,3,3]')) LIMIT 1;
+id
+4
+# -- Step 3: DROP vi2 → only vi3 remains
+DROP INDEX vi2 ON tmi_da;
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi3	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi3	v	5	6	HLINDEX_TABLE_NAME
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[6,7,8,9,10]')) LIMIT 1;
+id
+2
+# -- Step 4: ADD vi4 → vi3 + vi4 (second cycle)
+ALTER TABLE tmi_da ADD VECTOR INDEX vi4(v);
+Warnings:
+Warning	1831	Duplicate index 'vi4' defined on the table 'test.tmi_da'. This is deprecated and will be disallowed in a future release.
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi3	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+tmi_da	1	vi4	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi3	v	5	6	HLINDEX_TABLE_NAME
+vi4	v	5	6	HLINDEX_TABLE_NAME
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,4,6,8,10]')) LIMIT 1;
+id
+3
+# DML after second ADD
+INSERT INTO tmi_da (v) VALUES (VEC_FROMTEXT('[5,5,5,5,5]'));
+UPDATE tmi_da SET v = VEC_FROMTEXT('[9,9,9,9,9]') WHERE id = 1;
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 1;
+id
+1
+# -- Step 5: DROP + ADD in single ALTER (simultaneous)
+ALTER TABLE tmi_da DROP INDEX vi3, ADD VECTOR INDEX vi5(v);
+Warnings:
+Warning	1831	Duplicate index 'vi5' defined on the table 'test.tmi_da'. This is deprecated and will be disallowed in a future release.
+SHOW INDEX FROM tmi_da WHERE Index_type = 'VECTOR';
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+tmi_da	1	vi4	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+tmi_da	1	vi5	1	v	NULL	NULL	NULL	NULL		VECTOR		M=6, DISTANCE=EUCLIDEAN, EF_CONSTRUCTION=10, DIM=5	YES	NULL
+SELECT INDEX_NAME, COLUMN_NAME, DIMENSION, M, HLINDEX_TABLE_NAME
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tmi_da'
+ORDER BY INDEX_NAME;
+INDEX_NAME	COLUMN_NAME	DIMENSION	M	HLINDEX_TABLE_NAME
+vi4	v	5	6	HLINDEX_TABLE_NAME
+vi5	v	5	6	HLINDEX_TABLE_NAME
+SELECT id FROM tmi_da ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[5,5,5,5,5]')) LIMIT 1;
+id
+5
+DROP TABLE tmi_da;
+#
+# Test 10: Key_map boundary for hidden hlindex keys
+#
+# CREATE TABLE with 31 vector indexes succeeds (1 PK + 31 visible + 31 hidden = 63 keys)
+CREATE TABLE t_max (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, v1 VECTOR(4), VECTOR INDEX vi1(v1), v2 VECTOR(4), VECTOR INDEX vi2(v2), v3 VECTOR(4), VECTOR INDEX vi3(v3), v4 VECTOR(4), VECTOR INDEX vi4(v4), v5 VECTOR(4), VECTOR INDEX vi5(v5), v6 VECTOR(4), VECTOR INDEX vi6(v6), v7 VECTOR(4), VECTOR INDEX vi7(v7), v8 VECTOR(4), VECTOR INDEX vi8(v8), v9 VECTOR(4), VECTOR INDEX vi9(v9), v10 VECTOR(4), VECTOR INDEX vi10(v10), v11 VECTOR(4), VECTOR INDEX vi11(v11), v12 VECTOR(4), VECTOR INDEX vi12(v12), v13 VECTOR(4), VECTOR INDEX vi13(v13), v14 VECTOR(4), VECTOR INDEX vi14(v14), v15 VECTOR(4), VECTOR INDEX vi15(v15), v16 VECTOR(4), VECTOR INDEX vi16(v16), v17 VECTOR(4), VECTOR INDEX vi17(v17), v18 VECTOR(4), VECTOR INDEX vi18(v18), v19 VECTOR(4), VECTOR INDEX vi19(v19), v20 VECTOR(4), VECTOR INDEX vi20(v20), v21 VECTOR(4), VECTOR INDEX vi21(v21), v22 VECTOR(4), VECTOR INDEX vi22(v22), v23 VECTOR(4), VECTOR INDEX vi23(v23), v24 VECTOR(4), VECTOR INDEX vi24(v24), v25 VECTOR(4), VECTOR INDEX vi25(v25), v26 VECTOR(4), VECTOR INDEX vi26(v26), v27 VECTOR(4), VECTOR INDEX vi27(v27), v28 VECTOR(4), VECTOR INDEX vi28(v28), v29 VECTOR(4), VECTOR INDEX vi29(v29), v30 VECTOR(4), VECTOR INDEX vi30(v30), v31 VECTOR(4), VECTOR INDEX vi31(v31)) ENGINE=InnoDB;
+# INSERT into table with 31 vector indexes
+INSERT INTO t_max (v1, v2, v3) VALUES (VEC_FROMTEXT('[1,2,3,4]'), VEC_FROMTEXT('[5,6,7,8]'), VEC_FROMTEXT('[9,0,1,2]'));
+# Search on first vector index
+SELECT id FROM t_max ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[1,2,3,4]')) LIMIT 1;
+id
+1
+# Search on last vector index
+SELECT id FROM t_max ORDER BY VEC_DISTANCE_EUCLIDEAN(v31, VEC_FROMTEXT('[0,0,0,0]')) LIMIT 1;
+id
+1
+# INFORMATION_SCHEMA should show 31 rows
+SELECT COUNT(*) AS vec_index_count
+FROM INFORMATION_SCHEMA.VECTOR_INDEXES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't_max';
+vec_index_count
+31
+DROP TABLE t_max;
+# CREATE TABLE with 32 vector indexes fails (1 PK + 32 visible + 32 hidden = 65 keys)
+CREATE TABLE t_too_many (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, v1 VECTOR(4), VECTOR INDEX vi1(v1), v2 VECTOR(4), VECTOR INDEX vi2(v2), v3 VECTOR(4), VECTOR INDEX vi3(v3), v4 VECTOR(4), VECTOR INDEX vi4(v4), v5 VECTOR(4), VECTOR INDEX vi5(v5), v6 VECTOR(4), VECTOR INDEX vi6(v6), v7 VECTOR(4), VECTOR INDEX vi7(v7), v8 VECTOR(4), VECTOR INDEX vi8(v8), v9 VECTOR(4), VECTOR INDEX vi9(v9), v10 VECTOR(4), VECTOR INDEX vi10(v10), v11 VECTOR(4), VECTOR INDEX vi11(v11), v12 VECTOR(4), VECTOR INDEX vi12(v12), v13 VECTOR(4), VECTOR INDEX vi13(v13), v14 VECTOR(4), VECTOR INDEX vi14(v14), v15 VECTOR(4), VECTOR INDEX vi15(v15), v16 VECTOR(4), VECTOR INDEX vi16(v16), v17 VECTOR(4), VECTOR INDEX vi17(v17), v18 VECTOR(4), VECTOR INDEX vi18(v18), v19 VECTOR(4), VECTOR INDEX vi19(v19), v20 VECTOR(4), VECTOR INDEX vi20(v20), v21 VECTOR(4), VECTOR INDEX vi21(v21), v22 VECTOR(4), VECTOR INDEX vi22(v22), v23 VECTOR(4), VECTOR INDEX vi23(v23), v24 VECTOR(4), VECTOR INDEX vi24(v24), v25 VECTOR(4), VECTOR INDEX vi25(v25), v26 VECTOR(4), VECTOR INDEX vi26(v26), v27 VECTOR(4), VECTOR INDEX vi27(v27), v28 VECTOR(4), VECTOR INDEX vi28(v28), v29 VECTOR(4), VECTOR INDEX vi29(v29), v30 VECTOR(4), VECTOR INDEX vi30(v30), v31 VECTOR(4), VECTOR INDEX vi31(v31), v32 VECTOR(4), VECTOR INDEX vi32(v32)) ENGINE=InnoDB;
+ERROR 42000: Too many keys specified; max 64 keys allowed
+SET GLOBAL vidx_disabled = ON;

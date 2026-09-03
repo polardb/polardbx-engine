@@ -1085,6 +1085,7 @@ extern SHOW_COMP_OPTION have_profiling;
 extern SHOW_COMP_OPTION have_symlink, have_dlopen;
 extern SHOW_COMP_OPTION have_query_cache;
 extern SHOW_COMP_OPTION have_geometry, have_rtree_keys;
+extern SHOW_COMP_OPTION have_ftrunc_lock;
 extern SHOW_COMP_OPTION have_compress;
 extern SHOW_COMP_OPTION have_statement_timeout;
 

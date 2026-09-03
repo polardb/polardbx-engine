@@ -30,6 +30,12 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 1/20/2010      Jimmy Yang
  ************************************************************************/
 
+#if !defined(UNIV_HOTBACKUP)
+#ifndef srv0mon_h
+#define INNODB_SRV0MON_IC_STANDALONE
+#include "srv0mon.h"
+#undef INNODB_SRV0MON_IC_STANDALONE
+#endif /* !srv0mon_h */
 /** This function is used to calculate the maximum counter value
  since the start of monitor counter
  @return max counter value since start. */
@@ -97,3 +103,4 @@ static inline void srv_mon_reset_all(
     MONITOR_RESET_ALL(monitor);
   }
 }
+#endif /* !defined(UNIV_HOTBACKUP) */

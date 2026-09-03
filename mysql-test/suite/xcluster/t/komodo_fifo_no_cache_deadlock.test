@@ -1,0 +1,27 @@
+--source include/have_debug.inc
+
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+flush local logs;
+
+CREATE TABLE t_fifo_no_cache_deadlock (
+  id INT PRIMARY KEY,
+  payload LONGBLOB
+) ENGINE=InnoDB;
+
+# A 4 MiB row event split into 128-byte pieces needs more FIFO slots than the
+# minimum cache can provide, so split_event_if_beyond_batch() bypasses FIFO.
+SET GLOBAL debug="+d,force_large_trx";
+INSERT INTO t_fifo_no_cache_deadlock
+VALUES (1, REPEAT('a', 4 * 1024 * 1024));
+--source include/wait_follower_catchup.inc
+SET GLOBAL debug="";
+
+SELECT id, OCTET_LENGTH(payload)
+FROM t_fifo_no_cache_deadlock;
+
+DROP TABLE t_fifo_no_cache_deadlock;
+--source include/wait_follower_catchup.inc
+
+--disconnect conn1
+--connection default

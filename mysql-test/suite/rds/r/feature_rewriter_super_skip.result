@@ -1,0 +1,68 @@
+# Query rewrite plugin was installed.
+CREATE USER 'lintong'@'%' IDENTIFIED BY 'lintongpass';
+GRANT SELECT ON *.* TO 'lintong'@'%';
+CREATE TABLE test.rw (id INT PRIMARY KEY, val VARCHAR(16));
+INSERT INTO test.rw VALUES (1, 'ORIG');
+# rule A: observable rewrite (val ORIG -> REWRITTEN)
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT val FROM test.rw', "SELECT 'REWRITTEN' AS val FROM test.rw");
+# rule B (Vuln 3): SELECT rewritten into GRANT to an existing user
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT id FROM test.rw', "GRANT SUPER ON *.* TO 'lintong'@'%'");
+# rule C (Vuln 4): SELECT rewritten into backdoor-account creation
+# (8.0 removed GRANT ... IDENTIFIED BY, so a backdoor is created via CREATE USER)
+INSERT INTO query_rewrite.rewrite_rules (pattern, replacement)
+VALUES ('SELECT id, val FROM test.rw',
+"CREATE USER 'backdoor_admin'@'%' IDENTIFIED BY 'x'");
+CALL query_rewrite.flush_rewrite_rules();
+
+# D0: strategy OFF (default) -> SUPER (root) query IS rewritten (upstream behavior)
+SELECT val FROM test.rw;
+val
+REWRITTEN
+Warnings:
+Note	1105	Query 'SELECT val FROM test.rw' rewritten to 'SELECT 'REWRITTEN' AS val FROM test.rw' by a query rewrite plugin
+
+# enable the RDS privilege strategy -> SUPER connections now skip rewrite
+SET GLOBAL opt_enable_rds_priv_strategy = ON;
+# D1: strategy ON, SUPER (root) -> NOT rewritten, returns ORIG
+SELECT val FROM test.rw;
+val
+ORIG
+# D3: SUPER triggers the GRANT-to-existing rule -> NOT rewritten, no escalation
+SELECT id FROM test.rw;
+id
+1
+SELECT Super_priv FROM mysql.user WHERE user='lintong';
+Super_priv
+N
+# D4: SUPER triggers the backdoor rule -> NOT rewritten, no backdoor account
+SELECT id, val FROM test.rw;
+id	val
+1	ORIG
+SELECT COUNT(*) AS backdoor_admin_count FROM mysql.user WHERE user='backdoor_admin';
+backdoor_admin_count
+0
+
+# D2: non-SUPER connection -> STILL rewritten (val -> REWRITTEN)
+SELECT val FROM test.rw;
+val
+REWRITTEN
+Warnings:
+Note	1105	Query 'SELECT val FROM test.rw' rewritten to 'SELECT 'REWRITTEN' AS val FROM test.rw' by a query rewrite plugin
+
+# D5: a non-root SUPER account is also skipped
+CREATE USER 'suser'@'%' IDENTIFIED BY 'x';
+GRANT ALL PRIVILEGES ON *.* TO 'suser'@'%';
+SELECT val FROM test.rw;
+val
+ORIG
+DROP USER 'suser'@'%';
+
+# cleanup
+SET GLOBAL opt_enable_rds_priv_strategy = OFF;
+DROP TABLE test.rw;
+DROP USER 'lintong'@'%';
+Warnings:
+Warning	1620	Plugin is busy and will be uninstalled on shutdown
+# Query rewrite plugin was queued for uninstalling.

@@ -52,6 +52,12 @@ extern LEX_CSTRING ORIGIN_TABLE;
 /* Seconds before really purging the recycled table. */
 extern ulonglong recycle_bin_retention;
 
+/* Maximum storage capacity for recycle bin (in bytes). 0 means no limit. */
+extern ulonglong recycle_bin_capacity_limit;
+
+/* Global atomic version number for recycle bin changes */
+extern std::atomic<ulonglong> recycle_bin_version;
+
 /* Whether the db is recycle schema */
 inline bool is_recycle_db(const char *str) {
   return !my_strcasecmp(system_charset_info, RECYCLE_BIN_SCHEMA.str, str);

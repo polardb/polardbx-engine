@@ -53,6 +53,16 @@ class XPaxos_relay_log_info final : public Relay_log_info {
                        param_key_info_stop_cond, param_key_info_sleep_cond,
 #endif
                        param_id, param_channel, is_rli_fake) {
+    relay_log.is_xpaxos_log = true;
+   /**
+    * XPaxos channel use gtid to filter repeat event, not only server_id.
+    * This is a scenario to prevent the binlog from synchronizing with the 
+    * other two nodes first after the consensus_duplicate_with_cache_log 
+    * parameter is enabled, and the local power failure, log is not sync 
+    * into the disk. Then, after the local machine restarts, 
+    * it receives its own server_id's log but cannot be applied.
+    */
+    replicate_same_server_id = true;
   }
 
   ~XPaxos_relay_log_info() override;

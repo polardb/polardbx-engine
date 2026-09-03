@@ -81,8 +81,6 @@ void trans_reset_one_shot_chistics(THD *thd) {
   thd->tx_isolation = (enum_tx_isolation)thd->variables.transaction_isolation;
   thd->tx_read_only = thd->variables.transaction_read_only;
 
-  /* Reset commit and snapshot gcn when transition end. */
-  thd->reset_trans_policy();
   thd->m_trx_affected_rows = 0;
 }
 
@@ -544,6 +542,10 @@ bool trans_commit_stmt(THD *thd, bool ignore_global_read_lock) {
       trans_reset_one_shot_chistics(thd);
   } else if (tc_log)
     res = tc_log->commit(thd, false);
+
+  if (thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT))
+    thd->cpolicy_ctx.reset();
+
   if (res == false && !thd->in_active_multi_stmt_transaction())
     if (thd->rpl_thd_ctx.session_gtids_ctx().notify_after_transaction_commit(
             thd))
@@ -590,6 +592,9 @@ bool trans_rollback_stmt(THD *thd) {
       trans_reset_one_shot_chistics(thd);
   } else if (tc_log)
     tc_log->rollback(thd, false);
+
+  if (thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::STMT))
+    thd->cpolicy_ctx.reset();
 
   if (!thd->owned_gtid_is_empty() && !thd->in_active_multi_stmt_transaction()) {
     /*

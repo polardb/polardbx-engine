@@ -297,7 +297,9 @@ class Item_func : public Item_result_field {
     MEMBER_OF_FUNC,
     STRCMP_FUNC,
     TRUE_FUNC,
-    FALSE_FUNC
+    FALSE_FUNC,
+    MOD_ONUPD_FUNC,
+    VECTOR_DISTANCE_FUNC
   };
   enum optimize_type {
     OPTIMIZE_NONE,
@@ -326,7 +328,7 @@ class Item_func : public Item_result_field {
     args[0] = a;
     args[1] = b;
     m_accum_properties = 0;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(a);
     add_accum_properties(b);
   }
@@ -342,7 +344,7 @@ class Item_func : public Item_result_field {
     args[1] = b;
     args[2] = c;
     m_accum_properties = 0;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -363,7 +365,7 @@ class Item_func : public Item_result_field {
     args[2] = c;
     args[3] = d;
     m_accum_properties = 0;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -386,7 +388,7 @@ class Item_func : public Item_result_field {
     args[3] = d;
     args[4] = e;
     m_accum_properties = 0;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -411,7 +413,7 @@ class Item_func : public Item_result_field {
     args[4] = e;
     args[5] = f;
     m_accum_properties = 0;
-    reset_encrypted_type();
+    reset_encryption_type();
     add_accum_properties(a);
     add_accum_properties(b);
     add_accum_properties(c);
@@ -4041,6 +4043,57 @@ inline Item *get_system_variable(Parse_context *pc, enum_var_type scope,
                              unsafe_for_replication);
 }
 
+class Item_func_polardbx_hasher : public Item_int_func {
+private:
+  int column_count;         // Number of columns
+  bool m_has_range_params;  // Whether range parameters are detected (cached)
+  longlong m_min_range;     // Minimum range value (cached)
+  longlong m_max_range;     // Maximum range value (cached)
+  bool m_range_params_initialized;  // Whether range parameters are initialized
+
+public:
+  Item_func_polardbx_hasher(const POS &pos, Item *a)
+      : Item_int_func(pos, a), column_count(1),
+        m_has_range_params(false), m_min_range(0), m_max_range(0),
+        m_range_params_initialized(false) {}
+  explicit Item_func_polardbx_hasher(mem_root_deque<Item *> *list)
+      : Item_int_func(list), column_count(0),
+        m_has_range_params(false), m_min_range(0), m_max_range(0),
+        m_range_params_initialized(false) {}
+  Item_func_polardbx_hasher(const POS &pos, PT_item_list *args);
+  bool fix_fields(THD *thd, Item **ref) override;
+  longlong val_int() override;
+  const char *func_name() const override { return "polardbx_hasher"; }
+  Item_result result_type() const override { return INT_RESULT; }
+
+  // Override update_used_tables to ensure it includes RAND_TABLE_BIT
+  // This prevents constant folding of the function and its arguments
+  void update_used_tables() override {
+    Item_int_func::update_used_tables();
+    // Add RAND_TABLE_BIT to prevent constant folding
+    // This ensures const_for_execution() returns false
+    used_tables_cache |= RAND_TABLE_BIT;
+  }
+
+private:
+  // Initialize range parameters (called once in fix_fields phase)
+  void init_range_params();
+  bool resolve_type(THD *thd [[maybe_unused]]) override {
+    // supports a variable number of arguments, with at least one argument required.
+    if (arg_count < 1 || arg_count > 12) {
+      my_error(ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT, MYF(0), func_name());
+      return true;
+    }
+    set_data_type_longlong();
+    fix_num_length_and_dec();
+    // Type conversion will be handled in val_int() at runtime
+    // For parameters with existing types (constants, columns, etc.), their types are preserved
+    // DECIMAL, STRING and other types will be converted to longlong in val_int() at runtime
+    // param_type_uses_non_param(thd, MYSQL_TYPE_LONGLONG);
+    return false;
+  }
+};
+
 extern bool check_reserved_words(const char *name);
 extern enum_field_types agg_field_type(Item **items, uint nitems);
 double my_double_round(double value, longlong dec, bool dec_unsigned,
@@ -4060,5 +4113,7 @@ bool is_function_of_type(const Item *item, Item_func::Functype type);
 
 /// Checks if "item" contains a function of the specified type.
 bool contains_function_of_type(Item *item, Item_func::Functype type);
+
+longlong calculate_field_polardbx_hasher(const int partCnt, Item **args);
 
 #endif /* ITEM_FUNC_INCLUDED */

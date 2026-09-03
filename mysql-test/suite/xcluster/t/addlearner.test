@@ -8,6 +8,12 @@ let $learner_base_port = query_get_value("select $MYPORT_1+50 as c1", c1, 1);
 --echo # connect leader
 --connect (leader,127.0.0.1,root,,test,$MYPORT_1)
 --connection leader
+
+--let $PAXOS_PORT_1=`select @@port + 40;`
+--replace_result $PAXOS_PORT_1 PAXOS_PORT_1
+--error ER_CONSENSUS_COMMAND_ERROR
+eval call dbms_consensus.add_learner("127.0.0.1:$PAXOS_PORT_1");
+
 #eval add consensus_learner $learner_cluster_info;
 --replace_result $learner_cluster_info learner_cluster_info
 eval call dbms_consensus.add_learner($learner_cluster_info);

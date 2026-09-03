@@ -1,0 +1,161 @@
+##########################################
+# XA PREPARE share-cache flush timing    #
+# Covers set_prepared_in_tc gating on    #
+# is_xa_tran_detached_on_prepare(thd)    #
+##########################################
+
+# TEST: vidx_xa_prepare_flush
+#
+# Post-fix behavior of set_prepared_in_tc / disconnect path:
+#   - xa_detach_on_prepare = OFF: PREPARE returns 0 from
+#     set_prepared_in_tc; share-cache invalidate is deferred until
+#     the same thd's XA COMMIT (do_commit) or XA ROLLBACK
+#     (do_rollback).
+#   - xa_detach_on_prepare = ON:  set_prepared_in_tc routes to
+#     do_commit at PREPARE time, since the session is about to lose
+#     its Transaction_ctx via detach_xa_transaction().
+#   - Disconnect after PREPARE without xa_detach_on_prepare degrades
+#     to detached XA in xa::Transaction_cache::detach(); THD::cleanup
+#     calls vidx::hnsw::flush_share_cache_on_xa_disconnect to drain
+#     MHNSW_Trx before the connection memroot is freed.
+#
+# Observability: share-cache invalidation is a read-side optimization
+# and ANN queries reach down to InnoDB rows.  Tests below cover XA
+# isolation, post-COMMIT visibility, post-ROLLBACK invisibility and
+# disconnect-recover-commit, which exercise the timing without making
+# it directly observable.
+
+--source include/have_binlog_format_mixed_or_row.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo ##############################################
+--echo # 0. Setup                                   #
+--echo ##############################################
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(3),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+--disable_warnings
+
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[3,3,3]"));
+
+--echo
+--echo ##############################################
+--echo # 1. Non-detach XA - PREPARE state isolation #
+--echo #    set_prepared_in_tc returns 0;           #
+--echo #    share cache invalidate deferred to      #
+--echo #    XA COMMIT (same thd do_commit).         #
+--echo ##############################################
+--connect (con_w, localhost, root,,)
+SET transaction_isolation = 'READ-COMMITTED';
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_off_commit';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[10,10,10]"));
+XA END 'xa_off_commit';
+XA PREPARE 'xa_off_commit';
+
+--connection default
+--echo # Reader during PREPARE state: must not see uncommitted row
+SELECT COUNT(*) AS pre_commit_count FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+
+--connection con_w
+XA COMMIT 'xa_off_commit';
+
+--connection default
+--echo # After COMMIT: row visible, ANN finds the new node
+SELECT COUNT(*) AS post_commit_count FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[10,10,10]")) LIMIT 5;
+
+--echo
+--echo ##############################################
+--echo # 2. Non-detach XA - PREPARE then ROLLBACK   #
+--echo #    set_prepared_in_tc returned 0 earlier;  #
+--echo #    do_rollback handles the trx-list now.   #
+--echo #    Pre-fix would have invalidated cache    #
+--echo #    at PREPARE time even though XA          #
+--echo #    ROLLBACK followed.                      #
+--echo ##############################################
+--connection con_w
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_off_rb';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[20,20,20]"));
+XA END 'xa_off_rb';
+XA PREPARE 'xa_off_rb';
+XA ROLLBACK 'xa_off_rb';
+
+--connection default
+--echo # Rolled-back row must not appear in ANN result set
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[20,20,20]")) LIMIT 5;
+SELECT COUNT(*) FROM t1;
+
+--echo
+--echo ##############################################
+--echo # 3. Detach XA - PREPARE detaches the        #
+--echo #    session; set_prepared_in_tc flushes     #
+--echo #    eagerly because the same thd is about   #
+--echo #    to lose its Transaction_ctx.            #
+--echo ##############################################
+--connection con_w
+SET SESSION xa_detach_on_prepare = ON;
+XA START 'xa_on_commit';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[30,30,30]"));
+XA END 'xa_on_commit';
+XA PREPARE 'xa_on_commit';
+--echo # After PREPARE the session is detached; con_w may immediately
+--echo # issue plain SQL without an active XA branch.
+SELECT COUNT(*) AS detached_self_count FROM t1;
+
+--connection default
+--echo # XA RECOVER must list the detached transaction
+--replace_column 1 # 2 # 3 # 4 #
+XA RECOVER;
+XA COMMIT 'xa_on_commit';
+SELECT COUNT(*) AS post_detach_commit_count FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[30,30,30]")) LIMIT 5;
+
+--echo
+--echo ##############################################
+--echo # 4. Disconnect-degrades-to-detach           #
+--echo #    Non-detach XA + connection drop:        #
+--echo #    THD::cleanup runs                        #
+--echo #    xa::Transaction_cache::detach() then    #
+--echo #    flush_share_cache_on_xa_disconnect()    #
+--echo #    so MHNSW_Trx invalidate is not lost.    #
+--echo ##############################################
+--connect (con_drop, localhost, root,,)
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_drop_conn';
+INSERT INTO t1(v) VALUES (VEC_FROMTEXT("[40,40,40]"));
+XA END 'xa_drop_conn';
+XA PREPARE 'xa_drop_conn';
+--disconnect con_drop
+
+--connection default
+--echo # XA RECOVER on a different connection must list the prepared XA
+--replace_column 1 # 2 # 3 # 4 #
+XA RECOVER;
+XA COMMIT 'xa_drop_conn';
+SELECT COUNT(*) AS post_disconnect_commit_count FROM t1;
+--sorted_result
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[40,40,40]")) LIMIT 5;
+
+--echo
+--echo ##############################################
+--echo # Cleanup                                    #
+--echo ##############################################
+--disconnect con_w
+--connection default
+--enable_warnings
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

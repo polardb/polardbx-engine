@@ -133,10 +133,24 @@ void btr_search_sys_resize(ulint hash_size);
 void btr_search_sys_free();
 
 /** Disable the adaptive hash search system and empty the index.
+@note This function is used by the changing of system variable explicitly.
+@param[in,out]  srv_sys_var   the sys var that controls the AHI system.
 @returns true if the AHI system was enabled and became disabled. */
-bool btr_search_disable();
-/** Enable the adaptive hash search system. */
-void btr_search_enable();
+bool btr_search_disable_by_sysvar(bool *srv_sys_var);
+/** Enable the adaptive hash search system.
+@note This function is used by the changing of system variable explicitly.
+@param[in,out]  srv_sys_var   the sys var that controls the AHI system. */
+void btr_search_enable_by_sysvar(bool *srv_sys_var);
+
+/** Disable the adaptive hash search system and empty the index.
+@note This function is used by the internal operation, e.g. buffer pool resize,
+shutdown, etc.
+@returns true if the AHI system was enabled and became disabled. */
+bool btr_search_disable_by_internal();
+/** Enable the adaptive hash search system.
+@note This function is used by the internal operation, e.g. buffer pool resize.
+ */
+void btr_search_enable_by_internal();
 
 /** Creates and initializes a search info struct.
 @param[in]      heap            heap where created.
@@ -344,6 +358,8 @@ constexpr uint32_t BTR_SEARCH_ON_PATTERN_LIMIT = 3;
 the hash index */
 constexpr uint32_t BTR_SEARCH_ON_HASH_LIMIT = 3;
 
+#ifndef INNODB_BTR0SEA_IC_STANDALONE
 #include "btr0sea.ic"
+#endif /* !INNODB_BTR0SEA_IC_STANDALONE */
 
 #endif

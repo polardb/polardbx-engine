@@ -1,4 +1,5 @@
-/*  Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/*  Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -438,6 +439,23 @@ class Mutexed_map_thd_srv_session {
 static Mutexed_map_thd_srv_session server_session_list;
 static Thread_to_plugin_map server_session_threads;
 
+/*
+  Restore an outer THD as current_thd at the end of a
+  Session_backup_and_attach scope.
+
+  If the THD is wrapped by a Srv_session, go through that session's full
+  attach path so its state machine and thread_stack are restored together
+  with current_thd. Otherwise the THD is a regular connection THD whose
+  state the framework never touched, and only current_thd needs to be
+  reset.
+*/
+static void restore_outer_thd(THD *outer_thd) {
+  if (Srv_session *outer = server_session_list.find(outer_thd))
+    outer->attach();
+  else
+    outer_thd->store_globals();
+}
+
 Srv_session::Session_backup_and_attach::Session_backup_and_attach(
     Srv_session *sess, bool is_in_close_session)
     : session(sess),
@@ -478,7 +496,7 @@ Srv_session::Session_backup_and_attach::~Session_backup_and_attach() {
     if (backup_thd && backup_thd != session->m_thd) backup_thd->store_globals();
   } else if (backup_thd) {
     session->detach();
-    backup_thd->store_globals();
+    restore_outer_thd(backup_thd);
 #ifdef HAVE_PSI_THREAD_INTERFACE
     enum_vio_type vio_type = backup_thd->get_vio_type();
     if (vio_type != NO_VIO_TYPE) PSI_THREAD_CALL(set_connection_type)(vio_type);
@@ -675,6 +693,13 @@ void Srv_session::deinit_thread() {
   assert(THR_stack_start_address);
   THR_stack_start_address = nullptr;
   my_thread_end();
+}
+
+const void *Srv_session::set_thread_plugin(const void *new_plugin) {
+  const void *old = THR_srv_session_thread;
+  THR_srv_session_thread =
+      reinterpret_cast<const st_plugin_int *>(const_cast<void *>(new_plugin));
+  return old;
 }
 
 /**
@@ -908,10 +933,10 @@ bool Srv_session::attach() {
     return false;
   }
 
-  if (m_thd->real_id != 0 || current_thd != nullptr) {
-    sql_print_error("FATAL: attach before detach! %lu %p", m_thd->real_id,
-                    current_thd);
-  }
+  // if (m_thd->real_id != 0 || current_thd != nullptr) {
+  //   sql_print_error("FATAL: attach before detach! %lu %p", m_thd->real_id,
+  //                   current_thd);
+  // }
 
   // Since we now set current_thd during open(), we need to do complete
   // attach the first time in any case.
@@ -1114,6 +1139,31 @@ void Srv_session::set_detached() {
   thd_set_thread_stack(m_thd, nullptr);
 }
 
+int Srv_session::execute_with_attached_thd(Attached_thd_callback callback,
+                                           void *context) {
+  DBUG_TRACE;
+  assert(callback != nullptr);
+
+  if (!srv_session_server_is_available() || m_thd->killed) return 1;
+  if (current_thd == m_thd) return callback(m_thd, context);
+
+  // Only checked by the closing assert; unused in release builds.
+  THD *previous_thd [[maybe_unused]] = current_thd;
+  int result = 1;
+  // Restore same-plugin outer sessions as well; unlike execute_command(),
+  // this method must not leave the callback session attached on return.
+  {
+    Session_backup_and_attach backup(this, true);
+    if (!backup.attach_error) {
+      assert(current_thd == m_thd);
+      result = callback(m_thd, context);
+    }
+  }
+
+  assert(current_thd == previous_thd);
+  return result;
+}
+
 int Srv_session::execute_command(enum enum_server_command command,
                                  const union COM_DATA *data,
                                  const CHARSET_INFO *client_cs,
@@ -1157,8 +1207,7 @@ int Srv_session::execute_command(enum enum_server_command command,
   mysql_mutex_unlock(&m_thd->LOCK_thd_protocol);
 
   // only free audit cache when not safe session(improve performance)
-  if (!safe_session)
-    mysql_audit_release(m_thd);
+  if (!safe_session) mysql_audit_release(m_thd);
 
   /*
     The server does it for COM_QUERY in dispatch_sql_command() but not for

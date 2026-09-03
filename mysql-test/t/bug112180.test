@@ -1,0 +1,55 @@
+CREATE TABLE `foo_t` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `schema_id` bigint unsigned NOT NULL,
+  `name` varchar(64),
+  `type` enum('BASE TABLE','VIEW','SYSTEM VIEW'),
+  `engine` varchar(64),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `schema_id` (`schema_id`,`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 STATS_PERSISTENT=0;
+
+--disable_query_log
+connect (foo,localhost,root,,);
+connection foo;
+begin;
+select count(*) from mysql.user;
+
+connection default;
+
+let $j = 5;
+while ($j)
+{
+let $i = 1000;
+while ($i)
+{
+  dec $i;
+  eval insert into foo_t (schema_id, name, type, engine)
+  values ($i % 6, CONCAT("name_", $i), 'SYSTEM VIEW', repeat('a', 60));
+}
+delete from foo_t where id < 1000000;
+dec $j;
+}
+
+--enable_query_log
+
+let $i = 670;
+eval insert into foo_t (schema_id, name, type, engine)
+values ($i % 6, CONCAT("name_", $i), 'SYSTEM VIEW', repeat('a', 60));
+
+let $i = 675;
+eval insert into foo_t (schema_id, name, type, engine)
+values ($i % 6, CONCAT("name_", $i), 'SYSTEM VIEW', repeat('a', 60));
+
+connect (foo1,localhost,root,,);
+connection foo1;
+
+# ERROR. The result cannot be read. But, in fact, it should be readable.
+let $cnt1 = `select count(1) from foo_t force index(schema_id) where name like 'name_670'`;
+# If the query uses a primary key index, the data is read correctly.
+let $cnt2 = `select count(1) from foo_t force index(primary) where name like 'name_670'`;
+
+--let $assert_text= Assert value should be same
+--let $assert_cond = ($cnt1 = $cnt2)
+--source include/assert.inc
+
+drop table foo_t;

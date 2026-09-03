@@ -1,0 +1,499 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test index merge with gpp infos.
+--echo #
+ 
+--echo # Save original values
+--let $innodb_lizard_stat_enabled_original = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $innodb_index_purge_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_purge_guess_clust_enabled`
+--let $innodb_index_scan_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_scan_guess_clust_enabled`
+--let $innodb_adaptive_hash_index_original = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $innodb_polarx_btree_search_mode_original = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+
+--echo # enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+ 
+--echo # Create table t
+CREATE TABLE IF NOT EXISTS t (
+    id  INT AUTO_INCREMENT PRIMARY KEY,
+    a   VARCHAR(10) NOT NULL,  
+    b   INT         NOT NULL,  
+    c   INT         NOT NULL,  
+    d   CHAR(1)     NOT NULL DEFAULT 'A'
+    #,  
+    #KEY idx_a (a),
+    #KEY idx_b (b),
+    #KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (250),
+    PARTITION p1 VALUES LESS THAN (500),
+    PARTITION p2 VALUES LESS THAN (750),
+    PARTITION p3 VALUES LESS THAN (1000),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+ 
+--echo # Insert data into table t
+--echo # Procedure to produce data
+delimiter |;
+ 
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(10);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('NO', LPAD(i, 4, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+    SELECT CONCAT('Successfully inserted ', num_rows, ' rows into table t.') AS Result;
+END|
+delimiter ;|
+ 
+--echo # Insert 1000 rows into table t.
+CALL insert_t_data(1000);
+ 
+--echo # Create indexes on table t.
+--echo # Create indexes on table t.
+--echo # Also make sure that selection using the gpp infos of these secondary indexes will hit.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+ 
+--echo # Check where these indexes' gpp infos is valid.
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE a = 'NO0001';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup a=NO0001] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup b=10] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE c = 100 and d = 'B';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup c=100 d=B] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+ 
+ 
+--echo ## BEGIN TEST FOR INTERSECTION MERGE ---------------------------------------------------------------
+ 
+--echo # Check the condition of INTERSECTION MERGE
+# Yes
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,PRIMARY) */ * FROM t WHERE a = "NO0001" AND id < 100;
+# Yes
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+# Yes
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+# -------------------------------------------------------------------------------------------------
+# No, secondary index contains range query
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b < 100;
+# No, does not include all columns of composite index idx_cd
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 10;
+# No, uses OR to connect query conditions, will trigger union merge 
+#EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" OR b = 100;
+ 
+--echo # Check whether the intersection index merge with valid gpp hits
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SHOW VARIABLES LIKE 'innodb_adaptive_hash_index';
+
+SELECT /*+INDEX_MERGE(t idx_a,PRIMARY) */ * FROM t WHERE a = "NO0001" AND id < 100;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection idx_a,PRIMARY] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection idx_a,idx_b] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection idx_a,idx_cd] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+--echo # Check whether the intersection index merge with gpp can hit when one of the secondary index's gpp info is invalid
+# Use Optimize_Table to make all the gpp infos of t invalid
+OPTIMIZE TABLE t;
+# Drop and re-create the index on b to make one of the secondary index's gpp info valid
+DROP INDEX idx_b ON t;
+CREATE INDEX idx_b ON t(b);
+# Check whether the index merge with gpp can still hit
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection partial valid idx_a,idx_b] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+ 
+--echo #  Check whether the intersection index merge with gpp will miss when all of the secondary index's gpp info is invalid
+# Make all the gpp infos of t invalid
+SET DEBUG='+d,set_gpp_null';
+# Check whether the index merge with gpp can still hit
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection all-invalid idx_a,idx_b 1st] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection all-invalid idx_a,idx_b 2nd] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [intersection all-invalid idx_a,idx_cd] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SET DEBUG='-d,set_gpp_null';
+ 
+--echo ## END TEST FOR INTERSECTION MERGE ---------------------------------------------------------------
+ 
+ 
+--echo # DROP TABLE t;
+DROP TABLE t;
+ 
+--echo # Re-create the table t and re-insert the data;
+--echo # Create table t;
+CREATE TABLE IF NOT EXISTS t (
+    id  INT AUTO_INCREMENT PRIMARY KEY,
+    a   VARCHAR(10) NOT NULL,  
+    b   INT         NOT NULL,  
+    c   INT         NOT NULL,  
+    d   CHAR(1)     NOT NULL DEFAULT 'A'
+    #,  
+    #KEY idx_a (a),
+    #KEY idx_b (b),
+    #KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY RANGE (id) (
+    PARTITION p0 VALUES LESS THAN (250),
+    PARTITION p1 VALUES LESS THAN (500),
+    PARTITION p2 VALUES LESS THAN (750),
+    PARTITION p3 VALUES LESS THAN (1000),
+    PARTITION p4 VALUES LESS THAN MAXVALUE
+);
+ 
+--echo # Insert data into table t;
+CALL insert_t_data(1000);
+ 
+--echo # Create indexes on table t.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+ 
+--echo # Check where these indexes' gpp infos is valid.
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE a = 'NO0001';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup2 a=NO0001] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE b = 10;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup2 b=10] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+#  Lizard_index_scan_guess_clust_hit should += 1.
+SELECT * FROM t WHERE c = 100 and d = 'B';
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [warmup2 c=100 d=B] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+ 
+ 
+--echo # BEGIN TEST FOR UNION MERGE ---------------------------------------------------------------
+ 
+--echo # Check the condition of UNION MERGE
+# Yes
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+# Yes
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+# Yes
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+# Yes, trigger union merge and intersection merge at the same time
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 )OR (c = 50 AND d = "A");
+# -------------------------------------------------------------------------------------------------
+# No, secondary index contains range query, with trigger sort-union merge
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0111" OR b < 100;
+# No, does not include all columns of composite index idx_cd, with trigger sort-union merge
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+# No, uses AND to connect query conditions, will trigger intersection merge 
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 100;
+# No, conditions on columns within a composite index should be connected using AND operators
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 ) OR (c = 50 OR d = "A");
+ 
+--echo # Check whether the union index merge with valid gpp hits
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_b,PRIMARY valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_b valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_cd valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_b,idx_cd valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+ 
+--echo #  Check whether the union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+# Make all the gpp infos of t invalid
+SET DEBUG='+d,set_gpp_null';
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_b,PRIMARY invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_b invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_cd invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [union idx_a,idx_b,idx_cd invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SET DEBUG='-d,set_gpp_null';
+ 
+--echo ## END TEST FOR UNION MERGE ---------------------------------------------------------------
+ 
+ 
+--echo # BEGIN TEST FOR SORT-UNION MERGE ---------------------------------------------------------------
+--echo # Check the condition of UNION MERGE
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 OR b < 20 ;
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 10;
+# YES
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 10 OR (c = 5000 AND d = "A");
+# -------------------------------------------------------------------------------------------------
+# No, conditions should be connected using OR operators
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 AND b < 20;
+# No, there should be at least two indexes to merge
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_cd) */ * FROM t WHERE c < 10 AND d < 'b';
+ 
+--echo # Check whether the sort-union index merge with valid gpp hits
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_b,PRIMARY valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b valid 1] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b valid 2] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_cd valid 1] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_cd valid 2] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b,idx_cd valid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+ 
+--echo #  Check whether the sort-union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+# Make all the gpp infos of t invalid
+SET DEBUG='+d,set_gpp_null';
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_b,PRIMARY invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b invalid 1] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b invalid 2] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_cd invalid 1] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_cd invalid 2] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+
+--let $scan_hit= query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $scan_miss= query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text= [sort-union idx_a,idx_b,idx_cd invalid] gpp total (hit+miss) should be > 0
+--let $assert_cond= $scan_hit + $scan_miss > 0
+--source include/assert.inc
+# ------------------------------------------------
+SET DEBUG='-d,set_gpp_null';
+ 
+--echo # END TEST FOR SORT-UNION MERGE ---------------------------------------------------------------
+ 
+ 
+--echo --echo # END ALL TEST ---------------------------------------------------------------
+DROP TABLE t;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+DROP PROCEDURE insert_t_data;
+
+--echo # Restore original values
+--eval SET GLOBAL innodb_lizard_stat_enabled = $innodb_lizard_stat_enabled_original
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $innodb_index_purge_guess_clust_enabled_original
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $innodb_index_scan_guess_clust_enabled_original
+--eval SET GLOBAL innodb_adaptive_hash_index = $innodb_adaptive_hash_index_original
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $innodb_polarx_btree_search_mode_original
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';
+
+
+

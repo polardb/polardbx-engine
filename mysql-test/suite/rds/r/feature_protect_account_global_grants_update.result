@@ -1,0 +1,248 @@
+set global opt_enable_rds_priv_strategy=on;
+create database test_db;
+create table test_db.t1 (id int primary key);
+insert into test_db.t1 values (1);
+#
+# === Setup ===
+#
+# Reserved account 'u0' with high dynamic privilege
+create user 'u0'@'%';
+grant SYSTEM_VARIABLES_ADMIN on *.* to 'u0'@'%';
+# Attacker 'u1': broad static privileges (NO SUPER), only CONNECTION_ADMIN
+create user 'u1'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS,
+REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
+SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER,
+CREATE ROLE, DROP ROLE ON *.* TO 'u1'@'%' WITH GRANT OPTION;
+grant all privileges on test_db.* to 'u1'@'%';
+grant CONNECTION_ADMIN on *.* to 'u1'@'%' with grant option;
+flush privileges;
+# Confirm initial state: u1 only has CONNECTION_ADMIN
+select user, host, priv, with_grant_option
+from mysql.global_grants where user='u1' order by priv;
+user	host	priv	with_grant_option
+u1	%	CONNECTION_ADMIN	Y
+show grants for 'u1'@'%';
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT CONNECTION_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT ALL PRIVILEGES ON `test_db`.* TO `u1`@`%`
+#
+###########################################################################
+# Part A: Attack paths — all must return ERROR 7529
+###########################################################################
+#
+# A.1 UPDATE PRIV: the exact vulnerability (CONNECTION_ADMIN → SYSTEM_VARIABLES_ADMIN)
+update mysql.global_grants
+set priv='SYSTEM_VARIABLES_ADMIN'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.2 UPDATE PRIV to other high-value targets
+update mysql.global_grants
+set priv='ROLE_ADMIN'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+update mysql.global_grants
+set priv='ENCRYPTION_KEY_ADMIN'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.3 UPDATE HOST: scope expansion from '%' to more permissive
+update mysql.global_grants
+set host='10.%'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.4 UPDATE USER: hijack reserved user's high privilege
+update mysql.global_grants
+set user='u1'
+  where user='u0' and host='%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.5 UPDATE USER: hijack into a reserved user name
+update mysql.global_grants
+set user='u0'
+  where user='u1' and host='%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.6 UPDATE WITH_GRANT_OPTION: escalate grant ability N→Y
+# (prep: set to N so attacker's change is real)
+set global opt_enable_rds_priv_strategy=off;
+update mysql.global_grants set with_grant_option='N'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+flush privileges;
+set global opt_enable_rds_priv_strategy=on;
+update mysql.global_grants
+set with_grant_option='Y'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.7 Multi-table UPDATE (immediate path): join bypass
+update mysql.global_grants g, test_db.t1 b
+set g.priv='SYSTEM_VARIABLES_ADMIN'
+  where g.user='u1' and b.id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.8 Multi-table UPDATE (self-join, buffered path)
+update mysql.global_grants a, mysql.global_grants b
+set a.priv='SYSTEM_VARIABLES_ADMIN'
+  where a.user='u1' and b.user='u0';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.9 INSERT ... ON DUPLICATE KEY UPDATE targeting PRIV
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+values ('u1','%','CONNECTION_ADMIN','Y')
+on duplicate key update priv='SYSTEM_VARIABLES_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.10 REPLACE: implicitly DELETE+INSERT, guard blocks INSERT
+replace into mysql.global_grants (user, host, priv, with_grant_option)
+values ('u1','%','SYSTEM_VARIABLES_ADMIN','Y');
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.11 INSERT ... SELECT: cross-table injection
+insert into mysql.global_grants (user, host, priv, with_grant_option)
+select 'u1','%','SYSTEM_VARIABLES_ADMIN','Y' from test_db.t1 where id=1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.12 Prepared statement: dynamic SQL bypass attempt
+prepare stmt from
+'update mysql.global_grants set priv=? where user=? and host=? and priv=?';
+set @p1='SYSTEM_VARIABLES_ADMIN', @p2='u1', @p3='%', @p4='CONNECTION_ADMIN';
+execute stmt using @p1, @p2, @p3, @p4;
+ERROR HY000: Rerserved user or privileges can't be modified
+deallocate prepare stmt;
+# A.13 Subquery in SET clause
+update mysql.global_grants
+set priv=(select 'SYSTEM_VARIABLES_ADMIN')
+where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.14 UPDATE with LIMIT (partial update attempt)
+update mysql.global_grants
+set priv='SYSTEM_VARIABLES_ADMIN'
+  where user='u1'
+  limit 1;
+ERROR HY000: Rerserved user or privileges can't be modified
+# A.15 Verify state unchanged after all attacks
+select user, host, priv, with_grant_option
+from mysql.global_grants where user='u1' order by priv;
+user	host	priv	with_grant_option
+u1	%	CONNECTION_ADMIN	N
+#
+###########################################################################
+# Part B: Normal paths — must NOT be blocked
+###########################################################################
+#
+# B.1 SUPER user can UPDATE global_grants (exempted from guard)
+update mysql.global_grants
+set with_grant_option='Y'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+select user, host, priv, with_grant_option
+from mysql.global_grants where user='u1';
+user	host	priv	with_grant_option
+u1	%	CONNECTION_ADMIN	Y
+# B.2 GRANT dynamic privilege via SQL (internal path, not DML)
+grant ROLE_ADMIN on *.* to 'u1'@'%';
+select user, host, priv from mysql.global_grants
+where user='u1' order by priv;
+user	host	priv
+u1	%	CONNECTION_ADMIN
+u1	%	ROLE_ADMIN
+# B.3 REVOKE dynamic privilege via SQL (internal path)
+revoke ROLE_ADMIN on *.* from 'u1'@'%';
+select user, host, priv from mysql.global_grants
+where user='u1' order by priv;
+user	host	priv
+u1	%	CONNECTION_ADMIN
+# B.4 GRANT with WITH GRANT OPTION upgrade (internal no-op or re-insert)
+grant CONNECTION_ADMIN on *.* to 'u1'@'%' with grant option;
+select user, host, priv, with_grant_option from mysql.global_grants
+where user='u1' order by priv;
+user	host	priv	with_grant_option
+u1	%	CONNECTION_ADMIN	Y
+# B.5 DROP USER cleans up global_grants rows (internal path)
+create user 'tmp_u'@'%';
+grant BINLOG_ADMIN on *.* to 'tmp_u'@'%';
+select user, priv from mysql.global_grants where user='tmp_u';
+user	priv
+tmp_u	BINLOG_ADMIN
+drop user 'tmp_u'@'%';
+select user, priv from mysql.global_grants where user='tmp_u';
+user	priv
+# B.6 RENAME USER updates global_grants user column (internal path)
+create user 'rename_src'@'%';
+grant BINLOG_ADMIN on *.* to 'rename_src'@'%';
+select user, priv from mysql.global_grants where user='rename_src';
+user	priv
+rename_src	BINLOG_ADMIN
+rename user 'rename_src'@'%' to 'rename_dst'@'%';
+select user, priv from mysql.global_grants where user='rename_dst';
+user	priv
+rename_dst	BINLOG_ADMIN
+drop user 'rename_dst'@'%';
+# B.7 Non-guarded table: normal user can freely UPDATE
+update test_db.t1 set id=2 where id=1;
+select * from test_db.t1;
+id
+2
+#
+###########################################################################
+# Part C: Boundary / edge cases
+###########################################################################
+#
+# C.1 Zero-match WHERE: no row matched, no guard triggered
+update mysql.global_grants
+set priv='SYSTEM_VARIABLES_ADMIN'
+  where user='nonexistent_xyz' and host='impossible';
+# C.2 Strategy OFF: guard disabled, UPDATE is allowed
+set global opt_enable_rds_priv_strategy=off;
+update mysql.global_grants
+set with_grant_option='N'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+select user, host, priv, with_grant_option
+from mysql.global_grants where user='u1';
+user	host	priv	with_grant_option
+u1	%	CONNECTION_ADMIN	N
+# C.3 Re-enable strategy: guard resumes
+set global opt_enable_rds_priv_strategy=on;
+update mysql.global_grants
+set with_grant_option='Y'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# C.4 Noop UPDATE (same value): MySQL skips ha_update_row, no guard triggered
+update mysql.global_grants
+set with_grant_option='N'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+# C.5 SELECT on global_grants: read is always allowed
+select count(*) > 0 as has_rows from mysql.global_grants;
+has_rows
+1
+#
+###########################################################################
+# Part D: Full exploit chain verification (end-to-end)
+###########################################################################
+#
+# Step 1: Attacker tries UPDATE PRIV → BLOCKED
+update mysql.global_grants
+set priv='SYSTEM_VARIABLES_ADMIN'
+  where user='u1' and host='%' and priv='CONNECTION_ADMIN';
+ERROR HY000: Rerserved user or privileges can't be modified
+# Step 2: Without SYSTEM_VARIABLES_ADMIN, cannot disable protection
+set global opt_enable_rds_priv_strategy=off;
+ERROR 42000: Access denied; you need (at least one of) the SUPER or SYSTEM_VARIABLES_ADMIN privilege(s) for this operation
+# Step 3: Protection still on → cannot escalate via mysql.user either
+update mysql.user set super_priv='Y' where user='u1' and host='%';
+ERROR HY000: Rerserved user or privileges can't be modified
+# Step 4: Verify final state — u1 NOT escalated
+show grants for current_user();
+Grants for u1@%
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER, CREATE ROLE, DROP ROLE ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT CONNECTION_ADMIN ON *.* TO `u1`@`%` WITH GRANT OPTION
+GRANT ALL PRIVILEGES ON `test_db`.* TO `u1`@`%`
+# Confirm no SUPER, no FILE, no SYSTEM_VARIABLES_ADMIN
+select Super_priv, File_priv from mysql.user where user='u1';
+Super_priv	File_priv
+N	N
+select priv from mysql.global_grants where user='u1';
+priv
+CONNECTION_ADMIN
+#
+###########################################################################
+# Cleanup
+###########################################################################
+#
+drop database test_db;
+drop user 'u0'@'%';
+drop user 'u1'@'%';
+set global opt_enable_rds_priv_strategy=off;

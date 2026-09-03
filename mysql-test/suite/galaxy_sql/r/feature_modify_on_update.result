@@ -1,0 +1,418 @@
+#
+# Test MODIFY_ON_UPDATE function
+#
+# -------------------------------------------------------
+# 1. Basic: UPDATE with actual change triggers MODIFY_ON_UPDATE
+# MODIFY_ON_UPDATE only applies to columns with ON UPDATE in DDL.
+# -------------------------------------------------------
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME(6) ON UPDATE CURRENT_TIMESTAMP(6)
+);
+INSERT INTO t1 VALUES (1, 100, '2020-01-01 00:00:00');
+INSERT INTO t1 VALUES (2, 200, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+UPDATE t1 SET val = 111, ts = MODIFY_ON_UPDATE(NOW(6)) WHERE id = 1;
+# Row 1: val changed, ts should be updated
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t1 WHERE id = 1;
+id	val	ts_changed
+1	111	1
+# Row 2: not touched, ts should remain
+SELECT id, val, ts FROM t1 WHERE id = 2;
+id	val	ts
+2	200	2020-01-01 00:00:00.000000
+DROP TABLE t1;
+# -------------------------------------------------------
+# 2. UPDATE without actual change: MODIFY_ON_UPDATE should NOT fire
+# -------------------------------------------------------
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t2 VALUES (1, 100, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Set val to the same value - no actual change
+UPDATE t2 SET val = 100, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+# ts should remain unchanged since val was not actually modified
+SELECT id, val, ts FROM t2 WHERE id = 1;
+id	val	ts
+1	100	2020-01-01 00:00:00
+DROP TABLE t2;
+# -------------------------------------------------------
+# 3. Multiple rows: only changed rows should be affected
+# -------------------------------------------------------
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t3 VALUES (1, 100, '2020-01-01 00:00:00');
+INSERT INTO t3 VALUES (2, 200, '2020-01-01 00:00:00');
+INSERT INTO t3 VALUES (3, 300, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Only rows where val != original should have ts updated
+UPDATE t3 SET val = val + 1, ts = MODIFY_ON_UPDATE(NOW()) WHERE id IN (1, 3);
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t3 ORDER BY id;
+id	val	ts_changed
+1	101	1
+2	200	0
+3	301	1
+DROP TABLE t3;
+# -------------------------------------------------------
+# 4. MODIFY_ON_UPDATE with explicit datetime value (not NOW())
+# -------------------------------------------------------
+CREATE TABLE t4 (
+id INT PRIMARY KEY,
+val VARCHAR(50),
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t4 VALUES (1, 'hello', '2020-01-01 00:00:00');
+# Update with actual change, MODIFY_ON_UPDATE uses a literal
+UPDATE t4 SET val = 'world', ts = MODIFY_ON_UPDATE('2025-06-15 12:00:00') WHERE id = 1;
+SELECT id, val, ts FROM t4 WHERE id = 1;
+id	val	ts
+1	world	2025-06-15 12:00:00
+# Update without actual change
+UPDATE t4 SET val = 'world', ts = MODIFY_ON_UPDATE('2099-12-31 23:59:59') WHERE id = 1;
+# ts should remain '2025-06-15 12:00:00' since val did not change
+SELECT id, val, ts FROM t4 WHERE id = 1;
+id	val	ts
+1	world	2025-06-15 12:00:00
+DROP TABLE t4;
+# -------------------------------------------------------
+# 5. MODIFY_ON_UPDATE with NULL value
+# -------------------------------------------------------
+CREATE TABLE t5 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME NULL ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t5 VALUES (1, 100, '2020-01-01 00:00:00');
+# Update with change, MODIFY_ON_UPDATE(NULL)
+UPDATE t5 SET val = 200, ts = MODIFY_ON_UPDATE(NULL) WHERE id = 1;
+# ts should be NULL since row was modified
+SELECT id, val, ts IS NULL AS ts_is_null FROM t5 WHERE id = 1;
+id	val	ts_is_null
+1	200	1
+# Reset
+UPDATE t5 SET val = 100, ts = MODIFY_ON_UPDATE('2020-01-01 00:00:00') WHERE id = 1;
+SELECT id, val, ts FROM t5 WHERE id = 1;
+id	val	ts
+1	100	2020-01-01 00:00:00
+DROP TABLE t5;
+# -------------------------------------------------------
+# 6. MODIFY_ON_UPDATE with fractional seconds precision
+# -------------------------------------------------------
+CREATE TABLE t6 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME(3) ON UPDATE CURRENT_TIMESTAMP(3)
+);
+INSERT INTO t6 VALUES (1, 100, '2020-01-01 00:00:00.000');
+SET TIMESTAMP = 1000000.123;
+UPDATE t6 SET val = 200, ts = MODIFY_ON_UPDATE(NOW(3)) WHERE id = 1;
+# ts should have fractional seconds
+SELECT id, val, MICROSECOND(ts) > 0 AS has_frac FROM t6 WHERE id = 1;
+id	val	has_frac
+1	200	1
+DROP TABLE t6;
+# -------------------------------------------------------
+# 7. Multiple MODIFY_ON_UPDATE columns in same table
+# -------------------------------------------------------
+CREATE TABLE t7 (
+id INT PRIMARY KEY,
+val INT,
+ts1 DATETIME ON UPDATE CURRENT_TIMESTAMP,
+ts2 DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t7 VALUES (1, 100, '2020-01-01 00:00:00', '2020-06-01 00:00:00');
+SET TIMESTAMP = 1000000;
+UPDATE t7 SET val = 200, ts1 = MODIFY_ON_UPDATE(NOW()), ts2 = MODIFY_ON_UPDATE('2030-01-01 00:00:00') WHERE id = 1;
+# Both ts1 and ts2 should be updated since val changed
+SELECT id, val, ts1 != '2020-01-01 00:00:00' AS ts1_changed, ts2 FROM t7 WHERE id = 1;
+id	val	ts1_changed	ts2
+1	200	1	2030-01-01 00:00:00
+# Update without change
+UPDATE t7 SET val = 200, ts1 = MODIFY_ON_UPDATE(NOW()), ts2 = MODIFY_ON_UPDATE('2099-01-01 00:00:00') WHERE id = 1;
+# Neither ts1 nor ts2 should change since val is the same
+SELECT id, val, ts2 FROM t7 WHERE id = 1;
+id	val	ts2
+1	200	2030-01-01 00:00:00
+DROP TABLE t7;
+# -------------------------------------------------------
+# 8. MODIFY_ON_UPDATE combined with ON UPDATE CURRENT_TIMESTAMP
+# -------------------------------------------------------
+CREATE TABLE t8 (
+id INT PRIMARY KEY,
+val INT,
+auto_ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+manual_ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t8 VALUES (1, 100, '2020-01-01 00:00:00', '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+UPDATE t8 SET val = 200, manual_ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+# Both auto_ts (ON UPDATE) and manual_ts (MODIFY_ON_UPDATE) should be updated
+SELECT id, val, auto_ts != '2020-01-01 00:00:00' AS auto_changed, manual_ts != '2020-01-01 00:00:00' AS manual_changed FROM t8 WHERE id = 1;
+id	val	auto_changed	manual_changed
+1	200	1	1
+DROP TABLE t8;
+# -------------------------------------------------------
+# 9. MODIFY_ON_UPDATE used as a keyword (unambiguous identifier)
+# -------------------------------------------------------
+CREATE TABLE t9 (
+modify_on_update INT,
+val INT
+);
+INSERT INTO t9 VALUES (1, 100);
+SELECT modify_on_update, val FROM t9;
+modify_on_update	val
+1	100
+DROP TABLE t9;
+# -------------------------------------------------------
+# 10. MODIFY_ON_UPDATE with expression argument
+# -------------------------------------------------------
+CREATE TABLE t10 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t10 VALUES (1, 100, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Use DATE_ADD expression inside MODIFY_ON_UPDATE
+UPDATE t10 SET val = 200, ts = MODIFY_ON_UPDATE(DATE_ADD(NOW(), INTERVAL 1 HOUR)) WHERE id = 1;
+# ts should be set to NOW() + 1 hour since row changed
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t10 WHERE id = 1;
+id	val	ts_changed
+1	200	1
+DROP TABLE t10;
+# -------------------------------------------------------
+# 11. MODIFY_ON_UPDATE in multi-table UPDATE
+# -------------------------------------------------------
+CREATE TABLE t11a (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE t11b (
+id INT PRIMARY KEY,
+ref_val INT
+);
+INSERT INTO t11a VALUES (1, 100, '2020-01-01 00:00:00');
+INSERT INTO t11b VALUES (1, 999);
+SET TIMESTAMP = 1000000;
+UPDATE t11a a JOIN t11b b ON a.id = b.id
+SET a.val = b.ref_val, a.ts = MODIFY_ON_UPDATE(NOW());
+# a.val changed from 100 to 999, so ts should be updated
+SELECT a.id, a.val, a.ts != '2020-01-01 00:00:00' AS ts_changed FROM t11a a;
+id	val	ts_changed
+1	999	1
+DROP TABLE t11a, t11b;
+# -------------------------------------------------------
+# 12. INSERT should just pass through the MODIFY_ON_UPDATE value
+# -------------------------------------------------------
+CREATE TABLE t12 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME
+);
+INSERT INTO t12 VALUES (1, 100, MODIFY_ON_UPDATE(NOW()));
+# For INSERT, MODIFY_ON_UPDATE should just evaluate and store the value
+SELECT id, val, ts IS NOT NULL AS has_ts FROM t12;
+id	val	has_ts
+1	100	1
+DROP TABLE t12;
+# -------------------------------------------------------
+# 13. MODIFY_ON_UPDATE on column WITHOUT ON UPDATE in DDL
+# After extension, MODIFY_ON_UPDATE has conditional semantics on ALL
+# column types regardless of ON UPDATE attribute. The column value is
+# only updated when other columns in the row actually change.
+# -------------------------------------------------------
+CREATE TABLE t13 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME
+);
+INSERT INTO t13 VALUES (1, 100, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Update with actual change: ts gets new value
+UPDATE t13 SET val = 111, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t13 WHERE id = 1;
+id	val	ts_changed
+1	111	1
+# Update with actual change (val 111->100): ts gets new value
+UPDATE t13 SET val = 100, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+# ts is updated because val changed from 111 to 100
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t13 WHERE id = 1;
+id	val	ts_changed
+1	100	1
+DROP TABLE t13;
+# -------------------------------------------------------
+# 14. INSERT with ON UPDATE column: MODIFY_ON_UPDATE evaluates as value
+# -------------------------------------------------------
+CREATE TABLE t14 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME(6) ON UPDATE CURRENT_TIMESTAMP(6)
+);
+SET TIMESTAMP = 1000000;
+INSERT INTO t14 (id, val, ts) VALUES (1, 100, MODIFY_ON_UPDATE(NOW(6)));
+# INSERT stores the evaluated value
+SELECT id, val, ts IS NOT NULL AS has_ts FROM t14 WHERE id = 1;
+id	val	has_ts
+1	100	1
+INSERT INTO t14 (id, val, ts) VALUES (2, 200, MODIFY_ON_UPDATE('2025-01-01 12:00:00'));
+SELECT id, val, ts FROM t14 WHERE id = 2;
+id	val	ts
+2	200	2025-01-01 12:00:00.000000
+DROP TABLE t14;
+# -------------------------------------------------------
+# 15. INSERT with BEFORE INSERT trigger (MODIFY_ON_UPDATE in values)
+# -------------------------------------------------------
+CREATE TABLE t15_main (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE t15_log (id INT AUTO_INCREMENT PRIMARY KEY, main_id INT, logged_at DATETIME);
+CREATE TRIGGER t15_bi BEFORE INSERT ON t15_main FOR EACH ROW
+INSERT INTO t15_log (main_id, logged_at) VALUES (NEW.id, NOW());
+SET TIMESTAMP = 1000000;
+INSERT INTO t15_main VALUES (1, 100, MODIFY_ON_UPDATE(NOW()));
+# Row inserted, ts should have current time; trigger logged
+SELECT id, val, ts IS NOT NULL AS has_ts FROM t15_main WHERE id = 1;
+id	val	has_ts
+1	100	1
+SELECT main_id, logged_at IS NOT NULL AS has_logged FROM t15_log;
+main_id	has_logged
+1	1
+DROP TRIGGER t15_bi;
+DROP TABLE t15_main, t15_log;
+# -------------------------------------------------------
+# 16. REPLACE: MODIFY_ON_UPDATE in REPLACE evaluates and stores
+# -------------------------------------------------------
+CREATE TABLE t16 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t16 VALUES (1, 100, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# REPLACE existing row with new val and MODIFY_ON_UPDATE(NOW())
+REPLACE INTO t16 VALUES (1, 111, MODIFY_ON_UPDATE(NOW()));
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t16 WHERE id = 1;
+id	val	ts_changed
+1	111	1
+# REPLACE new row (no existing row): just like INSERT
+REPLACE INTO t16 VALUES (2, 200, MODIFY_ON_UPDATE('2025-06-01 00:00:00'));
+SELECT id, val, ts FROM t16 WHERE id = 2;
+id	val	ts
+2	200	2025-06-01 00:00:00
+DROP TABLE t16;
+# -------------------------------------------------------
+# 17. UPSERT (INSERT ... ON DUPLICATE KEY UPDATE) with MODIFY_ON_UPDATE
+# On duplicate: UPDATE path, MODIFY_ON_UPDATE only when row changes
+# -------------------------------------------------------
+CREATE TABLE t17 (
+id INT PRIMARY KEY,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP
+);
+INSERT INTO t17 VALUES (1, 100, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Duplicate key, val changed -> ts should be updated
+INSERT INTO t17 VALUES (1, 999, MODIFY_ON_UPDATE(NOW()))
+ON DUPLICATE KEY UPDATE val = VALUES(val), ts = MODIFY_ON_UPDATE(NOW());
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t17 WHERE id = 1;
+id	val	ts_changed
+1	999	1
+# Duplicate key, val unchanged -> ts should NOT be updated
+SET TIMESTAMP = 2000000;
+INSERT INTO t17 VALUES (1, 999, MODIFY_ON_UPDATE(NOW()))
+ON DUPLICATE KEY UPDATE val = VALUES(val), ts = MODIFY_ON_UPDATE(NOW());
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t17 WHERE id = 1;
+id	val	ts_changed
+1	999	1
+# New row: INSERT path, ts gets the value
+INSERT INTO t17 VALUES (2, 200, MODIFY_ON_UPDATE('2025-01-01 00:00:00'))
+ON DUPLICATE KEY UPDATE val = VALUES(val), ts = MODIFY_ON_UPDATE(NOW());
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT id, val, ts FROM t17 WHERE id = 2;
+id	val	ts
+2	200	2025-01-01 00:00:00
+DROP TABLE t17;
+# -------------------------------------------------------
+# 18. Partitioned table: UPDATE with MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t18 (
+id INT,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP,
+PRIMARY KEY (id)
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20),
+PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+INSERT INTO t18 VALUES (1, 100, '2020-01-01 00:00:00');
+INSERT INTO t18 VALUES (11, 110, '2020-01-01 00:00:00');
+INSERT INTO t18 VALUES (25, 250, '2020-01-01 00:00:00');
+SET TIMESTAMP = 1000000;
+# Update row in p0 with actual change
+UPDATE t18 SET val = 101, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t18 WHERE id = 1;
+id	val	ts_changed
+1	101	1
+# Update row in p1 without actual change
+UPDATE t18 SET val = 110, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 11;
+SELECT id, val, ts FROM t18 WHERE id = 11;
+id	val	ts
+11	110	2020-01-01 00:00:00
+# Update row in p2 with actual change
+UPDATE t18 SET val = 251, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 25;
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t18 WHERE id = 25;
+id	val	ts_changed
+25	251	1
+DROP TABLE t18;
+# -------------------------------------------------------
+# 19. Partitioned table: INSERT and UPDATE with MODIFY_ON_UPDATE
+# -------------------------------------------------------
+CREATE TABLE t19 (
+id INT,
+val INT,
+ts DATETIME ON UPDATE CURRENT_TIMESTAMP,
+PRIMARY KEY (id)
+)
+PARTITION BY LIST (id) (
+PARTITION pa VALUES IN (1, 2, 3),
+PARTITION pb VALUES IN (4, 5, 6)
+);
+SET TIMESTAMP = 1000000;
+INSERT INTO t19 VALUES (1, 100, MODIFY_ON_UPDATE(NOW()));
+INSERT INTO t19 VALUES (4, 400, MODIFY_ON_UPDATE('2025-12-31 23:59:59'));
+SELECT id, val, ts IS NOT NULL AS has_ts FROM t19 ORDER BY id;
+id	val	has_ts
+1	100	1
+4	400	1
+# UPDATE in partition pa: actual change -> ts should be updated
+SET TIMESTAMP = 2000000;
+UPDATE t19 SET val = 101, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 1;
+SELECT id, val, ts != '2020-01-01 00:00:00' AS ts_changed FROM t19 WHERE id = 1;
+id	val	ts_changed
+1	101	1
+# UPDATE in partition pb: no actual change -> ts should remain
+UPDATE t19 SET val = 400, ts = MODIFY_ON_UPDATE(NOW()) WHERE id = 4;
+SELECT id, val, ts FROM t19 WHERE id = 4;
+id	val	ts
+4	400	2025-12-31 23:59:59
+DROP TABLE t19;
+# -------------------------------------------------------
+# End of tests
+# -------------------------------------------------------

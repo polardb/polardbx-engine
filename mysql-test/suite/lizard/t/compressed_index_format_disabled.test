@@ -1,0 +1,91 @@
+#
+# The GCS/Lizard secondary-index formats (panda / hippo / spc) and the GPP
+# (guess-primary-page) feature are NOT supported on ROW_FORMAT=COMPRESSED
+# tables. See can_panda()/can_hippo()/can_spc()/can_gpp() in
+# storage/innobase/dict/lizard0dd0policy.cc, each of which requires
+# !table->is_compressed().
+#
+# This test turns every format option ON and verifies that:
+#   * a COMPRESSED table keeps every index as a plain FIL_PAGE_INDEX with
+#     GPP_ENABLED = 0;
+#   * an otherwise identical non-compressed table DOES pick up the special
+#     formats / gpp, proving the options were actually in effect.
+#
+--source include/have_innodb_16k.inc
+
+--let $orig_panda = `SELECT @@session.opt_index_format_panda_enabled`
+--let $orig_hippo = `SELECT @@session.opt_index_format_hippo_enabled`
+--let $orig_spc = `SELECT @@session.opt_index_format_spc_enabled`
+--let $orig_gpp = `SELECT @@session.opt_index_format_gpp_enabled`
+
+--echo # Enable all secondary-index formats + gpp.
+SET SESSION opt_index_format_panda_enabled = ON;
+SET SESSION opt_index_format_hippo_enabled = ON;
+SET SESSION opt_index_format_spc_enabled = ON;
+SET SESSION opt_index_format_gpp_enabled = ON;
+
+--echo #
+--echo # 1. COMPRESSED table: every index must stay a plain INDEX, gpp disabled.
+--echo #
+CREATE TABLE t_zip (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_uk (a),
+  KEY idx_sk (b)
+) ENGINE=InnoDB ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+
+INSERT INTO t_zip VALUES (1,'aaa',10), (2,'bbb',20), (3,'ccc',30);
+
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_zip'
+  ORDER BY INDEX_NAME;
+
+--echo #
+--echo # 2. Non-compressed control table: the options are effective here.
+--echo #    (unique -> PANDA_INDEX, non-unique -> SPC_PAGE, gpp on secondaries)
+--echo #
+CREATE TABLE t_plain (
+  id INT PRIMARY KEY,
+  a  VARCHAR(100),
+  b  INT,
+  UNIQUE KEY idx_uk (a),
+  KEY idx_sk (b)
+) ENGINE=InnoDB;
+
+INSERT INTO t_plain VALUES (1,'aaa',10), (2,'bbb',20), (3,'ccc',30);
+
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_plain'
+  ORDER BY INDEX_NAME;
+
+--echo #
+--echo # 3. ALTER TABLE ... ADD INDEX on a compressed table also stays plain.
+--echo #
+ALTER TABLE t_zip ADD UNIQUE KEY idx_uk2 (b);
+ALTER TABLE t_zip ADD KEY idx_sk2 (a);
+
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_zip'
+  ORDER BY INDEX_NAME;
+
+--echo #
+--echo # 4. A table converted to COMPRESSED rebuilds indexes as plain INDEX.
+--echo #
+ALTER TABLE t_plain ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8;
+
+SELECT INDEX_NAME, GPP_ENABLED, INDEX_PAGE_TYPE
+  FROM INFORMATION_SCHEMA.INNODB_INDEX_STATUS
+  WHERE SCHEMA_NAME='test' AND TABLE_NAME='t_plain'
+  ORDER BY INDEX_NAME;
+
+DROP TABLE t_zip;
+DROP TABLE t_plain;
+
+--eval SET SESSION opt_index_format_panda_enabled = $orig_panda
+--eval SET SESSION opt_index_format_hippo_enabled = $orig_hippo
+--eval SET SESSION opt_index_format_spc_enabled = $orig_spc
+--eval SET SESSION opt_index_format_gpp_enabled = $orig_gpp

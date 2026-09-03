@@ -1,0 +1,280 @@
+#
+# Test case for POLARDBX_HASHER function with get_tmp_table_field() returning nullptr
+# This test verifies that POLARDBX_HASHER works correctly in various scenarios
+# where get_tmp_table_field() might return nullptr, such as:
+# - Multiple PREPARE/EXECUTE operations
+# - Stored procedures with cursors
+# - Views
+# - Subqueries
+# - JOINs
+# - Batch REPLACE operations
+# - Transactions
+#
+# Bug: After multiple batch REPLACE operations, POLARDBX_HASHER in WHERE clause
+#      would fail with "Incorrect arguments to polardbx_hasher" error.
+#
+
+--disable_warnings
+DROP PROCEDURE IF EXISTS test_hasher_proc;
+DROP VIEW IF EXISTS test_hasher_view;
+DROP TABLE IF EXISTS test_prepare_source;
+DROP TABLE IF EXISTS test_prepare_target;
+--enable_warnings
+
+--echo ============================================
+--echo Scenario 1: PREPARE/EXECUTE multiple times
+--echo ============================================
+
+CREATE TABLE test_prepare_source (
+  id bigint NOT NULL,
+  name varchar(50) NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+CREATE TABLE test_prepare_target (
+  id bigint NOT NULL,
+  name varchar(50) NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
+INSERT INTO test_prepare_source VALUES
+(1, 'test1'), (2, 'test2'), (3, 'test3'),
+(100, 'test100'), (200, 'test200'), (300, 'test300');
+
+--echo Preparing statement with POLARDBX_HASHER in WHERE clause
+PREPARE stmt FROM '
+  REPLACE INTO test_prepare_target (id, name)
+  SELECT id, name
+  FROM test_prepare_source FORCE INDEX (PRIMARY)
+  WHERE (id) IN (?, ?, ?)
+    AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904)
+';
+
+--echo Executing prepared statement multiple times (may trigger cleanup)
+SET @id1 = 1, @id2 = 2, @id3 = 3;
+EXECUTE stmt USING @id1, @id2, @id3;
+
+SET @id1 = 100, @id2 = 200, @id3 = 300;
+EXECUTE stmt USING @id1, @id2, @id3;
+
+SET @id1 = 1, @id2 = 2, @id3 = 3;
+EXECUTE stmt USING @id1, @id2, @id3;
+
+SET @id1 = 100, @id2 = 200, @id3 = 300;
+EXECUTE stmt USING @id1, @id2, @id3;
+
+SELECT COUNT(*) AS rows_after_prepare FROM test_prepare_target;
+
+DEALLOCATE PREPARE stmt;
+
+--echo ============================================
+--echo Scenario 2: Stored procedure with cursor
+--echo ============================================
+
+DELIMITER //;
+
+CREATE PROCEDURE test_hasher_proc(IN batch_id INT)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE v_id BIGINT;
+  DECLARE cur CURSOR FOR 
+    SELECT id FROM test_prepare_source
+    WHERE (id % 100) = batch_id
+      AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+  
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  
+  OPEN cur;
+  read_loop: LOOP
+    FETCH cur INTO v_id;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    
+    REPLACE INTO test_prepare_target (id, name)
+    SELECT id, name
+    FROM test_prepare_source FORCE INDEX (PRIMARY)
+    WHERE id = v_id
+      AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+  END LOOP;
+  CLOSE cur;
+END//
+
+DELIMITER ;//
+
+--echo Calling stored procedure multiple times
+TRUNCATE TABLE test_prepare_target;
+CALL test_hasher_proc(1);
+CALL test_hasher_proc(2);
+CALL test_hasher_proc(0);
+CALL test_hasher_proc(1);
+
+SELECT COUNT(*) AS rows_after_proc FROM test_prepare_target;
+
+--echo ============================================
+--echo Scenario 3: Using view (may trigger Item_ref)
+--echo ============================================
+
+CREATE OR REPLACE VIEW test_hasher_view AS
+SELECT id, name
+FROM test_prepare_source
+WHERE POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904;
+
+TRUNCATE TABLE test_prepare_target;
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_hasher_view
+WHERE id IN (1, 2, 3);
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_hasher_view
+WHERE id IN (100, 200, 300);
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_hasher_view
+WHERE id IN (1, 2, 3);
+
+SELECT COUNT(*) AS rows_after_view FROM test_prepare_target;
+
+--echo ============================================
+--echo Scenario 4: Subquery (most likely to trigger Item_ref)
+--echo ============================================
+
+TRUNCATE TABLE test_prepare_target;
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT s1.id, s1.name
+FROM test_prepare_source s1
+WHERE EXISTS (
+  SELECT 1
+  FROM test_prepare_source s2
+  WHERE s2.id = s1.id
+    AND POLARDBX_HASHER(s2.id) BETWEEN -9223372036854775808 AND -4611686018427387904
+)
+LIMIT 10;
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT s1.id, s1.name
+FROM test_prepare_source s1
+WHERE EXISTS (
+  SELECT 1
+  FROM test_prepare_source s2
+  WHERE s2.id = s1.id
+    AND POLARDBX_HASHER(s2.id) BETWEEN -9223372036854775808 AND -4611686018427387904
+)
+LIMIT 10;
+
+SELECT COUNT(*) AS rows_after_subquery FROM test_prepare_target;
+
+--echo ============================================
+--echo Scenario 5: JOIN with POLARDBX_HASHER
+--echo ============================================
+
+TRUNCATE TABLE test_prepare_target;
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT s1.id, s1.name
+FROM test_prepare_source s1
+JOIN test_prepare_source s2 ON s1.id = s2.id
+WHERE POLARDBX_HASHER(s1.id) BETWEEN -9223372036854775808 AND -4611686018427387904
+LIMIT 10;
+
+REPLACE INTO test_prepare_target (id, name)
+SELECT s1.id, s1.name
+FROM test_prepare_source s1
+JOIN test_prepare_source s2 ON s1.id = s2.id
+WHERE POLARDBX_HASHER(s1.id) BETWEEN -9223372036854775808 AND -4611686018427387904
+LIMIT 10;
+
+SELECT COUNT(*) AS rows_after_join FROM test_prepare_target;
+
+--echo ============================================
+--echo Scenario 6: Multiple batch REPLACE (original bug scenario)
+--echo ============================================
+
+TRUNCATE TABLE test_prepare_target;
+
+--echo Batch 1
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (1, 2, 3)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+
+--echo Batch 2
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (100, 200, 300)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+
+--echo Batch 3 - Repeat Batch 1 (may trigger cleanup)
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (1, 2, 3)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+
+--echo Batch 4
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (100, 200, 300)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+
+--echo Batch 5 - Repeat again (more likely to trigger issue)
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (1, 2, 3)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+
+SELECT COUNT(*) AS rows_after_batch FROM test_prepare_target;
+
+--echo ============================================
+--echo Scenario 7: Multiple transactions
+--echo ============================================
+
+TRUNCATE TABLE test_prepare_target;
+
+START TRANSACTION;
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (1, 2, 3)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+COMMIT;
+
+START TRANSACTION;
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (100, 200, 300)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+COMMIT;
+
+START TRANSACTION;
+REPLACE INTO test_prepare_target (id, name)
+SELECT id, name
+FROM test_prepare_source FORCE INDEX (PRIMARY)
+WHERE (id) IN (1, 2, 3)
+  AND (POLARDBX_HASHER(id) BETWEEN -9223372036854775808 AND -4611686018427387904);
+COMMIT;
+
+SELECT COUNT(*) AS rows_after_transaction FROM test_prepare_target;
+
+--echo ============================================
+--echo Cleanup
+--echo ============================================
+
+DROP PROCEDURE IF EXISTS test_hasher_proc;
+DROP VIEW IF EXISTS test_hasher_view;
+DROP TABLE IF EXISTS test_prepare_source;
+DROP TABLE IF EXISTS test_prepare_target;
+
+--echo All test scenarios completed successfully!
+
+

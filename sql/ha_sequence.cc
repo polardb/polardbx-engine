@@ -1205,7 +1205,7 @@ int ha_sequence::rnd_end() {
 int ha_sequence::rnd_pos(uchar *buf, uchar *pos) {
   DBUG_ENTER("ha_sequence::rnd_pos");
   assert(m_file);
-  DBUG_RETURN(m_file->ha_rnd_pos(buf, pos));
+  DBUG_RETURN(m_file->ha_rnd_pos(buf, pos, komodo::GM_NONE));
 }
 
 void ha_sequence::position(const uchar *record) {

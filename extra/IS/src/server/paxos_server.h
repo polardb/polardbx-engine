@@ -98,7 +98,7 @@ private:
  * @brief
  *
  **/
-class LocalServer : public Server {
+class LocalServer final : public Server {
  public:
   LocalServer(uint64_t serverId);
   ~LocalServer() override = default;
@@ -128,25 +128,13 @@ class LocalServer : public Server {
   virtual void writeCacheLogDone();
   uint64_t writeLogDoneInternal(uint64_t logIndex, bool forceSend = false);
 
+  uint64_t syncLogDone(uint64_t logIndex);
+  void setLastNonCommitDepIndex(uint64_t logIndex);
+  
   std::atomic<uint64_t> lastSyncedIndex;
   /* for logType node, try more times for electionWeightAction */
   bool logType;
   uint64_t cidx;
-
-}; /* end of class LocalServer */
-
-/**
- * @class AliSQLServer
- *
- * @brief
- *
- **/
-class AliSQLServer : public LocalServer {
- public:
-  explicit AliSQLServer(uint64_t serverIdParam) : LocalServer(serverIdParam) {}
-  ~AliSQLServer() override = default;
-  uint64_t writeLogDone(uint64_t logIndex) override;
-  void setLastNonCommitDepIndex(uint64_t logIndex);
 
 }; /* end of class LocalServer */
 
@@ -253,12 +241,9 @@ class SendMsgTask {
   PaxosMsg *msg;
   std::shared_ptr<RemoteServer> server;
   bool force;
-  SendMsgTask(PaxosMsg *m, std::shared_ptr<RemoteServer> s, bool f)
-      : msg(m), server(std::move(s)), force(f) {}
-  ~SendMsgTask() {
-    delete msg;
-    msg = nullptr;
-  }
+  SendMsgTask(PaxosMsg &m, std::shared_ptr<RemoteServer> s, bool f);
+  ~SendMsgTask();
+
   bool merge(const SendMsgTask *task) const {
     assert(server == task->server);
     // assert(msg->msgtype() == Paxos::AppendLog);

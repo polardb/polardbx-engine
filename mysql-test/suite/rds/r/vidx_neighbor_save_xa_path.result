@@ -1,0 +1,38 @@
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+v VECTOR(8),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# XA 2PC: INSERT + UPDATE inside one XA, prepare + commit.
+XA START 'neighbor_save_xa_1';
+INSERT INTO t1(id, v) VALUES (101, VEC_FROMTEXT("[101,101,101,101,101,101,101,101]"));
+INSERT INTO t1(id, v) VALUES (102, VEC_FROMTEXT("[102,102,102,102,102,102,102,102]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[71,71,71,71,71,71,71,71]") WHERE id = 7;
+UPDATE t1 SET v = VEC_FROMTEXT("[91,91,91,91,91,91,91,91]") WHERE id = 9;
+XA END 'neighbor_save_xa_1';
+XA PREPARE 'neighbor_save_xa_1';
+XA COMMIT 'neighbor_save_xa_1';
+# XA 1PC: INSERT + UPDATE one-phase commit.
+XA START 'neighbor_save_xa_2';
+INSERT INTO t1(id, v) VALUES (103, VEC_FROMTEXT("[103,103,103,103,103,103,103,103]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[12,12,12,12,12,12,12,12]") WHERE id = 1;
+XA END 'neighbor_save_xa_2';
+XA COMMIT 'neighbor_save_xa_2' ONE PHASE;
+# XA prepare + rollback (aux must stay consistent).
+XA START 'neighbor_save_xa_3';
+INSERT INTO t1(id, v) VALUES (104, VEC_FROMTEXT("[104,104,104,104,104,104,104,104]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[15,15,15,15,15,15,15,15]") WHERE id = 5;
+XA END 'neighbor_save_xa_3';
+XA PREPARE 'neighbor_save_xa_3';
+XA ROLLBACK 'neighbor_save_xa_3';
+# Drive a second wave of XA UPDATEs to keep save_neighbors_only firing.
+== save_neighbors_only XA-path deltas:
+neighbor_save_count_gt_0=1
+save_retry_dup_key_eq_0=1
+indep_dml_commit_error_eq_0=1
+xa_rollback_id104_remaining=0
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

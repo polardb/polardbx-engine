@@ -31,7 +31,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 #include <functional>
 
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #include "lizard0sample.h"
+#include "my_sys.h"
+
 #include "raii/sentry.h"
 
 namespace lizard {
@@ -85,9 +89,9 @@ dberr_t Sampler::init(trx_t *trx, dict_index_t *index,
 }
 
 bool Sampler::skip() {
-  if (m_sampling_percentage == 0.00) {
+  if (m_sampling_percentage <= 0.0) {
     return (true);
-  } else if (m_sampling_percentage == 100.00) {
+  } else if (m_sampling_percentage >= 100.0) {
     return (false);
   }
 
@@ -164,20 +168,14 @@ void RecordSampler::open_at_index_left_side() {
 dberr_t RecordSampler::next(uchar *mysql_buf) {
   mtr_t mtr;
   dberr_t moved;
-  const rec_t *rec;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  mem_heap_t *offset_heap = nullptr;
 
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   mtr_start(&mtr);
 
-  raii::Sentry<> guard([this, &mtr, &offset_heap] {
+  raii::Sentry<> guard([this, &mtr] {
     m_leaf_pcur.store_position(&mtr);
-    if (offset_heap) {
-      mem_heap_free(offset_heap);
-    }
     mtr_commit(&mtr);
   });
 
@@ -196,13 +194,11 @@ next_rec:
   }
   ut_ad(m_leaf_pcur.is_on_user_rec());
 
-  rec = m_leaf_pcur.get_rec();
-  offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &offset_heap);
+  slc = sctx.get_offsets(m_leaf_pcur.get_reg(), m_index, ULINT_UNDEFINED);
 
-  if (!row_sel_store_mysql_rec(mysql_buf, m_prebuilt, rec, nullptr, true,
-                               m_index, m_prebuilt->index, offsets, false,
-                               nullptr, m_prebuilt->blob_heap)) {
+  if (!row_sel_store_mysql_rec(mysql_buf, m_prebuilt, slc, nullptr, true,
+                               m_index, m_prebuilt->index, false, nullptr,
+                               m_prebuilt->blob_heap)) {
     /** Currently, only the blob fields in the intermediate state are seen,
         will come into here */
     goto next_rec;
@@ -236,23 +232,16 @@ class SamplePageCursor {
   }
 
   void open(btr_pcur_t *father) {
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *node_ptr_offsets = offsets_;
+    creg_t node_ptr = page_cur_get_reg(father->get_page_cur());
 
-    mem_heap_t *heap = nullptr;
-
-    rec_offs_init(offsets_);
-    const rec_t *node_ptr = page_cur_get_rec(father->get_page_cur());
-    node_ptr_offsets =
-        rec_get_offsets(node_ptr, m_index, node_ptr_offsets, ULINT_UNDEFINED,
-                        UT_LOCATION_HERE, &heap);
+    Slice_ctx sctx;
+    Slice *slc = sctx.get_offsets(node_ptr, m_index, ULINT_UNDEFINED);
 
     ut_a(is_after_last_on_page());
 
     mtr_start(&m_mtr);
 
-    m_block = btr_node_ptr_get_child(node_ptr, m_index, node_ptr_offsets,
-                                     &m_mtr, RW_S_LATCH);
+    m_block = btr_node_ptr_get_child(slc, m_index, &m_mtr, RW_S_LATCH);
 
     page_cur_set_before_first(m_block, &m_cur);
 
@@ -261,34 +250,21 @@ class SamplePageCursor {
     /** At least an element. */
     ut_a(!page_cur_is_after_last(&m_cur));
     m_is_after_last_on_page = false;
-
-    if (heap) {
-      mem_heap_free(heap);
-    }
   }
 
   bool fetch_next_rec(uchar *buf) {
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
-    rec_offs_init(offsets_);
-    mem_heap_t *heap = nullptr;
+    Slice_ctx sctx;
+    Slice *slc = nullptr;
+    slc = sctx.get_offsets(page_cur_get_reg(&m_cur), m_index, ULINT_UNDEFINED);
 
-    const rec_t *rec = page_cur_get_rec(&m_cur);
-    offsets = rec_get_offsets(rec, m_index, offsets, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
-
-    bool success = row_sel_store_mysql_rec(
-        buf, m_prebuilt, rec, nullptr, true, m_index, m_prebuilt->index,
-        offsets, false, nullptr, m_prebuilt->blob_heap);
+    bool success = row_sel_store_mysql_rec(buf, m_prebuilt, slc, nullptr, true,
+                                           m_index, m_prebuilt->index, false,
+                                           nullptr, m_prebuilt->blob_heap);
 
     page_cur_move_to_next(&m_cur);
 
     if (page_cur_is_after_last(&m_cur)) {
       exhausted_records();
-    }
-
-    if (heap) {
-      mem_heap_free(heap);
     }
 
     return success;
@@ -365,7 +341,14 @@ class SamplePCursorNonLeaf {
   @param[in]  mtr
   @return false if cannot restored because dwarf tree, or is
                 btr_pcur_is_after_last_in_tree.
-          true if restored successfully. */
+          true if restored successfully.
+  @note The two false cases leave m_pcur in different states, and callers must
+        not treat them alike. On the dwarf tree case m_pcur is never
+        repositioned, so it is neither positioned nor latched within mtr and
+        still holds raw block/rec pointers left over from the previous,
+        already committed mtr; calling store_position() on it would read a page
+        this mtr does not hold. On the after-last-in-tree case m_pcur is both
+        positioned and latched. */
   bool restore_position(mtr_t *mtr) {
     constexpr auto MODE = BTR_SEARCH_LEAF;
     const auto relative = m_pcur.m_rel_pos;
@@ -374,6 +357,9 @@ class SamplePCursorNonLeaf {
                                     MTR_MEMO_SX_LOCK));
     ut_ad(m_pcur.m_read_level >= 1);
 
+    /** The tree has shrunk below our read level, so the page we were
+    positioned on no longer exists at that level. Bail out before touching
+    m_pcur: it is still pointing into the previous, already committed mtr. */
     if (btr_height_get(m_index, mtr) < m_pcur.m_read_level) {
       return false;
     }
@@ -409,6 +395,8 @@ class SamplePCursorNonLeaf {
       case BTR_PCUR_UNSET:
         break;
     }
+    /** Positioned and latched within mtr from here on, so false below only
+    means the cursor ran past the last record of the tree. */
     return !m_pcur.is_after_last_in_tree(mtr);
   }
 
@@ -512,12 +500,13 @@ dberr_t BlockSampler::fetch_next_leaf_node() {
     return DB_END_OF_INDEX;
   }
 
-  mtr_start(&mtr);
+  /** Neither a page latch nor an active mtr is held at this point: m_leaf_cur
+  has already committed its own mtr in exhausted_records() before we get here.
+  Parking a thread on this sync point therefore blocks no purge activity, which
+  is what lets a test shrink the tree behind our back. */
+  DEBUG_SYNC_C("polarx_sample_before_fetch_next_leaf_node");
 
-  raii::Sentry<> guard([this, &mtr] {
-    m_node_pcur.store_position(&mtr);
-    mtr_commit(&mtr);
-  });
+  mtr_start(&mtr);
 
   /** 1. Latch SX on the index. */
   mtr_sx_lock(dict_index_get_lock(m_index), &mtr, UT_LOCATION_HERE);
@@ -525,9 +514,25 @@ dberr_t BlockSampler::fetch_next_leaf_node() {
   /** 2. restore position. */
   if (!m_node_pcur.restore_position(&mtr)) {
     /** Found a drawf tree, or is btr_pcur_is_after_last_in_tree.() */
+    /** On the dwarf tree case m_node_pcur was never repositioned within this
+    mtr, so exhausted_tree_records() must be given nullptr rather than &mtr:
+    its is_after_last_in_tree() assertion would dereference a stale page. The
+    mtr is committed by hand here as well, because the Sentry below must not be
+    hoisted above this branch, or it would call store_position() on that same
+    unpositioned, unlatched cursor. */
     m_node_pcur.exhausted_tree_records(nullptr);
+    mtr_commit(&mtr);
     return DB_END_OF_INDEX;
   }
+
+  /** Restore position successfully, so m_node_pcur is positioned and latched
+  within this mtr from here on. That is exactly the precondition
+  btr_pcur_t::store_position() requires, hence the Sentry is installed only
+  now, not around the whole mtr. */
+  raii::Sentry<> guard([this, &mtr] {
+    m_node_pcur.store_position(&mtr);
+    mtr_commit(&mtr);
+  });
 
   /** 3. Now position at a uncheck-skip and unopened user record. Check skip()
   and open the leaf cursor, and latch S on it in an independent mtr. */

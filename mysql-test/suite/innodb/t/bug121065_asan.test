@@ -1,0 +1,67 @@
+# Bug #121065 / Bug #117135: ROW_T_DELETE must not deserialize a record
+# after its PRIMARY KEY extra-info prefix has crossed a row-log block.
+#
+# This testcase is deliberately byte-oriented.  All DELETE log records have
+# the same size (the VARCHAR primary-key value is always 32 bytes), while the
+# row-log block size is the prime 65537.  With 65536 records, block cuts cover
+# every record offset except at most one.  The vulnerable window is the
+# non-empty prefix between the ROW_T_DELETE header and the serialized record.
+#
+# DEBUG_SYNC parks OPTIMIZE after the scan and before row_log_table_apply(), so
+# the complete DELETE stream is present before the parser starts consuming it.
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/count_sessions.inc
+
+SELECT @@innodb_sort_buffer_size;
+
+CREATE TABLE t1 (
+  id INT NOT NULL,
+  k1 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+  k2 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+  k3 VARCHAR(32) CHARACTER SET latin1 NOT NULL,
+  c INT NOT NULL,
+  PRIMARY KEY (id, k1, k2, k3)
+) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, REPEAT('a', 32), REPEAT('b', 32),
+                       REPEAT('c', 32), 1);
+
+# 65536 rows, all with identical serialized size.
+--disable_query_log
+let $n = 1;
+while ($n < 65536)
+{
+  eval INSERT INTO t1 (id, k1, k2, k3, c)
+       SELECT id + $n, k1, k2, k3, c FROM t1;
+  let $n = `SELECT $n * 2`;
+}
+--enable_query_log
+SELECT COUNT(*) FROM t1;
+
+connect (ddl,localhost,root,,);
+connect (dml,localhost,root,,);
+
+connection ddl;
+SET debug_sync = 'alter_table_update_log SIGNAL scan_done WAIT_FOR log_filled';
+--send OPTIMIZE TABLE t1
+
+connection dml;
+SET debug_sync = 'now WAIT_FOR scan_done';
+--disable_query_log
+DELETE FROM t1;
+--enable_query_log
+SET debug_sync = 'now SIGNAL log_filled';
+
+connection ddl;
+--reap
+disconnect ddl;
+
+connection dml;
+disconnect dml;
+
+connection default;
+SET debug_sync = 'RESET';
+DROP TABLE t1;
+--source include/wait_until_count_sessions.inc

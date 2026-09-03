@@ -40,6 +40,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0chkp.h"
 #include "mach0data.h"
 #include "que0que.h"
+#include "rem0types.h"
 #include "row0log.h"
 #include "row0row.h"
 #include "row0umod.h"
@@ -62,6 +63,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "lizard0row0vers.h"
 #include "lizard0trx0rec.h"
 #include "lizard0undo.h"
+#include "lizard0row0lotus.h"
 
 /* Considerations on undoing a modify operation.
 (1) Undoing a delete marking: all index records should be found. Some of
@@ -90,11 +92,11 @@ introduced where a call to log_free_check() is bypassed. */
 /** Undoes a modify in a clustered index record.
  @return DB_SUCCESS, DB_FAIL, or error code: we may run out of file space */
 [[nodiscard]] static dberr_t row_undo_mod_clust_low(
-    undo_node_t *node, /*!< in: row undo node */
-    ulint **offsets,   /*!< out: rec_get_offsets() on the record */
-    mem_heap_t **offsets_heap,
-    /*!< in/out: memory heap that can be emptied */
-    mem_heap_t *heap, /*!< in/out: memory heap */
+    undo_node_t *node,         /*!< in: row undo node */
+    Slice **slc,               /*!< out: rec_get_offsets() on the record */
+    Slice_ctx *sctx,           /*!< in: slice context. */
+    mem_heap_t **offsets_heap, /*!< in/out: memory heap that can be emptied */
+    mem_heap_t *heap,          /*!< in/out: memory heap */
     const dtuple_t **rebuilt_old_pk,
     /*!< out: row_log_table_get_pk()
     before the update, or NULL if
@@ -127,12 +129,14 @@ introduced where a call to log_free_check() is bypassed. */
       pcur->restore_position(mode, mtr, UT_LOCATION_HERE);
 
   ut_ad(success);
-  ut_ad(rec_get_trx_id(btr_cur_get_rec(btr_cur), btr_cur->index) ==
+  ut_ad(rec_get_trx_id(btr_cur_get_reg(btr_cur), btr_cur->index) ==
         thr_get_trx(thr)->id);
 
   if (mode != BTR_MODIFY_LEAF && dict_index_is_online_ddl(btr_cur->index)) {
-    *rebuilt_old_pk = row_log_table_get_pk(btr_cur_get_rec(btr_cur),
-                                           btr_cur->index, nullptr, sys, &heap);
+    *rebuilt_old_pk = row_log_table_get_pk(
+        Slice_ctx().get_offsets(btr_cur_get_reg(btr_cur), btr_cur->index,
+                                ULINT_UNDEFINED),
+        btr_cur->index, sys, &heap);
   } else {
     *rebuilt_old_pk = nullptr;
   }
@@ -148,7 +152,7 @@ introduced where a call to log_free_check() is bypassed. */
 
     err = btr_cur_optimistic_update(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG |
                                         BTR_KEEP_SYS_FLAG | BTR_KEEP_POS_FLAG,
-                                    layout, btr_cur, offsets, offsets_heap,
+                                    layout, btr_cur, slc, sctx, offsets_heap,
                                     node->update, node->cmpl_info, thr,
                                     thr_get_trx(thr)->id, mtr);
   } else {
@@ -157,7 +161,7 @@ introduced where a call to log_free_check() is bypassed. */
     err = btr_cur_pessimistic_update(
         BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG | BTR_KEEP_SYS_FLAG |
             BTR_KEEP_POS_FLAG,
-        layout, btr_cur, offsets, offsets_heap, heap, &dummy_big_rec,
+        layout, btr_cur, slc, sctx, offsets_heap, heap, &dummy_big_rec,
         node->update, node->cmpl_info, thr, thr_get_trx(thr)->id, node->undo_no,
         mtr, pcur);
 
@@ -168,9 +172,9 @@ introduced where a call to log_free_check() is bypassed. */
       ut_a(err == DB_SUCCESS);
 
       DEBUG_SYNC_C("before_row_upd_extern");
-      err = lob::btr_store_big_rec_extern_fields(trx, pcur, node->update,
-                                                 *offsets, dummy_big_rec, mtr,
-                                                 lob::OPCODE_UPDATE);
+      err = lob::btr_store_big_rec_extern_fields(
+          trx, pcur, node->update, dynamic_cast<DSlice *>(*slc), dummy_big_rec,
+          mtr, lob::OPCODE_UPDATE);
       DEBUG_SYNC_C("after_row_upd_extern");
       mem_heap_free(dummy_big_rec->heap);
     }
@@ -210,22 +214,21 @@ introduced where a call to log_free_check() is bypassed. */
   trx_id_offset = btr_cur->index->trx_id_offset;
 
   if (!trx_id_offset) {
-    mem_heap_t *heap = nullptr;
     ulint trx_id_col;
-    const ulint *offsets;
+    Slice_ctx sctx;
+    const Slice *slc = nullptr;
     ulint len;
 
     trx_id_col = btr_cur->index->get_sys_col_pos(DATA_TRX_ID);
     ut_ad(trx_id_col > 0);
     ut_ad(trx_id_col != ULINT_UNDEFINED);
 
-    offsets = rec_get_offsets(btr_cur_get_rec(btr_cur), btr_cur->index, nullptr,
-                              trx_id_col + 1, UT_LOCATION_HERE, &heap);
+    slc = sctx.get_offsets(btr_cur_get_reg(btr_cur), btr_cur->index,
+                           trx_id_col + 1);
 
     /* nullptr for index as trx_id_col is physical here */
-    trx_id_offset = rec_get_nth_field_offs(nullptr, offsets, trx_id_col, &len);
+    trx_id_offset = slc->get_nth_sys_field_offs(DATA_TRX_ID, trx_id_col, &len);
     ut_ad(len == DATA_TRX_ID_LEN);
-    mem_heap_free(heap);
   }
 
   if (trx_read_trx_id(btr_cur_get_rec(btr_cur) + trx_id_offset) !=
@@ -298,7 +301,8 @@ introduced where a call to log_free_check() is bypassed. */
 
   mem_heap_t *heap = mem_heap_create(1024, UT_LOCATION_HERE);
   mem_heap_t *offsets_heap = nullptr;
-  ulint *offsets = nullptr;
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   const dtuple_t *rebuilt_old_pk;
   byte sys[DATA_TRX_ID_LEN + DATA_ROLL_PTR_LEN];
 
@@ -306,7 +310,7 @@ introduced where a call to log_free_check() is bypassed. */
   the index page */
 
   err = row_undo_mod_clust_low(
-      node, &offsets, &offsets_heap, heap, &rebuilt_old_pk, sys, thr, &mtr,
+      node, &slc, &sctx, &offsets_heap, heap, &rebuilt_old_pk, sys, thr, &mtr,
       online ? BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED : BTR_MODIFY_LEAF);
 
   if (err != DB_SUCCESS) {
@@ -319,7 +323,7 @@ introduced where a call to log_free_check() is bypassed. */
 
     dict_disable_redo_if_temporary(index->table, &mtr);
 
-    err = row_undo_mod_clust_low(node, &offsets, &offsets_heap, heap,
+    err = row_undo_mod_clust_low(node, &slc, &sctx, &offsets_heap, heap,
                                  &rebuilt_old_pk, sys, thr, &mtr,
                                  BTR_MODIFY_TREE);
     ut_ad(err == DB_SUCCESS || err == DB_OUT_OF_FILE_SPACE);
@@ -333,16 +337,17 @@ introduced where a call to log_free_check() is bypassed. */
     ut_ad(rw_lock_own_flagged(
         &index->lock, RW_LOCK_FLAG_S | RW_LOCK_FLAG_X | RW_LOCK_FLAG_SX));
 
+    ut_ad(slc->is_positioned(pcur->get_rec(), index));
     switch (node->rec_type) {
       case TRX_UNDO_DEL_MARK_REC:
-        row_log_table_insert(pcur->get_rec(), node->row, index, offsets);
+        row_log_table_insert(slc, node->row, index);
         break;
       case TRX_UNDO_UPD_EXIST_REC:
-        row_log_table_update(pcur->get_rec(), index, offsets, rebuilt_old_pk,
-                             node->undo_row, node->row);
+        row_log_table_update(slc, index, rebuilt_old_pk, node->undo_row,
+                             node->row);
         break;
       case TRX_UNDO_UPD_DEL_REC:
-        row_log_table_delete(pcur->get_rec(), node->row, index, offsets, sys);
+        row_log_table_delete(slc, node->row, index, sys);
         break;
       default:
         ut_d(ut_error);
@@ -350,7 +355,7 @@ introduced where a call to log_free_check() is bypassed. */
     }
   }
 
-  ut_ad(rec_get_trx_id(pcur->get_rec(), index) == node->new_trx_id);
+  ut_ad(rec_get_trx_id(pcur->get_reg(), index) == node->new_trx_id);
 
   pcur->commit_specify_mtr(&mtr);
 
@@ -415,6 +420,7 @@ introduced where a call to log_free_check() is bypassed. */
   ulint rec_deleted;
   bool success;
   bool old_has;
+  trx_id_t rec_tid = (index->is_hippo() ? 0 : thr_get_trx(thr)->id);
 
   log_free_check();
 
@@ -503,14 +509,17 @@ introduced where a call to log_free_check() is bypassed. */
       node->pcur.restore_position(BTR_SEARCH_LEAF, &mtr_vers, UT_LOCATION_HERE);
   ut_a(success);
 
-  old_has = row_vers_old_has_index_entry(false, node->pcur.get_rec(), &mtr_vers,
-                                         index, entry, 0, 0);
+  old_has = row_vers_old_has_index_entry(false, node->pcur.get_creg(),
+                                         &mtr_vers, index, entry, 0, 0);
   if (old_has) {
     const txn_layout_t layout = lizard::dict_index_txn_layout(index);
-    ut_ad(layout == TL_NONE);
-    err =
-        btr_cur_del_mark_set_sec_rec(BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG,
-                                     layout, btr_cur, true, thr, &mtr);
+    ut_ad(layout == TL_NONE || layout == TL_LOTUS);
+    /** When rolling back a modification to a secondary index that includes
+     * the transaction ID (tid) column, the tid value stored in the thr is not
+     * accurate. To ensure correctness, we set tid to a special value 0. */
+    err = btr_cur_del_mark_set_sec_rec_func(
+        BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG, layout, btr_cur, true, thr,
+        rec_tid, &mtr);
     ut_ad(err == DB_SUCCESS);
   } else {
     /* Remove the index record */
@@ -607,11 +616,13 @@ func_exit_no_pcur:
   big_rec_t *dummy_big_rec;
   mtr_t mtr;
   trx_t *trx = thr_get_trx(thr);
-  const ulint flags = BTR_KEEP_SYS_FLAG | BTR_NO_LOCKING_FLAG;
+  ulint flags = BTR_NO_LOCKING_FLAG;
+  flags |= (index->is_hippo() ? 0 : BTR_KEEP_SYS_FLAG);
   const txn_layout_t layout = lizard::dict_index_txn_layout(index);
-  ut_ad(layout == TL_NONE);
+  ut_ad(layout == TL_NONE || layout == TL_LOTUS);
   row_search_result search_result;
   ulint orig_mode = mode;
+  trx_id_t rec_tid = (index->is_hippo() ? 0 : trx->id);
 
   ut_ad(trx->id != 0);
 
@@ -660,14 +671,14 @@ try_again:
   switch (search_result) {
     mem_heap_t *heap;
     mem_heap_t *offsets_heap;
-    ulint *offsets;
+
     case ROW_BUFFERED:
     case ROW_NOT_DELETED_REF:
       /* These are invalid outcomes, because the mode passed
       to row_search_index_entry() did not include any of the
       flags BTR_INSERT, BTR_DELETE, or BTR_DELETE_MARK. */
       ut_error;
-    case ROW_NOT_FOUND:
+    case ROW_NOT_FOUND: {
       /* For spatial index, if first search didn't find an
       undel-marked rec, try to find a del-marked rec. */
       if (dict_index_is_spatial(index) && btr_cur->rtr_info->fd_del) {
@@ -694,7 +705,7 @@ try_again:
             << " was not found on rollback, trying to"
                " insert: "
             << *entry
-            << " at: " << rec_index_print(btr_cur_get_rec(btr_cur), index);
+            << " at: " << rec_index_print(btr_cur_get_reg(btr_cur), index);
       }
 
       if ((btr_cur->up_match >= dict_index_get_n_unique(index) ||
@@ -724,24 +735,28 @@ try_again:
       /* Insert the missing record that we were trying to
       delete-unmark. */
       big_rec_t *big_rec;
-      rec_t *insert_rec;
-      offsets = nullptr;
       offsets_heap = nullptr;
+      Slice_ctx sctx;
+      Slice *slc;
+      slc = sctx.reset_slice();
 
-      err = btr_cur_optimistic_insert(flags, layout, btr_cur, &offsets, &offsets_heap,
-                                      entry, &insert_rec, &big_rec, thr, &mtr);
+      err =
+          btr_cur_optimistic_insert(flags, layout, btr_cur, &slc, &sctx,
+                                    &offsets_heap, entry, &big_rec, thr, &mtr);
       ut_ad(!big_rec);
 
       if (err == DB_FAIL && mode == BTR_MODIFY_TREE) {
-        err = btr_cur_pessimistic_insert(flags, layout, btr_cur, &offsets,
-                                         &offsets_heap, entry, &insert_rec,
-                                         &big_rec, thr, &mtr);
+        err = btr_cur_pessimistic_insert(flags, layout, btr_cur, &slc, &sctx,
+                                         &offsets_heap, entry, &big_rec, thr,
+                                         &mtr);
         /* There are no off-page columns in
         secondary indexes. */
         ut_ad(!big_rec);
       }
 
       if (err == DB_SUCCESS) {
+        /* ROLLBACK: inserted record should have trx_id = 0 */
+        HIPPO_ASSERT_TID_ROLLBACK_REC(index, slc);
         page_update_max_trx_id(btr_cur_get_block(btr_cur),
                                btr_cur_get_page_zip(btr_cur), trx->id, &mtr);
       }
@@ -751,21 +766,26 @@ try_again:
       }
 
       break;
-    case ROW_FOUND:
-      err = btr_cur_del_mark_set_sec_rec(
+    }
+    case ROW_FOUND: {
+      /** When rolling back a modification to a secondary index that includes
+       * the transaction ID (tid) column, the tid value stored in the thr is not
+       * accurate. To ensure correctness, we set tid to a special value 0. */
+      err = btr_cur_del_mark_set_sec_rec_func(
           BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG, layout, btr_cur, false,
-          thr, &mtr);
+          thr, rec_tid, &mtr);
 
       ut_a(err == DB_SUCCESS);
       heap = mem_heap_create(
           sizeof(upd_t) + dtuple_get_n_fields(entry) * sizeof(upd_field_t),
           UT_LOCATION_HERE);
       offsets_heap = nullptr;
-      offsets =
-          rec_get_offsets(btr_cur_get_rec(btr_cur), index, nullptr,
-                          ULINT_UNDEFINED, UT_LOCATION_HERE, &offsets_heap);
-      update = row_upd_build_sec_rec_difference_binary(
-          btr_cur_get_rec(btr_cur), index, offsets, entry, heap);
+      Slice_ctx sctx;
+      Slice *slc;
+      slc = sctx.reset_slice();
+      slc = sctx.get_offsets(btr_cur_get_reg(btr_cur), index, ULINT_UNDEFINED);
+      update = row_upd_build_sec_rec_difference_binary((const Slice *)slc,
+                                                       index, entry, heap);
       if (upd_get_n_fields(update) == 0) {
         /* Do nothing */
 
@@ -774,9 +794,13 @@ try_again:
         changes within the page */
 
         /* TODO: pass offsets, not &offsets */
-        err = btr_cur_optimistic_update(flags, layout, btr_cur, &offsets,
-                                        &offsets_heap, update, 0, thr,
-                                        thr_get_trx(thr)->id, &mtr);
+        /** When rolling back a modification to a secondary index that includes
+         * the transaction ID (tid) column, the tid value stored in the thr is
+         * not accurate. To ensure correctness, we set it to a special value 0.
+         */
+        err = btr_cur_optimistic_update(flags, layout, btr_cur, &slc, &sctx,
+                                        &offsets_heap, update, 0, thr, rec_tid,
+                                        &mtr);
         switch (err) {
           case DB_OVERFLOW:
           case DB_UNDERFLOW:
@@ -786,15 +810,17 @@ try_again:
             break;
         }
       } else {
-        err = btr_cur_pessimistic_update(flags, layout, btr_cur, &offsets,
-                                         &offsets_heap, heap, &dummy_big_rec,
-                                         update, 0, thr, thr_get_trx(thr)->id,
-                                         undo_no, &mtr);
+        err = btr_cur_pessimistic_update(
+            flags, layout, btr_cur, &slc, &sctx, &offsets_heap, heap,
+            &dummy_big_rec, update, 0, thr, rec_tid, undo_no, &mtr);
         ut_a(!dummy_big_rec);
       }
 
       mem_heap_free(heap);
-      mem_heap_free(offsets_heap);
+      if (offsets_heap) {
+        mem_heap_free(offsets_heap);
+      }
+    }
   }
 
   pcur.close();
@@ -933,6 +959,14 @@ This is the specific function to handle the modify on multi-value indexes.
       transactions. */
       ut_a(thr_is_recv(thr));
     } else {
+      /* For hippo secondary index with trx_id system column, we need to set
+      the trx_id field to 0 during rollback because the correct previous
+      transaction ID is not available in the undo log. This is a special
+      placeholder value that will be handled appropriately. */
+      lizard::row_upd_index_entry_lotus_field_in_rollback(index, entry, heap);
+      ut_ad(node->row->get_trx_id() != 0);
+      HIPPO_ASSERT_TID_ROLLBACK_ENTRY(index, entry);
+
       err = row_undo_mod_del_mark_or_remove_sec(node, thr, index, entry);
 
       if (UNIV_UNLIKELY(err != DB_SUCCESS)) {
@@ -1034,6 +1068,14 @@ This is the specific function to handle the modify on multi-value indexes.
     entry = row_build_index_entry(node->row, node->ext, index, heap);
 
     ut_a(entry);
+
+    /* For hippo secondary index with trx_id system column, we need to set
+    the trx_id field to 0 during rollback because the correct previous
+    transaction ID is not available in the undo log. This is a special
+    placeholder value that will be handled appropriately. */
+    lizard::row_upd_index_entry_lotus_field_in_rollback(index, entry, heap);
+    ut_ad(node->row->get_trx_id() != 0);
+    HIPPO_ASSERT_TID_ROLLBACK_ENTRY(index, entry);
 
     err = row_undo_mod_del_unmark_sec_and_undo_update(
         BTR_MODIFY_LEAF, thr, index, entry, node->undo_no);
@@ -1206,7 +1248,16 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
       through which we do the search is
       delete-marked. */
 
+      /* For hippo secondary index with trx_id system column, we need to set
+      the trx_id field to 0 during rollback because the correct previous
+      transaction ID is not available in the undo log. This is a special
+      placeholder value that will be handled appropriately. */
+      lizard::row_upd_index_entry_lotus_field_in_rollback(index, entry, heap);
+      ut_ad(node->row->get_trx_id() != 0);
+      HIPPO_ASSERT_TID_ROLLBACK_ENTRY(index, entry);
+
       err = row_undo_mod_del_mark_or_remove_sec(node, thr, index, entry);
+
       if (err != DB_SUCCESS) {
         break;
       }
@@ -1228,6 +1279,14 @@ static dberr_t row_undo_mod_upd_exist_multi_sec(undo_node_t *node,
     }
 
     ut_a(entry);
+
+    /* For hippo secondary index with trx_id system column, we need to set
+    the trx_id field to 0 during rollback because the correct previous
+    transaction ID is not available in the undo log. This is a special
+    placeholder value that will be handled appropriately. */
+    lizard::row_upd_index_entry_lotus_field_in_rollback(index, entry, heap);
+    ut_ad(node->undo_row->get_trx_id() != 0);
+    HIPPO_ASSERT_TID_ROLLBACK_ENTRY(index, entry);
 
     err = row_undo_mod_del_unmark_sec_and_undo_update(
         BTR_MODIFY_LEAF, thr, index, entry, node->undo_no);
@@ -1291,6 +1350,9 @@ static void row_undo_mod_parse_undo_rec(undo_node_t *node, THD *thd,
 
   if (node->table == nullptr) {
     /* Table was dropped */
+    lizard_info(ER_LIZARD) << "Ignore modify undo log for dropped table "
+                           << table_id << " in transaction " << node->trx->id
+                           << " when rollback";
     return;
   }
 

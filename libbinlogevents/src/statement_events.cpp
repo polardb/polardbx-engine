@@ -87,7 +87,11 @@ Query_event::Query_event(
       default_table_encryption(0xff),
       opt_flashback_area(0xff),
       opt_index_format_gpp_enabled(0xff),
-      opt_index_format_panda_enabled(0xff) {}
+      opt_index_format_panda_enabled(0xff),
+      recycle_bin_table_name_len(0),
+      recycle_bin_table_name(nullptr),
+      opt_index_format_hippo_enabled(0xff),
+      opt_index_format_spc_enabled(0xff) {}
 
 /**
   Utility function for the Query_event constructor.
@@ -141,7 +145,11 @@ Query_event::Query_event(const char *buf, const Format_description_event *fde,
       default_table_encryption(0xff),
       opt_flashback_area(0xff),
       opt_index_format_gpp_enabled(0xff),
-      opt_index_format_panda_enabled(0xff) {
+      opt_index_format_panda_enabled(0xff),
+      recycle_bin_table_name_len(0),
+      recycle_bin_table_name(nullptr),
+      opt_index_format_hippo_enabled(0xff),
+      opt_index_format_spc_enabled(0xff) {
   BAPI_ENTER("Query_event::Query_event(const char*, ...)");
   READER_TRY_INITIALIZATION;
   READER_ASSERT_POSITION(fde->common_header_len);
@@ -344,6 +352,22 @@ Query_event::Query_event(const char *buf, const Format_description_event *fde,
       case Q_OPT_INDEX_FORMAT_PANDA_ENABLED:
         READER_TRY_SET(opt_index_format_panda_enabled, read<uint8_t>);
         break;
+      case Q_OPT_RECYCLE_BIN_TABLE_NAME:
+        READER_TRY_SET(recycle_bin_table_name_len, read<uint8_t>);
+        BAPI_ASSERT(recycle_bin_table_name_len <= NAME_LEN);
+        if (recycle_bin_table_name_len > 0) {
+          recycle_bin_table_name = READER_CALL(ptr);
+          READER_TRY_CALL(forward, recycle_bin_table_name_len);
+        } else {
+          recycle_bin_table_name = nullptr;
+        }
+        break;
+      case Q_OPT_INDEX_FORMAT_HIPPO_ENABLED:
+        READER_TRY_SET(opt_index_format_hippo_enabled, read<uint8_t>);
+        break;
+      case Q_OPT_INDEX_FORMAT_SPC_ENABLED:
+        READER_TRY_SET(opt_index_format_spc_enabled, read<uint8_t>);
+        break;
       default:
         /* That's why you must write status vars in growing order of code */
         READER_CALL(go_to, end_variable_part);  // Break loop
@@ -372,9 +396,9 @@ Query_event::Query_event(const char *buf, const Format_description_event *fde,
 /**
   Layout for the data buffer is as follows
   <pre>
-  +--------+-----------+------+------+---------+----+-------+----+
-  | catlog | time_zone | user | host | db name | \0 | Query | \0 |
-  +--------+-----------+------+------+---------+----+-------+----+
+  +--------+-----------+------+------+---------+----+-------+----+------------------------+
+  | catlog | time_zone | user | host | db name | \0 | Query | \0 | recycle_bin_table_name | 
+  +--------+-----------+------+------+---------+----+-------+----+------------------------+
   </pre>
 */
 int Query_event::fill_data_buf(Log_event_header::Byte *buf,
@@ -382,7 +406,7 @@ int Query_event::fill_data_buf(Log_event_header::Byte *buf,
   if (!buf) return 0;
   /* We need to check the buffer size */
   if (buf_len < catalog_len + 1 + time_zone_len + 1 + user_len + 1 + host_len +
-                    1 + data_len)
+                    1 + data_len + recycle_bin_table_name_len + 1)
     return 0;
 
   if (data_len && (data_len < db_len || data_len < q_len ||
@@ -410,6 +434,8 @@ int Query_event::fill_data_buf(Log_event_header::Byte *buf,
     if (db_len > 0 && db) copy_str_and_move(&start, &db, db_len);
     if (q_len > 0 && query) copy_str_and_move(&start, &query, q_len);
   }
+  if (recycle_bin_table_name_len > 0)
+    copy_str_and_move(&start, &recycle_bin_table_name, recycle_bin_table_name_len);
   return 1;
 }
 

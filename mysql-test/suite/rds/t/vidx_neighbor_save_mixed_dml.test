@@ -1,0 +1,150 @@
+--source include/have_debug.inc
+--source include/big_test.inc
+
+# save_neighbors_only regression: 4-way concurrent mixed DML (INSERT/UPDATE/DELETE).
+#           Vidx_save_retry_dup_key delta = 0, Vidx_indep_dml_deadlock delta = 0.
+# Related: commit dd578613c1c (FVectorNode::save_neighbors_only).
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL transaction_isolation = 'READ-COMMITTED';
+SET autocommit = ON;
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  v VECTOR(8),
+  VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+
+# Tight-cluster seed (id i -> [i,i,...,i]) — high neighbor overlap.
+--disable_query_log
+let $i = 1;
+while ($i <= 60)
+{
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT("[", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, ",", $i, "]")));
+  inc $i;
+}
+--enable_query_log
+
+# Snapshot save_neighbors_only counters BEFORE the workload.
+let $b_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $b_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $b_dl    = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $b_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+
+DELIMITER $$;
+
+# Worker A: UPDATE existing rows (drives update_2nd / save_neighbors_only).
+CREATE PROCEDURE p_upd(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 1500 DO
+    UPDATE t1 SET v = VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")) WHERE id = (j % 60) + 1;
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+# Worker B: INSERT new rows (new target.save() — exercises neighbor save side).
+CREATE PROCEDURE p_ins(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 500 DO
+    INSERT INTO t1(v) VALUES (VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")));
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+# Worker C: DELETE + re-INSERT same id (creates deleted nodes + revive race).
+CREATE PROCEDURE p_del(p_offset INT) BEGIN
+  DECLARE j INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR 1213 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1022 BEGIN END;
+  DECLARE CONTINUE HANDLER FOR 1062 BEGIN END;
+  WHILE j < 800 DO
+    DELETE FROM t1 WHERE id = ((j + p_offset) % 60) + 1;
+    INSERT INTO t1(id, v) VALUES (((j + p_offset) % 60) + 1, VEC_FROMTEXT(CONCAT("[", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, ",", (j+p_offset)%180, "]")));
+    SET j = j + 1;
+  END WHILE;
+END$$
+
+DELIMITER ;$$
+
+connect (cUp1, localhost, root,,);
+connect (cUp2, localhost, root,,);
+connect (cIn1, localhost, root,,);
+connect (cDel1, localhost, root,,);
+
+--connection cUp1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_upd(11)
+--connection cUp2
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_upd(23)
+--connection cIn1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_ins(7)
+--connection cDel1
+SET transaction_isolation = 'READ-COMMITTED';
+--send CALL p_del(31)
+
+--connection cUp1
+--error 0,1213,1022,1062
+--reap
+--connection cUp2
+--error 0,1213,1022,1062
+--reap
+--connection cIn1
+--error 0,1213,1022,1062
+--reap
+--connection cDel1
+--error 0,1213,1022,1062
+--reap
+
+--connection default
+
+# Snapshot AFTER.
+let $a_nbr   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_neighbor_save_count'`;
+let $a_dup   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_save_retry_dup_key'`;
+let $a_dl    = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_deadlock'`;
+let $a_err   = `SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Vidx_indep_dml_commit_error'`;
+
+let $d_nbr   = `SELECT $a_nbr - $b_nbr`;
+let $d_dup   = `SELECT $a_dup - $b_dup`;
+let $d_dl    = `SELECT $a_dl - $b_dl`;
+let $d_err   = `SELECT $a_err - $b_err`;
+
+let $ok_nbr = `SELECT $d_nbr > 0`;
+let $ok_dup = `SELECT $d_dup = 0`;
+let $ok_dl  = `SELECT $d_dl = 0`;
+let $ok_err = `SELECT $d_err = 0`;
+--echo == save_neighbors_only mixed-DML deltas:
+--echo neighbor_save_count_gt_0=$ok_nbr
+--echo save_retry_dup_key_eq_0=$ok_dup
+--echo indep_dml_deadlock_eq_0=$ok_dl
+--echo indep_dml_commit_error_eq_0=$ok_err
+
+# Hard invariants.
+if (`SELECT $d_dup != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_save_retry_dup_key must stay 0 under mixed concurrent DML
+}
+if (`SELECT $d_err != 0`) {
+  --die save_neighbors_only invariant violated: Vidx_indep_dml_commit_error must stay 0
+}
+if (`SELECT $d_nbr <= 0`) {
+  --die save_neighbors_only path not exercised: Vidx_neighbor_save_count must increase
+}
+
+disconnect cUp1;
+disconnect cUp2;
+disconnect cIn1;
+disconnect cDel1;
+
+DROP PROCEDURE p_upd;
+DROP PROCEDURE p_ins;
+DROP PROCEDURE p_del;
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL transaction_isolation = DEFAULT;

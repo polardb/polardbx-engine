@@ -22,7 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include "consensus.h"
+#include "protocol.h"
 #include "mem_paxos_log.h"
 #include "service.h"
 #include "thread_timer.h"
@@ -39,7 +39,7 @@ extern easy_log_level_t easy_log_level;
   } while (0)
 namespace alisql {
 
-class Witness : public Consensus {
+class Witness : public Protocol {
  public:
   Witness(std::string addr, std::shared_ptr<MemPaxosLog> log,
           uint64_t clusterId = 0, uint64_t ioThreadCnt = 4,
@@ -58,6 +58,7 @@ class Witness : public Consensus {
   virtual int onAppendLogResponce(PaxosMsg *msg) { return 0; }
   virtual int requestVote(bool force) { return 0; }
   virtual uint64_t replicateLog(LogEntry &entry) { return 0; }
+  virtual uint64_t replicateEmptyLog() { return 0; }
   virtual int appendLog(const bool needLock) { return 0; }
   virtual int onLeaderCommand(PaxosMsg *msg, PaxosMsg *rsp);
   virtual int onLeaderCommandResponce(PaxosMsg *msg) { return 0; };

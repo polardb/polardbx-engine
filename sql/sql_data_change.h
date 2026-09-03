@@ -34,10 +34,13 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include <map>
+
 #include "my_base.h"    // ha_rows
 #include "my_bitmap.h"  // MY_BITMAP
 
 class Item;
+class Item_func_mod_onupd;
 struct TABLE;
 template <class T>
 class List;
@@ -154,6 +157,18 @@ class COPY_INFO {
   int backfill_returning, backfill_dup;
   /** Values for UPDATE; needed by write_record() if INSERT with DUP_UPDATE */
   mem_root_deque<Item *> *update_values;
+
+  /**
+     MODIFY_ON_UPDATE items collected during REPLACE's fill_record phase.
+     Maps field_index -> Item_func_mod_onupd for conditional update in
+     write_record()'s DUP_REPLACE branch. Values are already evaluated into
+     record[0] at collection time; the map is used to identify which fields
+     need conditional revert when no other column has changed.
+  */
+  std::map<uint, Item_func_mod_onupd *> m_mod_onupd_items_for_replace;
+  std::map<uint, Item_func_mod_onupd *> &get_mod_onupd_items_for_replace() {
+    return m_mod_onupd_items_for_replace;
+  }
 
   /**
      Initializes this data change operation as an SQL @c INSERT (with all

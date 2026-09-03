@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fsp0fsp.h"
 #include "gis0rtree.h"
 
+#include "mem0mem.h"
 #include "my_dbug.h"
 
 #include "page0cur.h"
@@ -52,9 +53,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "srv0mon.h"
 #include "trx0trx.h"
 
+#include "lizard0mtr0log.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #include "lizard0row.h"
 #include "lizard0undo.h"
-#include "lizard0mtr0log.h"
+#include "lizard0txn.h"
+#include "lizard0trx.h"
 
 /** Initial split nodes info for R-tree split.
  @return initialized split nodes array */
@@ -63,7 +68,8 @@ static rtr_split_node_t *rtr_page_split_initialize_nodes(
     btr_cur_t *cursor,     /*!< in: cursor at which to insert; when the
                            function returns, the cursor is positioned
                            on the predecessor of the inserted record */
-    ulint **offsets,       /*!< in: offsets on inserted record */
+    Slice **slc,           /*!< in: offsets on inserted record */
+    Slice_ctx *sctx,       /*!< in: slice context. */
     const dtuple_t *tuple, /*!< in: tuple to insert */
     double **buf_pos)      /*!< in/out: current buffer position */
 {
@@ -73,7 +79,7 @@ static rtr_split_node_t *rtr_page_split_initialize_nodes(
   rtr_split_node_t *task;
   rtr_split_node_t *stop;
   rtr_split_node_t *cur;
-  rec_t *rec;
+  reg_t reg;
   buf_block_t *block;
   page_t *page;
   ulint n_uniq;
@@ -98,33 +104,30 @@ static rtr_split_node_t *rtr_page_split_initialize_nodes(
   *buf_pos = buf;
   stop = task + n_recs;
 
-  rec = page_rec_get_next(page_get_infimum_rec(page));
-  *offsets = rec_get_offsets(rec, cursor->index, *offsets, n_uniq,
-                             UT_LOCATION_HERE, &heap);
+  reg = page_rec_get_next_reg(page_get_infimum_rec(page));
+  *slc = sctx->get_offsets(reg, cursor->index, n_uniq);
 
-  source_cur = rec_get_nth_field(cursor->index, rec, *offsets, 0, &len);
+  source_cur = (*slc)->get_nth_field(cursor->index, 0, &len);
 
   for (cur = task; cur < stop - 1; ++cur) {
     cur->coords = reserve_coords(buf_pos, SPDIMS);
-    cur->key = rec;
+    cur->key = reg;
 
     memcpy(cur->coords, source_cur, DATA_MBR_LEN);
 
-    rec = page_rec_get_next(rec);
-    *offsets = rec_get_offsets(rec, cursor->index, *offsets, n_uniq,
-                               UT_LOCATION_HERE, &heap);
-    source_cur = rec_get_nth_field(cursor->index, rec, *offsets, 0, &len);
+    reg = page_rec_get_next_reg(reg.rec);
+    *slc = sctx->get_offsets(reg, cursor->index, n_uniq);
+    source_cur = (*slc)->get_nth_field(cursor->index, 0, &len);
   }
 
   /* Put the insert key to node list */
   source_cur =
       static_cast<byte *>(dfield_get_data(dtuple_get_nth_field(tuple, 0)));
   cur->coords = reserve_coords(buf_pos, SPDIMS);
-  rec = (byte *)mem_heap_alloc(heap,
-                               rec_get_converted_size(cursor->index, tuple));
-
-  rec = rec_convert_dtuple_to_rec(rec, cursor->index, tuple);
-  cur->key = rec;
+  boc_t rec_boc =
+      mem_heap_alloc_boc(heap, rec_get_converted_size(cursor->index, tuple));
+  reg = rec_convert_dtuple_to_reg(rec_boc, cursor->index, tuple);
+  cur->key = reg;
 
   memcpy(cur->coords, source_cur, DATA_MBR_LEN);
 
@@ -183,8 +186,7 @@ dtuple_t *rtr_index_build_node_ptr(const dict_index_t *index,
 /** In-place update the mbr field of a spatial index row. */
 static void rtr_update_mbr_field_in_place(
     dict_index_t *index, /*!< in: spatial index. */
-    rec_t *rec,          /*!< in/out: rec to be modified.*/
-    ulint *offsets,      /*!< in/out: offsets on rec. */
+    Slice *slc,          /*!< in/out: rec to be modified.*/
     rtr_mbr_t *mbr,      /*!< in: the new mbr. */
     mtr_t *mtr)          /*!< in: mtr */
 {
@@ -194,19 +196,21 @@ static void rtr_update_mbr_field_in_place(
   ulint len = DATA_MBR_LEN;
   ulint flags = BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG;
   ulint rec_info;
+  ut_ad(slc->is_positioned(index));
+  ut_ad(slc->contiguous());
 
   rtr_write_mbr(reinterpret_cast<byte *>(&new_mbr), mbr);
   new_mbr_ptr = static_cast<void *>(new_mbr);
   /* Otherwise, set the mbr to the new_mbr. */
-  rec_set_nth_field(index, rec, offsets, 0, new_mbr_ptr, len);
+  slc->set_nth_field(index, 0, new_mbr_ptr, len);
 
-  rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));
+  rec_info = rec_get_info_bits(slc->rec(), rec_offs_comp(slc->offsets()));
 
   /* Write redo log. */
   /* For now, we use LOG_REC_UPDATE_IN_PLACE to log this enlarge.
   In the future, we may need to add a new log type for this. */
   const bool opened = mlog_open_and_write_index(
-      mtr, rec, index, MLOG_REC_UPDATE_IN_PLACE,
+      mtr, slc->rec(), index, MLOG_REC_UPDATE_IN_PLACE,
       1 + REDO_SYS_FIELDS_LEN + REDO_CLOVER_FIELDS_LEN + 2 + MLOG_BUF_MARGIN,
       log_ptr);
 
@@ -240,7 +244,7 @@ static void rtr_update_mbr_field_in_place(
   log_ptr += DATA_GCN_ID_LEN;
 
   /* Offset */
-  mach_write_to_2(log_ptr, page_offset(rec));
+  mach_write_to_2(log_ptr, page_offset(slc->reg()));
   log_ptr += 2;
   /* Info bits */
   mach_write_to_1(log_ptr, rec_info);
@@ -263,7 +267,8 @@ static void rtr_update_mbr_field_in_place(
  @return true if update is successful */
 bool rtr_update_mbr_field(
     btr_cur_t *cursor,  /*!< in/out: cursor pointed to rec.*/
-    ulint *offsets,     /*!< in/out: offsets on rec. */
+    Slice **slc,        /*!< in/out: offsets on rec. */
+    Slice_ctx *sctx,    /*!< in: slice context. */
     btr_cur_t *cursor2, /*!< in/out: cursor pointed to rec
                         that should be deleted.
                         this cursor is for btr_compress to
@@ -276,7 +281,7 @@ bool rtr_update_mbr_field(
   dict_index_t *index = cursor->index;
   mem_heap_t *heap;
   page_t *page;
-  rec_t *rec;
+  reg_t reg;
   uint32_t flags =
       BTR_NO_UNDO_LOG_FLAG | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG;
   dberr_t err;
@@ -291,19 +296,21 @@ bool rtr_update_mbr_field(
   bool ins_suc = true;
   ulint cur2_pos = 0;
   page_no_t del_page_no = 0;
-  ulint *offsets2;
+  Slice_ctx sctx2;
+  Slice *slc2 = nullptr;
 
-  rec = btr_cur_get_rec(cursor);
-  page = page_align(rec);
+  reg = btr_cur_get_reg(cursor);
+  page = page_align(reg);
 
-  rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));
+  rec_info = rec_get_info_bits(reg.rec, rec_offs_comp((*slc)->offsets()));
 
   heap = mem_heap_create(100, UT_LOCATION_HERE);
   block = btr_cur_get_block(cursor);
   ut_ad(page == buf_block_get_frame(block));
   page_zip = buf_block_get_page_zip(block);
 
-  child = btr_node_ptr_get_child_page_no(rec, offsets);
+  ut_ad((*slc)->is_positioned(reg, index));
+  child = btr_node_ptr_get_child_page_no(*slc);
 
   if (new_rec) {
     child_rec = new_rec;
@@ -317,10 +324,10 @@ bool rtr_update_mbr_field(
   /* We need to remember the child page no of cursor2, since page could be
   reorganized or insert a new rec before it. */
   if (cursor2) {
-    rec_t *del_rec = btr_cur_get_rec(cursor2);
-    offsets2 = rec_get_offsets(btr_cur_get_rec(cursor2), index, nullptr,
-                               ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
-    del_page_no = btr_node_ptr_get_child_page_no(del_rec, offsets2);
+    reg_t del_reg = btr_cur_get_reg(cursor2);
+    slc2 = sctx2.get_offsets(del_reg, index, ULINT_UNDEFINED);
+
+    del_page_no = btr_node_ptr_get_child_page_no(slc2);
     cur2_pos = page_rec_get_n_recs_before(btr_cur_get_rec(cursor2));
   }
 
@@ -329,11 +336,12 @@ bool rtr_update_mbr_field(
      in-place update for avoiding it move to other place. */
 
     if (page_zip) {
+      ut_ad((*slc)->contiguous());
       /* Check if there's enough space for in-place
       update the zip page. */
-      if (!btr_cur_update_alloc_zip(page_zip, btr_cur_get_page_cur(cursor),
-                                    index, offsets, rec_offs_size(offsets),
-                                    false, mtr)) {
+      if (!btr_cur_update_alloc_zip(
+              page_zip, btr_cur_get_page_cur(cursor), index, *slc,
+              (*slc)->rec_size(), false, mtr)) {
         /* If there's not enough space for
         inplace update zip page, we do delete
         insert. */
@@ -350,77 +358,79 @@ bool rtr_update_mbr_field(
       }
 
       /* Record could be repositioned */
-      rec = btr_cur_get_rec(cursor);
+      reg = btr_cur_get_reg(cursor);
 
 #ifdef UNIV_DEBUG
       /* Make sure it is still the first record */
-      rec_info = rec_get_info_bits(rec, rec_offs_comp(offsets));
+      rec_info = rec_get_info_bits(reg.rec, rec_offs_comp((*slc)->offsets()));
       ut_ad(rec_info & REC_INFO_MIN_REC_FLAG);
 #endif /* UNIV_DEBUG */
     }
 
-    rtr_update_mbr_field_in_place(index, rec, offsets, mbr, mtr);
+    ut_ad((*slc)->is_positioned(reg, index));
+    rtr_update_mbr_field_in_place(index, *slc, mbr, mtr);
 
     if (page_zip) {
-      page_zip_write_rec(page_zip, rec, index, offsets, 0);
+      ut_ad((*slc)->contiguous());
+      page_zip_write_rec(page_zip, *slc, index, 0);
     }
 
     if (cursor2) {
-      ulint *offsets2;
+      Slice_ctx sctx2;
 
       if (page_zip) {
         cursor2->page_cur.rec = page_rec_get_nth(page, cur2_pos);
       }
-      offsets2 = rec_get_offsets(btr_cur_get_rec(cursor2), index, nullptr,
-                                 ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
-      ut_ad(del_page_no ==
-            btr_node_ptr_get_child_page_no(cursor2->page_cur.rec, offsets2));
+      Slice *slc2 =
+          sctx2.get_offsets(btr_cur_get_reg(cursor2), index, ULINT_UNDEFINED);
+      ut_ad(del_page_no == btr_node_ptr_get_child_page_no(slc2));
 
-      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, offsets2, mtr);
+      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, slc2, mtr);
     }
   } else if (page_get_n_recs(page) == 1) {
     /* When there's only one rec in the page, we do insert/delete to
     avoid page merge. */
 
     page_cur_t page_cur;
-    rec_t *insert_rec;
-    ulint *insert_offsets = nullptr;
+    Slice_ctx insert_sctx;
+    Slice *insert_slc = nullptr;
     ulint old_pos;
-    rec_t *old_rec;
+    reg_t old_reg;
 
     ut_ad(cursor2 == nullptr);
 
     /* Insert the new mbr rec. */
-    old_pos = page_rec_get_n_recs_before(rec);
+    old_pos = page_rec_get_n_recs_before(reg.rec);
 
-    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
-                                    &heap, node_ptr, &insert_rec,
+    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_slc,
+                                    &insert_sctx, &heap, node_ptr,
                                     &dummy_big_rec, nullptr, mtr);
 
     ut_ad(err == DB_SUCCESS);
 
-    btr_cur_position(index, insert_rec, block, cursor);
+    ut_ad(!index->table->is_intrinsic());
+    ut_ad(insert_slc->reg().is_not_null());
+    btr_cur_position(index, insert_slc->rec(), block, cursor);
 
     /* Delete the old mbr rec. */
-    old_rec = page_rec_get_nth(page, old_pos);
-    ut_ad(old_rec != insert_rec);
+    old_reg = page_reg_get_nth(page, old_pos);
+    ut_ad(old_reg != insert_slc->reg());
 
-    page_cur_position(old_rec, block, &page_cur);
-    offsets2 = rec_get_offsets(old_rec, index, nullptr, ULINT_UNDEFINED,
-                               UT_LOCATION_HERE, &heap);
-    page_cur_delete_rec(&page_cur, index, offsets2, mtr);
+    page_cur_position(old_reg.rec, block, &page_cur);
+    slc2 = sctx2.get_offsets(old_reg, index, ULINT_UNDEFINED);
+    page_cur_delete_rec(&page_cur, index, slc2, mtr);
 
   } else {
   update_mbr:
     /* When there're not only 1 rec in the page, we do delete/insert
     to avoid page split. */
-    rec_t *insert_rec;
-    ulint *insert_offsets = nullptr;
+    Slice_ctx insert_sctx;
+    Slice *insert_slc = nullptr;
     rec_t *next_rec;
 
     /* Delete the rec which cursor point to. */
-    next_rec = page_rec_get_next(rec);
-    page_cur_delete_rec(btr_cur_get_page_cur(cursor), index, offsets, mtr);
+    next_rec = page_rec_get_next(reg.rec);
+    page_cur_delete_rec(btr_cur_get_page_cur(cursor), index, *slc, mtr);
     if (!ins_suc) {
       ut_ad(rec_info & REC_INFO_MIN_REC_FLAG);
 
@@ -431,24 +441,24 @@ bool rtr_update_mbr_field(
     the rec which cursor2 point to. Otherwise, delete it later.*/
     if (cursor2 && page_get_n_recs(page) > 1) {
       ulint cur2_rec_info;
-      rec_t *cur2_rec;
+      reg_t cur2_reg;
 
-      cur2_rec = cursor2->page_cur.rec;
-      offsets2 = rec_get_offsets(cur2_rec, index, nullptr, ULINT_UNDEFINED,
-                                 UT_LOCATION_HERE, &heap);
+      cur2_reg = page_cur_get_reg(&cursor2->page_cur);
+      slc2 = sctx2.get_offsets(cur2_reg, index, ULINT_UNDEFINED);
 
-      cur2_rec_info = rec_get_info_bits(cur2_rec, rec_offs_comp(offsets2));
+      cur2_rec_info =
+          rec_get_info_bits(cur2_reg.rec, rec_offs_comp(slc2->offsets()));
       if (cur2_rec_info & REC_INFO_MIN_REC_FLAG) {
         /* If we delete the leftmost node
         pointer on a non-leaf level, we must
         mark the new leftmost node pointer as
         the predefined minimum record */
-        rec_t *next_rec = page_rec_get_next(cur2_rec);
+        rec_t *next_rec = page_rec_get_next(cur2_reg.rec);
         btr_set_min_rec_mark(next_rec, mtr);
       }
 
-      ut_ad(del_page_no == btr_node_ptr_get_child_page_no(cur2_rec, offsets2));
-      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, offsets2, mtr);
+      ut_ad(del_page_no == btr_node_ptr_get_child_page_no(slc2));
+      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, slc2, mtr);
       cursor2 = nullptr;
     }
 
@@ -457,8 +467,8 @@ bool rtr_update_mbr_field(
                                &low_match, btr_cur_get_page_cur(cursor),
                                nullptr);
 
-    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
-                                    &heap, node_ptr, &insert_rec,
+    err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_slc,
+                                    &insert_sctx, &heap, node_ptr,
                                     &dummy_big_rec, nullptr, mtr);
 
     if (!ins_suc && err == DB_SUCCESS) {
@@ -470,8 +480,8 @@ bool rtr_update_mbr_field(
     if (err != DB_SUCCESS && ins_suc) {
       btr_page_reorganize(btr_cur_get_page_cur(cursor), index, mtr);
 
-      err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
-                                      &heap, node_ptr, &insert_rec,
+      err = btr_cur_optimistic_insert(flags, TL_NONE, cursor, &insert_slc,
+                                      &insert_sctx, &heap, node_ptr,
                                       &dummy_big_rec, nullptr, mtr);
 
       /* Will do pessimistic insert */
@@ -482,65 +492,64 @@ bool rtr_update_mbr_field(
 
     /* Insert succeed, position cursor the inserted rec.*/
     if (ins_suc) {
-      btr_cur_position(index, insert_rec, block, cursor);
-      offsets = rec_get_offsets(insert_rec, index, offsets, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+      btr_cur_position(index, insert_slc->rec(), block, cursor);
+
+      *slc = sctx->get_offsets(insert_slc->reg(), index, ULINT_UNDEFINED);
     }
 
     /* Delete the rec which cursor2 point to. */
     if (cursor2) {
       ulint cur2_pno;
-      rec_t *cur2_rec;
+      reg_t cur2_reg;
 
       cursor2->page_cur.rec = page_rec_get_nth(page, cur2_pos);
 
-      cur2_rec = btr_cur_get_rec(cursor2);
+      cur2_reg = btr_cur_get_reg(cursor2);
 
-      offsets2 = rec_get_offsets(cur2_rec, index, nullptr, ULINT_UNDEFINED,
-                                 UT_LOCATION_HERE, &heap);
+      slc2 = sctx2.get_offsets(cur2_reg, index, ULINT_UNDEFINED);
 
       /* If the cursor2 position is on a wrong rec, we
       need to reposition it. */
-      cur2_pno = btr_node_ptr_get_child_page_no(cur2_rec, offsets2);
-      if ((del_page_no != cur2_pno) || (cur2_rec == insert_rec)) {
-        cur2_rec = page_rec_get_next(page_get_infimum_rec(page));
+      cur2_pno = btr_node_ptr_get_child_page_no(slc2);
+      if ((del_page_no != cur2_pno) || (cur2_reg == insert_slc->reg())) {
+        cur2_reg = page_rec_get_next_reg(page_get_infimum_rec(page));
 
-        while (!page_rec_is_supremum(cur2_rec)) {
-          offsets2 = rec_get_offsets(cur2_rec, index, nullptr, ULINT_UNDEFINED,
-                                     UT_LOCATION_HERE, &heap);
-          cur2_pno = btr_node_ptr_get_child_page_no(cur2_rec, offsets2);
+        while (!page_rec_is_supremum(cur2_reg.rec)) {
+          slc2 = sctx2.get_offsets(cur2_reg, index, ULINT_UNDEFINED);
+          cur2_pno = btr_node_ptr_get_child_page_no(slc2);
           if (cur2_pno == del_page_no) {
-            if (insert_rec != cur2_rec) {
-              cursor2->page_cur.rec = cur2_rec;
+            if (insert_slc->reg() != cur2_reg) {
+              cursor2->page_cur.rec = cur2_reg.rec;
               break;
             }
           }
-          cur2_rec = page_rec_get_next(cur2_rec);
+          cur2_reg = page_rec_get_next_reg(cur2_reg.rec);
         }
 
-        ut_ad(!page_rec_is_supremum(cur2_rec));
+        ut_ad(!page_rec_is_supremum(cur2_reg.rec));
       }
 
-      rec_info = rec_get_info_bits(cur2_rec, rec_offs_comp(offsets2));
+      rec_info =
+          rec_get_info_bits(cur2_reg.rec, rec_offs_comp(slc2->offsets()));
       if (rec_info & REC_INFO_MIN_REC_FLAG) {
         /* If we delete the leftmost node
         pointer on a non-leaf level, we must
         mark the new leftmost node pointer as
         the predefined minimum record */
-        rec_t *next_rec = page_rec_get_next(cur2_rec);
+        rec_t *next_rec = page_rec_get_next(cur2_reg.rec);
         btr_set_min_rec_mark(next_rec, mtr);
       }
 
-      ut_ad(cur2_pno == del_page_no && cur2_rec != insert_rec);
+      ut_ad(cur2_pno == del_page_no && cur2_reg != insert_slc->reg());
 
-      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, offsets2, mtr);
+      page_cur_delete_rec(btr_cur_get_page_cur(cursor2), index, slc2, mtr);
     }
 
     if (!ins_suc) {
       mem_heap_t *new_heap = nullptr;
 
-      err = btr_cur_pessimistic_insert(flags, TL_NONE, cursor, &insert_offsets,
-                                       &new_heap, node_ptr, &insert_rec,
+      err = btr_cur_pessimistic_insert(flags, TL_NONE, cursor, &insert_slc,
+                                       &insert_sctx, &new_heap, node_ptr,
                                        &dummy_big_rec, nullptr, mtr);
 
       ut_ad(err == DB_SUCCESS);
@@ -589,7 +598,6 @@ static void rtr_adjust_upper_level(
   page_zip_des_t *new_page_zip;
   dict_index_t *index = sea_cur->index;
   btr_cur_t cursor;
-  ulint *offsets;
   mem_heap_t *heap;
   ulint level;
   dtuple_t *node_ptr_upper;
@@ -602,10 +610,11 @@ static void rtr_adjust_upper_level(
   lock_prdt_t new_prdt;
   dberr_t err;
   big_rec_t *dummy_big_rec;
-  rec_t *rec;
 
   /* Create a memory heap where the data tuple is stored */
   heap = mem_heap_create(1024, UT_LOCATION_HERE);
+  Slice_ctx sctx(&heap);
+  Slice *slc = nullptr;
 
   cursor.thr = sea_cur->thr;
 
@@ -623,14 +632,15 @@ static void rtr_adjust_upper_level(
 
   /* Set new mbr for the old page on the upper level. */
   /* Look up the index for the node pointer to page */
-  offsets = rtr_page_get_father_block(nullptr, heap, index, block, mtr, sea_cur,
-                                      &cursor);
+  slc = rtr_page_get_father_block(&sctx, index, block, mtr, sea_cur, &cursor);
 
   page_cursor = btr_cur_get_page_cur(&cursor);
 
-  rtr_get_mbr_from_rec(page_cursor->rec, offsets, &parent_mbr);
+  ut_ad(slc->is_positioned(page_cursor->rec, index));
+  rtr_get_mbr_from_rec(slc, &parent_mbr);
 
-  rtr_update_mbr_field(&cursor, offsets, nullptr, page, mbr, nullptr, mtr);
+  rtr_update_mbr_field(&cursor, &slc, &sctx, nullptr, page, mbr, nullptr,
+                       mtr);
 
   /* Already updated parent MBR, reset in our path */
   if (sea_cur->rtr_info) {
@@ -656,7 +666,7 @@ static void rtr_adjust_upper_level(
 
   err = btr_cur_optimistic_insert(
       flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG,
-      TL_NONE, &cursor, &offsets, &heap, node_ptr_upper, &rec, &dummy_big_rec,
+      TL_NONE, &cursor, &slc, &sctx, &heap, node_ptr_upper, &dummy_big_rec,
       nullptr, mtr);
 
   if (err == DB_FAIL) {
@@ -670,7 +680,7 @@ static void rtr_adjust_upper_level(
 
     err = btr_cur_pessimistic_insert(
         flags | BTR_NO_LOCKING_FLAG | BTR_KEEP_SYS_FLAG | BTR_NO_UNDO_LOG_FLAG,
-        TL_NONE, &cursor, &offsets, &new_heap, node_ptr_upper, &rec,
+        TL_NONE, &cursor, &slc, &sctx, &new_heap, node_ptr_upper,
         &dummy_big_rec, nullptr, mtr);
 
     DBUG_EXECUTE_IF("rtr_page_need_first_split",
@@ -753,8 +763,8 @@ static bool rtr_split_page_move_rec_list(
                                   where to move */
     buf_block_t *block,           /*!< in/out: page containing
                                   split_rec */
-    rec_t *first_rec,             /*!< in: first record not to
-                                  move */
+    reg_t first_reg,              /*!< in: first record not to
+                                   move */
     dict_index_t *index,          /*!< in: record descriptor */
     mem_heap_t *heap,             /*!< in: pointer to memory
                                   heap, or NULL */
@@ -766,16 +776,14 @@ static bool rtr_split_page_move_rec_list(
   page_cur_t new_page_cursor;
   page_t *page;
   page_t *new_page;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  Slice_ctx slc_ctx;
+  Slice *slc = nullptr;
   page_zip_des_t *new_page_zip = buf_block_get_page_zip(new_block);
-  rec_t *rec;
+  reg_t reg;
   rec_t *ret;
   ulint moved = 0;
   ulint max_to_move = 0;
   rtr_rec_move_t *rec_move = nullptr;
-
-  rec_offs_init(offsets_);
 
   page_cur_set_before_first(block, &page_cursor);
   page_cur_set_before_first(new_block, &new_page_cursor);
@@ -800,24 +808,22 @@ static bool rtr_split_page_move_rec_list(
   for (cur_split_node = node_array; cur_split_node < end_split_node;
        ++cur_split_node) {
     if (cur_split_node->n_node != first_rec_group) {
-      lock_rec_store_on_page_infimum(block, cur_split_node->key);
+      lock_rec_store_on_page_infimum(block, cur_split_node->key.rec);
 
-      offsets = rec_get_offsets(cur_split_node->key, index, offsets,
-                                ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+      slc = slc_ctx.get_offsets(cur_split_node->key, index, ULINT_UNDEFINED);
 
-      ut_ad(cur_split_node->key != first_rec || !page_is_leaf(page));
+      ut_ad(cur_split_node->key != first_reg || !page_is_leaf(page));
 
-      rec = page_cur_insert_rec_low(page_cur_get_rec(&new_page_cursor), index,
-                                    cur_split_node->key, offsets, mtr);
+      reg = page_cur_insert_rec_low(page_cur_get_reg(&new_page_cursor), index,
+                                    slc, mtr);
+      ut_ad(reg.is_not_null() && slc->is_positioned(reg, index));
 
-      ut_a(rec);
-
-      lock_rec_restore_from_page_infimum(new_block, rec, block);
+      lock_rec_restore_from_page_infimum(new_block, reg.rec, block);
 
       page_cur_move_to_next(&new_page_cursor);
 
-      rec_move[moved].new_rec = rec;
-      rec_move[moved].old_rec = cur_split_node->key;
+      rec_move[moved].new_rec = reg.rec;
+      rec_move[moved].old_rec = cur_split_node->key.rec;
       rec_move[moved].moved = false;
       moved++;
 
@@ -880,10 +886,10 @@ static bool rtr_split_page_move_rec_list(
   for (cur_split_node = node_array; cur_split_node < end_split_node;
        ++cur_split_node) {
     if (cur_split_node->n_node != first_rec_group) {
-      page_cur_position(cur_split_node->key, block, &page_cursor);
-      offsets = rec_get_offsets(page_cur_get_rec(&page_cursor), index, offsets,
-                                ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
-      page_cur_delete_rec(&page_cursor, index, offsets, mtr);
+      page_cur_position(cur_split_node->key.rec, block, &page_cursor);
+      slc = slc_ctx.get_offsets(page_cur_get_reg(&page_cursor), index,
+                                ULINT_UNDEFINED);
+      page_cur_delete_rec(&page_cursor, index, slc, mtr);
     }
   }
 
@@ -897,12 +903,13 @@ static bool rtr_split_page_move_rec_list(
  free disk space (2 pages) must be guaranteed to be available before
  this function is called.
  @return inserted record */
-rec_t *rtr_page_split_and_insert(
-    uint32_t flags,        /*!< in: undo logging and locking flags */
-    btr_cur_t *cursor,     /*!< in/out: cursor at which to insert; when the
-                           function returns, the cursor is positioned
-                           on the predecessor of the inserted record */
-    ulint **offsets,       /*!< out: offsets on inserted record */
+reg_t rtr_page_split_and_insert(
+    uint32_t flags,    /*!< in: undo logging and locking flags */
+    btr_cur_t *cursor, /*!< in/out: cursor at which to insert; when the
+                       function returns, the cursor is positioned
+                       on the predecessor of the inserted record */
+    Slice **slc,       /*!< out: offsets on inserted record */
+    Slice_ctx *sctx,
     mem_heap_t **heap,     /*!< in/out: pointer to memory heap, or NULL */
     const dtuple_t *tuple, /*!< in: tuple to insert */
     mtr_t *mtr)            /*!< in: mtr */
@@ -918,7 +925,7 @@ rec_t *rtr_page_split_and_insert(
   page_zip_des_t *new_page_zip;
   buf_block_t *insert_block;
   page_cur_t *page_cursor;
-  rec_t *rec = nullptr;
+  reg_t reg;
   ulint n_recs;
   ulint total_data;
   ulint insert_size;
@@ -934,7 +941,7 @@ rec_t *rtr_page_split_and_insert(
   rtr_mbr_t new_mbr;
   lock_prdt_t prdt;
   lock_prdt_t new_prdt;
-  rec_t *first_rec = nullptr;
+  reg_t first_reg;
   int first_rec_group = 1;
   ulint n_iterations [[maybe_unused]] = 0;
 
@@ -945,7 +952,7 @@ rec_t *rtr_page_split_and_insert(
 func_start:
   ut_ad(tuple->m_heap != *heap);
   mem_heap_empty(*heap);
-  *offsets = nullptr;
+  *slc = sctx->reset_slice();
 
   ut_ad(mtr_memo_contains_flagged(mtr, dict_index_get_lock(cursor->index),
                                   MTR_MEMO_X_LOCK | MTR_MEMO_SX_LOCK));
@@ -966,13 +973,13 @@ func_start:
   page_no = block->page.id.page_no();
 
   if (btr_page_get_prev(page, mtr) == FIL_NULL && !page_is_leaf(page)) {
-    first_rec =
-        page_rec_get_next(page_get_infimum_rec(buf_block_get_frame(block)));
+    first_reg =
+        page_rec_get_next_reg(page_get_infimum_rec(buf_block_get_frame(block)));
   }
 
   /* Initial split nodes array. */
-  rtr_split_node_array =
-      rtr_page_split_initialize_nodes(*heap, cursor, offsets, tuple, &buf_pos);
+  rtr_split_node_array = rtr_page_split_initialize_nodes(
+      *heap, cursor, slc, sctx, tuple, &buf_pos);
 
   /* Divide all mbrs to two groups. */
   n_recs = page_get_n_recs(page) + 1;
@@ -991,12 +998,11 @@ func_start:
 #endif
 
   insert_size = rec_get_converted_size(cursor->index, tuple);
-  total_data = page_get_data_size(page) + insert_size;
+  total_data = page_get_total_data_size(page) + insert_size;
   first_rec_group = split_rtree_node(
       rtr_split_node_array, static_cast<int>(n_recs),
       static_cast<int>(total_data), static_cast<int>(insert_size), 0, 2, 2,
-      &buf_pos, SPDIMS, static_cast<uchar *>(first_rec),
-      cursor->index->rtr_srs.get());
+      &buf_pos, SPDIMS, first_reg, cursor->index->rtr_srs.get());
 
   /* Allocate a new page to the index */
   direction = FSP_UP;
@@ -1004,8 +1010,11 @@ func_start:
   alloc = btr_page_alloc(cursor->index, hint_page_no, direction, page_level,
                          mtr, mtr);
   new_page_zip = buf_block_get_page_zip(alloc.new_block);
+  page_dict_desc_t dict_desc(page);
+  ut_ad(dict_desc.data() == nullptr);
+
   btr_page_create(alloc.new_block, new_page_zip, cursor->index, page_level,
-                  alloc.root_page_type, mtr);
+                  alloc.root_page_type, &dict_desc, mtr);
 
   new_page = buf_block_get_frame(alloc.new_block);
   ut_ad(page_get_ssn_id(new_page) == 0);
@@ -1023,7 +1032,7 @@ func_start:
       || page_zip
 #endif
       || !rtr_split_page_move_rec_list(rtr_split_node_array, first_rec_group,
-                                       alloc.new_block, block, first_rec,
+                                       alloc.new_block, block, first_reg,
                                        cursor->index, *heap, mtr)) {
     ulint n = 0;
     rec_t *rec;
@@ -1053,12 +1062,12 @@ func_start:
     for (cur_split_node = rtr_split_node_array;
          cur_split_node < end_split_node - 1; ++cur_split_node) {
       if (cur_split_node->n_node != first_rec_group) {
-        pos = page_rec_get_n_recs_before(cur_split_node->key);
+        pos = page_rec_get_n_recs_before(cur_split_node->key.rec);
         rec = page_rec_get_nth(new_page, pos);
         ut_a(rec);
 
         rec_move[moved].new_rec = rec;
-        rec_move[moved].old_rec = cur_split_node->key;
+        rec_move[moved].old_rec = cur_split_node->key.rec;
         rec_move[moved].moved = false;
         moved++;
 
@@ -1078,18 +1087,17 @@ func_start:
       if (cur_split_node->n_node == first_rec_group) {
         ulint pos;
 
-        pos = page_rec_get_n_recs_before(cur_split_node->key);
+        pos = page_rec_get_n_recs_before(cur_split_node->key.rec);
         ut_a(pos > 0);
         rec_t *new_rec = page_rec_get_nth(new_page, pos - n);
 
         ut_a(new_rec && page_rec_is_user_rec(new_rec));
         page_cur_position(new_rec, alloc.new_block, page_cursor);
 
-        *offsets =
-            rec_get_offsets(page_cur_get_rec(page_cursor), cursor->index,
-                            *offsets, ULINT_UNDEFINED, UT_LOCATION_HERE, heap);
+        *slc = sctx->get_offsets(page_cur_get_reg(page_cursor), cursor->index,
+                                 ULINT_UNDEFINED);
 
-        page_cur_delete_rec(page_cursor, cursor->index, *offsets, mtr);
+        page_cur_delete_rec(page_cursor, cursor->index, *slc, mtr);
         n++;
       }
     }
@@ -1098,11 +1106,10 @@ func_start:
     for (cur_split_node = rtr_split_node_array;
          cur_split_node < end_split_node - 1; ++cur_split_node) {
       if (cur_split_node->n_node != first_rec_group) {
-        page_cur_position(cur_split_node->key, block, page_cursor);
-        *offsets =
-            rec_get_offsets(page_cur_get_rec(page_cursor), cursor->index,
-                            *offsets, ULINT_UNDEFINED, UT_LOCATION_HERE, heap);
-        page_cur_delete_rec(page_cursor, cursor->index, *offsets, mtr);
+        page_cur_position(cur_split_node->key.rec, block, page_cursor);
+        *slc = sctx->get_offsets(page_cur_get_reg(page_cursor), cursor->index,
+                                 ULINT_UNDEFINED);
+        page_cur_delete_rec(page_cursor, cursor->index, *slc, mtr);
       }
     }
 
@@ -1130,21 +1137,23 @@ func_start:
   We test this scenario here*/
   DBUG_EXECUTE_IF(
       "rtr_page_need_second_split", if (n_iterations == 0) {
-        rec = nullptr;
+        reg.reset();
         goto after_insert;
       });
 
-  rec = page_cur_tuple_insert(page_cursor, tuple, cursor->index, offsets, heap,
-                              mtr);
+  reg = page_cur_tuple_insert(page_cursor, tuple, cursor->index, slc, sctx,
+                              heap, mtr);
+  ut_ad(reg.is_null() || (*slc)->is_positioned(reg, cursor->index));
 
   /* If insert did not fit, try page reorganization.
   For compressed pages, page_cur_tuple_insert() will have
   attempted this already. */
-  if (rec == nullptr) {
+  if (reg.is_null()) {
     if (!page_cur_get_page_zip(page_cursor) &&
         btr_page_reorganize(page_cursor, cursor->index, mtr)) {
-      rec = page_cur_tuple_insert(page_cursor, tuple, cursor->index, offsets,
+      reg = page_cur_tuple_insert(page_cursor, tuple, cursor->index, slc, sctx,
                                   heap, mtr);
+      ut_ad(reg.is_null() || (*slc)->is_positioned(reg, cursor->index));
     }
     /* If insert fail, we will try to split the insert_block
     again. */
@@ -1180,13 +1189,13 @@ after_insert:
   /* Insert fit on the page: update the free bits for the
   left and right pages in the same mtr */
 
-  if (page_is_leaf(page)) {
+  if (page_is_leaf(page) && !cursor->index->table->is_temporary()) {
     ibuf_update_free_bits_for_two_pages_low(block, alloc.new_block, mtr);
   }
 
   /* If the new res insert fail, we need to do another split
    again. */
-  if (!rec) {
+  if (reg.is_null()) {
     /* We play safe and reset the free bits for new_page */
     if (!cursor->index->is_clustered() &&
         !cursor->index->table->is_temporary()) {
@@ -1218,7 +1227,7 @@ after_insert:
 #endif
   MONITOR_INC(MONITOR_INDEX_SPLIT);
 
-  return (rec);
+  return (reg);
 }
 
 dberr_t rtr_ins_enlarge_mbr(btr_cur_t *btr_cur, mtr_t *mtr) {
@@ -1228,7 +1237,6 @@ dberr_t rtr_ins_enlarge_mbr(btr_cur_t *btr_cur, mtr_t *mtr) {
   mem_heap_t *heap;
   dict_index_t *index = btr_cur->index;
   page_cur_t *page_cursor;
-  ulint *offsets;
   node_visit_t *node_visit;
   page_t *page;
 
@@ -1244,6 +1252,8 @@ dberr_t rtr_ins_enlarge_mbr(btr_cur_t *btr_cur, mtr_t *mtr) {
 
   /* Create a memory heap. */
   heap = mem_heap_create(1024, UT_LOCATION_HERE);
+  Slice_ctx sctx(&heap);
+  Slice *slc = nullptr;
 
   /* Leaf level page is stored in cursor */
   page_cursor = btr_cur_get_page_cur(btr_cur);
@@ -1264,13 +1274,13 @@ dberr_t rtr_ins_enlarge_mbr(btr_cur_t *btr_cur, mtr_t *mtr) {
 
     /* Get father block. */
     btr_cur_t cursor;
-    offsets = rtr_page_get_father_block(nullptr, heap, index, block, mtr,
-                                        btr_cur, &cursor);
+    slc = rtr_page_get_father_block(&sctx, index, block, mtr, btr_cur,
+                                    &cursor);
 
     page = buf_block_get_frame(block);
 
     /* Update the mbr field of the rec. */
-    if (!rtr_update_mbr_field(&cursor, offsets, nullptr, page, &new_mbr,
+    if (!rtr_update_mbr_field(&cursor, &slc, &sctx, nullptr, page, &new_mbr,
                               nullptr, mtr)) {
       err = DB_ERROR;
       break;
@@ -1304,7 +1314,7 @@ or by invoking ibuf_reset_free_bits() before mtr_commit().
 @param[out] num_moved Num of rec to move
 @param[in] mtr Mini-transaction */
 void rtr_page_copy_rec_list_end_no_locks(buf_block_t *new_block,
-                                         buf_block_t *block, rec_t *rec,
+                                         buf_block_t *block, reg_t reg,
                                          dict_index_t *index, mem_heap_t *heap,
                                          rtr_rec_move_t *rec_move,
                                          ulint max_move, ulint *num_moved,
@@ -1312,67 +1322,64 @@ void rtr_page_copy_rec_list_end_no_locks(buf_block_t *new_block,
   page_t *new_page = buf_block_get_frame(new_block);
   page_cur_t page_cur;
   page_cur_t cur1;
-  rec_t *cur_rec;
-  ulint offsets_1[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets1 = offsets_1;
-  ulint offsets_2[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets2 = offsets_2;
+  reg_t cur_reg;
   ulint moved = 0;
   bool is_leaf = page_is_leaf(new_page);
 
-  rec_offs_init(offsets_1);
-  rec_offs_init(offsets_2);
+  Slice_ctx slc_ctx1;
+  Slice_ctx slc_ctx2;
+  Slice *slc1 = nullptr;
+  Slice *slc2 = nullptr;
 
-  page_cur_position(rec, block, &cur1);
+  page_cur_position(reg.rec, block, &cur1);
 
   if (page_cur_is_before_first(&cur1)) {
     page_cur_move_to_next(&cur1);
   }
 
   btr_assert_not_corrupted(new_block, index);
-  ut_a(page_is_comp(new_page) == page_rec_is_comp(rec));
+  ut_a(page_is_comp(new_page) == page_rec_is_comp(reg.rec));
   ut_a(mach_read_from_2(new_page + UNIV_PAGE_SIZE - 10) ==
        (page_is_comp(new_page) ? PAGE_NEW_INFIMUM : PAGE_OLD_INFIMUM));
 
-  cur_rec =
-      page_rec_get_next(page_get_infimum_rec(buf_block_get_frame(new_block)));
-  page_cur_position(cur_rec, new_block, &page_cur);
+  cur_reg = page_rec_get_next_reg(
+      page_get_infimum_rec(buf_block_get_frame(new_block)));
+  page_cur_position(cur_reg.rec, new_block, &page_cur);
 
   /* Copy records from the original page to the new page */
   while (!page_cur_is_after_last(&cur1)) {
-    rec_t *cur1_rec = page_cur_get_rec(&cur1);
-    rec_t *ins_rec;
+    reg_t cur1_reg = page_cur_get_reg(&cur1);
+    reg_t ins_reg;
 
-    if (page_rec_is_infimum(cur_rec)) {
-      cur_rec = page_rec_get_next(cur_rec);
+    if (page_rec_is_infimum(cur_reg.rec)) {
+      cur_reg = page_rec_get_next_reg(cur_reg.rec);
     }
 
-    offsets1 = rec_get_offsets(cur1_rec, index, offsets1, ULINT_UNDEFINED,
-                               UT_LOCATION_HERE, &heap);
-    while (!page_rec_is_supremum(cur_rec)) {
+    slc1 = slc_ctx1.get_offsets(cur1_reg, index, ULINT_UNDEFINED);
+    while (!page_rec_is_supremum(cur_reg.rec)) {
       ulint cur_matched_fields = 0;
       int cmp;
 
-      offsets2 = rec_get_offsets(cur_rec, index, offsets2, ULINT_UNDEFINED,
-                                 UT_LOCATION_HERE, &heap);
-      cmp = cmp_rec_rec_with_match(cur1_rec, cur_rec, offsets1, offsets2, index,
-                                   page_is_spatial_non_leaf(cur1_rec, index),
-                                   false, &cur_matched_fields);
+      slc2 = slc_ctx2.get_offsets(cur_reg, index, ULINT_UNDEFINED);
+      cmp = cmp_rec_rec_with_match(
+          slc1, slc2, index, page_is_spatial_non_leaf(cur1_reg.rec, index),
+          false, &cur_matched_fields);
       if (cmp < 0) {
         page_cur_move_to_prev(&page_cur);
         break;
       } else if (cmp > 0) {
         /* Skip small recs. */
         page_cur_move_to_next(&page_cur);
-        cur_rec = page_cur_get_rec(&page_cur);
+        cur_reg = page_cur_get_reg(&page_cur);
       } else if (is_leaf) {
-        if (rec_get_deleted_flag(cur1_rec, dict_table_is_comp(index->table))) {
+        if (rec_get_deleted_flag(cur1_reg.rec,
+                                 dict_table_is_comp(index->table))) {
           goto next;
         } else {
           /* We have two identical leaf records,
           skip copying the undeleted one, and
           unmark deleted on the current page */
-          btr_rec_set_deleted_flag(cur_rec, nullptr, false);
+          btr_rec_set_deleted_flag(cur_reg.rec, nullptr, false);
           goto next;
         }
       }
@@ -1380,29 +1387,29 @@ void rtr_page_copy_rec_list_end_no_locks(buf_block_t *new_block,
 
     /* If position is on suprenum rec, need to move to
     previous rec. */
-    if (page_rec_is_supremum(cur_rec)) {
+    if (page_rec_is_supremum(cur_reg.rec)) {
       page_cur_move_to_prev(&page_cur);
     }
 
-    cur_rec = page_cur_get_rec(&page_cur);
+    cur_reg = page_cur_get_reg(&page_cur);
 
-    offsets1 = rec_get_offsets(cur1_rec, index, offsets1, ULINT_UNDEFINED,
-                               UT_LOCATION_HERE, &heap);
+    slc1 = slc_ctx1.get_offsets(cur1_reg, index, ULINT_UNDEFINED);
 
-    ins_rec = page_cur_insert_rec_low(cur_rec, index, cur1_rec, offsets1, mtr);
-    if (UNIV_UNLIKELY(!ins_rec)) {
+    ins_reg = page_cur_insert_rec_low(cur_reg, index, slc1, mtr);
+    ut_ad(ins_reg.is_null() || slc1->is_positioned(ins_reg, index));
+    if (UNIV_UNLIKELY(ins_reg.is_null())) {
       fprintf(stderr, "page number %lu and %lu\n",
               ulong{new_block->page.id.page_no()},
               ulong{block->page.id.page_no()});
 
       ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_520)
-          << "rec offset " << page_offset(rec) << ", cur1 offset "
+          << "rec offset " << page_offset(reg) << ", cur1 offset "
           << page_offset(page_cur_get_rec(&cur1)) << ", cur_rec offset "
-          << page_offset(cur_rec);
+          << page_offset(cur_reg.rec);
     }
 
-    rec_move[moved].new_rec = ins_rec;
-    rec_move[moved].old_rec = cur1_rec;
+    rec_move[moved].new_rec = ins_reg.rec;
+    rec_move[moved].old_rec = cur1_reg.rec;
     rec_move[moved].moved = false;
     moved++;
   next:
@@ -1432,61 +1439,58 @@ void rtr_page_copy_rec_list_start_no_locks(
     mem_heap_t *heap, rtr_rec_move_t *rec_move, ulint max_move,
     ulint *num_moved, mtr_t *mtr) {
   page_cur_t cur1;
-  rec_t *cur_rec;
-  ulint offsets_1[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets1 = offsets_1;
-  ulint offsets_2[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets2 = offsets_2;
+  reg_t cur_reg;
   page_cur_t page_cur;
   ulint moved = 0;
   bool is_leaf = page_is_leaf(buf_block_get_frame(block));
 
-  rec_offs_init(offsets_1);
-  rec_offs_init(offsets_2);
+  Slice_ctx slc_ctx1;
+  Slice_ctx slc_ctx2;
+  Slice *slc1 = nullptr;
+  Slice *slc2 = nullptr;
 
   page_cur_set_before_first(block, &cur1);
   page_cur_move_to_next(&cur1);
 
-  cur_rec =
-      page_rec_get_next(page_get_infimum_rec(buf_block_get_frame(new_block)));
-  page_cur_position(cur_rec, new_block, &page_cur);
+  cur_reg = page_rec_get_next_reg(
+      page_get_infimum_rec(buf_block_get_frame(new_block)));
+  page_cur_position(cur_reg.rec, new_block, &page_cur);
 
   while (page_cur_get_rec(&cur1) != rec) {
-    rec_t *cur1_rec = page_cur_get_rec(&cur1);
-    rec_t *ins_rec;
+    reg_t cur1_reg = page_cur_get_reg(&cur1);
+    reg_t ins_reg;
 
-    if (page_rec_is_infimum(cur_rec)) {
-      cur_rec = page_rec_get_next(cur_rec);
+    if (page_rec_is_infimum(cur_reg.rec)) {
+      cur_reg = page_rec_get_next_reg(cur_reg.rec);
     }
 
-    offsets1 = rec_get_offsets(cur1_rec, index, offsets1, ULINT_UNDEFINED,
-                               UT_LOCATION_HERE, &heap);
+    slc1 = slc_ctx1.get_offsets(cur1_reg, index, ULINT_UNDEFINED);
 
-    while (!page_rec_is_supremum(cur_rec)) {
+    while (!page_rec_is_supremum(cur_reg.rec)) {
       ulint cur_matched_fields = 0;
       int cmp;
 
-      offsets2 = rec_get_offsets(cur_rec, index, offsets2, ULINT_UNDEFINED,
-                                 UT_LOCATION_HERE, &heap);
-      cmp = cmp_rec_rec_with_match(cur1_rec, cur_rec, offsets1, offsets2, index,
-                                   page_is_spatial_non_leaf(cur1_rec, index),
-                                   false, &cur_matched_fields);
+      slc2 = slc_ctx2.get_offsets(cur_reg, index, ULINT_UNDEFINED);
+      cmp = cmp_rec_rec_with_match(
+          slc1, slc2, index, page_is_spatial_non_leaf(cur1_reg.rec, index),
+          false, &cur_matched_fields);
       if (cmp < 0) {
         page_cur_move_to_prev(&page_cur);
-        cur_rec = page_cur_get_rec(&page_cur);
+        cur_reg = page_cur_get_reg(&page_cur);
         break;
       } else if (cmp > 0) {
         /* Skip small recs. */
         page_cur_move_to_next(&page_cur);
-        cur_rec = page_cur_get_rec(&page_cur);
+        cur_reg = page_cur_get_reg(&page_cur);
       } else if (is_leaf) {
-        if (rec_get_deleted_flag(cur1_rec, dict_table_is_comp(index->table))) {
+        if (rec_get_deleted_flag(cur1_reg.rec,
+                                 dict_table_is_comp(index->table))) {
           goto next;
         } else {
           /* We have two identical leaf records,
           skip copying the undeleted one, and
           unmark deleted on the current page */
-          btr_rec_set_deleted_flag(cur_rec, nullptr, false);
+          btr_rec_set_deleted_flag(cur_reg.rec, nullptr, false);
           goto next;
         }
       }
@@ -1494,17 +1498,17 @@ void rtr_page_copy_rec_list_start_no_locks(
 
     /* If position is on suprenum rec, need to move to
     previous rec. */
-    if (page_rec_is_supremum(cur_rec)) {
+    if (page_rec_is_supremum(cur_reg.rec)) {
       page_cur_move_to_prev(&page_cur);
     }
 
-    cur_rec = page_cur_get_rec(&page_cur);
+    cur_reg = page_cur_get_reg(&page_cur);
 
-    offsets1 = rec_get_offsets(cur1_rec, index, offsets1, ULINT_UNDEFINED,
-                               UT_LOCATION_HERE, &heap);
+    slc1 = slc_ctx1.get_offsets(cur1_reg, index, ULINT_UNDEFINED);
+    ins_reg = page_cur_insert_rec_low(cur_reg, index, slc1, mtr);
+    ut_ad(ins_reg.is_null() || slc1->is_positioned(ins_reg, index));
 
-    ins_rec = page_cur_insert_rec_low(cur_rec, index, cur1_rec, offsets1, mtr);
-    if (UNIV_UNLIKELY(!ins_rec)) {
+    if (UNIV_UNLIKELY(ins_reg.is_null())) {
       fprintf(stderr, "page number %ld and %ld\n",
               (long)new_block->page.id.page_no(),
               (long)block->page.id.page_no());
@@ -1512,11 +1516,11 @@ void rtr_page_copy_rec_list_start_no_locks(
       ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_521)
           << "rec offset " << page_offset(rec) << ", cur1 offset "
           << page_offset(page_cur_get_rec(&cur1)) << ", cur_rec offset "
-          << page_offset(cur_rec);
+          << page_offset(cur_reg);
     }
 
-    rec_move[moved].new_rec = ins_rec;
-    rec_move[moved].old_rec = cur1_rec;
+    rec_move[moved].new_rec = ins_reg.rec;
+    rec_move[moved].old_rec = cur1_reg.rec;
     rec_move[moved].moved = false;
     moved++;
   next:
@@ -1531,26 +1535,22 @@ void rtr_page_copy_rec_list_start_no_locks(
   *num_moved = moved;
 }
 
-bool rtr_merge_mbr_changed(btr_cur_t *cursor, btr_cur_t *cursor2,
-                           ulint *offsets, ulint *offsets2,
-                           rtr_mbr_t *new_mbr) {
+bool rtr_merge_mbr_changed(btr_cur_t *cursor, btr_cur_t *cursor2, Slice *slc,
+                           Slice *slc2, rtr_mbr_t *new_mbr) {
   double *mbr;
   double mbr1[SPDIMS * 2];
   double mbr2[SPDIMS * 2];
-  rec_t *rec;
   ulint len;
   bool changed = false;
 
   ut_ad(dict_index_is_spatial(cursor->index));
+  ut_ad(slc->is_positioned(btr_cur_get_rec(cursor), cursor->index));
+  ut_ad(slc2->is_positioned(btr_cur_get_rec(cursor2), cursor2->index));
 
-  rec = btr_cur_get_rec(cursor);
-
-  rtr_read_mbr(rec_get_nth_field(cursor->index, rec, offsets, 0, &len),
+  rtr_read_mbr(slc->get_nth_field(cursor->index, 0, &len),
                reinterpret_cast<rtr_mbr_t *>(mbr1));
 
-  rec = btr_cur_get_rec(cursor2);
-
-  rtr_read_mbr(rec_get_nth_field(cursor->index, rec, offsets2, 0, &len),
+  rtr_read_mbr(slc2->get_nth_field(cursor2->index, 0, &len),
                reinterpret_cast<rtr_mbr_t *>(mbr2));
 
   mbr = reinterpret_cast<double *>(new_mbr);
@@ -1568,7 +1568,7 @@ bool rtr_merge_mbr_changed(btr_cur_t *cursor, btr_cur_t *cursor2,
 }
 
 dberr_t rtr_merge_and_update_mbr(btr_cur_t *cursor, btr_cur_t *cursor2,
-                                 ulint *offsets, ulint *offsets2,
+                                 Slice **slc, Slice_ctx *sctx, Slice *slc2,
                                  page_t *child_page, mtr_t *mtr) {
   dberr_t err = DB_SUCCESS;
   rtr_mbr_t new_mbr;
@@ -1576,12 +1576,12 @@ dberr_t rtr_merge_and_update_mbr(btr_cur_t *cursor, btr_cur_t *cursor2,
 
   ut_ad(dict_index_is_spatial(cursor->index));
 
-  changed = rtr_merge_mbr_changed(cursor, cursor2, offsets, offsets2, &new_mbr);
+  changed = rtr_merge_mbr_changed(cursor, cursor2, (*slc), slc2, &new_mbr);
 
   /* Update the mbr field of the rec. And will delete the record
   pointed by cursor2 */
   if (changed) {
-    if (!rtr_update_mbr_field(cursor, offsets, cursor2, child_page, &new_mbr,
+    if (!rtr_update_mbr_field(cursor, slc, sctx, cursor2, child_page, &new_mbr,
                               nullptr, mtr)) {
       err = DB_ERROR;
     }
@@ -1617,20 +1617,19 @@ bool rtr_check_same_block(
 
 {
   page_no_t page_no = childb->page.id.page_no();
-  ulint *offsets;
-  rec_t *rec =
-      page_rec_get_next(page_get_infimum_rec(buf_block_get_frame(parentb)));
+  Slice_ctx slc_ctx;
+  reg_t reg =
+      page_rec_get_next_reg(page_get_infimum_rec(buf_block_get_frame(parentb)));
 
-  while (!page_rec_is_supremum(rec)) {
-    offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                              UT_LOCATION_HERE, &heap);
+  while (!page_rec_is_supremum(reg.rec)) {
+    slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
-    if (btr_node_ptr_get_child_page_no(rec, offsets) == page_no) {
-      btr_cur_position(index, rec, parentb, cursor);
+    if (btr_node_ptr_get_child_page_no(slc_ctx.slice()) == page_no) {
+      btr_cur_position(index, reg.rec, parentb, cursor);
       return (true);
     }
 
-    rec = page_rec_get_next(rec);
+    reg = page_rec_get_next_reg(reg.rec);
   }
 
   return (false);
@@ -1641,11 +1640,7 @@ bool rtr_check_same_block(
 double rtr_rec_cal_increase(
     const dtuple_t *dtuple, /*!< in: data tuple to insert, which
                             cause area increase */
-    const rec_t *rec,       /*!< in: physical record which differs from
-                            dtuple in some of the common fields, or which
-                            has an equal number or more fields than
-                            dtuple */
-    const ulint *offsets,   /*!< in: array returned by rec_get_offsets() */
+    const Slice *slc,       /*!< in: array returned by rec_get_offsets() */
     double *area,           /*!< out: increased area */
     const dd::Spatial_reference_system *srs) /*!< in: SRS of R-tree */
 {
@@ -1655,13 +1650,15 @@ double rtr_rec_cal_increase(
   const byte *rec_b_ptr;
   double ret = 0;
 
-  ut_ad(!page_rec_is_supremum(rec));
-  ut_ad(!page_rec_is_infimum(rec));
+  ut_ad(slc->validate());
+  ut_ad(!page_rec_is_supremum(slc->rec()));
+  ut_ad(!page_rec_is_infimum(slc->rec()));
 
   dtuple_field = dtuple_get_nth_field(dtuple, 0);
   dtuple_f_len = dfield_get_len(dtuple_field);
 
-  rec_b_ptr = rec_get_nth_field(nullptr, rec, offsets, 0, &rec_f_len);
+  // rec_b_ptr = rec_get_nth_field(nullptr, rec, slc, 0, &rec_f_len);
+  rec_b_ptr = const_cast<Slice *>(slc)->get_nth_field(nullptr, 0, &rec_f_len);
   ret = rtree_area_increase(
       srs, rec_b_ptr, static_cast<const byte *>(dfield_get_data(dtuple_field)),
       static_cast<int>(dtuple_f_len), area);
@@ -1734,24 +1731,21 @@ int64_t rtr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple,
     return (HA_POS_ERROR);
   }
 
-  rec_t *rec;
   const byte *field;
   ulint len;
-  ulint *offsets = nullptr;
-  mem_heap_t *heap;
+  Slice_ctx slc_ctx;
+  Slice *slc = nullptr;
 
-  heap = mem_heap_create(512, UT_LOCATION_HERE);
-  rec = page_rec_get_next(page_get_infimum_rec(page));
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  slc = slc_ctx.get_offsets(page_rec_get_next_reg(page_get_infimum_rec(page)),
+                            index, ULINT_UNDEFINED);
 
   /* Scan records in root page and calculate area. */
   double area = 0;
-  while (!page_rec_is_supremum(rec)) {
+  while (!page_rec_is_supremum(slc->rec())) {
     rtr_mbr_t mbr;
     double rec_area;
 
-    field = rec_get_nth_field(index, rec, offsets, 0, &len);
+    field = slc->get_nth_field(index, 0, &len);
     ut_ad(len == DATA_MBR_LEN);
 
     rtr_read_mbr(field, &mbr);
@@ -1810,11 +1804,11 @@ int64_t rtr_estimate_n_rows_in_range(dict_index_t *index, const dtuple_t *tuple,
       }
     }
 
-    rec = page_rec_get_next(rec);
+    slc = slc_ctx.get_offsets(page_rec_get_next_reg(slc->rec()), index,
+                              ULINT_UNDEFINED);
   }
 
   mtr_commit(&mtr);
-  mem_heap_free(heap);
 
   if (!std::isfinite(area)) {
     return (HA_POS_ERROR);

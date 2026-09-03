@@ -43,6 +43,17 @@
 --echo # SETUP #
 --echo #########
 
+# Save current consensus cluster info before shutdown.
+# The old datadir (8.0.18) may contain stale consensus_info with a hardcoded
+# port that conflicts with the current MTR-assigned port. We must use
+# --cluster-force-change-meta on the first restart to overwrite the stale
+# consensus_info in the old datadir with the correct current cluster config.
+--disable_query_log
+let $cluster_info = query_get_value("select cluster_info from mysql.consensus_info", cluster_info, 1);
+let $cluster_id = query_get_value("select cluster_id from mysql.consensus_info", cluster_id, 1);
+let $current_term = query_get_value("select current_term from mysql.consensus_info", current_term, 1);
+--enable_query_log
+
 --echo # Stop the running the server
 --source include/shutdown_mysqld.inc
 
@@ -52,7 +63,12 @@
 --exec unzip -qo $MYSQL_TMP_DIR/data_8018_instant_ddl_system_table.zip -d $MYSQL_TMP_DIR
 let $DATADIR = $MYSQL_TMP_DIR/data;
 
---echo # Restart the server against the unzipped datadir
+--echo # Restart 1: update consensus info in old datadir via --cluster-force-change-meta
+# mysqld updates consensus_info with current cluster config then exits cleanly.
+--exec echo "restart: --datadir=$DATADIR --innodb-page-size=16k --log_bin_index=bin_log.index --log_bin=bin_log.000001 --cluster-force-change-meta=ON --cluster-info='$cluster_info' --cluster-id=$cluster_id --cluster-current-term=$current_term" > $_expect_file_name
+--sleep 10
+
+--echo # Restart 2: start against the unzipped datadir
 --replace_result $DATADIR DATADIR
 --let $restart_parameters = restart: --datadir=$DATADIR --innodb-page-size=16k --log_bin_index=bin_log.index --log_bin=bin_log.000001
 --let $wait_counter=100

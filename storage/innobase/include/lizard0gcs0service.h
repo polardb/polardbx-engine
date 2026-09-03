@@ -25,7 +25,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 *****************************************************************************/
 
 /** @file include/lizard0gcs0service.h
- Lizard scn number type declaration.
+ Lizard global commit system type declaration.
 
  Created 2024-06-05 by Jianwei.zhao
  *******************************************************/
@@ -119,14 +119,24 @@ struct gcn_tuple_t {
 
 const gcn_tuple_t GTUPLE_NULL(GCN_NULL, CSR_AUTOMATIC);
 
-/** Validate gcn tuple */
-inline bool gcn_tuple_validation(const gcn_tuple_t &tuple) {
-  return tuple.csr == csr_t::CSR_ASSIGNED ? tuple.gcn != GCN_NULL : true;
-}
+/** commit number order */
+struct cn_order_t {
+  scn_t scn;
+  utc_t us;
+  gcn_t gcn;
 
-/** Convert number to csr */
-inline csr_t uint2csr(unsigned int csr) {
-  return csr == 0 ? CSR_AUTOMATIC : CSR_ASSIGNED;
-}
+  cn_order_t() : scn(0), us(0), gcn(0) {}
+
+  cn_order_t(scn_t scn_arg, utc_t us_arg, gcn_t gcn_arg)
+      : scn(scn_arg), us(us_arg), gcn(gcn_arg) {}
+
+  void set_null() {
+    scn = 0;
+    us = 0;
+    gcn = 0;
+  }
+
+  bool is_null() const { return scn == 0 && us == 0 && gcn == 0; }
+};
 
 #endif

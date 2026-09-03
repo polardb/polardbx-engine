@@ -201,7 +201,7 @@ struct ViewCheck {
 /**
 Validates a read view list. */
 
-bool MVCC::validate() const {
+bool XVCC::validate() const {
   ViewCheck check;
 
   ut_ad(trx_sys_mutex_own());
@@ -331,7 +331,7 @@ ReadView::~ReadView() {
 
 /** Constructor
 @param size             Number of views to pre-allocate */
-MVCC::MVCC(ulint size) : m_free(), m_views() {
+XVCC::XVCC(ulint size) : m_free(), m_views() {
   for (ulint i = 0; i < size; ++i) {
     ReadView *view = ut::new_withkey<ReadView>(UT_NEW_THIS_FILE_PSI_KEY);
 
@@ -339,7 +339,7 @@ MVCC::MVCC(ulint size) : m_free(), m_views() {
   }
 }
 
-MVCC::~MVCC() {
+XVCC::~XVCC() {
   while (ReadView *view = UT_LIST_GET_FIRST(m_free)) {
     UT_LIST_REMOVE(m_free, view);
 
@@ -476,7 +476,7 @@ Find a free view from the active list, if none found then allocate
 a new view.
 @return a view to use */
 
-ReadView *MVCC::get_view() {
+ReadView *XVCC::get_view() {
   ut_ad(trx_sys_mutex_own());
 
   ReadView *view;
@@ -488,7 +488,7 @@ ReadView *MVCC::get_view() {
     view = ut::new_withkey<ReadView>(UT_NEW_THIS_FILE_PSI_KEY);
 
     if (view == nullptr) {
-      ib::error(ER_IB_MSG_918) << "Failed to allocate MVCC view";
+      ib::error(ER_IB_MSG_918) << "Failed to allocate XVCC view";
     }
   }
 
@@ -499,7 +499,7 @@ ReadView *MVCC::get_view() {
 Release a view that is inactive but not closed. Caller must own
 the trx_sys_t::mutex.
 @param view             View to release */
-void MVCC::view_release(ReadView *&view) {
+void XVCC::view_release(ReadView *&view) {
   ut_ad(!srv_read_only_mode);
   ut_ad(trx_sys_mutex_own());
 
@@ -527,7 +527,7 @@ void MVCC::view_release(ReadView *&view) {
 @param view     View owned by this class created for the caller. Must be
 freed by calling view_close()
 @param trx      Transaction instance of caller */
-void MVCC::view_open(ReadView *&view, trx_t *trx) {
+void XVCC::view_open(ReadView *&view, trx_t *trx) {
   ut_ad(!srv_read_only_mode);
 
   /** If no new RW transaction has been started since the last view
@@ -580,7 +580,7 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
   trx_sys_mutex_exit();
 }
 
-ReadView *MVCC::get_view_created_by_trx_id(trx_id_t trx_id) const {
+ReadView *XVCC::get_view_created_by_trx_id(trx_id_t trx_id) const {
   ReadView *view;
 
   ut_ad(trx_sys_mutex_own());
@@ -603,7 +603,7 @@ ReadView *MVCC::get_view_created_by_trx_id(trx_id_t trx_id) const {
 Get the oldest (active) view in the system.
 @return oldest view if found or NULL */
 
-ReadView *MVCC::get_oldest_view() const {
+ReadView *XVCC::get_oldest_view() const {
   ReadView *view;
 
   ut_ad(trx_sys_mutex_own());
@@ -672,7 +672,7 @@ It will also move the closed views from the m_views list to the
 m_free list. This function is called by Purge to determine whether it should
 purge the delete marked record or not.
 @param view             Preallocated view, owned by the caller */
-void MVCC::clone_oldest_view(ReadView *view) {
+void XVCC::clone_oldest_view(ReadView *view) {
   trx_sys_mutex_enter();
 
   ReadView *oldest_view = get_oldest_view();
@@ -698,7 +698,7 @@ void MVCC::clone_oldest_view(ReadView *view) {
 /**
 @return the number of active views */
 
-ulint MVCC::size() const {
+ulint XVCC::size() const {
   trx_sys_mutex_enter();
 
   ulint size = 0;
@@ -719,7 +719,7 @@ Close a view created by the above function.
 @param view             view allocated by trx_open.
 @param own_mutex        true if caller owns trx_sys_t::mutex */
 
-void MVCC::view_close(ReadView *&view, bool own_mutex) {
+void XVCC::view_close(ReadView *&view, bool own_mutex) {
   uintptr_t p = reinterpret_cast<uintptr_t>(view);
 
   /* Note: The assumption here is that AC-NL-RO transactions will

@@ -110,6 +110,7 @@
 #include "sql/protocol_classic.h"
 #include "sql/psi_memory_key.h"
 #include "sql/query_options.h"
+#include "sql/range_optimizer/range_optimizer.h"  // opt_unique_key_range_shortcut
 #include "sql/rpl_group_replication.h"  // is_group_replication_running
 #include "sql/rpl_handler.h"            // delegates_update_lock_type
 #include "sql/rpl_info_factory.h"       // Rpl_info_factory
@@ -144,6 +145,7 @@
 #include "sql/named_pipe.h"
 #endif
 #include "my_openssl_fips.h"
+#include "vidx/vidx_common.h"
 
 #ifdef WITH_LOCK_ORDER
 #include "sql/debug_lock_order.h"
@@ -154,11 +156,11 @@
 #include "storage/perfschema/terminology_use_previous.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
-#include "sql/appliedindex_checker.h"  // AppliedIndexChecker
-#include "sql/bl_consensus_log.h"      // ConsensusLogManager and alisql::Paxos
-#include "sql/consensus_log_manager.h"
+#include "sql/komodo0consensus0xlog.h"
+#include "sql/komodo0xlog.h"
 #include "sql/polarx_proc/changeset_manager.h"
 #include "sql/rpl_replica.h"  // rotate_relay_log
+#include "sql/sys_vars_ext.h"
 
 static constexpr const unsigned long DEFAULT_ERROR_COUNT{1024};
 static constexpr const unsigned long DEFAULT_SORT_MEMORY{256UL * 1024UL};
@@ -1758,6 +1760,13 @@ static Sys_var_bool Sys_binlog_rows_query(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin));
 
+static Sys_var_bool Sys_binlog_rows_query_key(
+    "binlog_rows_query_key_content",
+    "Only write the leading comment of Rows_query_log events into the binary "
+    "log.",
+    GLOBAL_VAR(binlog_rows_query_key_content_only), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
 static Sys_var_bool Sys_binlog_order_commits(
     "binlog_order_commits",
     "Issue internal commit calls in the same order as transactions are"
@@ -3217,6 +3226,22 @@ static Sys_var_ulong Sys_net_buffer_length(
     VALID_RANGE(1024, 1024 * 1024), DEFAULT(16384), BLOCK_SIZE(1024),
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_net_buffer_length));
 
+static Sys_var_bool Sys_net_buff_shrink_enabled(
+    "net_buff_shrink_enabled",
+    "Enable automatic shrinking of network receive buffer when consecutive "
+    "small packets are received",
+    GLOBAL_VAR(net_buff_shrink_enabled), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
+static Sys_var_uint Sys_net_buff_shrink_thresh(
+    "net_buff_shrink_thresh",
+    "Number of consecutive small packets required before shrinking the network "
+    "receive buffer. 0 means shrink immediately after every command, "
+    "regardless of packet size.",
+    GLOBAL_VAR(net_buff_shrink_thresh), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, 10000), DEFAULT(5), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG);
+
 static bool fix_net_read_timeout(sys_var *self, THD *thd, enum_var_type type) {
   if (!self->is_global_persist(type)) {
     // net_buffer_length is a specific property for the classic protocols
@@ -3486,6 +3511,12 @@ static Sys_var_flagset Sys_optimizer_switch(
     HINT_UPDATEABLE SESSION_VAR(optimizer_switch), CMD_LINE(REQUIRED_ARG),
     optimizer_switch_names, DEFAULT(OPTIMIZER_SWITCH_DEFAULT), NO_MUTEX_GUARD,
     NOT_IN_BINLOG, ON_CHECK(check_optimizer_switch), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_unique_key_range_shortcut(
+    "unique_key_range_shortcut",
+    "Enable unique-key range shortcut for single-table UPDATE/DELETE",
+    GLOBAL_VAR(opt_unique_key_range_shortcut), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
 
 static PolyLock_mutex PLock_global_conn_mem_limit(&LOCK_global_conn_mem_limit);
 
@@ -4505,7 +4536,7 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
 
   channel_map.wrlock();
 
-  mysql_mutex_lock(consensus_log_manager.get_sequence_stage1_lock());
+  mysql_mutex_lock(komodo::xlog_log_manager_get_sequence_stage1_lock());
   mysql_bin_log.wait_xid_disappear();
 
   mysql_mutex_lock(mysql_bin_log.get_log_lock());
@@ -4743,30 +4774,11 @@ bool Sys_var_gtid_mode::global_update(THD *thd, set_var *var) {
 
   // Rotate
   {
-    auto consensus_guard = create_lock_guard(
-      [&] { consensus_log_manager.rdlock_consensus_status(); },
-      [&] { consensus_log_manager.unlock_consensus_status(); }
-    );
-    uint64 binlog_status = consensus_log_manager.get_status();
-    if (binlog_status == BINLOG_WORKING) {
-      bool dont_care = false;
-      if (mysql_bin_log.rotate(true, &dont_care)) {
-        consensus_guard.unlock();
-        goto err;
-      }
-    } else {
-      Relay_log_info *rli_info = consensus_log_manager.get_relay_log_info();
-      Master_info *mi = rli_info->mi;
-      mysql_mutex_lock(&mi->data_lock);
-      if (rotate_relay_log(rli_info->mi)) {
-        mysql_mutex_unlock(&mi->data_lock);
-        consensus_guard.unlock();
-        my_error(ER_CANT_SET_GTID_MODE, MYF(0),
-                 Gtid_mode::to_string(new_gtid_mode),
-                 "rotate relay log failed.");
-        goto err;
-      }
-      mysql_mutex_unlock(&mi->data_lock);
+    if (komodo::xlog_engine_rotate_consensus_log()) {
+      my_error(ER_CANT_SET_GTID_MODE, MYF(0),
+                Gtid_mode::to_string(new_gtid_mode),
+                "rotate log failed.");
+      goto err;
     }
   }
 
@@ -4780,7 +4792,7 @@ err:
   assert(lock_count <= 4);
   if (lock_count == 4) global_sid_lock->unlock();
   mysql_mutex_unlock(mysql_bin_log.get_log_lock());
-  mysql_mutex_unlock(consensus_log_manager.get_sequence_stage1_lock());
+  mysql_mutex_unlock(komodo::xlog_log_manager_get_sequence_stage1_lock());
   channel_map.unlock();
   Gtid_mode::lock.unlock();
   return ret;
@@ -5600,6 +5612,26 @@ static bool check_sql_log_bin(sys_var *self, THD *thd, set_var *var) {
     return true;
   }
 
+  // check if sql_log_bin is modified(1->0) by super user
+  if (opt_sql_log_bin_super_modified
+      && thd->variables.sql_log_bin
+      && (var->save_result.ulonglong_value == 0)
+      && !thd->m_main_security_ctx.check_access(SUPER_ACL)) {
+    my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0), "SUPER");
+    return true;
+  }
+
+  // Log effective change to sql_log_bin for diagnostics (skip SUPER to avoid
+  // log flooding from management tools that routinely toggle sql_log_bin)
+  if (thd->variables.sql_log_bin != (bool)var->save_result.ulonglong_value &&
+      !thd->m_main_security_ctx.check_access(SUPER_ACL)) {
+    LogErr(SYSTEM_LEVEL, ER_CONSENSUS_CMD_LOG,
+           thd->m_main_security_ctx.user().str,
+           thd->m_main_security_ctx.host_or_ip().str,
+           thd->query().str,
+           (int)var->save_result.ulonglong_value);
+  }
+
   return false;
 }
 
@@ -6090,6 +6122,10 @@ static Sys_var_have Sys_have_symlink(
 static Sys_var_have Sys_have_statement_timeout(
     "have_statement_timeout", "have_statement_timeout",
     READ_ONLY NON_PERSIST GLOBAL_VAR(have_statement_timeout), NO_CMD_LINE);
+
+static Sys_var_have Sys_have_ftrunc_lock(
+    "have_ftrunc_lock", "have_ftrunc_lock",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(have_ftrunc_lock), NO_CMD_LINE);
 
 static bool fix_general_log_state(sys_var *, THD *thd, enum_var_type) {
   bool new_state = opt_general_log, res = false;
@@ -7807,5 +7843,31 @@ static Sys_var_bool Sys_pushdown_range_limit(
     CMD_LINE(OPT_ARG),
     DEFAULT(false));
 
+static Sys_var_bool Sys_show_vidx_hlindex_tables(
+    "show_vidx_hlindex_tables",
+    "When enabled, vector index auxiliary tables (hlindex) are visible in "
+    "INFORMATION_SCHEMA.TABLES, SHOW TABLES, and can be directly SELECTed. "
+    "Note: this also affects other storage-engine hidden tables (e.g., InnoDB "
+    "FTS auxiliary tables) since they share the same hidden type.",
+    GLOBAL_VAR(opt_show_vidx_hlindex_tables), CMD_LINE(OPT_ARG), DEFAULT(false),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
+static Sys_var_bool Sys_polarx_security_enhancement_mode(
+    "polarx_security_enhancement_mode",
+    "When enabled, DROP DATABASE requires both DROP_ACL and DROP_DATABASE_ADMIN. "
+    "When disabled, only DROP_ACL is required.",
+    GLOBAL_VAR(opt_polarx_security_enhancement_mode), CMD_LINE(OPT_ARG), 
+    DEFAULT(false));
+
+static Sys_var_bool Sys_forbid_execute_dml_all(
+    "forbid_execute_dml_all",
+    "When enabled, UPDATE and DELETE statements without a WHERE clause "
+    "or with a tautological WHERE clause (e.g. WHERE 1=1, WHERE TRUE) "
+    "will be blocked. Maintain users in maintain_user_list are exempt.",
+    HINT_UPDATEABLE SESSION_VAR(forbid_execute_dml_all), CMD_LINE(OPT_ARG),
+    DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG);
+
 #include "sys_vars_consensus.cc"
 #include "sys_vars_ext.cc"
+#include "sys_vars_deprecated.cc"
+

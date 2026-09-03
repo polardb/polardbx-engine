@@ -17,9 +17,6 @@ c1	c2	c3
 41	48	49
 51	58	59
 61	68	69
-call dbms_undo.purge_status();
-HISTORY_LENGTH	CURRENT_SCN	CURRENT_GCN	PURGED_SCN	PURGED_GCN	ERASED_SCN	ERASED_GCN
-2724	59039	1024	57345	1024	40987	1024
 set global innodb_undo_retention = 0;
 ###########
 # CLEANUP #

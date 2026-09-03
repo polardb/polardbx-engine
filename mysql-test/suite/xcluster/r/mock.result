@@ -1,16 +1,26 @@
 select server_id, role from information_schema.alisql_cluster_local where role='leader';
 server_id	role
 1	Leader
+create table t1(id int);
+insert into t1 values (1);
+insert into t1 values (2);
+insert into t1 values (3);
+insert into t1 values (4);
+flush logs;
+insert into t1 values (5);
+call dbms_consensus.purge_log(100000);
 select server_id, voted_for, role from information_schema.alisql_cluster_local;
 server_id	voted_for	role
 2	1	Follower
-create table t1(id int);
 insert into t1 values (1);
 insert into t1 values (2);
 insert into t1 values (3);
 insert into t1 values (4);
 insert into t1 values (5);
 # restart: --cluster-start-index=LOGINDEX
+show global status like "consensus_mock_start_index";
+Variable_name	Value
+consensus_mock_start_index	START_INDEX
 select count(distinct(match_index)) from information_schema.alisql_cluster_global where server_id <= 3;
 count(distinct(match_index))
 1

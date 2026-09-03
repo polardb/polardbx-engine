@@ -42,7 +42,9 @@ external tools. */
 #include "fil0types.h"
 #include "page0types.h"
 
+#ifndef INNODB_PAGE_PAGE_IC_STANDALONE
 #include "page/page.ic"
+#endif /* !INNODB_PAGE_PAGE_IC_STANDALONE */
 #include "page/zipdecompress.ic"
 /** Decompress a page.  This function should tolerate errors on the compressed
  page.  Instead of letting assertions fail, it will return false if an

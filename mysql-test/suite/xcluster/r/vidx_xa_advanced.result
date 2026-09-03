@@ -1,0 +1,442 @@
+########################################
+# Setup                                #
+########################################
+call mtr.add_suppression("Unsafe statement written to the binary log");
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+a INT NOT NULL DEFAULT 0,
+v VECTOR(3),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+label VARCHAR(32) NOT NULL DEFAULT '',
+v VECTOR(3),
+VECTOR INDEX vi2(v)
+) ENGINE = InnoDB;
+# Seed data
+INSERT INTO t1(a, v) VALUES (1, VEC_FROMTEXT("[1,1,1]"));
+INSERT INTO t1(a, v) VALUES (2, VEC_FROMTEXT("[2,2,2]"));
+INSERT INTO t1(a, v) VALUES (3, VEC_FROMTEXT("[3,3,3]"));
+INSERT INTO t2(label, v) VALUES ('a', VEC_FROMTEXT("[10,10,10]"));
+INSERT INTO t2(label, v) VALUES ('b', VEC_FROMTEXT("[20,20,20]"));
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+########################################
+# Setup on follower                    #
+########################################
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+SELECT TABLE_ID INTO @t2_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t2';
+
+########################################
+# 1. Verify seed: main + aux tables    #
+########################################
+# Leader
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+3
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+3
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+2
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t2_aux_rows
+2
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+3
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+3
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+2
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t2_aux_rows
+2
+DEALLOCATE PREPARE s;
+
+########################################
+# 2. XA INSERT - aux count increases   #
+########################################
+XA START 'xa_ins';
+INSERT INTO t1(a, v) VALUES (10, VEC_FROMTEXT("[10,10,10]"));
+INSERT INTO t1(a, v) VALUES (11, VEC_FROMTEXT("[11,11,11]"));
+XA END 'xa_ins';
+XA PREPARE 'xa_ins';
+XA COMMIT 'xa_ins';
+# Leader: main + aux
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+5
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+5
+DEALLOCATE PREPARE s;
+# Follower: main + aux
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+5
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+5
+DEALLOCATE PREPARE s;
+
+########################################
+# 3. Multi-table XA with aux verify    #
+########################################
+XA START 'xa_multi';
+INSERT INTO t2(label, v) VALUES ('c', VEC_FROMTEXT("[30,30,30]"));
+UPDATE t1 SET v = VEC_FROMTEXT("[5,5,5]") WHERE a = 1;
+DELETE FROM t1 WHERE a = 2;
+XA END 'xa_multi';
+XA PREPARE 'xa_multi';
+XA COMMIT 'xa_multi';
+# Leader
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+4
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+6
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+3
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t2_aux_rows
+3
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+4
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+6
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS t2_rows FROM t2;
+t2_rows
+3
+SET @s = CONCAT('SELECT COUNT(*) AS t2_aux_rows FROM `vidx_', @t2_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t2_aux_rows
+3
+DEALLOCATE PREPARE s;
+
+##############################################
+# 4. XA ROLLBACK - base rolled back,        #
+#    aux rows preserved (orphan-tolerated). #
+#    Per-Trx independent commit semantics:  #
+#    aux InnoDB rows commit per-row inside  #
+#    Attachable_trx_rw before user trx      #
+#    rolls back, leaving orphan aux rows.   #
+#    Subsequent invalidate / orphan-row     #
+#    treatment cleans them up lazily.       #
+##############################################
+# Record aux count before rollback
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_before
+6
+DEALLOCATE PREPARE s;
+XA START 'xa_rb';
+INSERT INTO t1(a, v) VALUES (99, VEC_FROMTEXT("[99,99,99]"));
+DELETE FROM t1 WHERE a = 3;
+XA END 'xa_rb';
+XA PREPARE 'xa_rb';
+XA ROLLBACK 'xa_rb';
+# Leader: aux count after rollback (>= before — INSERT-side orphans persist)
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after
+7
+DEALLOCATE PREPARE s;
+# Rolled-back base row must NOT exist
+SELECT COUNT(*) AS a99_count FROM t1 WHERE a = 99;
+a99_count
+0
+# Existing base row must still exist (DELETE was rolled back)
+SELECT COUNT(*) AS a3_count FROM t1 WHERE a = 3;
+a3_count
+1
+# Follower: verify base rollback (aux orphan also replicated)
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after
+7
+DEALLOCATE PREPARE s;
+SELECT COUNT(*) AS a99_count FROM t1 WHERE a = 99;
+a99_count
+0
+SELECT COUNT(*) AS a3_count FROM t1 WHERE a = 3;
+a3_count
+1
+
+########################################
+# 5. XA ROLLBACK then XA COMMIT       #
+#    Verify Attachable_trx_rw reuse   #
+#    works correctly across XA rb→commit
+########################################
+XA START 'xa_rb2';
+INSERT INTO t1(a, v) VALUES (300, VEC_FROMTEXT("[30,30,30]"));
+XA END 'xa_rb2';
+XA PREPARE 'xa_rb2';
+XA ROLLBACK 'xa_rb2';
+XA START 'xa_after_rb';
+INSERT INTO t1(a, v) VALUES (301, VEC_FROMTEXT("[31,31,31]"));
+XA END 'xa_after_rb';
+XA PREPARE 'xa_after_rb';
+XA COMMIT 'xa_after_rb';
+# Leader
+SELECT COUNT(*) AS a300_count FROM t1 WHERE a = 300;
+a300_count
+0
+SELECT COUNT(*) AS a301_count FROM t1 WHERE a = 301;
+a301_count
+1
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+9
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS a300_count FROM t1 WHERE a = 300;
+a300_count
+0
+SELECT COUNT(*) AS a301_count FROM t1 WHERE a = 301;
+a301_count
+1
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+9
+DEALLOCATE PREPARE s;
+
+########################################
+# 6. xa_detach_on_prepare = ON         #
+########################################
+SET SESSION xa_detach_on_prepare = ON;
+XA START 'xa_detach_on';
+INSERT INTO t1(a, v) VALUES (400, VEC_FROMTEXT("[40,40,40]"));
+XA END 'xa_detach_on';
+XA PREPARE 'xa_detach_on';
+XA COMMIT 'xa_detach_on';
+# Leader
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+6
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+10
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+6
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+10
+DEALLOCATE PREPARE s;
+
+########################################
+# 7. xa_detach_on_prepare = OFF        #
+########################################
+SET SESSION xa_detach_on_prepare = OFF;
+XA START 'xa_detach_off';
+INSERT INTO t1(a, v) VALUES (500, VEC_FROMTEXT("[50,50,50]"));
+XA END 'xa_detach_off';
+XA PREPARE 'xa_detach_off';
+XA COMMIT 'xa_detach_off';
+# Leader
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+7
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+11
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+7
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_rows
+11
+DEALLOCATE PREPARE s;
+
+########################################
+# 8. NULL vector then UPDATE           #
+#    aux table tracks changes          #
+########################################
+# Aux count before NULL inserts
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before_null FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_before_null
+11
+DEALLOCATE PREPARE s;
+XA START 'xa_null';
+INSERT INTO t1(a, v) VALUES (600, NULL);
+INSERT INTO t1(a, v) VALUES (601, NULL);
+XA END 'xa_null';
+XA PREPARE 'xa_null';
+XA COMMIT 'xa_null';
+# After NULL insert: aux count should NOT increase
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_null FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after_null
+11
+DEALLOCATE PREPARE s;
+XA START 'xa_set_vec';
+UPDATE t1 SET v = VEC_FROMTEXT("[60,60,60]") WHERE a = 600;
+UPDATE t1 SET v = VEC_FROMTEXT("[61,61,61]") WHERE a = 601;
+XA END 'xa_set_vec';
+XA PREPARE 'xa_set_vec';
+XA COMMIT 'xa_set_vec';
+# After UPDATE to set vector: aux count should increase
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after_update
+13
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+9
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_update FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after_update
+13
+DEALLOCATE PREPARE s;
+
+########################################
+# 9. Batch INSERT in XA               #
+########################################
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_before_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_before_batch
+13
+DEALLOCATE PREPARE s;
+XA START 'xa_batch';
+INSERT INTO t1(a, v) VALUES (701, VEC_FROMTEXT("[71,71,71]"));
+INSERT INTO t1(a, v) VALUES (702, VEC_FROMTEXT("[72,72,72]"));
+INSERT INTO t1(a, v) VALUES (703, VEC_FROMTEXT("[73,73,73]"));
+INSERT INTO t1(a, v) VALUES (704, VEC_FROMTEXT("[74,74,74]"));
+INSERT INTO t1(a, v) VALUES (705, VEC_FROMTEXT("[75,75,75]"));
+INSERT INTO t1(a, v) VALUES (706, VEC_FROMTEXT("[76,76,76]"));
+INSERT INTO t1(a, v) VALUES (707, VEC_FROMTEXT("[77,77,77]"));
+INSERT INTO t1(a, v) VALUES (708, VEC_FROMTEXT("[78,78,78]"));
+INSERT INTO t1(a, v) VALUES (709, VEC_FROMTEXT("[79,79,79]"));
+INSERT INTO t1(a, v) VALUES (710, VEC_FROMTEXT("[80,80,80]"));
+XA END 'xa_batch';
+XA PREPARE 'xa_batch';
+XA COMMIT 'xa_batch';
+# Leader
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+19
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after_batch
+23
+DEALLOCATE PREPARE s;
+# Follower
+SELECT COUNT(*) AS t1_rows FROM t1;
+t1_rows
+19
+SET @s = CONCAT('SELECT COUNT(*) AS t1_aux_after_batch FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+t1_aux_after_batch
+23
+DEALLOCATE PREPARE s;
+
+########################################
+# 10. ANN search consistency           #
+########################################
+# ANN on t1 (leader)
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5]")) LIMIT 5;
+id
+1
+4
+5
+8
+9
+# ANN on t2 (leader)
+SELECT id FROM t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[15,15,15]")) LIMIT 3;
+id
+1
+2
+3
+# ANN on t1 (follower)
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[5,5,5]")) LIMIT 5;
+id
+1
+4
+5
+8
+9
+# ANN on t2 (follower)
+SELECT id FROM t2 FORCE INDEX(vi2) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[15,15,15]")) LIMIT 3;
+id
+1
+2
+3
+
+########################################
+# Cleanup                              #
+########################################
+DROP TABLE t1;
+DROP TABLE t2;

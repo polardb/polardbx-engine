@@ -26,6 +26,12 @@ worklog5743;
 SELECT col_1_CHAR = repeat("b", 200) , col_2_CHAR = repeat("o", 200) FROM
 worklog5743;
 
+# produce an update-undo transaction to avoid the purge thread not progress.
+--disable_query_log
+INSERT INTO worklog5743 VALUES("qaq", "qaq");
+delete from worklog5743 where col_1_CHAR = "qaq";
+--enable_query_log
+
 START TRANSACTION;
 
 SELECT col_1_CHAR = repeat("a", 200) , col_2_CHAR = repeat("o", 200) FROM

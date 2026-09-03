@@ -77,10 +77,15 @@ Data dictionary interface */
 #endif /* !UNIV_HOTBACKUP */
 
 #include "lizard0data0types.h"
-#include "lizard0dict.h"
+#include "lizard0dd0policy.h"
+#include "lizard0dict0dd.h"
+#include "lizard0dict0dict.h"
 #include "lizard0page.h"
 #include "lizard0row.h"
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
+#include "vidx/vidx_index.h"
+
+static_assert(DATA_ROW_ID_LEN == vidx::DATA_ROW_ID_LEN);
 
 const char *DD_instant_col_val_coder::encode(const byte *stream, size_t in_len,
                                              size_t *out_len) {
@@ -243,9 +248,18 @@ static bool dd_index_match(const dict_index_t *index, const Index *dd_index) {
 
   page_type_t page_type = lizard::dd_index_get_page_type(index, p);
   if (page_type != index->page_type()) {
-    ib::warn(ER_IB_MSG_164) << "Index page type in InnoDB is "
-                            << index->page_type() << " while index page type in"
-                            << " global DD is " << page_type;
+    lizard_warn(ER_LIZARD) << "Index page type in InnoDB is "
+                           << index->page_type() << " while index page type in"
+                           << " global DD is " << page_type;
+    match = false;
+  }
+
+  uint16_t pd_capacity = lizard::dd_index_get_pd_capacity(index, p);
+  if (pd_capacity != index->pd_capacity) {
+    lizard_warn(ER_LIZARD) << "Index pd capacity in InnoDB is "
+                           << index->pd_capacity
+                           << " while index pd capacity in"
+                           << " global DD is " << pd_capacity;
     match = false;
   }
 
@@ -274,7 +288,7 @@ bool dd_table_match(const dict_table_t *table, const Table *dd_table) {
     match = false;
   }
 
-  if (!lizard::dd_check_table_fba(table, dd_table->table())) {
+  if (!lizard::dd_table_check_fba(table, dd_table->table())) {
     ib::warn(ER_IB_MSG_166)
         << "Flashback area mismatch. Table in InnoDB has flashback area "
            "option: "
@@ -354,27 +368,41 @@ bool dd_mdl_for_undo(const trx_t *trx) {
 int acquire_uncached_table(THD *thd, dd::cache::Dictionary_client *client,
                            const dd::Table *dd_table, const char *name,
                            TABLE_SHARE *ts, TABLE *td) {
+/**
+  The maximum length of a key in the table definition cache.
+
+  The key consists of the schema name, a '\0' character, the table
+  name and a '\0' character. Hence NAME_LEN * 2 + 1 + 1.
+
+  Additionally, the key can be suffixed with either 4 + 4 extra bytes
+  for slave tmp tables, or with a single extra byte for tables in a
+  secondary storage engine. Add 4 + 4 to account for either of these
+  suffixes.
+*/
+  static constexpr const size_t MAX_DBKEY_LENGTH{NAME_LEN * 2 + 1 + 1 + 4 + 4};
+
   int error = 0;
   dd::Schema *schema;
-  const char *table_cache_key;
-  size_t table_cache_key_len;
+  const char *db_name_ptr;
+  char db_name[MAX_DBKEY_LENGTH];
 
   if (name != nullptr) {
     schema = nullptr;
-    table_cache_key = name;
-    table_cache_key_len = dict_get_db_name_len(name);
+    size_t db_name_len = dict_get_db_name_len(name);
+    strncpy(db_name, name, db_name_len);
+    db_name[db_name_len] = '\0';
+    db_name_ptr = db_name;
   } else {
     error =
         client->acquire_uncached<dd::Schema>(dd_table->schema_id(), &schema);
     if (error != 0) {
       return (error);
     }
-    table_cache_key = schema->name().c_str();
-    table_cache_key_len = schema->name().size();
+    db_name_ptr = schema->name().c_str();
   }
 
-  init_tmp_table_share(thd, ts, table_cache_key, table_cache_key_len,
-                       dd_table->name().c_str(), "" /* file name */, nullptr);
+  init_tmp_table_share(thd, ts, db_name_ptr, 0, dd_table->name().c_str(),
+                       "" /* file name */, nullptr);
 
   error = open_table_def_suppress_invalid_meta_data(thd, ts, dd_table->table());
 
@@ -547,7 +575,14 @@ static dict_table_t *dd_table_open_on_id_low(THD *thd, MDL_ticket **mdl,
       dd::String_type schema;
       dd::String_type tablename;
       if (dc->get_table_name_by_se_private_id(handler_name, table_id, &schema,
-                                              &tablename)) {
+                                              &tablename, true)) {
+        return nullptr;
+      }
+      /* In order to rollback trxs of sequence tables properly in recovery, 
+         we need to acquire DD info of sequence engine again. */
+      if (schema.empty() &&
+          dc->get_table_name_by_se_private_id(
+              SEQUENCE_ENGINE_NAME.str, table_id, &schema, &tablename, false)) {
         return nullptr;
       }
 
@@ -586,7 +621,8 @@ static dict_table_t *dd_table_open_on_id_low(THD *thd, MDL_ticket **mdl,
       3) Table in InnoDB */
       bool same_name = not_table == is_part &&
                        (not_table || dd_table->se_private_id() == table_id) &&
-                       dd_table->engine() == handler_name;
+                       (dd_table->engine() == handler_name ||
+                        dd_table->engine() == SEQUENCE_ENGINE_NAME.str);
 
       /* Do more verification for partition table */
       if (same_name && is_part) {
@@ -920,6 +956,8 @@ bool dd_table_discard_tablespace(THD *thd, const dict_table_t *table,
       dd::Properties &p = dd_index->se_private_data();
       p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page_no());
       p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], index->page_type());
+      p.set(dd_index_key_strings[DD_INDEX_PAGE_DICT_CAPACITY],
+            index->pd_capacity);
       p.set(dd_index_key_strings[DD_TABLE_ID], table->id);
     }
 
@@ -1649,12 +1687,12 @@ void dd_copy_private(Table &new_table, const Table &old_table) {
     new_index->set_tablespace_id(old_index->tablespace_id());
 
     /** Lizard-4.0: IFT options actually is SE private meta */
-    lizard::dd_copy_index_format(new_index->options(), old_index->options());
+    lizard::dd_index_copy_format(new_index->options(), old_index->options());
   }
 
   new_table.table().set_row_format(old_table.table().row_format());
 
-  lizard::dd_copy_table_fba(old_table, new_table);
+  lizard::dd_table_copy_fba(old_table, new_table);
 }
 
 template void dd_copy_private<dd::Table>(dd::Table &, const dd::Table &);
@@ -1761,8 +1799,10 @@ void dd_part_adjust_table_id(dd::Table *new_table) {
 /** Clear the instant ADD COLUMN information of a table
 @param[in,out]  dd_table        dd::Table
 @param[in]      clear_version   true if version metadata is to be cleared
+@param[in]	new_dd          true if new meta will store into dd.
 @return DB_SUCCESS or error code */
-dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version) {
+dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version,
+                               bool new_dd) {
   dberr_t err = DB_SUCCESS;
   dd_table.se_private_data().remove(
       dd_table_key_strings[DD_TABLE_INSTANT_COLS]);
@@ -1810,6 +1850,12 @@ dberr_t dd_clear_instant_table(dd::Table &dd_table, bool clear_version) {
         ut_ad(0);
         err = DB_ERROR;
       }
+    }
+
+    /** DD meta which is inherited from old object will be stored into DD
+     * directly, ignore removed columns. */
+    if (new_dd) {
+      dd_table.columns()->clear_removed_items();
     }
   }
   cols_to_drop.clear();
@@ -2526,13 +2572,19 @@ static void dd_write_index(dd::Object_id dd_space_id, Index *dd_index,
   p.set(dd_index_key_strings[DD_INDEX_SPACE_ID], index->space);
   p.set(dd_index_key_strings[DD_TABLE_ID], index->table->id);
   p.set(dd_index_key_strings[DD_INDEX_ROOT], index->page_no());
-  dd_index_set_se_private_for_system_cols(
-      dd_index, index->trx_id,
-      txn_info_t{index->txn.scn, index->txn.uba, index->txn.gcn});
+  dd_index_set_se_private_for_system_cols(dd_index, index->trx_id,
+                                          txn_info_t(index->txn));
+  /* Write creator metadata: use loaded/resolved value if available,
+  otherwise fall back to current runtime values for newly created indexes. */
+  const bool has_creator = (index->creator_trx_id != 0);
+  dd_index_set_se_private_for_creator_cols(
+      dd_index, has_creator ? index->creator_trx_id : index->trx_id,
+      has_creator ? txn_info_t(index->creator_txn) : txn_info_t(index->txn));
   p.set(dd_index_key_strings[DD_INDEX_PAGE_TYPE], index->page_type());
+  p.set(dd_index_key_strings[DD_INDEX_PAGE_DICT_CAPACITY], index->pd_capacity);
 
   dd::Properties &options = dd_index->options();
-  lizard::dd_write_index_format(&options, index);
+  lizard::dd_index_write_format(&options, index);
 }
 
 template void dd_write_index<dd::Index>(dd::Object_id, dd::Index *,
@@ -2557,7 +2609,7 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
         dd_table_key_strings[DD_TABLE_DATA_DIRECTORY], true);
   }
 
-  lizard::dd_write_table_fba(table, dd_table);
+  lizard::dd_table_write_fba(table, dd_table);
 
   for (auto dd_index : *dd_table->indexes()) {
     /* Don't assume the index orders are the same, even on
@@ -2829,7 +2881,7 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
 @retval         HA_ERR_TOO_BIG_ROW if the record is too long */
 [[nodiscard]] static int dd_fill_one_dict_index(
     const dd::Index *dd_index, dict_table_t *table, const TABLE_SHARE *form,
-    uint key_num, const lizard::Index_policy &index_policy) {
+    uint key_num, const komodo::Index_policy &index_policy) {
   const KEY &key = form->key_info[key_num];
   ulint type = 0;
   unsigned n_fields = key.user_defined_key_parts;
@@ -2867,8 +2919,7 @@ template const dict_index_t *dd_find_index<dd::Partition_index>(
 
   /** Lizard-4.0: Set stored gpp. */
   page_type_t real_page_type;
-  lizard::dd_fill_dict_index_format(index_policy, table, index,
-                                    &real_page_type);
+  lizard::dd_index_fill_format(index_policy, table, index, &real_page_type);
 
   index->n_uniq = n_uniq;
 
@@ -3111,7 +3162,7 @@ inline void dd_copy_from_table_share(THD *thd, dict_table_t *table,
 @return 0 if successful, otherwise error number */
 inline int dd_fill_dict_index(const dd::Table &dd_table, const TABLE *m_form,
                               dict_table_t *m_table, THD *m_thd,
-                              const lizard::Indexes_policy &indexes_policy) {
+                              const komodo::Indexes_policy &indexes_policy) {
   int error = 0;
 
   ut_ad(!dict_sys_mutex_own());
@@ -3196,7 +3247,7 @@ inline int dd_fill_dict_index(const dd::Table &dd_table, const TABLE *m_form,
             m_table->name.m_name, FTS_DOC_ID_INDEX_NAME, 0, DICT_UNIQUE, 1);
         doc_id_index->add_field(FTS_DOC_ID_COL_NAME, 0, true);
 
-        const lizard::Index_policy *index_policy = nullptr;
+        const komodo::Index_policy *index_policy = nullptr;
         for (ulint i = 0; i < dd_table.indexes().size(); i++) {
           if (dd_table.indexes()[i]->name() == FTS_DOC_ID_INDEX_NAME) {
             index_policy = &indexes_policy[i];
@@ -3206,8 +3257,8 @@ inline int dd_fill_dict_index(const dd::Table &dd_table, const TABLE *m_form,
         ut_ad(index_policy);
         /** Lizard-4.0: Set stored gpp. */
         page_type_t expected_page_type;
-        lizard::dd_fill_dict_index_format(*index_policy, m_table, doc_id_index,
-                                          &expected_page_type);
+        lizard::dd_index_fill_format(*index_policy, m_table, doc_id_index,
+                                     &expected_page_type);
 
         dberr_t new_err =
             dict_index_add_to_cache(m_table, doc_id_index, doc_id_index->root,
@@ -3702,7 +3753,7 @@ template <typename Table>
 static inline dict_table_t *dd_fill_dict_table(
     const Table *dd_tab, const TABLE *m_form, const char *norm_name,
     HA_CREATE_INFO *create_info, bool zip_allowed, bool strict, THD *m_thd,
-    bool is_implicit, const lizard::Table_policy &table_policy) {
+    bool is_implicit, const komodo::Table_policy &table_policy) {
   ut_ad(dd_tab != nullptr);
   ut_ad(m_thd != nullptr);
   ut_ad(norm_name != nullptr);
@@ -3935,7 +3986,7 @@ static inline dict_table_t *dd_fill_dict_table(
     DICT_TF2_FLAG_SET(m_table, DICT_TF2_ENCRYPTION_FILE_PER_TABLE);
   }
 
-  lizard::dd_fill_dict_table_fba(table_policy, m_table);
+  lizard::dd_table_fill_fba(table_policy, m_table);
 
   mem_heap_t *heap = mem_heap_create(1000, UT_LOCATION_HERE);
 
@@ -4996,7 +5047,7 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
   bool first_index = true;
 
   /* Create dict_table_t for the table */
-  lizard::Table_policy table_policy;
+  komodo::Table_policy table_policy;
   lizard::dd_fill_table_policy(table_policy, dd_table->table());
   dict_table_t *m_table =
       dd_fill_dict_table(dd_table, table, norm_name, nullptr, zip_allowed,
@@ -5137,7 +5188,14 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
     page_type_t root_page_type =
         lizard::dd_index_get_page_type(index, se_private_data);
 
-    index->root = {root, root_page_type};
+    index->set_root({root, root_page_type});
+
+    index->pd_capacity =
+        lizard::dd_index_get_pd_capacity(index, se_private_data);
+    /* pd_capacity has been restored. */
+    if (DBUG_EVALUATE_IF("set_pd_capacity_specified", false, true)) {
+      ut_ad(lizard::dict_index_pd_capacity_is_compatible(index));
+    }
 
     index->space = sid;
     index->id = id;
@@ -5147,6 +5205,13 @@ dict_table_t *dd_open_table_one(dd::cache::Dictionary_client *client,
     if (lizard::dd_index_fill_txn_desc(index, se_private_data)) {
       fail = true;
       break;
+    }
+
+    /** Mark the dict_index_t as corrupt so it can skip purge, stat, ibuf merge
+    and some other. */
+    if (lizard::srv_mark_corrupt_spc_by_space_id == index->space &&
+        index->is_spc()) {
+      index->type |= DICT_CORRUPT;
     }
 
     /** Look up the spatial reference system in the
@@ -5381,18 +5446,19 @@ template dict_table_t *dd_open_table<dd::Partition>(
 @param[in,out] pcur            Persistent cursor
 @param[in]     mtr             Mini-transaction
 @return the next rec of the dd system table */
-static const rec_t *dd_getnext_system_low(btr_pcur_t *pcur, mtr_t *mtr) {
-  rec_t *rec = nullptr;
+static const Slice *dd_getnext_system_low(Slice_ctx *slc_ctx, btr_pcur_t *pcur,
+                                          mtr_t *mtr) {
+  Slice *slc = nullptr;
   bool is_comp = dict_table_is_comp(pcur->index()->table);
 
-  while (!rec || rec_get_deleted_flag(rec, is_comp)) {
+  while (!slc || rec_get_deleted_flag(slc->rec(), is_comp)) {
     pcur->move_to_next_user_rec(mtr);
 
     if (pcur->index()->is_clustered()) {
-      assert_page_txn_attributes(pcur->get_page(), pcur->index());
+      ut_ad(lizard::page_txn_is_valid(pcur->get_page(), pcur->index()));
     }
 
-    rec = pcur->get_rec();
+    slc = slc_ctx->get_offsets(pcur->get_reg(), pcur->index(), ULINT_UNDEFINED);
 
     if (!pcur->is_on_user_rec()) {
       /* end of index */
@@ -5405,18 +5471,19 @@ static const rec_t *dd_getnext_system_low(btr_pcur_t *pcur, mtr_t *mtr) {
   /* Get a record, let's save the position */
   pcur->store_position(mtr);
 
-  return rec;
+  return slc;
 }
 
 /** Get next record of new DD system tables
 @param[in,out]  pcur            Persistent cursor
 @param[in]      mtr             Mini-transaction
 @retval next record */
-const rec_t *dd_getnext_system_rec(btr_pcur_t *pcur, mtr_t *mtr) {
+const Slice *dd_getnext_system_rec(Slice_ctx *slc_ctx, btr_pcur_t *pcur,
+                                   mtr_t *mtr) {
   /* Restore the position */
   pcur->restore_position(BTR_SEARCH_LEAF, mtr, UT_LOCATION_HERE);
 
-  return dd_getnext_system_low(pcur, mtr);
+  return dd_getnext_system_low(slc_ctx, pcur, mtr);
 }
 
 /** Scan a new dd system table, like mysql.tables...
@@ -5427,26 +5494,24 @@ const rec_t *dd_getnext_system_rec(btr_pcur_t *pcur, mtr_t *mtr) {
 @param[in]      system_table_name       Which dd system table to open
 @param[in,out]  table           dict_table_t obj of dd system table
 @retval the first rec of the dd system table */
-const rec_t *dd_startscan_system(THD *thd, MDL_ticket **mdl, btr_pcur_t *pcur,
-                                 mtr_t *mtr, const char *system_table_name,
+const Slice *dd_startscan_system(THD *thd, Slice_ctx *slc_ctx, MDL_ticket **mdl,
+                                 btr_pcur_t *pcur, mtr_t *mtr,
+                                 const char *system_table_name,
                                  dict_table_t **table) {
   dict_index_t *clust_index;
-  const rec_t *rec = nullptr;
 
   *table = dd_table_open_on_name(thd, mdl, system_table_name, true, false);
   mtr_commit(mtr);
 
   clust_index = UT_LIST_GET_FIRST((*table)->indexes);
 
-  assert_lizard_dict_index_check(clust_index);
-  assert_lizard_dict_table_check(*table);
+  ut_ad(lizard::dict_index_check_valid(clust_index));
+  ut_ad(lizard::dict_table_check_valid(*table));
 
   mtr_start(mtr);
   pcur->open_at_side(true, clust_index, BTR_SEARCH_LEAF, true, 0, mtr);
 
-  rec = dd_getnext_system_low(pcur, mtr);
-
-  return rec;
+  return dd_getnext_system_low(slc_ctx, pcur, mtr);
 }
 
 /**
@@ -5466,25 +5531,24 @@ static const int DD_FIELD_OFFSET = 2 + DATA_N_LIZARD_COLS;
 @param[in]      mdl             MDL on the table
 @param[in]      mtr             Mini-transaction
 @retval error message, or NULL on success */
-const char *dd_process_dd_tables_rec_and_mtr_commit(
-    mem_heap_t *heap, const rec_t *rec, dict_table_t **table,
-    dict_table_t *dd_tables, MDL_ticket **mdl, mtr_t *mtr) {
+const char *dd_process_dd_tables_rec_and_mtr_commit(const Slice *slc,
+                                                    dict_table_t **table,
+                                                    dict_table_t *dd_tables,
+                                                    MDL_ticket **mdl,
+                                                    mtr_t *mtr) {
   ulint len;
   const byte *field;
   const char *err_msg = nullptr;
   ulint table_id;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_tables)));
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
-
-  ulint *offsets = rec_get_offsets(rec, dd_tables->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_tables)));
+  ut_ad(mtr_memo_contains_page(mtr, slc->rec(), MTR_MEMO_PAGE_S_FIX));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Table>();
 
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET,
+      &len);
 
   /* If "engine" field is not "innodb", return. */
   if (strncmp((const char *)field, "InnoDB", 6) != 0) {
@@ -5494,8 +5558,8 @@ const char *dd_process_dd_tables_rec_and_mtr_commit(
   }
 
   /* Get the se_private_id field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_ID") + DD_FIELD_OFFSET,
       &len);
 
@@ -5536,27 +5600,26 @@ const char *dd_process_dd_tables_rec_and_mtr_commit(
 @param[in]      mdl             MDL on the table
 @param[in]      mtr             Mini-transaction
 @retval error message, or NULL on success */
-const char *dd_process_dd_partitions_rec_and_mtr_commit(
-    mem_heap_t *heap, const rec_t *rec, dict_table_t **table,
-    dict_table_t *dd_tables, MDL_ticket **mdl, mtr_t *mtr) {
+const char *dd_process_dd_partitions_rec_and_mtr_commit(const Slice *slc,
+                                                        dict_table_t **table,
+                                                        dict_table_t *dd_tables,
+                                                        MDL_ticket **mdl,
+                                                        mtr_t *mtr) {
   ulint len;
   const byte *field;
   const char *err_msg = nullptr;
   ulint table_id;
 
-  ut_ad(mtr_memo_contains_page(mtr, rec, MTR_MEMO_PAGE_S_FIX));
+  ut_ad(mtr_memo_contains_page(mtr, slc->rec(), MTR_MEMO_PAGE_S_FIX));
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_tables)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_tables->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_tables)));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Partition>();
 
   /* Get the engine field. */
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET,
+      &len);
 
   /* If "engine" field is not "innodb", return. */
   if (strncmp((const char *)field, "InnoDB", 6) != 0) {
@@ -5566,10 +5629,11 @@ const char *dd_process_dd_partitions_rec_and_mtr_commit(
   }
 
   /* Get the se_private_id field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_ID") + DD_FIELD_OFFSET,
       &len);
+
   /* When table is partitioned table, the se_private_id is null. */
   if (len != 8) {
     *table = nullptr;
@@ -5600,165 +5664,6 @@ const char *dd_process_dd_partitions_rec_and_mtr_commit(
   return err_msg;
 }
 
-/** Process one mysql.columns record and get info to dict_col_t
-@param[in,out]  heap            Temp memory heap
-@param[in]      rec             mysql.columns record
-@param[in,out]  col             dict_col_t to fill
-@param[in,out]  table_id        Table id
-@param[in,out]  col_name        Column name
-@param[in,out]  nth_v_col       Nth v column
-@param[in]      dd_columns      dict_table_t obj of mysql.columns
-@param[in,out]  mtr             Mini-transaction
-@retval true if column is filled */
-bool dd_process_dd_columns_rec(mem_heap_t *heap, const rec_t *rec,
-                               dict_col_t *col, table_id_t *table_id,
-                               char **col_name, ulint *nth_v_col,
-                               const dict_table_t *dd_columns, mtr_t *mtr) {
-  ulint len;
-  const byte *field;
-  dict_col_t *t_col;
-  ulint pos;
-  ulint v_pos = 0;
-  dd::Column::enum_hidden_type hidden;
-  bool is_virtual;
-  dict_v_col_t *vcol = nullptr;
-
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_columns)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_columns->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
-
-  const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Column>();
-
-  /* Get the hidden attribute, and skip if it's a hidden column. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_HIDDEN") + DD_FIELD_OFFSET, &len);
-  hidden = static_cast<dd::Column::enum_hidden_type>(mach_read_from_1(field));
-  if (hidden == dd::Column::enum_hidden_type::HT_HIDDEN_SE ||
-      hidden == dd::Column::enum_hidden_type::HT_HIDDEN_SQL) {
-    mtr_commit(mtr);
-    return false;
-  }
-
-  /* Get the column name. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_NAME") + DD_FIELD_OFFSET, &len);
-  *col_name = mem_heap_strdupl(heap, (const char *)field, len);
-
-  /* Get the position. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ORDINAL_POSITION") + DD_FIELD_OFFSET,
-      &len);
-  pos = mach_read_from_4(field) - 1;
-
-  /* Get the is_virtual attribute. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_IS_VIRTUAL") + DD_FIELD_OFFSET, &len);
-  is_virtual = mach_read_from_1(field) & 0x01;
-
-  /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
-      &len);
-
-  if (len == 0 || len == UNIV_SQL_NULL) {
-    mtr_commit(mtr);
-    return false;
-  }
-
-  char *p_ptr = (char *)mem_heap_strdupl(heap, (const char *)field, len);
-  dd::String_type prop((char *)p_ptr);
-  dd::Properties *p = dd::Properties::parse_properties(prop);
-
-  /* Load the table and get the col. */
-  if (!p || !p->exists(dd_index_key_strings[DD_TABLE_ID])) {
-    if (p) {
-      delete p;
-    }
-    mtr_commit(mtr);
-    return false;
-  }
-
-  if (!p->get(dd_index_key_strings[DD_TABLE_ID], (uint64_t *)table_id)) {
-    THD *thd = current_thd;
-    dict_table_t *table;
-    MDL_ticket *mdl = nullptr;
-
-    /* Commit before we try to load the table. */
-    mtr_commit(mtr);
-    table = dd_table_open_on_id(*table_id, thd, &mdl, true, true);
-
-    if (!table) {
-      delete p;
-      return false;
-    }
-
-    if (is_virtual) {
-      vcol = dict_table_get_nth_v_col_mysql(table, pos);
-
-      if (vcol == nullptr) {
-        dd_table_close(table, thd, &mdl, true);
-        delete p;
-        return false;
-      }
-
-      /* Copy info. */
-      col->ind = vcol->m_col.ind;
-      col->mtype = vcol->m_col.mtype;
-      col->prtype = vcol->m_col.prtype;
-      col->len = vcol->m_col.len;
-
-      v_pos = dict_create_v_col_pos(vcol->v_pos, vcol->m_col.ind);
-    } else {
-      if (table->n_v_cols == 0) {
-        t_col = table->get_col(pos);
-      } else {
-        ulint col_nr;
-
-        col_nr = dict_table_has_column(table, *col_name, pos);
-        t_col = table->get_col(col_nr);
-        ut_ad(t_col);
-      }
-
-      /* Copy info. */
-      col->ind = t_col->ind;
-      col->mtype = t_col->mtype;
-      col->prtype = t_col->prtype;
-      col->len = t_col->len;
-    }
-
-    if (p->exists(dd_column_key_strings[DD_INSTANT_COLUMN_DEFAULT_NULL]) ||
-        p->exists(dd_column_key_strings[DD_INSTANT_COLUMN_DEFAULT])) {
-      dd_parse_default_value(*p, col, heap);
-    }
-
-    dd_table_close(table, thd, &mdl, true);
-    delete p;
-  } else {
-    delete p;
-    mtr_commit(mtr);
-    return false;
-  }
-
-  /* Report the virtual column number */
-  if (col->prtype & DATA_VIRTUAL) {
-    ut_ad(vcol != nullptr);
-    ut_ad(v_pos != 0);
-    ut_ad(is_virtual);
-
-    *nth_v_col = dict_get_v_col_pos(v_pos);
-  } else {
-    *nth_v_col = ULINT_UNDEFINED;
-  }
-
-  return true;
-}
-
 /** Process one mysql.columns record for virtual columns
 @param[in]      heap            temp memory heap
 @param[in,out]  rec             mysql.columns record
@@ -5769,7 +5674,7 @@ bool dd_process_dd_columns_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in]      dd_columns      dict_table_t obj of mysql.columns
 @param[in]      mtr             Mini-transaction
 @retval true if virtual info is filled */
-bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const Slice *slc,
                                        table_id_t *table_id, ulint **pos,
                                        ulint **base_pos, ulint *n_row,
                                        dict_table_t *dd_columns, mtr_t *mtr) {
@@ -5779,16 +5684,13 @@ bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
   dd::Column::enum_hidden_type hidden;
   bool is_virtual;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_columns)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_columns->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_columns)));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Column>();
 
   /* Get the is_virtual attribute, and skip if it's not a virtual column. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_IS_VIRTUAL") + DD_FIELD_OFFSET, &len);
   is_virtual = mach_read_from_1(field) & 0x01;
   if (!is_virtual) {
@@ -5797,9 +5699,9 @@ bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
   }
 
   /* Get the hidden attribute, and skip if it's a hidden column. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_HIDDEN") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_HIDDEN") + DD_FIELD_OFFSET,
+      &len);
   hidden = static_cast<dd::Column::enum_hidden_type>(mach_read_from_1(field));
   if (hidden == dd::Column::enum_hidden_type::HT_HIDDEN_SE) {
     mtr_commit(mtr);
@@ -5807,15 +5709,15 @@ bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
   }
 
   /* Get the position. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_ORDINAL_POSITION") + DD_FIELD_OFFSET,
       &len);
   origin_pos = mach_read_from_4(field) - 1;
 
   /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
       &len);
 
@@ -5891,9 +5793,9 @@ bool dd_process_dd_virtual_columns_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @param[in]      mtr             Mini-transaction
 @retval true if index is filled */
-bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
-                               const dict_index_t **index, MDL_ticket **mdl,
-                               dict_table_t **parent, MDL_ticket **parent_mdl,
+bool dd_process_dd_indexes_rec(const Slice *slc, const dict_index_t **index,
+                               MDL_ticket **mdl, dict_table_t **parent,
+                               MDL_ticket **parent_mdl,
                                dict_table_t *dd_indexes, mtr_t *mtr,
                                bool exclude_dd_table) {
   ulint len;
@@ -5904,16 +5806,13 @@ bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 
   *index = nullptr;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_indexes)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_indexes->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_indexes)));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Index>();
 
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET,
+      &len);
 
   /* If "engine" field is not "innodb", return. */
   if (strncmp((const char *)field, "InnoDB", 6) != 0) {
@@ -5922,8 +5821,8 @@ bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
   }
 
   /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
       &len);
 
@@ -6052,7 +5951,7 @@ bool dd_process_dd_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @param[in]      mtr             Mini-transaction
 @retval true if index is filled */
-bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_partition_indexes_rec(const Slice *slc,
                                          const dict_index_t **index,
                                          MDL_ticket **mdl,
                                          dict_table_t **parent,
@@ -6066,17 +5965,14 @@ bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 
   *index = nullptr;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_indexes)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_indexes->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_indexes)));
 
   const dd::Object_table &dd_object_table =
       dd::get_dd_table<dd::Partition_index>();
 
   /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
       &len);
 
@@ -6200,24 +6096,20 @@ bool dd_process_dd_partition_indexes_rec(mem_heap_t *heap, const rec_t *rec,
 @param[in,out]  space_id        space id
 @param[in]      dd_indexes      dict_table_t obj of mysql.indexes
 @retval true if index is filled */
-bool dd_process_dd_indexes_rec_simple(mem_heap_t *heap, const rec_t *rec,
-                                      space_index_t *index_id,
+bool dd_process_dd_indexes_rec_simple(const Slice *slc, space_index_t *index_id,
                                       space_id_t *space_id,
                                       dict_table_t *dd_indexes) {
   ulint len;
   const byte *field;
   uint32_t idx_id;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_indexes)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_indexes->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_indexes)));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Index>();
 
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET,
+      &len);
 
   /* If "engine" field is not "innodb", return. */
   if (strncmp((const char *)field, "InnoDB", 6) != 0) {
@@ -6225,8 +6117,8 @@ bool dd_process_dd_indexes_rec_simple(mem_heap_t *heap, const rec_t *rec,
   }
 
   /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
       &len);
 
@@ -6263,7 +6155,7 @@ bool dd_process_dd_indexes_rec_simple(mem_heap_t *heap, const rec_t *rec,
   return true;
 }
 
-bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const rec_t *rec,
+bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const Slice *slc,
                                    space_id_t *space_id, char **name,
                                    uint32_t *flags, uint32_t *server_version,
                                    uint32_t *space_version, bool *is_encrypted,
@@ -6275,16 +6167,13 @@ bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const rec_t *rec,
   char *prop_str;
   char *opt_str;
 
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(dd_spaces)));
-
-  ulint *offsets = rec_get_offsets(rec, dd_spaces->first_index(), nullptr,
-                                   ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(dd_spaces)));
 
   const dd::Object_table &dd_object_table = dd::get_dd_table<dd::Tablespace>();
 
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_ENGINE") + DD_FIELD_OFFSET,
+      &len);
 
   /* If "engine" field is not "innodb", return. */
   if (strncmp((const char *)field, "InnoDB", 6) != 0) {
@@ -6292,16 +6181,16 @@ bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const rec_t *rec,
   }
 
   /* Get name field. */
-  field = rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_NAME") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_NAME") + DD_FIELD_OFFSET,
+      &len);
   *name = reinterpret_cast<char *>(mem_heap_zalloc(heap, len + 1));
   memcpy(*name, field, len);
 
   /* Get the options string. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
-      dd_object_table.field_number("FIELD_OPTIONS") + DD_FIELD_OFFSET, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, dd_object_table.field_number("FIELD_OPTIONS") + DD_FIELD_OFFSET,
+      &len);
 
   if (len == 0 || len == UNIV_SQL_NULL) {
     return false; /* purecov: inspected */
@@ -6343,8 +6232,8 @@ bool dd_process_dd_tablespaces_rec(mem_heap_t *heap, const rec_t *rec,
   delete o;
 
   /* Get the se_private_data field. */
-  field = (const byte *)rec_get_nth_field(
-      nullptr, rec, offsets,
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr,
       dd_object_table.field_number("FIELD_SE_PRIVATE_DATA") + DD_FIELD_OFFSET,
       &len);
 

@@ -1,0 +1,78 @@
+create database sbtest;
+use sbtest;
+CREATE TABLE `sbtest1` (
+`id` int NOT NULL AUTO_INCREMENT,
+`k` int NOT NULL DEFAULT '0',
+`c` char(120) NOT NULL DEFAULT '',
+`pad` char(60) NOT NULL DEFAULT '',
+PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+set opt_index_format_spc_enabled = 1;
+alter table sbtest.sbtest1 add index c(c);
+CREATE PROCEDURE sp_insert_random_sbtest_rows(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 0;
+SET @table_size = 5000;
+SET @group_len = 11;
+SET @pad_len = 60;
+SET @base_group_string = RPAD('', @group_len, '@');
+WHILE i < num_rows DO
+REPLACE INTO sbtest.sbtest1 (id, k, c, pad)
+VALUES (
+FLOOR(1 + RAND() * @table_size),
+FLOOR(1 + RAND() * @table_size),
+CONCAT_WS('-',
+(CASE WHEN RAND() < 1.0 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.9 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.8 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.7 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.6 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.5 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.4 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.3 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.2 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END),
+(CASE WHEN RAND() < 0.1 THEN @base_group_string ELSE SUBSTRING(MD5(RAND()), 1, @group_len) END)
+),
+SUBSTRING(MD5(RAND()), 1, @pad_len)
+);
+SET i = i + 1;
+END WHILE;
+END //
+set global innodb_redo_log_capacity = 4*1024*1024*1024;
+set global innodb_buffer_pool_size = 4303355904;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+SET GLOBAL innodb_page_cleaner_disabled_debug = 1;
+SET GLOBAL innodb_checkpoint_disabled = 1;
+call sbtest.sp_insert_random_sbtest_rows(5000);
+call sbtest.sp_insert_random_sbtest_rows(5000);
+call sbtest.sp_insert_random_sbtest_rows(5000);
+call sbtest.sp_insert_random_sbtest_rows(5000);
+###################
+# Restart
+###################
+# Kill and restart
+WITH
+checksum_secondary AS (
+SELECT BIT_XOR(CRC32(c)) AS chk FROM sbtest.sbtest1 FORCE INDEX (c)
+),
+checksum_primary AS (
+SELECT BIT_XOR(CRC32(c)) AS chk FROM sbtest.sbtest1 FORCE INDEX (PRIMARY)
+)
+SELECT
+CASE
+WHEN NOT (s.chk <=> p.chk) THEN
+'CHECKSUM_FAILED'
+    ELSE
+'CHECKSUM_OK'
+  END AS verification_result
+FROM
+checksum_secondary AS s,
+checksum_primary AS p;
+verification_result
+CHECKSUM_OK
+###################
+# Cleanup
+###################
+drop PROCEDURE sp_insert_random_sbtest_rows;
+drop table sbtest.sbtest1;
+drop database sbtest;

@@ -22,7 +22,7 @@ INSERT INTO t1 VALUES(5, repeat('.',12));
 COMMIT WORK;
 
 --echo # Wait for purge to complete
---source include/wait_innodb_all_purged.inc
+#--source include/wait_innodb_all_purged.inc
 
 --echo # Ensure that dirty pages of table t1 is flushed.
 FLUSH TABLES t1 FOR EXPORT;

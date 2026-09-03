@@ -1,0 +1,122 @@
+--source include/have_debug.inc
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connect (conn3,127.0.0.1,root,,test,$MYPORT_3)
+let $MYPORT_CONSENSUS_3 = query_get_value("select $MYPORT_3+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_2 = query_get_value("select $MYPORT_2+40 as c1", c1, 1);
+let $MYPORT_CONSENSUS_1 = query_get_value("select $MYPORT_1+40 as c1", c1, 1);
+
+--connection conn1
+--enable_reconnect
+create table test.t1(id int);
+insert into test.t1 values(1);
+xa start 'x1';
+insert into test.t1 values(1);
+xa end 'x1';
+xa prepare 'x1';
+xa commit 'x1';
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+
+--echo # case 1 change_leader to disable_election node succeeds (operator-initiated bypasses disableElection)
+
+--connection conn2
+--enable_reconnect
+set global consensus_disable_election=1;
+
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+#change consensus_leader to 2 (target has disable_election=1, but operator-initiated transfer bypasses it);
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--source include/wait_until_connected_again.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+#change consensus_leader back to 1;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--source include/wait_until_connected_again.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+
+
+
+
+--echo # case 2 change_leader succeeds even when both leader and target have disable_election=1
+
+--connection conn1
+set global consensus_disable_election=1;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=1;
+
+--connection conn1
+insert into test.t1 values(1);
+select count(*) from test.t1;
+--source include/wait_follower_catchup.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+--echo ### ha begin
+#change consensus_leader to 2 (both nodes have disable_election=1);
+--replace_result $MYPORT_CONSENSUS_2 MYPORT_CONSENSUS_2
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_2");
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+--source include/wait_until_connected_again.inc
+--echo ### ha succ
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+#change consensus_leader back to 1;
+--replace_result $MYPORT_CONSENSUS_1 MYPORT_CONSENSUS_1
+eval call dbms_consensus.change_leader("127.0.0.1:$MYPORT_CONSENSUS_1");
+
+--disconnect conn1
+--connect (conn1,127.0.0.1,root,,test,$MYPORT_1)
+--connection conn1
+--source include/wait_until_connected_again.inc
+select SERVER_ID,ROLE,ELECTION_WEIGHT,INSTANCE_TYPE,DISABLE_ELECTION from information_schema.ALISQL_CLUSTER_GLOBAL;
+show global status like "consensus_in_leader_transfer";
+
+--connection conn1
+set global consensus_disable_election=0;
+
+--disconnect conn2
+--connect (conn2,127.0.0.1,root,,test,$MYPORT_2)
+--connection conn2
+set global consensus_disable_election=0;
+
+
+
+--connection conn1
+drop table test.t1;
+--source include/wait_follower_catchup.inc
+--disconnect conn1

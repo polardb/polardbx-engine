@@ -32,6 +32,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "row0row.h"
 
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #include "lizard0row.h"
 #include "lizard0row0undo.h"
 
@@ -58,9 +60,10 @@ bool row_undo_reposition_panda_pcur(ulint mode, dict_index_t *index,
       node->pcur.store_position(mtr);
     }
   }
-  if (!found) {
-    node->pcur.close();
-  }
+  // pcursor will be closed collectively at the end of the rollback.
+  // if (!found) {
+  //   node->pcur.close();
+  // }
   node->found_panda = found;
   return found;
 }
@@ -76,11 +79,8 @@ bool row_undo_search_panda_to_pcur(undo_node_t *node,
                                    dict_index_t *panda_index) {
   bool found;
   mtr_t mtr;
-  const rec_t *rec;
-  mem_heap_t *heap = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   ut_ad(!node->table->skip_alter_undo);
   ut_ad(node->layout == TL_BAMBOO && !node->is_rlog);
@@ -94,14 +94,11 @@ bool row_undo_search_panda_to_pcur(undo_node_t *node,
   if (!found) {
     goto func_exit;
   }
-  rec = node->pcur.get_rec();
+  slc = sctx.get_offsets(node->pcur.get_reg(), panda_index, ULINT_UNDEFINED);
 
-  offsets = rec_get_offsets(rec, panda_index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-
-  found = (row_get_rec_roll_ptr(rec, panda_index, offsets) == node->roll_ptr);
+  found = (row_get_rec_roll_ptr(slc, panda_index) == node->roll_ptr);
   if (found) {
-    ut_ad(row_get_rec_trx_id(rec, panda_index, offsets) == node->trx->id);
+    ut_ad(row_get_rec_trx_id(slc, panda_index) == node->trx->id);
     node->pcur.store_position(&mtr);
   }
 
@@ -113,10 +110,6 @@ bool row_undo_search_panda_to_pcur(undo_node_t *node,
                            << ",index_name=" << panda_index->name();
   }
 #endif
-
-  if (heap) {
-    mem_heap_free(heap);
-  }
 
 func_exit:
   node->pcur.commit_specify_mtr(&mtr);
@@ -142,21 +135,21 @@ bool undo_node_validate_panda_pcur(undo_node_t *node, dict_index_t *index) {
   }
   ut_ad(node->pcur.get_btr_cur()->index == index);
 
-  ulint *offsets =
-      rec_get_offsets(node->pcur.m_old_rec, index, nullptr,
-                      node->pcur.m_old_n_fields, UT_LOCATION_HERE, &node->heap);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
+
+  slc = sctx.get_offsets(node->pcur.m_old_reg, index, ULINT_UNDEFINED);
 
   /* Here we are comparing the purge ref record and the stored initial
   part in persistent cursor. Both cases we store n_uniq fields of the
   cluster index and so it is fine to do the comparison. We note this
   dependency here as pcur and ref belong to different modules. */
-  int st = cmp_dtuple_rec(node->ref, node->pcur.m_old_rec, index, offsets);
+  int st = cmp_dtuple_rec(node->ref, index, slc);
 
   if (st != 0) {
     ib::error(ER_IB_MSG_1010) << "Undo node panda pcur validation failed";
     ib::error(ER_IB_MSG_1011) << rec_printer(node->ref).str();
-    ib::error(ER_IB_MSG_1012)
-        << rec_printer(node->pcur.m_old_rec, offsets).str();
+    ib::error(ER_IB_MSG_1012) << rec_printer(slc).str();
     return (false);
   }
 

@@ -160,8 +160,14 @@ mysql	view_routine_usage	routine_catalog	0	INDEX
 mysql	view_table_usage	PRIMARY	0	INDEX
 mysql	view_table_usage	table_catalog	0	INDEX
 mysql	replication_group_configuration_version	PRIMARY	0	INDEX
+mysql	ai_model_config	PRIMARY	0	INDEX
+mysql	ai_model_config	uk_model_name	0	INDEX
+mysql	ai_function_config	PRIMARY	0	INDEX
+mysql	ai_function_config	idx_model_name	0	INDEX
+mysql	encdb_auth_users	PRIMARY	0	INDEX
+mysql	encdb_sensitive_rules	PRIMARY	0	INDEX
+mysql	encdb_kms_meta	PRIMARY	0	INDEX
 mysql	component	PRIMARY	0	INDEX
-mysql	ndb_binlog_index	PRIMARY	0	INDEX
 mysql	default_roles	PRIMARY	0	INDEX
 mysql	engine_cost	PRIMARY	0	INDEX
 mysql	global_grants	PRIMARY	0	INDEX
@@ -362,10 +368,14 @@ performance_schema	tls_channel_status	NULL	avg_row_length=0;key_block_size=0;key
 performance_schema	keyring_component_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
 performance_schema	events_statements_summary_by_digest_supplement	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	replication_group_configuration_version	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	ai_model_config	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	ai_function_config	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_auth_users	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_sensitive_rules	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_kms_meta	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	general_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	slow_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	component	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_sample_pages=0;
-mysql	ndb_binlog_index	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	default_roles	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	engine_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	global_grants	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
@@ -567,8 +577,14 @@ mysql	view_routine_usage	routine_catalog	1	INDEX
 mysql	view_table_usage	PRIMARY	0	INDEX
 mysql	view_table_usage	table_catalog	1	INDEX
 mysql	replication_group_configuration_version	PRIMARY	0	INDEX
+mysql	ai_model_config	PRIMARY	0	INDEX
+mysql	ai_model_config	uk_model_name	1	INDEX
+mysql	ai_function_config	PRIMARY	0	INDEX
+mysql	ai_function_config	idx_model_name	1	INDEX
+mysql	encdb_auth_users	PRIMARY	0	INDEX
+mysql	encdb_sensitive_rules	PRIMARY	0	INDEX
+mysql	encdb_kms_meta	PRIMARY	0	INDEX
 mysql	component	PRIMARY	0	INDEX
-mysql	ndb_binlog_index	PRIMARY	0	INDEX
 mysql	default_roles	PRIMARY	0	INDEX
 mysql	engine_cost	PRIMARY	0	INDEX
 mysql	global_grants	PRIMARY	0	INDEX
@@ -769,10 +785,14 @@ performance_schema	tls_channel_status	NULL	avg_row_length=0;key_block_size=0;key
 performance_schema	keyring_component_status	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
 performance_schema	events_statements_summary_by_digest_supplement	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;server_p_s_table=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	replication_group_configuration_version	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	ai_model_config	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	ai_function_config	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_auth_users	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_sensitive_rules	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
+mysql	encdb_kms_meta	NULL	avg_row_length=0;encrypt_type=N;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	general_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	slow_log	NULL	avg_row_length=0;key_block_size=0;keys_disabled=0;pack_record=1;stats_auto_recalc=0;stats_sample_pages=0;
 mysql	component	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_sample_pages=0;
-mysql	ndb_binlog_index	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	default_roles	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	engine_cost	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;
 mysql	global_grants	NULL	avg_row_length=0;encrypt_type=N;explicit_tablespace=1;flashback_area=0;key_block_size=0;keys_disabled=0;pack_record=1;row_type=2;stats_auto_recalc=0;stats_persistent=0;stats_sample_pages=0;

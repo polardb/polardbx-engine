@@ -1,0 +1,189 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+########################################
+# Setup
+########################################
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+data VARCHAR(100),
+v VECTOR(3),
+VECTOR INDEX vidx1(v)
+) ENGINE = InnoDB;
+INSERT INTO t1(data, v) VALUES ('seed1', VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(data, v) VALUES ('seed2', VEC_FROMTEXT('[0,1,0]'));
+INSERT INTO t1(data, v) VALUES ('seed3', VEC_FROMTEXT('[0,0,1]'));
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+########################################
+# Scenario 1: Two sessions INSERT different rows simultaneously
+# Aux table per-row lock release — no mutual blocking
+########################################
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('con_a_1', VEC_FROMTEXT('[10,0,0]'));
+INSERT INTO t1(data, v) VALUES ('con_a_2', VEC_FROMTEXT('[11,0,0]'));
+BEGIN;
+# con_b should not be blocked by con_a's aux table locks (per-row release)
+INSERT INTO t1(data, v) VALUES ('con_b_1', VEC_FROMTEXT('[0,10,0]'));
+INSERT INTO t1(data, v) VALUES ('con_b_2', VEC_FROMTEXT('[0,11,0]'));
+COMMIT;
+COMMIT;
+# All 4 rows from both sessions present
+SELECT COUNT(*) AS total_rows FROM t1;
+total_rows
+7
+SET @s = CONCAT('SELECT COUNT(*) AS aux_rows FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+aux_rows
+7
+DEALLOCATE PREPARE s;
+# ANN search finds all new rows
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,0,0]')) LIMIT 3;
+data
+con_a_1
+con_a_2
+seed1
+########################################
+# Scenario 2: Session A inserts (aux committed), sleeps;
+# Session B inserts same vector — B not blocked
+########################################
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('slow_a', VEC_FROMTEXT('[5,5,5]'));
+# aux table already independently committed at this point
+# Now sleep — holding main table trx open but aux lock released
+# B inserts same vector value — should NOT be blocked by A's aux table
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('fast_b', VEC_FROMTEXT('[5,5,5]'));
+COMMIT;
+COMMIT;
+SELECT COUNT(*) AS dup_vec_count FROM t1 WHERE data IN ('slow_a', 'fast_b');
+dup_vec_count
+2
+########################################
+# Scenario 3: Two sessions UPDATE same row
+# Main table row lock conflict (normal), but aux each commit independently
+########################################
+INSERT INTO t1(data, v) VALUES ('upd_target', VEC_FROMTEXT('[7,7,7]'));
+BEGIN;
+UPDATE t1 SET v = VEC_FROMTEXT('[8,8,8]'), data = 'upd_by_a' WHERE id = 10;
+# con_a holds X lock on the main table row
+BEGIN;
+# con_b tries to UPDATE same row — will wait on main table row lock
+SET SESSION innodb_lock_wait_timeout = 2;
+UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]'), data = 'upd_by_b' WHERE id = 10;
+ERROR HY000: Lock wait timeout exceeded; try restarting transaction
+COMMIT;
+# After A commits, B can retry
+UPDATE t1 SET v = VEC_FROMTEXT('[9,9,9]'), data = 'upd_by_b' WHERE id = 10;
+COMMIT;
+SELECT data FROM t1 WHERE id = 10;
+data
+upd_by_b
+SET @s = CONCAT('SELECT COUNT(*) AS after_update_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+after_update_aux
+12
+DEALLOCATE PREPARE s;
+# ANN search reflects the latest update
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[9,9,9]')) LIMIT 3;
+data
+fast_b
+slow_a
+upd_by_b
+########################################
+# Scenario 4: High concurrency — 4 sessions INSERT simultaneously
+########################################
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_a1', VEC_FROMTEXT('[20,1,0]'));
+INSERT INTO t1(data, v) VALUES ('hc_a2', VEC_FROMTEXT('[20,2,0]'));
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_b1', VEC_FROMTEXT('[0,20,1]'));
+INSERT INTO t1(data, v) VALUES ('hc_b2', VEC_FROMTEXT('[0,20,2]'));
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_c1', VEC_FROMTEXT('[1,0,20]'));
+INSERT INTO t1(data, v) VALUES ('hc_c2', VEC_FROMTEXT('[2,0,20]'));
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('hc_d1', VEC_FROMTEXT('[20,20,0]'));
+INSERT INTO t1(data, v) VALUES ('hc_d2', VEC_FROMTEXT('[0,20,21]'));
+# All 4 sessions commit
+COMMIT;
+COMMIT;
+COMMIT;
+COMMIT;
+# All 8 new rows should be present
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'hc_%';
+COUNT(*)
+8
+SET @s = CONCAT('SELECT COUNT(*) AS hc_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s;
+EXECUTE s;
+hc_aux
+20
+DEALLOCATE PREPARE s;
+# ANN search across high-concurrency inserted rows
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,0]')) LIMIT 3;
+data
+hc_a2
+hc_d1
+upd_by_b
+########################################
+# Scenario 5: Concurrent INSERT + DELETE on different rows
+# Aux table independent commits don't interfere
+########################################
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cd_new', VEC_FROMTEXT('[30,0,0]'));
+BEGIN;
+DELETE FROM t1 WHERE id = 1;
+COMMIT;
+COMMIT;
+# seed1 should be deleted, cd_new should exist
+SELECT COUNT(*) FROM t1 WHERE data = 'seed1';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t1 WHERE data = 'cd_new';
+COUNT(*)
+1
+# ANN works correctly after concurrent insert+delete
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[30,0,0]')) LIMIT 2;
+data
+cd_new
+hc_a1
+########################################
+# Scenario 6: Concurrent transactions with ROLLBACK
+# A commits, B rolls back — aux table state consistent
+########################################
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cr_a1', VEC_FROMTEXT('[40,0,0]'));
+BEGIN;
+INSERT INTO t1(data, v) VALUES ('cr_b1', VEC_FROMTEXT('[0,40,0]'));
+COMMIT;
+# B rolls back — main table row gone, but aux has orphan
+ROLLBACK;
+SELECT COUNT(*) FROM t1 WHERE data = 'cr_a1';
+COUNT(*)
+1
+SELECT COUNT(*) FROM t1 WHERE data = 'cr_b1';
+COUNT(*)
+0
+# ANN still works (orphan node from cr_b1 tolerated)
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0,40,0]')) LIMIT 3;
+data
+hc_b1
+hc_b2
+hc_d1
+########################################
+# Cleanup
+########################################
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;

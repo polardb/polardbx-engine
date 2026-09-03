@@ -1,0 +1,33 @@
+stage:
+  FunctionTest:
+    env:
+      setting: {}
+      host: 11.122.132.183
+      user: ruanbu.yx
+    exec:
+      - 'project=SecureGateway                    #folder name of the project'
+      - 'rm -rf ${project} 1>&2 &&'
+      - 'git clone ${repo} ${project} 1>&2 &&'
+      - 'cd ${project} 1>&2 &&'
+      - 'git checkout ${branch} 1>&2 &&'
+      - 'msg=`sh run_tests.sh`'
+      - 'exitCode=$?'
+      - 'echo "${msg}"'
+      - 'exit ${exitCode}'
+  FormatTest:
+    env:
+      setting: {}
+      host: 11.122.132.183
+      user: ruanbu.yx
+    exec:
+      - 'project=SecureGateway                    #folder name of the project'
+      - 'rm -rf ${project} 1>&2 &&'
+      - 'git clone ${repo} ${project} 1>&2 &&'
+      - 'cd ${project} 1>&2 &&'
+      - 'git checkout ${branch} 1>&2 &&'
+      - 'msg=`pre-commit run --all-files`         #use pre-commit to check file styles'
+      - 'exitCode=$?'
+      - 'echo "${msg}"'
+      - 'exit ${exitCode}'
+pipeline:
+  - 'FunctionTest,FormatTest'

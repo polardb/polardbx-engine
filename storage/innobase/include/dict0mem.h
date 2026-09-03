@@ -79,12 +79,13 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "lizard0data0types.h"
-#include "lizard0txn.h"
+#include "lizard0txn0types.h"
 
-#include "sql/lizard/lizard_snapshot.h"
+#include "sql/transaction/komodo0snapshot.h"
 
 /* Forward declaration. */
 struct ib_rbt_t;
+struct txn_rec_t;
 
 /** Format of INSTANTLY DROPPED column names. */
 constexpr char INSTANT_DROP_SUFFIX_8_0_29[] = "_dropped_v";
@@ -1239,6 +1240,19 @@ struct dict_index_t {
   when InnoDB was started up */
   trx_id_t trx_id;
 
+  /** DDL transaction that created this index.
+  Used by AS OF cross DDL to distinguish REBUILD from ADD INDEX.
+  Preserved across INSTANT DDL (unlike trx_id which is overwritten
+  on the clustered index by Bug #33937504 fix). */
+  trx_id_t creator_trx_id{0};
+
+  /** Transaction descriptor for the index creator.
+  Mirrors the runtime txn field but is NOT overwritten by INSTANT DDL.
+  uba: creator undo pointer, used to resolve real SCN via undo lookup.
+  scn: resolved on first AS OF query via txn_rec_real_state(), then cached.
+  gcn: resolved together with scn, then cached. */
+  txn_index_t creator_txn;
+
   /** Information about state of compression failures and successes */
   zip_pad_info_t zip_pad;
 
@@ -1312,6 +1326,11 @@ struct dict_index_t {
       We can't just init or modify only one of them. */
   page_mark_t root;
 
+  void set_root(const page_mark_t &root) {
+    this->root = root;
+    assert_lizard_page_mark_consistent(root);
+  }
+
   page_no_t page_no() const {
     assert_lizard_page_mark_consistent(root);
     return root.page_no;
@@ -1321,6 +1340,11 @@ struct dict_index_t {
     assert_lizard_page_mark_consistent(root);
     return root.page_type;
   }
+
+  uint16_t pd_capacity;
+  void set_pd_capacity(uint16_t capacity) { pd_capacity = capacity; }
+
+  bool is_spc() const;
 
   /** Determine if the index has been committed to the
   data dictionary.
@@ -1368,10 +1392,31 @@ struct dict_index_t {
   bool is_clustered() const {
     ut_ad(magic_n == DICT_INDEX_MAGIC_N);
 
-    return (type & DICT_CLUSTERED);
+    if (type & DICT_CLUSTERED) {
+      /** Cluster index doesn't support prefix compression. */
+      ut_ad(!is_spc());
+      return true;
+    }
+    return false;
   }
 
   bool is_panda() const;
+
+  bool is_hippo() const;
+
+  /** Resolve the real SCN/GCN of the index's transaction source into a
+  txn_rec_t. If the source is still active, its real state is looked up from
+  the undo log under dict_sys->mutex and cached back into the selected
+  txn_index_t (double-checked locking). This is NOT a cheap getter.
+
+  @param[in]  use_cross_ddl  true to use the creator source
+  (creator_trx_id / creator_txn, the per-index AS OF anchor), false to use
+  the runtime source (trx_id / txn, the legacy uniform path).
+  @return     resolved txn_rec_t with real scn/gcn values */
+  txn_rec_t resolve_txn(bool use_cross_ddl);
+
+  /** Number of stored tid fields. Only in secondary index. */
+  uint8_t n_s_tfields;
 
   /** Check whether the index is the multi-value index
   @return nonzero for multi-value index, zero for other indexes */
@@ -1396,7 +1441,7 @@ struct dict_index_t {
   /** Check whether index can be used by transaction
   @param[in] trx                transaction*/
   bool is_usable(const trx_t *trx,
-                 const lizard::Snapshot_vision *snapshot_vision);
+                 const komodo::Snapshot_vision *snapshot_vision);
 
   /** Check whether index has any instantly added columns.
   Possible only if table has INSTANT ADD columns and is upgraded.
@@ -1618,9 +1663,10 @@ struct dict_index_t {
   @return position, ULINT_UNDEFINED if not contained */
   ulint get_sys_col_pos(ulint type) const;
 
-  /** Returns position of gpp column in an index.
+  /** Returns the position of a functional column in an secondary index.
+  @param[in] type        transactional + GPP
   @return position, ULINT_UNDEFINED if not contained */
-  ulint get_gpp_col_pos() const;
+  ulint get_sec_functional_col_pos(ulint n) const;
 
   /** Looks for column n in an index.
   @param[in]    n               column number
@@ -1762,6 +1808,15 @@ struct dict_foreign_t {
 
   dict_vcol_set *v_cols; /*!< set of virtual columns affected
                          by foreign key constraint. */
+
+  /** Check whether foreign key constraint contains a column with a full
+  index on it. The function is used in the context of cascading DML
+  operations.
+  @retval true  if the column has FTS index on it.
+  @retval false if the FK table has no FTS index or has self referential
+               relationship
+  */
+  bool is_fts_col_affected() const;
 };
 
 std::ostream &operator<<(std::ostream &out, const dict_foreign_t &foreign);
@@ -3158,6 +3213,8 @@ inline bool dict_table_autoinc_own(const dict_table_t *table) {
 }
 #endif /* UNIV_DEBUG */
 
+#ifndef INNODB_DICT0MEM_IC_STANDALONE
 #include "dict0mem.ic"
+#endif /* !INNODB_DICT0MEM_IC_STANDALONE */
 
 #endif /* dict0mem_h */

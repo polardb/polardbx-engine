@@ -47,6 +47,7 @@ std::atomic<uint64>
 Rpl_transaction_write_set_ctx::Rpl_transaction_write_set_ctx()
     : m_has_missing_keys(false),
       m_has_related_foreign_keys(false),
+      m_has_hlindex(false),
       m_ignore_write_set_memory_limit(false),
       m_local_allow_drop_write_set(false),
       m_local_has_reached_write_set_limit(false) {
@@ -102,7 +103,7 @@ std::vector<uint64> *Rpl_transaction_write_set_ctx::get_write_set() {
 void Rpl_transaction_write_set_ctx::reset_state() {
   DBUG_TRACE;
   clear_write_set();
-  m_has_missing_keys = m_has_related_foreign_keys = false;
+  m_has_missing_keys = m_has_related_foreign_keys = m_has_hlindex = false;
   m_local_has_reached_write_set_limit = false;
 }
 
@@ -131,6 +132,16 @@ void Rpl_transaction_write_set_ctx::set_has_related_foreign_keys() {
 bool Rpl_transaction_write_set_ctx::get_has_related_foreign_keys() {
   DBUG_TRACE;
   return m_has_related_foreign_keys;
+}
+
+void Rpl_transaction_write_set_ctx::set_has_hlindex() {
+  DBUG_TRACE;
+  m_has_hlindex = true;
+}
+
+bool Rpl_transaction_write_set_ctx::get_has_hlindex() {
+  DBUG_TRACE;
+  return m_has_hlindex;
 }
 
 bool Rpl_transaction_write_set_ctx::was_write_set_limit_reached() {

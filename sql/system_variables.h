@@ -1,4 +1,5 @@
-/* Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023, 2024, Alibaba and/or its affiliates.
+/* Copyright (c) 2015, 2022, Oracle and/or its affiliates. Copyright (c) 2023,
+   2024, Alibaba and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +36,7 @@
 #include "sql/sql_plugin_ref.h"  // plugin_ref
 
 #include "sql/common/reload.h"
+#include "vidx/vidx_common.h"
 
 class MY_LOCALE;
 class Time_zone;
@@ -190,15 +192,14 @@ enum class Explain_format_type : ulong {
    0x10000000 /* was: MODE_NO_AUTO_CREATE_USER */ \
   )
 
-
 /* Bits for different ping check modes modes*/
-#define PING_MODE_IS_READABLE               1
-#define PING_MODE_IS_LEADER                 2
-#define PING_MODE_IS_WRITEABLE              4
-#define PING_MODE_NOT_IN_LEADER_TRANSFER    8
-#define PING_MODE_NO_CLUSTER_CHANGED        16
-#define PING_MODE_IS_IN_LEADER_TRANSFER     32
-#define PING_MODE_IS_PAXOS_APPLING          64
+#define PING_MODE_IS_READABLE 1
+#define PING_MODE_IS_LEADER 2
+#define PING_MODE_IS_WRITEABLE 4
+#define PING_MODE_NOT_IN_LEADER_TRANSFER 8
+#define PING_MODE_NO_CLUSTER_CHANGED 16
+#define PING_MODE_IS_IN_LEADER_TRANSFER 32
+#define PING_MODE_IS_PAXOS_APPLING 64
 
 /*
   Replication uses 8 bytes to store SQL_MODE in the binary log. The day you
@@ -240,7 +241,7 @@ struct System_variables {
   long optimizer_trace_limit;
   ulong optimizer_trace_max_mem_size;
   sql_mode_t sql_mode;  ///< which non-standard SQL behaviour should be enabled
-  ulonglong ping_mode;  ///check system status for ping pkg
+  ulonglong ping_mode;  /// check system status for ping pkg
   ulonglong option_bits;  ///< OPTION_xxx constants, e.g. OPTION_PROFILING
   ha_rows select_limit;
   ha_rows max_join_size;
@@ -427,6 +428,10 @@ struct System_variables {
 
   bool opt_flashback_area;
 
+  bool opt_flashback_query_enable;
+
+  bool opt_asof_cross_ddl_enabled;
+
   bool innodb_transaction_group;
 
   /**
@@ -547,6 +552,9 @@ struct System_variables {
 
   bool recycle_bin;
 
+  /** Custom table name for recycle bin */
+  char *recycle_bin_table_name;
+
   bool outline_allowed_sql_digest_truncate;
 
   /* Used to switch ON/OFF auto savepoint */
@@ -560,7 +568,17 @@ struct System_variables {
   bool flush_gcov_enabled;
 #endif
 
+  /* Used to forbid execute DML without WHERE clause or with tautological WHERE
+   * clause */
+  bool forbid_execute_dml_all;
+
   bool opt_index_format_panda_enabled;
+
+  bool opt_index_format_hippo_enabled;
+
+  char *polarx_slow_query_pushdown_username;
+
+  bool opt_index_format_spc_enabled;
 };
 
 /**
@@ -628,6 +646,8 @@ struct System_status_var {
   ulonglong max_execution_time_set_failed;
 
   ulonglong reload_stat[(uint)im::MAX_RELOAD_ENTRY_COUNT];
+
+  ulonglong net_buff_stat_shrink_count;
 
   /* Number of statements sent from the client. */
   ulonglong questions;

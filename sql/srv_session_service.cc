@@ -65,6 +65,15 @@ int srv_session_init_thread(const void *plugin) {
 */
 void srv_session_deinit_thread() { Srv_session::deinit_thread(); }
 
+/*
+  Swap thread-local plugin pointer; return previous value.
+  Internal helper for built-in (statically linked) plugins; not part of the
+  plugin service ABI — declare locally with C++ linkage at the call site.
+*/
+const void *srv_session_set_thread_plugin(const void *new_plugin) {
+  return Srv_session::set_thread_plugin(new_plugin);
+}
+
 /**
   Opens server session
 

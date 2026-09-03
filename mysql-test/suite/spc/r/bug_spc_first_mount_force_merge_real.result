@@ -1,0 +1,33 @@
+CREATE TABLE t1 (id VARBINARY(2500) NOT NULL,
+c VARBINARY(3000) NOT NULL,
+PRIMARY KEY (id),
+KEY c (c)) ENGINE=InnoDB DEFAULT CHARSET=binary;
+SET @c_shared = REPEAT('a', 3000);
+SET @id1 = CONCAT(REPEAT('b', 2400), '0001');
+SET @id2 = CONCAT(REPEAT('b', 2400), '0002');
+SET @id3 = CONCAT(REPEAT('b', 2400), '0003');
+SET @id4 = CONCAT(REPEAT('b', 2400), '0004');
+SET @id5 = CONCAT(REPEAT('b', 2400), '0005');
+INSERT INTO t1 VALUES (@id1, @c_shared);
+INSERT INTO t1 VALUES (@id2, @c_shared);
+INSERT INTO t1 VALUES (@id3, @c_shared);
+INSERT INTO t1 VALUES (@id4, @c_shared);
+INSERT INTO t1 VALUES (@id5, @c_shared);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+# restart
+SET @c_shared = REPEAT('a', 3000);
+CHECK TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+5
+SELECT COUNT(*) FROM t1 WHERE c >= @c_shared;
+COUNT(*)
+5
+DROP TABLE t1;

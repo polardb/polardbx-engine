@@ -82,6 +82,7 @@
 #include "sql/filesort_utils.h"
 #include "sql/handler.h"
 #include "sql/item.h"
+#include "sql/item_strfunc.h"
 #include "sql/item_subselect.h"
 #include "sql/iterators/row_iterator.h"
 #include "sql/iterators/sorting_iterator.h"
@@ -225,7 +226,7 @@ void Sort_param::init_for_filesort(Filesort *file_sort,
       // have to store the row ID for NULL rows.
       ++sum_ref_length;
     }
-    sum_ref_length += table->file->ref_length;
+    sum_ref_length += table->file->ref_length + table->file->gpp_length;
   }
 
   local_sortorder = sf_array;
@@ -1424,7 +1425,8 @@ uint Sort_param::make_sortkey(Bounds_checked_array<uchar> dst,
     bool is_null = maybe_null && *to == 0;
     if (maybe_null) {
       assert(*to == 0 || *to == 1);
-      if (sort_field->reverse && is_null) {
+      if ((vidx::check_item_func_vec_distance(item) || sort_field->reverse) &&
+          is_null) {
         *to = 0xff;
       }
       ++to;
@@ -1539,11 +1541,11 @@ uint Sort_param::make_sortkey(Bounds_checked_array<uchar> dst,
       if (table->is_nullable() && table->has_null_row()) {
         // The contents are not used, but it's nice to have them
         // defined when writing them to disk nevertheless.
-        memset(to, 0, table->file->ref_length);
+        memset(to, 0, table->file->ref_length + table->file->gpp_length);
       } else {
-        memcpy(to, table->file->ref, table->file->ref_length);
+        memcpy(to, table->file->ref, table->file->ref_length + table->file->gpp_length);
       }
-      to += table->file->ref_length;
+      to += table->file->ref_length + table->file->gpp_length;
     }
   }
   return to - orig_to;

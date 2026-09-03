@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 1/8/1996 Heikki Tuuri
  ***********************************************************************/
 
+#ifndef dict0dict_h
+#define INNODB_DICT0DICT_IC_STANDALONE
+#include "dict0dict.h"
+#undef INNODB_DICT0DICT_IC_STANDALONE
+#endif /* !dict0dict_h */
 #include "data0type.h"
 #include "dict0load.h"
 #include "fsp0fsp.h"
@@ -264,8 +269,11 @@ static inline dict_v_col_t *dict_table_get_nth_v_col(const dict_table_t *table,
 static inline ulint dict_table_get_sys_col_no(const dict_table_t *table,
                                               ulint sys) {
   ut_ad(table);
-  ut_ad(sys < table->get_n_sys_cols());
+  ut_ad(sys < table->get_n_sys_cols() || sys == DATA_GPP_NO);
   ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+  if (sys == DATA_GPP_NO) {
+    return sys;
+  }
 
   return (table->n_cols - table->get_n_sys_cols() + sys);
 }

@@ -91,6 +91,10 @@ extern void thd_increment_bytes_received(size_t length);
 
 /* Additional instrumentation hooks for the server */
 #include "mysql_com_server.h"
+
+// Network buffer shrink configuration (global-only variables)
+bool net_buff_shrink_enabled = false;
+uint net_buff_shrink_thresh = 5;
 #endif
 
 static bool net_write_buff(NET *, const uchar *, size_t);
@@ -241,6 +245,11 @@ bool net_realloc(NET *net, size_t length) {
   }
 #ifdef MYSQL_SERVER
   net->buff = net->write_pos = buff;
+  /* Record the buffer size before alignment for shrink logic */
+  NET_SERVER *server_ext = static_cast<NET_SERVER *>(net->extension);
+  if (server_ext) {
+    server_ext->unaligned_buff_size = length;
+  }
 #else
   size_t cur_pos_offset = NET_ASYNC_DATA(net)->cur_pos - net->buff;
   net->buff = net->write_pos = buff;
@@ -278,6 +287,99 @@ void net_clear(NET *net, bool check_buffer [[maybe_unused]]) {
   net->pkt_nr = net->compress_pkt_nr = 0;
   net->write_pos = net->buff;
 }
+
+#ifdef MYSQL_SERVER
+static void net_update_buff_usage(NET *net, ulong packet_len) {
+  NET_SERVER *server_ext = static_cast<NET_SERVER *>(net->extension);
+  if (server_ext) {
+    if (packet_len == packet_error) {
+      // Reset to 0 on error to avoid using stale value
+      server_ext->last_buff_usage = 0;
+    } else {
+      // For uncompressed: only one packet, use len directly
+      // For compressed: may have multiple packets, use net->buf_length
+      server_ext->last_buff_usage =
+          (net->compress ? net->buf_length : packet_len);
+    }
+  }
+}
+
+/**
+  Perform actual buffer shrinking.
+
+  @param net  NET handler
+  @param init_buff_size  Initial buffer size to shrink to
+  @param server_ext  NET_SERVER extension
+  @retval true if buffer was shrunk
+*/
+static inline bool net_shrink_buffer(NET *net, ulong init_buff_size,
+                                      NET_SERVER *server_ext) {
+  if (!net_realloc(net, init_buff_size)) {
+    server_ext->small_packet_counter = 0;
+    return true;
+  }
+  return false;
+}
+
+/**
+  Check if buffer should be shrunk and perform shrinking if needed.
+
+  Strategy:
+  - If shrink_thresh is 0, shrink immediately when buffer is larger
+    than initial size (immediate mode)
+  - If n consecutive packets are smaller than net_buffer_length, shrink to net_buffer_length
+  - If allocation fails, keep original size (fail-safe)
+
+  @param net  NET handler
+  @param init_buff_size  Initial buffer size to shrink to
+  @param shrink_enabled  Whether buffer shrinking is enabled
+  @param shrink_thresh  Number of consecutive small packets required before shrinking.
+                         0 means shrink immediately.
+  @retval true if buffer was shrunk
+*/
+bool net_maybe_shrink_buffer(NET *net, ulong init_buff_size, bool shrink_enabled,
+                              uint shrink_thresh) {
+  DBUG_TRACE;
+
+  if (!net) return false;
+  NET_SERVER *server_ext = static_cast<NET_SERVER *>(net->extension);
+
+  // don't shrink if:
+  // 1. the server extension is not initialized
+  // 2. buffer shrinking is not enabled
+  // 3. the unaligned buffer size is less than or equal to the initial size
+  //    Use unaligned_buff_size instead of net->max_packet to avoid alignment issues
+  if (!server_ext || !shrink_enabled ||
+      server_ext->unaligned_buff_size <= init_buff_size) {
+    return false;
+  }
+  // don't shrink if there are unprocessed packets in the buffer
+  if (net->remain_in_buf > 0) {
+    return false;
+  }
+
+  // If shrink_thresh is 0, shrink immediately when buffer is larger
+  // than initial size (immediate mode)
+  if (shrink_thresh == 0) {
+    return net_shrink_buffer(net, init_buff_size, server_ext);
+  }
+
+  // Large packet resets the counter
+  // (interrupts consecutive small packet sequence)
+  if (server_ext->last_buff_usage >= init_buff_size) {
+    server_ext->small_packet_counter = 0;
+    return false;
+  }
+
+  // Small packet: increment counter and check if we should shrink
+  server_ext->small_packet_counter++;
+  if (server_ext->small_packet_counter < shrink_thresh) {
+    return false;
+  }
+
+  return net_shrink_buffer(net, init_buff_size, server_ext);
+}
+#endif  // MYSQL_SERVER
 
 /** Flush write_buffer if not empty. */
 
@@ -2144,6 +2246,11 @@ net_async_status my_net_read_nonblocking(NET *net, ulong *len_ptr) {
   if (status == NET_ASYNC_NOT_READY) return status;
 
   status = NET_ASYNC_COMPLETE;
+
+#ifdef MYSQL_SERVER
+  net_update_buff_usage(net, *len_ptr);
+#endif
+
   if (*len_ptr == packet_error) return status;
 
   DBUG_PRINT("info", ("chunk nb read: %lu", *len_ptr));
@@ -2239,6 +2346,10 @@ ulong my_net_read(NET *net) {
     net_read_compressed_packet(net, len);
   else
     net_read_uncompressed_packet(net, len);
+
+#ifdef MYSQL_SERVER
+  net_update_buff_usage(net, static_cast<ulong>(len));
+#endif
 
   return static_cast<ulong>(len);
 }

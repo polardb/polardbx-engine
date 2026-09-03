@@ -1,0 +1,305 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+#
+# Cleanup before test
+#
+DROP TABLE IF EXISTS t1, t2;
+#
+# 10.1 ALTER TABLE ADD COLUMN - verify VECTOR INDEX preserved
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+extra INT,
+VECTOR INDEX vi(v) m=10 distance=euclidean
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ALTER TABLE t1 ADD COLUMN new_col VARCHAR(100);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  `new_col` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify VECTOR INDEX still exists
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+#
+# 10.2 ALTER TABLE DROP COLUMN - verify VECTOR INDEX preserved
+#
+ALTER TABLE t1 DROP COLUMN new_col;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify VECTOR INDEX still exists
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+#
+# 10.3 ALTER TABLE MODIFY COLUMN - verify VECTOR INDEX preserved
+#
+ALTER TABLE t1 MODIFY COLUMN extra BIGINT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify VECTOR INDEX still exists and column type changed
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+#
+# 10.4 ALTER TABLE ADD regular INDEX - verify VECTOR INDEX unaffected
+#
+ALTER TABLE t1 ADD INDEX idx_extra(extra);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_extra` (`extra`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Both indexes should exist
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY INDEX_NAME;
+INDEX_NAME	INDEX_TYPE
+idx_extra	BTREE
+PRIMARY	BTREE
+#
+# 10.5 Mixed ALTER operations with VECTOR INDEX ADD should fail
+#
+# Create a new table without VECTOR INDEX for this test
+CREATE TABLE t2 (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(3),
+extra INT
+) ENGINE=InnoDB;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v), ADD COLUMN c2 INT;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+# Verify table unchanged
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` int DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t2;
+#
+# 10.6 Mixed ALTER operations with VECTOR INDEX DROP should fail
+#
+# Note: According to vidx_ddl.test, DROP INDEX vi uses standard syntax
+# Test mixed operation: DROP VECTOR INDEX + other change
+ALTER TABLE t1 DROP INDEX vi, DROP COLUMN extra;
+ERROR 42000: This version of MySQL doesn't yet support 'perform other operations while alter a vector index'
+# Verify table unchanged
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_extra` (`extra`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# 10.7 ALTER TABLE RENAME INDEX - verify VECTOR INDEX renamed
+#
+# First drop the extra index we added
+ALTER TABLE t1 DROP INDEX idx_extra;
+ALTER TABLE t1 RENAME INDEX vi TO vi_renamed;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_renamed` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify renamed index exists
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi_renamed';
+INDEX_NAME	INDEX_TYPE
+# Check auxiliary tables are unaffected
+SELECT COUNT(*) > 0 AS has_vidx_tables FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+has_vidx_tables
+1
+#
+# 10.8 ALTER TABLE ENGINE=InnoDB (equivalent to OPTIMIZE TABLE)
+#
+ALTER TABLE t1 ENGINE=InnoDB;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_renamed` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Verify VECTOR INDEX preserved after engine rebuild
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi_renamed';
+INDEX_NAME	INDEX_TYPE
+#
+# Additional scenarios
+#
+# Test: ADD multiple columns at once
+ALTER TABLE t1 ADD COLUMN col1 INT, ADD COLUMN col2 VARCHAR(50);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  `col1` int DEFAULT NULL,
+  `col2` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_renamed` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Test: CHANGE column name
+ALTER TABLE t1 CHANGE col1 col1_renamed INT;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT NULL,
+  `col1_renamed` int DEFAULT NULL,
+  `col2` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_renamed` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Test: ALTER TABLE with DEFAULT value change
+ALTER TABLE t1 ALTER COLUMN extra SET DEFAULT 100;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT '100',
+  `col1_renamed` int DEFAULT NULL,
+  `col2` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi_renamed` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Test: Rename index back
+ALTER TABLE t1 RENAME INDEX vi_renamed TO vi;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT '100',
+  `col1_renamed` int DEFAULT NULL,
+  `col2` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Test: DROP all added columns
+ALTER TABLE t1 DROP COLUMN col1_renamed, DROP COLUMN col2;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT '100',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Test: ALTER TABLE operations on VECTOR column itself
+#
+#
+# Test: ALTER TABLE with CHARACTER SET change
+#
+ALTER TABLE t1 CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `v` vector(3) DEFAULT NULL,
+  `extra` bigint DEFAULT '100',
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=10 DISTANCE=EUCLIDEAN EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+# Verify VECTOR INDEX still exists
+SELECT INDEX_NAME, INDEX_TYPE FROM information_schema.STATISTICS 
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1' AND INDEX_NAME = 'vi';
+INDEX_NAME	INDEX_TYPE
+#
+# Test: Multiple ALTER TABLE operations preserving VECTOR INDEX
+#
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+v VECTOR(4),
+data VARCHAR(100),
+VECTOR INDEX vi(v) m=12 distance=cosine
+) ENGINE=InnoDB;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `v` vector(4) DEFAULT NULL,
+  `data` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  VECTOR KEY `vi` (`v`) M=12 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+# Multiple operations in sequence
+ALTER TABLE t2 ADD COLUMN ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE t2 ADD INDEX idx_data(data);
+ALTER TABLE t2 MODIFY COLUMN data VARCHAR(200);
+ALTER TABLE t2 RENAME INDEX vi TO vidx_main;
+SHOW CREATE TABLE t2;
+Table	Create Table
+t2	CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `v` vector(4) DEFAULT NULL,
+  `data` varchar(200) DEFAULT NULL,
+  `ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_data` (`data`),
+  VECTOR KEY `vidx_main` (`v`) M=12 DISTANCE=COSINE EF_CONSTRUCTION=10
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+#
+# Cleanup
+#
+DROP TABLE t1, t2;
+# Verify all auxiliary tables cleaned up
+SELECT COUNT(*) AS final_vidx_count FROM information_schema.INNODB_TABLES 
+WHERE NAME LIKE 'test/vidx_%';
+final_vidx_count
+0
+SET GLOBAL vidx_disabled = ON;

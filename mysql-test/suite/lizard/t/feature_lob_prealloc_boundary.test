@@ -1,0 +1,219 @@
+# ============================================================
+# Boundary coverage for the LOB preallocation path
+# (Lob_alloc_eager).
+#
+# Setup:
+#   - n = 4 worker tables t_lob_prealloc_b_0 .. _3, schema
+#     (id BIGINT PRIMARY KEY, b LONGBLOB).
+#   - A driver table l_tasks(idx, l_value) holds a curated
+#     list of blob lengths covering boundaries:
+#       * 0 (NULL) and 1 byte
+#       * sub-page sizes around the inline/external split
+#         (~768B / ~8KB depending on row format)
+#       * one InnoDB page (16384) +/- 1
+#       * multi-page LOB sizes up to 16 MB
+#   - Tasks are dispatched index-wise: l_tasks idx i goes to
+#     worker (i MOD n). Worker tid inserts (l_value, blob of
+#     length l_value) into t_lob_prealloc_b_<tid> with id =
+#     l_value (l_values are unique, so PK never collides).
+#   - All inserts of a single worker are wrapped in one
+#     transaction (one COMMIT per worker) -- this is the
+#     practical "batch insert" given a single 16 MB row
+#     would not fit a multi-VALUES form anyway.
+#
+# Run with: ./mtr --suite=lizard feature_lob_prealloc_boundary
+#   First verify the output, then re-run with --record.
+# ============================================================
+
+--disable_warnings
+DROP TABLE IF EXISTS l_tasks;
+DROP TABLE IF EXISTS t_lob_prealloc_b_0;
+DROP TABLE IF EXISTS t_lob_prealloc_b_1;
+DROP TABLE IF EXISTS t_lob_prealloc_b_2;
+DROP TABLE IF EXISTS t_lob_prealloc_b_3;
+DROP PROCEDURE IF EXISTS lob_boundary_proc;
+--enable_warnings
+
+# Save defaults so cleanup can restore them.
+SET @save_lob_prealloc = @@global.innodb_lob_prealloc;
+
+# Force the eager preallocation path on.
+SET GLOBAL innodb_lob_prealloc = ON;
+
+# ----------------------------------------------------------
+# Per-worker data tables.
+# ----------------------------------------------------------
+CREATE TABLE t_lob_prealloc_b_0 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_1 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_2 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+CREATE TABLE t_lob_prealloc_b_3 (id BIGINT PRIMARY KEY, b LONGBLOB) ENGINE=InnoDB;
+
+# ----------------------------------------------------------
+# Boundary L list. idx is 0-based and is the round-robin key.
+#
+# The values cover:
+#   0           NULL marker
+#   1, 100      tiny rows (fully inline)
+#   768, 1024   around the legacy 768B off-page threshold
+#   4096, 8000  sub-page payloads
+#   8192        half InnoDB page
+#   16000, 16383, 16384, 16385   single page +/- boundary
+#   32768 .. 1048576   2..64 LOB pages
+#   2097151, 2097152   2 MB +/- 1
+#   4194304            4 MB
+#   8388608            8 MB
+#   12582912           12 MB
+#   16777215, 16777216 16 MB +/- 1
+# ----------------------------------------------------------
+CREATE TABLE l_tasks (idx INT PRIMARY KEY, l_value BIGINT NOT NULL) ENGINE=InnoDB;
+
+INSERT INTO l_tasks VALUES
+  ( 0,        0),
+  ( 1,        1),
+  ( 2,      100),
+  ( 3,      768),
+  ( 4,     1024),
+  ( 5,     4096),
+  ( 6,     8000),
+  ( 7,     8192),
+  ( 8,    16000),
+  ( 9,    16383),
+  (10,    16384),
+  (11,    16385),
+  (12,    32768),
+  (13,    65536),
+  (14,   131072),
+  (15,   262144),
+  (16,   524288),
+  (17,  1048576),
+  (18,  2097151),
+  (19,  2097152),
+  (20,  4194304),
+  (21,  8388608),
+  (22, 12582912),
+  (23, 16777215),
+  (24, 16777216);
+
+# ----------------------------------------------------------
+# Worker procedure.
+#   tid:       worker id, 0..n_workers-1.
+#   n_workers: number of workers (= number of tables).
+#
+# Picks every l_tasks row whose idx MOD n_workers = tid,
+# inserts (l_value, blob) into t_lob_prealloc_b_<tid>.
+# l_value = 0 stores NULL; otherwise REPEAT('x', l_value).
+# All inserts of one worker share a single transaction.
+# ----------------------------------------------------------
+DELIMITER $$;
+CREATE PROCEDURE lob_boundary_proc(IN tid INT, IN n_workers INT)
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE cur_l BIGINT;
+  DECLARE cur CURSOR FOR
+    SELECT l_value FROM l_tasks
+    WHERE MOD(idx, n_workers) = tid
+    ORDER BY idx;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  OPEN cur;
+  START TRANSACTION;
+  read_loop: LOOP
+    FETCH cur INTO cur_l;
+    IF done THEN LEAVE read_loop; END IF;
+
+    SET @sql = CONCAT(
+      'INSERT INTO t_lob_prealloc_b_', tid,
+      ' VALUES (', cur_l, ', ',
+      IF(cur_l = 0, 'NULL', CONCAT('REPEAT(''x'', ', cur_l, ')')),
+      ')'
+    );
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END LOOP;
+  COMMIT;
+  CLOSE cur;
+END$$
+DELIMITER ;$$
+
+# ----------------------------------------------------------
+# Spin up four worker connections and run them in parallel.
+# ----------------------------------------------------------
+--connect (con1, localhost, root,, test)
+--connect (con2, localhost, root,, test)
+--connect (con3, localhost, root,, test)
+--connect (con4, localhost, root,, test)
+
+--connection con1
+--send CALL lob_boundary_proc(0, 4)
+
+--connection con2
+--send CALL lob_boundary_proc(1, 4)
+
+--connection con3
+--send CALL lob_boundary_proc(2, 4)
+
+--connection con4
+--send CALL lob_boundary_proc(3, 4)
+
+--connection con1
+--reap
+--connection con2
+--reap
+--connection con3
+--reap
+--connection con4
+--reap
+
+# ----------------------------------------------------------
+# Verify row counts (worker 0 owns idx 0,4,8,...,24 = 7 rows;
+# workers 1..3 own 6 rows each).
+# ----------------------------------------------------------
+--connection default
+SELECT
+  (SELECT COUNT(*) FROM t_lob_prealloc_b_0) AS rows_t0,
+  (SELECT COUNT(*) FROM t_lob_prealloc_b_1) AS rows_t1,
+  (SELECT COUNT(*) FROM t_lob_prealloc_b_2) AS rows_t2,
+  (SELECT COUNT(*) FROM t_lob_prealloc_b_3) AS rows_t3;
+
+# Length sanity: every row must satisfy
+#   id = 0   -> b IS NULL
+#   id > 0   -> LENGTH(b) = id
+# bad_tN should be 0 for every table.
+SELECT
+  SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+                     (id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+    AS bad_t0
+  FROM t_lob_prealloc_b_0;
+SELECT
+  SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+                     (id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+    AS bad_t1
+  FROM t_lob_prealloc_b_1;
+SELECT
+  SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+                     (id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+    AS bad_t2
+  FROM t_lob_prealloc_b_2;
+SELECT
+  SUM(CASE WHEN NOT ((id = 0 AND b IS NULL) OR
+                     (id > 0 AND LENGTH(b) = id)) THEN 1 ELSE 0 END)
+    AS bad_t3
+  FROM t_lob_prealloc_b_3;
+
+# ----------------------------------------------------------
+# Cleanup
+# ----------------------------------------------------------
+--disconnect con1
+--disconnect con2
+--disconnect con3
+--disconnect con4
+
+DROP PROCEDURE lob_boundary_proc;
+DROP TABLE t_lob_prealloc_b_0;
+DROP TABLE t_lob_prealloc_b_1;
+DROP TABLE t_lob_prealloc_b_2;
+DROP TABLE t_lob_prealloc_b_3;
+DROP TABLE l_tasks;
+
+SET GLOBAL innodb_lob_prealloc = @save_lob_prealloc;

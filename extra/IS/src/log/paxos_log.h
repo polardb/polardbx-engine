@@ -27,6 +27,7 @@
 #include "paxos.pb.h"
 
 namespace alisql {
+class Paxos;
 
 enum LogOperation {
   kNormal = 0,
@@ -42,17 +43,17 @@ enum LogOperation {
 };
 
 /**
- * @class PaxosLog
+ * @class PaxosLogHandler
  *
  * @brief
  *
  **/
-class PaxosLog {
+class PaxosLogHandler {
  public:
-  PaxosLog() : currentTerm_(0) {}
-  virtual ~PaxosLog() = default;
-  PaxosLog(const PaxosLog &other) = delete;  // copy constructor
-  const PaxosLog &operator=(const PaxosLog &other) =
+  PaxosLogHandler() : currentTerm_(0) {}
+  virtual ~PaxosLogHandler() = default;
+  PaxosLogHandler(const PaxosLogHandler &other) = delete;  // copy constructor
+  const PaxosLogHandler &operator=(const PaxosLogHandler &other) =
       delete;                                // assignment operator
 
   virtual int getEntry(uint64_t logIndex, LogEntry &entry, bool fastfail,
@@ -61,23 +62,14 @@ class PaxosLog {
   }
   virtual int getEntry(uint64_t logIndex, LogEntry &entry,
                        bool fastfail = false) = 0;
+  virtual uint64_t getFirstIndexOfLastFileTerm(const uint64_t) = 0;
+  virtual uint64_t getLastIndexOfTerm(const uint64_t) = 0;
+
   virtual const LogEntry *getEntry(uint64_t /* logIndex */,
                                    bool /* fastfail */ = false) {
     return nullptr;
   }
   virtual int getEmptyEntry(LogEntry &entry) = 0;
-  virtual uint64_t getLeftSize(uint64_t startLogIndex) {
-    const LogEntry *entry;
-    uint64_t lastLogIndex = getLastLogIndex();
-    uint64_t size = 0;
-    for (uint64_t i = startLogIndex; i <= lastLogIndex; ++i) {
-      if (nullptr != (entry = getEntry(i, true)))
-        size += entry->ByteSizeLong();
-      else
-        break;
-    }
-    return size;
-  }
   virtual bool getLeftSize(uint64_t startLogIndex, uint64_t maxPacketSize) {
     const LogEntry *entry;
     uint64_t lastLogIndex = getLastLogIndex();
@@ -106,9 +98,9 @@ class PaxosLog {
   virtual uint64_t getSafeLastLogIndexNoLock() { return getLastLogIndex(); }
   virtual uint64_t getWaitMilliseconds4OldTrxFinish() { return 0; }
   virtual void forceUpdateAppliedIndex(const uint64_t) { }
-  virtual void waitOldTrxFinish() { }
-  virtual void waitOldXaFinish() { }
-  virtual uint64_t waitOldBgcFinish() { return 0; }
+  virtual uint64_t waitOldTrxFinish() { return 0; }
+  virtual uint64_t waitOldXaFinish() { return 0; }
+  virtual std::pair<uint64_t, uint64_t> waitOldBgcFinish(Paxos *) { return {0, 0}; }
   virtual void setLimitNone() { }
   virtual void setLimitNewTrx() { }
   virtual void setLimitXaFinish() { }
@@ -188,6 +180,7 @@ class PaxosLog {
   }
   virtual bool isStateMachineHealthy() { return true; }
   virtual uint64_t getMockStartIndex() { return 0; }
+  virtual void setMockStartIndex(uint64_t ) { }
   virtual bool entriesPreCheck(
       const ::google::protobuf::RepeatedPtrField<LogEntry> &) {
     return false;
@@ -201,7 +194,7 @@ class PaxosLog {
 
  private:
   LogMetaCache metaCache_;
-}; /* end of class PaxosLog */
+}; /* end of class PaxosLogHandler */
 
 }  // namespace alisql
 

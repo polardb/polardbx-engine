@@ -1,0 +1,228 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# ========================================
+# 1. Prepare - Create source table with vector data
+# ========================================
+CREATE TABLE t_source (
+id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert test data
+INSERT INTO t_source(v) VALUES (VEC_FROMTEXT("[1.0,2.0,3.0,4.0,5.0]"));
+INSERT INTO t_source(v) VALUES (VEC_FROMTEXT("[5.0,4.0,3.0,2.0,1.0]"));
+INSERT INTO t_source(v) VALUES (VEC_FROMTEXT("[1.1,2.1,3.1,4.1,5.1]"));
+INSERT INTO t_source(v) VALUES (VEC_FROMTEXT("[2.5,3.5,4.5,5.5,6.5]"));
+INSERT INTO t_source(v) VALUES (VEC_FROMTEXT("[10.0,20.0,30.0,40.0,50.0]"));
+# Verify source data
+SELECT id, VEC_TOTEXT(v) FROM t_source ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+5	[10,20,30,40,50]
+
+# ========================================
+# 2. Export data to CSV using SELECT INTO OUTFILE
+# ========================================
+SELECT id, VEC_TOTEXT(v) INTO OUTFILE 'MYSQLD_DATADIR/vidx_load_test.csv' FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' FROM t_source;
+
+# ========================================
+# 3. Import to table without vector index (text format)
+# ========================================
+CREATE TABLE t_import_text (
+id INT PRIMARY KEY,
+v_text VARCHAR(200)
+) ENGINE = InnoDB;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_load_test.csv' INTO TABLE t_import_text FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' (id, v_text);
+# Verify imported data
+SELECT * FROM t_import_text ORDER BY id;
+id	v_text
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+5	[10,20,30,40,50]
+# Verify row count matches
+SELECT COUNT(*) AS source_count FROM t_source;
+source_count
+5
+SELECT COUNT(*) AS import_count FROM t_import_text;
+import_count
+5
+DROP TABLE t_import_text;
+
+# ========================================
+# 4. Import and convert to vector format
+# ========================================
+CREATE TABLE t_import_vec (
+id INT PRIMARY KEY,
+v_text VARCHAR(200)
+) ENGINE = InnoDB;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_load_test.csv' INTO TABLE t_import_vec FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' (id, v_text);
+# Now create final table with vector index and convert data
+CREATE TABLE t_final (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# Insert with VEC_FROMTEXT conversion
+INSERT INTO t_final(id, v) SELECT id, VEC_FROMTEXT(v_text) FROM t_import_vec;
+# Verify data
+SELECT id, VEC_TOTEXT(v) FROM t_final ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+5	[10,20,30,40,50]
+# Verify ANN query works on imported data
+EXPLAIN SELECT id, VEC_TOTEXT(v) FROM t_final FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_final	NULL	index	NULL	vi	23	NULL	5	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=3; metric=EUCLIDEAN)
+SELECT id, VEC_TOTEXT(v) FROM t_final FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+# Compare with source table ANN query result
+SELECT id, VEC_TOTEXT(v) FROM t_source FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+DROP TABLE t_import_vec;
+DROP TABLE t_final;
+
+# ========================================
+# 5. LOAD DATA transaction behavior
+# ========================================
+CREATE TABLE t_trx (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+# LOAD DATA in transaction with COMMIT
+BEGIN;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_load_test.csv' INTO TABLE t_trx FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' (@id, @v_text) SET id = @id, v = VEC_FROMTEXT(@v_text);
+COMMIT;
+# Verify data after commit
+SELECT COUNT(*) FROM t_trx;
+COUNT(*)
+5
+SELECT id, VEC_TOTEXT(v) FROM t_trx ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	[5,4,3,2,1]
+3	[1.1,2.1,3.1,4.1,5.1]
+4	[2.5,3.5,4.5,5.5,6.5]
+5	[10,20,30,40,50]
+TRUNCATE TABLE t_trx;
+# LOAD DATA in transaction with ROLLBACK
+BEGIN;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_load_test.csv' INTO TABLE t_trx FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' (@id, @v_text) SET id = @id, v = VEC_FROMTEXT(@v_text);
+# Before rollback
+SELECT COUNT(*) FROM t_trx;
+COUNT(*)
+5
+ROLLBACK;
+# After rollback - should be empty
+SELECT COUNT(*) FROM t_trx;
+COUNT(*)
+0
+DROP TABLE t_trx;
+
+# ========================================
+# 6. Generate test data file with write_file
+# ========================================
+CREATE TABLE t_manual (
+id INT PRIMARY KEY,
+v_text VARCHAR(200)
+) ENGINE = InnoDB;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_manual_data.csv' INTO TABLE t_manual FIELDS TERMINATED BY '\t' LINES TERMINATED BY '\n' (id, v_text);
+# Verify manually created data
+SELECT * FROM t_manual ORDER BY id;
+id	v_text
+1	[0.1,0.2,0.3,0.4,0.5]
+2	[0.5,0.4,0.3,0.2,0.1]
+3	[1.0,1.0,1.0,1.0,1.0]
+4	[2.0,2.0,2.0,2.0,2.0]
+5	[0.0,0.0,0.0,0.0,0.0]
+# Convert to vector table
+CREATE TABLE t_manual_vec (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+INSERT INTO t_manual_vec(id, v) SELECT id, VEC_FROMTEXT(v_text) FROM t_manual;
+# Verify vector data
+SELECT id, VEC_TOTEXT(v) FROM t_manual_vec ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[0.1,0.2,0.3,0.4,0.5]
+2	[0.5,0.4,0.3,0.2,0.1]
+3	[1,1,1,1,1]
+4	[2,2,2,2,2]
+5	[0,0,0,0,0]
+# Test ANN query - find nearest to [0,0,0,0,0]
+SELECT id, VEC_TOTEXT(v), VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0,0,0,0,0]")) AS dist 
+FROM t_manual_vec FORCE INDEX(`vi`) 
+ORDER BY dist, id LIMIT 3;
+id	VEC_TOTEXT(v)	dist
+5	[0,0,0,0,0]	0
+1	[0.1,0.2,0.3,0.4,0.5]	0.741619857751291
+2	[0.5,0.4,0.3,0.2,0.1]	0.741619857751291
+DROP TABLE t_manual;
+DROP TABLE t_manual_vec;
+
+# ========================================
+# 7. LOAD DATA with NULL vector values
+# ========================================
+CREATE TABLE t_null (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_null_data.csv' INTO TABLE t_null FIELDS TERMINATED BY '\t' LINES TERMINATED BY '\n' (@id, @v_text) SET id = @id, v = IF(@v_text = '\N', NULL, VEC_FROMTEXT(@v_text));
+# Verify data with NULL values
+SELECT id, VEC_TOTEXT(v) FROM t_null ORDER BY id;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+2	NULL
+3	[3,4,5,6,7]
+4	NULL
+5	[5,6,7,8,9]
+# ANN query should work, ignoring NULL vectors
+SELECT id, VEC_TOTEXT(v) FROM t_null FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[1,2,3,4,5]")) LIMIT 3;
+id	VEC_TOTEXT(v)
+1	[1,2,3,4,5]
+3	[3,4,5,6,7]
+5	[5,6,7,8,9]
+DROP TABLE t_null;
+
+# ========================================
+# 8. LOAD DATA with large batch
+# ========================================
+# Generate large data file
+SELECT id, v_text INTO OUTFILE 'MYSQLD_DATADIR/vidx_large_data.csv' FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' FROM t_gen;
+CREATE TABLE t_large (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE = InnoDB;
+LOAD DATA INFILE 'MYSQLD_DATADIR/vidx_large_data.csv' INTO TABLE t_large FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' (@id, @v_text) SET id = @id, v = VEC_FROMTEXT(@v_text);
+# Verify row count
+SELECT COUNT(*) FROM t_large;
+COUNT(*)
+100
+# Verify ANN query works
+SELECT id FROM t_large FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT("[0.5,0.5,0.5,0.5,0.5]")) LIMIT 5;
+DROP TABLE t_gen;
+DROP TABLE t_large;
+
+# ========================================
+# 9. Cleanup
+# ========================================
+DROP TABLE t_source;
+SET GLOBAL vidx_disabled = ON;

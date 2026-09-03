@@ -34,17 +34,17 @@ TEST(LeaderTransfer, UnnecessaryLog) {
 
   const uint64_t timeout = 10000;
   std::string dir1 = std::string("paxosLogTestDir71");
-  std::shared_ptr<PaxosLog> rlog1 =
+  std::shared_ptr<PaxosLogHandler> rlog1 =
       std::make_shared<FilePaxosLog>(dir1, FilePaxosLog::LogType::LTMem);
   Paxos *paxos1 = new Paxos(timeout, rlog1);
   paxos1->init(strConfig, 1, 1);
   std::string dir2 = std::string("paxosLogTestDir72");
-  std::shared_ptr<PaxosLog> rlog2 =
+  std::shared_ptr<PaxosLogHandler> rlog2 =
       std::make_shared<FilePaxosLog>(dir2, FilePaxosLog::LogType::LTMem);
   Paxos *paxos2 = new Paxos(timeout, rlog2);
   paxos2->init(strConfig, 2, 2);
   std::string dir3 = std::string("paxosLogTestDir73");
-  std::shared_ptr<PaxosLog> rlog3 =
+  std::shared_ptr<PaxosLogHandler> rlog3 =
       std::make_shared<FilePaxosLog>(dir3, FilePaxosLog::LogType::LTMem);
   Paxos *paxos3 = new Paxos(timeout, rlog3);
   paxos3->init(strConfig, 3, 3);
@@ -108,17 +108,17 @@ TEST(LeaderTransfer, AutoLeaderTransfer) {
 
   const uint64_t timeout = 1000;
   std::string dir1 = std::string("paxosLogTestDir71");
-  std::shared_ptr<PaxosLog> rlog1 =
+  std::shared_ptr<PaxosLogHandler> rlog1 =
       std::make_shared<PaxosLogTmp>(dir1, FilePaxosLog::LogType::LTMem);
   Paxos *paxos1 = new Paxos(timeout, rlog1);
   paxos1->init(strConfig, 1, 1);
   std::string dir2 = std::string("paxosLogTestDir72");
-  std::shared_ptr<PaxosLog> rlog2 =
+  std::shared_ptr<PaxosLogHandler> rlog2 =
       std::make_shared<PaxosLogTmp>(dir2, FilePaxosLog::LogType::LTMem);
   Paxos *paxos2 = new Paxos(timeout, rlog2);
   paxos2->init(strConfig, 2, 2);
   std::string dir3 = std::string("paxosLogTestDir73");
-  std::shared_ptr<PaxosLog> rlog3 =
+  std::shared_ptr<PaxosLogHandler> rlog3 =
       std::make_shared<PaxosLogTmp>(dir3, FilePaxosLog::LogType::LTMem);
   Paxos *paxos3 = new Paxos(timeout, rlog3);
   paxos3->init(strConfig, 3, 3);

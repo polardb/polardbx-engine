@@ -1,0 +1,111 @@
+--source include/have_blackhole.inc
+--source include/have_gtid.inc
+
+--disable_query_log
+
+SET AUTOCOMMIT=1;
+CREATE TABLE test_blackhole (
+  id INT PRIMARY KEY,
+  data VARCHAR(255)
+) ENGINE=BLACKHOLE;
+
+CREATE TABLE test_innodb (
+  id INT PRIMARY KEY,
+  data VARCHAR(255)
+) ENGINE=INNODB;
+
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 1: Insert data into blackhole table - Single statement transactions
+#--------------------------------------------------------------------------
+--echo # Case 1: Insert data into blackhole table - Single statement transactions
+INSERT INTO test_blackhole VALUES (1, 'test1'), (2, 'test2'), (3, 'test3');
+INSERT INTO test_blackhole VALUES (4, 'test4');
+INSERT INTO test_blackhole VALUES (5, 'test5'), (6, 'test6');
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 2: Insert data into blackhole table - XA Transactions
+#--------------------------------------------------------------------------
+--echo # Case 2: Insert data into blackhole table - XA Transactions
+XA START 'xid1';
+INSERT INTO test_blackhole VALUES (7, 'xa_test1');
+XA END 'xid1';
+XA COMMIT 'xid1' ONE PHASE;
+
+XA START 'xid2';
+INSERT INTO test_blackhole VALUES (8, 'xa_test2'), (9, 'xa_test3');
+XA END 'xid2';
+XA COMMIT 'xid2' ONE PHASE;
+
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 3: InnoDB first, then BLACKHOLE in same transaction
+#--------------------------------------------------------------------------
+--echo # Case 3: InnoDB first, then BLACKHOLE in same transaction
+BEGIN;
+INSERT INTO test_innodb VALUES (10, 'innodb_first_1');
+INSERT INTO test_blackhole VALUES (11, 'blackhole_second_1');
+COMMIT;
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 4: BLACKHOLE first, then InnoDB in same transaction 
+#--------------------------------------------------------------------------
+--echo # Case 4: BLACKHOLE first, then InnoDB in same transaction 
+BEGIN;
+INSERT INTO test_blackhole VALUES (12, 'blackhole_first_1');
+INSERT INTO test_innodb VALUES (13, 'innodb_second_1');
+COMMIT;
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 5: InnoDB first, then BLACKHOLE in same XA transaction
+#--------------------------------------------------------------------------
+--echo # Case 5: InnoDB first, then BLACKHOLE in same XA transaction
+XA START 'xid3';
+INSERT INTO test_innodb VALUES (18, 'xa_innodb_first');
+INSERT INTO test_blackhole VALUES (19, 'xa_blackhole_second');
+XA END 'xid3';
+XA COMMIT 'xid3' ONE PHASE;
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 6: BLACKHOLE first, then InnoDB in same XA transaction
+#--------------------------------------------------------------------------
+--echo # Case 6: BLACKHOLE first, then InnoDB in same XA transaction
+XA START 'xid4';
+INSERT INTO test_blackhole VALUES (20, 'xa_blackhole_first');
+INSERT INTO test_innodb VALUES (21, 'xa_innodb_second');
+XA END 'xid4';
+XA COMMIT 'xid4' ONE PHASE;
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+#--------------------------------------------------------------------------
+# Test Case 7: fault inject
+#--------------------------------------------------------------------------
+--echo # Case 7: Test blackhole insert with ib_create_table_fail_too_many_trx fault injection
+
+SET DEBUG='+d,ib_create_table_fail_too_many_trx';
+--error ER_INNODB_PARTICIPATE_FAILED
+INSERT INTO test_blackhole VALUES (22, 'fault_inject_test');
+
+SET DEBUG='-d,ib_create_table_fail_too_many_trx';
+--echo # After fault injection, insert more data to verify normal operation
+INSERT INTO test_blackhole VALUES (23, 'post_fault_test1');
+INSERT INTO test_blackhole VALUES (24, 'post_fault_test2');
+FLUSH LOGS;
+--source include/check_gtid_increase.inc
+
+--echo # Cleanup
+DROP TABLE test_blackhole;
+DROP TABLE test_innodb;

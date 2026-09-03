@@ -1,0 +1,126 @@
+call mtr.add_suppression("Fail to recycle table");
+set session recycle_bin=on;
+SET AUTOCOMMIT=1;
+SET GLOBAL recycle_scheduler = ON;
+SET GLOBAL recycle_scheduler_interval = 1;
+SET GLOBAL recycle_bin_retention=604800;
+------------------------------------------------------
+1. Capacity limit
+------------------------------------------------------
+SET GLOBAL recycle_bin_capacity_limit = 163840;
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+create table test1(id int);
+insert into test1 values(1);
+drop table test1;
+create table test2(id int);
+insert into test2 values(2);
+drop table test2;
+create table test3(id int);
+insert into test3 values(3);
+drop table test3;
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_499	test	test3	#	#
+------------------------------------------------------
+2. Truncate table behavior with capacity limit
+------------------------------------------------------
+create table truncate_test(id int, data varchar(200));
+insert into truncate_test values(1, repeat('T', 200));
+insert into truncate_test values(2, repeat('U', 200));
+insert into truncate_test values(3, repeat('V', 200));
+SELECT COUNT(*) AS 'Row_Count' FROM truncate_test;
+Row_Count
+3
+truncate table truncate_test;
+SELECT COUNT(*) AS 'Row_Count_After_Truncate' FROM truncate_test;
+Row_Count_After_Truncate
+0
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_1413	test	truncate_test	#	#
+------------------------------------------------------
+3. Scheduler disabled behavior
+------------------------------------------------------
+SET GLOBAL recycle_scheduler = OFF;
+SELECT @@global.recycle_scheduler;
+@@global.recycle_scheduler
+0
+SET GLOBAL recycle_bin_capacity_limit = 163840;
+create table no_cleanup1(id int, data varchar(100));
+insert into no_cleanup1 values(1, repeat('X', 100));
+drop table no_cleanup1;
+create table no_cleanup2(id int, data varchar(100));
+insert into no_cleanup2 values(1, repeat('Y', 100));
+drop table no_cleanup2;
+create table no_cleanup3(id int, data varchar(100));
+insert into no_cleanup3 values(1, repeat('Z', 100));
+drop table no_cleanup3;
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_1109	test	no_cleanup1	#	#
+__recycle_bin__	__innodb_1110	test	no_cleanup2	#	#
+__recycle_bin__	__innodb_1111	test	no_cleanup3	#	#
+__recycle_bin__	__innodb_1413	test	truncate_test	#	#
+------------------------------------------------------
+4. Dynamic parameter adjustment behavior
+------------------------------------------------------
+SET GLOBAL recycle_scheduler = ON;
+SELECT @@global.recycle_scheduler;
+@@global.recycle_scheduler
+1
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_1111	test	no_cleanup3	#	#
+SET GLOBAL recycle_bin_capacity_limit = 655360;
+drop table truncate_test;
+create table dynamic1(id int, data varchar(100));
+insert into dynamic1 values(1, repeat('D1', 50));
+drop table dynamic1;
+create table dynamic2(id int, data varchar(100));
+insert into dynamic2 values(1, repeat('D2', 50));
+drop table dynamic2;
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_1111	test	no_cleanup3	#	#
+__recycle_bin__	__innodb_1413	test	truncate_test	#	#
+__recycle_bin__	__innodb_790	test	dynamic1	#	#
+__recycle_bin__	__innodb_791	test	dynamic2	#	#
+SET GLOBAL recycle_bin_capacity_limit = 163840;
+SELECT SLEEP(2);
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_791	test	dynamic2	#	#
+------------------------------------------------------
+5. Restore and purge recycle table
+------------------------------------------------------
+call dbms_recycle.restore_table("__innodb_791", "", "");
+ERROR HY000: Recycle table failed :  only restore table __innodb_791 on current node, other replicas should be handled separately.
+select id from dynamic2;
+id
+1
+drop table dynamic2;
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+__recycle_bin__	__innodb_791	test	dynamic2	#	#
+call dbms_recycle.purge_table("__innodb_791");
+call dbms_recycle.show_tables();
+SCHEMA	TABLE	ORIGIN_SCHEMA	ORIGIN_TABLE	RECYCLED_TIME	PURGE_TIME
+------------------------------------------------------
+6. Cleanup and reset
+------------------------------------------------------
+SET GLOBAL recycle_bin_capacity_limit = 0;
+SET GLOBAL recycle_scheduler_interval = 30;
+SET GLOBAL recycle_scheduler = OFF;
+SELECT @@global.recycle_bin_capacity_limit AS 'Capacity_Limit';
+Capacity_Limit
+0
+SELECT @@global.recycle_scheduler AS 'Scheduler_Status';
+Scheduler_Status
+0

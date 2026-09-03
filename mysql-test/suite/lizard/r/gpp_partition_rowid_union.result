@@ -1,0 +1,211 @@
+#
+# Test GPP (Guess Primary Page) for ROWID UNION index merge
+# on HASH-partitioned tables. INDEX_MERGE hint with OR conditions
+# (equality on all indexes) triggers union merge; GPP should accelerate
+# the clustered index lookup when merging rowids.
+#
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+# -----------------------------------------------------------------------
+# Create a HASH-partitioned table with multiple secondary indexes.
+# -----------------------------------------------------------------------
+CREATE TABLE tp (
+id  INT AUTO_INCREMENT,
+a   VARCHAR(10) NOT NULL,
+b   INT         NOT NULL,
+c   INT         NOT NULL,
+d   CHAR(1)     NOT NULL DEFAULT 'A',
+PRIMARY KEY (id),
+KEY idx_a (a),
+KEY idx_b (b),
+KEY idx_cd (c, d)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
+PARTITION BY HASH(id) PARTITIONS 4;
+# -----------------------------------------------------------------------
+# Insert 1000 rows distributed across 4 partitions.
+# -----------------------------------------------------------------------
+CREATE PROCEDURE insert_tp_data(IN num_rows INT)
+BEGIN
+DECLARE i INT DEFAULT 1;
+START TRANSACTION;
+WHILE i <= num_rows DO
+INSERT INTO tp (id, a, b, c, d) VALUES (
+i,
+CONCAT('NO', LPAD(i, 4, '0')),
+i * 10,
+i * 50,
+ELT(((i - 1) % 3) + 1, 'A', 'B', 'C')
+);
+SET i = i + 1;
+END WHILE;
+COMMIT;
+END//
+CALL insert_tp_data(1000);
+SELECT COUNT(*) AS row_count FROM tp;
+row_count
+1000
+# -----------------------------------------------------------------------
+# Warm up: verify secondary index GPP info is valid via point lookups.
+# -----------------------------------------------------------------------
+SELECT * FROM tp WHERE a = 'NO0001';
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM tp WHERE b = 10;
+id	a	b	c	d
+1	NO0001	10	50	A
+SELECT * FROM tp WHERE c = 100 AND d = 'B';
+id	a	b	c	d
+2	NO0002	20	100	B
+# ===================================================================
+# Test 1: Union merge (idx_b OR PRIMARY) — equality on both
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_b,PRIMARY) */ * FROM tp WHERE b = 1000 OR id < 100;
+id	a	b	c	d
+1	NO0001	10	50	A
+2	NO0002	20	100	B
+3	NO0003	30	150	C
+4	NO0004	40	200	A
+5	NO0005	50	250	B
+6	NO0006	60	300	C
+7	NO0007	70	350	A
+8	NO0008	80	400	B
+9	NO0009	90	450	C
+10	NO0010	100	500	A
+11	NO0011	110	550	B
+12	NO0012	120	600	C
+13	NO0013	130	650	A
+14	NO0014	140	700	B
+15	NO0015	150	750	C
+16	NO0016	160	800	A
+17	NO0017	170	850	B
+18	NO0018	180	900	C
+19	NO0019	190	950	A
+20	NO0020	200	1000	B
+21	NO0021	210	1050	C
+22	NO0022	220	1100	A
+23	NO0023	230	1150	B
+24	NO0024	240	1200	C
+25	NO0025	250	1250	A
+26	NO0026	260	1300	B
+27	NO0027	270	1350	C
+28	NO0028	280	1400	A
+29	NO0029	290	1450	B
+30	NO0030	300	1500	C
+31	NO0031	310	1550	A
+32	NO0032	320	1600	B
+33	NO0033	330	1650	C
+34	NO0034	340	1700	A
+35	NO0035	350	1750	B
+36	NO0036	360	1800	C
+37	NO0037	370	1850	A
+38	NO0038	380	1900	B
+39	NO0039	390	1950	C
+40	NO0040	400	2000	A
+41	NO0041	410	2050	B
+42	NO0042	420	2100	C
+43	NO0043	430	2150	A
+44	NO0044	440	2200	B
+45	NO0045	450	2250	C
+46	NO0046	460	2300	A
+47	NO0047	470	2350	B
+48	NO0048	480	2400	C
+49	NO0049	490	2450	A
+50	NO0050	500	2500	B
+51	NO0051	510	2550	C
+52	NO0052	520	2600	A
+53	NO0053	530	2650	B
+54	NO0054	540	2700	C
+55	NO0055	550	2750	A
+56	NO0056	560	2800	B
+57	NO0057	570	2850	C
+58	NO0058	580	2900	A
+59	NO0059	590	2950	B
+60	NO0060	600	3000	C
+61	NO0061	610	3050	A
+62	NO0062	620	3100	B
+63	NO0063	630	3150	C
+64	NO0064	640	3200	A
+65	NO0065	650	3250	B
+66	NO0066	660	3300	C
+67	NO0067	670	3350	A
+68	NO0068	680	3400	B
+69	NO0069	690	3450	C
+70	NO0070	700	3500	A
+71	NO0071	710	3550	B
+72	NO0072	720	3600	C
+73	NO0073	730	3650	A
+74	NO0074	740	3700	B
+75	NO0075	750	3750	C
+76	NO0076	760	3800	A
+77	NO0077	770	3850	B
+78	NO0078	780	3900	C
+79	NO0079	790	3950	A
+80	NO0080	800	4000	B
+81	NO0081	810	4050	C
+82	NO0082	820	4100	A
+83	NO0083	830	4150	B
+84	NO0084	840	4200	C
+85	NO0085	850	4250	A
+86	NO0086	860	4300	B
+87	NO0087	870	4350	C
+88	NO0088	880	4400	A
+89	NO0089	890	4450	B
+90	NO0090	900	4500	C
+91	NO0091	910	4550	A
+92	NO0092	920	4600	B
+93	NO0093	930	4650	C
+94	NO0094	940	4700	A
+95	NO0095	950	4750	B
+96	NO0096	960	4800	C
+97	NO0097	970	4850	A
+98	NO0098	980	4900	B
+99	NO0099	990	4950	C
+100	NO0100	1000	5000	A
+include/assert.inc [[partition union idx_b,PK] gpp total (hit+miss) should be > 0]
+# ===================================================================
+# Test 2: Union merge (idx_a OR idx_b) — equality on both
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b) */ * FROM tp WHERE a = "NO0011" OR b = 200;
+id	a	b	c	d
+11	NO0011	110	550	B
+20	NO0020	200	1000	B
+include/assert.inc [[partition union idx_a,idx_b] gpp total (hit+miss) should be > 0]
+# ===================================================================
+# Test 3: Union merge (idx_a OR idx_cd) — equality on both
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,idx_cd) */ * FROM tp WHERE a = "NO0100" OR (c = 50 AND d = "A");
+id	a	b	c	d
+1	NO0001	10	50	A
+100	NO0100	1000	5000	A
+include/assert.inc [[partition union idx_a,idx_cd] gpp total (hit+miss) should be > 0]
+# ===================================================================
+# Test 4: Union + Intersection combined
+# (a = ... AND b = ...) OR (c = ... AND d = ...)
+# ===================================================================
+call dbms_stat.flush_gpp();
+SELECT /*+INDEX_MERGE(tp idx_a,idx_b,idx_cd) */ * FROM tp
+WHERE (a = "NO0001" AND b = 10) OR (c = 5000 AND d = "A");
+id	a	b	c	d
+1	NO0001	10	50	A
+100	NO0100	1000	5000	A
+include/assert.inc [[partition union+intersection] gpp total (hit+miss) should be > 0]
+# -----------------------------------------------------------------------
+# Clean up
+# -----------------------------------------------------------------------
+DROP PROCEDURE insert_tp_data;
+DROP TABLE tp;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+SET GLOBAL innodb_lizard_stat_enabled = 0;
+SET GLOBAL innodb_index_purge_guess_clust_enabled = 1;
+SET GLOBAL innodb_index_scan_guess_clust_enabled = 1;
+SET GLOBAL innodb_adaptive_hash_index = 0;
+SET GLOBAL innodb_polarx_btree_search_mode = 1;
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';

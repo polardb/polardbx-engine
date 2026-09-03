@@ -56,11 +56,16 @@ constexpr uint32_t IB_EXPORT_CFG_VERSION_V6 = 6;
 constexpr uint32_t IB_EXPORT_CFG_VERSION_V7 = 7;
 /** The v8 .cfg has metadata of index page type for row_quiesce_write_one_index. */
 constexpr uint32_t IB_EXPORT_CFG_VERSION_V8 = 8;
+/** The v9 .cfg has metadata of index page dict capacity for SPC indexes. */
+constexpr uint32_t IB_EXPORT_CFG_VERSION_V9 = 9;
 /** Future version used to test that the correct error message is returned. */
 constexpr uint32_t IB_EXPORT_CFG_VERSION_V99 = 99;
 
 /** The length of page_type written in .cfg */
 constexpr uint32_t IB_EXPORT_CFG_INDEX_PAGE_TYPE_LENGTH = 2;
+
+/** The length of pd_capacity written in .cfg */
+constexpr uint32_t IB_EXPORT_CFG_INDEX_PD_CAPACITY_LENGTH = 2;
 
 /** Quiesce the tablespace that the table resides in.
 @param[in] table Quiesce this table

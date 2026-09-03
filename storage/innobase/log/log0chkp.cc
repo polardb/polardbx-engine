@@ -567,7 +567,6 @@ static void log_request_checkpoint_low(log_t &log, lsn_t requested_lsn) {
 
 static void log_wait_for_checkpoint(const log_t &log, lsn_t requested_lsn) {
   ut_d(log_background_threads_active_validate(log));
-
   auto stop_condition = [&log, requested_lsn](bool) {
     return log.last_checkpoint_lsn.load() >= requested_lsn;
   };
@@ -1071,25 +1070,6 @@ void log_checkpointer(log_t *log_ptr) {
   ut_d(destroy_internal_thd(log.m_checkpointer_thd));
 }
 
-lsn_t log_get_checkpoint_age(const log_t &log) {
-  const lsn_t last_checkpoint_lsn = log.last_checkpoint_lsn.load();
-
-  const lsn_t current_lsn = log_get_lsn(log);
-
-  if (current_lsn <= last_checkpoint_lsn) {
-    /* Writes or reads have been somehow reordered.
-    Note that this function does not provide any lock,
-    and does not assume any lock existing. Therefore
-    the calculated result is already outdated when the
-    function is finished. Hence, we might assume that
-    this time we calculated age = 0, because checkpoint
-    lsn is close to current lsn if such race happened. */
-    return 0;
-  }
-
-  return current_lsn - last_checkpoint_lsn;
-}
-
 /** @} */
 
 /**************************************************/ /**
@@ -1306,5 +1286,76 @@ void log_free_check_validate() {
 #endif /* !UNIV_DEBUG */
 
 /** @} */
+
+/**-------------------- Lizard-related code --------------------*/
+
+/* Default advanced checkpoint wait for 2 minutes. */
+uint64_t srv_checkpoint_wait_time = 2;
+
+template <typename Condition>
+inline static Wait_stats wait_for_advanced_checkpoint(
+    uint64_t spins_limit, std::chrono::microseconds sleep,
+    Condition condition = {}) {
+  uint64_t sleeps = 0, spins = 0;
+#ifdef _WIN32
+  constexpr uint64_t base_level = 64;
+#else
+  constexpr uint64_t base_level = 4;
+#endif
+  uint64_t next_level = base_level;
+  uint64_t sleep_time = 0;
+  while (!condition(spins == spins_limit, sleep_time)) {
+    if (spins == spins_limit) {
+      ++sleeps;
+
+      if (sleeps == next_level) {
+        sleep = std::min<std::chrono::microseconds>(
+            sleep * 2, std::chrono::milliseconds{100});
+
+        next_level += base_level;
+      }
+
+      std::this_thread::sleep_for(sleep);
+      sleep_time += sleep.count();
+
+    } else {
+      ++spins;
+
+      UT_RELAX_CPU();
+    }
+  }
+
+  return (Wait_stats{sleeps});
+}
+
+static void log_wait_for_advanced_checkpoint(const log_t &log,
+                                             lsn_t requested_lsn) {
+  ut_d(log_background_threads_active_validate(log));
+  uint64_t total_sleep_time_us =
+      std::chrono::microseconds(std::chrono::minutes(srv_checkpoint_wait_time))
+          .count();
+  auto stop_condition = [&log, requested_lsn, total_sleep_time_us](
+                            bool, uint64_t sleep_time_us) {
+    return sleep_time_us > total_sleep_time_us ||
+           log.last_checkpoint_lsn.load() >= requested_lsn;
+  };
+
+  wait_for_advanced_checkpoint(0, std::chrono::microseconds{100},
+                                   stop_condition);
+}
+
+
+bool log_make_latest_advanced_checkpoint(log_t &log) {
+  lsn_t lsn;
+  if (!log_request_latest_checkpoint(log, lsn)) {
+    return false;
+  }
+
+  log_wait_for_advanced_checkpoint(log, lsn);
+  return true;
+}
+
+/**-------------------- Lizard-related code --------------------*/
+
 
 #endif /* !UNIV_HOTBACKUP */

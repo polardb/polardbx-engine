@@ -287,6 +287,7 @@ class Fake_TABLE : public TABLE {
     key->name = "unittest_index";
 
     ++s->keys;
+    ++s->total_keys;  // Keep total_keys in sync with keys
     s->visible_indexes.set_bit(index_id);
     s->keys_in_use.set_bit(index_id);
     return index_id;

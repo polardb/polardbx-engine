@@ -1,0 +1,288 @@
+--source include/have_debug.inc
+--echo #
+--echo # Test index merge with gpp infos.
+--echo # Counter values are validated via include/assert.inc rather than
+--echo # hard-coded SHOW status output, to avoid flakiness from cumulative
+--echo # cross-test counter drift.
+--echo #
+
+--echo # Save original values
+--let $innodb_lizard_stat_enabled_original = `SELECT @@GLOBAL.innodb_lizard_stat_enabled`
+--let $innodb_index_purge_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_purge_guess_clust_enabled`
+--let $innodb_index_scan_guess_clust_enabled_original = `SELECT @@GLOBAL.innodb_index_scan_guess_clust_enabled`
+--let $innodb_adaptive_hash_index_original = `SELECT @@GLOBAL.innodb_adaptive_hash_index`
+--let $innodb_polarx_btree_search_mode_original = `SELECT @@GLOBAL.innodb_polarx_btree_search_mode`
+
+--echo # enable gpp mode
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SET GLOBAL innodb_index_purge_guess_clust_enabled=on;
+SET GLOBAL innodb_index_scan_guess_clust_enabled=on;
+SET GLOBAL innodb_adaptive_hash_index = OFF;
+SET GLOBAL innodb_polarx_btree_search_mode = OFF;
+
+--echo # Create table t
+CREATE TABLE IF NOT EXISTS t (
+    id  INT AUTO_INCREMENT PRIMARY KEY,
+    a   VARCHAR(10) NOT NULL,
+    b   INT         NOT NULL,
+    c   INT         NOT NULL,
+    d   CHAR(1)     NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+--echo # Insert data into table t
+delimiter |;
+
+CREATE PROCEDURE insert_t_data(IN num_rows INT)
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE val_a VARCHAR(10);
+    DECLARE val_b INT;
+    DECLARE val_c INT;
+    DECLARE val_d CHAR(1);
+    START TRANSACTION;
+    WHILE i <= num_rows DO
+        SET val_a = CONCAT('NO', LPAD(i, 4, '0'));
+        SET val_b = i * 10;
+        SET val_c = val_b * 5;
+        SET val_d = ELT(((i - 1) % 3) + 1, 'A', 'B', 'C');
+        INSERT INTO t (id, a, b, c, d) VALUES (i, val_a, val_b, val_c, val_d);
+        SET i = i + 1;
+    END WHILE;
+    COMMIT;
+END|
+delimiter ;|
+
+--echo # Insert 1000 rows into table t.
+CALL insert_t_data(1000);
+
+--echo # Create indexes on table t.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+
+--echo # ============================================================
+--echo # Warm up: verify secondary index GPP info is valid via point lookups.
+--echo # ============================================================
+call dbms_stat.flush_gpp();
+
+SELECT * FROM t WHERE a = 'NO0001';
+SELECT * FROM t WHERE b = 10;
+SELECT * FROM t WHERE c = 100 and d = 'B';
+
+--let $sg_hit = query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $sg_miss = query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text = [warmup] index scan guess clust hit+miss should be > 0
+--let $assert_cond = $sg_hit + $sg_miss > 0
+--source include/assert.inc
+
+--echo ## BEGIN TEST FOR INTERSECTION MERGE -------------------------------
+
+--echo # Check whether the intersection index merge with valid gpp hits
+SET GLOBAL innodb_lizard_stat_enabled=on;
+SHOW VARIABLES LIKE 'innodb_adaptive_hash_index';
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_a,PRIMARY) */ * FROM t WHERE a = "NO0001" AND id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+--enable_result_log
+
+--let $ri_hit = query_get_value(show global status like "Lizard_rowid_intersection_gpp_hit", Value, 1)
+--let $ri_miss = query_get_value(show global status like "Lizard_rowid_intersection_gpp_miss", Value, 1)
+--let $assert_text = [intersection merge valid gpp] hit+miss should be > 0
+--let $assert_cond = $ri_hit + $ri_miss > 0
+--source include/assert.inc
+
+--echo # Check whether the intersection index merge with gpp can hit when one of the secondary index's gpp info is invalid
+OPTIMIZE TABLE t;
+DROP INDEX idx_b ON t;
+CREATE INDEX idx_b ON t(b);
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+--enable_result_log
+
+--let $ri_hit = query_get_value(show global status like "Lizard_rowid_intersection_gpp_hit", Value, 1)
+--let $ri_miss = query_get_value(show global status like "Lizard_rowid_intersection_gpp_miss", Value, 1)
+--let $assert_text = [intersection merge partial valid gpp] hit+miss should be > 0
+--let $assert_cond = $ri_hit + $ri_miss > 0
+--source include/assert.inc
+
+--echo #  Check whether the intersection index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 10;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0001" AND c = 50 AND d = "A";
+--enable_result_log
+
+--let $ri_miss = query_get_value(show global status like "Lizard_rowid_intersection_gpp_miss", Value, 1)
+--let $assert_text = [intersection merge invalid gpp] miss should be > 0
+--let $assert_cond = $ri_miss > 0
+--source include/assert.inc
+
+SET DEBUG='-d,set_gpp_null';
+
+--echo ## END TEST FOR INTERSECTION MERGE -------------------------------
+
+
+--echo # DROP TABLE t;
+DROP TABLE t;
+
+--echo # Re-create the table t and re-insert the data;
+--echo # Create table t;
+CREATE TABLE IF NOT EXISTS t (
+    id  INT AUTO_INCREMENT PRIMARY KEY,
+    a   VARCHAR(10) NOT NULL,
+    b   INT         NOT NULL,
+    c   INT         NOT NULL,
+    d   CHAR(1)     NOT NULL DEFAULT 'A'
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+--echo # Insert data into table t;
+CALL insert_t_data(1000);
+
+--echo # Create indexes on table t.
+CREATE INDEX idx_a on t(a);
+CREATE INDEX idx_b on t(b);
+CREATE INDEX idx_cd on t(c, d);
+
+--echo # Warm up secondary indexes after recreation.
+call dbms_stat.flush_gpp();
+
+SELECT * FROM t WHERE a = 'NO0001';
+SELECT * FROM t WHERE b = 10;
+SELECT * FROM t WHERE c = 100 and d = 'B';
+
+--let $sg_hit = query_get_value(show global status like "Lizard_index_scan_guess_clust_hit", Value, 1)
+--let $sg_miss = query_get_value(show global status like "Lizard_index_scan_guess_clust_miss", Value, 1)
+--let $assert_text = [warmup #2] index scan guess clust hit+miss should be > 0
+--let $assert_cond = $sg_hit + $sg_miss > 0
+--source include/assert.inc
+
+
+--echo # BEGIN TEST FOR UNION MERGE -------------------------------
+
+--echo # Check the condition of UNION MERGE
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 )OR (c = 50 AND d = "A");
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0111" OR b < 100;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0001" AND b = 100;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0100" and b =100 ) OR (c = 50 OR d = "A");
+
+--echo # Check whether the union index merge with valid gpp hits
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+--enable_result_log
+
+--let $ru_hit = query_get_value(show global status like "Lizard_rowid_union_gpp_hit", Value, 1)
+--let $ru_miss = query_get_value(show global status like "Lizard_rowid_union_gpp_miss", Value, 1)
+--let $assert_text = [union merge valid gpp] hit+miss should be > 0
+--let $assert_cond = $ru_hit + $ru_miss > 0
+--source include/assert.inc
+
+--echo #  Check whether the union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE b = 1000 OR id < 100;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0011" OR b = 200;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0100" OR (c = 50 AND d = "A");
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE (a = "NO0001" and b = 10)OR (c = 5000 AND d = "A");
+--enable_result_log
+
+--let $ru_miss = query_get_value(show global status like "Lizard_rowid_union_gpp_miss", Value, 1)
+--let $assert_text = [union merge invalid gpp] miss should be > 0
+--let $assert_cond = $ru_miss > 0
+--source include/assert.inc
+
+SET DEBUG='-d,set_gpp_null';
+
+--echo ## END TEST FOR UNION MERGE -------------------------------
+
+
+--echo # BEGIN TEST FOR SORT-UNION MERGE -------------------------------
+--echo # Check the condition of SORT-UNION MERGE
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 OR b < 20 ;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 10;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 10;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 10 OR (c = 5000 AND d = "A");
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id < 10 AND b < 20;
+EXPLAIN SELECT /*+INDEX_MERGE(t idx_cd) */ * FROM t WHERE c < 10 AND d < 'b';
+
+--echo # Check whether the sort-union index merge with valid gpp hits
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+--enable_result_log
+
+--let $im_hit = query_get_value(show global status like "Lizard_index_merge_gpp_hit", Value, 1)
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+--let $assert_text = [sort-union merge valid gpp] index_merge hit+miss should be > 0
+--let $assert_cond = $im_hit + $im_miss > 0
+--source include/assert.inc
+
+--echo #  Check whether the sort-union index merge with gpp will miss when all of the secondary index's gpp info is invalid
+SET DEBUG='+d,set_gpp_null';
+
+call dbms_stat.flush_gpp();
+
+--disable_result_log
+SELECT /*+INDEX_MERGE(t idx_b,PRIMARY) */ * FROM t WHERE id > 999 OR b < 20 ;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a = "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b) */ * FROM t WHERE a < "NO0101" OR b < 20;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c = 50;
+SELECT /*+INDEX_MERGE(t idx_a,idx_cd) */ * FROM t WHERE a = "NO0101" OR c < 150;
+SELECT /*+INDEX_MERGE(t idx_a,idx_b,idx_cd) */ * FROM t WHERE a = "NO0001" OR b < 30 OR (c = 5000 AND d = "A");
+--enable_result_log
+
+--let $im_miss = query_get_value(show global status like "Lizard_index_merge_gpp_miss", Value, 1)
+--let $assert_text = [sort-union merge invalid gpp] index_merge miss should be > 0
+--let $assert_cond = $im_miss > 0
+--source include/assert.inc
+
+SET DEBUG='-d,set_gpp_null';
+
+--echo # END TEST FOR SORT-UNION MERGE -------------------------------
+
+
+--echo # END ALL TEST -------------------------------
+DROP TABLE t;
+SET GLOBAL innodb_purge_stop_now = default;
+SET GLOBAL innodb_dbug_gpp_no = default;
+DROP PROCEDURE insert_t_data;
+
+--echo # Restore original values
+--eval SET GLOBAL innodb_lizard_stat_enabled = $innodb_lizard_stat_enabled_original
+--eval SET GLOBAL innodb_index_purge_guess_clust_enabled = $innodb_index_purge_guess_clust_enabled_original
+--eval SET GLOBAL innodb_index_scan_guess_clust_enabled = $innodb_index_scan_guess_clust_enabled_original
+--eval SET GLOBAL innodb_adaptive_hash_index = $innodb_adaptive_hash_index_original
+--eval SET GLOBAL innodb_polarx_btree_search_mode = $innodb_polarx_btree_search_mode_original
+SET DEBUG_SYNC = 'RESET';
+SET DEBUG = '';

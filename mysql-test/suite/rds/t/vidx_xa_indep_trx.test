@@ -1,0 +1,230 @@
+##########################################
+# XA + Independent Trx interaction tests #
+# for VECTOR INDEX (Attachable_trx_rw)   #
+##########################################
+--source include/have_binlog_format_mixed_or_row.inc
+--source include/have_debug.inc
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--disable_warnings
+
+--echo ########################################
+--echo # Setup
+--echo ########################################
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  data VARCHAR(100),
+  v VECTOR(3),
+  VECTOR INDEX vidx1(v)
+) ENGINE = InnoDB;
+
+INSERT INTO t1(data, v) VALUES ('seed1', VEC_FROMTEXT('[1,0,0]'));
+INSERT INTO t1(data, v) VALUES ('seed2', VEC_FROMTEXT('[0,1,0]'));
+
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--echo ########################################
+--echo # Scenario 1: XA START → INSERT → XA END → XA PREPARE
+--echo # Aux table committed independently at INSERT time (before XA PREPARE)
+--echo ########################################
+
+--connect (con_observer, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+SELECT TABLE_ID INTO @t1_tid FROM information_schema.INNODB_TABLES WHERE NAME = 'test/t1';
+
+--connection default
+SET @s = CONCAT('SELECT COUNT(*) AS before_xa1_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+XA START 'xa_test_1';
+INSERT INTO t1(data, v) VALUES ('xa1_row1', VEC_FROMTEXT('[10,0,0]'));
+INSERT INTO t1(data, v) VALUES ('xa1_row2', VEC_FROMTEXT('[11,0,0]'));
+XA END 'xa_test_1';
+
+--echo # Before XA PREPARE — aux table already committed independently
+--connection con_observer
+SET @s = CONCAT('SELECT COUNT(*) AS during_xa1_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+--echo # Main table rows NOT visible yet (XA not committed)
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'xa1_%';
+
+--connection default
+XA PREPARE 'xa_test_1';
+
+--echo # After XA PREPARE — aux still same, main still not visible
+--connection con_observer
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'xa1_%';
+
+--connection default
+XA COMMIT 'xa_test_1';
+
+--echo # After XA COMMIT — main table now visible
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'xa1_%';
+SET @s = CONCAT('SELECT COUNT(*) AS after_xa1_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN search finds xa1 rows
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[10,0,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 2: XA START → INSERT → XA END → XA ROLLBACK
+--echo # Aux table already committed (orphan), main table XA rolled back
+--echo ########################################
+
+SET @s = CONCAT('SELECT COUNT(*) AS before_xa2_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+XA START 'xa_test_2';
+INSERT INTO t1(data, v) VALUES ('xa2_row1', VEC_FROMTEXT('[20,0,0]'));
+INSERT INTO t1(data, v) VALUES ('xa2_row2', VEC_FROMTEXT('[21,0,0]'));
+XA END 'xa_test_2';
+
+--echo # Aux committed during INSERT
+--connection con_observer
+SET @s = CONCAT('SELECT COUNT(*) AS during_xa2_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--connection default
+XA ROLLBACK 'xa_test_2';
+
+--echo # Main table: xa2 rows gone (XA ROLLBACK)
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'xa2_%';
+
+--echo # Aux table: still has orphan nodes from xa2 (independent commit)
+SET @s = CONCAT('SELECT COUNT(*) AS after_xa2_rollback_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # ANN still works despite orphan nodes (fault tolerance)
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,0,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 3: XA with multi-row INSERT
+--echo # Each row's aux table DML committed independently within XA
+--echo ########################################
+
+SET @s = CONCAT('SELECT COUNT(*) AS before_xa3_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+XA START 'xa_test_3';
+INSERT INTO t1(data, v) VALUES
+  ('xa3_r1', VEC_FROMTEXT('[30,1,0]')),
+  ('xa3_r2', VEC_FROMTEXT('[30,2,0]')),
+  ('xa3_r3', VEC_FROMTEXT('[30,3,0]')),
+  ('xa3_r4', VEC_FROMTEXT('[30,4,0]')),
+  ('xa3_r5', VEC_FROMTEXT('[30,5,0]'));
+XA END 'xa_test_3';
+
+--echo # Aux table: all 5 rows independently committed
+--connection con_observer
+SET @s = CONCAT('SELECT COUNT(*) AS during_xa3_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--connection default
+XA PREPARE 'xa_test_3';
+XA COMMIT 'xa_test_3';
+
+SELECT COUNT(*) FROM t1 WHERE data LIKE 'xa3_%';
+--echo # ANN search on xa3 rows
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[30,3,0]')) LIMIT 3;
+
+--echo ########################################
+--echo # Scenario 4: XA with UPDATE (invalidate + insert = 2 independent trx)
+--echo ########################################
+
+XA START 'xa_test_4';
+UPDATE t1 SET v = VEC_FROMTEXT('[99,0,0]'), data = 'xa4_updated' WHERE data = 'xa1_row1';
+XA END 'xa_test_4';
+
+--echo # Aux: both invalidate and insert already committed
+--connection con_observer
+SET @s = CONCAT('SELECT COUNT(*) AS during_xa4_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--connection default
+XA PREPARE 'xa_test_4';
+XA COMMIT 'xa_test_4';
+
+SELECT data FROM t1 WHERE data = 'xa4_updated';
+--echo # ANN finds updated vector
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[99,0,0]')) LIMIT 2;
+
+--echo ########################################
+--echo # Scenario 5: XA + DELETE
+--echo ########################################
+
+XA START 'xa_test_5';
+DELETE FROM t1 WHERE data = 'xa1_row2';
+XA END 'xa_test_5';
+XA PREPARE 'xa_test_5';
+XA COMMIT 'xa_test_5';
+
+--echo # Main table row deleted
+SELECT COUNT(*) FROM t1 WHERE data = 'xa1_row2';
+SET @s = CONCAT('SELECT COUNT(*) AS after_xa5_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo ########################################
+--echo # Scenario 6: XA PREPARE then session disconnect → XA RECOVER → XA COMMIT
+--echo # Aux already committed, XA COMMIT just finalizes main table
+--echo ########################################
+
+--connect (con_xa6, localhost, root,,)
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+
+XA START 'xa_test_6';
+INSERT INTO t1(data, v) VALUES ('xa6_row', VEC_FROMTEXT('[60,0,0]'));
+XA END 'xa_test_6';
+XA PREPARE 'xa_test_6';
+--disconnect con_xa6
+
+--connection default
+--echo # XA prepared but session disconnected — XA still in prepared state
+--replace_column 1 # 2 # 3 # 4 #
+XA RECOVER;
+
+--echo # Aux already committed during INSERT
+SET @s = CONCAT('SELECT COUNT(*) AS xa6_aux FROM `vidx_', @t1_tid, '_0`');
+PREPARE s FROM @s; EXECUTE s; DEALLOCATE PREPARE s;
+
+--echo # Main table row not yet visible
+SELECT COUNT(*) FROM t1 WHERE data = 'xa6_row';
+
+--echo # Complete the XA transaction
+XA COMMIT 'xa_test_6';
+SELECT COUNT(*) FROM t1 WHERE data = 'xa6_row';
+
+--echo # ANN search finds xa6_row
+--sorted_result
+SELECT data FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[60,0,0]')) LIMIT 2;
+
+--echo ########################################
+--echo # Cleanup
+--echo ########################################
+
+--connection con_observer
+--disconnect con_observer
+
+--connection default
+--enable_warnings
+
+# Scenario 7 (vidx_force_non_indep=ON × XA) lives in its own file —
+# vidx_xa_indep_trx_force_on.test — because vidx_force_non_indep is
+# now PLUGIN_VAR_READONLY and cannot be flipped mid-run.
+
+DROP TABLE t1;
+
+SET GLOBAL vidx_disabled = ON;
+SET GLOBAL show_vidx_hlindex_tables = OFF;
+SET GLOBAL transaction_isolation = DEFAULT;

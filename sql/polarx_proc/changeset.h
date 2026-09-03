@@ -28,33 +28,21 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef POLARX_PROC_CHANGESET_H
 #define POLARX_PROC_CHANGESET_H
 
-// #include <my_global.h>
 #include <dirent.h>
 #include <mysql.h>
 #include <mysql/plugin.h>
-#include <mysql/service_my_plugin_log.h>
-
-#include "plugin/polarx_rpc/utility/atomicex.h"
 
 #include "../common/component.h"
-#include "../consensus_log_manager.h"
 #include "../field.h"
 #include "../item.h"
-#include "../log.h"
 #include "../my_decimal.h"
 #include "../mysqld.h"
 #include "../package/proc.h"
-#include "../sql_admin.h"
 #include "../sql_base.h"
 #include "../sql_class.h"
-#include "../sql_plugin.h"
-#include "../sql_udf.h"
-#include "../table.h"
-#include "field_types.h"
-#include "my_base.h"
-#include "mysqld_error.h"
 #include "sql_string.h"
 #include "thread_pool.h"
+#include "token_bucket.h"
 
 namespace im {
 
@@ -84,16 +72,15 @@ class ChangesetResult {
   void operator delete(void *ptr) { my_free(ptr); }
 
   bool operator< (const ChangesetResult& other) const {
-    std::list<Field *>::const_iterator it = pk_field_list.cbegin();
-    std::list<Field *>::const_iterator it_other = other.pk_field_list.cbegin();
-    for (; it != pk_field_list.cend() && it_other != other.pk_field_list.cend(); ++it, ++it_other) {
+    for (auto it = pk_field_list.cbegin(), it_other = other.pk_field_list.cbegin();
+      it != pk_field_list.cend() && it_other != other.pk_field_list.cend();
+      ++it, ++it_other) {
       int cmp_res = (*it)->cmp((*it_other)->field_ptr());
       if (cmp_res < 0) {
         return true;
-      } else if (cmp_res > 0) {
+      }
+      if (cmp_res > 0) {
         return false;
-      } else {
-        continue;
       }
     }
 
@@ -130,10 +117,20 @@ class Changeset {
     uint64_t file_count;
     uint64_t memory_size;
 
-    void swap(Stats &rhs) {
-      std::swap(insert_count, rhs.insert_count);
-      std::swap(delete_count, rhs.delete_count);
-      std::swap(update_count, rhs.update_count);
+    uint64_t current_pk_num;
+    std::string bucket_fill_rate;
+    std::string bucket_available_tokens;
+    std::string backpressure_trigger;
+
+    Stats() : bucket_fill_rate("-"),
+        bucket_available_tokens("-"),
+        backpressure_trigger("-") {
+      insert_count = 0;
+      delete_count = 0;
+      update_count = 0;
+      current_pk_num = 0;
+      file_count = 0;
+      memory_size = 0;
     }
   };
 
@@ -147,31 +144,18 @@ class Changeset {
   /**
    * @brief delete pk
    */
-  void pk_map_delete(std::unique_ptr<Change> &change, bool mem_c = false);
+  void pk_map_delete(std::unique_ptr<Change> &change);
 
   /**
    * @brief insert pk
    */
-  void pk_map_insert(std::unique_ptr<Change> &change, bool mem_c = false);
-
-  /**
-   * insert delete update of change set
-   */
-  void add_delete(const std::string &pk);
-
-  void add_insert(const std::string &pk);
-
-  void add_update(const std::string &pk_before, const std::string &pk_after);
+  void pk_map_insert(std::unique_ptr<Change> &change);
 
   Stats update_stats();
 
   int init(const DBTableName &full_table_name);
 
   void close();
-
-  void clear();
-
-  void swap_pk();
 
   // changeset cache --> changeset
   void append_changeset(std::unique_ptr<ChangeSetCache> &changeset);
@@ -203,10 +187,6 @@ class Changeset {
   std::list<Field *> make_pk_fields(TABLE *table, uchar *pk,
                                     MEM_ROOT *mem_root);
 
-  void set_stop(bool stop) { this->stop = stop; }
-
-  bool is_stop() const { return this->stop; }
-
   uint64_t get_approximate_memory_size() const;
 
   // memory table approximate memory size
@@ -218,26 +198,37 @@ class Changeset {
   // tmp table approximate memory size
   std::atomic<uint64_t> tmp_memory_size{};
 
-  // pk nums
-  std::atomic<uint64_t> primary_key_nums{};
-  
-  // imm table pk nums
-  std::atomic<uint64_t> imm_primary_key_nums{};
+  // num of mem table pks
+  std::atomic<uint64_t> primary_key_num{};
 
-  std::atomic<bool> imm_empty;
+  // num of imm table pks
+  std::atomic<uint64_t> imm_primary_key_num{};
+  
+  // current num of all pks
+  std::atomic<uint64_t> all_primary_key_num{};
+
+  std::atomic<bool> imm_empty{};
 
   // memory limit
   u_int64_t memory_limit;
+
+  // backpressure
+  bool backpressure;
+
+  // token bucket
+  TokenBucket token_bucket;
+
+  // pk num threshold
+  uint64_t backpressure_trigger;
+
+  void do_backpressure(double tokens = 1.0);
 
  private:
   static int open_table(THD *thd, const std::string &db, const std::string &tb,
                         TABLE **output);
 
   // stats info
-  Stats stats_{0, 0, 0, 0, 0};
-
-  // changeset stop
-  bool stop;
+  Stats stats_info;
 
   // generate file name
   uint32_t file_name_num;
@@ -253,7 +244,7 @@ class Changeset {
   mutable std::unordered_map<std::string, std::unique_ptr<Change>> mem_pk_map;
   mutable std::unordered_map<std::string, std::unique_ptr<Change>> imm_pk_map;
   mutable std::unordered_map<std::string, std::unique_ptr<Change>> tmp_map;
-  mutable std::list<std::pair<const char *, bool>> file_list;
+  mutable std::list<FileNode> file_list;
 };
 
 }  // namespace im

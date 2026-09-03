@@ -208,6 +208,11 @@ class Sql_cmd_xa_second_phase : public Sql_cmd {
     NOTES: The state is only used for dbms_xa.find_by_xid(...).
   */
   void attach_again();
+
+  /**
+   * Loading the changeset cache
+   */
+  bool load_changeset_context(THD *thd);
 };
 
 #endif  // XA_SQL_CMD_XA_SECOND_PHASE

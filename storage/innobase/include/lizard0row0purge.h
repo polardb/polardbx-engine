@@ -32,6 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef lizard0row0purge_h
 #define lizard0row0purge_h
 
+#include "dict0mem.h"
 struct purge_node_t;
 class THD;
 
@@ -52,6 +53,49 @@ enum e_2pp_phase {
 @return true if purged, false if skipped */
 bool row_purge_record_for_panda(purge_node_t *node, bool updated_extern,
                                 THD *thd);
-}
+
+/** Determines if it is possible to remove a secondary index entry.
+Removal is possible if the secondary index entry does not refer to any
+not delete marked version of a clustered index record where DB_TRX_ID
+is newer than the purge view.
+
+NOTE: This function should only be called by the purge thread, only
+while holding a latch on the leaf page of the secondary index entry
+(or keeping the buffer pool watch on the page).  It is possible that
+this function first returns true and then false, if a user transaction
+inserts a record that the secondary index entry would refer to.
+However, in that case, the user transaction would also re-insert the
+secondary index entry after purge has removed it and released the leaf
+page latch.
+@return true if the secondary index record can be purged */
+[[nodiscard]] bool row_purge_poss_sec(purge_node_t *node, dict_index_t *index,
+                                      const dtuple_t *entry, btr_cur_t *cur);
+
+/**
+ * Allocates and initializes the TRX_ID field in a partial row during purge
+ * operations.
+ *
+ * During purge operations, trx_undo_rec_get_partial_row() creates a partial row
+ * with only ordering fields initialized, leaving system columns (like TRX_ID)
+ * as DATA_MISSING. This function properly initializes the TRX_ID field in the
+ * clustered index row by:
+ * 1. Setting the correct data type for the TRX_ID field
+ * 2. Allocating memory for the field data
+ * 3. Initializing the field with a zero transaction ID value
+ *
+ * Note that this does not fully initialize the entire row - only the TRX_ID
+ * field is initialized. However, this is sufficient for building secondary
+ * index entries for both hippo and regular secondary indexes during purge
+ * operations. In particular, this TRX_ID initialization is critical for hippo
+ * secondary indexes, which include the TID column in their index entries.
+ *
+ * @param[in] index  The clustered index (must be a clustered index)
+ * @param[in,out] row  The partial row tuple to initialize
+ * @param[in] heap  Memory heap for field data allocation
+ */
+void row_purge_alloc_trx_id_field(const dict_index_t *index, dtuple_t *row,
+                                  mem_heap_t *heap);
+
+}  // namespace lizard
 
 #endif

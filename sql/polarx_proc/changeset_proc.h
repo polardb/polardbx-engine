@@ -193,42 +193,42 @@ class Changeset_proc_finish : public Changeset_proc {
 };
 
 /**
- * @brief procedure changeset_stop
+ * @brief procedure changeset_backpressure
  *
  */
-class Sql_cmd_changeset_proc_stop : public Sql_cmd_changeset_proc {
+class Sql_cmd_changeset_proc_backpressure : public Sql_cmd_changeset_proc {
  public:
-  explicit Sql_cmd_changeset_proc_stop(THD *thd, mem_root_deque<Item *> *list,
+  explicit Sql_cmd_changeset_proc_backpressure(THD *thd, mem_root_deque<Item *> *list,
                                        const Proc *proc)
       : Sql_cmd_changeset_proc(thd, list, proc) {}
 
   void send_result(THD *thd, bool error) override;
 };
 
-class Changeset_proc_stop : public Changeset_proc {
-  using Sql_cmd_type = Sql_cmd_changeset_proc_stop;
+class Changeset_proc_backpressure : public Changeset_proc {
+  using Sql_cmd_type = Sql_cmd_changeset_proc_backpressure;
 
  public:
-  explicit Changeset_proc_stop(PSI_memory_key key) : Changeset_proc(key) {
+  explicit Changeset_proc_backpressure(PSI_memory_key key) : Changeset_proc(key) {
     m_result_type = Result_type::RESULT_SET;
 
     Column_element elements[2] = {
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("SEQ"), 0},
-        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("ROW"), 64},
+      {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("SEQ"), 24},
+      {MYSQL_TYPE_VARCHAR,  C_STRING_WITH_LEN("ROW"), 64},
     };
     for (auto &element : elements) {
       m_columns.push_back(element);
     }
   }
 
-  ~Changeset_proc_stop() override = default;
+  ~Changeset_proc_backpressure() override = default;
 
   static Proc *instance();
 
   Sql_cmd *invoke_cmd(THD *thd, mem_root_deque<Item *> *list) const override;
 
   virtual const std::string str() const override {
-    return std::string("changeset_stop");
+    return std::string("changeset_backpressure");
   }
 };
 
@@ -265,6 +265,14 @@ class Changeset_proc_stats : public Changeset_proc {
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("NUM_FILES"), 64});
     m_columns.push_back(
         {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("MEMORY_SIZE"), 64});
+    m_columns.push_back(
+        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("CURRENT_PRIMARY_KEY_NUM"), 64});
+    m_columns.push_back(
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("BACKPRESSURE_TRIGGER"), 64});
+    m_columns.push_back(
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("BUCKET_AVAILABLE_TOKENS"), 64});
+    m_columns.push_back(
+        {MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("BUCKET_FILL_RATE"), 64});
   }
 
   ~Changeset_proc_stats() override = default;
@@ -301,7 +309,9 @@ class Changeset_proc_times : public Changeset_proc {
     // Columns: TABLE,  CHANGES
     m_columns.push_back({MYSQL_TYPE_VARCHAR, C_STRING_WITH_LEN("TABLE"), 64});
     m_columns.push_back(
-        {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("NUM_INSERTS"), 64});
+      {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("FETCH_TIMES_NUM"), 64});
+    m_columns.push_back(
+      {MYSQL_TYPE_LONGLONG, C_STRING_WITH_LEN("CURRENT_PRIMARY_KEY_NUM"), 64});
   }
 
   ~Changeset_proc_times() override = default;
@@ -314,6 +324,7 @@ class Changeset_proc_times : public Changeset_proc {
     return std::string("changeset_times");
   }
 };
+
 }  // namespace im
 
 #endif  // MYSQL_CHANGESET_PROC_H

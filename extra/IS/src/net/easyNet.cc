@@ -312,25 +312,24 @@ int EasyNet::reciveProcess(easy_request_t *r) {
   if (r->ms->c->type == EASY_TYPE_SERVER) {
     auto tp2 = srv->getHeartbeatPool();
     NetPacket *np = (NetPacket *)r->ipacket;
-    assert(np);
-    PaxosMsg *msg = new PaxosMsg;
-    if (!msg->ParseFromArray(np->data, np->len)) {
+    PaxosMsg *msg = (PaxosMsg *)np->msg;
+    if (np->packetId == 0) {
       // receive a wrong msg.
-      easy_error_log("A msg have %ld entries!! droped!!\n",
-                     msg->entries_size());
+      if (msg != nullptr)
+        easy_error_log("A msg have %ld entries!! droped!!\n",msg->entries_size());
+      else
+        easy_error_log("Received invalid message, dropped!\n");
       r->opacket = (void *)NULL;
       return EASY_OK;
     }
-    assert(r->args == 0);
-    r->args = (void *)msg;
-    if (tp2 == NULL || msg->msgtype() != Consensus::AppendLog ||
+    if (tp2 == NULL || msg->msgtype() != Protocol::AppendLog ||
         msg->entries_size() != 0 || Service::running < Service::workThreadCnt ||
         !((Paxos *)(srv->getConsensus()))->getOptimisticHeartbeat()) {
       easy_thread_pool_push(tp, r, easy_hash_key((uint64_t)(long)r));
     } else {
       // set msg type to OptimisticHeartbeat to let service know it is in
       // heartbeat pool
-      msg->set_msgtype(Consensus::OptimisticHeartbeat);
+      msg->set_msgtype(Protocol::OptimisticHeartbeat);
       // msg is heartbeat and work pool is full, put in heartbeat pool
       easy_thread_pool_push(tp2, r, easy_hash_key((uint64_t)(long)r));
     }
@@ -375,9 +374,12 @@ void *EasyNet::paxosDecode(easy_message_t *m) {
   np->type = NetPacketTypeNet;
   np->data = (char *)m->input->pos;
   np->len = datalen;
-  if (m->c->type == EASY_TYPE_CLIENT) {
-    auto msg = new PaxosMsg();
-    msg->ParseFromArray(np->data, np->len);
+  auto msg = new PaxosMsg();
+  if (!msg->ParseFromArray(np->data, np->len)) {
+    np->packetId = 0;
+    np->msg = NULL;
+    delete msg;
+  } else {
     np->packetId = msg->msgid();
     np->msg = (void *)msg;
   }

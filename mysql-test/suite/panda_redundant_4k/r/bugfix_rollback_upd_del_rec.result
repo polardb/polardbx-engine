@@ -1,0 +1,37 @@
+SET @transaction_isolation_global_orig = @@global.transaction_isolation;
+SET GLOBAL transaction_isolation= 'READ-COMMITTED';
+SET @transaction_isolation_session_orig = @@global.transaction_isolation;
+SET SESSION transaction_isolation= 'READ-COMMITTED';
+###
+# First Test: restore position failed.
+###
+create table t1 (id int primary key, c1 int, unique key (c1) secondary_engine_attribute '{"gpp":"1","panda index":"1"}');
+insert into t1 values (1, 1);
+set global innodb_purge_stop_now=1;
+delete from t1 where id=1;
+begin;
+insert into t1 values (2,1);
+set debug_sync='before_row_undo_mod_remove_panda_rec SIGNAL s1 wait_for s2';
+rollback;
+set debug_sync='now wait_for s1';
+set global innodb_purge_run_now=1;
+set debug_sync='now SIGNAL s2';
+DROP TABLE t1;
+###
+# Second Test: restore position succeed, but trx id not equal.
+###
+create table t1 (id int primary key, c1 int, unique key (c1) secondary_engine_attribute '{"gpp":"1","panda index":"1"}');
+insert into t1 values (1, 1);
+set global innodb_purge_stop_now=1;
+delete from t1 where id=1;
+begin;
+insert into t1 values (2,1);
+set debug_sync='before_row_undo_mod_remove_panda_rec SIGNAL s3 wait_for s4';
+rollback;
+set debug_sync='now wait_for s3';
+set global innodb_purge_run_now=1;
+insert into t1 values(3,1);
+set debug_sync='now SIGNAL s4';
+DROP TABLE t1;
+SET GLOBAL transaction_isolation= @transaction_isolation_global_orig;
+SET SESSION transaction_isolation= @transaction_isolation_session_orig;

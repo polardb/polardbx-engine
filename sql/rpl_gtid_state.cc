@@ -20,10 +20,12 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#define LOG_SUBSYSTEM_TAG "Repl"
+
 #include <time.h>
 #include <atomic>
 
-#include "consensus_log_manager.h"
+#include "komodo0xlog.h"
 #include "lex_string.h"
 #include "libbinlogevents/include/control_events.h"
 #include "my_compiler.h"
@@ -39,7 +41,7 @@
 
 #include "sql/binlog.h"
 #include "sql/consensus/consensus_err.h"
-#include "sql/consensus/consensus_recovery.h"
+#include "sql/komodo0xlog0recovery.h"
 #include "sql/current_thd.h"
 #include "sql/debug_sync.h"  // DEBUG_SYNC
 #include "sql/mdl.h"
@@ -51,7 +53,6 @@
 #include "sql/sql_error.h"
 #include "sql/system_variables.h"
 #include "sql/thr_malloc.h"
-#include "sql/consensus_log_manager.h"
 
 class Table_ref;
 
@@ -707,7 +708,7 @@ int Gtid_state::save(THD *thd, bool xpaxos_check/* = true */) {
   DBUG_TRACE;
   assert(gtid_table_persistor != nullptr);
   assert(thd->owned_gtid.sidno > 0);
-  if (xpaxos_check && ConsensusLogManager::enable_consensus()) {
+  if (xpaxos_check && komodo::xlog_enable_consensus()) {
     assert(thd->xpaxos_replication_channel);
   }
   int error = 0;
@@ -759,8 +760,7 @@ int Gtid_state::save_gtids_of_last_binlog_into_table() {
     return ER_RPL_GTID_TABLE_CANNOT_OPEN;
   }
 
-  if (!opt_initialize && ConsensusLogManager::enable_consensus())
-    return ret;
+  if (!opt_initialize && komodo::xlog_enable_consensus()) return ret;
 
   /*
     Use local Sid_map, so that we don't need a lock while inserting

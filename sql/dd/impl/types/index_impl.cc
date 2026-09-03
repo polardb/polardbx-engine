@@ -45,7 +45,7 @@
 #include "sql/dd/impl/transaction_impl.h"          // Open_dictionary_tables_ctx
 #include "sql/dd/impl/types/index_element_impl.h"  // Index_element_impl
 #include "sql/dd/impl/types/table_impl.h"          // Table_impl
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 #include "sql/dd/properties.h"
 #include "sql/dd/string_type.h"  // dd::String_type
 #include "sql/dd/types/column.h"
@@ -65,7 +65,7 @@ class Table;
 
 static const std::set<String_type> default_valid_option_keys = {
     "block_size", "flags", "parser_name",
-    "gipk" /* generated implicit primary key */, lizard::OPTION_IFT};
+    "gipk" /* generated implicit primary key */, komodo::OPTION_IFT};
 
 ///////////////////////////////////////////////////////////////////////////
 // Index_impl implementation.
@@ -160,34 +160,40 @@ bool Index_impl::drop_children(Open_dictionary_tables_ctx *otx) const {
  * properties of gpp and panda indexes. We don't care about the actually
  * stored value; we only care that the value derived from OPTION_IFT
  * and PAGE_TYPE.
- * Not Supported for partitioned tables.
+ * NOTE: This function is only used for non-partitioned tables. The se_attrs of
+ * is accumulated from all partition index objects.
  * @param[in] idx_obj: The index object to get the real se_attr for.
  * @return Real se_attr hint for the index.
  */
-static lizard::Ha_se_attr_hint get_real_se_attr_hint(const dd::Index *idx_obj) {
+static komodo::dd_se_attrs_t get_real_se_attrs(const dd::Index *idx_obj) {
   if (idx_obj->table().partition_type() != dd::Table::PT_NONE) {
-    return lizard::Ha_se_attr_hint();
+    return komodo::dd_se_attrs_t();
   }
   int has_gpp = 0;
   int has_panda = 0;
-  if (idx_obj->options().exists(lizard::OPTION_IFT)) {
+  int has_hippo = 0;
+  int has_spc = 0;
+  if (idx_obj->options().exists(komodo::OPTION_IFT)) {
     ulonglong format;
-    idx_obj->options().Properties::get(lizard::OPTION_IFT, &format);
-    has_gpp = (format & lizard::IFT_GPP) ? 1 : 0;
+    idx_obj->options().Properties::get(komodo::OPTION_IFT, &format);
+    has_gpp = (format & komodo::IFT_GPP) ? 1 : 0;
   }
-  if (idx_obj->se_private_data().exists(lizard::PAGE_TYPE_STR)) {
+  if (idx_obj->se_private_data().exists(komodo::PAGE_TYPE_STR)) {
     uint16_t page_type;
-    idx_obj->se_private_data().Properties::get(lizard::PAGE_TYPE_STR,
+    idx_obj->se_private_data().Properties::get(komodo::PAGE_TYPE_STR,
                                                &page_type);
-    has_panda = (page_type == lizard::PANDA_PAGE_TYPE) ? 1 : 0;
+    has_panda = (page_type == komodo::PANDA_PAGE_TYPE) ? 1 : 0;
+    has_hippo = (page_type == komodo::HIPPO_PAGE_TYPE) ? 1 : 0;
+    has_spc = (page_type == komodo::SPC_PAGE_TYPE) ? 1 : 0;
   }
 
-  char buffer[64];
-  size_t written =
-      snprintf(buffer, sizeof(buffer), R"({"gpp": "%d", "panda index": "%d"})",
-               has_gpp, has_panda);
+  char buffer[128];
+  size_t written = snprintf(
+      buffer, sizeof(buffer),
+      R"({"gpp": "%d", "panda index": "%d", "hippo index": "%d", "spc": "%d"})",
+      has_gpp, has_panda, has_hippo, has_spc);
   assert(written < sizeof(buffer));
-  return lizard::Ha_se_attr_hint({buffer, written});
+  return komodo::dd_se_attrs_t({buffer, written});
 }
 
 bool Index_impl::restore_attributes(const Raw_record &r) {
@@ -222,7 +228,7 @@ bool Index_impl::restore_attributes(const Raw_record &r) {
         r.read_str(Indexes::FIELD_SECONDARY_ENGINE_ATTRIBUTE, "");
   }
   assert(m_secondary_engine_attribute.length() == 0);
-  m_se_attr_hint = get_real_se_attr_hint(this);
+  m_se_attrs = get_real_se_attrs(this);
 
   return false;
 }
@@ -352,7 +358,7 @@ void Index_impl::debug_print(String_type &outb) const {
      << "m_engine: " << m_engine << "; "
      << "m_engine_attribute: " << m_engine_attribute << "; "
      << "m_secondary_engine_attribute: " << m_secondary_engine_attribute << "; "
-     << "m_se_attr_hint: " << m_se_attr_hint.to_string() << "; "
+     << "m_se_attrs: " << m_se_attrs.to_string() << "; "
      << "m_elements: " << m_elements.size() << " [ ";
 
   {
@@ -438,7 +444,7 @@ Index_impl::Index_impl(const Index_impl &src, Table_impl *parent)
       m_engine(src.m_engine),
       m_engine_attribute(src.m_engine_attribute),
       m_secondary_engine_attribute(src.m_secondary_engine_attribute),
-      m_se_attr_hint(src.m_se_attr_hint),
+      m_se_attrs(src.m_se_attrs),
       m_table(parent),
       m_elements(),
       m_tablespace_id(src.m_tablespace_id) {

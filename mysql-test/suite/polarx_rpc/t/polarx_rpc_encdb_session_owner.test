@@ -1,0 +1,75 @@
+--echo #
+--echo # Test polarx_rpc transaction survives EncDB KMS internal sessions.
+--echo #
+
+--let $TEMP_FILE = polarx_rpc_encdb_session_owner
+
+--source include/polarx_rpc_preamble.inc
+--source include/polarx_rpc_create_user.inc
+
+--disable_query_log
+--disable_warnings
+DROP SCHEMA IF EXISTS xtest;
+--enable_warnings
+CREATE SCHEMA xtest;
+CREATE TABLE xtest.t1 (c1 INT PRIMARY KEY, c2 INT);
+DELETE FROM mysql.encdb_kms_meta;
+--enable_query_log
+
+--write_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+-->switchsid 1
+PolarXRPC.Session.NewSession {
+}
+-->recvok
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "BEGIN"
+  schema_name: "xtest"
+}
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "INSERT INTO t1 VALUES (1, 2)"
+}
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "SELECT encdb_process_message('{\"request_type\":50,\"kms_enc_mek\":\"dGVzdF9jaXBoZXJ0ZXh0X2Jsb2Jfdg==\",\"plaintext\":\"MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY=\",\"kms_region\":\"cn-hangzhou\",\"kms_key_id\":\"key-test-rpc\",\"version\":0}')"
+}
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "DO 1"
+}
+-->recvresult
+
+PolarXRPC.Sql.StmtExecute {
+  stmt: "ROLLBACK"
+}
+-->recvresult
+
+PolarXRPC.Session.Close {
+}
+-->recvok
+
+EOF
+
+--exec $POLARX_RPC_TEST -upolarx_root --password='' --file=$MYSQL_TMP_DIR/$TEMP_FILE.tmp > $MYSQL_TMP_DIR/$TEMP_FILE.out 2>&1
+
+--echo ok
+
+SELECT COUNT(*) AS caller_rows_after_rollback FROM xtest.t1;
+SELECT COUNT(*) AS kms_rows_after_caller_rollback FROM mysql.encdb_kms_meta;
+SELECT JSON_EXTRACT(CAST(FROM_BASE64(encdb_process_message('{"request_type":51}')) AS CHAR), '$.status') = 0 AS cleanup_ok;
+SELECT COUNT(*) AS kms_rows_after_cleanup FROM mysql.encdb_kms_meta;
+
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.tmp
+--remove_file $MYSQL_TMP_DIR/$TEMP_FILE.out
+
+--disable_query_log
+--disable_warnings
+DROP SCHEMA IF EXISTS xtest;
+--enable_warnings
+--enable_query_log
+
+--source include/polarx_rpc_drop_user.inc

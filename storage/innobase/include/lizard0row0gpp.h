@@ -34,6 +34,24 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0row0gpp_h
 
 #include "lizard0row.h"
+#include "page0types.h"
+
+/** Guess Primary Page NO on record. */
+struct rep_t {
+ public:
+  rep_t() : reg(), gpp_no(FIL_NULL) {}
+  rep_t(creg_t reg, gpp_no_t gpp_no) : reg(reg), gpp_no(gpp_no) {}
+
+  const rec_t *rec() const { return reg.rec; }
+
+ public:
+  creg_t reg;
+  /** gpp_no of the clustered index record.
+   * For a clustered index record, returns the page_no where it resides.
+   * For a secondary index record, returns the page_no of the clustered index
+   * record*/
+  gpp_no_t gpp_no;
+};
 
 namespace lizard {
 
@@ -45,6 +63,9 @@ extern bool index_purge_guess_clust_enabled;
 
 /** Whether to enable clustered index record inference during the locking. */
 extern bool index_lock_guess_clust_enabled;
+
+/** Whether to enable clustered index record inference during the index merge. */
+extern bool index_pos_guess_clust_enabled;
 
 #ifdef UNIV_DEBUG
 extern gpp_no_t dbug_gpp_no;
@@ -67,19 +88,6 @@ void ins_alloc_gpp_field(ins_node_t *node);
  */
 void row_ins_clust_write_gpp_no(ins_node_t *node, const dict_index_t *index,
                                 dtuple_t *entry, const dtuple_t *row);
-
-/**
- * Debug assert GPP_NO is valid when inserting second index.
- * Attention: Use macro instead of using it directly.
- *
- * @param[in]	  insert node
- * @param[in]		index
- * @param[in]		index entry
- * @param[in]		row
- */
-void row_ins_sec_assert_gpp_no(ins_node_t *node, const dict_index_t *index,
-                               dtuple_t *entry, const dtuple_t *row);
-
 /**
  * Write GPP_NO after primary key insert or just assert it for sec index.
  *
@@ -128,7 +136,7 @@ void row_upd_clust_write_gpp_no(upd_node_t *node, const dict_index_t *index,
  * @param[in]   index entry
  * @param[in]		upd_row
  */
-void row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
+bool row_upd_sec_assert_gpp_no(upd_node_t *node, const dict_index_t *index,
                                dtuple_t *entry, const dtuple_t *upd_row);
 
 /**
@@ -158,7 +166,7 @@ void row_log_table_clust_write_gpp_no(const gpp_no_t &gpp_no,
  * @param[in]		row
  * @param[in]		gpp_no
  */
-void row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
+bool row_log_table_sec_assert_gpp_no(const dict_index_t *index, dtuple_t *entry,
                                      const dtuple_t *row,
                                      const gpp_no_t &gpp_no);
 
@@ -210,7 +218,7 @@ void row_upd_rec_gpp_fields_in_recovery(rec_t *rec, page_zip_des_t *page_zip,
  * @param[in] offsets Array of field offsets
  * @return            Returns the offset of the GPP number within the record
  */
-ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets);
+ulint row_get_gpp_no_offset(const dict_index_t *index, const Slice *slc);
 
 /**
  * Retrieves the GPP Number from a record
@@ -221,9 +229,8 @@ ulint row_get_gpp_no_offset(const dict_index_t *index, const ulint *offsets);
  *
  * @return            Returns the GPP Number and offset from the record
  */
-std::pair<gpp_no_t, ulint> row_get_gpp_no(const rec_t *rec,
-                                          const dict_index_t *index,
-                                          const ulint *offsets);
+std::pair<gpp_no_t, ulint> row_get_gpp_no(const dict_index_t *index,
+                                          const Slice *slc);
 
 /**
  * Write the GPP Number
@@ -243,7 +250,7 @@ void row_write_gpp_no(rec_t *rec, const dict_index_t *index,
  * @param[in]		index
  * @param[in]		multi-value entry
  */
-void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
+bool row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
                                        const dtuple_t *mv_entry);
 
 /*=============================================================================*/
@@ -261,7 +268,7 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     cleanout        cleanout context
  * @param[in]     mtr             Mini-transaction handle
  *
@@ -269,10 +276,9 @@ void row_sec_multi_value_assert_gpp_no(const dict_index_t *index,
  */
 bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
                                     dict_index_t *sec_idx, dtuple_t *clust_ref,
-                                    const rec_t *sec_rec,
-                                    btr_pcur_t *clust_pcur, ulint *sec_offsets,
-                                    ulint mode, Cleanout_ctx_t &cctx,
-                                    mtr_t *mtr);
+                                    const Slice *sec_slc,
+                                    btr_pcur_t *clust_pcur, ulint latch_mode,
+                                    Cleanout_ctx_t &cctx, mtr_t *mtr);
 
 /**
  * When attempting to purge a secondary index record, this operation tries to
@@ -284,14 +290,14 @@ bool row_sel_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     clust_ref       Reference tuple for the clustered index
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
  */
 bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
                                       dict_index_t *sec_idx,
-                                      dtuple_t *clust_ref, const rec_t *sec_rec,
-                                      btr_pcur_t *clust_pcur, ulint mode,
+                                      dtuple_t *clust_ref, creg_t sec_reg,
+                                      btr_pcur_t *clust_pcur, ulint latch_mode,
                                       mtr_t *mtr);
 
 /**
@@ -305,46 +311,40 @@ bool row_purge_optimistic_guess_clust(dict_index_t *clust_idx,
  * @param[in]     sec_rec         Secondary index record
  * @param[in,out] clust_pcur      Persistent cursor for the clustered index
  * @param[out]    sec_offsets     Offsets array for the secondary record
- * @param[in]     mode            latching mode
+ * @param[in]     latch_mode      latching mode
  * @param[in]     mtr             Mini-transaction handle
  * @return        True if successful positioning, False otherwise
  */
 bool row_lock_optimistic_guess_clust(dict_index_t *clust_idx,
                                      const dict_index_t *sec_idx,
-                                     dtuple_t *clust_ref, const rec_t *sec_rec,
-                                     btr_pcur_t *clust_pcur,
-                                     const ulint *sec_offsets, ulint mode,
+                                     dtuple_t *clust_ref, const Slice *sec_slc,
+                                     btr_pcur_t *clust_pcur, ulint latch_mode,
                                      mtr_t *mtr);
+
+/** Optimistic guess clust index record with guess context.
+ * @param[in]      guess_ctx       Guess context
+ * @param[in]      base_idx        Base index
+ * @param[in]      clust_ref       Clustered index reference
+ * @param[in]      mode            Search mode
+ * @param[in]      latch_mode      Latching mode
+ * @param[in,out]  clust_pcur      Clustered index cursor
+ * @param[in]      mtr             Mini-transaction
+ * @return true if guess succeeded
+ */
+bool row_pos_optimistic_guess_clust(const komodo::guess_ctx_t guess_ctx,
+                                    dict_index_t *base_idx,
+                                    const dtuple_t *clust_ref,
+                                    page_cur_mode_t mode, ulint latch_mode,
+                                    btr_pcur_t *clust_pcur, mtr_t *mtr);
+/**
+ * Update the cached GPP number.
+ *
+ * @param[in] prebuilt        Prebuilt struct for the table handler
+ * @param[in] index           Index object
+ * @param[in] rec             Record
+ * @param[in] offsets         Offsets array
+ */
+gpp_no_t row_sec_get_gpp_no(const dict_index_t *index, const Slice *slc);
 }  // namespace lizard
- 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
-#define lizard_row_ins_sec_assert_gpp_no(node, index, entry, row) \
-  do {                                                            \
-    lizard::row_ins_sec_assert_gpp_no(node, index, entry, row);   \
-  } while (0)
-
-#define lizard_row_upd_sec_assert_gpp_no(node, index, entry, upd_row) \
-  do {                                                                \
-    lizard::row_upd_sec_assert_gpp_no(node, index, entry, upd_row);   \
-  } while (0)
-
-#define lizard_row_log_table_sec_assert_gpp_no(index, entry, row, gpp_no) \
-  do {                                                                    \
-    lizard::row_log_table_sec_assert_gpp_no(index, entry, row, gpp_no);   \
-  } while (0)
-
-#define lizard_row_sec_multi_value_assert_gpp_no(index, mv_entry) \
-  do {                                                            \
-    lizard::row_sec_multi_value_assert_gpp_no(index, mv_entry);   \
-  } while (0)
-
-#else
-
-#define lizard_row_ins_sec_assert_gpp_no(node, index, entry, row)
-#define lizard_row_upd_sec_assert_gpp_no(node, index, entry, upd_row)
-#define lizard_row_log_table_sec_assert_gpp_no(index, entry, row, gpp_no)
-#define lizard_row_sec_multi_value_assert_gpp_no(index, mv_entry)
-
-#endif
 
 #endif

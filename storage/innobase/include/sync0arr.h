@@ -105,6 +105,8 @@ void sync_array_close();
 /** Get an instance of the sync wait array. */
 static inline sync_array_t *sync_array_get();
 
+#ifndef INNODB_SYNC0ARR_IC_STANDALONE
 #include "sync0arr.ic"
+#endif /* !INNODB_SYNC0ARR_IC_STANDALONE */
 
 #endif /* sync0arr_h */

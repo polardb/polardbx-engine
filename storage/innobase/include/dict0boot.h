@@ -333,7 +333,9 @@ updated */
 constexpr uint32_t DICT_HDR_ROW_ID_WRITE_MARGIN = 256;
 
 #ifndef UNIV_HOTBACKUP
+#ifndef INNODB_DICT0BOOT_IC_STANDALONE
 #include "dict0boot.ic"
+#endif /* !INNODB_DICT0BOOT_IC_STANDALONE */
 #endif /* !UNIV_HOTBACKUP */
 
 #endif

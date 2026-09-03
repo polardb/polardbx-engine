@@ -1,0 +1,26 @@
+message
+Initial GTID end
+# Case 1: Insert data into blackhole table - Single statement transactions
+message
+GTID end increased
+# Case 2: Insert data into blackhole table - XA Transactions
+message
+GTID end increased
+# Case 3: InnoDB first, then BLACKHOLE in same transaction
+message
+GTID end increased
+# Case 4: BLACKHOLE first, then InnoDB in same transaction 
+message
+GTID end increased
+# Case 5: InnoDB first, then BLACKHOLE in same XA transaction
+message
+GTID end increased
+# Case 6: BLACKHOLE first, then InnoDB in same XA transaction
+message
+GTID end increased
+# Case 7: Test blackhole insert with ib_create_table_fail_too_many_trx fault injection
+ERROR HY000: Failed to register InnoDB and allocate update undo log for transaction when inserting into blackhole table
+# After fault injection, insert more data to verify normal operation
+message
+GTID end increased
+# Cleanup

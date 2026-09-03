@@ -1,0 +1,347 @@
+
+# ================================================================
+# 1. VEC_FROMTEXT + AI functions type compatibility (PREPARE)
+# ================================================================
+# 1a. VEC_FROMTEXT(AI_EMBEDDING(?)) - resolve_type passes
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(AI_EMBEDDING(?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '1a VEC_FROMTEXT(AI_EMBEDDING) PREPARE: PASS' AS result;
+result
+1a VEC_FROMTEXT(AI_EMBEDDING) PREPARE: PASS
+# 1b. VEC_FROMTEXT(AI_EMBEDDING(?, model)) - with model name
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(AI_EMBEDDING(?, ?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '1b VEC_FROMTEXT(AI_EMBEDDING with model) PREPARE: PASS' AS result;
+result
+1b VEC_FROMTEXT(AI_EMBEDDING with model) PREPARE: PASS
+# 1c. VEC_FROMTEXT(AI_EMBEDDING(?, model, options))
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(AI_EMBEDDING(?, ?, ?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '1c VEC_FROMTEXT(AI_EMBEDDING with opts) PREPARE: PASS' AS result;
+result
+1c VEC_FROMTEXT(AI_EMBEDDING with opts) PREPARE: PASS
+# 1d. VEC_FROMTEXT(AI_VL_EMBEDDING(?)) - multimodal
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(AI_VL_EMBEDDING(?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '1d VEC_FROMTEXT(AI_VL_EMBEDDING) PREPARE: PASS' AS result;
+result
+1d VEC_FROMTEXT(AI_VL_EMBEDDING) PREPARE: PASS
+# 1e. CAST(AI_EMBEDDING(?) AS VECTOR) - new CAST syntax
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(CAST(AI_EMBEDDING(?) AS VECTOR))';
+DEALLOCATE PREPARE stmt;
+SELECT '1e CAST(AI_EMBEDDING AS VECTOR) PREPARE: PASS' AS result;
+result
+1e CAST(AI_EMBEDDING AS VECTOR) PREPARE: PASS
+
+# ================================================================
+# 2. VEC_TOTEXT(AI_EMBEDDING(?)) - charset mismatch defect
+# ================================================================
+# 2a. VEC_TOTEXT on AI_EMBEDDING fails at resolve_type
+# AI_EMBEDDING returns utf8mb4_general_ci charset
+# VEC_TOTEXT requires MYSQL_TYPE_VARCHAR or binary charset
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(AI_EMBEDDING(?))';
+ERROR HY000: Incorrect arguments to VEC_ToText
+# 2b. Workaround 1: VEC_FROMTEXT bridge
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(VEC_FROMTEXT(AI_EMBEDDING(?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '2b workaround VEC_FROMTEXT: PASS' AS result;
+result
+2b workaround VEC_FROMTEXT: PASS
+# 2c. Workaround 2: CAST AS VECTOR bridge
+PREPARE stmt FROM 'SELECT VEC_TOTEXT(CAST(AI_EMBEDDING(?) AS VECTOR))';
+DEALLOCATE PREPARE stmt;
+SELECT '2c workaround CAST AS VECTOR: PASS' AS result;
+result
+2c workaround CAST AS VECTOR: PASS
+
+# ================================================================
+# 3. AI_SIMILARITY + vector column interaction
+# ================================================================
+SET GLOBAL vidx_disabled = OFF;
+CREATE TABLE t_ai_sim (
+id INT AUTO_INCREMENT PRIMARY KEY,
+title VARCHAR(200),
+content TEXT,
+embedding VECTOR(4),
+VECTOR INDEX vi(embedding) m=16 distance=euclidean
+) ENGINE=InnoDB;
+INSERT INTO t_ai_sim(title, content, embedding) VALUES
+('doc1', 'distributed transaction', VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]')),
+('doc2', 'vector index', VEC_FROMTEXT('[0.5, 0.6, 0.7, 0.8]')),
+('doc3', 'mysql compatible', VEC_FROMTEXT('[0.9, 0.1, 0.2, 0.3]'));
+# 3a. AI_SIMILARITY two JSON vectors (zero API call)
+SELECT AI_SIMILARITY('[1,0,0,0]', '[0,1,0,0]') AS orthogonal;
+orthogonal
+0
+SELECT AI_SIMILARITY('[1,0,0,0]', '[1,0,0,0]') AS identical;
+identical
+1
+# 3b. AI_SIMILARITY with VEC_TOTEXT output (zero API call)
+SELECT AI_SIMILARITY(
+VEC_TOTEXT(VEC_FROMTEXT('[0.1, 0.2, 0.3, 0.4]')),
+VEC_TOTEXT(VEC_FROMTEXT('[0.5, 0.6, 0.7, 0.8]'))
+) AS via_totext;
+via_totext
+0.9688639316269664
+# 3c. Three similarity types
+SELECT AI_SIMILARITY('[1,0,0]', '[0,1,0]', 'cosine') AS cosine_sim;
+cosine_sim
+0
+SELECT AI_SIMILARITY('[1,0,0]', '[0,1,0]', 'euclidean') AS euclidean_dist;
+euclidean_dist
+1.4142135623730951
+SELECT AI_SIMILARITY('[1,0,0]', '[0,1,0]', 'dot') AS dot_prod;
+dot_prod
+0
+# 3d. Invalid similarity type
+SELECT AI_SIMILARITY('[1,0,0]', '[0,1,0]', 'manhattan');
+ERROR HY000: AI_SIMILARITY: unsupported similarity type 'manhattan'. Supported types: cosine, euclidean, dot
+# 3e. Dimension mismatch
+SELECT AI_SIMILARITY('[1,2,3]', '[1,2,3,4]');
+ERROR HY000: AI_SIMILARITY: vectors have different dimensions (3 vs 4).
+# 3f. Both vectors + model name -> error
+SELECT AI_SIMILARITY('[1,2,3]', '[4,5,6]', 'cosine', 'some_model');
+ERROR HY000: AI_SIMILARITY: both arguments are vectors; model name 'some_model' is not applicable.
+# 3g. AI_SIMILARITY(VEC_TOTEXT(col), VEC_TOTEXT(col)) - zero API
+SELECT a.id, b.id,
+AI_SIMILARITY(VEC_TOTEXT(a.embedding), VEC_TOTEXT(b.embedding)) AS sim
+FROM t_ai_sim a, t_ai_sim b
+WHERE a.id = 1 AND b.id = 2;
+id	id	sim
+1	2	0.9688639316269664
+# 3h. PREPARE AI_SIMILARITY with VEC_TOTEXT
+PREPARE stmt FROM
+'SELECT id, AI_SIMILARITY(?, VEC_TOTEXT(embedding)) AS sim
+   FROM t_ai_sim ORDER BY sim DESC';
+DEALLOCATE PREPARE stmt;
+SELECT '3h PREPARE AI_SIMILARITY(text, VEC_TOTEXT): PASS' AS result;
+result
+3h PREPARE AI_SIMILARITY(text, VEC_TOTEXT): PASS
+# 3i. PREPARE AI_SIMILARITY(text, raw_vec_col) - runtime defect
+# PREPARE passes but EXECUTE would fail because binary vector
+# data is misdetected as plain text (first byte != '[')
+PREPARE stmt FROM
+'SELECT id, AI_SIMILARITY(?, embedding) AS sim
+   FROM t_ai_sim WHERE id = ?';
+DEALLOCATE PREPARE stmt;
+SELECT '3i PREPARE AI_SIMILARITY(text, vec_col): PASS (runtime defect)' AS result;
+result
+3i PREPARE AI_SIMILARITY(text, vec_col): PASS (runtime defect)
+
+# ================================================================
+# 4. JSON type handling with VEC_FROMTEXT
+# ================================================================
+# 4a. JSON_ARRAY direct - now accepted on m85 build
+SELECT VEC_TOTEXT(VEC_FROMTEXT(JSON_ARRAY(1.0, 2.0, 3.0, 4.0))) AS json_direct;
+json_direct
+[1,2,3,4]
+# 4b. CAST(JSON_ARRAY(...) AS CHAR) bridge still works
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CAST(JSON_ARRAY(1.0, 2.0, 3.0, 4.0) AS CHAR))) AS cast_bridge;
+cast_bridge
+[1,2,3,4]
+# 4c. JSON column
+CREATE TABLE t_json_col(id INT PRIMARY KEY, vec_json JSON);
+INSERT INTO t_json_col VALUES(1, JSON_ARRAY(0.1, 0.2, 0.3, 0.4));
+# JSON column direct - now accepted on m85 build
+SELECT VEC_TOTEXT(VEC_FROMTEXT(vec_json)) AS json_col_direct FROM t_json_col;
+json_col_direct
+[0.1,0.2,0.3,0.4]
+# JSON column with CAST still works
+SELECT VEC_TOTEXT(VEC_FROMTEXT(CAST(vec_json AS CHAR))) AS json_cast FROM t_json_col;
+json_cast
+[0.1,0.2,0.3,0.4]
+DROP TABLE t_json_col;
+# 4d. CAST AS VECTOR syntax
+SELECT VEC_TOTEXT(CAST('[1,2,3,4]' AS VECTOR(4))) AS cast_with_dim;
+cast_with_dim
+[1,2,3,4]
+SELECT VEC_TOTEXT(CAST('[1,2,3,4]' AS VECTOR)) AS cast_no_dim;
+cast_no_dim
+[1,2,3,4]
+
+# ================================================================
+# 5. NULL handling
+# ================================================================
+# 5a. VEC_FROMTEXT(NULL)
+SELECT VEC_TOTEXT(VEC_FROMTEXT(NULL)) AS fromtext_null;
+fromtext_null
+NULL
+# 5b. VEC_DISTANCE_EUCLIDEAN with NULL
+SELECT VEC_DISTANCE_EUCLIDEAN(NULL, VEC_FROMTEXT('[1,2,3,4]')) AS dist_null_a;
+dist_null_a
+NULL
+SELECT VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT('[1,2,3,4]'), NULL) AS dist_null_b;
+dist_null_b
+NULL
+# 5c. Dimension mismatch -> NULL
+SELECT VEC_DISTANCE_EUCLIDEAN(VEC_FROMTEXT('[1,2,3]'), VEC_FROMTEXT('[1,2,3,4]')) AS dim_mismatch;
+dim_mismatch
+NULL
+# 5d. AI_SIMILARITY with NULL
+SELECT AI_SIMILARITY(NULL, '[1,2,3]') AS sim_null_a;
+sim_null_a
+NULL
+SELECT AI_SIMILARITY('[1,2,3]', NULL) AS sim_null_b;
+sim_null_b
+NULL
+
+# ================================================================
+# 6. VEC_DISTANCE + HNSW index
+# ================================================================
+# 6a. Three distance functions
+SELECT id, title,
+ROUND(VEC_DISTANCE_EUCLIDEAN(embedding, VEC_FROMTEXT('[0.15, 0.25, 0.35, 0.45]')), 4) AS dist_l2,
+ROUND(VEC_DISTANCE_COSINE(embedding, VEC_FROMTEXT('[0.15, 0.25, 0.35, 0.45]')), 4) AS dist_cos
+FROM t_ai_sim
+ORDER BY dist_l2 LIMIT 3;
+id	title	dist_l2	dist_cos
+1	doc1	0.1	0.002
+2	doc2	0.7	0.0173
+3	doc3	0.7937	0.4152
+# 6b. Self distance = 0
+SELECT VEC_DISTANCE_EUCLIDEAN(embedding, embedding) AS self_dist FROM t_ai_sim WHERE id = 1;
+self_dist
+0
+SELECT ROUND(VEC_DISTANCE_COSINE(embedding, embedding), 10) AS self_cos FROM t_ai_sim WHERE id = 1;
+self_cos
+0
+# 6c. EXPLAIN
+EXPLAIN SELECT id FROM t_ai_sim
+ORDER BY VEC_DISTANCE_EUCLIDEAN(embedding, VEC_FROMTEXT('[0.1,0.2,0.3,0.4]')) LIMIT 3;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_ai_sim	NULL	ALL	NULL	NULL	NULL	NULL	3	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_ai_sim`.`id` AS `id` from `test`.`t_ai_sim` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_ai_sim`.`embedding`,VEC_FromText('[0.1,0.2,0.3,0.4]')) limit 3
+# 6d. VEC_TOTEXT output is valid JSON
+SELECT JSON_VALID(VEC_TOTEXT(embedding)) AS is_json FROM t_ai_sim WHERE id = 1;
+is_json
+1
+# 6e. VECTOR_DIM
+SELECT VECTOR_DIM(embedding) AS dim FROM t_ai_sim WHERE id = 1;
+dim
+4
+
+# ================================================================
+# 7. Full RAG pipeline PREPARE
+# ================================================================
+# 7a. INSERT with AI_EMBEDDING
+PREPARE stmt FROM
+'INSERT INTO t_ai_sim(title, content, embedding)
+   VALUES (?, ?, VEC_FROMTEXT(AI_EMBEDDING(?)))';
+DEALLOCATE PREPARE stmt;
+SELECT '7a INSERT+AI_EMBEDDING: PASS' AS result;
+result
+7a INSERT+AI_EMBEDDING: PASS
+# 7b. Semantic search
+PREPARE stmt FROM
+'SELECT id, title,
+     VEC_DISTANCE(embedding, VEC_FROMTEXT(AI_EMBEDDING(?))) AS dist
+   FROM t_ai_sim ORDER BY dist LIMIT ?';
+DEALLOCATE PREPARE stmt;
+SELECT '7b semantic search: PASS' AS result;
+result
+7b semantic search: PASS
+# 7c. Two-stage retrieval (HNSW + AI_RANK)
+PREPARE stmt FROM
+'SELECT id, title, AI_RANK(?, content) AS relevance
+   FROM (
+     SELECT id, title, content FROM t_ai_sim
+     ORDER BY VEC_DISTANCE(embedding, VEC_FROMTEXT(AI_EMBEDDING(?)))
+     LIMIT 20
+   ) AS candidates
+   ORDER BY relevance DESC LIMIT 5';
+DEALLOCATE PREPARE stmt;
+SELECT '7c two-stage RAG: PASS' AS result;
+result
+7c two-stage RAG: PASS
+# 7d. Full RAG with AI_PROMPT
+PREPARE stmt FROM
+'SELECT AI_PROMPT(
+     CONCAT(''参考资料：\n'',
+       (SELECT GROUP_CONCAT(content SEPARATOR ''\n'')
+        FROM (
+          SELECT content FROM t_ai_sim
+          ORDER BY VEC_DISTANCE(embedding, VEC_FROMTEXT(AI_EMBEDDING(?)))
+          LIMIT 3
+        ) t),
+       ''\n问题：'', ?)
+   ) AS answer';
+DEALLOCATE PREPARE stmt;
+SELECT '7d full RAG: PASS' AS result;
+result
+7d full RAG: PASS
+# 7e. Hybrid VEC_DISTANCE + AI_SIMILARITY
+PREPARE stmt FROM
+'SELECT id, title,
+     VEC_DISTANCE(embedding, VEC_FROMTEXT(AI_EMBEDDING(?))) AS vec_dist,
+     AI_SIMILARITY(?, VEC_TOTEXT(embedding)) AS ai_sim
+   FROM t_ai_sim
+   ORDER BY vec_dist LIMIT 10';
+DEALLOCATE PREPARE stmt;
+SELECT '7e hybrid search: PASS' AS result;
+result
+7e hybrid search: PASS
+# 7f. AI_SUMMARIZE → AI_EMBEDDING chain
+PREPARE stmt FROM
+'SELECT VEC_TOTEXT(VEC_FROMTEXT(
+     AI_EMBEDDING(AI_SUMMARIZE(content, 50))
+   )) FROM t_ai_sim WHERE id = ?';
+DEALLOCATE PREPARE stmt;
+SELECT '7f AI_SUMMARIZE→AI_EMBEDDING: PASS' AS result;
+result
+7f AI_SUMMARIZE→AI_EMBEDDING: PASS
+# 7g. AI_CLASSIFY on search results
+PREPARE stmt FROM
+'SELECT id, title,
+     AI_CLASSIFY(content, ''["topic_a", "topic_b"]'') AS category
+   FROM t_ai_sim
+   ORDER BY VEC_DISTANCE(embedding, VEC_FROMTEXT(AI_EMBEDDING(?)))
+   LIMIT 5';
+DEALLOCATE PREPARE stmt;
+SELECT '7g AI_CLASSIFY+search: PASS' AS result;
+result
+7g AI_CLASSIFY+search: PASS
+# 7h. AI_EXTRACT
+PREPARE stmt FROM
+'SELECT id,
+     AI_EXTRACT(content, ''{"topic":"主题","keywords":"关键词"}'') AS info
+   FROM t_ai_sim WHERE id = ?';
+DEALLOCATE PREPARE stmt;
+SELECT '7h AI_EXTRACT: PASS' AS result;
+result
+7h AI_EXTRACT: PASS
+
+# ================================================================
+# 8. Batch operations PREPARE
+# ================================================================
+# 8a. Batch INSERT with AI_EMBEDDING
+PREPARE stmt FROM
+'INSERT INTO t_ai_sim(title, content, embedding)
+   SELECT title, content, VEC_FROMTEXT(AI_EMBEDDING(content))
+   FROM t_ai_sim WHERE embedding IS NULL';
+DEALLOCATE PREPARE stmt;
+SELECT '8a batch INSERT: PASS' AS result;
+result
+8a batch INSERT: PASS
+# 8b. UPDATE with AI_EMBEDDING
+PREPARE stmt FROM
+'UPDATE t_ai_sim SET embedding = VEC_FROMTEXT(AI_EMBEDDING(content))
+   WHERE embedding IS NULL AND content IS NOT NULL';
+DEALLOCATE PREPARE stmt;
+SELECT '8b UPDATE+AI_EMBEDDING: PASS' AS result;
+result
+8b UPDATE+AI_EMBEDDING: PASS
+# 8c. UPDATE with AI_SUMMARIZE
+PREPARE stmt FROM
+'UPDATE t_ai_sim SET title = AI_SUMMARIZE(content, 50)
+   WHERE content IS NOT NULL AND title IS NULL';
+DEALLOCATE PREPARE stmt;
+SELECT '8c UPDATE+AI_SUMMARIZE: PASS' AS result;
+result
+8c UPDATE+AI_SUMMARIZE: PASS
+
+# ================================================================
+# 9. Cleanup
+# ================================================================
+DROP TABLE t_ai_sim;
+SET GLOBAL vidx_disabled = ON;

@@ -1,0 +1,484 @@
+--echo #
+--echo # Test polardbx_hasher function with variable length string types
+--echo #
+
+--echo
+--echo  Test with utf8mb4_general_ci charset and collation
+--echo
+CREATE TABLE t_utf8mb4_general_ci (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_general_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_general_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 25, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 30, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 35, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 40, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 45, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 50, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 55, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 85, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 86, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 87, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 88, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 89, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 74, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 75, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 76, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 77, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 78, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 79, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 80, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 81, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_general_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with utf8mb4_bin charset and collation
+--echo
+CREATE TABLE t_utf8mb4_bin (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_bin,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_bin (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 125, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 130, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 135, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 140, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 145, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 150, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 155, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 185, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 186, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 187, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 188, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 189, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 174, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 175, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 176, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 177, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 178, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 179, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 180, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 181, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_bin ORDER BY age, hash_value;
+
+--echo
+--echo  Test with utf8mb4_unicode_ci charset and collation
+--echo
+CREATE TABLE t_utf8mb4_unicode_ci (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_unicode_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 225, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 230, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 235, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 240, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 245, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 250, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 255, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 285, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 286, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 287, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 288, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 289, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 274, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 275, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 276, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 277, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 278, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 279, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 280, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 281, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_unicode_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with utf8mb4_unicode_520_ci charset and collation
+--echo
+CREATE TABLE t_utf8mb4_unicode_520_ci (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_unicode_520_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_unicode_520_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 325, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 330, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 335, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 340, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 345, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 350, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 355, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 385, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 386, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 387, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 388, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 389, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 374, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 375, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 376, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 377, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 378, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 379, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 380, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 381, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_unicode_520_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with utf8mb4_0900_ai_ci charset and collation
+--echo
+CREATE TABLE t_utf8mb4_0900_ai_ci (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_0900_ai_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 425, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 430, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 435, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 440, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 445, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 450, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 455, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 485, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 486, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 487, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 488, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 489, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 474, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 475, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 476, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 477, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 478, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 479, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 480, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 481, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_0900_ai_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with ascii_bin charset and collation
+--echo
+CREATE TABLE t_ascii_bin (
+  id VARCHAR(64) CHARSET ascii COLLATE ascii_bin,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_ascii_bin (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 525, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 530, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 535, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 545, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 550, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 555, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 534, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 535, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 536, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 537, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 538, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 539, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 540, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 541, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 542, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 543, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 544, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 545, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 533, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 531, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_ascii_bin ORDER BY age, hash_value;
+
+--echo
+--echo  Test with latin1_danish_ci charset and collation
+--echo
+CREATE TABLE t_latin1_danish_ci (
+  id VARCHAR(64) CHARSET latin1 COLLATE latin1_danish_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_latin1_danish_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 625, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 630, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 635, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 645, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 650, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 655, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 634, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 635, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 636, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 637, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 638, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 639, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 640, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 641, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 642, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 643, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 644, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 645, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 633, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 631, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_latin1_danish_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with latin1_bin charset and collation
+--echo
+CREATE TABLE t_latin1_bin (
+  id VARCHAR(64) CHARSET latin1 COLLATE latin1_bin,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_latin1_bin (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 725, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 730, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 735, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 745, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 750, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 755, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 734, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 735, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 736, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 737, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 738, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 739, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 740, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 741, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 742, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 743, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 744, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 745, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 733, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 731, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_latin1_bin ORDER BY age, hash_value;
+
+--echo
+--echo  Test with latin1_general_ci charset and collation
+--echo
+CREATE TABLE t_latin1_general_ci (
+  id VARCHAR(64) CHARSET latin1 COLLATE latin1_general_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_latin1_general_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 825, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 830, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 835, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 845, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 850, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 855, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 834, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 835, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 836, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 837, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 838, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 839, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 840, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 841, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 842, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 843, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 844, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 845, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 833, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 831, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_latin1_general_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with latin1_general_cs charset and collation
+--echo
+CREATE TABLE t_latin1_general_cs (
+  id VARCHAR(64) CHARSET latin1 COLLATE latin1_general_cs,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_latin1_general_cs (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 925, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 930, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 935, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 945, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 950, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 955, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 934, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 935, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 936, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 937, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 938, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 939, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 940, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 941, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 942, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 943, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 944, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 945, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 933, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 931, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_latin1_general_cs ORDER BY age, hash_value;
+
+--echo
+--echo  Test with latin1_spanish_ci charset and collation
+--echo
+CREATE TABLE t_latin1_spanish_ci (
+  id VARCHAR(64) CHARSET latin1 COLLATE latin1_spanish_ci,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_latin1_spanish_ci (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 1025, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 1030, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 1035, 70000.75, '2023-01-01 00:00:02', true),
+  (NULL, 'actual null', 1045, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 1050, 95000.00, '2023-01-01 00:00:05', false),
+  ('!@#$%^&*()', 'special chars', 1055, 100000.00, '2023-01-01 00:00:06', true),
+  ('user001', 'numeric suffix id', 1034, 59000.00, '2023-01-01 00:00:15', false),
+  ('USER001', 'upper numeric id', 1035, 60000.00, '2023-01-01 00:00:16', true),
+  ('test_user', 'underscore id', 1036, 61000.00, '2023-01-01 00:00:17', false),
+  ('test-user', 'hyphen id', 1037, 62000.00, '2023-01-01 00:00:18', true),
+  ('TEST_USER', 'upper underscore id', 1038, 63000.00, '2023-01-01 00:00:19', false),
+  ('user.name', 'dot id', 1039, 64000.00, '2023-01-01 00:00:20', true),
+  ('user@domain', 'at symbol id', 1040, 65000.00, '2023-01-01 00:00:21', false),
+  ('user#tag', 'hash id', 1041, 66000.00, '2023-01-01 00:00:22', true),
+  ('user$sign', 'dollar id', 1042, 67000.00, '2023-01-01 00:00:23', false),
+  ('user%sign', 'percent id', 1043, 68000.00, '2023-01-01 00:00:24', true),
+  ('user&sign', 'ampersand id', 1044, 69000.00, '2023-01-01 00:00:25', false),
+  ('user*sign', 'asterisk id', 1045, 70000.00, '2023-01-01 00:00:26', true),
+  ('AbC', 'mixed case id', 1033, 58000.00, '2023-01-01 00:00:14', true),
+  (' ', 'single space id', 1031, 56000.00, '2023-01-01 00:00:12', true);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_latin1_spanish_ci ORDER BY age, hash_value;
+
+--echo
+--echo  Test with utf8mb4_zh_0900_as_cs charset and collation
+--echo
+CREATE TABLE t_utf8mb4_zh_0900_as_cs (
+  id VARCHAR(64) CHARSET utf8mb4 COLLATE utf8mb4_zh_0900_as_cs,
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_utf8mb4_zh_0900_as_cs (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 1125, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 1130, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 1135, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 1140, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 1145, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 1150, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 1155, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 1185, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 1186, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 1187, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 1188, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 1189, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 1174, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 1175, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 1176, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 1177, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 1178, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 1179, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 1180, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 1181, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_utf8mb4_zh_0900_as_cs ORDER BY age, hash_value;
+
+--echo
+--echo  Test with binary charset and collation
+--echo
+CREATE TABLE t_binary (
+  id VARBINARY(64),
+  name VARCHAR(64),
+  age INT,
+  salary DECIMAL(10,2),
+  create_time DATETIME,
+  is_active BOOLEAN
+);
+
+INSERT INTO t_binary (id, name, age, salary, create_time, is_active) VALUES
+  ('', 'empty string', 1225, 50000.00, '2023-01-01 00:00:00', true),
+  ('ABC', 'uppercase', 1230, 60000.50, '2023-01-01 00:00:01', false),
+  ('abc', 'lowercase', 1235, 70000.75, '2023-01-01 00:00:02', true),
+  ('中文测试', 'chinese string', 1240, 80000.00, '2023-01-01 00:00:03', false),
+  (NULL, 'actual null', 1245, 90000.25, '2023-01-01 00:00:04', true),
+  ('   ', 'spaces', 1250, 95000.00, '2023-01-01 00:00:05', false),
+  ('特殊字符!@#$%^&*()', 'special chars', 1255, 100000.00, '2023-01-01 00:00:06', true),
+  ('😊🚀🎉', 'emoji id 1', 1285, 110000.00, '2023-01-01 00:01:06', true),
+  ('🐱🐶🐭🐹', 'emoji id 2', 1286, 111000.00, '2023-01-01 00:01:07', false),
+  ('🌍🌎🌏', 'emoji id 3', 1287, 112000.00, '2023-01-01 00:01:08', true),
+  ('🍎🍕🍔🍟', 'emoji id 4', 1288, 113000.00, '2023-01-01 00:01:09', false),
+  ('🚗✈️🚀', 'emoji id 5', 1289, 114000.00, '2023-01-01 00:01:10', true),
+  ('αβγδεζηθ', 'greek chars id', 1274, 99000.00, '2023-01-01 00:00:55', true),
+  ('АБВГДЕЖЗ', 'cyrillic chars id', 1275, 100000.00, '2023-01-01 00:00:56', false),
+  ('àáâãäåæç', 'latin ext id', 1276, 101000.00, '2023-01-01 00:00:57', true),
+  ('ñòóôõöøù', 'spanish chars id', 1277, 102000.00, '2023-01-01 00:00:58', false),
+  ('üýþÿāăą', 'umlaut chars id', 1278, 103000.00, '2023-01-01 00:00:59', true),
+  ('ćĉċčďđēĕė', 'polish chars id', 1279, 104000.00, '2023-01-01 00:01:00', false),
+  ('=+_-/*', 'math symbols id', 1280, 105000.00, '2023-01-01 00:01:01', true),
+  ('안녕하세요', 'korean', 614, 180000.00, '2023-01-01 00:00:22', false),
+  ('|\\:"-', 'path symbols id', 1281, 106000.00, '2023-01-01 00:01:02', false);
+
+SELECT id, age, polardbx_hasher(id) AS hash_value FROM t_binary ORDER BY age, hash_value;
+
+--echo #
+--echo # Clean up
+--echo #
+
+DROP TABLE t_utf8mb4_general_ci, t_utf8mb4_bin, t_utf8mb4_unicode_ci, t_utf8mb4_unicode_520_ci, t_utf8mb4_0900_ai_ci, t_ascii_bin, t_latin1_danish_ci, t_latin1_bin, t_latin1_general_ci, t_latin1_general_cs, t_latin1_spanish_ci, t_utf8mb4_zh_0900_as_cs, t_binary;

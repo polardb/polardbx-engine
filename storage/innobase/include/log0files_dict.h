@@ -177,6 +177,21 @@ void log_files_for_each(const Log_files_dict &files, F functor) {
   std::for_each(files.begin(), files.end(), functor);
 }
 
+template <typename F>
+void log_files_for_each(const Log_files_dict &files, size_t max_pct,
+                        F functor) {
+  size_t count = 0;
+  size_t max_count = ((100 - max_pct) * LOG_N_FILES) / 100;
+  for (const auto &file : files) {
+    if (functor(file)) {
+      ++count;
+      if (count >= max_count) {
+        break;
+      }
+    }
+  }
+}
+
 /** Calls the given functor for each of existing log files on path
 from a file containing start_lsn to a file containing end_lsn - 1.
 Asserts that such a path exists (going through existing log files).

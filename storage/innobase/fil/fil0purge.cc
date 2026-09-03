@@ -164,17 +164,10 @@ bool File_purge::add_file(ulint id, const char *path,
   @param[in]  size        Purge max size (bytes)
   @param[in]  force       Whether unlink file directly
 
-  First return in std::pair
-  @retval       -1        Error
-  @retval       0         Success & no file purge
-  @retval       >0        How many purged operation
-
-  Second return in std::pair
-  @retval       size      Truncated file size
+  @retval       size      Truncated file size (0 if no file or error)
 */
-std::pair<int, ulint> File_purge::purge_file(ulint size, bool force) {
+ulint File_purge::purge_file(ulint size, bool force) {
   bool success = false;
-  uint truncated = 0;
   file_purge_node_t *node = nullptr;
   pfs_os_file_t handle;
   ulint truncated_size = 0;
@@ -195,7 +188,7 @@ std::pair<int, ulint> File_purge::purge_file(ulint size, bool force) {
       /* Maybe delete by DBA, so remove file directly */
       if (err == OS_FILE_NOT_FOUND) remove_file(node);
 
-      return std::make_pair(-1, 0);
+      return 0;
     }
 
     if (srv_print_data_file_purge_process)
@@ -208,22 +201,18 @@ std::pair<int, ulint> File_purge::purge_file(ulint size, bool force) {
       /* Truncate predefined size once */
       os_file_truncate(node->m_file_path, handle, file_size - size);
       os_file_close(handle);
-      truncated++;
       node->m_current_size = (file_size - size);
-      truncated_size += size;
+      truncated_size = size;
     } else {
       /* Direct delete the file when file_size < predefined size */
       os_file_close(handle);
       os_file_delete(innodb_data_file_key, node->m_file_path);
       remove_file(node);
-      truncated++;
-      truncated_size += file_size;
+      truncated_size = file_size;
     }
-  } else {
-    return std::make_pair(0, 0);
   }
 
-  return std::make_pair(truncated, truncated_size);
+  return truncated_size;
 }
 
 /**
@@ -332,9 +321,7 @@ dberr_t row_purge_single_table_tablespace(space_id_t space_id,
       ib::info(ER_IB_MSG_989) << "Purge data file " << filepath;
     }
   } else {
-    // purge file TODO BUF_REMOVE_FLUSH_NO_WRITE -> BUF_REMOVE_NONE
-    err = fil_delete_tablespace(space_id, BUF_REMOVE_FLUSH_NO_WRITE,
-                                new_filepath);
+    err = fil_delete_tablespace(space_id, BUF_REMOVE_NONE, new_filepath);
   }
 
   file_purge_sys->add_file(log_id, new_filepath, filepath);

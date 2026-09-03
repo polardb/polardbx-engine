@@ -57,7 +57,10 @@ struct Vio;
 
 #if defined(__linux__)
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
+// Since v4.9.102, linux contain the sigprocmask bugfix
+// source code: https://elixir.bootlin.com/linux/v4.9.102/source/kernel/signal.c
+// bugfix: https://lkml.org/lkml/2016/9/27/213
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 102)
 #ifdef USE_PPOLL_IN_VIO
 #undef USE_PPOLL_IN_VIO
 #include <signal.h>

@@ -32,7 +32,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "trx0purge.h"
 
-#include "lizard0dict.h"
+#include "lizard0dict0dict.h"
 #include "lizard0txn0space.h"
 
 namespace lizard {

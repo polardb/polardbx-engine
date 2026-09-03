@@ -26,10 +26,15 @@
  Created 1/11/2019 Galaxy SQL
  *******************************************************/
 #include "fil0purge.h"
+#include "ha_prototypes.h"
 #include "my_inttypes.h"
+#include "sql/log.h"
 #include "sql/mysqld.h"
 #include "sql/mysqld_thd_manager.h"
+#include "sql/sql_class.h"
+#include "sql/sql_ftrunc_lock.h"
 #include "srv0start.h"
+#include "ut0ut.h"
 
 #include "srv0file.h"
 
@@ -115,39 +120,73 @@ void srv_file_purge_destroy() {
   file_purge_system_inited = false;
 }
 
+/**
+  Purge file with lock handling.
+  @param thd Thread handle, nullptr means skip lock
+  @param max_size Max size to purge
+  @param lock_fail_counter Counter for lock failures
+  @return Purged size, 0 if lock acquisition failed
+*/
+static ulint purge_file_with_lock(THD *thd, ulong max_size,
+                                   ib::ExponentialBackoffCounter &lock_fail_counter) {
+  if (thd == nullptr) {
+    /* If thd is nullptr, skip lock logic and directly purge file */
+    return file_purge_sys->purge_file(max_size, srv_data_file_purge_immediate);
+  }
+
+  /* Acquire FTRUNC_LOCK MDL lock for file truncate */
+  if (!acquire_ftrunc_lock(thd, 30, MDL_EXCLUSIVE)) {
+    ulint trunc_size =
+        file_purge_sys->purge_file(max_size, srv_data_file_purge_immediate);
+    release_ftrunc_lock(thd);
+    lock_fail_counter.reset();
+    return trunc_size;
+  } else {
+    /* Exponential backoff to reduce lock failure log */
+    if (lock_fail_counter.inc_and_check()) {
+      ib::warn(ER_FTRUNC_LOCK_ACQUIRE_FAILED);
+    }
+    return 0;
+  }
+}
+
 /* Data file purge thread runtime */
 void srv_file_purge_thread(void) {
   int64_t sig_count;
   int64_t sig_count_shutdown;
-  ut_a(file_purge_sys);
-  int truncated = 0;
-  ulint truncated_size = 0;
   ulong max_size;
+  ulint total_trunc_size = 0;
+  ulint trunc_size = 0;
+  ib::ExponentialBackoffCounter lock_fail_counter;
+  ut_a(file_purge_sys);
+  THD *thd = create_internal_thd();
 
 loop:
   max_size = srv_data_file_purge_max_size * 1024 * 1024;
+  trunc_size = purge_file_with_lock(thd, max_size, lock_fail_counter);
+  total_trunc_size += trunc_size;
 
-  std::pair<int, ulint> result =
-      file_purge_sys->purge_file(max_size, srv_data_file_purge_immediate);
-
-  truncated = result.first;
-  truncated_size += result.second;
-
-  if (truncated <= 0) {
+  /* If no files were truncated in this round, sleep 5 seconds.
+  Reset total_trunc_size since there's nothing to truncate. */
+  if (trunc_size == 0) {
     sig_count = os_event_reset(file_purge_event);
     os_event_wait_time_low(file_purge_event, std::chrono::milliseconds{5000},
                            sig_count);
-    truncated_size = 0;
-  } else if (truncated > 0) {
-    if (truncated_size >= max_size) {
+    total_trunc_size = 0;
+  } else {
+    /* If total truncated size reaches max_size, sleep for the configured
+    interval and reset the accumulator to start a new cycle. */
+    if (total_trunc_size >= max_size) {
       sig_count_shutdown = os_event_reset(file_purge_shutdown_event);
       os_event_wait_time_low(
           file_purge_shutdown_event,
           std::chrono::milliseconds{srv_data_file_purge_interval},
           sig_count_shutdown);
-
-      truncated_size = 0;
+      total_trunc_size = 0;
     }
+    /* Otherwise (total_trunc_size > 0 && total_trunc_size < max_size):
+    Continue looping without waiting, keep accumulating total_trunc_size
+    until it reaches max_size. */
   }
 
   if (srv_shutdown_state.load() >= SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS)
@@ -168,6 +207,9 @@ exit_func:
 
     file_purge_sys->purge_all(srv_data_file_purge_max_size * 1024 * 1024, true);
     ib::info(ER_IB_MSG_FP_COMPLETE);
+  }
+  if (thd != nullptr) {
+    destroy_internal_thd(thd);
   }
 }
 

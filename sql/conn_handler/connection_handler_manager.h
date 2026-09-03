@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <sys/types.h>
+#include <utility>
 
 #include "mysql/psi/mysql_cond.h"  // mysql_cond_t
 #include "mysql/psi/mysql_mutex.h"
@@ -160,9 +161,9 @@ class Connection_handler_manager {
     Check if the current number of connections are below or equal
     the value given by the max_connections server system variable.
 
-    @return true if a new connection can be accepted, false otherwise.
+    @return true if a new connection can be accepted, false otherwise
   */
-  bool valid_connection_count();
+  std::pair<bool, uint> valid_connection_count();
 
   /**
     Increment connection count if max_connections is not exceeded.

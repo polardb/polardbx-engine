@@ -22,7 +22,9 @@ SET DEBUG_SYNC='ddl_bulk_inserter_latches_released SIGNAL latches_released WAIT_
 --connection default
 SET DEBUG_SYNC='now WAIT_FOR latches_released';
 SET GLOBAL innodb_purge_run_now=ON;
---source include/wait_innodb_all_purged.inc
+# We cannot use wait_innodb_all_purged because ddl_log is an insert-only operation.
+#--source include/wait_innodb_all_purged.inc
+--sleep 10
 SET DEBUG_SYNC='now SIGNAL go';
 
 --connection con1

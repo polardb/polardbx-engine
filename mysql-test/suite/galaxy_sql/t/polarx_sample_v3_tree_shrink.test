@@ -1,0 +1,197 @@
+#
+# Repro for the BlockSampler dangling-cursor defect.
+#
+# BlockSampler::fetch_next_leaf_node() installs an unconditional raii::Sentry
+# that always calls m_node_pcur.store_position() on scope exit. But
+# SamplePCursorNonLeaf::restore_position() has two very different false returns:
+#
+#   a) btr_height_get(index) < m_read_level  -> bails out BEFORE ever calling
+#      m_pcur.restore_position(), so the pcur is still holding raw block/rec
+#      pointers left over from the previous, already committed mtr.
+#   b) is_after_last_in_tree()               -> the pcur IS positioned and
+#      latched inside the current mtr, so storing it is safe.
+#
+# The Sentry cannot tell them apart. On path (a) it runs store_position() on a
+# cursor that is neither positioned nor latched in the current mtr, and reads a
+# page this mtr does not hold.
+#
+# Path (a) means the clustered index collapsed to height 0. BlockSampler::init()
+# hardcodes m_node_pcur.init(1, index), so the node cursor always reads level 1.
+# When the height is 1 that level-1 page IS the root page, and a collapse
+# rewrites that very page in place: btr_page_empty(root, ..., level 0) keeps the
+# block resident and valid while its whole record layout changes. That is why the
+# crash is a garbage rec_get_status() rather than a SIGSEGV.
+#
+# Flow:
+# 1. Build a clustered index of height >= 1 (root is a non-leaf page), so
+#    create_sampler() picks BlockSampler and open_at_index_left_side() really
+#    positions the node cursor on the root.
+# 2. Park the sampler at the top of fetch_next_leaf_node(). open_at_index_left_side()
+#    has already committed its mtr, so at this point the sampler holds no page
+#    latch and has no active mtr, and purge stays unblocked.
+# 3. From another connection, shrink the table and drive purge until the tree
+#    collapses to height 0.
+# 4. Release the sampler. It must not dereference the stale cursor.
+#
+# Expected BEFORE the fix -- mysqld aborts on scope exit of
+#   fetch_next_leaf_node(), with Sentry::~Sentry() on the stack:
+#     debug build   : page-latch assertion at the top of
+#                     btr_pcur_t::store_position() (btr0pcur.cc)
+#     release build : ut_error in rec_copy_prefix_to_buf(), reached through
+#                     dict_index_copy_rec_order_prefix()
+#
+# Expected AFTER the fix -- the statement completes and reports the surviving
+# row count.
+#
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+
+--source include/count_sessions.inc
+
+--disable_warnings
+DROP TABLE IF EXISTS t1, t2;
+--enable_warnings
+
+# CLUST_INDEX_SIZE below is only refreshed by ANALYZE TABLE when stats are
+# transient, which is how suite/innodb/t/innodb_bug14676111.test reads B-tree
+# page counts as well.
+SET @old_innodb_stats_persistent = @@GLOBAL.innodb_stats_persistent;
+SET GLOBAL innodb_stats_persistent = OFF;
+
+--echo # Step 1: build a clustered index of height >= 1.
+
+# latin1 keeps pad a fixed 255 bytes on disk regardless of the server default
+# charset, which is what makes the page arithmetic below deterministic. utf8mb3
+# would work identically but emits a deprecation warning into the baseline.
+CREATE TABLE t1 (id INT PRIMARY KEY, pad CHAR(255) CHARACTER SET latin1)
+  ENGINE = InnoDB;
+
+# Drives purge in step 3 and nothing else. Deliberately a separate table so it
+# never perturbs t1's B-tree, and deliberately a single row so that repeatedly
+# bumping the primary key never collides with an existing value.
+CREATE TABLE t2 (id INT PRIMARY KEY) ENGINE = InnoDB;
+INSERT INTO t2 VALUES (1);
+
+--disable_query_log
+let $i = 1;
+while ($i <= 200)
+{
+  eval INSERT INTO t1 VALUES ($i, REPEAT('a', 255));
+  inc $i;
+}
+--enable_query_log
+
+# The defect needs a tree that is height >= 1 now and height 0 later, so pin
+# both ends down instead of letting the test silently degrade into a no-op.
+# INNODB_BUFFER_PAGE exposes no page level, but CLUST_INDEX_SIZE counts pages in
+# the clustered index: exactly 1 means a lone root page, i.e. height 0, and
+# anything above 1 means the root is a non-leaf page, i.e. height >= 1.
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--let $clust_index_size = `SELECT CLUST_INDEX_SIZE FROM information_schema.INNODB_TABLESTATS WHERE NAME = 'test/t1'`
+--let $assert_text = root of t1 PRIMARY must be a non-leaf page before sampling
+--let $assert_cond = $clust_index_size >= 2
+--source include/assert.inc
+
+--echo # Step 2: park the sampler at the top of fetch_next_leaf_node().
+
+--connect (con_sampler, localhost, root,,)
+
+# Sampler::init() downgrades trx->isolation_level on its own, but set it here
+# too so the SQL layer assigns no read view at all and purge stays unblocked.
+SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+
+# create_sampler() derives read_level from btr_height_get() on this connection's
+# own statement path, so the injection has to be SESSION scoped. Step 1 already
+# guarantees height >= 1, so this only documents the intent.
+SET SESSION debug = "+d,polarx_sample_force_block_mode";
+
+SET DEBUG_SYNC = "polarx_sample_before_fetch_next_leaf_node SIGNAL sampler_parked WAIT_FOR sampler_go";
+--send SELECT /*+ sample_percentage(100.0) */ COUNT(*) FROM t1
+
+--connection default
+SET DEBUG_SYNC = "now WAIT_FOR sampler_parked";
+
+--echo # Step 3: collapse the tree to height 0 behind the parked sampler.
+
+# MDL_SHARED_READ (the parked SELECT) and MDL_SHARED_WRITE (this DELETE) are
+# compatible, and the sampler takes no row locks under READ UNCOMMITTED, so
+# this proceeds while the sampler stays parked.
+#
+# Deleting only part of the table is what makes this a faithful repro, and the
+# surviving row count matters twice over.
+#
+# Emptying t1 completely would collapse the tree through
+# btr_discard_only_page_on_level(), leaving the root an empty page. store_position()
+# short-circuits on that shape: page_is_empty() is true, so it sets m_rel_pos to
+# BTR_PCUR_BEFORE_FIRST_IN_TREE and returns before ever reaching
+# dict_index_copy_rec_order_prefix(). The production crash signature inside
+# rec_copy_prefix_to_buf() would then be unreachable.
+#
+# Leaving rows behind forces the collapse through btr_lift_page_up() instead,
+# which page_copy_rec_list_end()s the last surviving leaf into the root. The root
+# ends up level 0 with n_recs != 0, page_is_empty() is false, and store_position()
+# walks on into the record-prefix copy exactly as it did in production.
+#
+# A row carries a fixed 255 bytes of payload here, so 15 rows fit comfortably in
+# a single 16K page and the tree can still reach height 0.
+#
+# The WHERE clause also keeps execution off the ha_delete_all_rows() fast path.
+# A bare "DELETE FROM t1" has a constant condition, and sql_delete.cc then empties
+# the table wholesale whenever the statement is not row-binlogged, so no page
+# merge would happen at all. Referencing a column makes const_cond_result false
+# and pins execution to the row-by-row ha_delete_row() path.
+DELETE FROM t1 WHERE id > 15;
+
+# Purge, not the DELETE, is what physically removes the records and merges the
+# pages, so the tree only collapses once the DELETE's undo has been purged.
+#
+# wait_innodb_all_purged.inc is not a dependable gate here: it converges as soon
+# as INNODB_PURGE_TRX_SCN_AGE drops to INNODB_PURGE_VIEW_TRX_SCN_AGE, which can
+# happen while this DELETE's own undo is still pending. Left to that gate the
+# repro is flaky.
+#
+# Feed purge real work instead. Each statement below bumps a primary key, which
+# InnoDB implements as delete-mark plus insert in the clustered index, so every
+# one of them files update undo into the history list. That is what keeps the
+# purge coordinator running and walking the history list forward until it passes
+# the DELETE above. Plain INSERTs would not work: insert undo is released at
+# commit and never enters the history list, so it generates no purge work.
+--disable_query_log
+let $purge_drive_trx = 300;
+while ($purge_drive_trx)
+{
+  UPDATE t2 SET id = id + 1;
+  dec $purge_drive_trx;
+}
+--enable_query_log
+
+--echo # Step 4: release the sampler; it must not touch the stale cursor.
+
+SET DEBUG_SYNC = "now SIGNAL sampler_go";
+
+--connection con_sampler
+--reap
+
+--connection default
+--disconnect con_sampler
+
+# Guard rail, deliberately checked after the reap: it stays off the concurrency
+# path and costs one ANALYZE instead of a polling loop. The crashing run never
+# gets here, which is fine. A non-crashing run needs it to tell "the defect is
+# fixed" apart from "purge never collapsed the tree, so there was nothing to hit".
+--disable_result_log
+ANALYZE TABLE t1;
+--enable_result_log
+--let $clust_index_size = `SELECT CLUST_INDEX_SIZE FROM information_schema.INNODB_TABLESTATS WHERE NAME = 'test/t1'`
+--let $assert_text = t1 PRIMARY must have collapsed to a single leaf root page
+--let $assert_cond = $clust_index_size = 1
+--source include/assert.inc
+
+SET DEBUG_SYNC = "RESET";
+DROP TABLE t1, t2;
+SET GLOBAL innodb_stats_persistent = @old_innodb_stats_persistent;
+
+--source include/wait_until_count_sessions.inc

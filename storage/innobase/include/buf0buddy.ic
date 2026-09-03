@@ -30,6 +30,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created December 2006 by Marko Makela
  *******************************************************/
 
+#ifndef buf0buddy_h
+#define INNODB_BUF0BUDDY_IC_STANDALONE
+#include "buf0buddy.h"
+#undef INNODB_BUF0BUDDY_IC_STANDALONE
+#endif /* !buf0buddy_h */
 #include "buf0buddy.h"
 #include "buf0buf.h"
 

@@ -201,6 +201,28 @@ bool Cmd_switch_user::pc_execute(THD *thd) {
              (thd->password ? ER_THD(thd, ER_YES) : ER_THD(thd, ER_NO)));
     return true;
   }
+
+  /*
+    acl_getroot() was called with db=nullptr, so it cannot properly set the
+    db-level access cache for the current database. If the THD already has
+    an active database, we must refresh cache_current_db_access here,
+    otherwise subsequent queries against the current database will see
+    stale (zero) db-level privileges, causing intermittent permission errors.
+    This is analogous to what acl_authenticate() + mysql_change_db() do for
+    COM_CHANGE_USER.
+  */
+  if (thd->db().str && thd->db().length > 0) {
+    ulong db_access;
+    if (sctx->get_active_roles()->size() > 0) {
+      db_access = sctx->db_acl(thd->db());
+    } else {
+      db_access =
+          acl_get(thd, sctx->host().str, sctx->ip().str,
+                  sctx->priv_user().str, thd->db().str, false);
+    }
+    sctx->cache_current_db_access(db_access);
+  }
+
   const auto sctx_thd = sctx->get_thd();
   if (sctx_thd != nullptr) {
     set_system_user_flag(sctx_thd);

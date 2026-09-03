@@ -247,6 +247,8 @@ bool dynamic_privilege_init(void) {
           STRING_WITH_LEN("PASSWORDLESS_USER_ADMIN"));
       ret += service->register_privilege(
           STRING_WITH_LEN("SENSITIVE_VARIABLES_OBSERVER"));
+      ret += service->register_privilege(
+          STRING_WITH_LEN("DROP_DATABASE_ADMIN"));
     }
   }  // exist scope
   mysql_plugin_registry_release(r);

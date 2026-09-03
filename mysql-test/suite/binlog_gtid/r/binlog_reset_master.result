@@ -1,0 +1,21 @@
+set global consensus_enable_reset_master=0;
+RESET MASTER;
+ERROR HY000: RESET MASTER is not allowed because PolarDB-X XPaxos is running.
+set global consensus_enable_reset_master=1;
+RESET MASTER;
+create database if not exists d1;
+drop table if exists d1.t0;
+Warnings:
+Note	1051	Unknown table 'd1.t0'
+create table d1.t0(c1 int , c2 varchar(100));
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	854	#
+RESET MASTER;
+show consensus logs;
+Log_name	File_size	Start_log_index
+binlog.000001	252	#
+drop database if exists d1;
+drop table if exists d1.t0;
+Warnings:
+Note	1051	Unknown table 'd1.t0'

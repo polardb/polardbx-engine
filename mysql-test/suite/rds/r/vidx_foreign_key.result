@@ -1,0 +1,271 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Prepare - Create parent table with vector index
+CREATE TABLE parent (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO parent(id, v) VALUES (1, VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO parent(id, v) VALUES (2, VEC_FROMTEXT('[2,2,2,2,2]'));
+INSERT INTO parent(id, v) VALUES (3, VEC_FROMTEXT('[3,3,3,3,3]'));
+INSERT INTO parent(id, v) VALUES (4, VEC_FROMTEXT('[4,4,4,4,4]'));
+INSERT INTO parent(id, v) VALUES (5, VEC_FROMTEXT('[5,5,5,5,5]'));
+SELECT id, VEC_TOTEXT(v) FROM parent;
+id	VEC_TOTEXT(v)
+1	[1,1,1,1,1]
+2	[2,2,2,2,2]
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+5	[5,5,5,5,5]
+
+# 2. Create child table with FK referencing parent PK (ON DELETE CASCADE)
+CREATE TABLE child_cascade (
+id INT PRIMARY KEY AUTO_INCREMENT,
+parent_id INT,
+data VARCHAR(50),
+FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+INSERT INTO child_cascade(parent_id, data) VALUES (1, 'child of 1');
+INSERT INTO child_cascade(parent_id, data) VALUES (2, 'child of 2');
+INSERT INTO child_cascade(parent_id, data) VALUES (3, 'child of 3');
+SELECT * FROM child_cascade;
+id	parent_id	data
+1	1	child of 1
+2	2	child of 2
+3	3	child of 3
+
+# 3. Test ON DELETE CASCADE - delete parent record
+# Delete parent id=1, child should be deleted as well
+DELETE FROM parent WHERE id = 1;
+SELECT id, VEC_TOTEXT(v) FROM parent;
+id	VEC_TOTEXT(v)
+2	[2,2,2,2,2]
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+5	[5,5,5,5,5]
+SELECT * FROM child_cascade;
+id	parent_id	data
+2	2	child of 2
+3	3	child of 3
+# Verify vector index still works after cascade delete
+SELECT id, VEC_TOTEXT(v) FROM parent FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,2,2,2,2]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+2	[2,2,2,2,2]
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+
+# 4. Test ON UPDATE CASCADE - update parent PK
+# Update parent id=2 to id=20, child should be updated as well
+UPDATE parent SET id = 20 WHERE id = 2;
+SELECT id, VEC_TOTEXT(v) FROM parent ORDER BY id;
+id	VEC_TOTEXT(v)
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+5	[5,5,5,5,5]
+20	[2,2,2,2,2]
+SELECT * FROM child_cascade ORDER BY id;
+id	parent_id	data
+2	20	child of 2
+3	3	child of 3
+# Verify vector index still works after cascade update.
+# Query vector [20,20,20,20,20] is chosen to avoid the [2,2,2,2,2]
+# collision region: after UPDATE id=2->20, id=2's HNSW entry is
+# soft-deleted while id=20 is freshly inserted at the SAME vector
+# position, so HNSW recall for queries near [2,2,2,2,2] is
+# non-deterministic. Querying from a distant vector traverses the
+# live region and reliably returns all 4 live rows.
+SELECT id, VEC_TOTEXT(v) FROM parent FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 4;
+id	VEC_TOTEXT(v)
+5	[5,5,5,5,5]
+4	[4,4,4,4,4]
+3	[3,3,3,3,3]
+20	[2,2,2,2,2]
+DROP TABLE child_cascade;
+
+# 5. Create child table with FK RESTRICT constraint
+CREATE TABLE child_restrict (
+id INT PRIMARY KEY AUTO_INCREMENT,
+parent_id INT,
+data VARCHAR(50),
+FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB;
+INSERT INTO child_restrict(parent_id, data) VALUES (3, 'child of 3');
+INSERT INTO child_restrict(parent_id, data) VALUES (4, 'child of 4');
+SELECT * FROM child_restrict;
+id	parent_id	data
+1	3	child of 3
+2	4	child of 4
+
+# 6. Test RESTRICT - attempt to delete referenced parent (should fail)
+DELETE FROM parent WHERE id = 3;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`child_restrict`, CONSTRAINT `child_restrict_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)
+# Test RESTRICT - attempt to update referenced parent PK (should fail)
+UPDATE parent SET id = 30 WHERE id = 3;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`child_restrict`, CONSTRAINT `child_restrict_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)
+# Verify data unchanged
+SELECT id, VEC_TOTEXT(v) FROM parent;
+id	VEC_TOTEXT(v)
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+5	[5,5,5,5,5]
+20	[2,2,2,2,2]
+SELECT * FROM child_restrict;
+id	parent_id	data
+1	3	child of 3
+2	4	child of 4
+# Delete non-referenced parent should succeed
+DELETE FROM parent WHERE id = 5;
+SELECT id, VEC_TOTEXT(v) FROM parent;
+id	VEC_TOTEXT(v)
+3	[3,3,3,3,3]
+4	[4,4,4,4,4]
+20	[2,2,2,2,2]
+DROP TABLE child_restrict;
+
+# 7. Create child table with FK SET NULL
+CREATE TABLE child_setnull (
+id INT PRIMARY KEY AUTO_INCREMENT,
+parent_id INT,
+data VARCHAR(50),
+FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE SET NULL ON UPDATE SET NULL
+) ENGINE=InnoDB;
+INSERT INTO child_setnull(parent_id, data) VALUES (3, 'child of 3');
+INSERT INTO child_setnull(parent_id, data) VALUES (4, 'child of 4');
+SELECT * FROM child_setnull;
+id	parent_id	data
+1	3	child of 3
+2	4	child of 4
+
+# 8. Test SET NULL - delete parent sets child FK to NULL
+DELETE FROM parent WHERE id = 3;
+SELECT id, VEC_TOTEXT(v) FROM parent;
+id	VEC_TOTEXT(v)
+4	[4,4,4,4,4]
+20	[2,2,2,2,2]
+SELECT * FROM child_setnull;
+id	parent_id	data
+1	NULL	child of 3
+2	4	child of 4
+# Verify vector index still works
+SELECT id, VEC_TOTEXT(v) FROM parent FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[4,4,4,4,4]')) LIMIT 3;
+id	VEC_TOTEXT(v)
+4	[4,4,4,4,4]
+20	[2,2,2,2,2]
+DROP TABLE child_setnull;
+
+# 9. Vector index table as child table scenario
+DROP TABLE parent;
+CREATE TABLE master_table (
+id INT PRIMARY KEY,
+name VARCHAR(50)
+) ENGINE=InnoDB;
+INSERT INTO master_table VALUES (1, 'master1'), (2, 'master2'), (3, 'master3');
+CREATE TABLE vector_child (
+id INT PRIMARY KEY AUTO_INCREMENT,
+master_id INT,
+v VECTOR(5),
+FOREIGN KEY (master_id) REFERENCES master_table(id) ON DELETE CASCADE,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+INSERT INTO vector_child(master_id, v) VALUES (1, VEC_FROMTEXT('[1,2,3,4,5]'));
+INSERT INTO vector_child(master_id, v) VALUES (1, VEC_FROMTEXT('[1,2,3,4,6]'));
+INSERT INTO vector_child(master_id, v) VALUES (2, VEC_FROMTEXT('[2,3,4,5,6]'));
+INSERT INTO vector_child(master_id, v) VALUES (3, VEC_FROMTEXT('[3,4,5,6,7]'));
+SELECT id, master_id, VEC_TOTEXT(v) FROM vector_child;
+id	master_id	VEC_TOTEXT(v)
+1	1	[1,2,3,4,5]
+2	1	[1,2,3,4,6]
+3	2	[2,3,4,5,6]
+4	3	[3,4,5,6,7]
+# ANN query on vector child table
+SELECT id, master_id, VEC_TOTEXT(v) FROM vector_child FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[1,2,3,4,5]')) LIMIT 3;
+id	master_id	VEC_TOTEXT(v)
+1	1	[1,2,3,4,5]
+2	1	[1,2,3,4,6]
+3	2	[2,3,4,5,6]
+
+# 10. Delete master record - child vectors should cascade delete
+DELETE FROM master_table WHERE id = 1;
+SELECT * FROM master_table;
+id	name
+2	master2
+3	master3
+SELECT id, master_id, VEC_TOTEXT(v) FROM vector_child;
+id	master_id	VEC_TOTEXT(v)
+3	2	[2,3,4,5,6]
+4	3	[3,4,5,6,7]
+# Verify vector index still works after cascade delete
+SELECT id, master_id, VEC_TOTEXT(v) FROM vector_child FORCE INDEX(`vi`) 
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,3,4,5,6]')) LIMIT 3;
+id	master_id	VEC_TOTEXT(v)
+3	2	[2,3,4,5,6]
+4	3	[3,4,5,6,7]
+
+# 11. Insert with invalid FK reference (should fail)
+INSERT INTO vector_child(master_id, v) VALUES (999, VEC_FROMTEXT('[9,9,9,9,9]'));
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`vector_child`, CONSTRAINT `vector_child_ibfk_1` FOREIGN KEY (`master_id`) REFERENCES `master_table` (`id`) ON DELETE CASCADE)
+
+# 12. Multi-level foreign key with vector index
+DROP TABLE vector_child;
+DROP TABLE master_table;
+CREATE TABLE level1 (
+id INT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+CREATE TABLE level2 (
+id INT PRIMARY KEY,
+l1_id INT,
+v VECTOR(5),
+FOREIGN KEY (l1_id) REFERENCES level1(id) ON DELETE CASCADE,
+VECTOR INDEX vi(v)
+) ENGINE=InnoDB;
+CREATE TABLE level3 (
+id INT PRIMARY KEY AUTO_INCREMENT,
+l2_id INT,
+FOREIGN KEY (l2_id) REFERENCES level2(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+INSERT INTO level1 VALUES (1, VEC_FROMTEXT('[1,1,1,1,1]'));
+INSERT INTO level1 VALUES (2, VEC_FROMTEXT('[2,2,2,2,2]'));
+INSERT INTO level2 VALUES (10, 1, VEC_FROMTEXT('[10,10,10,10,10]'));
+INSERT INTO level2 VALUES (20, 2, VEC_FROMTEXT('[20,20,20,20,20]'));
+INSERT INTO level3(l2_id) VALUES (10), (20);
+SELECT id, VEC_TOTEXT(v) FROM level1;
+id	VEC_TOTEXT(v)
+1	[1,1,1,1,1]
+2	[2,2,2,2,2]
+SELECT id, l1_id, VEC_TOTEXT(v) FROM level2;
+id	l1_id	VEC_TOTEXT(v)
+10	1	[10,10,10,10,10]
+20	2	[20,20,20,20,20]
+SELECT * FROM level3;
+id	l2_id
+1	10
+2	20
+# Delete from level1 should cascade to level2 and level3
+DELETE FROM level1 WHERE id = 1;
+SELECT id, VEC_TOTEXT(v) FROM level1;
+id	VEC_TOTEXT(v)
+2	[2,2,2,2,2]
+SELECT id, l1_id, VEC_TOTEXT(v) FROM level2;
+id	l1_id	VEC_TOTEXT(v)
+20	2	[20,20,20,20,20]
+SELECT * FROM level3;
+id	l2_id
+2	20
+# Verify vector indexes still work
+SELECT id, VEC_TOTEXT(v) FROM level1 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[2,2,2,2,2]')) LIMIT 1;
+id	VEC_TOTEXT(v)
+2	[2,2,2,2,2]
+SELECT id, VEC_TOTEXT(v) FROM level2 FORCE INDEX(`vi`) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[20,20,20,20,20]')) LIMIT 1;
+id	VEC_TOTEXT(v)
+20	[20,20,20,20,20]
+
+# 13. Cleanup
+DROP TABLE level3;
+DROP TABLE level2;
+DROP TABLE level1;
+SET GLOBAL vidx_disabled = ON;

@@ -30,11 +30,19 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 6/2/1994 Heikki Tuuri
  *******************************************************/
 
+#ifndef btr0btr_h
+#define INNODB_BTR0BTR_IC_STANDALONE
+#include "btr0btr.h"
+#undef INNODB_BTR0BTR_IC_STANDALONE
+#endif /* !btr0btr_h */
 #include "mach0data.h"
 #ifndef UNIV_HOTBACKUP
 #include "mtr0log.h"
 #include "mtr0mtr.h"
 #include "page0zip.h"
+
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 #endif /* !UNIV_HOTBACKUP */
 
 /** NOTE - Changing this from the original number of 50 to 45 as
@@ -180,17 +188,18 @@ static inline void btr_page_set_prev(
   }
 }
 
-static inline page_no_t btr_node_ptr_get_child_page_no(const rec_t *rec,
-                                                       const ulint *offsets) {
+static inline page_no_t btr_node_ptr_get_child_page_no(const Slice *slc) {
   const byte *field;
   ulint len;
   page_no_t page_no;
 
-  ut_ad(!rec_offs_comp(offsets) || rec_get_node_ptr_flag(rec));
+  ut_ad(!rec_offs_comp(slc->offsets()) || rec_get_node_ptr_flag(slc->rec()));
 
   /* The child address is in the last field */
-  field = rec_get_nth_field(nullptr, rec, offsets,
-                            rec_offs_n_fields(offsets) - 1, &len);
+  // field = rec_get_nth_field(nullptr, slc->rec(), slc,
+  // rec_offs_n_fields(slc->offsets()) - 1, &len);
+  field = const_cast<Slice *>(slc)->get_nth_field(
+      nullptr, rec_offs_n_fields(slc->offsets()) - 1, &len);
 
   ut_ad(len == 4);
 

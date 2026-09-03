@@ -1,0 +1,325 @@
+--echo #
+--echo # Test case for EncDB system variables
+--echo #
+
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+call mtr.add_suppression("\\[Warning\\] \\[[^]]*\\] \\[[^]]*\\] Plugin encdb reported: *");
+
+--echo #
+--echo # Setup
+--echo #
+
+--echo # Enable local_infile on server side for load data local infile
+SET GLOBAL local_infile = 1;
+SET GLOBAL column_encryption = on;
+
+create user aurora@'%' identified by '123456';
+grant all privileges on *.* to aurora@'%' with grant option;
+create user aurora2@'%' identified by '123456';
+grant all privileges on *.* to aurora2@'%' with grant option;
+create user newuser@'%' identified by '123456';
+grant all privileges on test.* to newuser@'%';
+create user newuser_mek@'%' identified by '123456';
+grant all privileges on *.* to newuser_mek@'%';
+
+create function encdb_decrypt returns string soname 'encdb_udf.so';
+create function encdb_generate_mek_request returns string soname 'encdb_udf.so';
+
+use test;
+create table t1 (id int, val varchar(50));
+insert into t1 values (1, 'hello'), (2, 'world');
+create table mysql.cipher_text (c0 text, c1 text);
+
+select encdb_rule_op('add','{"name":"rule_all","enabled":true,"meta":{"databases":["test"],"tables":["*"],"columns":["*"]}}');
+select encdb_rule_op('grant','{"fullAccess": ["root"], "expired": "2038-01-18 03:14:07"}');
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+
+connect(conn_aurora, localhost, aurora, 123456, test);
+connect(conn_aurora2, localhost, aurora2, 123456, test);
+connect(conn_newuser_mek, localhost, newuser_mek, 123456, test);
+connection default;
+
+--echo #
+--echo # Scenario 1: System variable value validity
+--echo #
+
+SHOW GLOBAL VARIABLES LIKE 'encdb_default_encryption_algorithm';
+SHOW GLOBAL VARIABLES LIKE 'encdb_default_user_access';
+
+--echo # Test all 8 valid encryption algorithm values
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_GCM';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_ECB';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_CTR';
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_CBC';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_CBC';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_ECB';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_CTR';
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+
+--echo # Test invalid encryption algorithm values
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL encdb_default_encryption_algorithm = 'INVALID';
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL encdb_default_encryption_algorithm = '';
+
+--echo # Test all 3 valid user access values
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+
+--echo # Test invalid user access values
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL encdb_default_user_access = 'INVALID';
+--error ER_WRONG_VALUE_FOR_VAR
+SET GLOBAL encdb_default_user_access = '';
+
+--echo # Restore defaults
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+
+--echo #
+--echo # Scenario 2: Dynamic encryption algorithm change
+--echo #
+
+--echo # Step 1: Confirm default algorithm is SM4_128_GCM
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+
+--echo # Step 2: aurora MEK exchange without specifying algorithm (uses default SM4_128_GCM)
+connection default;
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora"]}');
+
+connection conn_aurora;
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff')));
+
+--echo # Step 3: Verify aurora encryption/decryption is correct (SM4_128_GCM)
+connection default;
+--disable_warnings
+--write_file $MYSQL_TMP_DIR/aurora_sel.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select * from t1;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_sel.sql > $MYSQL_TMP_DIR/enc.txt
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--exec $MYSQL --local-infile=1 --skip-column-names -uroot -e "load data local infile '$MYSQL_TMP_DIR/enc.txt' into table mysql.cipher_text" mysql
+--write_file $MYSQL_TMP_DIR/aurora_dec.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select encdb_decrypt(c0,'aurora'),encdb_decrypt(c1,'aurora') from mysql.cipher_text;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_dec.sql > $MYSQL_TMP_DIR/dec.txt
+--exec $MYSQL --skip-column-names -uroot -e "select * from t1" test > $MYSQL_TMP_DIR/plain.txt
+diff_files $MYSQL_TMP_DIR/dec.txt $MYSQL_TMP_DIR/plain.txt;
+truncate table mysql.cipher_text;
+--enable_warnings
+
+--echo # Step 4: Switch default algorithm to AES_128_GCM
+SET GLOBAL encdb_default_encryption_algorithm = 'AES_128_GCM';
+
+--echo # Step 5: aurora still works correctly after algorithm switch (MEK+nonce re-derives SM4_128_GCM DEK)
+--disable_warnings
+--write_file $MYSQL_TMP_DIR/aurora_sel_after.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select * from t1;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_sel_after.sql > $MYSQL_TMP_DIR/enc_after.txt
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--exec $MYSQL --local-infile=1 --skip-column-names -uroot -e "load data local infile '$MYSQL_TMP_DIR/enc_after.txt' into table mysql.cipher_text" mysql
+--write_file $MYSQL_TMP_DIR/aurora_dec_after.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select encdb_decrypt(c0,'aurora'),encdb_decrypt(c1,'aurora') from mysql.cipher_text;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_dec_after.sql > $MYSQL_TMP_DIR/dec_after.txt
+diff_files $MYSQL_TMP_DIR/dec_after.txt $MYSQL_TMP_DIR/plain.txt;
+truncate table mysql.cipher_text;
+--enable_warnings
+
+--echo # Step 6: aurora2 MEK exchange without specifying algorithm (uses new default AES_128_GCM)
+select encdb_rule_op('grant','{"restrictedAccess": ["aurora2"]}');
+
+connection conn_aurora2;
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'ffeeddccbbaa99887766554433221100')));
+
+--echo # Step 7: Verify aurora2 encryption/decryption is correct (AES_128_GCM)
+connection default;
+--disable_warnings
+--write_file $MYSQL_TMP_DIR/aurora2_sel.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'ffeeddccbbaa99887766554433221100'))) INTO @mek_prov;
+select * from t1;
+EOF
+--exec $MYSQL --skip-column-names -uaurora2 -p123456 test < $MYSQL_TMP_DIR/aurora2_sel.sql > $MYSQL_TMP_DIR/enc2.txt
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--exec $MYSQL --local-infile=1 --skip-column-names -uroot -e "load data local infile '$MYSQL_TMP_DIR/enc2.txt' into table mysql.cipher_text" mysql
+--write_file $MYSQL_TMP_DIR/aurora2_dec.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'ffeeddccbbaa99887766554433221100'))) INTO @mek_prov;
+select encdb_decrypt(c0,'aurora2'),encdb_decrypt(c1,'aurora2') from mysql.cipher_text;
+EOF
+--exec $MYSQL --skip-column-names -uaurora2 -p123456 test < $MYSQL_TMP_DIR/aurora2_dec.sql > $MYSQL_TMP_DIR/dec2.txt
+diff_files $MYSQL_TMP_DIR/dec2.txt $MYSQL_TMP_DIR/plain.txt;
+truncate table mysql.cipher_text;
+--enable_warnings
+
+--echo #
+--echo # Scenario 3: Default user access — ungrant users rely entirely on encdb_default_user_access;
+--echo # MEK exchange only determines encryption algorithm, not permission level.
+--echo #
+
+--echo # Baseline: root plaintext for comparison
+--exec $MYSQL --skip-column-names -uroot -e "select * from t1" test > $MYSQL_TMP_DIR/root.txt
+
+--echo #
+--echo # 3a: Without MEK (newuser)
+--echo #   NO_ACCESS / RESTRICTED both return garbled data (no key to decrypt);
+--echo #   FULL_ACCESS returns plaintext (server skips encryption).
+--echo #
+
+--echo # NO_ACCESS: random bytes
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+--exec $MYSQL --skip-column-names -unewuser -p123456 -e "select * from t1" test > $MYSQL_TMP_DIR/s3a_no.txt
+--error 1
+--exec diff $MYSQL_TMP_DIR/s3a_no.txt $MYSQL_TMP_DIR/root.txt > /dev/null 2>&1
+
+--echo # RESTRICTED_ACCESS: newuser has no MEK, CC_MISS causes query failure
+SET GLOBAL encdb_cc_miss_error = ON;
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+--error 1
+--exec $MYSQL --skip-column-names -unewuser -p123456 -e "select * from t1" test > $MYSQL_TMP_DIR/s3a_restricted.txt
+SET GLOBAL encdb_cc_miss_error = OFF;
+
+--echo # FULL_ACCESS: plaintext — server skips encryption
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+--exec $MYSQL --skip-column-names -unewuser -p123456 -e "select * from t1" test > $MYSQL_TMP_DIR/s3a_full.txt
+diff_files $MYSQL_TMP_DIR/s3a_full.txt $MYSQL_TMP_DIR/root.txt;
+
+--echo #
+--echo # 3b: With MEK (newuser_mek)
+--echo #   NO_ACCESS still returns garbled data (MEK irrelevant when access denied);
+--echo #   RESTRICTED returns encrypted ciphertext, decryptable via encdb_decrypt (key diff from 3a);
+--echo #   FULL_ACCESS returns plaintext (same as 3a).
+--echo #
+
+--echo # Exchange MEK under RESTRICTED_ACCESS
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+connection conn_newuser_mek;
+select from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'aabbccddeeff00112233445566778899')));
+connection default;
+
+--echo # NO_ACCESS: random bytes — MEK irrelevant when access denied
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+--exec $MYSQL --skip-column-names -unewuser_mek -p123456 -e "select * from t1" test > $MYSQL_TMP_DIR/s3b_no.txt
+--error 1
+--exec diff $MYSQL_TMP_DIR/s3b_no.txt $MYSQL_TMP_DIR/root.txt > /dev/null 2>&1
+
+--echo # RESTRICTED_ACCESS: newuser_mek has MEK; encrypted data is decryptable via encdb_decrypt
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+--disable_warnings
+--write_file $MYSQL_TMP_DIR/newuser_mek_sel.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'aabbccddeeff00112233445566778899'))) INTO @mek_prov;
+select * from t1;
+EOF
+--exec $MYSQL --skip-column-names -unewuser_mek -p123456 test < $MYSQL_TMP_DIR/newuser_mek_sel.sql > $MYSQL_TMP_DIR/s3b_restricted.txt
+--error 1
+--exec diff $MYSQL_TMP_DIR/s3b_restricted.txt $MYSQL_TMP_DIR/root.txt > /dev/null 2>&1
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--exec $MYSQL --local-infile=1 --skip-column-names -uroot -e "load data local infile '$MYSQL_TMP_DIR/s3b_restricted.txt' into table mysql.cipher_text" mysql
+--write_file $MYSQL_TMP_DIR/newuser_mek_dec.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), 'aabbccddeeff00112233445566778899'))) INTO @mek_prov;
+select encdb_decrypt(c0,'newuser_mek'),encdb_decrypt(c1,'newuser_mek') from mysql.cipher_text;
+EOF
+--exec $MYSQL --skip-column-names -unewuser_mek -p123456 test < $MYSQL_TMP_DIR/newuser_mek_dec.sql > $MYSQL_TMP_DIR/s3b_dec.txt
+diff_files $MYSQL_TMP_DIR/s3b_dec.txt $MYSQL_TMP_DIR/root.txt;
+truncate table mysql.cipher_text;
+--enable_warnings
+
+--echo # FULL_ACCESS: plaintext — no encryption needed
+SET GLOBAL encdb_default_user_access = 'fullAccess';
+--exec $MYSQL --skip-column-names -unewuser_mek -p123456 -e "select * from t1" test > $MYSQL_TMP_DIR/s3b_full.txt
+diff_files $MYSQL_TMP_DIR/s3b_full.txt $MYSQL_TMP_DIR/root.txt;
+
+--echo # Verify: explicit grant (aurora RESTRICTED_ACCESS) unaffected by default=FULL_ACCESS
+--disable_warnings
+--write_file $MYSQL_TMP_DIR/aurora_check_sel.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select * from t1;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_check_sel.sql > $MYSQL_TMP_DIR/aurora_check.txt
+--error 1
+--exec diff $MYSQL_TMP_DIR/aurora_check.txt $MYSQL_TMP_DIR/root.txt > /dev/null 2>&1
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--exec $MYSQL --local-infile=1 --skip-column-names -uroot -e "load data local infile '$MYSQL_TMP_DIR/aurora_check.txt' into table mysql.cipher_text" mysql
+--write_file $MYSQL_TMP_DIR/aurora_check_dec.sql
+SELECT from_base64(encdb_process_message(encdb_generate_mek_request(encdb_process_message('{"request_type":0, "version":"1.2.15"}'), '00112233445566778899aabbccddeeff'))) INTO @mek_prov;
+select encdb_decrypt(c0,'aurora'),encdb_decrypt(c1,'aurora') from mysql.cipher_text;
+EOF
+--exec $MYSQL --skip-column-names -uaurora -p123456 test < $MYSQL_TMP_DIR/aurora_check_dec.sql > $MYSQL_TMP_DIR/aurora_dec.txt
+diff_files $MYSQL_TMP_DIR/aurora_dec.txt $MYSQL_TMP_DIR/root.txt;
+truncate table mysql.cipher_text;
+--enable_warnings
+
+--echo #
+--echo # Scenario 4: RESTRICTED_ACCESS user without MEK_PROVISION gets explicit error on SELECT
+--echo # Verifies enc_aux.cpp getCCWithAccsType() re-throws CC_MISS rather than falling
+--echo # back to DUMMY CC, ensuring a missing key produces an error, not silent corruption.
+--echo #
+connection default;
+SET GLOBAL column_encryption = ON;
+SET GLOBAL encdb_cc_miss_error = ON;
+# Reset to noneAccess so aurora's explicit restrictedAccess grant takes effect for the encrypt hook.
+SET GLOBAL encdb_default_user_access = 'noneAccess';
+connect(conn_aurora_noprov, localhost, aurora, 123456, test);
+connection conn_aurora_noprov;
+--error ER_ENCDB_HOOK_ERROR
+SELECT * FROM t1;
+disconnect conn_aurora_noprov;
+connection default;
+SET GLOBAL encdb_cc_miss_error = OFF;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+disconnect conn_aurora;
+disconnect conn_aurora2;
+disconnect conn_newuser_mek;
+connection default;
+
+select encdb_rule_op('delete','"rule_all"');
+delete from mysql.encdb_auth_users;
+
+SET GLOBAL encdb_default_encryption_algorithm = 'SM4_128_GCM';
+SET GLOBAL encdb_default_user_access = 'restrictedAccess';
+drop table t1;
+drop table mysql.cipher_text;
+drop function encdb_decrypt;
+drop function encdb_generate_mek_request;
+drop user aurora@'%';
+drop user aurora2@'%';
+drop user newuser@'%';
+drop user newuser_mek@'%';
+set global column_encryption = on;
+
+--remove_file $MYSQL_TMP_DIR/enc.txt
+--remove_file $MYSQL_TMP_DIR/dec.txt
+--remove_file $MYSQL_TMP_DIR/plain.txt
+--remove_file $MYSQL_TMP_DIR/enc_after.txt
+--remove_file $MYSQL_TMP_DIR/dec_after.txt
+--remove_file $MYSQL_TMP_DIR/enc2.txt
+--remove_file $MYSQL_TMP_DIR/dec2.txt
+--remove_file $MYSQL_TMP_DIR/root.txt
+--remove_file $MYSQL_TMP_DIR/s3a_no.txt
+--remove_file $MYSQL_TMP_DIR/s3a_restricted.txt
+--remove_file $MYSQL_TMP_DIR/s3a_full.txt
+--remove_file $MYSQL_TMP_DIR/s3b_restricted.txt
+--remove_file $MYSQL_TMP_DIR/s3b_dec.txt
+--remove_file $MYSQL_TMP_DIR/s3b_no.txt
+--remove_file $MYSQL_TMP_DIR/s3b_full.txt
+--remove_file $MYSQL_TMP_DIR/aurora_check.txt
+--remove_file $MYSQL_TMP_DIR/aurora_dec.txt
+--remove_file $MYSQL_TMP_DIR/aurora_sel.sql
+--remove_file $MYSQL_TMP_DIR/aurora_sel_after.sql
+--remove_file $MYSQL_TMP_DIR/aurora2_sel.sql
+--remove_file $MYSQL_TMP_DIR/newuser_mek_sel.sql
+--remove_file $MYSQL_TMP_DIR/aurora_check_sel.sql
+--remove_file $MYSQL_TMP_DIR/aurora_dec.sql
+--remove_file $MYSQL_TMP_DIR/aurora_dec_after.sql
+--remove_file $MYSQL_TMP_DIR/aurora2_dec.sql
+--remove_file $MYSQL_TMP_DIR/newuser_mek_dec.sql
+--remove_file $MYSQL_TMP_DIR/aurora_check_dec.sql

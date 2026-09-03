@@ -1,0 +1,79 @@
+SET GLOBAL vidx_disabled = OFF;
+SET autocommit = ON;
+CREATE TABLE t1 (
+id INT NOT NULL PRIMARY KEY,
+k INT,
+c VARCHAR(50),
+v VECTOR(3),
+VECTOR INDEX vi(v),
+KEY k_idx(k)
+) ENGINE = InnoDB;
+INSERT INTO t1(id, k, c, v) VALUES
+(1, 100, 'one',   VEC_FROMTEXT('[1,1,1]')),
+(2, 200, 'two',   VEC_FROMTEXT('[2,2,2]')),
+(3, 300, 'three', NULL);
+
+##############################################
+# 1. UPDATE on non-vector column, vector and  #
+#    PK unchanged — must SKIP vidx entirely.  #
+##############################################
+UPDATE t1 SET c = 'one_v2' WHERE id = 1;
+UPDATE t1 SET c = 'two_v2' WHERE id = 2;
+update_skipped_delta_eq_2=1
+no_attachable_for_skipped_update=1
+
+##############################################
+# 2. UPDATE NULL -> NULL — early continue,    #
+#    must NOT bump update_skipped (it's a     #
+#    different code path).                   #
+##############################################
+UPDATE t1 SET c = 'three_v2' WHERE id = 3;
+null_to_null_no_skip_bump=1
+
+##############################################
+# 3. UPDATE non-NULL -> NULL — INVALIDATE    #
+#    only (no INSERT, no skip).              #
+##############################################
+UPDATE t1 SET v = NULL WHERE id = 1;
+invalidate_only_delta=1
+no_insert_for_to_null=1
+no_skip_for_to_null=1
+
+##############################################
+# 4. UPDATE NULL -> non-NULL — INSERT only.  #
+##############################################
+UPDATE t1 SET v = VEC_FROMTEXT('[3,3,3]') WHERE id = 3;
+insert_only_delta=1
+no_skip_for_from_null=1
+
+##############################################
+# 5. UPDATE non-NULL, vector changed —        #
+#    INVALIDATE + INSERT (no skip).          #
+##############################################
+UPDATE t1 SET v = VEC_FROMTEXT('[22,22,22]') WHERE id = 2;
+no_skip_for_v_changed=1
+two_attachables_for_v_changed=1
+
+##############################################
+# 6. UPDATE non-NULL, PK changed (vector     #
+#    unchanged) — INVALIDATE + INSERT (the   #
+#    sixth contract row).  Skip would break  #
+#    aux-table TREF identity.                #
+##############################################
+UPDATE t1 SET id = 99 WHERE id = 2;
+no_skip_for_pk_changed=1
+two_attachables_for_pk_changed=1
+
+##############################################
+# 7. ANN sanity — exact-hit lookup for the   #
+#    query vector itself (id=3 has v =       #
+#    [3,3,3]).  LIMIT 1 avoids the top-K     #
+#    tail flakiness that depends on cache /  #
+#    graph cache state across the mixed      #
+#    UPDATE sequence above.                  #
+##############################################
+SELECT id FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[3,3,3]')) LIMIT 1;
+id
+3
+DROP TABLE t1;
+SET GLOBAL vidx_disabled = ON;

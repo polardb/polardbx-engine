@@ -34,6 +34,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #define lizard0row0bamboo_h
 
 #include "que0que.h"
+#include "rem0types.h"
 
 namespace lizard {
 
@@ -62,9 +63,8 @@ extern void row_upd_rec_write_bamboo(byte *ptr, const scn_t scn,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-extern void row_upd_rec_write_bamboo(rec_t *rec, const dict_index_t *index,
-                                     const ulint *offsets, const scn_t scn,
-                                     const undo_ptr_t uba);
+extern void row_upd_rec_write_bamboo(Slice *slc, const dict_index_t *index,
+                                     const scn_t scn, const undo_ptr_t uba);
 
 /**
   Modify bamboo layout fields of record. It will handle compress pages.
@@ -74,9 +74,9 @@ extern void row_upd_rec_write_bamboo(rec_t *rec, const dict_index_t *index,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_desc  txn description
 */
-extern void row_upd_rec_bamboo_fields_low(rec_t *rec, page_zip_des_t *page_zip,
+extern void row_upd_rec_bamboo_fields_low(Slice *slc, page_zip_des_t *page_zip,
                                           const dict_index_t *index,
-                                          const ulint *offsets, const scn_t scn,
+                                          const scn_t scn,
                                           const undo_ptr_t uba);
 /**
   Updates bamboo layout field in a panda index record when
@@ -87,10 +87,9 @@ extern void row_upd_rec_bamboo_fields_low(rec_t *rec, page_zip_des_t *page_zip,
   @param[in]      offsets   rec_get_offsets(rec, idnex)
   @param[in]      txn_rec   scn/uba info
 */
-extern void row_upd_rec_bamboo_fields_in_cleanout(rec_t *rec,
+extern void row_upd_rec_bamboo_fields_in_cleanout(Slice *slc,
                                                   page_zip_des_t *page_zip,
                                                   const dict_index_t *index,
-                                                  const ulint *offsets,
                                                   const txn_rec_t *txn_rec);
 
 /**
@@ -101,8 +100,8 @@ extern void row_upd_rec_bamboo_fields_in_cleanout(rec_t *rec,
   @param[in]      offsets     rec_get_offsets(rec, index)
   @param[out]     txn_rec     lizard transaction attributes
 */
-extern void row_get_bamboo_txn_rec(const rec_t *rec, const dict_index_t *index,
-                                   const ulint *offsets, txn_rec_t *txn_rec);
+extern void row_get_bamboo_txn_rec(const Slice *slc, const dict_index_t *index,
+                                   txn_rec_t *txn_rec);
 /**
  * Bamboo Layout row has been cleanout.
   @param[in]      rec       record
@@ -111,8 +110,8 @@ extern void row_get_bamboo_txn_rec(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      cleanout
 */
-extern bool row_bamboo_has_cleanout(const rec_t *rec, const dict_index_t *index,
-                                    const ulint *offsets);
+extern bool row_bamboo_has_cleanout(const Slice *slc,
+                                    const dict_index_t *index);
 /**
   Debug the undo_ptr and scn in record is matched.
   @param[in]      rec       record
@@ -121,8 +120,7 @@ extern bool row_bamboo_has_cleanout(const rec_t *rec, const dict_index_t *index,
 
   @retval         true      Success
 */
-extern bool row_bamboo_is_valid(const rec_t *rec, const dict_index_t *index,
-                                const ulint *offsets);
+extern bool row_bamboo_is_valid(const Slice *slc, const dict_index_t *index);
 
 /*=============================================================================*/
 /* Bamboo Layout record write/parse redo */
@@ -164,9 +162,11 @@ byte *row_upd_parse_bamboo_vals(const byte *ptr, const byte *end_ptr,
   @param[in]      scn       SCN
   @param[in]      undo_ptr  UBA
 */
-extern void row_upd_rec_bamboo_fields_in_recovery(
-    rec_t *rec, page_zip_des_t *page_zip, const dict_index_t *index, ulint pos,
-    const ulint *offsets, const scn_t scn, const undo_ptr_t undo_ptr);
+extern void row_upd_rec_bamboo_fields_in_recovery(Slice *slc,
+                                                  page_zip_des_t *page_zip,
+                                                  const dict_index_t *index,
+                                                  ulint pos, const scn_t scn,
+                                                  const undo_ptr_t undo_ptr);
 
 }  // namespace lizard
 #endif

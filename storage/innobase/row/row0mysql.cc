@@ -43,7 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <vector>
 
 #include "btr0sea.h"
-#include "dd/lizard_policy_types.h"
+#include "dd/komodo0dd0policy0types.h"
 #include "ddl0ddl.h"
 #include "dict0boot.h"
 #include "dict0crea.h"
@@ -85,8 +85,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "my_io.h"
 
-#include "lizard0dict.h"
+#include "sql/komodo0handler0types.h"
+
+#include "lizard0dd0policy.h"
+#include "lizard0dict0dd.h"
+#include "lizard0dict0dict.h"
 #include "lizard0gp.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
 
 static const char *MODIFICATIONS_NOT_ALLOWED_MSG_FORCE_RECOVERY =
     "innodb_force_recovery is on. We do not allow database modifications"
@@ -959,6 +965,8 @@ row_prebuilt_t *row_create_prebuilt(
 
   prebuilt->m_asof_query.release_vision();
 
+  prebuilt->guess_ctx.reset();
+
   return prebuilt;
 }
 
@@ -1024,6 +1032,8 @@ void row_prebuilt_free(row_prebuilt_t *prebuilt, bool dict_locked) {
       byte *row = ptr;
       ut_a(row == prebuilt->fetch_cache[i]);
       ptr += prebuilt->mysql_row_len;
+
+      ptr += sizeof(komodo::gpp_no_t); 
 
       ulint magic2 = mach_read_from_4(ptr);
       ut_a(magic2 == ROW_PREBUILT_FETCH_MAGIC_N);
@@ -1323,27 +1333,24 @@ static dberr_t row_explicit_rollback(dict_index_t *index, const dtuple_t *entry,
                                      const txn_layout_t &layout) {
   btr_cur_t cursor;
   ulint flags;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets;
-  mem_heap_t *heap = nullptr;
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
   dberr_t err;
 
-  rec_offs_init(offsets_);
   flags = BTR_NO_LOCKING_FLAG | BTR_NO_UNDO_LOG_FLAG;
 
   btr_cur_search_to_nth_level_with_no_latch(index, 0, entry, PAGE_CUR_LE,
                                             &cursor, __FILE__, __LINE__, mtr);
 
-  offsets = rec_get_offsets(btr_cur_get_rec(&cursor), index, offsets_,
-                            ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+  slc = sctx.get_offsets(btr_cur_get_reg(&cursor), index, ULINT_UNDEFINED);
 
   ut_ad(layout == TL_NONE && index->table->is_intrinsic());
   if (index->is_clustered()) {
-    err = btr_cur_del_mark_set_clust_rec(flags, layout, btr_cur_get_block(&cursor),
-                                         btr_cur_get_rec(&cursor), index,
-                                         offsets, thr, entry, mtr);
+    err = btr_cur_del_mark_set_clust_rec(
+        flags, layout, btr_cur_get_block(&cursor), slc, index, thr, entry, mtr);
   } else {
-    err = btr_cur_del_mark_set_sec_rec(flags, layout, &cursor, true, thr, mtr);
+    err = btr_cur_del_mark_set_sec_rec_func(flags, layout, &cursor, true, thr,
+                                            thr_get_trx(thr)->id, mtr);
   }
   ut_ad(err == DB_SUCCESS);
 
@@ -1353,10 +1360,6 @@ static dberr_t row_explicit_rollback(dict_index_t *index, const dtuple_t *entry,
   if (mlog_open(mtr, 0, log_ptr)) {
     ut_d(ut_error);
     ut_o(mlog_close(mtr, log_ptr));
-  }
-
-  if (heap != nullptr) {
-    mem_heap_free(heap);
   }
 
   return (err);
@@ -1472,7 +1475,7 @@ static dberr_t row_insert_for_mysql_using_cursor(const byte *mysql_rec,
   /* Step-3: Append row-id index is not unique. */
   dict_index_t *clust_index = node->table->first_index();
 
-  assert_lizard_dict_table_check(node->table);
+  ut_ad(lizard::dict_table_check_valid(node->table));
 
   if (!dict_index_is_unique(clust_index)) {
     dict_sys_write_row_id(node->row_id_buf,
@@ -1569,7 +1572,7 @@ static dberr_t row_insert_for_mysql_using_ins_graph(const byte *mysql_rec,
   ut_a(prebuilt->magic_n == ROW_PREBUILT_ALLOCATED);
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
 
-  assert_lizard_dict_table_check(prebuilt->table);
+  ut_ad(lizard::dict_table_check_valid(prebuilt->table));
 
   if (dict_table_is_discarded(prebuilt->table)) {
     ib::error(ER_IB_MSG_976)
@@ -1744,6 +1747,41 @@ run_again:
   just an estimate anyway) than protecting the following code
   with a latch. */
   dict_table_n_rows_inc(table);
+
+  /* vidx: Sync the newly assigned DB_ROW_ID to prebuilt->row_id so that
+     the subsequent Vector Index insertion can obtain a correct tref.
+
+     Call flow that makes this necessary:
+       ha_write_row()                          [sql/handler.cc]
+         write_row()                           [ha_innodb.cc]
+           row_insert_for_mysql_using_ins_graph()  <-- we are here
+             INS_NODE_ALLOC_ROW_ID: dict_sys_write_row_id(node->row_id_buf, ...)
+             ... INSERT executes ...
+             prebuilt->row_id = node->row_id_buf   <-- THIS PATCH
+         hlindexes_on_insert()                 [sql/vidx/vidx_index.cc]
+           mhnsw_insert()                      [sql/vidx/vidx_hnsw.cc]
+             table->file->position()           [ha_innodb.cc]
+               memcpy(ref, m_prebuilt->row_id) <-- reads prebuilt->row_id
+
+     Why prebuilt->row_id is otherwise stale for INSERT:
+       prebuilt->row_id is normally maintained by
+       row_sel_store_row_id_to_prebuilt() in the SELECT path.  A plain
+       INSERT has no preceding read, so prebuilt->row_id still holds
+       whatever value was left by the last SELECT (or is zero-initialized
+       if no SELECT has ever run on this handle).
+
+     Without this patch:
+       position() returns the wrong row reference; mhnsw_insert() stores
+       it as tref in the HNSW graph table, causing ANN queries to retrieve
+       the wrong rows or crash in ha_rnd_pos().
+
+     This fix applies only to tables without a user-defined primary key
+     (clust_index_was_generated == true), because tables with an explicit
+     PK use the PK value — not prebuilt->row_id — as the row reference. 
+  */
+  if (prebuilt->clust_index_was_generated) {
+    ut_memcpy(prebuilt->row_id, node->row_id_buf, DATA_ROW_ID_LEN);
+  }
 
   row_update_statistics_if_needed(table);
   trx->op_info = "";
@@ -1968,11 +2006,10 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
   dict_table_t *table = node->table;
   mem_heap_t *heap = node->heap;
   dtuple_t *entry = node->row;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   ut_ad(table->is_intrinsic());
-  rec_offs_init(offsets_);
   mtr_start(&mtr);
   mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
   btr_pcur_t pcur;
@@ -1984,27 +2021,24 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
   pcur.open(index, 0, entry, PAGE_CUR_LE, BTR_MODIFY_LEAF, &mtr,
             UT_LOCATION_HERE);
 
-  rec_t *rec = pcur.get_rec();
+  slc = sctx.get_offsets(pcur.get_reg(), index, ULINT_UNDEFINED);
 
-  ut_ad(!page_rec_is_infimum(rec));
-  ut_ad(!page_rec_is_supremum(rec));
+  ut_ad(!page_rec_is_infimum(slc->rec()));
+  ut_ad(!page_rec_is_supremum(slc->rec()));
 
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-
-  ut_ad(!cmp_dtuple_rec(entry, rec, index, offsets));
-  ut_ad(!rec_get_deleted_flag(rec, dict_table_is_comp(index->table)));
+  ut_ad(!cmp_dtuple_rec(entry, index, slc));
+  ut_ad(!rec_get_deleted_flag(slc->rec(), dict_table_is_comp(index->table)));
   ut_ad(pcur.get_block()->made_dirty_with_no_latch);
 
   bool size_changes =
-      row_upd_changes_field_size_or_external(index, offsets, node->update);
+      row_upd_changes_field_size_or_external(index, slc, node->update);
 
   if (size_changes) {
     mtr_commit(&mtr);
     return (DB_FAIL);
   }
 
-  row_upd_rec_in_place(rec, index, offsets, node->update, nullptr);
+  row_upd_rec_in_place(slc, index, node->update, nullptr);
 
   /* Set the changed pages as modified, so that if the page is
   evicted from the buffer pool it is flushed and we don't lose
@@ -2050,16 +2084,13 @@ static dberr_t row_delete_for_mysql_using_cursor(const upd_node_t *node,
               UT_LOCATION_HERE);
 
 #ifdef UNIV_DEBUG
-    ulint offsets_[REC_OFFS_NORMAL_SIZE];
-    ulint *offsets = offsets_;
-    rec_offs_init(offsets_);
+    Slice_ctx sctx;
+    Slice *slc = nullptr;
 
-    offsets =
-        rec_get_offsets(btr_cur_get_rec(pcur.get_btr_cur()), index, offsets,
-                        ULINT_UNDEFINED, UT_LOCATION_HERE, &heap);
+    slc = sctx.get_offsets(btr_cur_get_reg(pcur.get_btr_cur()), index,
+                           ULINT_UNDEFINED);
 
-    ut_ad(!cmp_dtuple_rec(entry, btr_cur_get_rec(pcur.get_btr_cur()), index,
-                          offsets));
+    ut_ad(!cmp_dtuple_rec(entry, index, slc));
 #endif /* UNIV_DEBUG */
 
     ut_ad(!rec_get_deleted_flag(btr_cur_get_rec(pcur.get_btr_cur()),
@@ -2333,7 +2364,7 @@ static dberr_t row_update_for_mysql_using_upd_graph(const byte *mysql_rec,
   ut_a(prebuilt->magic_n2 == ROW_PREBUILT_ALLOCATED);
   UT_NOT_USED(mysql_rec);
 
-  assert_lizard_dict_table_check(table);
+  ut_ad(lizard::dict_table_check_valid(table));
 
   if (prebuilt->table->ibd_file_missing) {
     ib::error(ER_IB_MSG_984)
@@ -2530,23 +2561,41 @@ void row_delete_all_rows(dict_table_t *table) {
   Note: This is ddl action even though delete all rows is
   DML action. Any error during this action is ir-reversible. */
   for (auto index : table->indexes) {
+    ut_ad(index->disable_ahi);
     ut_ad(index->space == table->space);
     const page_id_t root(index->space, index->page_no());
-    btr_free(root, page_size);
+    btr_free(root, page_size, /*ahi=*/false);
 
     mtr_t mtr;
 
     mtr.start();
     mtr.set_log_mode(MTR_LOG_NO_REDO);
     /* TODO: var_hint */
-    page_type_t expected_page_type = index->page_type() == FIL_PAGE_INDEX_PANDA
-                                         ? FIL_PAGE_INDEX_PANDA
-                                         : FIL_PAGE_TYPE_UNUSED;
+    page_type_t expected_page_type = FIL_PAGE_TYPE_UNUSED;
+    switch (index->page_type()) {
+      case FIL_PAGE_INDEX_PANDA:
+        expected_page_type = FIL_PAGE_INDEX_PANDA;
+        break;
+      case FIL_PAGE_INDEX_HIPPO:
+        expected_page_type = FIL_PAGE_INDEX_HIPPO;
+        break;
+      case FIL_PAGE_INDEX_SPC:
+        expected_page_type = FIL_PAGE_INDEX_SPC;
+        break;
+      default:
+        ut_ad(index->page_type() == FIL_PAGE_INDEX);
+        expected_page_type = FIL_PAGE_TYPE_UNUSED;
+        break;
+    }
+
     auto root_page = btr_create(index->type, index->space, index->id, index,
                                 expected_page_type, &mtr);
     ut_ad(root_page.page_no != FIL_NULL);
     ut_ad(root_page.page_type == index->page_type());
-    index->root = root_page;
+    index->set_root(root_page);
+    ut_ad(index->pd_capacity ==
+          lizard::dict_index_determine_pd_capacity(index));
+
     mtr.commit();
   }
 }
@@ -2601,12 +2650,13 @@ void row_prebuilt_t::try_unlock(bool has_latches_on_recs) {
           new_rec_lock[row_prebuilt_t::LOCK_CLUST_PCUR] ? clust_pcur : pcur;
       const dict_index_t *const index = the_pcur->get_btr_cur()->index;
       if (index->is_clustered()) {
-        const rec_t *const rec = the_pcur->get_rec();
+        const creg_t reg = the_pcur->get_creg();
         const trx_id_t rec_trx_id =
             index->trx_id_offset
-                ? trx_read_trx_id(rec + index->trx_id_offset)
-                : row_get_rec_trx_id(rec, index,
-                                     Rec_offsets().compute(rec, index));
+                ? trx_read_trx_id(reg.rec + index->trx_id_offset)
+                : row_get_rec_trx_id(
+                      Slice_ctx().get_offsets(reg, index, ULINT_UNDEFINED),
+                      index);
         ut_ad(rec_trx_id != trx->id);
       }
     }
@@ -2790,7 +2840,7 @@ dberr_t row_create_table_for_mysql(dict_table_t *&table,
                                    const char *compression,
                                    const HA_CREATE_INFO *create_info,
                                    trx_t *trx, mem_heap_t *heap,
-                                   const lizard::Ha_table_hint *table_hint,
+                                   const komodo::Dict_table_hint *table_hint,
                                    const dd::Table *old_dd_tab) {
   dberr_t err;
 
@@ -2830,8 +2880,8 @@ dberr_t row_create_table_for_mysql(dict_table_t *&table,
     return err;
   }
 
-  lizard::dd_fill_dict_table_fba(
-      lizard::ha_ddl_create_table_policy(table_hint, table, old_dd_tab), table);
+  lizard::dd_table_fill_fba(
+      lizard::ha_ddl_invoke_table_policy(table_hint, table, old_dd_tab), table);
 
   bool free_heap = false;
   if (heap == nullptr) {
@@ -2951,8 +3001,8 @@ dberr_t row_create_index_for_mysql(
                                              index columns, which are
                                              then checked for not being too
                                              large. */
-    const lizard::Ha_index_hint *index_hint, /*!< in: ddl index hints */
-    const lizard::Ha_table_hint *table_hint, /*!< in: ddl table hints */
+    const komodo::Dict_index_hint *index_hint, /*!< in: ddl index hints */
+    const komodo::Dict_table_hint *table_hint, /*!< in: ddl table hints */
     dict_table_t *handler /*!< in/out: table handler. */) {
   dberr_t err;
   ulint i;
@@ -3007,8 +3057,8 @@ dberr_t row_create_index_for_mysql(
   trx_set_dict_operation(trx, TRX_DICT_OP_TABLE);
 
   page_type_t expected_page_type;
-  lizard::dd_fill_dict_index_format(
-      lizard::ha_ddl_create_index_policy(index_hint, table, index), table,
+  lizard::dd_index_fill_format(
+      lizard::ha_ddl_invoke_index_policy(index_hint, table, index), table,
       index, &expected_page_type);
 
   /* For temp-table we avoid insertion into SYSTEM TABLES to
@@ -4085,11 +4135,17 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
   for (dict_index_t *index = table->first_index(); index != nullptr;
        index = index->next()) {
     page_no_t page;
+    page_type_t page_type;
 
     rw_lock_x_lock(dict_index_get_lock(index), UT_LOCATION_HERE);
     page = index->page_no();
+    page_type = index->page_type();
     /* Mark the index unusable. */
-    index->root = PAGE_MARK_NULL;
+    /* Revision:
+       Keep page type and pd capacity because it is still be used for parse SPC
+       record */
+    index->set_root({FIL_NULL, page_type});
+    // index->set_pd_capacity(0);
     rw_lock_x_unlock(dict_index_get_lock(index));
 
     if (table->is_temporary()) {
@@ -4453,6 +4509,8 @@ dberr_t row_mysql_parallel_select_count_star(
 
   for (auto index : indexes) {
     Parallel_reader::Config config(FULL_SCAN, index);
+    config.m_is_count_star_parallel_scan =
+        !lizard::opt_count_star_cleanout_disable;
 
     config.m_ptr_n_rows_read_del_mark = &n_rows_read_del_mark;
 
@@ -4541,7 +4599,7 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
   config.m_ptr_n_rows_read_del_mark = &n_rows_read_del_mark;
 
   auto err = reader.add_scan(trx, config, [&](const Parallel_reader::Ctx *ctx) {
-    const auto rec = ctx->m_rec;
+    // const auto rec = ctx->m_rec;
     const auto block = ctx->m_block;
     const auto id = ctx->thread_id();
 
@@ -4557,13 +4615,14 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
 
     auto prev_tuple = prev_tuples[id];
 
-    auto offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                                   UT_LOCATION_HERE, &heap);
+    Slice_ctx sctx;
+    Slice *slc = nullptr;
+    slc = sctx.get_offsets(ctx->m_slc->reg(), index, ULINT_UNDEFINED);
 
     if (prev_tuple != nullptr) {
       ulint matched_fields = 0;
 
-      auto cmp = prev_tuple->compare(rec, index, offsets, &matched_fields);
+      auto cmp = prev_tuple->compare(index, slc, &matched_fields);
 
       /* In a unique secondary index we allow equal key values if
       they contain SQL NULLs */
@@ -4586,7 +4645,7 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
         ib::error(ER_IB_ERR_INDEX_RECORDS_WRONG_ORDER)
             << "Index records in a wrong order in " << index->name
             << " of table " << index->table->name << ": " << *prev_tuple << ", "
-            << rec_offsets_print(rec, offsets);
+            << rec_offsets_print(slc);
         /* Continue reading */
       } else if (dict_index_is_unique(index) && !contains_null &&
                  matched_fields >=
@@ -4596,19 +4655,23 @@ static dberr_t parallel_check_table(trx_t *trx, dict_index_t *index,
         ib::error(ER_IB_ERR_INDEX_DUPLICATE_KEY)
             << "Duplicate key in " << index->name << " of table "
             << index->table->name << ": " << *prev_tuple << ", "
-            << rec_offsets_print(rec, offsets);
+            << rec_offsets_print(slc);
       }
     }
 
     if (prev_blocks[id] != block || prev_blocks[id] == nullptr) {
       mem_heap_empty(heap);
-      offsets = rec_get_offsets(rec, index, nullptr, ULINT_UNDEFINED,
-                                UT_LOCATION_HERE, &heap);
+
+      /** Empty possible heap in slice context. */
+      slc = sctx.reset_slice();
+
+      slc = sctx.get_offsets(ctx->m_slc->reg(), index, ULINT_UNDEFINED);
 
       prev_blocks[id] = block;
     }
 
-    prev_tuples[id] = row_rec_to_index_entry(rec, index, offsets, heap);
+    ut_ad(slc->is_positioned(ctx->m_slc->rec(), index));
+    prev_tuples[id] = row_rec_to_index_entry(slc, index, heap);
 
     return DB_SUCCESS;
   });
@@ -4739,21 +4802,21 @@ skip_parallel_read:
   // #endif /* UNIV_DEBUG */
 
   bool contains_null;
-  rec_t *rec = nullptr;
+  reg_t reg;
   ulint matched_fields;
   dtuple_t *prev_entry = nullptr;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets;
 
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   ulint cnt = 1000;
   ulint bufsize = std::max(UNIV_PAGE_SIZE, prebuilt->mysql_row_len);
-  auto buf = static_cast<byte *>(
-      ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, bufsize));
+
+  boc_t boc = ut::malloc_boc_withkey(UT_NEW_THIS_FILE_PSI_KEY, bufsize);
+
   auto heap = mem_heap_create(100, UT_LOCATION_HERE);
 
-  auto ret = row_search_for_mysql(buf, PAGE_CUR_G, prebuilt, 0, 0);
+  auto ret = row_search_for_mysql(boc.buf, PAGE_CUR_G, prebuilt, 0, 0);
 
 loop:
   /* Check thd->killed every 1,000 scanned rows */
@@ -4792,7 +4855,8 @@ loop:
     case DB_END_OF_INDEX:
       ret = DB_SUCCESS;
     func_exit:
-      ut::free(buf);
+      ut::free(boc.buf);
+      boc.reset();
       mem_heap_free(heap);
 
       return (ret);
@@ -4809,15 +4873,14 @@ loop:
   within buf stored in the first 4 bytes, because we have built a dummy
   template */
 
-  rec = buf + mach_read_from_4(buf);
+  reg = {boc.buf + mach_read_from_4(boc.buf), boc.loc};
 
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
+  slc = sctx.get_offsets(reg, index, ULINT_UNDEFINED);
 
   if (prev_entry != nullptr) {
     matched_fields = 0;
 
-    auto cmp = prev_entry->compare(rec, index, offsets, &matched_fields);
+    auto cmp = prev_entry->compare(index, slc, &matched_fields);
     contains_null = false;
 
     /* In a unique secondary index we allow equal key values if
@@ -4841,7 +4904,7 @@ loop:
     not_ok:
       ib::error(ER_IB_MSG_1006)
           << msg << index->name << " of table " << index->table->name << ": "
-          << *prev_entry << ", " << rec_offsets_print(rec, offsets);
+          << *prev_entry << ", " << rec_offsets_print(slc);
       /* Continue reading */
     } else if (dict_index_is_unique(index) && !contains_null &&
                matched_fields >=
@@ -4853,30 +4916,29 @@ loop:
   }
 
   {
-    mem_heap_t *tmp_heap = nullptr;
+    // mem_heap_t *tmp_heap = nullptr;
 
-    /* Empty the heap on each round.  But preserve offsets[]
-    for the row_rec_to_index_entry() call, by copying them
-    into a separate memory heap when needed. */
-    if (UNIV_UNLIKELY(offsets != offsets_)) {
-      ulint size = rec_offs_get_n_alloc(offsets) * sizeof *offsets;
+    // /* Empty the heap on each round.  But preserve offsets[]
+    // for the row_rec_to_index_entry() call, by copying them
+    // into a separate memory heap when needed. */
+    // if (UNIV_UNLIKELY(offsets != offsets_)) {
+    //   ulint size = rec_offs_get_n_alloc(offsets) * sizeof *offsets;
 
-      tmp_heap = mem_heap_create(size, UT_LOCATION_HERE);
+    //   tmp_heap = mem_heap_create(size, UT_LOCATION_HERE);
 
-      offsets = static_cast<ulint *>(mem_heap_dup(tmp_heap, offsets, size));
-    }
+    //   offsets = static_cast<ulint *>(mem_heap_dup(tmp_heap, offsets, size));
+    // }
 
     mem_heap_empty(heap);
 
-    prev_entry = row_rec_to_index_entry(rec, index, offsets, heap);
+    ut_ad(slc->is_positioned(boc.buf + mach_read_from_4(boc.buf), index));
+    prev_entry = row_rec_to_index_entry(slc, index, heap);
 
-    if (UNIV_LIKELY_NULL(tmp_heap)) {
-      mem_heap_free(tmp_heap);
-    }
+    slc = sctx.reset_slice();
   }
 
 next_rec:
-  ret = row_search_for_mysql(buf, PAGE_CUR_G, prebuilt, 0, ROW_SEL_NEXT);
+  ret = row_search_for_mysql(boc.buf, PAGE_CUR_G, prebuilt, 0, ROW_SEL_NEXT);
 
   goto loop;
 }

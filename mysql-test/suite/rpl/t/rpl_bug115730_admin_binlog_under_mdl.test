@@ -1,0 +1,406 @@
+# ==== Purpose ====
+#
+# Regression coverage for BUG#115730: OPTIMIZE TABLE used to write the
+# statement-level binlog event AFTER releasing MDL.  When the event
+# entered the same binlog group commit (BGC) as a concurrent XA PREPARE
+# on the same table both got identical last_committed, letting the
+# replica's LOGICAL_CLOCK applier schedule them in parallel and deadlock
+# the admin worker against the MDL_SHARED_WRITE backup-ticket left
+# behind by XA PREPARE.
+#
+# The fix writes the binlog event inside mysql_admin_table()'s
+# HA_ADMIN_TRY_ALTER branch (InnoDB default OPTIMIZE) under the
+# MDL_EXCLUSIVE left by the internal ALTER TABLE, before releasing it.
+#
+# Out of scope (legacy path preserved on purpose):
+#
+#   - InnoDB OPTIMIZE with innodb_optimize_fulltext_only=ON (HA_ADMIN_OK).
+#   - Multi-table admin statements.
+#
+# ==== Test nature ====
+#
+# This file is REGRESSION-ONLY.  No scenario reproduces the bug, because
+# the fix's correctness implies that on every code path it covers the
+# admin holds an MDL strong enough to keep concurrent XA PREPARE out of
+# the same BGC group -- which means we cannot stage same-BGC overlap on
+# the master without deadlocking the master itself.  Instead we pin the
+# covered paths to the fixed behavior (binlog event present, replica
+# stays consistent) and exercise the uncovered-but-safe ANALYZE path to
+# guard against regressions in BGC + LOGICAL_CLOCK interaction.
+
+--source include/have_debug.inc
+--source include/have_debug_sync.inc
+--source include/not_group_replication_plugin.inc
+--source include/have_binlog_format_row.inc
+--source include/master-slave.inc
+
+# Configure replica to use LOGICAL_CLOCK parallel apply.
+--source include/rpl_connection_slave.inc
+--let $save_workers = `SELECT @@GLOBAL.replica_parallel_workers`
+--let $save_type    = `SELECT @@GLOBAL.replica_parallel_type`
+STOP REPLICA SQL_THREAD;
+SET GLOBAL replica_parallel_workers = 4;
+SET GLOBAL replica_parallel_type    = 'LOGICAL_CLOCK';
+START REPLICA SQL_THREAD;
+
+# Schema setup.
+--source include/rpl_connection_master.inc
+CREATE DATABASE bug115730_db;
+CREATE TABLE bug115730_db.t1 (id INT) ENGINE=InnoDB;
+INSERT INTO bug115730_db.t1 VALUES (0);
+CREATE TABLE bug115730_db.t3 (id INT) ENGINE=InnoDB;
+INSERT INTO bug115730_db.t3 VALUES (100);
+# Partitioned InnoDB table used to cross-check the admin/OPTIMIZE paths
+# (whole-table and per-partition) against the single-table
+# binlog-under-MDL fix.
+CREATE TABLE bug115730_db.pt (id INT) ENGINE=InnoDB PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20), PARTITION p2 VALUES LESS THAN MAXVALUE);
+INSERT INTO bug115730_db.pt VALUES (1), (5), (15), (25);
+--source include/sync_slave_sql_with_master.inc
+
+
+# === Scenario 1: ANALYZE + XA PREPARE in same BGC group ===
+#
+# Regression-only.  ANALYZE holds MDL_SHARED_READ which IS compatible
+# with XA's MDL_SHARED_WRITE, so this overlap was never a deadlock
+# trigger pre-fix; it stays harmless post-fix.  Purpose here is to
+# exercise the BGC + LOGICAL_CLOCK + binlog-under-MDL code paths
+# end-to-end and assert the replica stays consistent.
+--echo # --- scenario 1: ANALYZE TABLE + XA PREPARE in same BGC group ---
+
+--source include/rpl_connection_master.inc
+--connect (conn_admin, 127.0.0.1, root,, test, $MASTER_MYPORT)
+--connect (conn_xa,    127.0.0.1, root,, test, $MASTER_MYPORT)
+
+--connection conn_admin
+SET DEBUG_SYNC = 'bgc_before_flush_stage SIGNAL admin_in_bgc1 WAIT_FOR xa_in_bgc1';
+--send ANALYZE TABLE bug115730_db.t1
+
+--connection conn_xa
+SET DEBUG_SYNC = 'now WAIT_FOR admin_in_bgc1';
+SET DEBUG_SYNC = 'bgc_before_flush_stage SIGNAL xa_in_bgc1';
+XA START 'bug115730_xa1';
+INSERT INTO bug115730_db.t1 VALUES (1);
+XA END 'bug115730_xa1';
+XA PREPARE 'bug115730_xa1';
+
+--connection conn_admin
+--reap
+
+--connection conn_xa
+XA COMMIT 'bug115730_xa1';
+
+--source include/rpl_connection_master.inc
+--let $slave_timeout = 60
+--source include/sync_slave_sql_with_master.inc
+
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 1: replica row count matches master after ANALYZE+XA
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+--let $assert_text = scenario 1: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+
+# Scenario 1 connections aren't reused; clean them up here so the
+# remaining scenarios run with the default master/slave connections.
+--connection conn_admin
+SET DEBUG_SYNC = 'RESET';
+--connection conn_xa
+SET DEBUG_SYNC = 'RESET';
+--disconnect conn_admin
+--disconnect conn_xa
+
+
+# === Scenario 2: Sequential OPTIMIZE on InnoDB FTS-only path ===
+#
+# innodb_optimize_fulltext_only=ON forces OPTIMIZE through the
+# HA_ADMIN_OK path (not HA_ADMIN_TRY_ALTER).  This path is NOT covered
+# by the BUG#115730 fix -- binlog is written via the caller's legacy
+# post-release path.  We keep this scenario as a regression guard to
+# ensure the legacy path is not broken by the TRY_ALTER fix.
+--echo # --- scenario 2: OPTIMIZE TABLE main-loop path replicates ---
+
+--source include/rpl_connection_master.inc
+--let $pos_before_opt = query_get_value(SHOW MASTER STATUS, Position, 1)
+SET @save_fulltext_only = @@GLOBAL.innodb_optimize_fulltext_only;
+SET GLOBAL innodb_optimize_fulltext_only = ON;
+OPTIMIZE TABLE bug115730_db.t1;
+SET GLOBAL innodb_optimize_fulltext_only = @save_fulltext_only;
+--let $pos_after_opt = query_get_value(SHOW MASTER STATUS, Position, 1)
+# Binlog position must advance past the OPTIMIZE; if the fix accidentally
+# stopped writing the event we would see no change here.
+--let $assert_text = scenario 2: OPTIMIZE produced binlog events on master
+--let $assert_cond = $pos_after_opt > $pos_before_opt
+--source include/assert.inc
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 2: OPTIMIZE replicated, t1 readable
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+--let $assert_text = scenario 2: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+
+
+# === Scenario 3: InnoDB default OPTIMIZE (HA_ADMIN_TRY_ALTER path) ===
+#
+# InnoDB's ha_optimize returns HA_ADMIN_TRY_ALTER: mysql_admin_table
+# does close + ALTER + reopen.  The fix writes the binlog event under
+# the MDL_EXCLUSIVE left by mysql_recreate_table's ALTER TABLE, before
+# releasing it.  Regression check: binlog event produced and replica
+# catches up.
+--echo # --- scenario 3: OPTIMIZE TABLE HA_ADMIN_TRY_ALTER path replicates ---
+
+--source include/rpl_connection_master.inc
+--let $pos_before_tryalter = query_get_value(SHOW MASTER STATUS, Position, 1)
+OPTIMIZE TABLE bug115730_db.t1;
+--let $pos_after_tryalter = query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $assert_text = scenario 3: OPTIMIZE (TRY_ALTER) produced binlog events on master
+--let $assert_cond = $pos_after_tryalter > $pos_before_tryalter
+--source include/assert.inc
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 3: OPTIMIZE (TRY_ALTER) replicated, t1 readable
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+--let $assert_text = scenario 3: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+
+
+# === Scenario 3b: single-table OPTIMIZE writes EXACTLY ONE binlog event ===
+#
+# Regression guard for the duplicate-binlog defect on the
+# HA_ADMIN_TRY_ALTER path.  Before the fix, the post-switch write at the
+# end of mysql_admin_table() did not check *stmt_binlogged, so a single
+# OPTIMIZE produced TWO identical statement events: one under the
+# MDL_EXCLUSIVE inside the TRY_ALTER branch, then a second one again
+# after falling through the switch.  The position-advance checks in
+# scenario 3 cannot catch this because two events also advance the
+# position.  Here we dump the binlog and assert the event count is
+# exactly one, and that the replica applies it without any applier
+# worker stopping on an error.
+--echo # --- scenario 3b: single-table OPTIMIZE writes exactly one binlog event ---
+
+--source include/rpl_connection_master.inc
+--let $datadir = `SELECT @@datadir`
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+OPTIMIZE TABLE bug115730_db.t1;
+
+--let $dump_file = $MYSQLTEST_VARDIR/tmp/bug115730_opt_once.sql
+--exec $MYSQL_BINLOG --force-if-open --start-position=$binlog_pos $datadir/$binlog_file > $dump_file
+--let $assert_file = $dump_file
+--let $assert_select = OPTIMIZE TABLE bug115730_db.t1
+--let $assert_count = 1
+--let $assert_text = scenario 3b: single-table OPTIMIZE recorded exactly one binlog event
+--source include/assert_grep.inc
+--remove_file $dump_file
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+# Duplicate events must not have stopped any LOGICAL_CLOCK worker.
+--let $assert_text = scenario 3b: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+--let $assert_text = scenario 3b: OPTIMIZE replicated, t1 still readable
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+
+
+# === Scenario 4: Multi-table ANALYZE keeps legacy binlog write ===
+#
+# Defends against accidentally dropping the binlog event for the
+# multi-table legacy path.
+--echo # --- scenario 4: multi-table ANALYZE still writes to binlog ---
+
+--source include/rpl_connection_master.inc
+--let $pos_before_multi = query_get_value(SHOW MASTER STATUS, Position, 1)
+ANALYZE TABLE bug115730_db.t1, bug115730_db.t3;
+--let $pos_after_multi = query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $assert_text = scenario 4: multi-table ANALYZE produced binlog events on master
+--let $assert_cond = $pos_after_multi > $pos_before_multi
+--source include/assert.inc
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 4: multi-table ANALYZE replicated to slave (t3 readable)
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t3] = 1
+--source include/assert.inc
+--let $assert_text = scenario 4: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+
+
+# === Scenario 5: Multi-table OPTIMIZE (InnoDB, HA_ADMIN_TRY_ALTER) ===
+#
+# Ensures the legacy post-release binlog write for multi-table admin
+# statements is not broken by the single-table fix.  Both tables are
+# InnoDB and go through the HA_ADMIN_TRY_ALTER path.
+--echo # --- scenario 5: multi-table OPTIMIZE replicates ---
+
+--source include/rpl_connection_master.inc
+--let $pos_before_mopt = query_get_value(SHOW MASTER STATUS, Position, 1)
+OPTIMIZE TABLE bug115730_db.t1, bug115730_db.t3;
+--let $pos_after_mopt = query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $assert_text = scenario 5: multi-table OPTIMIZE produced binlog events on master
+--let $assert_cond = $pos_after_mopt > $pos_before_mopt
+--source include/assert.inc
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 5: multi-table OPTIMIZE replicated (t1 readable)
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+--let $assert_text = scenario 5: multi-table OPTIMIZE replicated (t3 readable)
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t3] = 1
+--source include/assert.inc
+--let $assert_text = scenario 5: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+
+
+# === Scenario 6: partitioned-table OPTIMIZE writes EXACTLY ONE event ===
+#
+# Cross-checks the duplicate-binlog defect against a PARTITIONED InnoDB
+# table.  Whole-table OPTIMIZE on a partitioned InnoDB table is still a
+# single-table statement, so the fix must write exactly one binlog
+# event under MDL regardless of which internal admin path the
+# partitioned handler takes.  Assert exactly one event and that the
+# replica applies it without any applier worker stopping on an error.
+--echo # --- scenario 6: partitioned-table OPTIMIZE writes exactly one binlog event ---
+
+--source include/rpl_connection_master.inc
+--let $datadir = `SELECT @@datadir`
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+OPTIMIZE TABLE bug115730_db.pt;
+
+--let $dump_file = $MYSQLTEST_VARDIR/tmp/bug115730_pt_once.sql
+--exec $MYSQL_BINLOG --force-if-open --start-position=$binlog_pos $datadir/$binlog_file > $dump_file
+--let $assert_file = $dump_file
+--let $assert_select = OPTIMIZE TABLE bug115730_db.pt
+--let $assert_count = 1
+--let $assert_text = scenario 6: partitioned-table OPTIMIZE recorded exactly one binlog event
+--source include/assert_grep.inc
+--remove_file $dump_file
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 6: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+--let $assert_text = scenario 6: partitioned OPTIMIZE replicated, pt readable
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.pt] = 4
+--source include/assert.inc
+
+
+# === Scenario 7: ALTER TABLE ... OPTIMIZE PARTITION syntax ===
+#
+# The ALTER TABLE <t> OPTIMIZE PARTITION <list> syntax is parsed into
+# the same SQLCOM_OPTIMIZE command as OPTIMIZE TABLE (with
+# ALTER_ADMIN_PARTITION set), so it must take the identical single-table
+# binlog-under-MDL path.  This is the ONLY valid syntax for a
+# partition-level OPTIMIZE (OPTIMIZE TABLE ... PARTITION does not exist).
+# Cross-check that it produces exactly one binlog event and leaves the
+# replica error-free.  Mirrors the partition-command coverage in
+# extra/rpl_tests/rpl_mts_spco_partition_commands.test.
+--echo # --- scenario 7: ALTER TABLE ... OPTIMIZE PARTITION writes exactly one binlog event ---
+
+--source include/rpl_connection_master.inc
+--let $datadir = `SELECT @@datadir`
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+ALTER TABLE bug115730_db.pt OPTIMIZE PARTITION p0, p1;
+
+--let $dump_file = $MYSQLTEST_VARDIR/tmp/bug115730_pt_alter.sql
+--exec $MYSQL_BINLOG --force-if-open --start-position=$binlog_pos $datadir/$binlog_file > $dump_file
+--let $assert_file = $dump_file
+--let $assert_select = ALTER TABLE bug115730_db.pt OPTIMIZE PARTITION
+--let $assert_count = 1
+--let $assert_text = scenario 7: ALTER TABLE ... OPTIMIZE PARTITION recorded exactly one binlog event
+--source include/assert_grep.inc
+--remove_file $dump_file
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 7: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+--let $assert_text = scenario 7: ALTER ... OPTIMIZE PARTITION replicated, pt readable
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.pt] = 4
+--source include/assert.inc
+
+
+# === Scenario 8: TRY_ALTER failure does not lose or duplicate binlog ===
+#
+# When mysql_recreate_table() fails inside the HA_ADMIN_TRY_ALTER branch,
+# the MDL is already released by the branch before reaching the
+# main-loop tail.  The fix routes away the tail write via
+# admin_binlog_via_try_alter; binlog is left to the caller's legacy path.
+# Verify:
+#   (a) exactly one binlog event is produced (the caller's write), and
+#   (b) the replica catches up without applier errors (the event is
+#       harmless -- replica's own OPTIMIZE may succeed independently).
+--echo # --- scenario 8: TRY_ALTER failure writes exactly one binlog event via caller ---
+
+--source include/rpl_connection_master.inc
+--let $datadir = `SELECT @@datadir`
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+SET SESSION debug = '+d,admin_try_alter_fail_after_recreate';
+OPTIMIZE TABLE bug115730_db.t1;
+SET SESSION debug = '-d,admin_try_alter_fail_after_recreate';
+
+--let $dump_file = $MYSQLTEST_VARDIR/tmp/bug115730_fail_once.sql
+--exec $MYSQL_BINLOG --force-if-open --start-position=$binlog_pos $datadir/$binlog_file > $dump_file
+--let $assert_file = $dump_file
+--let $assert_select = OPTIMIZE TABLE bug115730_db.t1
+--let $assert_count = 1
+--let $assert_text = scenario 8: failed TRY_ALTER recorded exactly one binlog event
+--source include/assert_grep.inc
+--remove_file $dump_file
+
+--source include/sync_slave_sql_with_master.inc
+--source include/rpl_connection_slave.inc
+--let $assert_text = scenario 8: no replica applier worker reported an error
+--let $assert_cond = [SELECT COUNT(*) FROM performance_schema.replication_applier_status_by_worker WHERE LAST_ERROR_NUMBER != 0] = 0
+--source include/assert.inc
+--let $assert_text = scenario 8: t1 still readable after failed OPTIMIZE
+--let $assert_cond = [SELECT COUNT(*) FROM bug115730_db.t1] = 2
+--source include/assert.inc
+
+
+# === Scenario 9: sql_log_bin=0 suppresses all binlog writes ===
+#
+# Verify that SET sql_log_bin=0 prevents the single-table fix from
+# writing any binlog event -- both the TRY_ALTER branch (W1) and the
+# main-loop tail (W2) check thd->lex->no_write_to_binlog.
+--echo # --- scenario 9: sql_log_bin=0 suppresses binlog for single-table OPTIMIZE ---
+
+--source include/rpl_connection_master.inc
+--let $binlog_file = query_get_value(SHOW MASTER STATUS, File, 1)
+--let $binlog_pos = query_get_value(SHOW MASTER STATUS, Position, 1)
+SET sql_log_bin = 0;
+OPTIMIZE TABLE bug115730_db.t1;
+SET sql_log_bin = 1;
+--let $pos_after_nolog = query_get_value(SHOW MASTER STATUS, Position, 1)
+--let $assert_text = scenario 9: binlog position unchanged when sql_log_bin=0
+--let $assert_cond = $pos_after_nolog = $binlog_pos
+--source include/assert.inc
+
+
+# === Cleanup ===
+--source include/rpl_connection_master.inc
+DROP DATABASE bug115730_db;
+--source include/sync_slave_sql_with_master.inc
+
+--source include/rpl_connection_slave.inc
+STOP REPLICA SQL_THREAD;
+--eval SET GLOBAL replica_parallel_workers = $save_workers
+--eval SET GLOBAL replica_parallel_type    = '$save_type'
+START REPLICA SQL_THREAD;
+
+--source include/rpl_end.inc

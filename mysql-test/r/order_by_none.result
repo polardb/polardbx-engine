@@ -1286,7 +1286,7 @@ Warnings:
 Note	1003	/* select#1 */ select `test`.`t2`.`id` AS `id`,`test`.`t2`.`c3` AS `c3` from `test`.`t2` where (`test`.`t2`.`c2` = 11) order by `test`.`t2`.`c3` limit 20
 EXPLAIN SELECT id,c3 FROM t2 WHERE c2=11 ORDER BY c3 LIMIT 4000;
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t2	NULL	ref	k2	k2	5	const	8192	100.00	Using filesort
+1	SIMPLE	t2	NULL	index	k2	k3	5	NULL	10843	36.89	Using where
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t2`.`id` AS `id`,`test`.`t2`.`c3` AS `c3` from `test`.`t2` where (`test`.`t2`.`c2` = 11) order by `test`.`t2`.`c3` limit 4000
 EXPLAIN SELECT id,c3 FROM t2 WHERE c2 BETWEEN 10 AND 12 ORDER BY c3 LIMIT 20;

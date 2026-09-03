@@ -3,6 +3,7 @@
 #
 # While the purge thread is turned off, perform enough DML to cause
 # undo tablespace sizes grow beyond the truncation threshold.
+set global innodb_scn_history_task_enabled = off;
 # Then check if truncation is accomplished by restarting mysqld
 # causing each undo tablespace to be truncated.
 # Create 2 explicit undo tablespaces.
@@ -99,7 +100,11 @@ undo_004	Undo	active	0
 SET GLOBAL innodb_max_undo_log_size=20000000;
 SET GLOBAL innodb_fast_shutdown=0;
 SET GLOBAL innodb_purge_rseg_truncate_frequency=1;
+SET GLOBAL innodb_purge_batch_size=1;
+SET GLOBAL innodb_dbug_gcs_enable_traverse_scn_list=ON;
 SET GLOBAL innodb_purge_run_now=ON;
+create table t3(id int);
+drop table t3;
 # restart:
 # Compare the undo tablespace sizes before and after truncation.
 SELECT NAME, SPACE_TYPE, STATE, AUTOEXTEND_SIZE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES

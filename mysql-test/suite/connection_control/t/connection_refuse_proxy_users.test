@@ -107,6 +107,8 @@ let $REFUSE_STATS=3;
 # Rather, we will rely on proxying users' data.
 # So each of the following should be refused to authenticate within the period
 
+SELECT USERHOST, IP, FAILED_ATTEMPTS, STATUS FROM INFORMATION_SCHEMA.connection_control_refuse_statistic;
+
 let $USER=u3;
 let $PASSWORD=proxied;
 let $REFUSE=1;

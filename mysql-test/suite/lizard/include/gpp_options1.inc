@@ -25,6 +25,8 @@ if ($var_or_sea==sea) {
 
 set global innodb_lizard_stat_enabled=on;
 set opt_index_format_gpp_enabled=true;
+SET opt_index_format_hippo_enabled=false;
+
 create database gpp_options;
 CREATE TABLE gpp_options.t1 (
   a int NOT NULL,
@@ -79,6 +81,7 @@ insert into gpp_options.t1 values (7,7,7,'77777');
 CREATE DATABASE gpp_tmp;
 # First, create a table with index b and b_c both gpp enabled.
 SET opt_index_format_gpp_enabled=true;
+SET opt_index_format_hippo_enabled=false;
 CREATE TABLE gpp_tmp.t1 (
   a int NOT NULL,
   b int NOT NULL,

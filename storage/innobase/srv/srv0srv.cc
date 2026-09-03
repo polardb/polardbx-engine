@@ -45,6 +45,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 10/8/1995 Heikki Tuuri
  *******************************************************/
 
+#include "lizard0gcs0scn.h"
 #ifndef UNIV_HOTBACKUP
 #include <mysqld.h>
 #include <sys/types.h>
@@ -76,6 +77,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "pars0pars.h"
 #include "que0que.h"
 #include "row0mysql.h"
+#include "sql/sql_class.h"
 #include "sql_thd_internal_api.h"
 #include "srv0mon.h"
 
@@ -96,6 +98,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "srv0file.h"
 
+#include <filesystem>
+#include "arch0arch.h"
+#include "arch0page.h"
+
 #ifdef UNIV_HOTBACKUP
 #include "page0size.h"
 #else
@@ -115,8 +121,11 @@ bool srv_upgrade_old_undo_found = false;
 
 #include "lizard0cleanout0safe.h"
 #include "lizard0gcs.h"
-#include "lizard0erase.h"
+#include "lizard0trx0erase.h"
 #include "row0purge.h"
+#include "lizard0srv0cycle.h"
+#include "lizard0trx0cycle.h"
+#include "lizard0undo0retent.h"
 
 /* Revert to old partition file name if upgrade fails. */
 bool srv_downgrade_partition_files = false;
@@ -188,6 +197,9 @@ bool srv_undo_log_truncate = false;
 
 /** Enable or disable Encrypt of UNDO tablespace. */
 bool srv_undo_log_encrypt = false;
+
+/** Enable or disable encrypted-page checksum verification before decrypt. */
+bool srv_verify_enc_checksum = false;
 
 /** Maximum size of undo tablespace. */
 unsigned long long srv_max_undo_tablespace_size;
@@ -592,6 +604,8 @@ bool srv_stats_auto_recalc = true;
 
 bool srv_innodb_btree_sampling = true;
 
+ulong srv_spc_analyze_sample_percentage = 100;
+
 ulong srv_replication_delay = 0;
 std::chrono::milliseconds get_srv_replication_delay() {
   return std::chrono::milliseconds{srv_replication_delay};
@@ -776,7 +790,7 @@ struct srv_sys_t {
 
   srv_slot_t *sys_threads; /*!< server thread table */
 
-  ulint n_threads_active[SRV_MASTER + 1];
+  ulint n_threads_active[SRV_CYCLE + 1];
   /*!< number of threads active
   in a thread class */
 
@@ -784,7 +798,7 @@ struct srv_sys_t {
                                              activity */
 };
 
-static srv_sys_t *srv_sys = nullptr;
+srv_sys_t *srv_sys = nullptr;
 
 /** Event to signal the monitor thread. */
 os_event_t srv_monitor_event;
@@ -805,6 +819,8 @@ char *srv_buf_dump_filename;
 and/or load it during startup. */
 bool srv_buffer_pool_dump_at_shutdown = true;
 bool srv_buffer_pool_load_at_startup = true;
+
+static const ulint SRV_CYCLE_SLOT = 2;
 
 /** Slot index in the srv_sys->sys_threads array for the purge thread. */
 static const ulint SRV_PURGE_SLOT = 1;
@@ -912,6 +928,7 @@ static bool srv_thread_type_validate(
     case SRV_WORKER:
     case SRV_PURGE:
     case SRV_MASTER:
+    case SRV_CYCLE:
       return true;
   }
   ut_error;
@@ -930,7 +947,7 @@ static srv_thread_type srv_slot_get_type(
 
 /** Reserves a slot in the thread table for the current thread.
  @return reserved slot */
-static srv_slot_t *srv_reserve_slot(
+srv_slot_t *srv_reserve_slot(
     srv_thread_type type) /*!< in: type of the thread */
 {
   srv_slot_t *slot = nullptr;
@@ -940,6 +957,9 @@ static srv_slot_t *srv_reserve_slot(
   ut_ad(srv_thread_type_validate(type));
 
   switch (type) {
+    case SRV_CYCLE:
+      slot = &srv_sys->sys_threads[SRV_CYCLE_SLOT];
+      break;
     case SRV_MASTER:
       slot = &srv_sys->sys_threads[SRV_MASTER_SLOT];
       break;
@@ -950,7 +970,7 @@ static srv_slot_t *srv_reserve_slot(
 
     case SRV_WORKER:
       /* Find an empty slot, skip the master and purge slots. */
-      for (slot = &srv_sys->sys_threads[2]; slot->in_use; ++slot) {
+      for (slot = &srv_sys->sys_threads[3]; slot->in_use; ++slot) {
         ut_a(slot < &srv_sys->sys_threads[srv_sys->n_sys_threads]);
       }
       break;
@@ -990,6 +1010,10 @@ static int64_t srv_suspend_thread_low(
     case SRV_NONE:
       ut_error;
 
+    case SRV_CYCLE:
+      ut_a(srv_sys->n_threads_active[type] == 1);
+      break;
+
     case SRV_MASTER:
       /* We have only one master thread and it
       should be the first entry always. */
@@ -1020,7 +1044,7 @@ static int64_t srv_suspend_thread_low(
 
 /** Suspends the calling thread to wait for the event in its thread slot.
  @return the current signal count of the event. */
-static int64_t srv_suspend_thread(srv_slot_t *slot) /*!< in/out: thread slot */
+int64_t srv_suspend_thread(srv_slot_t *slot) /*!< in/out: thread slot */
 {
   srv_sys_mutex_enter();
 
@@ -1055,6 +1079,14 @@ ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
       switch (type) {
         case SRV_NONE:
           ut_error;
+
+        case SRV_CYCLE:
+          /* We have only one master thread and it
+          should be the first entry always. */
+          ut_a(n == 1);
+          ut_a(i == SRV_CYCLE_SLOT);
+          ut_a(srv_sys->n_threads_active[type] == 0);
+          break;
 
         case SRV_MASTER:
           /* We have only one master thread and it
@@ -1097,7 +1129,7 @@ ulint srv_release_threads(srv_thread_type type, /*!< in: thread type */
 }
 
 /** Release a thread's slot. */
-static void srv_free_slot(srv_slot_t *slot) /*!< in/out: thread slot */
+void srv_free_slot(srv_slot_t *slot) /*!< in/out: thread slot */
 {
   srv_sys_mutex_enter();
 
@@ -1142,8 +1174,8 @@ static void srv_init(void) {
       UT_NEW_THIS_FILE_PSI_KEY, ut::Count{srv_threads.m_purge_workers_n});
 
   if (!srv_read_only_mode) {
-    /* Number of purge threads + master thread */
-    n_sys_threads = srv_n_purge_threads + 1;
+    /* Number of purge threads + master thread  + cycle thread*/
+    n_sys_threads = srv_n_purge_threads + 1 + 1;
 
     srv_sys_sz += n_sys_threads * sizeof(*srv_sys->sys_threads);
   }
@@ -1502,7 +1534,7 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
 
   /* This is a dirty read, without holding trx_sys->mutex. */
   fprintf(file, ULINTPF " read views open inside InnoDB\n",
-          lizard::trx_vision_container_size());
+          lizard::gcs_mvcc_size());
 
   n_reserved = fil_space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
@@ -1578,6 +1610,142 @@ bool srv_printf_innodb_monitor(FILE *file, bool nowait, ulint *trx_start_pos,
   return (ret);
 }
 
+/** Update and export page tracking statistics to MySQL status variables.
+
+This function collects statistics from the global arch_page_stats namespace
+and exports them to MySQL via the export_vars structure. The statistics are
+divided into several categories:
+
+1. Direct Statistics: Directly copied from global variables (no calculation)
+   - Cumulative counters (total_page_ids, block_flush_count, etc.)
+   - Last operation info (last_write_space/page/block, flush times, etc.)
+   - Current session state (current_start_lsn)
+   - Error counters (checksum_errors, io_errors)
+
+2. Computed Statistics: Calculated based on raw statistics
+   - Flush lag: Time since last flush operation
+   - Pending data: Blocks/bytes waiting to be flushed (write - flush)
+   - Memory usage: Buffer utilization percentage
+
+Thread Safety:
+This function reads non-atomic global variables without locking. This is
+acceptable for monitoring purposes where slight inconsistency is tolerable.
+Should not be called concurrently with shutdown operations.
+
+When page tracking is inactive, state indicators and computed metrics are
+reset to 0, while cumulative counters retain their values. */
+void report_page_track_stats() {
+  if (arch_page_sys != nullptr && arch_page_sys->is_active()) {
+    export_vars.innodb_page_track_is_active = 1;
+
+    /* Direct statistics: copy from global variables. */
+    export_vars.innodb_page_track_total_page_ids =
+        arch_page_stats::g_total_page_ids;
+    export_vars.innodb_page_track_last_write_space =
+        arch_page_stats::g_last_write_space;
+    export_vars.innodb_page_track_last_write_page =
+        arch_page_stats::g_last_write_page;
+    export_vars.innodb_page_track_last_write_block =
+        arch_page_stats::g_last_write_block;
+    export_vars.innodb_page_track_last_flush_block =
+        arch_page_stats::g_last_flush_block;
+    export_vars.innodb_page_track_flush_last_time =
+        arch_page_stats::g_flush_last_time;
+    export_vars.innodb_page_track_block_flush_count =
+        arch_page_stats::g_block_flush_count;
+    export_vars.innodb_page_track_buffer_full_wait_flushes =
+        arch_page_stats::g_buffer_full_wait_flushes;
+    export_vars.innodb_page_track_wait_flush_succ_count =
+        arch_page_stats::g_wait_flush_succ_count;
+    export_vars.innodb_page_track_wait_flush_timeout_count =
+        arch_page_stats::g_wait_flush_timeout_count;
+    export_vars.innodb_page_track_wait_flush_failed_count =
+        arch_page_stats::g_wait_flush_failed_count;
+    export_vars.innodb_page_track_backup_count = arch_page_stats::g_backup_count;
+    export_vars.innodb_page_track_backup_last_time =
+        arch_page_stats::g_backup_last_time;
+    export_vars.innodb_page_track_backup_last_pages =
+        arch_page_stats::g_backup_last_pages;
+    export_vars.innodb_page_track_purge_count = arch_page_stats::g_purge_count;
+    export_vars.innodb_page_track_purge_last_lsn =
+        arch_page_stats::g_purge_last_lsn;
+    export_vars.innodb_page_track_checksum_errors =
+        arch_page_stats::g_checksum_errors;
+    export_vars.innodb_page_track_io_errors = arch_page_stats::g_io_errors;
+    export_vars.innodb_page_track_current_start_lsn =
+        arch_page_stats::g_current_start_lsn;
+
+    /* Computed statistics: calculated metrics. */
+
+    /* Calculate flush lag in seconds based on last flush time. Represents
+    the time elapsed since the last successful flush operation. */
+    uint64_t last_flush_time = arch_page_stats::get_flush_last_time();
+    uint64_t current_time = static_cast<uint64_t>(std::time(nullptr));
+    uint64_t flush_lag =
+        (last_flush_time > 0 && current_time >= last_flush_time)
+            ? (current_time - last_flush_time)
+            : 0;
+    export_vars.innodb_page_track_flush_lag_seconds = flush_lag;
+
+    /* Estimate pending (unflushed) data based on block counters. */
+    uint64_t last_write_block = arch_page_stats::g_last_write_block;
+    uint64_t last_flush_block = arch_page_stats::g_last_flush_block;
+    uint64_t pending_blocks = 0;
+    uint64_t pending_bytes = 0;
+
+    if (last_write_block >= last_flush_block) {
+      pending_blocks = last_write_block - last_flush_block;
+      pending_bytes = pending_blocks * ARCH_PAGE_BLK_SIZE;
+    }
+
+    export_vars.innodb_page_track_pending_flush_blocks = pending_blocks;
+    export_vars.innodb_page_track_pending_flush_bytes = pending_bytes;
+
+    /* Calculate buffer utilization metrics. */
+    constexpr uint64_t TOTAL_ARCH_BLOCKS = ARCH_PAGE_NUM_BLKS;
+    constexpr uint64_t TOTAL_MEMORY = TOTAL_ARCH_BLOCKS * ARCH_PAGE_BLK_SIZE;
+
+    uint64_t available_blocks = (TOTAL_ARCH_BLOCKS > pending_blocks)
+                                    ? (TOTAL_ARCH_BLOCKS - pending_blocks)
+                                    : 0;
+    export_vars.innodb_page_track_buffer_available_blocks = available_blocks;
+
+    uint64_t used_memory = pending_bytes;
+    uint64_t memory_usage_pct =
+        (TOTAL_MEMORY > 0) ? ((used_memory * 100) / TOTAL_MEMORY) : 0;
+    export_vars.innodb_page_track_memory_usage_pct = memory_usage_pct;
+
+  } else {
+    /* Page tracking is not active, reset all computed/state indicators. */
+    export_vars.innodb_page_track_is_active = 0;
+    export_vars.innodb_page_track_total_page_ids = 0;
+    export_vars.innodb_page_track_flush_last_time = 0;
+    export_vars.innodb_page_track_buffer_full_wait_flushes = 0;
+    export_vars.innodb_page_track_last_write_space = 0;
+    export_vars.innodb_page_track_last_write_page = 0;
+    export_vars.innodb_page_track_last_write_block = 0;
+    export_vars.innodb_page_track_last_flush_block = 0;
+    export_vars.innodb_page_track_block_flush_count = 0;
+    export_vars.innodb_page_track_wait_flush_succ_count = 0;
+    export_vars.innodb_page_track_wait_flush_timeout_count = 0;
+    export_vars.innodb_page_track_wait_flush_failed_count = 0;
+    export_vars.innodb_page_track_backup_count = 0;
+    export_vars.innodb_page_track_backup_last_time = 0;
+    export_vars.innodb_page_track_backup_last_pages = 0;
+    export_vars.innodb_page_track_purge_count = 0;
+    export_vars.innodb_page_track_purge_last_lsn = 0;
+    export_vars.innodb_page_track_checksum_errors = 0;
+    export_vars.innodb_page_track_io_errors = 0;
+    export_vars.innodb_page_track_current_start_lsn = 0;
+    export_vars.innodb_page_track_memory_usage_pct = 0;
+    export_vars.innodb_page_track_buffer_available_blocks = 0;
+    export_vars.innodb_page_track_flush_lag_seconds = 0;
+    export_vars.innodb_page_track_pending_flush_blocks = 0;
+    export_vars.innodb_page_track_pending_flush_bytes = 0;
+    /* Note: Cumulative counters (errors, waits, etc.) are not reset. */
+  }
+}
+
 /** Function to pass InnoDB status variables to MySQL */
 void srv_export_innodb_status(void) {
   buf_pool_stat_t stat;
@@ -1633,6 +1801,8 @@ void srv_export_innodb_status(void) {
       buf_pools_list_size.LRU_bytes + buf_pools_list_size.unzip_LRU_bytes;
 
   export_vars.innodb_buffer_pool_pages_dirty = flush_list_len;
+
+  export_vars.innodb_buffer_pool_dirty_ratio = static_cast<double>(100 * flush_list_len) / (1 + LRU_len + free_len);
 
   export_vars.innodb_buffer_pool_bytes_dirty =
       buf_pools_list_size.flush_list_bytes;
@@ -1745,19 +1915,20 @@ void srv_export_innodb_status(void) {
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
-  scn_t done_trx_scn = purge_sys->done.ommt.scn;
+  scn_t done_trx_scn =
+      std::min(lizard::gcs_clean_purged_scn(), purge_sys->done.ommt.scn);
 
   /* Purge always deals with transaction end points represented by
   transaction number. We are allowed to purge transactions with number
   below the low limit. */
-  lizard::Vision oldest_vision;
-  lizard::trx_clone_oldest_vision(&oldest_vision);
-  scn_t low_limit_scn = oldest_vision.snapshot_scn();
+  lizard::purge_vision_t pvision;
+  lizard::gcs_clone_oldest_vision(&pvision);
+  scn_t low_limit_scn = pvision.snapshot_scn();
 
   rw_lock_s_unlock(&purge_sys->latch);
 
   /* Maximum transaction number added to history list for purge. */
-  scn_t max_trx_scn = lizard::gcs->min_safe_scn.load();
+  scn_t max_trx_scn = pvision.safe_scn();
 
   if (done_trx_scn == 0 || max_trx_scn < done_trx_scn) {
     export_vars.innodb_purge_trx_scn_age = 0;
@@ -1779,6 +1950,9 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_erase_done_scn = lizard::erase_sys->done.ommt.scn;
 
 #endif /* UNIV_DEBUG */
+
+
+  report_page_track_stats();
 
   mutex_exit(&srv_innodb_monitor_mutex);
 }
@@ -2357,7 +2531,7 @@ static void srv_master_do_active_tasks(void) {
 
   srv_update_cpu_usage();
 
-  if (trx_sys->rseg_history_len.load() > 0) {
+  if (trx_sys->update_rseg_history_len.load() > 0) {
     srv_wake_purge_thread_if_not_active();
   }
 
@@ -2418,7 +2592,7 @@ static void srv_master_do_idle_tasks(void) {
 
   srv_update_cpu_usage();
 
-  if (trx_sys->rseg_history_len > 0) {
+  if (trx_sys->update_rseg_history_len.load() > 0) {
     srv_wake_purge_thread_if_not_active();
   }
 
@@ -2784,7 +2958,7 @@ void srv_master_thread() {
 /**
 Check if purge should stop.
 @return true if it should shutdown. */
-static bool srv_purge_should_exit(
+bool srv_purge_should_exit(
     ulint n_purged) /*!< in: pages purged in last batch */
 {
   switch (srv_shutdown_state.load()) {
@@ -2940,7 +3114,7 @@ static ulint srv_do_purge(ulint *n_total_purged,
   }
 
   do {
-    if (trx_sys->rseg_history_len.load() > rseg_history_len ||
+    if (trx_sys->update_rseg_history_len.load() > rseg_history_len ||
         (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag)) {
       /* History length is now longer than what it was
       when we took the last snapshot. Use more threads. */
@@ -2953,7 +3127,17 @@ static ulint srv_do_purge(ulint *n_total_purged,
       /* History length same or smaller since last snapshot,
       use fewer threads. */
 
-      --n_use_threads;
+      /*
+        If an instance is idle but has a large history list to purge,
+        the current logic may frequently decrement n_use_threads.
+        This can reduce the number of purge threads to 1, slowing down
+        the purge process significantly, even with a large amount of
+        work to do.
+        So we hard-code that n_use_threads will not be decremented if the
+        history list length is less than 100000. */
+      if (trx_sys->update_rseg_history_len.load() < 100000) {
+        --n_use_threads;
+      }
 
       old_activity_count = srv_get_activity_count();
     }
@@ -2965,7 +3149,7 @@ static ulint srv_do_purge(ulint *n_total_purged,
     ut_a(n_use_threads <= n_threads);
 
     /* Take a snapshot of the history list before purge. */
-    if ((rseg_history_len = trx_sys->rseg_history_len.load()) == 0 &&
+    if ((rseg_history_len = trx_sys->update_rseg_history_len.load()) == 0 &&
         /** Lizard: Now will erase untill can not be erased. */
         n_pages_erased == 0) {
       break;
@@ -3031,7 +3215,7 @@ static void srv_purge_coordinator_suspend(
     if (stop) {
       os_event_wait_low(slot->event, sig_count);
       ret = 0;
-    } else if (rseg_history_len <= trx_sys->rseg_history_len.load()) {
+    } else if (rseg_history_len <= trx_sys->update_rseg_history_len.load()) {
       ret =
           os_event_wait_time_low(slot->event, SRV_PURGE_MAX_TIMEOUT, sig_count);
     } else {
@@ -3089,8 +3273,8 @@ static void srv_purge_coordinator_suspend(
       log records which prevent truncate of the UNDO
       segments. */
 
-      if (rseg_history_len == trx_sys->rseg_history_len &&
-          trx_sys->rseg_history_len < 5000) {
+      if (rseg_history_len == trx_sys->update_rseg_history_len.load() &&
+          trx_sys->update_rseg_history_len.load() < 5000) {
         stop = true;
       }
     }
@@ -3120,6 +3304,9 @@ void srv_purge_coordinator_thread() {
 
   THD *thd = create_internal_thd();
 
+  // Allow purge in read only mode as well.
+  thd->set_skip_readonly_check();
+
   rw_lock_x_lock(&purge_sys->latch, UT_LOCATION_HERE);
 
   purge_sys->thds.insert(thd);
@@ -3142,7 +3329,7 @@ void srv_purge_coordinator_thread() {
 
   slot = srv_reserve_slot(SRV_PURGE);
 
-  ulint rseg_history_len = trx_sys->rseg_history_len;
+  ulint rseg_history_len = trx_sys->update_rseg_history_len.load();
   bool is_blocked_by_retention = false;
 
   do {
@@ -3181,6 +3368,12 @@ void srv_purge_coordinator_thread() {
   exit condition is satisfied. */
 
   ut_a(srv_purge_should_exit(n_total_purged));
+
+  /** Promise cycle thread exit */
+  while (srv_thread_is_active(srv_threads.m_cycle_coordinator)) {
+    lizard::srv_cycle_wakeup();
+    std::this_thread::sleep_for(std::chrono::microseconds(10));
+  }
 
   ulint n_pages_purged = ULINT_MAX;
 
@@ -3316,4 +3509,26 @@ void set_srv_redo_log(bool enable) {
   mutex_enter(&srv_innodb_monitor_mutex);
   srv_redo_log = enable;
   mutex_exit(&srv_innodb_monitor_mutex);
+}
+
+void srv_wakeup_if_suspend(srv_slot_t *slot) {
+  srv_sys_mutex_enter();
+
+  if (slot->suspended) {
+    slot->suspended = false;
+    ++srv_sys->n_threads_active[slot->type];
+    ut_a(srv_sys->n_threads_active[slot->type] == 1);
+  }
+
+  srv_sys_mutex_exit();
+}
+
+namespace lizard {
+
+void srv_wake_cycle_thread_if_not_active(void) {
+  if (cycle_sys->state == CYCLE_STATE_RUN &&
+      srv_sys->n_threads_active[SRV_CYCLE] == 0) {
+    srv_release_threads(SRV_CYCLE, 1);
+  }
+}
 }

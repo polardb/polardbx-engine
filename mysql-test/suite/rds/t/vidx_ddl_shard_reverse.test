@@ -1,0 +1,132 @@
+##############################################################
+# Sharded parallel reverse-edge install (stage 3a) coverage. #
+#                                                            #
+# The parallel DDL direct build materializes reverse-edge    #
+# ops from the frozen post-search batch state and applies    #
+# them W-way sharded by destination pointer; the final       #
+# adjacency is designed to be bit-identical to the serial    #
+# stage 3 (per-destination op order preserved).              #
+#                                                            #
+# Phase 1  W=8, 300 rows: full self-probe (every row's own   #
+#          vector returns its own id).  Reverse edges are    #
+#          what makes rows reachable at all: mutation runs   #
+#          that skip one shard's ops turn a stable subset    #
+#          of self-probes red (verified manually before      #
+#          recording, see the B1 commit message).            #
+# Phase 2  W=4, overflow re-prune stress: 64 duplicates of   #
+#          one vector force full layer-0 lists so the        #
+#          sharded install exercises the scratch-based       #
+#          select_neighbors re-prune path, not just the      #
+#          append path.  All duplicates must stay            #
+#          reachable.                                        #
+# Phase 3  batch accounting must be untouched by the split   #
+#          of stage 3 into 3a/3b: same ceil((N-1)/(W*8))     #
+#          law as rds.vidx_ddl_parallel_build.               #
+##############################################################
+--source include/have_binlog_format_mixed_or_row.inc
+
+CREATE DATABASE vidx_ddl_shard_reverse;
+USE vidx_ddl_shard_reverse;
+SET GLOBAL vidx_disabled = OFF;
+SET GLOBAL show_vidx_hlindex_tables = ON;
+SET transaction_isolation = 'READ-COMMITTED';
+
+--echo
+--echo ############################################
+--echo # Phase 1: W=8, 300 rows, full self-probe #
+--echo ############################################
+CREATE TABLE t1 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+--disable_query_log
+let $i = 1;
+while ($i <= 300) {
+  eval INSERT INTO t1(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']')));
+  inc $i;
+}
+--enable_query_log
+SET SESSION vidx_ddl_threads = 8;
+let $pb_before = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+
+ALTER TABLE t1 ADD VECTOR INDEX vi(v);
+
+let $pb_after = query_get_value(SHOW GLOBAL STATUS LIKE 'Vidx_ddl_parallel_batches', Value, 1);
+# 299 parallel rows / (8*8 per batch) = 4 full + 1 tail(43) = 5
+let $delta = `SELECT $pb_after - $pb_before`;
+if ($delta != 5) {
+  --echo FATAL: batch delta $delta, expected 5 (299 rows / batch 64)
+  --die Phase 1: batch accounting broken by the 3a/3b split
+}
+--echo VERDICT 1 batch-count ceil(299/64)==5: PASS
+
+SET SESSION vidx_hnsw_ef_search = 40;
+--disable_query_log
+let $i = 1;
+let $bad = 0;
+while ($i <= 300) {
+  SET @nn = NULL;
+  eval SELECT id INTO @nn FROM t1 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT(CONCAT('[', $i, ',', $i+1, ',', $i+2, ',', $i+3, ',', $i+4, ']'))) LIMIT 1;
+  if (`SELECT @nn IS NULL OR @nn <> $i`) {
+    --echo self-probe MISS: row $i got another id
+    inc $bad;
+  }
+  inc $i;
+}
+--enable_query_log
+if ($bad) {
+  --die Phase 1: $bad/300 self-probes missed (reverse edges lost in shards?)
+}
+--echo VERDICT 1 full self-probe 300/300: PASS
+
+let $tid = query_get_value(SELECT TABLE_ID FROM INFORMATION_SCHEMA.INNODB_TABLES WHERE NAME LIKE '%/t1', TABLE_ID, 1);
+--disable_query_log
+eval SET @s = CONCAT('SELECT COUNT(*) INTO @live FROM \`vidx_', $tid, '_0\` WHERE tref IS NOT NULL');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+--enable_query_log
+if (`SELECT @live <> 300`) {
+  --die Phase 1: live nodes != 300
+}
+--echo VERDICT 1 live==300: PASS
+
+--echo
+--echo ############################################
+--echo # Phase 2: W=4, overflow re-prune stress  #
+--echo ############################################
+CREATE TABLE t2 (
+  id INT NOT NULL PRIMARY KEY,
+  v VECTOR(5)
+) ENGINE = InnoDB;
+# 64 identical vectors overflow M*2 layer-0 lists many times over: the
+# sharded reverse-edge install must run the select_neighbors re-prune on
+# the shared destination lists (append fast-path alone cannot hold 64).
+--disable_query_log
+let $i = 1;
+while ($i <= 64) {
+  eval INSERT INTO t2(id, v) VALUES ($i, VEC_FROMTEXT('[9,9,9,9,9]'));
+  inc $i;
+}
+while ($i <= 96) {
+  eval INSERT INTO t2(id, v) VALUES ($i, VEC_FROMTEXT(CONCAT('[', $i*10, ',', $i, ',', $i, ',', $i, ',', $i, ']')));
+  inc $i;
+}
+--enable_query_log
+SET SESSION vidx_ddl_threads = 4;
+ALTER TABLE t2 ADD VECTOR INDEX vi(v);
+# All duplicates must stay reachable through the pruned graph modulo the
+# serial build's own diversity-pruning loss (W=1 measured 60/64 on this
+# dataset; the per-run layer sequence makes the exact count
+# non-deterministic, so assert a conservative floor rather than a pin).
+SET SESSION vidx_hnsw_ef_search = 100;
+SELECT COUNT(*) >= 48 AS dup_hits_ok FROM (
+  SELECT id FROM t2 FORCE INDEX(vi) ORDER BY VEC_DISTANCE(v, VEC_FROMTEXT('[9,9,9,9,9]')) LIMIT 64
+) q WHERE q.id <= 64;
+
+DROP TABLE t1;
+DROP TABLE t2;
+SET SESSION vidx_ddl_threads = default;
+SET SESSION vidx_hnsw_ef_search = default;
+SET GLOBAL show_vidx_hlindex_tables = default;
+SET GLOBAL vidx_disabled = default;
+
+DROP DATABASE IF EXISTS vidx_ddl_shard_reverse;

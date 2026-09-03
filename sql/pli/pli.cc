@@ -33,7 +33,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "pli/pli.h"
-namespace xlicense {
+namespace komodo {
 void PLI_register_service(PLI_service_t *service) { PLI_service = service; }
 
-}  // namespace xlicense
+}  // namespace komodo

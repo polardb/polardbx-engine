@@ -30,34 +30,28 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 2020-04-06 by Jianwei.zhao
  *******************************************************/
 
-#include "lizard0row.h"
-#include "lizard0cleanout.h"
-#include "lizard0data0types.h"
-#include "lizard0dict.h"
-#include "lizard0mon.h"
-#include "lizard0page.h"
-#include "lizard0tcn.h"
-#include "lizard0txn0rec.h"
-#include "lizard0undo.h"
 
-#include "my_dbug.h"
-
-#include "lock0lock.h"
+#include "data0data.h"
 #include "que0que.h"
+#include "rem0types.h"
 #include "row0ins.h"
 #include "row0log.h"
 #include "row0mysql.h"
-#include "row0purge.h"
 #include "row0row.h"
-#include "row0undo.h"
-#include "row0upd.h"
-#include "trx0rec.h"
-#include "data0data.h"
 
-#include "lizard0btr0cur.h"
+#include "lizard0cleanout.h"
+#include "lizard0data0types.h"
+#include "lizard0dict0dict.h"
 #include "lizard0dict0mem.h"
-#include "lizard0row0clover.h"
+#include "lizard0mon.h"
+#include "lizard0page.h"
+#include "lizard0rem0slc.h"
+#include "lizard0rem0slc0ctx.h"
+#include "lizard0row.h"
 #include "lizard0row0bamboo.h"
+#include "lizard0row0clover.h"
+#include "lizard0trx.h"
+#include "lizard0undo.h"
 
 #ifdef UNIV_DEBUG
 extern void page_zip_header_cmp(const page_zip_des_t *, const byte *);
@@ -136,6 +130,7 @@ void row_upd_index_entry_txn_field(que_thr_t *thr, dtuple_t *entry,
       row_upd_index_entry_bamboo_field(thr, entry, index);
       break;
     case TL_NONE:
+    case TL_LOTUS:
       ut_error;
       break;
   }
@@ -150,31 +145,29 @@ void row_upd_index_entry_txn_field(que_thr_t *thr, dtuple_t *entry,
   @param[in]     layout    txn layout
   @param[in]     txn       txn description
 */
-void row_upd_rec_txn_fields(rec_t *rec, page_zip_des_t *page_zip,
-                            const dict_index_t *index, const ulint *offsets,
+void row_upd_rec_txn_fields(Slice *slc, page_zip_des_t *page_zip,
+                            const dict_index_t *index,
                             const txn_layout_t &layout, const txn_desc_t *txn) {
   const txn_desc_t *txn_desc;
   ut_ad(!index->table->skip_alter_undo);
   ut_ad(!index->table->is_intrinsic());
   ut_ad(index->is_clustered() || index->is_panda());
   ut_ad(txn_layout_is_arranged(layout));
-
+  ut_ad(slc->is_positioned(index));
   if (index->table->is_temporary()) {
     txn_desc = &txn_sys_t::instance()->txn_desc_temp;
   } else {
     txn_desc = txn;
-    assert_undo_ptr_allocated(txn_desc->undo_ptr);
+    ut_ad(txn_desc->is_slot_alloced());
   }
-
   switch (layout) {
     case TL_CLOVER:
-      row_upd_rec_clover_fields_low(rec, page_zip, index, offsets,
-                                    txn_desc->cmmt.scn, txn_desc->undo_ptr,
-                                    txn_desc->cmmt.gcn);
+      row_upd_rec_clover_fields_low(slc, page_zip, index, txn_desc->cmmt.scn,
+                                    txn_desc->undo_ptr, txn_desc->cmmt.gcn);
       break;
     case TL_BAMBOO:
-      row_upd_rec_bamboo_fields_low(rec, page_zip, index, offsets,
-                                    txn_desc->cmmt.scn, txn_desc->undo_ptr);
+      row_upd_rec_bamboo_fields_low(slc, page_zip, index, txn_desc->cmmt.scn,
+                                    txn_desc->undo_ptr);
       break;
     default:
       ut_a(0);
@@ -194,18 +187,19 @@ void row_upd_rec_txn_fields(rec_t *rec, page_zip_des_t *page_zip,
 */
 bool validate_lizard_fields_in_record(const dict_index_t *index,
                                       const byte *scn_ptr_in_rec, ulint scn_pos,
-                                      const rec_t *rec, const ulint *offsets) {
+                                      const Slice *slc) {
   ulint len;
 
-  ut_a(scn_ptr_in_rec == const_cast<byte *>(rec_get_nth_field(
-                             index, rec, offsets, scn_pos, &len)));
+  ut_a(scn_ptr_in_rec ==
+       const_cast<byte *>(
+           const_cast<Slice *>(slc)->get_nth_field(index, scn_pos, &len)));
   ut_a(len == DATA_SCN_ID_LEN);
   ut_a(scn_ptr_in_rec + DATA_SCN_ID_LEN ==
-       rec_get_nth_field(index, rec, offsets, scn_pos + 1, &len));
+       const_cast<Slice *>(slc)->get_nth_field(index, scn_pos + 1, &len));
   ut_a(len == DATA_UNDO_PTR_LEN);
 
   ut_a(scn_ptr_in_rec + DATA_SCN_ID_LEN + DATA_UNDO_PTR_LEN ==
-       rec_get_nth_field(index, rec, offsets, scn_pos + 2, &len));
+       const_cast<Slice *>(slc)->get_nth_field(index, scn_pos + 2, &len));
   ut_a(len == DATA_GCN_ID_LEN);
 
   return true;
@@ -223,52 +217,23 @@ bool validate_lizard_fields_in_record(const dict_index_t *index,
   @param[in]      layout      rec layout
   @param[out]     txn_rec     lizard transaction attributes
 */
-void row_get_txn_rec(const rec_t *rec, const dict_index_t *index,
-                     const ulint *offsets, const txn_layout_t &layout,
-                     txn_rec_t *txn_rec) {
+void row_get_txn_rec(const Slice *slc, const dict_index_t *index,
+                     const txn_layout_t &layout, txn_rec_t *txn_rec) {
   ut_ad(txn_layout_is_arranged(layout));
   ut_ad(!index->table || !index->table->is_intrinsic());
+  ut_ad(slc->is_positioned(index));
 
-  switch (layout) {
-    case TL_NONE:
-      ut_ad(0);
-      return;
-    case TL_CLOVER:
-      return row_get_clover_txn_rec(rec, index, offsets, txn_rec);
-    case TL_BAMBOO:
-      return row_get_bamboo_txn_rec(rec, index, offsets, txn_rec);
+  if (layout == TL_CLOVER) {
+    return row_get_clover_txn_rec(slc, index, txn_rec);
   }
+
+  if (layout == TL_BAMBOO) {
+    return row_get_bamboo_txn_rec(slc, index, txn_rec);
+  }
+
+  ut_ad(0);
+  return;
 }
-
-// /**
-//   Whether the transaction on the record has committed
-//   @param[in]        trx_id
-//   @param[in]        rec             current rec
-//   @param[in]        index           cluster index
-//   @parma[in]        offsets         rec_get_offsets(rec, index)
-
-//   @retval           true            committed
-//   @retval           false           active
-// */
-// bool row_is_committed(trx_id_t trx_id, const rec_t *rec,
-//                       const dict_index_t *index, const ulint *offsets) {
-//   /** If the trx id if less than the minimum active trx id,
-//       it's sure that trx has committed.
-
-//       Attention:
-//       the minimum active trx id is changed after trx_sys structure
-//       modification when commit, so it's later than txn undo header
-//       modification.
-//   */
-//   if (gcs_load_min_active_trx_id() > trx_id) {
-//     return true;
-//   }
-
-//   txn_rec_t txn_rec;
-//   row_get_txn_rec(rec, index, offsets, &txn_rec);
-
-//   return !txn_rec_real_state(&txn_rec, Cache_hint::KEEP_OLD, ccr_t::CCR_ALL);
-// }
 
 static void row_entry_adjust_cmp_fields_func(const dict_index_t *index,
                                              dtuple_t *search_entry) {
@@ -350,15 +315,16 @@ void row_log_entry_update_txn_field(dtuple_t *entry, const dict_index_t *index,
   ut_ad(entry && index);
   ut_ad(lizard::dict_index_is_panda(index));
   ut_ad(!index->table->is_temporary());
+  ut_ad(trx->txn_desc.is_slot_alloced());
+  ut_ad(trx->txn_desc.is_cmmt_initial());
 
-  assert_txn_desc_allocated(trx);
   txn_desc = &trx->txn_desc;
 
   /** 1. Populate SCN */
   pos = index->get_sys_col_pos(DATA_SCN_ID);
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_scn(ptr, txn_desc);
+  trx_write_scn(ptr, txn_desc->cmmt.scn);
   pos++;
 
   /** 2. Populate UBA */
@@ -366,14 +332,15 @@ void row_log_entry_update_txn_field(dtuple_t *entry, const dict_index_t *index,
 
   dfield = dtuple_get_nth_field(entry, pos);
   ptr = static_cast<byte *>(dfield_get_data(dfield));
-  trx_write_undo_ptr(ptr, txn_desc);
+  trx_write_undo_ptr(ptr, txn_desc->undo_ptr);
 }
 
-bool row_entry_panda_unique_check_with_rec(const dtuple_t *entry,
-                                           const rec_t *cmp_rec,
-                                           const dict_index_t *index,
-                                           mem_heap_t *heap, ulint *offsets) {
-  size_t matched_fields;
+static bool row_entry_panda_unique_check_with_rec(const dtuple_t *entry,
+                                                  creg_t cmp_reg,
+                                                  const dict_index_t *index,
+                                                  Slice **slc,
+                                                  Slice_ctx &slc_ctx) {
+  size_t matched_fields = 0;
   bool contains_null;
   size_t n_unique;
   size_t n_order_fields;
@@ -384,11 +351,9 @@ bool row_entry_panda_unique_check_with_rec(const dtuple_t *entry,
 
   contains_null = lizard::row_index_entry_contains_null_in_unique(index, entry);
 
-  offsets = rec_get_offsets(cmp_rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-  matched_fields = 0;
+  *slc = slc_ctx.get_offsets(cmp_reg, index, ULINT_UNDEFINED);
 
-  entry->compare(cmp_rec, index, offsets, &matched_fields);
+  entry->compare(index, *slc, &matched_fields);
 
   if (contains_null) {
     return matched_fields >= n_order_fields;
@@ -397,40 +362,39 @@ bool row_entry_panda_unique_check_with_rec(const dtuple_t *entry,
   }
 }
 
-bool row_panda_rec_neighbor_unique_check(const rec_t *rec,
+bool row_panda_rec_neighbor_unique_check(creg_t reg,
                                          const dict_index_t *index) {
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  ulint *offsets = offsets_;
-  const rec_t *cmp_rec;
+  creg_t cmp_reg;
   mem_heap_t *heap = nullptr;
+  Slice_ctx slc_ctx;
+  Slice *slc = nullptr;
   dtuple_t *entry;
 
   if (!dict_index_is_panda(index)) {
     return true;
   }
 
-  ut_a(page_rec_is_user_rec(rec));
+  ut_a(page_rec_is_user_rec(reg.rec));
 
-  rec_offs_init(offsets_);
   heap = mem_heap_create(512, UT_LOCATION_HERE);
-  offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-  entry = row_rec_to_index_entry(rec, index, offsets, heap);
-  ut_a(dtuple_get_n_fields_cmp(entry) ==
-       dict_index_get_n_unique_in_tree(index));
+  slc = slc_ctx.get_offsets(reg, index, ULINT_UNDEFINED);
+
+  entry = row_rec_to_index_entry(slc, index, heap);
+  ut_a(entry->n_panda_suffix ==
+       dict_index_get_n_unique_in_tree(index) - dtuple_get_n_fields_cmp(entry));
 
   /** Check next record */
-  cmp_rec = page_rec_get_next_const(rec);
-  if (page_rec_is_user_rec(cmp_rec)) {
-    ut_a(!row_entry_panda_unique_check_with_rec(entry, cmp_rec, index, heap,
-                                                offsets));
+  cmp_reg = page_rec_get_next_creg(reg.rec);
+  if (page_rec_is_user_rec(cmp_reg.rec)) {
+    ut_a(!row_entry_panda_unique_check_with_rec(entry, cmp_reg, index, &slc,
+                                                slc_ctx));
   }
 
   /** Check prev record */
-  cmp_rec = page_rec_get_prev_const(rec);
-  if (page_rec_is_user_rec(cmp_rec)) {
-    ut_a(!row_entry_panda_unique_check_with_rec(entry, cmp_rec, index, heap,
-                                                offsets));
+  cmp_reg = page_rec_get_prev_creg(reg.rec);
+  if (page_rec_is_user_rec(cmp_reg.rec)) {
+    ut_a(!row_entry_panda_unique_check_with_rec(entry, cmp_reg, index, &slc,
+                                                slc_ctx));
   }
 
   mem_heap_free(heap);
@@ -468,61 +432,60 @@ mem_heap_t *row_sel_decide_old_vers_heap(const dict_index_t *index,
   return *heap;
 }
 
-#if defined UNIV_DEBUG || defined LIZARD_DEBUG
 /*=============================================================================*/
-/* lizard field debug */
+/* lizard field validation */
 /*=============================================================================*/
 /**
-  Debug the undo_ptr and scn in record is matched.
-  @param[in]      rec       record
+  Check the undo_ptr and scn in record is matched.
+  @param[in]      slc       record slice
   @param[in]      index     cluster index
-  @parma[in]      offsets   rec_get_offsets(rec, index)
+  @param[in]      layout    txn layout of the index
 
   @retval         true      Success
 */
-bool row_txn_is_valid(const rec_t *rec, const dict_index_t *index,
-                      const ulint *offsets, const txn_layout_t &layout) {
+bool row_txn_is_valid(const Slice *slc, const dict_index_t *index,
+                      const txn_layout_t &layout) {
   /** If we are in recovery, we don't make a validation, because purge
   sys might have not been started */
   if (recv_recovery_is_on()) return true;
 
   switch(layout) {
-    case TL_NONE:
-      return true;
     case TL_CLOVER:
-      return row_clover_is_valid(rec, index, offsets);
+      return row_clover_is_valid(slc, index);
     case TL_BAMBOO:
-      return row_bamboo_is_valid(rec, index, offsets);
+      return row_bamboo_is_valid(slc, index);
+    case TL_NONE:
+    case TL_LOTUS:
+      return true;
   }
 
   return true;
 }
 
 /**
-  Debug row has cleanout.
-  @param[in]      rec       record
+  Check row has cleanout.
+  @param[in]      slc       record slice
   @param[in]      index     cluster index
-  @parma[in]      offsets   rec_get_offsets(rec, index)
+  @param[in]      layout    txn layout of the index
 
   @retval         true      Success
 */
-bool row_txn_has_cleanout(const rec_t *rec, const dict_index_t *index,
-                          const ulint *offsets, const txn_layout_t &layout) {
+bool row_txn_has_cleanout(const Slice *slc, const dict_index_t *index,
+                          const txn_layout_t &layout) {
   ut_ad(txn_layout_is_arranged(layout));
 
   switch (layout) {
     case TL_CLOVER:
-      return row_clover_has_cleanout(rec, index, offsets);
+      return row_clover_has_cleanout(slc, index);
     case TL_BAMBOO:
-      return row_bamboo_has_cleanout(rec, index, offsets);
+      return row_bamboo_has_cleanout(slc, index);
     case TL_NONE:
+    case TL_LOTUS:
       ut_error;
       return true;
   }
 
   return true;
 }
-
-#endif /* UNIV_DEBUG || LIZARD_DEBUG */
 
 } /* namespace lizard */

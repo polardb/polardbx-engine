@@ -36,6 +36,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "current_thd.h"
 #include "debug_sync.h"
+#include "ibuf0ibuf.h"
 #include "mysqld.h"
 
 #include "dict0dd.h"
@@ -46,6 +47,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0chkp.h"
 #include "mach0data.h"
 #include "que0que.h"
+#include "rem0types.h"
 #include "row0log.h"
 #include "row0mysql.h"
 #include "row0row.h"
@@ -64,10 +66,10 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 
 #include "lizard0row.h"
+#include "lizard0row0gpp.h"
+#include "lizard0row0lotus.h"
 #include "lizard0trx0rec.h"
 #include "lizard0undo.h"
-#include "lizard0undo0types.h"
-#include "lizard0row0gpp.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -112,6 +114,7 @@ purge_node_t *row_purge_node_create(que_thr_t *parent, mem_heap_t *heap) {
 static bool row_purge_reposition_pcur(
     ulint mode,         /*!< in: latching mode */
     purge_node_t *node, /*!< in: row purge node */
+    btr_cur_t *sec_cur, /*!< in: Cursor for the secondary index */
     mtr_t *mtr)         /*!< in: mtr */
 {
   if (node->found_clust) {
@@ -122,6 +125,8 @@ static bool row_purge_reposition_pcur(
 
   } else {
     node->found_clust =
+        lizard::row_purge_optimistic_reposition_pcur(mode, node, sec_cur,
+                                                     mtr) ||
         row_search_on_row_ref(&node->pcur, mode, node->table, node->ref, mtr);
 
     if (node->found_clust) {
@@ -157,11 +162,8 @@ static bool row_purge_reposition_pcur(
   dict_index_t *index;
   bool success = true;
   mtr_t mtr;
-  rec_t *rec;
-  mem_heap_t *heap = nullptr;
-  ulint *offsets;
-  ulint offsets_[REC_OFFS_NORMAL_SIZE];
-  rec_offs_init(offsets_);
+  Slice_ctx sctx;
+  Slice *slc = nullptr;
 
   index = node->table->first_index();
 
@@ -178,22 +180,19 @@ static bool row_purge_reposition_pcur(
   log_free_check();
   mtr_start(&mtr);
 
-  if (!row_purge_reposition_pcur(mode, node, &mtr)) {
+  if (!row_purge_reposition_pcur(mode, node, nullptr, &mtr)) {
     /* The record was already removed. */
     goto func_exit;
   }
 
-  rec = node->pcur.get_rec();
+  slc = sctx.get_offsets(node->pcur.get_reg(), index, ULINT_UNDEFINED);
 
-  offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
-                            UT_LOCATION_HERE, &heap);
-
-  if (node->roll_ptr != row_get_rec_roll_ptr(rec, index, offsets)) {
+  if (node->roll_ptr != row_get_rec_roll_ptr(slc, index)) {
     /* Someone else has modified the record later: do not remove */
     goto func_exit;
   }
 
-  ut_ad(rec_get_deleted_flag(rec, rec_offs_comp(offsets)));
+  ut_ad(rec_get_deleted_flag(slc->rec(), rec_offs_comp(slc->offsets())));
 
   if (mode == BTR_MODIFY_LEAF) {
     success = btr_cur_optimistic_delete(node->pcur.get_btr_cur(), 0, &mtr);
@@ -227,10 +226,6 @@ static bool row_purge_reposition_pcur(
   }
 
 func_exit:
-  if (heap) {
-    mem_heap_free(heap);
-  }
-
   /* Persistent cursor is closed if reposition fails. */
   if (node->found_clust) {
     node->pcur.commit_specify_mtr(&mtr);
@@ -286,10 +281,11 @@ func_exit:
  secondary index entry after purge has removed it and released the leaf
  page latch.
  @return true if the secondary index record can be purged */
-bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
-                        dict_index_t *index,   /*!< in: secondary index */
-                        const dtuple_t *entry, /*!< in: secondary index entry */
-                        btr_cur_t *cur) /*!< in: cursor on secondary index */
+bool row_purge_poss_sec_slow(
+    purge_node_t *node,    /*!< in/out: row purge node */
+    dict_index_t *index,   /*!< in: secondary index */
+    const dtuple_t *entry, /*!< in: secondary index entry */
+    btr_cur_t *sec_cur)    /*!< in: cursor on secondary index */
 {
   bool can_delete;
   bool found_clust;
@@ -298,12 +294,10 @@ bool row_purge_poss_sec(purge_node_t *node,    /*!< in/out: row purge node */
   ut_ad(!index->is_clustered());
   mtr_start(&mtr);
 
-  found_clust = lizard::row_purge_optimistic_reposition_pcur(BTR_SEARCH_LEAF,
-                                                             node, cur, &mtr) ||
-                row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, &mtr);
+  found_clust = row_purge_reposition_pcur(BTR_SEARCH_LEAF, node, sec_cur, &mtr);
 
   can_delete = !found_clust || !row_vers_old_has_index_entry(
-                                   true, node->pcur.get_rec(), &mtr, index,
+                                   true, node->pcur.get_reg(), &mtr, index,
                                    entry, node->roll_ptr, node->trx_id);
 
   /* Persistent cursor is closed if reposition fails. */
@@ -390,7 +384,7 @@ index tree.  Does not try to buffer the delete.
   which cannot be purged yet, requires its existence. If some requires,
   we should do nothing. */
 
-  if (row_purge_poss_sec(node, index, entry, btr_cur)) {
+  if (lizard::row_purge_poss_sec(node, index, entry, btr_cur)) {
     /* Remove the index record, which should have been
     marked for deletion. */
     if (!rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
@@ -400,7 +394,7 @@ index tree.  Does not try to buffer the delete.
              " in index "
           << index->name << " of table " << index->table->name
           << ": tuple: " << *entry
-          << ", record: " << rec_index_print(btr_cur_get_rec(btr_cur), index);
+          << ", record: " << rec_index_print(btr_cur_get_reg(btr_cur), index);
 
       ut_d(ut_error);
 
@@ -481,7 +475,7 @@ if possible.
     }
 
     /* Change buffering is disabled for temporary tables. */
-    mode = (index->table->is_temporary())
+    mode = (index->table->is_temporary() || !ibuf_hippo_purge_possible(index))
                ? BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED
                : BTR_MODIFY_LEAF | BTR_ALREADY_S_LATCHED | BTR_DELETE;
   } else {
@@ -491,8 +485,10 @@ if possible.
     ut_ad(!dict_index_is_online_ddl(index));
 
     /* Change buffering is disabled for temporary tables
-    and spatial index. */
-    mode = (index->table->is_temporary() || dict_index_is_spatial(index))
+    and spatial index and hippo index. */
+    /* TODO: delay purge for hippo. */
+    mode = (index->table->is_temporary() || dict_index_is_spatial(index) ||
+            !ibuf_hippo_purge_possible(index))
                ? BTR_MODIFY_LEAF
                : BTR_MODIFY_LEAF | BTR_DELETE;
   }
@@ -518,7 +514,7 @@ if possible.
     case ROW_FOUND:
       /* Before attempting to purge a record, check
       if it is safe to do so. */
-      if (row_purge_poss_sec(node, index, entry, pcur.get_btr_cur())) {
+      if (lizard::row_purge_poss_sec(node, index, entry, pcur.get_btr_cur())) {
         btr_cur_t *btr_cur = pcur.get_btr_cur();
 
         /* Only delete-marked records should be purged. */
@@ -530,7 +526,7 @@ if possible.
                  " in index "
               << index->name << " of table " << index->table->name
               << ": tuple: " << *entry << ", record: "
-              << rec_index_print(btr_cur_get_rec(btr_cur), index);
+              << rec_index_print(btr_cur_get_reg(btr_cur), index);
 
           pcur.close();
 
@@ -550,7 +546,7 @@ if possible.
 
           page = btr_cur_get_page(btr_cur);
 
-          if (!lock_test_prdt_page_lock(trx, page_get_page_id(page)) &&
+          if (lock_other_has_prdt_page_lock(trx, page_get_page_id(page)) &&
               page_get_n_recs(page) < 2 &&
               page_get_page_no(page) != dict_index_get_page(index)) {
             /* this is the last record on page,
@@ -714,6 +710,16 @@ static inline void row_purge_remove_multi_sec_if_poss(purge_node_t *node,
       }
 
       mem_heap_empty(heap);
+
+      DBUG_EXECUTE_IF("purge_del_mark_pause_after_sec_index", {
+        if (strcmp(node->table->name.m_name, "test/t1") == 0) {
+          const char act[] =
+              "now SIGNAL purge_processed_sec_index "
+              "WAIT_FOR purge_continue_after_sec_index";
+          assert(opt_debug_sync_timeout > 0);
+          assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+        }
+      });
     }
 
     node->index = node->index->next();
@@ -1118,6 +1124,7 @@ try_again:
     ptr = trx_undo_rec_get_partial_row(
         ptr, index, &node->row, type == TRX_UNDO_UPD_DEL_REC, node->heap);
     lizard::row_purge_alloc_gpp_field(node);
+    lizard::row_purge_alloc_trx_id_field(index, node->row, node->heap);
   }
 
   return (true);
@@ -1352,20 +1359,21 @@ bool purge_node_t::validate_pcur() {
 
   dict_index_t *clust_index = pcur.m_btr_cur.index;
 
-  ulint *offsets =
-      rec_get_offsets(pcur.m_old_rec, clust_index, nullptr, pcur.m_old_n_fields,
-                      UT_LOCATION_HERE, &heap);
+  Slice_ctx sctx(&heap);
+  Slice *slc = nullptr;
+
+  slc = sctx.get_offsets(pcur.m_old_reg, clust_index, pcur.m_old_n_fields);
 
   /* Here we are comparing the purge ref record and the stored initial
   part in persistent cursor. Both cases we store n_uniq fields of the
   cluster index and so it is fine to do the comparison. We note this
   dependency here as pcur and ref belong to different modules. */
-  int st = cmp_dtuple_rec(ref, pcur.m_old_rec, clust_index, offsets);
+  int st = cmp_dtuple_rec(ref, clust_index, slc);
 
   if (st != 0) {
     ib::error(ER_IB_MSG_1010) << "Purge node pcur validation failed";
     ib::error(ER_IB_MSG_1011) << rec_printer(ref).str();
-    ib::error(ER_IB_MSG_1012) << rec_printer(pcur.m_old_rec, offsets).str();
+    ib::error(ER_IB_MSG_1012) << rec_printer(slc).str();
     return (false);
   }
 

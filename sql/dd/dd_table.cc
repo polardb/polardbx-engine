@@ -50,7 +50,7 @@
 #include "sql/dd/impl/system_registry.h"       // dd::System_tables
 #include "sql/dd/impl/tables/dd_properties.h"  // dd::tables:.DD_properties
 #include "sql/dd/impl/utils.h"                 // dd::escape
-#include "sql/dd/lizard_policy_types.h"
+#include "sql/dd/komodo0dd0policy0types.h"
 #include "sql/dd/performance_schema/init.h"    // performance_schema::
                                                //   set_PS_version_for_table
 #include "sql/create_field.h"
@@ -107,6 +107,9 @@
 #include "sql/thd_raii.h"
 #include "sql_string.h"
 #include "typelib.h"
+#ifndef NDEBUG
+#include "vidx/vidx_index.h"
+#endif /* !NDEBUG */
 
 namespace dd {
 
@@ -694,6 +697,12 @@ bool fill_dd_columns_from_create_fields(THD *thd, dd::Abstract_table *tab_obj,
       col_options->set("geom_type", field.geom_type);
     }
 
+    // Store vector type
+    if (field.is_vector) {
+      assert(field.sql_type == MYSQL_TYPE_VARCHAR);
+      col_options->set("vector_type", true);
+    }
+
     // Field storage media and column format options
     if (field.field_storage_type() != HA_SM_DEFAULT)
       col_options->set("storage",
@@ -1040,6 +1049,9 @@ static void fill_dd_indexes_from_keyinfo(
 
   const KEY *primary_key_info = nullptr;
   for (int key_nr = 1; key != end; ++key, ++key_nr) {
+    if (key->flags & HA_VECTOR) {
+      continue;
+    }
     //
     // Add new DD index
     //
@@ -1071,7 +1083,7 @@ static void fill_dd_indexes_from_keyinfo(
     idx_obj->set_engine_attribute(key->engine_attribute);
     idx_obj->set_secondary_engine_attribute(key->secondary_engine_attribute);
     assert(key->secondary_engine_attribute.length == 0);
-    idx_obj->set_se_attr_hint(key->se_attr_hint);
+    idx_obj->set_se_attrs(key->se_attrs);
     //
     // Set options
     //
@@ -2314,19 +2326,19 @@ static bool get_se_private_data(THD *thd, dd::Table *tab_obj) {
       tbl_props->get(options_ss.str().c_str(), &options_raw);
       std::unique_ptr<dd::Properties> options(
           Properties::parse_properties(options_raw));
-      if (options->exists(lizard::OPTION_IFT)) {
-        options->get(lizard::OPTION_IFT, &IFT_option);
+      if (options->exists(komodo::OPTION_IFT)) {
+        options->get(komodo::OPTION_IFT, &IFT_option);
       }
       assert(
           DBUG_EVALUATE_IF("allow_dd_tables_have_gpp", true, IFT_option == 0));
-      idx->options().set(lizard::OPTION_IFT, IFT_option);
+      idx->options().set(komodo::OPTION_IFT, IFT_option);
     }
 
     /* Check dd table not contains panda */
-    if (idx->se_private_data().exists(lizard::PAGE_TYPE_STR)) {
+    if (idx->se_private_data().exists(komodo::PAGE_TYPE_STR)) {
       uint16_t page_type = 0;
-      idx->se_private_data().get(lizard::PAGE_TYPE_STR, &page_type);
-      assert(page_type != lizard::PANDA_PAGE_TYPE);
+      idx->se_private_data().get(komodo::PAGE_TYPE_STR, &page_type);
+      assert(page_type != komodo::PANDA_PAGE_TYPE);
     }
 
     // Assign the same tablespace id for the indexes as for the table.
@@ -2467,6 +2479,7 @@ std::unique_ptr<dd::Table> create_tmp_table(
                                      check_cons_spec, file))
     return nullptr;
 
+  assert(!vidx::dd_table_has_hlindexes(tab_obj.get()));
   return tab_obj;
 }
 
@@ -2678,6 +2691,9 @@ bool recreate_table(THD *thd, const char *schema_name, const char *table_name) {
   // Create a path to the table, but without a extension
   char path[FN_REFLEN + 1];
   build_table_filename(path, sizeof(path) - 1, schema_name, table_name, "", 0);
+
+  /* vector index is only supported for InnoDB tables. */
+  assert(!vidx::dd_table_has_hlindexes(table_def));
 
   // Attempt to reconstruct the table
   return ha_create_table(thd, path, schema_name, table_name, &create_info, true,

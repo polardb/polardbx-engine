@@ -52,19 +52,24 @@ void first_page_t::replace_inline(ulint offset, const byte *&ptr, ulint &want,
 point to remaining data.
 @param[in,out]  want    Requested amount of data to be replaced. After the
 call it will contain amount of data yet to be replaced.
+@param[in]      ctx     insert context providing index/is_bulk for new page
+                        allocation.
 @param[in]      mtr     Mini-transaction context.
 @return  the newly allocated buffer block.
 @return  nullptr if new page could not be allocated
 (DB_OUT_OF_FILE_SPACE). */
 buf_block_t *first_page_t::replace(trx_t *trx, ulint offset, const byte *&ptr,
-                                   ulint &want, mtr_t *mtr) {
+                                   ulint &want, InsertContext *ctx,
+                                   mtr_t *mtr) {
   DBUG_TRACE;
 
   buf_block_t *new_block = nullptr;
 
   /** Allocate a new data page. */
   data_page_t new_page(mtr, m_index);
-  new_block = new_page.alloc(mtr, false);
+  ut_ad(ctx != nullptr);
+  ut_ad(!ctx->is_bulk());
+  new_block = new_page.alloc(ctx, mtr);
 
   DBUG_EXECUTE_IF("innodb_lob_first_page_replace_failed", new_block = nullptr;);
 
@@ -212,16 +217,17 @@ bool first_page_t::validate() const {
 #endif /* UNIV_DEBUG */
 
 /** Allocate the first page for uncompressed LOB.
+@param[in]      ctx             insert context providing index/is_bulk.
 @param[in,out]  alloc_mtr       the allocation mtr.
-@param[in]      is_bulk         true if it is bulk operation.
-                                (OPCODE_INSERT_BULK)
 return the allocated buffer block.*/
-buf_block_t *first_page_t::alloc(mtr_t *alloc_mtr, bool is_bulk) {
+buf_block_t *first_page_t::alloc(InsertContext *ctx, mtr_t *alloc_mtr) {
   ut_ad(m_index != nullptr);
   ut_ad(m_block == nullptr);
 
   page_no_t hint = FIL_NULL;
-  m_block = alloc_lob_page(m_index, alloc_mtr, hint, is_bulk);
+  ut_ad(ctx != nullptr);
+  ut_ad(m_index == ctx->index());
+  m_block = ctx->alloc_lob_page(hint, alloc_mtr);
 
   if (m_block == nullptr) {
     return (nullptr);
@@ -257,15 +263,17 @@ buf_block_t *first_page_t::alloc(mtr_t *alloc_mtr, bool is_bulk) {
 
 /** Allocate one index entry.  If required an index page (of type
 FIL_PAGE_TYPE_LOB_INDEX) will be allocated.
-@param[in]      bulk    true if it is a bulk operation
-                        (OPCODE_INSERT_BULK), false otherwise.
+@param[in]      ctx     insert context providing index/is_bulk.
 @return the file list node of the index entry. */
-flst_node_t *first_page_t::alloc_index_entry(bool bulk) {
+flst_node_t *first_page_t::alloc_index_entry(InsertContext *ctx) {
+  ut_ad(ctx != nullptr);
+  ut_ad(m_index == ctx->index());
+
   flst_base_node_t *f_list = free_list();
   fil_addr_t node_addr = flst_get_first(f_list, m_mtr);
   if (fil_addr_is_null(node_addr)) {
     node_page_t node_page(m_mtr, m_index);
-    buf_block_t *block = node_page.alloc(*this, bulk);
+    buf_block_t *block = node_page.alloc(*this, ctx);
 
     if (block == nullptr) {
       return (nullptr);

@@ -126,6 +126,7 @@ SET(MYSYS_SOURCES
   sm4_sha1.cc
   sm4_PBKDF2.cc
   sm4_interface_sym_others.cc
+  hash.cc
 )
 LIST(APPEND MYSYS_SOURCES my_aes_openssl.cc)
 

@@ -1,0 +1,4 @@
+!include ../my.cnf
+
+[mysqld]
+consensus_replicate_with_cache_log=OFF

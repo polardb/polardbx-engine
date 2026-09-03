@@ -1,4 +1,4 @@
-!include suite/rpl_gtid/my.cnf 
+!include suite/rpl_gtid_no_xpaxos/my.cnf 
 
 # Set innodb-write-io-threads and innodb-read-io-threads to 2,
 # instead of the default value 4, so that the aio-max-nr limit

@@ -1,0 +1,25 @@
+--source include/have_debug.inc
+
+--echo # Bug repro: rollback after instant-dropped column history
+
+SET GLOBAL innodb_purge_stop_now = ON;
+
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  k INT,
+  c VARCHAR(64),
+  pad VARCHAR(64),
+  KEY idx_c(c)
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
+
+INSERT INTO t1 VALUES (1, 1, 'c1', 'p1'), (2, 2, 'c2', 'p2');
+ALTER TABLE t1 ADD COLUMN inst_col VARCHAR(255) NOT NULL DEFAULT '', ALGORITHM=INSTANT;
+UPDATE t1 SET inst_col = 'inst471361' WHERE id = 1;
+ALTER TABLE t1 DROP COLUMN inst_col, ALGORITHM=INSTANT;
+
+BEGIN;
+UPDATE t1 SET c = 'c1_rollback' WHERE id = 1;
+ROLLBACK;
+
+SET GLOBAL innodb_purge_run_now = ON;
+DROP TABLE t1;

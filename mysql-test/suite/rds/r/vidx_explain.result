@@ -1,0 +1,319 @@
+CALL mtr.add_suppression("Unsafe statement written to the binary log using statement format since BINLOG_FORMAT = STATEMENT");
+SET GLOBAL vidx_disabled = OFF;
+SET transaction_isolation = 'READ-COMMITTED';
+# 1. Setup: table with EUCLIDEAN vector index
+CREATE TABLE t1 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi(v) m=16 distance=euclidean
+) ENGINE=InnoDB;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+# 2. EXPLAIN shows ef_search, limit, metric
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 3. Different LIMIT values
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 10;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=10; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 10
+# 4. Change ef_search and verify it reflects in EXPLAIN
+SET vidx_hnsw_ef_search = 50;
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=50; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SET vidx_hnsw_ef_search = 200;
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=200; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+SET vidx_hnsw_ef_search = 20;
+# 5. EXPLAIN FORMAT=JSON shows vector_index info
+EXPLAIN FORMAT=JSON SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "X"
+    },
+    "ordering_operation": {
+      "using_filesort": false,
+      "table": {
+        "table_name": "t1",
+        "access_type": "index",
+        "key": "vi",
+        "used_key_parts": [
+          "v"
+        ],
+        "key_length": "23",
+        "rows_examined_per_scan": X,
+        "rows_produced_per_join": X,
+        "filtered": "X",
+        "using_vector_index": "algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN",
+        "cost_info": {
+          "read_cost": "0.25",
+          "eval_cost": "10.00",
+          "prefix_cost": "10.25",
+          "data_read_per_join": "X"
+        },
+        "used_columns": [
+          "id",
+          "v"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 6. EXPLAIN ANALYZE shows nodes_visited
+EXPLAIN ANALYZE SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+EXPLAIN
+-> Limit: 5 row(s)  (cost=N rows=N) (actual time=N..N rows=N loops=N)
+    -> Index scan on t1 using vi  (cost=N rows=N) (actual time=N..N rows=N loops=N) (vector: algo=HNSW, nodes_visited=N)
+
+# 7. When vector index is NOT used (limit too large), no vector info in Extra
+EXPLAIN SELECT * FROM t1 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 100;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ALL	NULL	NULL	NULL	NULL	X	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 100
+# 8. COSINE metric
+CREATE TABLE t2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi_cos(v) distance=cosine
+) ENGINE=InnoDB;
+ANALYZE TABLE t2;
+Table	Op	Msg_type	Msg_text
+test.t2	analyze	status	OK
+EXPLAIN SELECT * FROM t2 ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t2	NULL	index	NULL	vi_cos	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=COSINE)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`id` AS `id`,`test`.`t2`.`v` AS `v` from `test`.`t2` order by VEC_DISTANCE_COSINE(`test`.`t2`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 9. nodes_visited accuracy: value is non-zero and continuation
+#    re-searches are accumulated (full-traversal semantics)
+nodes_visited accuracy OK
+# 10. Extra coexists with "Using where" when a runtime filter is present
+#     and still carries accurate vector params (id + 0 > 5 blocks PK range,
+#     so the optimizer keeps the vector index scan plus a Using where filter)
+EXPLAIN SELECT * FROM t1 WHERE id + 0 > 5 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	index	NULL	vi	23	NULL	X	X	Using where; Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id`,`test`.`t1`.`v` AS `v` from `test`.`t1` where ((`test`.`t1`.`id` + 0) > 5) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t1`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 11. FORMAT=JSON accuracy under non-default ef_search and COSINE metric
+#     (cross-checks ef_search/limit/metric in the JSON path, not just the
+#     default combination covered by scenario 5)
+SET vidx_hnsw_ef_search = 50;
+EXPLAIN FORMAT=JSON SELECT * FROM t2 ORDER BY VEC_DISTANCE_COSINE(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 7;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "X"
+    },
+    "ordering_operation": {
+      "using_filesort": false,
+      "table": {
+        "table_name": "t2",
+        "access_type": "index",
+        "key": "vi_cos",
+        "used_key_parts": [
+          "v"
+        ],
+        "key_length": "23",
+        "rows_examined_per_scan": X,
+        "rows_produced_per_join": X,
+        "filtered": "X",
+        "using_vector_index": "algo=HNSW; ef_search=50; ef_construction=10; limit=7; metric=COSINE",
+        "cost_info": {
+          "read_cost": "0.25",
+          "eval_cost": "10.00",
+          "prefix_cost": "10.25",
+          "data_read_per_join": "X"
+        },
+        "used_columns": [
+          "id",
+          "v"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t2`.`id` AS `id`,`test`.`t2`.`v` AS `v` from `test`.`t2` order by VEC_DISTANCE_COSINE(`test`.`t2`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 7
+SET vidx_hnsw_ef_search = 20;
+# 12. INNER_PRODUCT metric
+CREATE TABLE t3 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi_ip(v) distance=inner_product
+) ENGINE=InnoDB;
+ANALYZE TABLE t3;
+Table	Op	Msg_type	Msg_text
+test.t3	analyze	status	OK
+# 12a. Tabular EXPLAIN shows metric=INNER_PRODUCT
+EXPLAIN SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t3	NULL	index	NULL	vi_ip	23	NULL	100	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=INNER_PRODUCT)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t3`.`id` AS `id`,`test`.`t3`.`v` AS `v` from `test`.`t3` order by VEC_DISTANCE_INNER_PRODUCT(`test`.`t3`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 12b. FORMAT=JSON with INNER_PRODUCT metric
+EXPLAIN FORMAT=JSON SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "X"
+    },
+    "ordering_operation": {
+      "using_filesort": false,
+      "table": {
+        "table_name": "t3",
+        "access_type": "index",
+        "key": "vi_ip",
+        "used_key_parts": [
+          "v"
+        ],
+        "key_length": "23",
+        "rows_examined_per_scan": X,
+        "rows_produced_per_join": X,
+        "filtered": "X",
+        "using_vector_index": "algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=INNER_PRODUCT",
+        "cost_info": {
+          "read_cost": "0.25",
+          "eval_cost": "10.00",
+          "prefix_cost": "10.25",
+          "data_read_per_join": "X"
+        },
+        "used_columns": [
+          "id",
+          "v"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t3`.`id` AS `id`,`test`.`t3`.`v` AS `v` from `test`.`t3` order by VEC_DISTANCE_INNER_PRODUCT(`test`.`t3`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 12c. EXPLAIN ANALYZE with INNER_PRODUCT metric shows nodes_visited
+EXPLAIN ANALYZE SELECT * FROM t3 ORDER BY VEC_DISTANCE_INNER_PRODUCT(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+EXPLAIN
+-> Limit: 5 row(s)  (cost=N rows=N) (actual time=N..N rows=N loops=N)
+    -> Index scan on t3 using vi_ip  (cost=N rows=N) (actual time=N..N rows=N loops=N) (vector: algo=HNSW, nodes_visited=N)
+
+# 13. ef_construction value is accurate in EXPLAIN Extra
+CREATE TABLE t4 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v VECTOR(5),
+VECTOR INDEX vi_ec(v) EF_CONSTRUCTION=50
+) ENGINE=InnoDB;
+ANALYZE TABLE t4;
+Table	Op	Msg_type	Msg_text
+test.t4	analyze	status	OK
+EXPLAIN SELECT * FROM t4 ORDER BY VEC_DISTANCE_EUCLIDEAN(v, VEC_FROMTEXT('[0.5,0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t4	NULL	index	NULL	vi_ec	23	NULL	20	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=50; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t4`.`id` AS `id`,`test`.`t4`.`v` AS `v` from `test`.`t4` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t4`.`v`,VEC_FromText('[0.5,0.5,0.5,0.5,0.5]')) limit 5
+# 14. Multi-index: optimizer picks correct index per column
+CREATE TABLE t_mi (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v1 VECTOR(4),
+v2 VECTOR(4),
+VECTOR INDEX idx_v1(v1) DISTANCE=euclidean,
+VECTOR INDEX idx_v2(v2) DISTANCE=cosine
+) ENGINE=InnoDB;
+ANALYZE TABLE t_mi;
+Table	Op	Msg_type	Msg_text
+test.t_mi	analyze	status	OK
+# 14a. EXPLAIN on v1 should show idx_v1
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	idx_v1	19	NULL	20	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+# 14b. EXPLAIN on v2 should show idx_v2
+EXPLAIN SELECT * FROM t_mi ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	idx_v2	19	NULL	20	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=COSINE)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` order by VEC_DISTANCE_COSINE(`test`.`t_mi`.`v2`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+# 14c. FORCE INDEX(idx_v1) for v1 query
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (idx_v1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	idx_v1	19	NULL	20	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` FORCE INDEX FOR ORDER BY (`idx_v1`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+# 14d. FORCE INDEX(idx_v2) for v2 query
+EXPLAIN SELECT * FROM t_mi FORCE INDEX FOR ORDER BY (idx_v2)
+ORDER BY VEC_DISTANCE_COSINE(v2, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	index	NULL	idx_v2	19	NULL	20	100.00	Using vector index (algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=COSINE)
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` FORCE INDEX FOR ORDER BY (`idx_v2`) order by VEC_DISTANCE_COSINE(`test`.`t_mi`.`v2`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+# 14e. IGNORE INDEX(idx_v1) → v1 query uses filesort
+EXPLAIN SELECT * FROM t_mi IGNORE INDEX FOR ORDER BY (idx_v1)
+ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t_mi	NULL	ALL	NULL	NULL	NULL	NULL	20	100.00	Using filesort
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` IGNORE INDEX FOR ORDER BY (`idx_v1`) order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+# 14f. FORMAT=JSON distinguishes index names
+EXPLAIN FORMAT=JSON SELECT * FROM t_mi ORDER BY VEC_DISTANCE_EUCLIDEAN(v1, VEC_FROMTEXT('[0.5,0.5,0.5,0.5]')) LIMIT 5;
+EXPLAIN
+{
+  "query_block": {
+    "select_id": 1,
+    "cost_info": {
+      "query_cost": "X"
+    },
+    "ordering_operation": {
+      "using_filesort": false,
+      "table": {
+        "table_name": "t_mi",
+        "access_type": "index",
+        "key": "idx_v1",
+        "used_key_parts": [
+          "v1"
+        ],
+        "key_length": "19",
+        "rows_examined_per_scan": X,
+        "rows_produced_per_join": X,
+        "filtered": "X",
+        "using_vector_index": "algo=HNSW; ef_search=20; ef_construction=10; limit=5; metric=EUCLIDEAN",
+        "cost_info": {
+          "read_cost": "0.25",
+          "eval_cost": "2.00",
+          "prefix_cost": "2.25",
+          "data_read_per_join": "X"
+        },
+        "used_columns": [
+          "id",
+          "v1",
+          "v2"
+        ]
+      }
+    }
+  }
+}
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t_mi`.`id` AS `id`,`test`.`t_mi`.`v1` AS `v1`,`test`.`t_mi`.`v2` AS `v2` from `test`.`t_mi` order by VEC_DISTANCE_EUCLIDEAN(`test`.`t_mi`.`v1`,VEC_FromText('[0.5,0.5,0.5,0.5]')) limit 5
+DROP TABLE t_mi;
+# Cleanup
+DROP TABLE t1, t2, t3, t4;
+SET GLOBAL vidx_disabled = default;

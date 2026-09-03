@@ -1,0 +1,536 @@
+#
+# CASE 1: simple insert
+#
+# DYNAMIC
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('b', 100), 2)); UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+id	cp
+1	c
+2	b
+# COMPACT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=COMPACT;;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('b', 100), 2)); UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
+id	cp
+1	c
+2	b
+# REDUNDANT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT;;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('b', 100), 2)); UPDATE t1 SET c = CONCAT(REPEAT('c', 100)) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
+id	cp
+1	c
+2	b
+#
+# CASE 2: simple delete
+#
+# DYNAMIC
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 2));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+DELETE FROM t1 WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+id	cp
+2	a
+# COMPACT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=COMPACT; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 2));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+DELETE FROM t1 WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
+id	cp
+2	a
+# REDUNDANT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1)); INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 2));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+DELETE FROM t1 WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
+id	cp
+2	a
+#
+# CASE 3: update (delete-and-insert in secondary index)
+#
+# DYNAMIC
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET c = CONCAT(REPEAT('z', 100), 99) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+id	cp
+1	z
+# COMPACT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=COMPACT; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET c = CONCAT(REPEAT('z', 100), 99) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
+id	cp
+1	z
+# REDUNDANT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT; INSERT INTO t1 (c) VALUES (CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET c = CONCAT(REPEAT('z', 100), 99) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
+id	cp
+1	z
+#
+# CASE 4: update in-place (PK changes; secondary index not touched)
+# Verifies that redo on clustered index does not corrupt SPC index.
+#
+# DYNAMIC
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', pad VARCHAR(60) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC; INSERT INTO t1 (c, pad) VALUES (CONCAT(REPEAT('a', 100), 1), REPEAT('x', 60));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET pad = REPEAT('y', 60) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp, LEFT(pad,1) AS pp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  `pad` varchar(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+id	cp	pp
+1	a	y
+# COMPACT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', pad VARCHAR(60) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=COMPACT; INSERT INTO t1 (c, pad) VALUES (CONCAT(REPEAT('a', 100), 1), REPEAT('x', 60));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET pad = REPEAT('y', 60) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp, LEFT(pad,1) AS pp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  `pad` varchar(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
+id	cp	pp
+1	a	y
+# REDUNDANT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', pad VARCHAR(60) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT; INSERT INTO t1 (c, pad) VALUES (CONCAT(REPEAT('a', 100), 1), REPEAT('x', 60));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+UPDATE t1 SET pad = REPEAT('y', 60) WHERE id = 1;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp, LEFT(pad,1) AS pp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  `pad` varchar(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
+id	cp	pp
+1	a	y
+#
+# CASE 5: insert reusing del-marked slot (DELETE + INSERT in one txn)
+#
+# DYNAMIC
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC; INSERT INTO t1 (id, c) VALUES (1, CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+BEGIN; DELETE FROM t1 WHERE id = 1; INSERT INTO t1 (id, c) VALUES (2, CONCAT(REPEAT('b', 100), 2)); COMMIT;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=DYNAMIC
+id	cp
+2	b
+# COMPACT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=COMPACT; INSERT INTO t1 (id, c) VALUES (1, CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+BEGIN; DELETE FROM t1 WHERE id = 1; INSERT INTO t1 (id, c) VALUES (2, CONCAT(REPEAT('b', 100), 2)); COMMIT;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPACT
+id	cp
+2	b
+# REDUNDANT
+SET opt_index_format_spc_enabled = ON;
+CREATE TABLE t1 (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, c VARCHAR(120) NOT NULL DEFAULT '', KEY idx_c (c)) ENGINE=InnoDB ROW_FORMAT=REDUNDANT; INSERT INTO t1 (id, c) VALUES (1, CONCAT(REPEAT('a', 100), 1));;
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Produce redo (checkpoint disabled)
+SET GLOBAL innodb_checkpoint_disabled = 1;
+BEGIN; DELETE FROM t1 WHERE id = 1; INSERT INTO t1 (id, c) VALUES (2, CONCAT(REPEAT('b', 100), 2)); COMMIT;;
+# Kill the server
+# mysqld was killed by no_checkpoint_end; restart to replay redo
+# restart
+# After recovery: verify SPC index == PRIMARY KEY (checksum)
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+SET GLOBAL innodb_checkpoint_disabled = 0;
+SET opt_index_format_spc_enabled = 1;
+SHOW CREATE TABLE t1; SELECT id, LEFT(c,1) AS cp FROM t1 ORDER BY id; DROP TABLE IF EXISTS t1;;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `c` varchar(120) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `idx_c` (`c`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=REDUNDANT
+id	cp
+2	b
+#
+# CASE 6: B-tree split on SPC index (page_copy_rec_list_end_to_created_page)
+#
+# page_copy_rec_list_end_to_created_page() copies right-half records to a
+# newly allocated page during split.  The redo log records individual
+# MLOG_COMP_REC_INSERT entries for those records but does NOT log the
+# page-dict area that SPC needs for decompression.  On recovery the new
+# page's page-dict is uninitialized, which used to crash.
+#
+CREATE TABLE t1 (
+id INT NOT NULL AUTO_INCREMENT,
+c  VARCHAR(100) NOT NULL DEFAULT '',
+PRIMARY KEY (id),
+KEY idx_c (c) secondary_engine_attribute '{"gpp":"0","spc":"1"}'
+) ENGINE=InnoDB;
+# Force checkpoint: pre-fill pages are now durable
+SET GLOBAL innodb_log_checkpoint_now = 1;
+# Freeze pages: disable page cleaner and checkpoint
+SET GLOBAL innodb_page_cleaner_disabled_debug = 1;
+SET GLOBAL innodb_checkpoint_disabled         = 1;
+# Trigger B-tree split (redo written; new split page NOT flushed)
+# Kill without flushing; restart to replay redo
+# Kill and restart
+# After recovery: verify SPC secondary index == PRIMARY KEY
+WITH
+ck_spc AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (idx_c)),
+ck_pk  AS (SELECT BIT_XOR(CRC32(CONCAT_WS(',', id, c))) AS chk
+FROM t1 FORCE INDEX (PRIMARY))
+SELECT IF(s.chk <=> p.chk, 'CHECKSUM_OK', 'CHECKSUM_FAILED') AS result
+FROM ck_spc AS s, ck_pk AS p;
+result
+CHECKSUM_OK
+DROP TABLE t1;

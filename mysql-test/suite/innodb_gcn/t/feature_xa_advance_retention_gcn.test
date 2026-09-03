@@ -1,0 +1,338 @@
+--source suite/innodb_gcn/include/init_conn_base_seq.inc
+
+show global variables like "have_xa_advance_retention_gcn";
+
+create table t1 (version int);
+
+insert into t1 values (1);
+
+--source include/wait_innodb_all_purged.inc
+
+set global innodb_undo_retention = 1800;
+
+set xa_detach_on_prepare = false;
+
+--replace_column 2 ####
+SHOW STATUS LIKE "lizard_retention_gcn";
+
+--replace_column 1 #### 2 #### 3 #### 4 #### 5 #### 6 #### 7 #### 8 #### 9 #### 10 #### 11 #### 12 #### 13 #### 14 ####
+CALL DBMS_UNDO.PURGE_STATUS();
+
+--echo ###############################
+--echo # case 1
+--echo ###############################
+--let $commit_gcn = `select @base_seq + 100`
+--echo set innodb_commit_seq = base + 100
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+update t1 set version = 2;
+
+--let $commit_gcn = `select @base_seq + 200`
+--echo set innodb_commit_seq = base + 200
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+update t1 set version = 3;
+
+--let $snapshot_gcn = `select @base_seq + 1`
+--echo set innodb_snapshot_seq = base + 1
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 100`
+--echo set innodb_snapshot_seq = base + 100
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 200`
+--echo set innodb_snapshot_seq = base + 200
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+# advance rentention gcn to base + 100
+--let $retention_gcn = `select @base_seq + 101`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 101)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 100`
+--source include/wait_innodb_purged_gcn.inc
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 100`
+--echo set innodb_snapshot_seq = base + 100
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+--error ER_SNAPSHOT_TOO_OLD
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 199`
+--echo set innodb_snapshot_seq = base + 199
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 200`
+--echo set innodb_snapshot_seq = base + 200
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+# advance rentention gcn to base + 201
+--let $retention_gcn = `select @base_seq + 201`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 201)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 200`
+--source include/wait_innodb_purged_gcn.inc
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 100`
+--echo set innodb_snapshot_seq = base + 100
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+--error ER_SNAPSHOT_TOO_OLD
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 199`
+--echo set innodb_snapshot_seq = base + 199
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+--error ER_SNAPSHOT_TOO_OLD
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 200`
+--echo set innodb_snapshot_seq = base + 200
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+--error ER_SNAPSHOT_TOO_OLD
+select * from t1;
+
+--let $snapshot_gcn = `select @base_seq + 201`
+--echo set innodb_snapshot_seq = base + 201
+--disable_query_log
+--eval set innodb_snapshot_seq = $snapshot_gcn
+--enable_query_log
+select * from t1;
+
+--echo ###############################
+--echo # case 2
+--echo ###############################
+xa start 'retention_gcn_t2_b1';
+update t1 set version = 4;
+xa end 'retention_gcn_t2_b1';
+xa prepare 'retention_gcn_t2_b1';
+--let $commit_gcn = `select @base_seq + 300`
+--echo set innodb_commit_seq = base + 300
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit 'retention_gcn_t2_b1';
+
+xa start 'retention_gcn_t2_b2';
+update t1 set version = 5;
+xa end 'retention_gcn_t2_b2';
+xa prepare 'retention_gcn_t2_b2';
+--let $commit_gcn = `select @base_seq + 400`
+--echo set innodb_commit_seq = base + 400
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit 'retention_gcn_t2_b2';
+
+--let $commit_gcn = `select @base_seq + 300`
+--let $my_xid='retention_gcn_t2_b1', '', 1
+--let $expect_status= COMMIT
+--let $expect_gcn= $commit_gcn
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+--let $commit_gcn = `select @base_seq + 400`
+--let $my_xid='retention_gcn_t2_b2', '', 1
+--let $expect_status= COMMIT
+--let $expect_gcn= $commit_gcn
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+# advance rentention gcn to base + 301
+--let $retention_gcn = `select @base_seq + 301`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 301)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 300`
+--source include/wait_innodb_purged_gcn.inc
+
+set debug="+d,purged_txn_always_reused";
+--let $my_xid='retention_gcn_t2_b1', '', 1
+--let $expect_status=NOTSTART_OR_FORGET
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+--let $commit_gcn = `select @base_seq + 400`
+--let $my_xid='retention_gcn_t2_b2', '', 1
+--let $expect_status= COMMIT
+--let $expect_gcn= $commit_gcn
+--source suite/innodb_gcn/include/xa_info_verify.inc
+set debug="-d,purged_txn_always_reused";
+
+--echo ###############################
+--echo # case 3
+--echo ###############################
+set xa_detach_on_prepare = on;
+
+--let $sys_gcn = `select @base_seq + 500`
+--echo call dbms_xa.advance_gcn_no_flush(base + 500)
+--disable_query_log
+--eval call dbms_xa.advance_gcn_no_flush($sys_gcn)
+--enable_query_log
+
+xa start 'retention_gcn_t3_b1';
+update t1 set version = 6;
+xa end 'retention_gcn_t3_b1';
+xa prepare 'retention_gcn_t3_b1';
+
+--let $retention_gcn = `select @base_seq + 600`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 600)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--source include/wait_innodb_all_purged.inc
+
+--let $my_xid='retention_gcn_t3_b1', '', 1
+--let $expect_status= DETACHED_PREPARE
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+--let $commit_gcn = `select @base_seq + 700`
+--echo set innodb_commit_seq = base + 700
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit 'retention_gcn_t3_b1';
+
+--let $retention_gcn = `select @base_seq + 700`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 700)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--let $wait_timeout = 5
+--let $expect_can_not_advance = 1
+--let $expect_purged_gcn = `select @base_seq + 700`
+--source include/wait_innodb_purged_gcn.inc
+
+set debug="+d,purged_txn_always_reused";
+--let $commit_gcn = `select @base_seq + 700`
+--let $my_xid='retention_gcn_t3_b1', '', 1
+--let $expect_status= COMMIT
+--let $expect_gcn= $commit_gcn
+--source suite/innodb_gcn/include/xa_info_verify.inc
+set debug="-d,purged_txn_always_reused";
+
+--let $retention_gcn = `select @base_seq + 701`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 701)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 701`
+--source include/wait_innodb_purged_gcn.inc
+
+set debug="+d,purged_txn_always_reused";
+--let $expect_status=NOTSTART_OR_FORGET
+--let $my_xid='retention_gcn_t3_b1', '', 1
+--source suite/innodb_gcn/include/xa_info_verify.inc
+set debug="-d,purged_txn_always_reused";
+
+set xa_detach_on_prepare = default;
+
+--echo ###############################
+--echo # case 4: Also purged, if beyond innodb_undo_retention.
+--echo ###############################
+--let $retention_gcn = `select @base_seq + 800`
+--echo call dbms_xa.advance_retention_gcn_no_flush(base + 800)
+--disable_query_log
+--eval call dbms_xa.advance_retention_gcn_no_flush($retention_gcn)
+--enable_query_log
+--source include/wait_innodb_all_purged.inc
+
+xa start 'retention_gcn_t4_b1';
+update t1 set version = 7;
+xa end 'retention_gcn_t4_b1';
+xa prepare 'retention_gcn_t4_b1';
+--let $commit_gcn = `select @base_seq + 900`
+--echo set innodb_commit_seq = base + 900
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+xa commit 'retention_gcn_t4_b1';
+
+--echo # Can not advance purge.
+--let $wait_timeout = 5
+--let $expect_can_not_advance = 1
+--let $expect_purged_gcn = `select @base_seq + 800`
+--source include/wait_innodb_purged_gcn.inc
+set debug="+d,purged_txn_always_reused";
+--let $my_xid='retention_gcn_t4_b1', '', 1
+--let $expect_status=COMMIT
+--let $expect_gcn= $commit_gcn
+--source suite/innodb_gcn/include/xa_info_verify.inc
+
+--echo # Can advance purge because of beyond innodb_undo_retention (= 0)
+set global innodb_undo_retention = 0;
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 900`
+--source include/wait_innodb_purged_gcn.inc
+--let $my_xid='retention_gcn_t4_b1', '', 1
+--let $expect_status=NOTSTART_OR_FORGET
+--source suite/innodb_gcn/include/xa_info_verify.inc
+set debug="-d,purged_txn_always_reused";
+
+--echo ###############################
+--echo # case 5: Monotonicity is not enforced for updates to `retention_gcn`
+--echo ###############################
+call dbms_xa.advance_retention_gcn_no_flush(1);
+SHOW STATUS LIKE "lizard_retention_gcn";
+
+call dbms_xa.advance_retention_gcn_no_flush(0);
+SHOW STATUS LIKE "lizard_retention_gcn";
+
+--echo ###############################
+--echo # case 6: Set 0 to disable this feature
+--echo ###############################
+begin;
+update t1 set version = 8;
+
+--let $commit_gcn = `select @base_seq + 1000`
+--echo set innodb_commit_seq = base + 1000
+--disable_query_log
+--eval set innodb_commit_seq = $commit_gcn
+--enable_query_log
+commit;
+
+call dbms_xa.advance_retention_gcn_no_flush(0);
+--let $expect_can_not_advance = 0
+--let $expect_purged_gcn = `select @base_seq + 1000`
+--source include/wait_innodb_purged_gcn.inc
+
+--echo ###############################
+--echo # Cleanup
+--echo ###############################
+set xa_detach_on_prepare = on;
+set global innodb_undo_retention = default;
+call dbms_xa.advance_retention_gcn_no_flush(0);
+
+drop table t1;
