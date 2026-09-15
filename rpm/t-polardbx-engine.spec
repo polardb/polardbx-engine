@@ -22,12 +22,12 @@
 
 
 %define polardb_version 'PolarDB V2.0'
-%define product_version 2.4.1
+%define product_version 2.5.0
 %define release_date %(echo $RELEASE | cut -c 1-8)
 %define version_extra X-Cluster
 
 Name: t-polardbx-engine
-Version: 8.4.19
+Version: 8.4.21
 Release: %(echo $RELEASE)%{?dist}
 License: GPL
 #URL: http://gitlab.alibaba-inc.com/polardbx/polardbx-engine
