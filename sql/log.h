@@ -42,6 +42,8 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#include <atomic>
+
 #include "lex_string.h"
 #include "my_command.h"
 #include "my_compiler.h"
@@ -728,7 +730,72 @@ class Error_log_throttle : public Log_throttle {
   bool log();
 };
 
-extern Slow_log_throttle log_throttle_qni;
+/**
+  One server-wide quota/window, with sharded suppressed-query statistics.
+
+  Normal eligible calls hold one shard mutex. Window changes, flushes and
+  rate updates lock every shard in increasing order. A thread must release
+  its individual shard before attempting to lock all shards. Thus neither
+  a quota reset nor a statistics drain can race with an admitted query.
+
+  The array has static storage in the global instance: no aligned_alloc,
+  placement new, or dynamically allocated mutexes are needed. alignas also
+  rounds the structure size without assuming sizeof(mysql_mutex_t) < 64.
+*/
+class Sharded_slow_log_throttle {
+ public:
+  static constexpr size_t SHARD_COUNT = 16;
+  // Reuse the PolarDB-X aggregate slow-log callback (lock time, exec time).
+  using log_summary_t = ::log_summary_t;
+
+  Sharded_slow_log_throttle(ulong window_usecs, log_summary_t logger,
+                           const char *msg);
+  Sharded_slow_log_throttle(const Sharded_slow_log_throttle &) = delete;
+  Sharded_slow_log_throttle &operator=(const Sharded_slow_log_throttle &) = delete;
+
+  /** Called after MY_INIT/P_S setup. true means initialization failed. */
+  bool init(PSI_mutex_key key);
+  /** Called before my_end(), after all users have stopped; also handles rollback. */
+  void cleanup();
+  bool log(THD *thd, bool eligible);
+  /** Drain one aggregate summary without granting a fresh quota. */
+  bool flush(THD *thd);
+  /** Drain the old statistics; a changed rate starts a new logging epoch. */
+  bool update_rate(THD *thd, ulong rate);
+
+ private:
+  struct Summary {
+    ulonglong suppressed_count = 0;
+    ulonglong total_lock_time = 0;
+    ulonglong total_exec_time = 0;
+  };
+  struct alignas(64) Shard {
+    mysql_mutex_t mutex;
+    Summary suppressed;
+  };
+
+  Shard m_shards[SHARD_COUNT];
+  size_t m_initialized_shards = 0;
+  // Written only while all shards are locked; read by the no-lock fast path.
+  std::atomic<ulong> m_rate{0};
+  std::atomic<ulonglong> m_window_end{0};
+  // Only successful admissions write this shared cache line. Once the quota
+  // is exhausted, suppressed queries update their shard instead of a global
+  // fetch_add counter (which would also overflow at ULONG_MAX).
+  alignas(64) std::atomic<ulong> m_remaining{0};
+  const ulong m_window_usecs;
+  const log_summary_t m_log_summary;
+  const char *const m_summary_template;
+
+  void lock_all();
+  void unlock_all();
+  Summary drain_locked();
+  bool account_locked(THD *thd, size_t index, ulonglong now);
+  bool log_window_boundary(THD *thd, bool eligible, size_t index);
+  bool print_summary(THD *thd, const Summary &summary);
+};
+
+extern Sharded_slow_log_throttle log_throttle_qni;
 
 ////////////////////////////////////////////////////////////
 //

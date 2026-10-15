@@ -1832,12 +1832,189 @@ static bool slow_log_write(THD *thd, /* purecov: inspected */
                                      time_usec, lock_usec);
 }
 
-Slow_log_throttle log_throttle_qni(&opt_log_throttle_queries_not_using_indexes,
-                                   &LOCK_log_throttle_qni,
-                                   Log_throttle::LOG_THROTTLE_WINDOW_SIZE,
-                                   slow_log_write,
-                                   "throttle: %10lu 'index "
-                                   "not used' warning(s) suppressed.");
+Sharded_slow_log_throttle::Sharded_slow_log_throttle(
+    ulong window_usecs, log_summary_t logger, const char *msg)
+    : m_window_usecs(window_usecs),
+      m_log_summary(logger),
+      m_summary_template(msg) {}
+
+bool Sharded_slow_log_throttle::init(PSI_mutex_key key) {
+  if (m_initialized_shards == SHARD_COUNT) return false;
+  assert(m_initialized_shards == 0);
+  for (size_t i = 0; i < SHARD_COUNT; ++i) {
+    // Exercise partial-initialization rollback in debug builds.
+    DBUG_EXECUTE_IF("fail_sharded_slow_log_throttle_init", {
+      if (i == SHARD_COUNT / 2) {
+        cleanup();
+        return true;
+      }
+    });
+    mysql_mutex_t *mutex = &m_shards[i].mutex;
+    if (mysql_mutex_init(key, mutex, MY_MUTEX_INIT_FAST) != 0) {
+      // mysql_mutex_init creates its P_S handle before the native mutex.
+      // Do not destroy a native mutex whose initialization failed.
+#ifdef HAVE_PSI_MUTEX_INTERFACE
+      if (mutex->m_psi != nullptr) {
+        PSI_MUTEX_CALL(destroy_mutex)(mutex->m_psi);
+        mutex->m_psi = nullptr;
+      }
+#endif
+      cleanup();
+      return true;
+    }
+    ++m_initialized_shards;
+  }
+  return false;
+}
+
+void Sharded_slow_log_throttle::cleanup() {
+  while (m_initialized_shards != 0) {
+    --m_initialized_shards;
+    mysql_mutex_destroy(&m_shards[m_initialized_shards].mutex);
+    m_shards[m_initialized_shards].suppressed = Summary{};
+  }
+  m_rate.store(0, std::memory_order_relaxed);
+  m_window_end.store(0, std::memory_order_relaxed);
+  m_remaining.store(0, std::memory_order_relaxed);
+}
+
+void Sharded_slow_log_throttle::lock_all() {
+  assert(m_initialized_shards == SHARD_COUNT);
+  for (size_t i = 0; i < SHARD_COUNT; ++i)
+    mysql_mutex_lock(&m_shards[i].mutex);
+}
+
+void Sharded_slow_log_throttle::unlock_all() {
+  for (size_t i = SHARD_COUNT; i != 0; --i)
+    mysql_mutex_unlock(&m_shards[i - 1].mutex);
+}
+
+Sharded_slow_log_throttle::Summary Sharded_slow_log_throttle::drain_locked() {
+  Summary result;
+  for (size_t i = 0; i < SHARD_COUNT; ++i) {
+    Summary &data = m_shards[i].suppressed;
+    result.suppressed_count += data.suppressed_count;
+    result.total_lock_time += data.total_lock_time;
+    result.total_exec_time += data.total_exec_time;
+    // Counts and times belong to the same snapshot and are retired together.
+    data = Summary{};
+  }
+  return result;
+}
+
+bool Sharded_slow_log_throttle::account_locked(THD *thd, size_t index,
+                                              ulonglong now) {
+  ulong remaining = m_remaining.load(std::memory_order_relaxed);
+  while (remaining != 0) {
+    if (m_remaining.compare_exchange_weak(remaining, remaining - 1,
+                                         std::memory_order_relaxed))
+      return false;
+  }
+  Summary &data = m_shards[index].suppressed;
+  ++data.suppressed_count;
+  data.total_exec_time += now - thd->start_utime;
+  data.total_lock_time += thd->get_lock_usec();
+  return true;
+}
+
+bool Sharded_slow_log_throttle::log(THD *thd, bool eligible) {
+  assert(m_initialized_shards == SHARD_COUNT);
+  if (m_rate.load(std::memory_order_relaxed) == 0) return false;
+
+  // Ineligible queries need only help close an expired window. This also
+  // avoids locking on every indexed query when no window has been opened.
+  if (!eligible) {
+    const ulonglong end = m_window_end.load(std::memory_order_relaxed);
+    if (end == 0 || my_micro_time() < end) return false;
+  }
+
+  const size_t index = thd->thread_id() % SHARD_COUNT;
+  mysql_mutex_lock(&m_shards[index].mutex);
+  if (m_rate.load(std::memory_order_relaxed) == 0) {
+    mysql_mutex_unlock(&m_shards[index].mutex);
+    return false;
+  }
+  const ulonglong now = my_micro_time();
+  const ulonglong end = m_window_end.load(std::memory_order_relaxed);
+  if (end != 0 && now < end) {
+    const bool suppress = eligible && account_locked(thd, index, now);
+    mysql_mutex_unlock(&m_shards[index].mutex);
+    return suppress;
+  }
+  mysql_mutex_unlock(&m_shards[index].mutex);
+  return log_window_boundary(thd, eligible, index);
+}
+
+bool Sharded_slow_log_throttle::log_window_boundary(THD *thd, bool eligible,
+                                                   size_t index) {
+  Summary summary;
+  bool suppress = false;
+  lock_all();
+  const ulong rate = m_rate.load(std::memory_order_relaxed);
+  if (rate != 0) {
+    // Recheck after acquiring all locks: another caller may have rolled over.
+    const ulonglong now = my_micro_time();
+    const ulonglong end = m_window_end.load(std::memory_order_relaxed);
+    if (end == 0 || now >= end) {
+      summary = drain_locked();
+      m_remaining.store(rate, std::memory_order_relaxed);
+      m_window_end.store(eligible ? now + m_window_usecs : 0,
+                         std::memory_order_relaxed);
+    }
+    if (eligible) suppress = account_locked(thd, index, now);
+  }
+  unlock_all();
+  // No throttle mutex is held while calling the query logger / THD locks.
+  print_summary(thd, summary);
+  return suppress;
+}
+
+bool Sharded_slow_log_throttle::print_summary(THD *thd,
+                                             const Summary &summary) {
+  if (summary.suppressed_count == 0) return false;
+  assert(thd != nullptr);
+  Security_context *save_sctx = thd->security_context();
+  Security_context aggregate_sctx;
+  char buf[128];
+  snprintf(buf, sizeof(buf), m_summary_template, summary.suppressed_count);
+
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+  thd->set_security_context(&aggregate_sctx);
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+
+  // Aggregate values are explicit in the 8.0.42 logging API. Do not
+  // modify the current statement's start time or lock-time accounting.
+  (*m_log_summary)(thd, buf, strlen(buf), true, summary.total_lock_time,
+                   summary.total_exec_time);
+
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+  thd->set_security_context(save_sctx);
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+  return true;
+}
+
+bool Sharded_slow_log_throttle::flush(THD *thd) {
+  lock_all();
+  const Summary summary = drain_locked();
+  unlock_all();
+  return print_summary(thd, summary);
+}
+
+bool Sharded_slow_log_throttle::update_rate(THD *thd, ulong rate) {
+  lock_all();
+  const Summary summary = drain_locked();
+  if (rate != m_rate.load(std::memory_order_relaxed)) {
+    m_remaining.store(rate, std::memory_order_relaxed);
+    m_window_end.store(0, std::memory_order_relaxed);
+    m_rate.store(rate, std::memory_order_relaxed);
+  }
+  unlock_all();
+  return print_summary(thd, summary);
+}
+
+Sharded_slow_log_throttle log_throttle_qni(
+    Log_throttle::LOG_THROTTLE_WINDOW_SIZE, slow_log_write,
+    "throttle: %10llu 'index not used' warning(s) suppressed.");
 
 ////////////////////////////////////////////////////////////
 //

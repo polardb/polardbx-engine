@@ -2800,9 +2800,10 @@ static Sys_var_deprecated_alias Sys_log_slow_slave_statements(
 
 static bool update_log_throttle_queries_not_using_indexes(sys_var *, THD *thd,
                                                           enum_var_type) {
-  // Check if we should print a summary of any suppressed lines to the slow
-  // log now since opt_log_throttle_queries_not_using_indexes was changed.
-  log_throttle_qni.flush(thd);
+  // Retire actual suppressed counts/times before publishing the new rate.
+  // Query threads read the atomic copy, not this mutable sysvar.
+  log_throttle_qni.update_rate(
+      thd, opt_log_throttle_queries_not_using_indexes);
   return false;
 }
 
