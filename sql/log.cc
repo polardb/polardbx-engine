@@ -1842,13 +1842,6 @@ bool Sharded_slow_log_throttle::init(PSI_mutex_key key) {
   if (m_initialized_shards == SHARD_COUNT) return false;
   assert(m_initialized_shards == 0);
   for (size_t i = 0; i < SHARD_COUNT; ++i) {
-    // Exercise partial-initialization rollback in debug builds.
-    DBUG_EXECUTE_IF("fail_sharded_slow_log_throttle_init", {
-      if (i == SHARD_COUNT / 2) {
-        cleanup();
-        return true;
-      }
-    });
     mysql_mutex_t *mutex = &m_shards[i].mutex;
     if (mysql_mutex_init(key, mutex, MY_MUTEX_INIT_FAST) != 0) {
       // mysql_mutex_init creates its P_S handle before the native mutex.
