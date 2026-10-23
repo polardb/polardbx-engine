@@ -1697,7 +1697,6 @@ mysql_mutex_t LOCK_replica_list;
 mysql_mutex_t LOCK_sql_replica_skip_counter;
 mysql_mutex_t LOCK_replica_net_timeout;
 mysql_mutex_t LOCK_replica_trans_dep_tracker;
-mysql_mutex_t LOCK_log_throttle_qni;
 mysql_rwlock_t LOCK_sys_init_connect, LOCK_sys_init_replica;
 mysql_rwlock_t LOCK_system_variables_hash;
 my_thread_handle signal_thread_id;
@@ -2860,7 +2859,7 @@ static void clean_up(bool print_message) {
 } /* clean_up */
 
 static void clean_up_mutexes() {
-  mysql_mutex_destroy(&LOCK_log_throttle_qni);
+  log_throttle_qni.cleanup();
   mysql_mutex_destroy(&LOCK_status);
   mysql_mutex_destroy(&LOCK_manager);
   mysql_mutex_destroy(&LOCK_crypt);
@@ -5483,8 +5482,6 @@ static int init_thread_environment() {
   mysql_mutex_init(key_LOCK_uuid_generator, &LOCK_uuid_generator,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_sql_rand, &LOCK_sql_rand, MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(key_LOCK_log_throttle_qni, &LOCK_log_throttle_qni,
-                   MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_default_password_lifetime,
                    &LOCK_default_password_lifetime, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_mandatory_roles, &LOCK_mandatory_roles,
@@ -5549,6 +5546,15 @@ static int init_thread_environment() {
                    &im::LOCK_internal_account_string, MY_MUTEX_INIT_FAST);
   mysql_mutex_init(polarx::key_LOCK_slow_query_user_config,
                    &polarx::LOCK_slow_query_user_config, MY_MUTEX_INIT_FAST);
+  PSI_mutex_key log_throttle_key = PSI_NOT_INSTRUMENTED;
+#ifdef HAVE_PSI_INTERFACE
+  log_throttle_key = key_LOCK_log_throttle_qni;
+#endif
+  if (log_throttle_qni.init(log_throttle_key)) {
+    LogErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+           "Cannot initialize sharded slow-log throttle mutexes.");
+    return 1;
+  }
   return 0;
 }
 
@@ -7869,6 +7875,10 @@ int mysqld_main(int argc, char **argv)
     setup_error_log();
     unireg_abort(MYSQLD_ABORT_EXIT);  // Will do exit
   }
+
+  // Options have been parsed; publish the initial rate before serving SQL.
+  log_throttle_qni.update_rate(nullptr,
+                               opt_log_throttle_queries_not_using_indexes);
 
   keyring_lockable_init();
 
@@ -12155,7 +12165,7 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_TABLE_SHARE_LOCK_ha_data, "TABLE_SHARE::LOCK_ha_data", 0, 0, PSI_DOCUMENT_ME},
   { &key_TABLE_SHARE_LOCK_share, "TABLE_SHARE::LOCK_share", 0, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_error_messages, "LOCK_error_messages", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-  { &key_LOCK_log_throttle_qni, "LOCK_log_throttle_qni", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_log_throttle_qni, "LOCK_log_throttle_qni", 0, 0, PSI_DOCUMENT_ME},
   { &key_gtid_ensure_index_mutex, "Gtid_state", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_query_plan, "THD::LOCK_query_plan", 0, PSI_VOLATILITY_SESSION, PSI_DOCUMENT_ME},
   { &key_LOCK_cost_const, "Cost_constant_cache::LOCK_cost_const", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},

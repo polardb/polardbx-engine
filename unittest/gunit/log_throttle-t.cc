@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 #include <sys/types.h>
 
+#include "my_systime.h"
 #include "mysql/psi/mysql_mutex.h"
 #include "sql/log.h"
 #include "unittest/gunit/test_utils.h"
@@ -32,11 +33,17 @@ namespace log_throttle_unittest {
 using my_testing::Server_initializer;
 
 int summary_count = 0;
-char last_query[10];
+char last_query[32];
+bool last_aggregate = false;
+ulonglong last_lock_usec = 0;
+ulonglong last_exec_usec = 0;
 
-static bool slow_logger(THD *, const char *query, size_t, bool, ulonglong,
-                        ulonglong) {
+static bool slow_logger(THD *, const char *query, size_t, bool aggregate,
+                        ulonglong lock_usec, ulonglong exec_usec) {
   summary_count++;
+  last_aggregate = aggregate;
+  last_lock_usec = lock_usec;
+  last_exec_usec = exec_usec;
   strcpy(last_query, query);
   return false;
 }
@@ -47,6 +54,8 @@ class LogThrottleTest : public ::testing::Test {
     initializer.SetUp();
     mysql_mutex_init(0, &m_mutex, MY_MUTEX_INIT_FAST);
     summary_count = 0;
+    last_aggregate = false;
+    last_lock_usec = last_exec_usec = 0;
   }
 
   void TearDown() override {
@@ -157,5 +166,112 @@ TEST_F(LogThrottleTest, SlowLogSuppressCount) {
   EXPECT_STREQ("2", last_query);
 }
 // End of Slow_log_throttles test cases.
+
+// The legacy Slow_log_throttle tests above remain unchanged.
+class ScopedShardedThrottle : public Sharded_slow_log_throttle {
+ public:
+  explicit ScopedShardedThrottle(ulong window = 60000000)
+      : Sharded_slow_log_throttle(window, slow_logger, "%llu") {
+    EXPECT_FALSE(init(0));
+  }
+  ~ScopedShardedThrottle() { cleanup(); }
+};
+
+TEST_F(LogThrottleTest, ShardedQuotaIsGlobal) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 3);
+  int admitted = 0;
+  // New THDs receive distinct connection IDs and exercise different shards.
+  for (int i = 0; i < 32; ++i) {
+    THD other;
+    other.set_new_thread_id();
+    other.start_utime = my_micro_time();
+    if (!throttle.log(&other, true)) ++admitted;
+  }
+  EXPECT_EQ(3, admitted);
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_EQ(1, summary_count);
+  EXPECT_STREQ("29", last_query);
+  EXPECT_FALSE(throttle.flush(thd()));
+}
+
+TEST_F(LogThrottleTest, ShardedFlushDoesNotRefillQuota) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 1);
+  EXPECT_FALSE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_STREQ("1", last_query);
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_STREQ("1", last_query);
+  EXPECT_EQ(2, summary_count);
+}
+
+TEST_F(LogThrottleTest, ShardedRateChangeReportsActualSuppression) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 1);
+  EXPECT_FALSE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.update_rate(thd(), 100));
+  EXPECT_STREQ("2", last_query);
+  EXPECT_EQ(1, summary_count);
+  EXPECT_FALSE(throttle.flush(thd()));
+  EXPECT_FALSE(throttle.log(thd(), true));
+  EXPECT_FALSE(throttle.update_rate(thd(), 0));
+  EXPECT_EQ(1, summary_count);
+  for (int i = 0; i < 10; ++i) EXPECT_FALSE(throttle.log(thd(), true));
+}
+
+TEST_F(LogThrottleTest, ShardedUnchangedRateDoesNotRefillQuota) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 1);
+  EXPECT_FALSE(throttle.log(thd(), true));
+  EXPECT_FALSE(throttle.update_rate(thd(), 1));
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.update_rate(thd(), 1));
+  EXPECT_STREQ("1", last_query);
+  EXPECT_TRUE(throttle.log(thd(), true));
+}
+
+TEST_F(LogThrottleTest, ShardedIneligibleQueriesDoNotConsumeQuota) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 1);
+  for (int i = 0; i < 32; ++i) EXPECT_FALSE(throttle.log(thd(), false));
+  EXPECT_FALSE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_FALSE(throttle.log(thd(), false));
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_STREQ("1", last_query);
+}
+
+TEST_F(LogThrottleTest, ShardedSummaryUsesAggregateCallback) {
+  ScopedShardedThrottle throttle;
+  throttle.update_rate(thd(), 1);
+  EXPECT_FALSE(throttle.log(thd(), true));
+  thd()->start_utime = my_micro_time() - 1000;
+  thd()->pop_lock_usec(7);
+  const ulonglong saved_start = thd()->start_utime;
+  Security_context *saved_sctx = thd()->security_context();
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_TRUE(last_aggregate);
+  EXPECT_EQ(7ULL, last_lock_usec);
+  EXPECT_GE(last_exec_usec, 1000ULL);
+  EXPECT_EQ(saved_start, thd()->start_utime);
+  EXPECT_EQ(7ULL, thd()->get_lock_usec());
+  EXPECT_EQ(saved_sctx, thd()->security_context());
+
+  // A later summary must contain only the new statement's lock time.
+  thd()->start_utime = my_micro_time();
+  thd()->pop_lock_usec(3);
+  EXPECT_TRUE(throttle.log(thd(), true));
+  EXPECT_TRUE(throttle.flush(thd()));
+  EXPECT_EQ(3ULL, last_lock_usec);
+  EXPECT_EQ(2, summary_count);
+  EXPECT_FALSE(throttle.flush(thd()));
+  EXPECT_EQ(2, summary_count);
+}
 
 }  // namespace log_throttle_unittest
